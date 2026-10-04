@@ -926,9 +926,17 @@ function fromLoopback(req) {
   const a = String((req.socket && req.socket.remoteAddress) || '');
   return a === '::1' || a.startsWith('127.') || a.startsWith('::ffff:127.');
 }
-/** 配置页和它的接口：连接必须来自本机、Host 必须是本机、改东西必须带自定义请求头（跨站的网页带不上）、Origin 必须是本机 */
+/**
+ * 是不是别的网站的页面发来的。<img>、<script> 这类子资源的 GET 不带 Origin，光看 Origin 挡不住；浏览器往本机发的请求都带 Sec-Fetch-Site：
+ * 配置页自己发的是 same-origin，地址栏里直接打开的是 none，别的页面发的是 cross-site / same-site。程序发的不带这个头
+ */
+function fromOtherSite(req) {
+  const s = req.headers['sec-fetch-site'];
+  return s !== undefined && !['same-origin', 'none'].includes(String(s).trim().toLowerCase());
+}
+/** 配置页和它的接口：连接必须来自本机、Host 必须是本机、不是别的网站的页面发的、改东西必须带自定义请求头（跨站的网页带不上）、Origin 必须是本机 */
 function apiAllowed(req) {
-  if (!fromLoopback(req) || !hostIsLocal(req)) return false;
+  if (!fromLoopback(req) || !hostIsLocal(req) || fromOtherSite(req)) return false;
   if (req.method !== 'GET' && req.headers['x-vibe-router'] !== '1') return false;
   const origin = req.headers.origin;
   if (origin && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(origin)) return false;
@@ -1060,6 +1068,8 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && url === '/') { res.writeHead(302, { Location: '/ui' }); return res.end(); }
   if (url.startsWith('/api/')) return void handleApi(req, res);
+  // 下面四个只读的也不给别的网站的页面用
+  if (req.method === 'GET' && ['/health', '/version', '/busy', '/stats'].includes(url) && fromOtherSite(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('不接受别的网页发来的请求'); }
   if (req.method === 'GET' && url === '/health') return json(res, 200, { status: configError ? 'degraded' : 'ok', error: configError, warnings: configWarnings, routes: config.routes, default: config.default.provider, providers: usableProviders().map((p) => p.name) });
   if (req.method === 'GET' && url === '/version') return json(res, 200, { version: VERSION });
   // 现在闲不闲：套件自动更新要重启路由，得挑没有请求在跑的时候（lib/updater.js 来问）

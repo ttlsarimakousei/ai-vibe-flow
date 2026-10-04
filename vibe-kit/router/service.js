@@ -15,7 +15,7 @@ const os = require('os');
 const path = require('path');
 const net = require('net');
 const http = require('http');
-const { spawn, execSync, execFileSync } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 // 系统自带的命令一律按绝对路径调：有的机器 PATH 被改乱了（少了 System32、混进了坏项），不能指望靠 PATH 找到它们
 const SYS32 = path.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32');
 const sysExe = (name) => { const p = path.join(SYS32, name); return fs.existsSync(p) ? p : name; };
@@ -79,7 +79,7 @@ function pidOnPort(port, host) {
     } else {
       for (const a of want) {
         const hp = a.replace(/:(\d+)$/, '');
-        const pid = parseInt(execSync('lsof -nP -t -sTCP:LISTEN -iTCP@' + hp + ':' + port, { encoding: 'utf8' }).trim().split('\n')[0], 10);
+        const pid = parseInt(execFileSync('lsof', ['-nP', '-t', '-sTCP:LISTEN', '-iTCP@' + hp + ':' + port], { encoding: 'utf8' }).trim().split('\n')[0], 10);
         if (pid) return pid;
       }
     }

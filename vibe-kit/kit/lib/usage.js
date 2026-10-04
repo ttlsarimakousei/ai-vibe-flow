@@ -28,8 +28,20 @@ const pad = (n) => String(n).padStart(2, '0');
 const dayKey = (t) => { const d = t ? new Date(t) : new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 const readJson = (f) => { try { let t = fs.readFileSync(f, 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t); } catch (e) { return null; } };
 const kitVersion = () => { try { return fs.readFileSync(path.join(KIT, 'VERSION'), 'utf8').trim(); } catch (e) { return ''; } };
-/** 名字里别带出内网地址（模型的名字是用户自己起的） */
-const maskIps = (t) => String(t || '').replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '内网IP');
+/**
+ * 名字里别带出内网的地址（模型的名字是用户自己起的）：带协议的网址、IP（v4、v6）、域名都换掉。
+ * 域名只认两种：最后一段是常见后缀的（gw.local、llm.corp-qwen），三段以上而且每段都是字母开头的（llm.dept.intranet）。
+ * 版本号那样的写法（qwen3.5、gpt-4.1-mini、glm-4.5.flash）不动
+ */
+const HOST_TAIL = /^(?:com|cn|net|org|io|ai|dev|gov|edu|local|lan|corp|internal|intranet|intra|home)$/i;
+const maskAddr = (t) => String(t || '')
+  .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s|]+/gi, '内网地址')
+  .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '内网IP')
+  .replace(/(?<![\w:])\[?(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}\]?(?![\w:])/gi, '内网IP')
+  .replace(/(?<![\w.-])(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z][a-z0-9-]*(?![\w.])/gi, (m) => {
+    const p = m.split('.');
+    return HOST_TAIL.test(p[p.length - 1].split('-')[0]) || (p.length >= 3 && p.every((s) => /^[a-z]/i.test(s))) ? '内网域名' : m;
+  });
 const cell = (s) => String(s == null ? '' : s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
 function dayOf(o, d) {
@@ -94,7 +106,10 @@ function collect(day) {
     models = { requests: Number(md.requests) || 0, by: {} };
     for (const name of Object.keys(md.byProvider).slice(0, 20)) {
       const x = md.byProvider[name] || {};
-      models.by[maskIps(name).slice(0, 60)] = { requests: Number(x.requests) || 0, fail: Number(x.fail) || 0, failover: Number(x.failover) || 0, input: (Number(x.input) || 0) + (Number(x.cacheRead) || 0) + (Number(x.cacheWrite) || 0), output: Number(x.output) || 0 };
+      // 遮过以后重名的（两个模型的名字只差在地址上）加在一起，不是后一个盖掉前一个
+      const key = maskAddr(name).slice(0, 60);
+      const c = models.by[key] || { requests: 0, fail: 0, failover: 0, input: 0, output: 0 };
+      models.by[key] = { requests: c.requests + (Number(x.requests) || 0), fail: c.fail + (Number(x.fail) || 0), failover: c.failover + (Number(x.failover) || 0), input: c.input + (Number(x.input) || 0) + (Number(x.cacheRead) || 0) + (Number(x.cacheWrite) || 0), output: c.output + (Number(x.output) || 0) };
     }
   }
   // 钩子在路由里跑的耗时（累计到现在的，路由记的；走命令方式的没有）
@@ -109,7 +124,7 @@ function collect(day) {
   try {
     const ts = require('./toolstats.js');
     tools = ts.stats(10).map((s) => ({ tool: String(s.tool).slice(0, 30), cmd: String(s.cmd).slice(0, 30), n: s.n, fail: s.fail, avg: s.avg }));
-    hints = ts.hints().map((h) => maskIps(h.what).slice(0, 120)).slice(0, 8);
+    hints = ts.hints().map((h) => maskAddr(h.what).slice(0, 120)).slice(0, 8);
   } catch (e) { tools = []; hints = []; }
   return {
     v: 1, day: d, host: os.hostname().slice(0, 60),
@@ -215,4 +230,4 @@ function aggregate(list, from, to) {
     + names.map((k) => { const h = hosts[k]; return '| ' + cell(k) + ' | ' + h.days.size + ' | ' + cell(h.kit) + ' | ' + cell(h.cc) + ' | ' + h.prompt + ' | ' + h.blocks + ' | ' + h.over + ' | ' + h.requests + ' |'; }).join('\n') + '\n';
 }
 
-module.exports = { MARK, KEEP_DAYS, dayKey, bump, seen, days, collect, render, summary, parse, aggregate };
+module.exports = { MARK, KEEP_DAYS, dayKey, bump, seen, days, collect, render, summary, parse, aggregate, maskAddr };
