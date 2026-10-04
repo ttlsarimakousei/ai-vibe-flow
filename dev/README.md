@@ -1,0 +1,141 @@
+# dev：测试和打包
+
+改套件用的脚本。不进安装包，装套件的人用不到。
+
+以前这些脚本放在会话的临时目录里，换一台机器就没了，所以挪到这里。
+
+## 怎么用
+
+```bash
+node dev/run-all.js
+```
+
+加上新旧对比、端到端、连真的 JDBC 数据库：
+
+```bash
+node dev/run-all.js --old dev/baseline/20260930.1505/vibe-kit --old dev/baseline/20260929.2205/vibe-kit --claude <claude.exe> --claude <另一个版本的 claude.exe> --rt auto
+```
+
+`--old` 可以给几个，新旧对比每个都比一遍。有意改过的地方每一项记着是哪一版改的：拿来比的上一版比它老，两版应该不一样；上一版已经带着这个改动，两版应该一样。
+
+`--rt` 是查库的技能要的运行环境，见下面"查库的运行环境"。`auto` 是到正式装的位置去找。不给的话连库的那一套不跑，端到端里查库的几项不测。
+
+打包：
+
+```bash
+node dev/stamp-and-pack.js
+```
+
+它先把《更新说明.md》里两处占位 `@@VER@@` 换成现在的时间（年月日.时分），再跑 `pack.js --version <版本号>`。版本号自己定、或者更新说明里已经写好版本号的，直接跑 `pack.js`：
+
+```bash
+node dev/pack.js
+```
+
+包名带完整的版本号，比如 `vibe-kit-20260928.1700.zip`：一天发几版，文件名都不一样。打包时顺手在 `dev/baseline/<版本号>/` 留一份这一版的代码（不带看页面的依赖，一兆左右），下一版做新旧对比时当"上一版"用，只留最近四份。
+
+## 都有什么
+
+| 文件 | 干什么 |
+|---|---|
+| `run-all.js` | 依次跑下面的测试，汇总；结尾查桌面有没有多出窗口、临时目录清没清 |
+| `pack.js` | 检查、写版本号、压成 zip、解压出来逐个文件核对 |
+| `test-lessons.js` | 经验规则：记、合并、升规则、上限、过时、保护、收工检查 |
+| `test-feedback0928.js` | 内网 0928 导出的五条问题反馈，照原样复现 |
+| `test-feedback0929.js` | 内网 0929 导出的问题反馈：id 重复、审查记账、打勾、放行、全自动模式和报告、不记噪音 |
+| `test-feedback0930.js` | 内网 0930 导出的议题 #1 到 #9 照原样复现，加上用下来提的几件事：全自动模式只在走 OpenSpec 流程时算数、变更的过程文件留到归档、调用记录里的错每天汇总、提示规则去掉、报告里"库里改过的" |
+| `test-1001.js` | 1001 这一批：安装器写 settings.json 的自动压缩窗口（改开关跟着改、填 0 和卸载时还回原来的）；状态栏三行；使用情况数次数、要传的那一段不带路径；开工前拉代码（真的 git 仓库和远端：快进、分叉、和没提交的改动冲突、没有远端、连不上、壳子、全自动记进报告）；问题列表标上报了没有 |
+| `test-page-0929.js` | 看页面的场景：同一步里写断言、上传、应答文件选择框、点被盖住的控件。用本机的 Edge 无头跑 |
+| `test-devserver-0929.js` | 起服务的工具：最后一行是结果，停的时候进程清干净 |
+| `ui-kit-0929.js` | 配置页重排之后：接口、页面上每个开关都在、保存条、三张表。第二个参数给目录就存截图 |
+| `check-old-repro-0929.js` | 拿 20260928.2054 / 2055 跑同样的输入，确认修之前确实有那些毛病 |
+| `e2e-auto-0929.js` | 真的 Claude Code 加假模型，全自动模式走两个会话：放行、审查、报告、id 重复的复审、归档 |
+| `test-ttls.js` | 改名（`ttls-` 前缀）和并进来的两个技能：从上一版升上来，旧名字的技能删掉、改过的先备份、驱动挪过来、经验规则的文件改名。要一个上一版的目录 |
+| `test-dbcrud.js` | 查库：拿 H2（MySQL 兼容模式）走完整的读写循环，最后照冒烟靶场把不连库的判断过一遍。要运行环境的目录 |
+| `test-redis.js` | 查 redis：客户端对着假 redis 走一遍；模型跑技能自带的脚本钩子放行，改套件的东西照拦 |
+| `test-onboard.js` | 后台自动探索：认工程、只配开发环境的连接、文件改了跟着改、找驱动不拖住项目说明、项目里留着旧技能的提醒 |
+| `test-auto-0930.js` | 审查报的问题自动收、自动归并成规则；工具的用量和毛病并进问题反馈 |
+| `ui-data-0930.js` | 配置页"数据库驱动"那一页：接口和页面 |
+| `e2e-0930.js` | 真的 Claude Code 加假模型：技能清单、后台探索、配置改了跟着改、模型照技能说的查库查缓存 |
+| `lib/fake-redis.js` | 假 redis：认客户端会发的那几条命令 |
+| `testbed/ttls-db-crud/smoke/` | 查库的冒烟靶场：假连接配置、放着各种写法的配置文件的假项目、用例 |
+| `docs/ttls-db-crud/` | 查库技能的设计说明、维护须知、使用说明、验证记录（从 skytech-skills 搬来的，在这里维护） |
+| `lib/fake-site.js` | 假网站：登录失败也返回 200、被按钮盖住的上传控件 |
+| `check-old-repro.js` | 拿上一版跑同样的输入，确认修之前确实有那个毛病 |
+| `diff-hooks.js` | 同一批输入喂给上一版和这一版的钩子，比输出：没动的地方必须一字不差 |
+| `test-install-0928.js` | 用真的 install.js 往假用户目录里装、升级、同步、卸载 |
+| `ui-lessons.js` | 起一个临时路由，测配置页"经验规则"的接口；第二个参数给秒数就留着让人看页面 |
+| `test-http-hooks.js` | 检查在路由的工作线程里跑，和命令方式结果一样 |
+| `e2e-lessons.js` | 真的 Claude Code 加假模型，走完整条路 |
+| `test-update.js` | 自动更新和发布：维护的人发布，同事的电脑自己发现、自己装上；装坏了退回；路由忙就等 |
+| `test-issues.js` | 问题上报：用 SSH 申请令牌、装之前攒下的不传、不重复建、又出现；导出（本机不存）、关掉是另一步；使用情况一台电脑一条议题、一天一条补充，导出时汇总在最后 |
+| `test-secrets.js` | 令牌和模型的 key 不给读；跑发布脚本要确认；安装器加的权限规则 |
+| `ui-update.js` | 配置页"更新和上报"的接口，从页面上点更新（路由会重启）；导出、关掉、使用情况；维护的电脑写死在代码里，测导出时用环境变量 VIBE_KIT_MAINTAINER_HOSTS 把路由装成那台；第二个参数给秒数就留着让人看页面 |
+| `e2e-update.js` | 真的 Claude Code：令牌读不到；会话里后台自己更新、自己上报 |
+| `accept-packages.js` | 验收：拿打好的两个压缩包走一遍发布、安装、再发布、自动更新 |
+| `lib/fake-gitlab.js` | 假 GitLab：git 的 http 通道加 issue 的接口 |
+| `lib/fake-ssh.js` | 假 ssh：拉仓库、推仓库、申请令牌 |
+| `lib/fake-busy.js` | 装成路由，只回答"现在忙不忙" |
+| `lib/watch-windows.ps1` | 盯着桌面，测试跑的时候冒出来的窗口都记下来，一闪就关的也算 |
+| `lib/harness.js` | 公共部分：假用户目录、假会话记录、结尾核对真实文件没变 |
+
+## 拿到别的版本的 Claude Code
+
+每个版本各装在自己的目录里，不要 `npm i -g`（会把自己在用的那个换掉）：
+
+```bash
+npm install --prefix "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120" @anthropic-ai/claude-code@2.1.120
+```
+
+程序在 `<那个目录>\node_modules\@anthropic-ai\claude-code\bin\claude.exe`。一个版本两百多 MB。这台电脑上装着 2.1.120 和 2.1.259，以后还要用，不删。
+
+上一版的套件直接用 `dev/baseline/` 里留的那份：
+
+```bash
+node dev/run-all.js --old dev/baseline/20260930.1505/vibe-kit
+```
+
+## 查库的运行环境
+
+查库的技能要 python 和 java，测试还要一个真的 JDBC 数据库。2026-09-30 起正式装在各自该在的位置，不再放临时目录：
+
+| 装什么 | 装在哪 | 怎么装的 |
+|---|---|---|
+| Python 3.12 | `%LOCALAPPDATA%\Programs\Python\Python312\` | python.org 在 NuGet 上发的官方包，解开放过去。带 pip |
+| JDK 17（Temurin） | `%LOCALAPPDATA%\Programs\Eclipse Adoptium\jdk-17.0.20.1-hotspot\` | Adoptium 的压缩包 |
+| H2 | `~/.m2/repository/com/h2database/h2/2.2.224/` | Maven 中央仓库的 jar，放在 Maven 本地仓库该在的位置 |
+
+用户级的环境变量也设了：`PATH` 里加了 Python 和 JDK 的 bin，`JAVA_HOME` 指着 JDK。
+
+`--rt auto` 照这三个位置找（Python 找 `Python3*`，JDK 先认 `JAVA_HOME`，H2 取 `~/.m2` 里最新的）。装在别处的，用环境变量指：`VIBE_TEST_PYTHON`、`VIBE_TEST_JAVA`、`VIBE_TEST_H2`。也可以给一个放着便携版的目录（里面有 `python/python.exe`、`jdk/bin/java.exe`、`h2.jar`）。
+
+在 Claude 桌面版的会话里装东西有两个坑。它是商店应用，跑在容器里：
+
+- 微软安装包（MSI、python.org 的 exe 安装器）装不了，报 2203 / 0x80070003。用压缩包、NuGet 包解开。
+- 往 `AppData\Local`、`AppData\Roaming` 下面新建的顶层目录，实际落在应用自己的私有目录里，别的程序看不到。放在已经有的目录下面（`AppData\Local\Programs\…`）才是真的。装完用资源管理器看一眼在不在。
+
+达梦、神通、Oracle、金仓、MySQL 的真库这里测不了，见 `docs/ttls-db-crud/验证记录.md`。
+
+改了 `DbRunner.java` 要重新编译，命令在 `docs/ttls-db-crud/维护须知.md`。
+
+## 推送只推到临时目录
+
+测试里的 `git push`、发布脚本，推的都是临时目录里的裸仓库（假 GitLab）。往真的远端推要用户自己来。
+
+## 几条规矩
+
+- 不碰真实的用户目录。套件拷到临时目录里的假用户目录再跑，结尾核对真实的 `settings.json`、`CLAUDE.md` 没变。
+- 不碰真实的"启动"文件夹。子进程的 `APPDATA`、`LOCALAPPDATA`、`VIBE_KIT_STARTUP_DIR` 都指假目录，结尾核对真实"启动"文件夹里的 `vibe-kit-router.vbs` 没变。2026-09-28 出过事：测试把路由装上了，自启动脚本写进了真的"启动"文件夹。
+- 不留进程。结尾查命令行里带着这次测试的临时目录名、还在跑的 node、git、ssh，有就算失败并结束掉。
+- 手工试一条命令也要指假的用户目录。2026-09-29 手工跑了一次查库的自检，在真实的用户目录下建出了 `~/.db-crud`。用 `lib/harness.js` 的 `H.run`，或者自己把 `HOME`、`USERPROFILE`、`CLAUDE_CONFIG_DIR` 指到临时目录。
+- 钩子默认不甩后台的更新进程（`VIBE_KIT_NO_UPDATE=1`）。测更新的那几套自己把它去掉。
+- 钩子默认不甩后台的自动探索（`VIBE_KIT_NO_ONBOARD=1`）：它会往测试的项目里写 `.vibe/project.md`，别的测试的输出就跟着变了。测探索的那几套自己把它去掉。
+- 安装包里不能有 jar。数据库的驱动是厂商的，只限内部使用；打包脚本会查。
+- 在假用户目录里伪造了套件的文件（比如假的 `router/service.js`），连带变了的状态（`installed.json`）也要改回去。
+- 不在桌面留窗口。子进程一律隐藏窗口，不用 detached。
+- 临时目录用完自己删。
+- 要写进补丁的内容里有反斜杠（正则、Windows 路径）的，不要用 Bash 的 heredoc、`node -e`，它们会吃掉反斜杠。写成文件再跑。
+- 同一个对话里工具调用的 id 重复，Claude Code 会把第二次调用换成"Tool use interrupted"，假模型会一直重试。要测 id 重复，分成两个会话。
+- `kit/hooks/` 里的文件不能随便删。自动更新装完新版之后的自检，跑的是旧版的代码，它按旧版的名单挨个载钩子，少一个就装回旧版。不用了的钩子留一个空壳（`source-hint.js` 就是）。
+- 测全自动模式的行为，先用 `H.inFlow(h, 会话编号, [变更目录])` 把会话记成在 OpenSpec 流程里。不记的话全自动不算数。
+- 在测试进程里直接 `require` 套件的模块，`os.homedir()` 是真实的用户目录。要读写用户目录的（查库的留痕 `~/.db-crud`），走 `H.hook`、`H.node` 起子进程。
