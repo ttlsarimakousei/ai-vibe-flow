@@ -27,6 +27,12 @@
 ## 开发要的东西
 
 - Node 18 以上（套件只用 Node 自带的模块，不装依赖）、git。
+- **克隆到短一点的路径**（比如 `C:\WorkSpace\ai-vibe-flow`），并打开 git 的长路径：看页面的依赖目录很深，路径超过 Windows 的 260 字符上限时检出会失败，打包用的 Compress-Archive 也会失败。
+
+```bash
+git clone -c core.longpaths=true git@github.com:ttlsarimakousei/ai-vibe-flow.git C:/WorkSpace/ai-vibe-flow
+```
+
 - 跑全量测试还要：Windows、系统自带的 Edge（看页面的测试）、Python 3、JDK 8 以上和 H2（查库的测试）、两个版本的 Claude Code（端到端）。装法见 [dev/README.md](dev/README.md)。
 
 ```bash

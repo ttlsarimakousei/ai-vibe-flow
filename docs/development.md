@@ -12,6 +12,12 @@
 
 装法、放在哪、`--rt auto` 怎么找，见 [dev/README.md](../dev/README.md)。旧版的 Claude Code 不要 `npm i -g`，会把机器上在用的换掉。
 
+仓库要克隆到短一点的路径，并打开 `core.longpaths`：`vibe-kit/kit/page/node_modules` 下面最深的文件相对路径有一百四十多个字符，整个路径超过 Windows 的 260 字符上限时，git 检出会报 `Filename too long`，`pack.js` 用的 Compress-Archive 也会失败（2026-10-05 在会话临时目录里克隆时遇到过）。
+
+```bash
+git config --global core.longpaths true
+```
+
 ## 改一处东西的步骤
 
 1. 读要改的文件开头的注释，再读 [architecture.md](architecture.md) 里对应的那一块。用 Grep 找全调用方。
