@@ -296,11 +296,14 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     const r = run(['run', '--print', '--wait-ms', '4000', '--quiet-ms', '1000']);
     H.ok('路由有请求在跑：等着，等不到就先不装', p.code === 0 && r.json && r.json.apply && !r.json.apply.ok && /忙/.test(r.json.apply.why) && version(u) === Y && Date.now() - t0 >= 3500, r.out + r.err);
     H.ok('等不到不算装坏', !state(u).failed);
+    // 没装成（只是没等到空闲）：问题、使用情况照常上报。以前这种时候一并跳过，全自动挂着跑、请求不断的那段时间一直传不上去
+    H.ok('没等到空闲：这一次照常上报，不跳过', r.json && r.json.issues !== undefined && r.json.usage !== undefined, r.out);
     const k = H.node(u, '-e', ['const up = require(' + JSON.stringify(updater) + '); console.log(up.needInstall())'], { env: Object.assign({}, live) });
     H.ok('下载好了、还没装上的，下次接着装', k.out.trim() === 'true', k.out + k.err);
     fs.writeFileSync(busyFile, JSON.stringify({ inflight: 0, idleMs: 60000, upMs: 100000 }));
     const r2 = run(['run', '--print', '--wait-ms', '4000', '--quiet-ms', '1000']);
     H.ok('路由闲下来了：装上 Z', r2.json && r2.json.apply && r2.json.apply.ok && version(u) === Z, r2.out + r2.err);
+    H.ok('真装了新版的那一次：上报留给下一次（这个进程里还是旧代码）', r2.json && r2.json.issues === undefined && r2.json.usage === undefined, r2.out);
     try { busy.kill(); } catch (e) { /* 已经退了 */ }
     // 装成路由的那个文件删掉，安装清单里"装了路由"也改回去：不然下一次自动更新会把真的路由装上、启动起来
     fs.rmSync(path.join(u.kit, 'router'), { recursive: true, force: true });

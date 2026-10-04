@@ -159,6 +159,37 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
     H.ok('导出：只导出，内容交给页面（由浏览器下载），本机不存', ex1.status === 200 && ex1.json.export.ok && ex1.json.export.count === 2 && ex1.json.export.iids.length === 2 && /同事电脑上记的第一条/.test(ex1.json.export.text) && /^vibe-kit议题汇总-\d{8}-\d{6}\.md$/.test(ex1.json.export.name) && gl.issues().every((i) => i.state === 'opened') && !fs.existsSync(path.join(h.kit, 'issue-exports')), ex1.text.slice(0, 600));
     const cl = await call('POST', '/api/kit/remote/issues/close', { iids: ex1.json.export.iids, name: ex1.json.export.name });
     H.ok('页面交给浏览器之后再关：这一批关掉了', cl.status === 200 && cl.json.close.ok && cl.json.close.closed.length === 2 && gl.issues().every((i) => i.state === 'closed') && cl.json.issues.lastExport.closed === 2, cl.text.slice(0, 600));
+    // 页面上点"导出"：文件交给浏览器之后问一句存下来没有。取消：不关，这一批还开着；确定：才关。用系统的 Edge 无头跑，下载落在浏览器自己的临时目录里
+    H.node(h, '-e', ['require(' + JSON.stringify(path.join(h.kit, 'lib', 'feedback.js')) + ').record(' + JSON.stringify({ kind: '出错', hook: 'verify-gate', title: '页面上导出时还开着的一条', what: 'x', sig: 'sig-ui-export-page' }) + ')'], { cwd: h.root });
+    await call('POST', '/api/kit/remote/issues/sync', {});
+    const openNow = () => gl.issues().filter((i) => i.state === 'opened' && !/使用情况/.test(i.title)).length;
+    H.ok('（又有一条开放中的议题）', openNow() === 1, gl.issues().map((i) => i.state + ' ' + i.title));
+    let eb = null; let ep = null; const dialogs = []; const pageErrors = []; let answer = false;
+    try {
+      const r = await require(path.join(H.SRC, 'kit', 'page', 'browser.js')).launchBrowser({});
+      eb = r.browser;
+      const ctx = await eb.newContext({ viewport: { width: 1360, height: 900 }, locale: 'zh-CN', colorScheme: 'light', reducedMotion: 'reduce', acceptDownloads: true });
+      ep = await ctx.newPage();
+      ep.on('pageerror', (e) => pageErrors.push(String((e && e.message) || e)));
+      ep.on('dialog', (dg) => { dialogs.push(dg.message()); (answer ? dg.accept() : dg.dismiss()).catch(() => {}); });
+    } catch (e) { console.log('  这台电脑上起不来浏览器，页面上导出那部分没法测：' + String((e && e.message) || e).split('\n')[0]); }
+    if (ep) {
+      try {
+        await ep.goto('http://127.0.0.1:' + PORT + '/ui');
+        await ep.click('nav button[data-tab="remote"]');
+        await ep.waitForSelector('#riExport', { state: 'visible', timeout: 30000 });
+        const [dl1] = await Promise.all([ep.waitForEvent('download', { timeout: 60000 }), ep.click('#riExport')]);
+        await ep.waitForFunction(() => /先不关/.test(document.querySelector('#riMsg').textContent), null, { timeout: 30000 });
+        H.ok('文件交给了浏览器，接着问了一句存下来没有', /^vibe-kit议题汇总-\d{8}-\d{6}\.md$/.test(dl1.suggestedFilename()) && dialogs.length === 1 && /存下来了/.test(dialogs[0]) && /没存下来/.test(dialogs[0]), [dl1.suggestedFilename(), dialogs]);
+        H.ok('选"取消"：这一批没关，说了下次导出会再带上', openNow() === 1 && /这一批还开着/.test(await ep.textContent('#riMsg')), await ep.textContent('#riMsg'));
+        answer = true;
+        await Promise.all([ep.waitForEvent('download', { timeout: 60000 }), ep.click('#riExport')]);
+        await ep.waitForFunction(() => /关掉 \d+ 条/.test(document.querySelector('#riMsg').textContent), null, { timeout: 60000 });
+        H.ok('选"确定"：关掉了', openNow() === 0 && dialogs.length === 2 && /关掉 1 条/.test(await ep.textContent('#riMsg')), [openNow(), await ep.textContent('#riMsg')]);
+        H.ok('页面没有报错', pageErrors.length === 0, pageErrors);
+      } catch (e) { H.ok('页面上导出走得通', false, String((e && e.stack) || e).slice(0, 600) + ' | 弹过的框：' + JSON.stringify(dialogs) + ' | 页面报的错：' + JSON.stringify(pageErrors)); }
+    }
+    if (eb) { try { await eb.close(); } catch (e) { /* 已经关了 */ } }
     const pv = await call('GET', '/api/kit/remote/usage/preview');
     H.ok('看看要传的使用情况：今天到现在的样子', pv.status === 200 && pv.json.usage && pv.json.usage.ok && /的使用情况/.test(pv.json.usage.today) && /<!-- vibe-kit-usage/.test(pv.json.usage.today), pv.text.slice(0, 600));
     const us = await call('POST', '/api/kit/remote/usage/sync', {});

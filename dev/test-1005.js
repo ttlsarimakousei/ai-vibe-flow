@@ -24,6 +24,10 @@ const settings = (h) => readJson(path.join(h.cfg, 'settings.json'));
 const man = (h) => readJson(path.join(h.kit, 'installed.json'));
 const sync = (h) => H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
 const perm = (h) => settings(h).permissions || {};
+const p2 = (n) => String(n).padStart(2, '0');
+const now0 = new Date();
+// 今天（本机日期）：使用情况按天数
+const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0.getDate());
 
 (async () => {
   const watch = await H.watchWindows('t1005-win');
@@ -126,14 +130,188 @@ const perm = (h) => settings(h).permissions || {};
     fs.mkdirSync(w.work, { recursive: true });
     H.git(w.work, ['clone', '-q', '-c', 'core.autocrlf=false', bare, me]);
     const tf = H.transcript(path.join(w.root, 'p.jsonl'), [H.tr.user('开始')]);
-    const raw = (prompt, sid) => { const o = H.hook(w, 'task-anchor', { session_id: sid, cwd: me, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
+    // dir 不给就是 shop 这个仓库；env 是另加的环境变量（调合并等多久、不读系统的 git 配置）
+    const raw = (prompt, sid, dir, env) => {
+      const r = H.node(w, path.join(w.kit, 'hooks', 'task-anchor.js'), [], { input: JSON.stringify({ session_id: sid, cwd: dir || me, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }), cwd: dir || me, env, timeout: 180000 });
+      return r.out.trim();
+    };
+    const push = (file, text, msg) => { H.write(path.join(mate, file), text); H.git(mate, ['add', '-A']); H.git(mate, ['commit', '-q', '-m', msg]); H.git(mate, ['push', '-q', 'origin', 'main']); };
+    const forget = () => { try { fs.unlinkSync(path.join(w.kit, 'state', 'pull.json')); } catch (e) { /* 没有 */ } };
+    const head = (d) => H.git(d, ['rev-parse', 'HEAD']).out.trim();
+    const locked = () => fs.existsSync(path.join(me, '.git', 'index.lock'));
     const t1 = raw('做一个导出订单的功能', 't1005-p1');
     const log = H.read(path.join(w.kit, 'state', 'hooks.log')) || '';
     H.ok('拉过了（流水账里有），是最新的：不往消息里放"拉代码"的字', /开工前拉代码 shop=最新/.test(log) && !/开工前拉了一次代码/.test(t1) && /这像一条需求/.test(t1), [t1, log.slice(-300)]);
-    H.write(path.join(mate, 'src/B.java'), 'class B {}\n'); H.git(mate, ['add', '-A']); H.git(mate, ['commit', '-q', '-m', 'feat: 同事加了 B']); H.git(mate, ['push', '-q', 'origin', 'main']);
-    fs.unlinkSync(path.join(w.kit, 'state', 'pull.json'));
+    push('src/B.java', 'class B {}\n', 'feat: 同事加了 B');
+    forget();
     const t2 = raw('做一个导入客户的功能', 't1005-p2');
     H.ok('拉到了新代码：照旧说', /开工前拉了一次代码/.test(t2) && /shop：拉到了 1 个新提交/.test(t2), t2);
+
+    // 流程中插一句问话再说"继续"：不算新开工，不拉（以前问句那一轮记成不在流程里，"继续"就被当成刚进流程）
+    raw('做一个导出订单的功能', 't1005-q');
+    push('src/C.java', 'class C {}\n', 'feat: 同事加了 C');
+    forget();
+    raw('3.2 为什么这么写？', 't1005-q');
+    const cont = raw('继续', 't1005-q');
+    H.ok('流程中插一句问话再说"继续"：不拉（做到一半不换底下的代码）', !/开工前拉了一次代码/.test(cont) && !fs.existsSync(path.join(me, 'src', 'C.java')), cont);
+    const enters = (((readJson(path.join(w.kit, 'state', 'usage.json')).days || {})[today] || {}).n || {})['flow.enter'];
+    H.ok('"继续"接回去的不数成又进了一次流程', enters === 3, enters);
+    const keep = raw('不要停，把剩下的做完', 't1005-q');
+    H.ok('"不要停，把剩下的做完"也一样不拉', !/开工前拉了一次代码/.test(keep) && !fs.existsSync(path.join(me, 'src', 'C.java')), keep);
+    H.git(me, ['pull', '-q', '--ff-only']);
+
+    // 用户配了 merge.autoStash：没提交的改动不藏起来再放回去（放回去有冲突时，冲突标记会留在文件里，退出码还是 0）
+    H.git(me, ['config', 'merge.autoStash', 'true']);
+    push('src/A.java', 'class A { int remote; }\n', 'feat: 同事改了 A');
+    H.write(path.join(me, 'src/A.java'), 'class A { int mine; }\n');
+    forget();
+    const beforeAs = head(me);
+    const as = raw('做一个导入客户的功能', 't1005-as');
+    H.ok('配了 merge.autoStash：照样不动没提交的改动，文件里没有冲突标记', /和没提交的改动碰到同一些文件（src\/A\.java）/.test(as) && head(me) === beforeAs && H.read(path.join(me, 'src/A.java')) === 'class A { int mine; }\n', [as, H.read(path.join(me, 'src/A.java'))]);
+    H.git(me, ['checkout', '-q', '--', 'src/A.java']);
+    H.git(me, ['config', '--unset', 'merge.autoStash']);
+    H.git(me, ['pull', '-q', '--ff-only']);
+
+    // 合并要好几秒（检出时过一个慢的过滤器，杀毒软件扫文件、git-lfs 下大文件就是这样）：到点了不结束它，等它做完。
+    // 强行结束会留下 index.lock 和改了一半的工作区。测试里把"到点"调成 1 秒
+    H.git(me, ['config', 'filter.slow.smudge', "sh -c 'sleep 4; cat'"]);
+    H.git(me, ['config', 'filter.slow.clean', 'cat']);
+    H.write(path.join(mate, '.gitattributes'), '*.slow filter=slow\n');
+    push('big.slow', 'v1\n', 'feat: 同事加了一个检出很慢的文件');
+    forget();
+    const t0 = Date.now();
+    const slow = raw('做一个导入客户的功能', 't1005-slow', me, { VIBE_KIT_PULL_PATIENCE_MS: '1000' });
+    H.ok('合并做到一半到点了：不结束它，等它做完', /shop：拉到了 1 个新提交/.test(slow) && !/被结束了/.test(slow) && head(me) === head(mate) && H.read(path.join(me, 'big.slow')) === 'v1\n' && !locked() && Date.now() - t0 >= 3500, [slow, Date.now() - t0, locked()]);
+    H.ok('工作区是干净的（没有改了一半的文件）', H.git(me, ['status', '--porcelain']).out.trim() === '', H.git(me, ['status', '--porcelain']).out);
+
+    // 合完了、只剩仓库自己的 post-merge 钩子在跑（装依赖这类）：到点结束钩子，代码照样算拉到了，告诉它钩子没跑完
+    H.write(path.join(me, '.git', 'hooks', 'post-merge'), '#!/bin/sh\nsleep 60\n');
+    push('src/E.java', 'class E {}\n', 'feat: 同事加了 E');
+    forget();
+    const t3 = Date.now();
+    const cut = raw('做一个导入客户的功能', 't1005-hook', me, { VIBE_KIT_PULL_PATIENCE_MS: '1000' });
+    H.ok('只剩仓库的 post-merge 钩子在跑：到点结束钩子，代码算拉到了，说了钩子没跑完', /shop：拉到了 1 个新提交/.test(cut) && /post-merge 钩子跑了 \d+ 秒还没完，被结束了/.test(cut) && head(me) === head(mate) && !locked() && Date.now() - t3 < 40000, [cut, Date.now() - t3, locked()]);
+    fs.unlinkSync(path.join(me, '.git', 'hooks', 'post-merge'));
+
+    // 不是壳子的上级目录（一堆项目放在一起，自己没有 openspec、CLAUDE.md，也不是仓库）：不带下面的仓库
+    push('src/F.java', 'class F {}\n', 'feat: 同事加了 F');
+    forget();
+    const plain = raw('做一个导出订单的功能', 't1005-plain', w.work);
+    H.ok('不是壳子的上级目录：下面的仓库不拉', !/开工前拉了一次代码/.test(plain) && !fs.existsSync(path.join(me, 'src', 'F.java')), plain);
+    // 是壳子（放着 CLAUDE.md）：带上
+    H.write(path.join(w.work, 'CLAUDE.md'), '# 壳子的约定\n');
+    const shell = raw('做一个导出订单的功能', 't1005-shell', w.work);
+    H.ok('是壳子：下面的子项目一起拉', /shop：拉到了 1 个新提交/.test(shell) && fs.existsSync(path.join(me, 'src', 'F.java')), shell);
+
+    // 子项目多于 12 个：先拉最久没拉过的，剩下的告诉它
+    const sesJs = JSON.stringify(path.join(w.kit, 'lib', 'session.js'));
+    const pk = H.node(w, '-e', ['const P = require(' + JSON.stringify(path.join(w.kit, 'lib', 'pull.js')) + '); const K = require(' + sesJs + ').normKey; const now = Date.now(); const rs = []; for (let i = 0; i < 14; i++) rs.push("C:/x/r" + i);'
+      + ' const seen = {}; for (const i of [1, 2, 3]) seen[K("C:/x/r" + i)] = { at: now - (3 + i) * 3600000 }; seen[K("C:/x/r13")] = { at: now - 600000 };'
+      + ' const r = P.pick(rs, seen, now); console.log(JSON.stringify({ due: r.due.map((x) => x.split("/").pop()), more: r.more.map((x) => x.split("/").pop()), text: P.linesOf([{ repo: "C:/x/r0", updated: 1, from: "a", to: "b" }], "C:/x", false, r.more) }))'], { cwd: w.root });
+    let po = {};
+    try { po = JSON.parse(pk.out.trim().split('\n').pop()); } catch (e) { po = { error: pk.out + pk.err }; }
+    H.ok('一次最多 12 个：刚拉过的不算，会话所在的排最前，别的先拉最久没拉过的', (po.due || []).length === 12 && po.due[0] === 'r0' && !po.due.includes('r13') && po.due.slice(-2).join() === 'r3,r2' && (po.more || []).join() === 'r1', po.error || po);
+    H.ok('没轮上的告诉它，要动之前自己先拉', /还有 1 个没拉（r1）/.test(po.text || '') && /pull --ff-only/.test(po.text || ''), po.text);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('开工前拉代码：登不上的远端不拿提示语当口令去试');
+  {
+    const w = H.makeHome('t1005-ask');
+    const gl = await H.fakeGitlab('t1005-gl', PORT + 1);
+    H.ok('假 GitLab 起来了', gl.up, gl.log());
+    const TK = 'glpat-t1005-token-0000001';
+    gl.addToken(TK, 'me');
+    // 这几条 git 用假用户目录的环境跑，不读系统的 git 配置：不碰这台电脑真的凭据管理器
+    const gitx = (dir, args) => H.run(w, 'git', ['-C', dir].concat(args), { env: { GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' } });
+    const url = gl.url;
+    const authUrl = url.replace('http://', 'http://oauth2:' + TK + '@');
+    const seed = H.makeRepo(path.join(w.root, 'seed'), { 'a.txt': 'a\n' });
+    H.git(seed, ['branch', '-M', 'main']);
+    const p0 = gitx(seed, ['push', '-q', authUrl, 'main']);
+    fs.mkdirSync(w.work, { recursive: true });
+    const hp = path.join(w.work, 'hp');
+    const c0 = gitx(w.work, ['clone', '-q', authUrl, hp]);
+    gitx(hp, ['remote', 'set-url', 'origin', url]);
+    H.ok('（带令牌克隆下来了，远端地址换成不带令牌的）', p0.code === 0 && c0.code === 0 && fs.existsSync(path.join(hp, 'a.txt')), p0.err + c0.err);
+    gl.clearLogs();
+    const tf = H.transcript(path.join(w.root, 'a.jsonl'), [H.tr.user('开始')]);
+    const r = H.node(w, path.join(w.kit, 'hooks', 'task-anchor.js'), [], { input: JSON.stringify({ session_id: 't1005-http', cwd: hp, hook_event_name: 'UserPromptSubmit', prompt: '做一个导出订单的功能', transcript_path: tf }), cwd: hp, env: { GIT_CONFIG_NOSYSTEM: '1' }, timeout: 120000 });
+    const auths = gl.requests().filter((x) => x.kind === 'git').map((x) => x.auth);
+    H.ok('没拉成，说了是登录信息的事', /hp：没拉成（远端不认这台电脑的登录信息/.test(r.out), r.out + r.err);
+    H.ok('问过服务器，但没有拿提示语当用户名、口令去登录', auths.length > 0 && auths.every((a) => !a), auths);
+    // 上面那一项在新版 git 上新旧代码都过（git 2.55 认 credential.interactive=false，根本不去问）。老一点的 git 会去问：
+    // 问口令的程序以前指的是 echo，它把提示语吐回来，git 就拿提示语当用户名、口令发给服务器。所以直接查指到了哪
+    const ev = H.node(w, '-e', ['const P = require(' + JSON.stringify(path.join(w.kit, 'lib', 'pull.js')) + '); const e = P.envFor ? P.envFor(' + JSON.stringify(hp) + ', false) : {}; console.log(JSON.stringify([e.GIT_ASKPASS, e.SSH_ASKPASS, e.GIT_TERMINAL_PROMPT]))'], { cwd: w.root });
+    H.ok('问口令的程序指到一个不存在的名字，不是 echo', ev.out.trim() === '["vibe-kit-no-askpass","vibe-kit-no-askpass","0"]', ev.out + ev.err);
+    gl.stop();
+    await H.sleep(300);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('开口："不要停"不算停；让它停的话要整句是停');
+  {
+    const h = H.makeHome('t1005-flow', null, { autoMode: true });
+    const proj = H.makeRepo(path.join(h.work, 'crm'), { 'pom.xml': '<project/>\n', 'openspec/changes/add-export/tasks.md': '- [ ] 1.1 改 A.java；验：mvn -q compile\n' });
+    const tf = H.transcript(path.join(h.root, 'f.jsonl'), [H.tr.user('开始')]);
+    const say = (sid, prompt) => { const o = H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
+    const flow = (sid) => readJson(path.join(h.kit, 'state', sid + '-flow.json'));
+    say('f1', '/opsx:apply add-export');
+    H.ok('（敲了 /opsx:apply：在流程里）', flow('f1').on === true, flow('f1'));
+    for (const p of ['不要停，把剩下的做完', '不用问我，按你的判断做完', '别等我，做完就归档', '别停']) { say('f1', p); H.ok('在流程里说"' + p + '"：还在流程里', flow('f1').on === true, flow('f1')); }
+    const ask = H.hook(h, 'guard-ask', { session_id: 'f1', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '接着做哪个？', options: [{ label: 'A' }, { label: 'B' }] }] } });
+    H.ok('全自动照样算开着：提问框拦下，不会停在那里等人', !!ask && ask.decision === 'block' && /全自动模式/.test(H.reasonOf(ask)), ask);
+    for (const p of ['停', '等等，先别提交', '不用了', '别做了', '先停一下，我看看日志', '暂停']) { say('f1', '/opsx:apply add-export'); say('f1', p); H.ok('说"' + p + '"：出了流程', flow('f1').on === false, flow('f1')); }
+    say('f1', '继续');
+    H.ok('停了之后说"继续"：接回去', flow('f1').on === true, flow('f1'));
+    say('f2', '不要停');
+    H.ok('本来就不在流程里的会话说"不要停"：不算进流程', flow('f2').on === false, flow('f2'));
+    const r1 = say('f3', '停车场管理加一个导出功能');
+    H.ok('"停车场管理加一个导出功能"是需求，不是让它停', flow('f3').on === true && /这像一条需求/.test(r1), [flow('f3'), r1]);
+    const r2 = say('f4', '不用写提案，直接在 OrderService 加导出接口');
+    H.ok('"不用写提案，直接在…加导出接口"是需求', flow('f4').on === true && /这像一条需求/.test(r2), [flow('f4'), r2]);
+    const r3 = say('f5', '好友列表页面加一个搜索功能');
+    H.ok('"好友列表页面加一个搜索功能"：开头的"好"不算应一声', /这像一条需求/.test(r3), r3);
+    const r4 = say('f6', '好的，谢谢');
+    H.ok('"好的，谢谢"还是闲话', !/这像一条需求/.test(r4) && flow('f6').on === false, r4);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('自动压缩窗口最大写到 96 万；用户开口的钩子写明等多久');
+  {
+    const h = H.freshHome('t1005-ac');
+    const r = install(h, H.SRC);
+    H.ok('默认（上限 100 万、压缩线 90%）：93.3 万，没变', r.code === 0 && settings(h).autoCompactWindow === 933000, settings(h).autoCompactWindow);
+    H.setConfig(h, { autoCompactPercent: 95 });
+    sync(h);
+    H.ok('压缩线填 95：窗口 96 万（以前是 98.3 万，Claude Code 还没压缩就先报 Prompt is too long）', settings(h).autoCompactWindow === 960000, settings(h).autoCompactWindow);
+    H.setConfig(h, { autoCompactPercent: 90, contextLimitTokens: 2000000 });
+    sync(h);
+    H.ok('上限填 200 万：窗口也是 96 万（以前是 100 万）', settings(h).autoCompactWindow === 960000, settings(h).autoCompactWindow);
+    const s = H.node(h, '-e', ['const S = require(' + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + '); const c = { autoCompactPercent: 95, contextLimitTokens: 1000000 }; console.log(JSON.stringify([S.autoCompactWindowOf(c), S.autoCompactAt(c, 1000000)]))'], { cwd: h.root });
+    H.ok('钩子、状态栏算的和安装器写的一样', s.out.trim() === '[960000,927000]', s.out + s.err);
+    const ups = ((settings(h).hooks || {}).UserPromptSubmit || [])[0];
+    H.ok('用户开口那个钩子写明等 300 秒（Claude Code 默认只等 30 秒，合并做到一半不能被它结束）', !!ups && ups.hooks[0].timeout === 300 && /task-anchor\.js/.test(ups.hooks[0].command), ups);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('使用情况：不能放行的拦截也数；模型自己调交接的技能也数');
+  {
+    const h = H.makeHome('t1005-cnt');
+    const proj = H.makeRepo(path.join(h.work, 'p'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n' });
+    const base = { session_id: 'c1', cwd: proj, hook_event_name: 'PreToolUse' };
+    const blocked = (o) => !!o && (o.decision === 'block' || (o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'deny'));
+    const cd = H.hook(h, 'guard-commit', Object.assign({}, base, { tool_name: 'Bash', tool_input: { command: 'cd src && ls -la' } }));
+    const kit = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: path.join(h.kit, 'hooks', 'pre-edit.js'), old_string: 'a', new_string: 'b' } }));
+    const tok = H.hook(h, 'guard-commit', Object.assign({}, base, { tool_name: 'Bash', tool_input: { command: 'cat ~/.claude/vibe-kit/secrets.json' } }));
+    H.hook(h, 'guard-ask', Object.assign({}, base, { tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } }));
+    const n = ((readJson(path.join(h.kit, 'state', 'usage.json')).days || {})[today] || { n: {} }).n;
+    const sum = Object.keys(n).filter((k) => /^block\./.test(k)).reduce((a, k) => a + n[k], 0);
+    H.ok('串着 cd 的命令、改套件、读令牌：三次都拦下了', blocked(cd) && blocked(kit) && blocked(tok), [cd, kit, tok]);
+    H.ok('都数进了"拦下"（以前这三样都是 0）', n['block.cd'] === 1 && n['block.guard-kit'] === 1 && sum === 3, n);
+    H.ok('模型自己调交接的技能：数进"写交接记录"', n['handover.write'] === 1, n);
+    const stats = readJson(path.join(h.kit, 'state', 'block-stats.json'));
+    H.ok('"拦得最多的规矩"里也有', Object.values(stats).some((x) => x && x.hook === 'cd') && Object.values(stats).some((x) => x && x.hook === 'guard-kit'), Object.values(stats).map((x) => x && x.hook));
   }
 
   // ---------------------------------------------------------------------------------------------

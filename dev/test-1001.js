@@ -243,6 +243,8 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     const shell = path.join(w.work, 'shell');
     fs.mkdirSync(shell, { recursive: true });
     H.write(path.join(shell, 'README.md'), '# 壳子\n');
+    // 壳子要有点自己的东西才认（CLAUDE.md、openspec、.claude，或者自己是仓库）：1005 起不是壳子的目录不带下面的仓库
+    H.write(path.join(shell, 'CLAUDE.md'), '# 壳子的约定\n');
     const bare2 = path.join(root, 'web.git');
     H.git(root, ['init', '-q', '--bare', '--initial-branch=main', bare2]);
     const mate2 = H.makeRepo(path.join(root, 'mate2'), { 'index.html': '<p>1</p>\n' });

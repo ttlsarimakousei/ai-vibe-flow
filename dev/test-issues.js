@@ -140,6 +140,24 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('关掉之后又出现：新建一条，写明之前是哪条', r.json && r.json.created === 1 && fresh.length === 1 && new RegExp('之前的 #' + one.iid + ' 已经关闭').test(fresh[0].description), r.out + JSON.stringify(fresh.map((i) => i.description.slice(0, 80))));
     const keep = up(u, ['issues-export']);
     H.ok('页面上没勾"下载之后关掉"：只导出', keep.json && keep.json.count === 1 && gl.issues().filter((i) => i.state === 'opened').length === 1, keep.out);
+    // 导出之后、关掉之前，别的电脑在这条下面又补了一句：新补充的不在导出的文件里，这一条不能关
+    const OT = 'glpat-other-pc-token-000001';
+    gl.addToken(OT, 'li');
+    const openIid = gl.issues().find((i) => i.state === 'opened').iid;
+    const noted = await new Promise((resolve) => {
+      const data = Buffer.from(JSON.stringify({ body: '别的电脑后来补的：这台电脑上也出现了，多了一种触发办法' }));
+      const req = require('http').request({ host: '127.0.0.1', port: gl.port, path: '/api/v4/projects/77/issues/' + openIid + '/notes', method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': data.length, 'private-token': OT } }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      req.on('error', () => resolve(0));
+      req.end(data);
+    });
+    const cl = up(u, ['issues-close', keep.json.iids.join(','), '--name', keep.json.name]);
+    H.ok('导出之后又有人补充过的：不关，说了是哪条', noted === 201 && cl.json && cl.json.ok && cl.json.closed.length === 0 && Array.isArray(cl.json.later) && cl.json.later[0] === openIid && gl.issues().find((i) => i.iid === openIid).state === 'opened', [noted, cl.out]);
+    const sum2 = up(u, ['issues-summary']);
+    H.ok('上一次导出里记着有一条没关；每条的时间戳不交给页面', sum2.json && sum2.json.lastExport && sum2.json.lastExport.later === 1 && sum2.json.lastExport.stamps === undefined, sum2.out);
+    const again = up(u, ['issues-export']);
+    H.ok('下次导出整条带上，新补充的也在', again.json && again.json.count === 1 && /别的电脑后来补的/.test(again.json.text), again.out.slice(0, 600));
+    const cl2 = up(u, ['issues-close', again.json.iids.join(','), '--name', again.json.name]);
+    H.ok('这回没人再补充：关掉了', cl2.json && cl2.json.ok && cl2.json.closed.length === 1 && !cl2.json.later.length && gl.issues().every((i) => i.state === 'closed' || /使用情况/.test(i.title)), cl2.out);
   }
 
   H.section('使用情况：一台电脑一条议题，一天一条补充；今天的不传');
@@ -180,7 +198,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     up(u, ['issues-sync']);
     const e = up(u, ['issues-export']);
     const usageIid = ui()[0].iid;
-    H.ok('导出：使用情况的议题不当问题列', e.json && e.json.ok && !e.json.iids.includes(usageIid) && !/## #\d+ \[使用情况\]/.test(e.json.text) && e.json.count === 2, e.json && [e.json.iids, e.json.count]);
+    H.ok('导出：使用情况的议题不当问题列', e.json && e.json.ok && !e.json.iids.includes(usageIid) && !/## #\d+ \[使用情况\]/.test(e.json.text) && e.json.count === 1, e.json && [e.json.iids, e.json.count]);
     H.ok('导出：最后附了各台电脑的使用情况', /## 使用情况（/.test(e.json.text) && /\| 开口 \| 14 次/.test(e.json.text) && /\| 电脑 \| 天数 \|/.test(e.json.text) && e.json.usageDays >= 2, e.json.text.slice(e.json.text.indexOf('## 使用情况')));
     const c = up(u, ['issues-close', e.json.iids.join(','), '--name', e.json.name]);
     H.ok('关掉这一批：使用情况的议题还开着', c.json && c.json.ok && ui()[0].state === 'opened' && gl.issues().filter((i) => i.state === 'opened').length === 1, c.out);
