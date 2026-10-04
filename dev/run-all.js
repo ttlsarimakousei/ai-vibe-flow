@@ -27,12 +27,14 @@ const claudes = all('--claude');
 const rt = all('--rt')[0] || '';
 // 改名（ttls- 前缀）那一版：要一个还用着旧名字的版本来测"升上来会怎样"
 const oldNames = olds.find((d) => verOf(d) && verOf(d) <= '20260929.2205') || '';
+// 1005 那一批测"从上一版升上来"：给的旧版里最新的那个
+const newestOld = olds.filter((d) => verOf(d)).sort((a, b) => verOf(b).localeCompare(verOf(a)))[0] || '';
 const ps = (cmd) => { try { return execFileSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', cmd], { encoding: 'utf8', windowsHide: true, timeout: 60000 }); } catch (e) { return ''; } };
 const windows = () => ps('Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object { $_.ProcessName + "#" + $_.Id }').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).sort();
 const temps = () => fs.readdirSync(os.tmpdir()).filter((n) => /^(vkt|vke|vkz)-/.test(n));
 
 const before = windows();
-const suites = [['内网反馈 0928', 'test-feedback0928.js', []], ['内网反馈 0929', 'test-feedback0929.js', []], ['内网反馈 0930', 'test-feedback0930.js', []], ['1001：压缩、状态栏、拉代码', 'test-1001.js', []], ['看页面 0929', 'test-page-0929.js', ['18771']], ['起服务 0929', 'test-devserver-0929.js', ['18781']], ['配置页 0929', 'ui-kit-0929.js', ['18791']],
+const suites = [['内网反馈 0928', 'test-feedback0928.js', []], ['内网反馈 0929', 'test-feedback0929.js', []], ['内网反馈 0930', 'test-feedback0930.js', []], ['1001：压缩、状态栏、拉代码', 'test-1001.js', []], ['1005：自动模式、约定、路由', 'test-1005.js', ['18787'].concat(newestOld ? [newestOld] : [])],['看页面 0929', 'test-page-0929.js', ['18771']], ['起服务 0929', 'test-devserver-0929.js', ['18781']], ['配置页 0929', 'ui-kit-0929.js', ['18791']],
   ['查 redis', 'test-redis.js', ['18761']], ['后台自动探索', 'test-onboard.js', rt ? [rt] : []], ['自动归并、工具用量', 'test-auto-0930.js', []], ['全仓审查之后改的', 'test-review-0930.js', []], ['拦截类钩子（0930 审查）', 'test-guard-0930.js', []], ['配置页：数据库驱动', 'ui-data-0930.js', ['18795']], ['经验规则', 'test-lessons.js', []], ['安装、升级、卸载', 'test-install-0928.js', old ? [old] : []], ['配置页的经验规则', 'ui-lessons.js', ['18733', '0']], ['HTTP 方式的钩子', 'test-http-hooks.js', ['18734']], ['令牌保护、发布确认', 'test-secrets.js', []], ['自动更新和发布', 'test-update.js', ['18741']], ['问题上报和导出', 'test-issues.js', ['18743']], ['配置页的更新和上报', 'ui-update.js', ['18745', '0', '18746']]];
 if (old) suites.push(['旧版复现', 'check-old-repro.js', [old]]);
 if (old0929) suites.push(['旧版复现 0929', 'check-old-repro-0929.js', [old0929]]);

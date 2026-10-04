@@ -45,6 +45,8 @@ node dev/pack.js
 | `test-feedback0929.js` | 内网 0929 导出的问题反馈：id 重复、审查记账、打勾、放行、全自动模式和报告、不记噪音 |
 | `test-feedback0930.js` | 内网 0930 导出的议题 #1 到 #9 照原样复现，加上用下来提的几件事：全自动模式只在走 OpenSpec 流程时算数、变更的过程文件留到归档、调用记录里的错每天汇总、提示规则去掉、报告里"库里改过的" |
 | `test-1001.js` | 1001 这一批：安装器写 settings.json 的自动压缩窗口（改开关跟着改、填 0 和卸载时还回原来的）；状态栏三行；使用情况数次数、要传的那一段不带路径；开工前拉代码（真的 git 仓库和远端：快进、分叉、和没提交的改动冲突、没有远端、连不上、壳子、全自动记进报告）；问题列表标上报了没有 |
+| `test-1005.js` | 1005 这一批：安装器默认关掉 Claude Code 自带的自动模式（配置页改成"不管它"就去掉、你自己写的不动、卸载只收回自己加的、从上一版升上来也加上）；全局约定里有官方那句；开工前拉代码"本来就是最新"不占上下文；使用情况里模型名字带的内网地址遮掉；起一个临时路由，配置页的接口不收别的网站的页面发来的请求。第一个参数是路由端口，第二个给上一版的目录 |
+| `probes/` | 探测，不是回归测试：真的 Claude Code 加假网关，看某个版本在一件事上是怎么做的，输出给人看。`cc-compact.js`（到多少自动压缩）、`cc-automode.js`（没配权限模式进不进自带的自动模式、分类请求长什么样）、`cc-statusline.js`（交互界面里状态栏照不照常，用 winpty 抓屏）、`cc-http-hooks.js`（钩子走 HTTP 照不照常）。见下面"换 Claude Code 版本之前" |
 | `test-page-0929.js` | 看页面的场景：同一步里写断言、上传、应答文件选择框、点被盖住的控件。用本机的 Edge 无头跑 |
 | `test-devserver-0929.js` | 起服务的工具：最后一行是结果，停的时候进程清干净 |
 | `ui-kit-0929.js` | 配置页重排之后：接口、页面上每个开关都在、保存条、三张表。第二个参数给目录就存截图 |
@@ -87,13 +89,39 @@ node dev/pack.js
 npm install --prefix "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120" @anthropic-ai/claude-code@2.1.120
 ```
 
-程序在 `<那个目录>\node_modules\@anthropic-ai\claude-code\bin\claude.exe`。一个版本两百多 MB。这台电脑上装着 2.1.120 和 2.1.259，以后还要用，不删。
+程序在 `<那个目录>\node_modules\@anthropic-ai\claude-code\bin\claude.exe`。一个版本两百多 MB。这台电脑上装着 2.1.120、2.1.259 和 2.1.289，以后还要用，不删。
 
 上一版的套件直接用 `dev/baseline/` 里留的那份：
 
 ```bash
-node dev/run-all.js --old dev/baseline/20260930.1505/vibe-kit
+node dev/run-all.js --old dev/baseline/20261001.0303/vibe-kit
 ```
+
+## 换 Claude Code 版本之前
+
+内网要升 Claude Code、或者官方出了新版想知道套件受不受影响，先把那个版本装到上面说的目录，跑四个探测，再拿它跑端到端：
+
+```bash
+node dev/probes/cc-compact.js 2.1.289
+```
+
+```bash
+node dev/probes/cc-automode.js 2.1.289
+```
+
+```bash
+node dev/probes/cc-statusline.js 2.1.289
+```
+
+```bash
+node dev/probes/cc-http-hooks.js 2.1.289
+```
+
+```bash
+node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.289\node_modules\@anthropic-ai\claude-code\bin\claude.exe" --rt auto
+```
+
+参数给版本号（到上面那个目录里找）或者 `claude.exe` 的路径。探测的输出是给人看的：和 `docs/claude-code-facts.md` 里记的对一遍，有变化的记进去，要改套件的改套件。`cc-automode.js` 加环境变量 `PROBE_CLASSIFIER=garbage` 能看分类模型答得不合格式时会怎样（内网的模型多半就是这种情况）。
 
 ## 查库的运行环境
 
