@@ -13,7 +13,7 @@ node dev/run-all.js
 加上新旧对比、端到端、连真的 JDBC 数据库：
 
 ```bash
-node dev/run-all.js --old dev/baseline/20260930.1505/vibe-kit --old dev/baseline/20260929.2205/vibe-kit --claude <claude.exe> --claude <另一个版本的 claude.exe> --rt auto
+node dev/run-all.js --old dev/baseline/20261005.0302/vibe-kit --old dev/baseline/20261001.0303/vibe-kit --claude <claude.exe> --claude <另一个版本的 claude.exe> --rt auto
 ```
 
 `--old` 可以给几个，新旧对比每个都比一遍。有意改过的地方每一项记着是哪一版改的：拿来比的上一版比它老，两版应该不一样；上一版已经带着这个改动，两版应该一样。

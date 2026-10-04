@@ -27,7 +27,7 @@
 1. 全量回归，盯着桌面跑（参数见 [dev/README.md](../dev/README.md)）：
 
    ```bash
-   node dev/run-all.js --rt auto --claude <2.1.259 的 claude.exe> --claude <2.1.120 的 claude.exe> --old dev/baseline/<最新的基线>/vibe-kit --old dev/baseline/<再早一版>/vibe-kit
+   node dev/run-all.js --rt auto --claude <2.1.289 的 claude.exe> --claude <2.1.259 的 claude.exe> --claude <2.1.120 的 claude.exe> --old dev/baseline/<最新的基线>/vibe-kit --old dev/baseline/<再早一版>/vibe-kit
    ```
 
    要求：全过、桌面上没有多出窗口、临时目录没留下东西。
