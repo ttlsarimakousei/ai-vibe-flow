@@ -72,6 +72,10 @@
 - 交互界面可以在看不见的控制台里跑起来抓屏：Git for Windows 带的 `winpty -Xallow-non-tty -Xplain`，`.claude.json` 里先写好 `hasCompletedOnboarding` 和项目的 `hasTrustDialogAccepted`。
 - 测试项目建在用户目录下面时（`%TEMP%` 就在用户目录下面），Claude Code 会往上找到真实的 `~/.claude/CLAUDE.md`，当成上级目录的项目说明读进来（只读，没改）。要完全隔离，把测试项目建在用户目录之外。
 
+## 官方文档里写的、还没实测（2026-10-05 查的）
+
+- 钩子的超时（hooks 文档）：`command`、`http` 默认 600 秒；**在 UserPromptSubmit 上降到 30 秒**。到点就结束钩子、丢掉它的输出，这一轮照常往下走。每个钩子可以用 `timeout` 字段自己定（秒）。套件的"用户开口"钩子里有开工前拉代码，所以安装器给它写明 300 秒。哪个版本开始降到 30 秒文档没说。
+
 ## 更新日志里说的、还没实测（2026-10-05 查的，2.1.260 到 2.1.289）
 
 npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG，和套件有关，**没有在真的 Claude Code 上验过**：
