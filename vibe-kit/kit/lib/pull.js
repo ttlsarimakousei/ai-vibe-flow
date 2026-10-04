@@ -13,7 +13,7 @@
  *   没有跟踪的远端分支、分离头指针、合并/变基做到一半 → 不拉，不提
  *   连不上、没权限、超时                             → 没拉成，告诉它照本地的做
  * git 一律不交互（不弹登录框、不问口令），拉一个仓库最多等 15 秒。
- * 结果带给模型几行；拉到了新代码的，提醒它之前读过的代码可能变了。全自动模式下没拉成的，记进报告"留给你做的"。
+ * 结果带给模型几行；拉到了新代码的，提醒它之前读过的代码可能变了。本来就是最新的不说（不占上下文）。全自动模式下没拉成的，记进报告"留给你做的"。
  */
 const fs = require('fs');
 const path = require('path');
@@ -148,8 +148,9 @@ function linesOf(results, cwd, auto) {
     else if (r.fail === 'dirty' || r.fail === 'untracked') out.push(name(r) + '：远端有 ' + r.behind + ' 个新提交，和' + (r.fail === 'untracked' ? '还没 add 的新文件' : '没提交的改动') + '碰到同一些文件' + (r.files && r.files.length ? '（' + r.files.slice(0, 5).join('、') + '）' : '') + '，git 没让拉，什么都没变。' + ask);
     else if (r.fail) out.push(name(r) + '：没拉成（' + (r.why || r.fail) + '），照本地的代码做');
   }
-  if (!out.length && !latest.length) return '';
-  if (latest.length) out.push(out.length ? '其余 ' + latest.length + ' 个仓库本来就是最新的' : latest.length > 1 ? latest.length + ' 个仓库都是最新的' : name(latest[0]) + '：本来就是最新的');
+  // 都是最新的：模型用不着知道，不往上下文里放字（流水账里有）
+  if (!out.length) return '';
+  if (latest.length) out.push('其余 ' + latest.length + ' 个仓库本来就是最新的');
   return '开工前拉了一次代码（只快进，同一个仓库 2 小时内不再拉）：' + (out.length > 1 ? '\n- ' + out.join('\n- ') : out[0]);
 }
 
