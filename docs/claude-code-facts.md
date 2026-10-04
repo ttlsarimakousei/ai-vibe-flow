@@ -1,8 +1,8 @@
 # 实测过的 Claude Code 行为
 
-设计套件时用到的事实，都是在真的 Claude Code 上测出来的（一般做法：npm 把指定版本装到单独的目录，本进程起一个记录请求、按剧本回复的假模型，`claude -p` 的环境变量里去掉所有 `CLAUDE*`、`ANTHROPIC*`，再把 `HOME`、`USERPROFILE`、`CLAUDE_CONFIG_DIR` 指到假目录）。内网同事的版本从 2.1.120 到 2.1.259 都有，**套件两头都要兼容**。
+设计套件时用到的事实，都是在真的 Claude Code 上测出来的（一般做法：npm 把指定版本装到单独的目录，本进程起一个记录请求、按剧本回复的假模型，`claude -p` 的环境变量里去掉所有 `CLAUDE*`、`ANTHROPIC*`，再把 `HOME`、`USERPROFILE`、`CLAUDE_CONFIG_DIR` 指到假目录）。内网同事的版本从 2.1.120 到 2.1.259 都有，**套件两头都要兼容**；2026-10-05 又在当时最新的 2.1.289 上测了一遍（见最后两节）。
 
-没写版本的，2.1.120 和 2.1.259 都一样。拿不准的写着"没实测"。
+没写版本的，2.1.120 和 2.1.259 都一样。拿不准的写着"没实测"。换 Claude Code 版本之前，先跑 `dev/probes/` 里的四个探测（见 [dev/README.md](../dev/README.md)）。
 
 ## 读写文件
 
@@ -35,7 +35,7 @@
 
 ## 状态栏
 
-- 输出几行就显示几行（2.1.120、2.1.259 都认）。
+- 输出几行就显示几行（2.1.120、2.1.259 是读代码确认的，2.1.289 是在交互界面里实测的）。
 - settings.json 里 `statusLine.refreshInterval`（秒）能让它没有新消息时也定时刷新。
 
 ## 权限
@@ -53,16 +53,33 @@
 - 内网网关的回复是整段返回的（攒包在网关那层，不在模型、不在路由）。网关对单次请求体有大小上限（实测约 1 MB，合二十三四万 token），超了直接 413，换模型、`/compact` 都没用。路由记下实测到的上限，快到时状态栏提前警告。
 - 路由原样转发请求，上游收到的字节和 Claude Code 发出的逐字节一致，不破坏提示缓存。真正让缓存失效的是换模型、请求被放弃后重发、上下文太长（30 万 token 时热请求比冷请求还慢）。
 
+## 2.1.289 上实测的（2026-10-05）
+
+测法：`dev/probes/` 里的四个探测（真的 Claude Code 加假网关），加上端到端五套。
+
+- **`autoCompactWindow` 照样认**（settings.json 顶层）：设 50 万、报 48 万就压缩，报 30 万不压；设 93.3 万、报 91 万就压缩。另外 2.1.289 不设这一项也会按用量压缩了（报 99 万时压缩），不像 2.1.259 那样一直涨。`/autocompact` 按模型各存一份的那个改动没测。
+- **没配权限模式时默认进"自动模式"（auto mode）**，`-p` 和交互界面都是，经网关、模型名不认识的也是：
+  - 套件装的整条 `Bash` 放行规则在自动模式下不算数。`echo`、`git status`、在项目里 Write / Edit / Read 不过分类器；`node -e`、`curl` 这类每条先发一个分类请求：模型名 `claude-sonnet-5`，不走流式，系统提示约 14 万字符，`max_tokens` 64，带 `stop_sequences`。
+  - 分类器要的回答有两种格式（看它拿到的是哪一套提示）：`<block>no</block>` / `<block>yes</block><category>…</category><reason>…</reason>`，或者 `<severity>N</severity>`。答得不合格式：第一段重试 5 次，再用 `max_tokens` 8192 的第二段重试 5 次，然后这条命令被拦下（"Auto mode could not evaluate this action and is blocking it for safety"）。
+  - 启动时 stderr 有一句：经网关的会话分类请求照旧计费。
+  - **这几种都不进自动模式、没有分类请求**：`permissions.disableAutoMode: "disable"`；`permissions.defaultMode` 写成 `default` 或 `acceptEdits`；命令行 `--dangerously-skip-permissions`。
+  - 交互界面：只写 `defaultMode: "default"` 的，会弹一次"Make auto mode your default permission mode?"，默认选中的是 Yes。写 `disableAutoMode` 的不弹，底下显示 `manual mode on`。
+  - `permissions.disableAutoMode` 这一项 2.1.120、2.1.259 不认识，但不碍事：设置文件照常生效（放行规则、钩子都在）。
+  - 套件没关自动模式之前，端到端五套在 2.1.289 上挂了 31 项（命令被拦、审查代理没跑起来）；套件写上 `disableAutoMode` 之后五套 190 项全过。
+- **钩子**：命令方式的 SessionStart、UserPromptSubmit、PreToolUse、Stop 照常（端到端五套）；HTTP 方式的 pre-edit、guard-commit、verify-gate 照常打到路由，拦截和"要确认"都生效。已有的文件没先 Read 就 Write，Claude Code 自己先报错，不走钩子。
+- **状态栏**：多行照常显示；`refreshInterval: 30` 起作用（实测相隔 28.8、30.0 秒）；输入里 `context_window.used_percentage`、`current_usage` 在第一次回复之前是 `null`，之后是数字。2.1.289 多了几个字段：`prompt_cache`（`hit_ratio`、`last_miss_cause` 这些）、`cost`、`effort`、`exceeds_200k_tokens`、`prompt_id`。
+- 不指定模型时发出去的模型名是 `claude-opus-5-5`；启动时会对网关发一个 `HEAD /api/hello`。
+- 交互界面可以在看不见的控制台里跑起来抓屏：Git for Windows 带的 `winpty -Xallow-non-tty -Xplain`，`.claude.json` 里先写好 `hasCompletedOnboarding` 和项目的 `hasTrustDialogAccepted`。
+- 测试项目建在用户目录下面时（`%TEMP%` 就在用户目录下面），Claude Code 会往上找到真实的 `~/.claude/CLAUDE.md`，当成上级目录的项目说明读进来（只读，没改）。要完全隔离，把测试项目建在用户目录之外。
+
 ## 更新日志里说的、还没实测（2026-10-05 查的，2.1.260 到 2.1.289）
 
-内网最新是 2.1.259，npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG，和套件有关，**没有在真的 Claude Code 上验过**，内网装到这些版本之前要先测：
+npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG，和套件有关，**没有在真的 Claude Code 上验过**：
 
-- 2.1.277：项目里没有 CLAUDE.md 时读 AGENTS.md。子代理的结果带着"这是子代理的输出"的标头、正文缩进送回主代理（套件认审查结论的正则没有锚定行首，不受影响）。去掉了 TaskOutput 工具。
+- 2.1.277：项目里没有 CLAUDE.md 时读 AGENTS.md。子代理的结果带着"这是子代理的输出"的标头、正文缩进送回主代理（套件认审查结论的正则没有锚定行首；端到端里审查记账在 2.1.289 上是过的）。去掉了 TaskOutput 工具。
 - 2.1.281：`--dangerously-skip-permissions` 和自动模式下，危险的 `rm` 等 2 分钟没人答就拒绝并给改法，无人值守的会话不再一直挂着。`settings.json` 加了 `"attribution": false`（注意：老版本碰到这一项会跳过整个设置文件，跨版本共用的文件要写成对象的形式）。
 - 2.1.283：`/doctor prompt-audit` 能审 CLAUDE.md、技能、代理里给旧模型写的提示写法。
-- 2.1.284 / 2.1.285：**没配 `permissions.defaultMode` 时，交互会话、`-p` 都默认进"自动模式"（一个分类器审每次工具调用），第三方网关、关了遥测的也一样**。分类器在服务端跑不了的时候在本地跑、算用量。内网经网关用的话，这会多出请求、占每天的额度；套件没有写 `defaultMode`，升到这些版本前要定下来写不写。
-- 2.1.284：压缩之后还是"Prompt is too long"会再压一次、少留一些。2.1.288：上一次回复报的 token 用量是 0 时，不再直接报"Prompt is too long"，会去压缩（内网模型不报用量的话可能就是这一条）。
-- 2.1.288：**带 `paths` 的规则和子目录的 CLAUDE.md，Write、Edit 建了或改了范围里的文件也会加载**（以前只有 Read）。`/autocompact` 改成按模型各存一份窗口：套件写的是顶层的 `autoCompactWindow`，新版本还认不认、存成什么样，要测。PreToolUse 钩子匹配失败或者输入没法序列化时不再跳过，直接拦下。
+- 2.1.284：压缩之后还是"Prompt is too long"会再压一次、少留一些。2.1.288：上一次回复报的 token 用量是 0 时，不再直接报"Prompt is too long"，会去压缩。
+- 2.1.288：**带 `paths` 的规则和子目录的 CLAUDE.md，Write、Edit 建了或改了范围里的文件也会加载**（以前只有 Read）。PreToolUse 钩子匹配失败或者输入没法序列化时不再跳过，直接拦下。
 - 2.1.287：Windows 上 Bash 工具每条命令前少起一个子 shell，快了一些。Opus 4.7 以后和 Fable 在网关上默认 1M 窗口。
-- 2.1.280 / 2.1.284：默认模型换成 Opus 5.5、Sonnet 5.5，不指定模型时发出去的模型名会变（路由按角色关键词分流，不受影响；README 里写的 `claude-opus-5` 是 2.1.259 的）。
 - 2.1.271：`cd` 加 git、两次 cd、子 shell 这类命令在跳过权限模式下的确认框，和 `permissions.blockReadsOutsideWorkingDirectories` 有关。

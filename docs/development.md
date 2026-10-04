@@ -43,6 +43,10 @@ H.cleanup();
 
 自己起子进程的话，`HOME`、`USERPROFILE`、`CLAUDE_CONFIG_DIR`、`APPDATA`、`LOCALAPPDATA` 都指到临时目录，用完删掉。
 
+## 换 Claude Code 版本
+
+套件靠的是 Claude Code 的具体行为（钩子、状态栏、压缩、权限模式），这些会随版本变。内网要升版本之前，照 [dev/README.md](../dev/README.md) 的"换 Claude Code 版本之前"跑四个探测和端到端，把结果记进 [claude-code-facts.md](claude-code-facts.md)。2026-10-05 用这个办法在 2.1.289 上查出了"默认进自动模式"会让套件的流程挂掉。
+
 ## 出问题先看哪
 
 - 钩子做了什么：装好的套件里的 `state/hooks.log`（测试里在假用户目录下）。
