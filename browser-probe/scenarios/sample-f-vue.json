@@ -1,0 +1,28 @@
+{
+  "name": "F Vue 单页应用：动态路由菜单 + Element 表格分页 + 深链到异步组件 + 组件归因",
+  "disableAnimations": true,
+  "timeout": 20000,
+  "consoleIgnore": ["\\[Vue warn\\]", "\\[HMR\\]"],
+  "steps": [
+    { "goto": "/f/login" },
+    { "fill": { "label": "用户名" }, "value": "admin" },
+    { "fill": { "label": "密码" }, "value": "admin123" },
+    { "click": { "role": "button", "name": "登录" } },
+    { "waitUrl": "**/f/users" },
+    { "wait": ".user-table .el-table__row", "note": "el-table 数据行" },
+    { "readCount": ".el-menu-item", "as": "menuItems", "note": "登录后按权限动态注册的路由才会出现在菜单里" },
+    { "read": ".el-pagination__total", "as": "total" },
+    { "readCount": ".user-table .el-table__body .el-tag--danger", "as": "stoppedOnPage1", "note": "函数式组件 StatusTag 渲染的停用标签。必须限定在 .el-table__body 里：el-table 会把列插槽在隐藏的 hidden-columns 区域多渲染一份占位，不限定会多数 1 个" },
+    { "click": ".el-pagination .btn-next" },
+    { "click": ".el-pagination .btn-next" },
+    { "wait": 400 },
+    { "readCount": ".user-table .el-table__row", "as": "page3Rows" },
+    { "layout": "users", "root": ".view-users" },
+    { "goto": "/f/report", "note": "深链：整页重载后守卫先拉权限再注册路由，再经过 Suspense 等异步组件；老机器上整套 vendor 脚本重新解析可能要好几秒，所以本场景 timeout 放到 20 秒" },
+    { "wait": "#reportOrders" },
+    { "read": "#reportOrders", "as": "reportOrders" },
+    { "read": { "text": "统计周期" }, "as": "periodLabel" },
+    { "screenshot": "report", "mask": [{ "text": "更新时间" }] },
+    { "expectNoConsoleErrors": true }
+  ]
+}

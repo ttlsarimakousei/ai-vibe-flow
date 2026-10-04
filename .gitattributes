@@ -1,0 +1,3 @@
+# git 不改换行、不转编码：检出来的和提交的一字节不差。
+# .bat 是 GBK + CRLF（cmd 才认得中文），别的文本是 UTF-8 + LF；dev/pack.js 打包时会逐字节核对
+* -text

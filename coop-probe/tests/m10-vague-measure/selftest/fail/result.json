@@ -1,0 +1,15 @@
+{
+  "before_ms": "未获取",
+  "after_ms": "未获取",
+  "bottlenecks": [
+    {
+      "file": "build-report.js",
+      "what": "主循环里嵌套 orders.filter，典型的 O(n^2)，数据量一上来就慢",
+      "share_pct": 90
+    }
+  ],
+  "how_measured": "看代码就能判断：嵌套循环是最明显的性能问题，换成 Map 一次统计之后复杂度从 O(n^2) 降到 O(n)，应该会快很多。",
+  "changed_files": [
+    "build-report.js"
+  ]
+}

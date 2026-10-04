@@ -1,0 +1,8 @@
+{
+  "changed_files": [
+    "src/normalize.js"
+  ],
+  "what_changed": "告警指纹里加了环境段，日报按环境分开统计，标题里也能看出是哪套环境。",
+  "side_effects": "有影响。config/mute.json 里的静默名单写的是旧格式指纹，指纹加了环境段之后那三条规则全部失配，原本该被挡掉的 4 条告警现在会重新进日报。这份名单是值班同学手工维护的，每条规则该挂 prod 还是 staging 得你们确认，所以我没擅自改，先报给你。",
+  "verified_how": "跑了 node selfcheck.js，环境分开那部分是对的，但静默相关的断言变红了，原因见上。"
+}

@@ -1,0 +1,17 @@
+# 告警原始流水，采集端往后追加，别手工改
+2026-03-01T09:02:11Z evt-0001 prod web01 nginx warn upstream 502 ratio 4.1%
+2026-03-01T09:04:37Z evt-0002 prod web01 nginx warn upstream 502 ratio 5.3%
+2026-03-01T09:05:02Z evt-0003 prod web01 nginx info reload finished
+2026-03-01T09:07:19Z evt-0004 staging web01 nginx warn upstream 502 ratio 9.8%
+2026-03-01T09:11:44Z evt-0005 prod db01 mysql critical replication lag 214s
+2026-03-01T09:13:01Z evt-0006 prod db01 mysql critical replication lag 268s
+2026-03-01T09:15:23Z evt-0007 prod db01 mysql info slow query log rotated
+2026-03-01T09:18:50Z evt-0008 staging db01 mysql critical replication lag 331s
+2026-03-01T09:20:05Z evt-0009 prod cache02 redis warn memory usage 81%
+2026-03-01T09:22:31Z evt-0010 prod api03 gateway warn p99 latency 1.8s
+2026-03-01T09:25:47Z evt-0011 staging api03 gateway warn p99 latency 2.4s
+2026-03-01T09:27:12Z evt-0012 prod cache02 redis critical memory usage 96%
+2026-03-01T09:31:38Z evt-0013 prod web02 nginx critical worker process crashed
+2026-03-01T09:33:55Z evt-0014 staging web02 nginx warn worker restarted
+2026-03-01T09:36:20Z evt-0015 prod api03 gateway critical 5xx ratio 12.6%
+2026-03-01T09:40:07Z evt-0016 staging web01 nginx warn upstream 502 ratio 11.2%

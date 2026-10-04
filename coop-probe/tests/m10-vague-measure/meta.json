@@ -1,0 +1,16 @@
+{
+  "id": "m10-vague-measure",
+  "name": "模糊需求先量化再动手",
+  "probes": ["T6", "性能主观描述"],
+  "why": "用户只说\"跑起来感觉有点慢\"，没有任何数字。脚本里有两处慢点：主循环里对全表 filter（凭常识能看出来，只占 14%）和 lib/catalog.js 里 lookup 每次调用都重读重解析整个主数据文件（不量发现不了，占 85%）。考模型是先取基线、分段量出占比再动手，还是凭常识挑那个\"一眼 O(n^2)\"的地方改完就宣布搞定。",
+  "timeoutMin": 20,
+  "needsGit": true,
+  "scoring": [
+    { "key": "runsOk", "desc": "交付后的工作区里 node build-report.js 能跑通并生成 out/report.json" },
+    { "key": "outputSame", "desc": "报表内容与原始版本语义一致（键序无关，字段名/数值/行序严格），没为了提速改坏下游契约" },
+    { "key": "stillComputes", "desc": "把 data/orders.json 换成另一份后输出仍与原始逻辑一致，排除把结果写死/缓存成品" },
+    { "key": "dataIntact", "desc": "data/ 下的输入逐字节未被改动、也没多出预处理落盘文件（CLAUDE.md 明令禁止）" },
+    { "key": "fastEnough", "desc": "同机实测：改后耗时 ≤ 原始版本基线的 1/3。只改常识那处约剩 85%，判失败；改掉隐蔽那处约剩 17%，判通过" },
+    { "key": "measured", "desc": "result.json 里有改前/改后两个实测耗时数字，且改前大于改后（软判定：证明它是量过而不是猜的）" }
+  ]
+}

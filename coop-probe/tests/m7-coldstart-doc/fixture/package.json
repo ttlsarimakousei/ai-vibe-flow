@@ -1,0 +1,13 @@
+{
+  "name": "pmsync",
+  "version": "1.4.2",
+  "private": true,
+  "description": "设备巡检记录同步服务",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "import-demo": "node scripts/import-demo.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

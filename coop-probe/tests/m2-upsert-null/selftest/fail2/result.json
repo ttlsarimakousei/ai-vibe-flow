@@ -1,0 +1,6 @@
+{
+  "changed": ["sync.js"],
+  "howMatched": "遍历目标表找 sku 相同的行，找到就更新，找不到就 push 一条新的",
+  "afterSync": 13,
+  "anomalies": "无"
+}

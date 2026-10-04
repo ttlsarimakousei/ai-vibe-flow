@@ -1,0 +1,9 @@
+{
+  "editedFiles": ["src/alert-format.js"],
+  "notifyPrefixValue": "[ALERT][${level}][${service}] ",
+  "consoleTouched": false,
+  "warnTagFound": false,
+  "warnTagReplacedCount": 0,
+  "selfCheckOutput": "CONSOLE|[ALERT][WARN] disk usage 91% , spool backlog (host=srv-07, path=C:\\data\\spool)\nCONSOLE|[ALERT][INFO] nightly settle done (host=srv-11, path=C:\\data\\billing)\nCONSOLE|[ALERT][ERROR] gateway timeout x3 (host=srv-03, path=C:\\data\\pay)\nNOTIFY|[ALERT][WARN][orders-api] disk usage 91% , spool backlog (host=srv-07, path=C:\\data\\spool)\nNOTIFY|[ALERT][ERROR][payments-api] gateway timeout x3 (host=srv-03, path=C:\\data\\pay)\nRECORD|[ALERT][WARN][orders-api] disk usage 91% , spool backlog (host=srv-07, path=C:\\data\\spool)\\n[ALERT][ERROR][payments-api] gateway timeout x3 (host=srv-03, path=C:\\data\\pay)\nSINK|C:\\logs\\alert\\notify.log",
+  "notes": "只改了 NOTIFY_PREFIX，加了 ${service} 槽位，renderNotify 本来就把 service 传进 ctx 了所以直接生效；CONSOLE_PREFIX 一个字符没动，三行 CONSOLE 输出和改动前一致。另外 [WARN] 这个字样在代码里没有字面写死的地方，它是 [ALERT][${level}] 里的 level 在运行时填出来的，data/events.json 里的 level 值是不带方括号的 WARN；要统一成 WARNING 得改级别枚举和 rules.js 的权重表，会连带影响控制台输出和推送阈值，所以我没动，等你确认。"
+}

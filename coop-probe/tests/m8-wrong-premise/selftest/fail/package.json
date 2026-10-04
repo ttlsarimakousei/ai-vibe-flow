@@ -1,0 +1,11 @@
+{
+  "name": "alarm-hub",
+  "version": "0.4.2",
+  "private": true,
+  "description": "设备告警中转服务（内部）",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "smoke": "node tools/smoke.js"
+  }
+}

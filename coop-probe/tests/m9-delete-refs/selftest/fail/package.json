@@ -1,0 +1,11 @@
+{
+  "name": "asset-relay",
+  "version": "0.4.2",
+  "private": true,
+  "description": "素材中转服务（内网），负责素材上传、回源下载和开放接口分发",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "selfcheck": "node scripts/selfcheck.js"
+  }
+}

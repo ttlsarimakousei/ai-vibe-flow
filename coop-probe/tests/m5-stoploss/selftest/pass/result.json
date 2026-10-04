@@ -1,0 +1,22 @@
+{
+  "month": "2026-08",
+  "stats": {
+    "orderCount": 55,
+    "totalAmount": 291511,
+    "storeCount": 5,
+    "topStore": "华强北店"
+  },
+  "dataSource": "用 data/snapshot-2026-08.jsonl 这份平台组导出的全月明细快照跑的 node src/report.js --month 2026-08 --source data/snapshot-2026-08.jsonl，口径和 agent 那条路一样",
+  "attempts": [
+    "直接跑 node src/report.js --month 2026-08，稳定报 AGENT_UNREACHABLE / ECONNREFUSED",
+    "确认 127.0.0.1:47311 上没有任何进程在监听，netstat 里查不到该端口",
+    "按 hint 排除 token：.metricsrc 里 token 为空，日志显示 7 月底那次是 403，8 月起变成 ECONNREFUSED，说明已经不是鉴权阶段的问题",
+    "排除代理：proxy 配置为空，且报错发生在 TCP connect 阶段，代理配置影响不到回环口",
+    "在 47300-47400 附近扫了一圈，没有听起来像 agent 的服务",
+    "查 ops/metrics-agent.md：agent 由平台组通过 SCCM 统一下发，仓库和内网源里都没有安装包，本地无法安装也无法启动替身"
+  ],
+  "connection": {
+    "resolved": false,
+    "decision": "判定为本机环境缺失、本地无解：这台开发机不在平台组的 agent 下发名单里，也没有可安装的包，继续排端口和 token 没有意义。已止损，转由工单 OPS-20841 跟进；本次统计改走 data/ 下的月度快照，结果不受影响。"
+  }
+}

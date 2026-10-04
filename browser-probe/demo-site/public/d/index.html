@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数据看板 - 演示站 D</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="plain-body">
+  <div class="dash-page">
+    <h1>数据看板</h1>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab active" role="tab" data-tab="sales">销售</button>
+      <button type="button" class="tab" role="tab" data-tab="inventory">库存</button>
+      <button type="button" class="tab" role="tab" data-tab="customers">客户</button>
+      <span class="tabs-right">
+        <button type="button" class="btn btn-sm" id="refreshBtn">刷新</button>
+        <span id="refreshCount">已刷新 0 次</span>
+        <span id="refreshTime" class="muted"></span>
+      </span>
+    </div>
+    <div id="panels"></div>
+  </div>
+<script src="/common.js"></script>
+<script src="/d/app.js"></script>
+</body>
+</html>

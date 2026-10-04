@@ -1,0 +1,9 @@
+{
+  "table": "target",
+  "rows": [
+    { "sku": "WH-1001", "name": "马克杯 白", "qty": 90, "price": 19.9 },
+    { "sku": "WH-1002", "name": "马克杯 黑", "qty": 60, "price": 18.5 },
+    { "sku": "WH-1015", "name": "帆布袋 中号", "qty": 40, "price": 29 },
+    { "sku": "WH-1099", "name": "亚克力相框 已停产", "qty": 5, "price": 45 }
+  ]
+}

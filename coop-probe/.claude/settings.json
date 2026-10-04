@@ -1,0 +1,60 @@
+{
+    "permissions":  {
+                        "allow":  [
+                                      "Bash",
+                                      "Read",
+                                      "Write",
+                                      "Edit",
+                                      "Glob",
+                                      "Grep"
+                                  ],
+                        "deny":  [
+                                     "Bash(git push:*)",
+                                     "WebFetch",
+                                     "WebSearch"
+                                 ]
+                    },
+    "hooks":  {
+                  "PostToolUse":  [
+                                      {
+                                          "matcher":  ".*",
+                                          "hooks":  [
+                                                        {
+                                                            "type":  "command",
+                                                            "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"D:\\WorkSpace\\AI\\ai-vibe-flow\\coop-probe\\tools\\hook-log.ps1\" -Event PostToolUse"
+                                                        }
+                                                    ]
+                                      }
+                                  ],
+                  "UserPromptSubmit":  [
+                                           {
+                                               "hooks":  [
+                                                             {
+                                                                 "type":  "command",
+                                                                 "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"D:\\WorkSpace\\AI\\ai-vibe-flow\\coop-probe\\tools\\hook-log.ps1\" -Event UserPromptSubmit"
+                                                             }
+                                                         ]
+                                           }
+                                       ],
+                  "Stop":  [
+                               {
+                                   "hooks":  [
+                                                 {
+                                                     "type":  "command",
+                                                     "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"D:\\WorkSpace\\AI\\ai-vibe-flow\\coop-probe\\tools\\hook-log.ps1\" -Event Stop"
+                                                 }
+                                             ]
+                               }
+                           ],
+                  "SessionStart":  [
+                                       {
+                                           "hooks":  [
+                                                         {
+                                                             "type":  "command",
+                                                             "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"D:\\WorkSpace\\AI\\ai-vibe-flow\\coop-probe\\tools\\hook-log.ps1\" -Event SessionStart"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+              }
+}

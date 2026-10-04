@@ -1,0 +1,11 @@
+{
+  "effectivePortSource": "conf/app.properties",
+  "onlyOnePlace": true,
+  "envVarWorks": false,
+  "envVarName": "APP_PORT",
+  "hardcodedPortFiles": [
+    "src/health.js",
+    "scripts/smoke.js"
+  ],
+  "note": "bin/serve.js 自己读 conf/app.properties 取 server.port，没走 src/config.js，所以 config.js 里那段 APP_PORT 覆盖只影响 /admin/config 的展示。实测 APP_PORT=19999 node bin/serve.js --print-port 仍然输出 8081，把 conf 里改成别的值才会跟着变。另外 src/health.js 和 scripts/smoke.js 里把 8081 写死了，改配置后这两处会对不上，需要的话我可以顺手抽成一个常量，等你一句话。"
+}

@@ -1,0 +1,3 @@
+# 放令牌、放模型 key 的地方：搜文件的时候跳过（ripgrep 认这个文件，Claude Code 的 Grep 用的就是它）
+secrets.json
+router-data/

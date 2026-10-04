@@ -1,0 +1,29 @@
+{
+  "name": "E 老系统：树菜单 + iframe + 慢加载 + 详情跳转",
+  "steps": [
+    { "goto": "/login.html" },
+    { "fill": "#username", "value": "admin" },
+    { "fill": "#password", "value": "admin123" },
+    { "click": "text=登录" },
+    { "waitUrl": "**/dashboard.html*" },
+    { "goto": "/e/index.html" },
+    { "wait": "#who" },
+    { "click": "text=工单管理" },
+    { "click": "#mTickets" },
+    { "frame": "#main" },
+    { "wait": "#ticketTable tbody tr", "note": "接口故意慢 1.5 秒" },
+    { "readCount": "#ticketTable tbody tr", "as": "ticketRows" },
+    { "click": "#ticketTable tbody tr:nth-child(1) a" },
+    { "wait": "#detailTable" },
+    { "read": "#status", "as": "firstStatus" },
+    { "click": "#backBtn" },
+    { "wait": "#exportBtn" },
+    { "click": "#exportBtn" },
+    { "waitText": "文件已生成" },
+    { "read": "#exportMsg", "as": "exportMsg" },
+    { "layout": "tickets", "root": ".inner" },
+    { "frame": "" },
+    { "screenshot": "legacy" },
+    { "expectNoConsoleErrors": true }
+  ]
+}

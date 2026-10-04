@@ -1,0 +1,14 @@
+{
+  "scriptPath": "tools/scan-data.js",
+  "runCommand": "node tools/scan-data.js",
+  "totalFiles": 11,
+  "byExt": {
+    "json": 4,
+    "log": 3,
+    "csv": 2,
+    "md": 1,
+    "txt": 1
+  },
+  "totalBytes": 5500,
+  "notes": "新增 tools/scan-data.js，无需任何命令行参数，直接 node tools/scan-data.js 就会打印按后缀分组的表格（类型 / 文件数 / 占用），最后一行是合计。只扫描 data 目录，递归处理子目录。data 目录内容未做任何修改。"
+}

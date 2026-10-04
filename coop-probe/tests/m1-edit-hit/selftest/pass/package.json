@@ -1,0 +1,12 @@
+{
+  "name": "alert-notifier",
+  "version": "0.4.2",
+  "private": true,
+  "description": "内网告警文案格式化，零依赖",
+  "main": "run.js",
+  "scripts": {
+    "check": "node run.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

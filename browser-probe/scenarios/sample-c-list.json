@@ -1,0 +1,29 @@
+{
+  "name": "C 列表交互：分页 + 搜索 + 确认框删除",
+  "steps": [
+    { "goto": "/login.html" },
+    { "fill": "#username", "value": "admin" },
+    { "fill": "#password", "value": "admin123" },
+    { "click": "text=登录" },
+    { "waitUrl": "**/dashboard.html*" },
+    { "goto": "/c/index.html" },
+    { "wait": "#productTable tbody tr" },
+    { "readCount": "#productTable tbody tr", "as": "firstPageRows" },
+    { "read": "#total", "as": "total" },
+    { "click": "#nextBtn" },
+    { "click": "#nextBtn" },
+    { "wait": 300 },
+    { "read": "#pageInfo", "as": "pageInfo" },
+    { "readCount": "#productTable tbody tr", "as": "page3Rows" },
+    { "fill": "#q", "value": "键盘" },
+    { "click": "#searchBtn" },
+    { "wait": 300 },
+    { "readCount": "#productTable tbody tr", "as": "searchRows" },
+    { "onDialog": "accept", "as": "confirmText" },
+    { "click": "#productTable tbody tr:nth-child(1) .del-btn" },
+    { "waitText": "已删除" },
+    { "read": "#total", "as": "totalAfterDelete" },
+    { "screenshot": "list" },
+    { "expectNoConsoleErrors": true }
+  ]
+}

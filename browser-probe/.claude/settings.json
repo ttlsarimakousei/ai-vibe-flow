@@ -1,0 +1,36 @@
+{
+    "enableAllProjectMcpServers":  true,
+    "permissions":  {
+                        "allow":  [
+                                      "mcp__playwright",
+                                      "Bash(node:*)",
+                                      "Bash(powershell:*)",
+                                      "Read",
+                                      "Write",
+                                      "Edit"
+                                  ]
+                    },
+    "hooks":  {
+                  "UserPromptSubmit":  [
+                                           {
+                                               "hooks":  [
+                                                             {
+                                                                 "type":  "command",
+                                                                 "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\WorkSpace\\AI\\ai-vibe-flow\\browser-probe\\tools\\hook-toolcount.ps1\" -Mark"
+                                                             }
+                                                         ]
+                                           }
+                                       ],
+                  "PostToolUse":  [
+                                      {
+                                          "matcher":  "mcp__playwright__.*",
+                                          "hooks":  [
+                                                        {
+                                                            "type":  "command",
+                                                            "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\WorkSpace\\AI\\ai-vibe-flow\\browser-probe\\tools\\hook-toolcount.ps1\""
+                                                        }
+                                                    ]
+                                      }
+                                  ]
+              }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "设置页错误捕获（预期本页有 console 错误和 404，看执行器能不能抓到）",
+  "steps": [
+    { "goto": "/dashboard.html?preview=1#settings", "note": "免登录预览路由" },
+    { "wait": "#settingsForm" },
+    { "wait": 800, "note": "给故意抛出的异步错误一点时间" },
+    { "click": "#saveBtn" },
+    { "waitText": "已保存" },
+    { "screenshot": "settings" },
+    { "layout": "settings", "root": "main" }
+  ]
+}

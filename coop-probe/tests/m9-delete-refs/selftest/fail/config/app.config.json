@@ -1,0 +1,19 @@
+{
+  "serviceName": "asset-relay",
+  "port": 7301,
+  "storage": {
+    "mode": "local",
+    "localRoot": "./data/assets",
+    "ossBucket": "asset-relay-prod"
+  },
+  "auth": {
+    "sessionTtlMin": 120,
+    "openApiPaths": [
+      "/open/asset/fetch",
+      "/open/asset/meta"
+    ]
+  },
+  "featureFlags": {
+    "useLocalCache": true
+  }
+}

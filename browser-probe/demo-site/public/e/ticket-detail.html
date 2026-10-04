@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>工单详情</title>
+<link rel="stylesheet" href="/e/legacy.css">
+</head>
+<body style="background:#fff">
+<div class="inner">
+  <h2>工单详情</h2>
+  <div id="loading">加载中...</div>
+  <table class="grid kv" id="detailTable" hidden>
+    <tbody>
+      <tr><th>工单号</th><td id="tid"></td></tr>
+      <tr><th>标题</th><td id="ttitle"></td></tr>
+      <tr><th>状态</th><td id="status"></td></tr>
+      <tr><th>创建时间</th><td id="created"></td></tr>
+      <tr><th>处理人</th><td id="owner"></td></tr>
+    </tbody>
+  </table>
+  <div class="bar"><button type="button" id="backBtn">返回列表</button></div>
+</div>
+<script src="/common.js"></script>
+<script>
+(function () {
+  var P = window.Probe;
+  var id = new URLSearchParams(location.search).get('id') || '';
+  P.api('/api/tickets/' + encodeURIComponent(id)).then(function (j) {
+    if (!j.ok) { document.getElementById('loading').textContent = j.msg || '工单不存在'; return; }
+    var t = j.item;
+    document.getElementById('tid').textContent = t.id;
+    document.getElementById('ttitle').textContent = t.title;
+    document.getElementById('status').textContent = t.status;
+    document.getElementById('created').textContent = t.created;
+    document.getElementById('owner').textContent = t.owner || '（未分配）';
+    document.getElementById('loading').hidden = true;
+    document.getElementById('detailTable').hidden = false;
+  });
+  document.getElementById('backBtn').addEventListener('click', function () { location.href = '/e/tickets.html'; });
+})();
+</script>
+</body>
+</html>

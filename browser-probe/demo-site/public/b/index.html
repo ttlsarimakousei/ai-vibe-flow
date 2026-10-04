@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新建供应商 - 演示站 B</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="plain-body">
+  <div class="wizard">
+    <h1>新建供应商</h1>
+    <ol class="steps">
+      <li id="s1" class="active">1 基本信息</li>
+      <li id="s2">2 联系人</li>
+      <li id="s3">3 确认提交</li>
+    </ol>
+
+    <form id="step1" class="step-panel" autocomplete="off">
+      <label for="name">供应商名称</label>
+      <input id="name" type="text" placeholder="必填">
+      <label for="type">类型</label>
+      <select id="type">
+        <option value="">请选择</option>
+        <option>生产商</option>
+        <option>代理商</option>
+        <option>服务商</option>
+      </select>
+      <div class="radio-group" role="radiogroup" aria-label="地区">
+        <span class="field-label">地区</span>
+        <label><input type="radio" name="region" id="region1" value="华东"> 华东</label>
+        <label><input type="radio" name="region" id="region2" value="华北"> 华北</label>
+        <label><input type="radio" name="region" id="region3" value="华南"> 华南</label>
+      </div>
+      <label for="email">邮箱</label>
+      <input id="email" type="text" placeholder="name@example.com">
+      <div id="err1" class="error" role="alert"></div>
+      <div class="actions"><button type="button" class="btn btn-primary" id="next1">下一步</button></div>
+    </form>
+
+    <form id="step2" class="step-panel" autocomplete="off" hidden>
+      <label for="contact">联系人</label>
+      <input id="contact" type="text">
+      <label for="phone">电话</label>
+      <input id="phone" type="text" placeholder="11 位手机号">
+      <label for="remark">备注</label>
+      <textarea id="remark" rows="3"></textarea>
+      <label class="checkbox"><input type="checkbox" id="enabled" checked> 启用该供应商</label>
+      <div id="err2" class="error" role="alert"></div>
+      <div class="actions"><button type="button" class="btn" id="prev2">上一步</button> <button type="button" class="btn btn-primary" id="next2">下一步</button></div>
+    </form>
+
+    <div id="step3" class="step-panel" hidden>
+      <table class="table kv" id="confirm"><tbody></tbody></table>
+      <div class="actions"><button type="button" class="btn" id="prev3">上一步</button> <button type="button" class="btn btn-primary" id="submit">提交</button></div>
+    </div>
+
+    <div id="done" class="step-panel" hidden>
+      <h2>提交成功</h2>
+      <p>供应商编号：<strong id="code"></strong></p>
+      <p>已收到 <span id="doneName"></span> 的资料，审核结果将通过邮件通知。</p>
+    </div>
+  </div>
+<script src="/common.js"></script>
+<script src="/b/app.js"></script>
+</body>
+</html>

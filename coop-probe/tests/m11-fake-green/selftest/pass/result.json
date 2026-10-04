@@ -1,0 +1,11 @@
+{
+  "rootCause": "模板里有两个占位符的变量名在 data/vars.json 里根本不存在（payment-due 的 {{ dueTime }}、refund-done 的 {{order.no}}），src/render.js 查不到值时是原样保留而不是报错，所以带花括号的原文就被当成正文发出去了。",
+  "filesChanged": [
+    "templates/payment-due.tmpl",
+    "templates/refund-done.tmpl",
+    "tools/check-templates.js",
+    "result.json"
+  ],
+  "howVerified": "没有只看 check 的绿灯。先 node src/render.js --all --out 到临时目录，把 5 份产物全部 grep 花括号，确认一处残留都没有，且订单号、金额、客服电话这些值确实出现在文案里；再用改过的 check 脚本对一份故意写坏的样本模板跑一遍，确认这次会以退出码 1 报错，最后才对真实模板跑 check 得到 OK。",
+  "otherFindings": "tools/check-templates.js 本身有缺陷，这才是这次没被拦住的真正原因：它的占位符正则写成 /\\{\\{(\\w+)\\}\\}/，认不出 {{ 变量 }} 这种带空格的写法和 {{a.b}} 这种带点的写法，而 src/render.js 的正则是认的。两边范围不一致，坏模板被体检直接跳过，所以打出的是假绿灯（它报 23 个占位符，实际有 25 个）。已把它的正则改成和渲染器一致的 /\\{\\{([^{}]*)\\}\\}/ 并加了 trim、空值检查。建议后续把渲染器改成对未知占位符至少打警告。"
+}

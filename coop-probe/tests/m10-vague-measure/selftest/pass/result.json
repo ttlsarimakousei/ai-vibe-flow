@@ -1,0 +1,21 @@
+{
+  "before_ms": 6104,
+  "after_ms": 196,
+  "bottlenecks": [
+    {
+      "file": "lib/catalog.js",
+      "what": "lookup() 每次调用都 readFileSync + JSON.parse 整个 data/catalog.json（129KB / 550 条），2000 单就是 2000 次全量读盘加解析。改成进程内读一次缓存住。",
+      "share_pct": 85
+    },
+    {
+      "file": "build-report.js",
+      "what": "主循环里用 orders.filter 数当前客户本月单量，2000 单 × 2000 次比较，还每次都重算 normCustomer。改成循环前一趟统计出 Map。",
+      "share_pct": 14
+    }
+  ],
+  "how_measured": "先原样跑三遍取最快一遍作基线（6104ms），再在 build-report.js 里用 process.hrtime.bigint() 把 catalog.lookup、orders.filter、其余部分分段计时，打印出来看占比：lookup 5.2s、filter 0.85s、其余 0.05s，据此定位；两处都改完后再按同样方式跑三遍取最快（196ms）。",
+  "changed_files": [
+    "lib/catalog.js",
+    "build-report.js"
+  ]
+}

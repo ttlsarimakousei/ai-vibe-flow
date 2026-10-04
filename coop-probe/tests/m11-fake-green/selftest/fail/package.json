@@ -1,0 +1,10 @@
+{
+  "name": "notice-gen",
+  "version": "0.3.1",
+  "private": true,
+  "description": "订单通知文案的离线渲染工具",
+  "scripts": {
+    "render": "node src/render.js --all",
+    "check": "node tools/check-templates.js"
+  }
+}

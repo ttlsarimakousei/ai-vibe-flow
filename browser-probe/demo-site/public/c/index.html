@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>商品列表 - 演示站 C</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="plain-body">
+  <div class="list-page">
+    <h1>商品列表</h1>
+    <div class="toolbar">
+      <input id="q" type="text" class="inline" placeholder="按名称搜索">
+      <button type="button" class="btn" id="searchBtn">搜索</button>
+      <button type="button" class="btn btn-primary" id="addBtn">新增</button>
+    </div>
+    <table class="table" id="productTable">
+      <thead><tr><th>ID</th><th>名称</th><th>分类</th><th>价格</th><th>库存</th><th>操作</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="pager">
+      <span id="total">共 0 条</span>
+      <button type="button" class="btn" id="prevBtn">上一页</button>
+      <span id="pages"></span>
+      <button type="button" class="btn" id="nextBtn">下一页</button>
+      <span id="pageInfo"></span>
+    </div>
+  </div>
+
+  <div id="modal" class="modal-mask" hidden>
+    <div class="modal" role="dialog" aria-label="新增商品">
+      <h2>新增商品</h2>
+      <label for="pName">名称</label>
+      <input id="pName" type="text">
+      <label for="pCat">分类</label>
+      <select id="pCat">
+        <option>外设</option><option>显示</option><option>音频</option><option>存储</option>
+        <option>网络</option><option>办公</option><option>配件</option><option>终端</option>
+      </select>
+      <label for="pPrice">价格</label>
+      <input id="pPrice" type="text">
+      <label for="pStock">库存</label>
+      <input id="pStock" type="text">
+      <div id="modalErr" class="error" role="alert"></div>
+      <div class="actions"><button type="button" class="btn" id="cancelBtn">取消</button> <button type="button" class="btn btn-primary" id="saveBtn">保存</button></div>
+    </div>
+  </div>
+<script src="/common.js"></script>
+<script src="/c/app.js"></script>
+</body>
+</html>

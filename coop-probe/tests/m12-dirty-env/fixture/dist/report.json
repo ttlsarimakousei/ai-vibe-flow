@@ -1,0 +1,94 @@
+{
+  "meta": {
+    "tool": "recon-report",
+    "toolVersion": "1.3.0",
+    "profile": "prod",
+    "builtAt": "2026-08-14T01:12:33.407Z",
+    "ordersFile": "data/orders.json",
+    "orderCount": 12
+  },
+  "currency": "CNY",
+  "lines": [
+    {
+      "id": "SO-2408-001",
+      "amount": 1280,
+      "shipping": 18,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-002",
+      "amount": 356.5,
+      "shipping": 12,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-003",
+      "amount": 2140,
+      "shipping": 0,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-004",
+      "amount": 89.9,
+      "shipping": 8,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-005",
+      "amount": 1799,
+      "shipping": 25,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-006",
+      "amount": 640,
+      "shipping": 15,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-007",
+      "amount": 322.75,
+      "shipping": 12,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-008",
+      "amount": 5600,
+      "shipping": 0,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-009",
+      "amount": 148,
+      "shipping": 8,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-010",
+      "amount": 970.2,
+      "shipping": 18,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-011",
+      "amount": 2450,
+      "shipping": 30,
+      "counted": true
+    },
+    {
+      "id": "SO-2408-012",
+      "amount": 76.4,
+      "shipping": 8,
+      "counted": true
+    }
+  ],
+  "summary": {
+    "countedOrders": 12,
+    "excludedOrders": 0,
+    "subtotal": 15872.75,
+    "shipping": 0,
+    "taxRate": 0.13,
+    "tax": 2063.46,
+    "total": 17936.21
+  }
+}

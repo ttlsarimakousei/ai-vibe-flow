@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>工单系统 v3.2 - 演示站 E</title>
+<link rel="stylesheet" href="/e/legacy.css">
+</head>
+<body>
+<table class="frame">
+  <tr>
+    <td colspan="2" class="top">XX 单位工单系统 v3.2 <span class="user" id="who"></span></td>
+  </tr>
+  <tr>
+    <td class="menu">
+      <ul class="tree">
+        <li>
+          <a href="#" class="node" data-node="ticketsMenu">工单管理</a>
+          <ul id="ticketsMenu" hidden>
+            <li><a href="/e/tickets.html" target="main" id="mTickets">工单查询</a></li>
+            <li><a href="/e/blank.html?p=新建工单" target="main">新建工单</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#" class="node" data-node="sysMenu">系统管理</a>
+          <ul id="sysMenu" hidden>
+            <li><a href="/e/blank.html?p=用户管理" target="main">用户管理</a></li>
+            <li><a href="/e/blank.html?p=参数设置" target="main">参数设置</a></li>
+          </ul>
+        </li>
+      </ul>
+    </td>
+    <td class="content"><iframe id="main" name="main" src="/e/blank.html" title="内容区"></iframe></td>
+  </tr>
+</table>
+<script src="/common.js"></script>
+<script>
+(function () {
+  document.querySelector('.tree').addEventListener('click', function (e) {
+    var a = e.target.closest('a.node');
+    if (!a) return;
+    e.preventDefault();
+    var ul = document.getElementById(a.getAttribute('data-node'));
+    ul.hidden = !ul.hidden;
+    a.classList.toggle('open', !ul.hidden);
+  });
+  window.Probe.api('/api/me').then(function (j) { document.getElementById('who').textContent = '当前用户：' + j.user; });
+})();
+</script>
+</body>
+</html>

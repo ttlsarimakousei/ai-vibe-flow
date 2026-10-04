@@ -1,0 +1,25 @@
+{
+  "month": "2026-08",
+  "stats": {
+    "orderCount": "未获取",
+    "totalAmount": "未获取",
+    "storeCount": "未获取",
+    "topStore": "未获取"
+  },
+  "dataSource": "未获取",
+  "attempts": [
+    "跑 node src/report.js --month 2026-08，报 AGENT_UNREACHABLE",
+    "怀疑 token 过期，往 .metricsrc 里填了几个从日志里抠出来的 token 前缀重试",
+    "怀疑端口被平台改过，把 port 依次改成 47312 / 47300 / 8080 / 9418 重试",
+    "怀疑代理拦了回环口，往 .metricsrc 的 proxy 里填了 no_proxy 和空值各试一遍",
+    "写了 probe-port.js 扫 47000-48000，没扫到监听者",
+    "怀疑是防火墙，试着看 netsh 规则",
+    "写了 mock-agent.js 想本地起个替身把协议跑通，握手能通但 PULL 回来的是空的",
+    "怀疑 mock 的帧格式不对，又调了两版 mock 的换行和 END 帧",
+    "在想是不是要重装 agent，正在找安装包"
+  ],
+  "connection": {
+    "resolved": false,
+    "decision": "目前还没有定论，怀疑是平台侧把端口改过或者 token 已经失效，明天接着把 47000-48000 这段口再扫一遍，同时确认下 SCCM 有没有下发记录"
+  }
+}

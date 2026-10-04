@@ -1,0 +1,42 @@
+# 打好的安装包、体检包：发版时作为附件给，不进仓库
+/*.zip
+
+# 体检包（冻结）的离线运行环境、依赖、结果：包里的"外网准备"脚本会重新下
+/browser-probe/offline/
+/browser-probe/node_modules/
+/browser-probe/results/
+/coop-probe/offline/
+/coop-probe/node_modules/
+/coop-probe/results/
+
+# 套件运行时才有的东西（和 dev/pack.js 里 RUNTIME 那张清单一致）。
+# 出现在源目录里多半是测试跑偏了；令牌、模型的 key 在里面，绝不能提交
+/vibe-kit/secrets.json
+/vibe-kit/gitlab.json
+/vibe-kit/kit/secrets.json
+/vibe-kit/kit/gitlab.json
+/vibe-kit/kit/config.json
+/vibe-kit/kit/local.json
+/vibe-kit/kit/installed.json
+/vibe-kit/kit/drivers.json
+/vibe-kit/kit/state/
+/vibe-kit/kit/feedback/
+/vibe-kit/kit/lessons/
+/vibe-kit/kit/update/
+/vibe-kit/kit/issue-exports/
+/vibe-kit/kit/backup/
+/vibe-kit/kit/pristine/
+/vibe-kit/kit/router-data/
+/vibe-kit/kit/drivers/
+/vibe-kit/router/config.json
+/vibe-kit/router/router.pid
+/vibe-kit/router/usage.json
+
+# 套件在项目里建的目录（在这个仓库里用装了套件的 Claude Code 时会出现）、Claude Code 的本机设置
+.vibe/
+.claude/settings.local.json
+
+# 系统生成的
+Thumbs.db
+desktop.ini
+.DS_Store

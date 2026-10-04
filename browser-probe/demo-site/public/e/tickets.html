@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>工单查询</title>
+<link rel="stylesheet" href="/e/legacy.css">
+</head>
+<body style="background:#fff">
+<div class="inner">
+  <h2>工单查询</h2>
+  <div id="loading">数据加载中，请稍候...</div>
+  <table class="grid" id="ticketTable" hidden>
+    <thead><tr><th>工单号</th><th>标题</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="bar" id="exportBar" hidden>
+    <button type="button" id="exportBtn">导出 Excel</button>
+    <span class="msg" id="exportMsg"></span>
+  </div>
+</div>
+<script src="/common.js"></script>
+<script>
+(function () {
+  var P = window.Probe;
+  P.api('/api/tickets').then(function (j) {
+    var tb = document.querySelector('#ticketTable tbody');
+    tb.innerHTML = j.list.map(function (t) {
+      return '<tr><td>' + t.id + '</td><td>' + P.esc(t.title) + '</td><td>' + P.esc(t.status) + '</td><td>' + t.created +
+        '</td><td><a href="/e/ticket-detail.html?id=' + t.id + '">详情</a></td></tr>';
+    }).join('');
+    document.getElementById('loading').hidden = true;
+    document.getElementById('ticketTable').hidden = false;
+    document.getElementById('exportBar').hidden = false;
+  });
+  document.getElementById('exportBtn').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    document.getElementById('exportMsg').textContent = '生成中...';
+    P.post('/api/tickets/export').then(function (j) {
+      document.getElementById('exportMsg').textContent = j.msg;
+      btn.disabled = false;
+    });
+  });
+})();
+</script>
+</body>
+</html>

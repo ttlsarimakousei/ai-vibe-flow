@@ -1,0 +1,26 @@
+html, body, #app { margin: 0; height: 100%; }
+body { font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; background: #f5f7fa; color: #303133; }
+.login-wrap { display: flex; align-items: center; justify-content: center; height: 100vh; }
+.login-card { width: 380px; }
+.login-card h1 { margin: 0 0 6px; font-size: 20px; }
+.login-card .hint { margin: 0 0 18px; color: #909399; font-size: 12px; }
+.login-btn { width: 100%; margin-top: 4px; }
+.err { min-height: 20px; margin-top: 8px; color: #f56c6c; font-size: 12px; }
+.layout { height: 100vh; }
+.aside { background: #1f2d3d; }
+.logo { height: 56px; line-height: 56px; padding: 0 20px; color: #fff; font-size: 18px; font-weight: bold; background: #17222f; }
+.menu { border-right: 0; background: #1f2d3d; }
+.menu .el-menu-item { color: #cfd8e3; }
+.menu .el-menu-item.is-active, .menu .el-menu-item:hover { background: #2f6fed; color: #fff; }
+.header { display: flex; align-items: center; background: #fff; border-bottom: 1px solid #e4e7ed; }
+.header .title { font-size: 18px; font-weight: 600; }
+.header .who { margin-left: auto; margin-right: 12px; color: #909399; }
+.toolbar { margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.muted { color: #909399; }
+.pager { margin-top: 16px; }
+.loading { padding: 40px; text-align: center; color: #909399; }
+.stat { text-align: center; }
+.stat-num { font-size: 28px; font-weight: bold; color: #2f6fed; }
+.stat-label { margin-top: 6px; color: #909399; }
+.desc { margin-top: 20px; }
+.notfound { padding: 40px; color: #909399; }

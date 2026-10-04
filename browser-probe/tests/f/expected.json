@@ -1,0 +1,12 @@
+{
+  "title": "Vue 单页应用",
+  "t25": { "menuItems": "3", "total": "共 23 条", "searchRows": "4", "formError": "客户名称不能为空", "createMsg": "订单已创建：FO-2026-0007", "orderRows": "7", "reportOrders": "128" },
+  "t3": {
+    "menuItems": "3",
+    "total": { "regex": "^\\s*(共\\s*)?23(\\s*条)?\\s*$", "sample": "共 23 条", "note": "只抄数字也算对" },
+    "searchRows": "4",
+    "formError": { "regex": "客户名称不能为空", "sample": "客户名称不能为空", "note": "包含这一条即可，多报一条产品必填不算错" },
+    "createMsg": { "regex": "订单已创建[：:]?\\s*FO-2026-00(0[7-9]|1\\d)", "sample": "订单已创建：FO-2026-0007", "note": "允许因重试产生的后续编号" },
+    "reportOrders": "128"
+  }
+}

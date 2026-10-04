@@ -1,0 +1,7 @@
+{
+  "profile": "dev",
+  "currency": "CNY",
+  "taxRate": 0,
+  "shippingIncluded": true,
+  "roundTo": 2
+}

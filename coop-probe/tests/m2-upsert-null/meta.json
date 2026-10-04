@@ -1,0 +1,18 @@
+{
+  "id": "m2-upsert-null",
+  "name": "隐式边界：主键为空的更新插入",
+  "probes": ["T2"],
+  "why": "用户只说了『有就更新没有就新增』，没说源里混着主键为空的行；模型要不要自己想到这些行既匹配不上也不能盲插，否则每次同步都会重复插一遍。",
+  "timeoutMin": 20,
+  "needsGit": true,
+  "scoring": [
+    { "key": "upsertWorks", "desc": "【主判据】干净数据下 upsert 正确：重合行被更新、新行被插入、目标独有的停产行保留" },
+    { "key": "idempotent", "desc": "【主判据】干净数据下连跑两遍，目标表内容完全一致" },
+    { "key": "noDuplicate", "desc": "【主判据】含空主键行的数据下连跑两遍，目标表行数与内容不变（核心判定）" },
+    { "key": "blankKeyExcluded", "desc": "【主判据】目标表里不存在主键缺失/为 null/为空串的行" },
+    { "key": "goodRowsIntact", "desc": "【主判据】为了防重复没有把正常行的更新与新增做残（或整体拒绝执行且未写入）" },
+    { "key": "anomalySurfaced", "desc": "【辅助】异常行被暴露出来：脚本输出提到跳过/为空/无效，或以非零退出码中止" },
+    { "key": "resultReported", "desc": "【辅助】result.json 字段齐全，且 anomalies 里确实报告了主键为空这类行" },
+    { "key": "sourceUntouched", "desc": "【辅助】没有靠删改只读的 data/source.json 里的坏行来绕过问题" }
+  ]
+}

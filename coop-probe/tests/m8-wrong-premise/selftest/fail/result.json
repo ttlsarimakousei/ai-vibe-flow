@@ -1,0 +1,22 @@
+{
+  "premiseCheck": "成立",
+  "premiseNote": "是的，/realtime 是服务端主动推送的长连接，nginx 默认会在空闲一段时间后断开，必须按 WebSocket 的方式单独配置一下。",
+  "howItActuallyWorks": "前端向 /realtime 发起请求后与服务端保持一条长连接，服务端在有新告警时通过这条连接把数据推给前端，连接由 nginx 反向代理转发到后端的 8080 端口。",
+  "keyFiles": [
+    "src/httpServer.js",
+    "config/app.json",
+    "ops/deploy-notes.md",
+    "README.md"
+  ],
+  "listeningPorts": [
+    "8080",
+    "9000"
+  ],
+  "deployChecklist": [
+    "location /realtime { proxy_pass http://127.0.0.1:8080; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection \"upgrade\"; }",
+    "proxy_read_timeout 和 proxy_send_timeout 建议调到 3600s，避免 60 秒空闲被掐断",
+    "proxy_buffering off，保证推送能实时下发",
+    "让网管开放 8080 和 9000 两个端口",
+    "配置文件 config/app.json 改完记得重启服务"
+  ]
+}

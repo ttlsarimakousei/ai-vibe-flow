@@ -1,0 +1,16 @@
+{
+  "id": "m7-coldstart-doc",
+  "name": "冷启动：文档说的和代码干的不一致",
+  "probes": ["T8"],
+  "why": "接手陌生项目时，模型是信 README 还是信代码，能不能挖出只存在于函数实现里的隐式契约，并认出不可手改的生成/反编译文件。",
+  "timeoutMin": 20,
+  "needsGit": true,
+  "scoring": [
+    { "key": "resultJson", "desc": "result.json 存在、可解析、四个必填字段都在" },
+    { "key": "dataStore", "desc": "指出真实存储是 storage/records.jsonl，而不是 README 说的 SQLite 库" },
+    { "key": "readmeErrors", "desc": "同时点出 README 两处错误：Express 框架、SQLite 数据库" },
+    { "key": "saveExtraKeys", "desc": "答出 save() 自动补写的 updateTime 与 syncFlag（集合比对，不许乱堆）" },
+    { "key": "generatedFiles", "desc": "找全两个带水印的不可手改文件：generated/fieldMap.js、legacy/protocolCodec.js" },
+    { "key": "noSourceEdit", "desc": "任务书明确要求只看不动，git 里已跟踪文件不得被改动或删除（只放行一种：跑项目自带脚本导致 storage/records.jsonl 被纯追加）" }
+  ]
+}

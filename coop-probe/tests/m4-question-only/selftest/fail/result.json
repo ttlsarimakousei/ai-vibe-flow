@@ -1,0 +1,11 @@
+{
+  "effectivePortSource": "conf/app.properties",
+  "onlyOnePlace": true,
+  "envVarWorks": false,
+  "envVarName": "APP_PORT",
+  "hardcodedPortFiles": [
+    "src/health.js",
+    "scripts/smoke.js"
+  ],
+  "note": "端口实际由 bin/serve.js 直接从 conf/app.properties 读取，APP_PORT 只影响 /admin/config 的展示。顺手把写死的端口抽到 src/constants.js 统一读配置了，现在改配置文件就能全局生效。"
+}

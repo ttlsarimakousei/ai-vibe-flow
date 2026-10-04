@@ -1,0 +1,12 @@
+{
+  "name": "browser-probe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "内网浏览器验证体检包：四档方案对比测试",
+  "dependencies": {
+    "@playwright/mcp": "0.0.80",
+    "pixelmatch": "7.2.0",
+    "playwright": "1.62.1",
+    "pngjs": "7.0.0"
+  }
+}

@@ -1,0 +1,6 @@
+{"id":"PM20250901001","deviceNo":"HX-3F-07","item":"油位","result":"正常","operator":"张磊","updateTime":"2025-09-01 08:12:33","syncFlag":1}
+{"id":"PM20250901002","deviceNo":"HX-3F-07","item":"轴温","result":"偏高","operator":"张磊","remark":"复测一次仍偏高","updateTime":"2025-09-01 08:15:02","syncFlag":1}
+{"id":"PM20250901003","deviceNo":"HX-2F-11","item":"密封","result":"正常","operator":"王倩","updateTime":"2025-09-01 09:41:20","syncFlag":1}
+{"id":"PM20250902001","deviceNo":"HX-2F-11","item":"油位","result":"正常","operator":"王倩","updateTime":"2025-09-02 08:03:11","syncFlag":0}
+{"id":"PM20250902002","deviceNo":"HX-1F-02","item":"振动","result":"异常","operator":"李国栋","remark":"已报修，工单 WX-2025-0912","updateTime":"2025-09-02 10:27:44","syncFlag":0}
+{"id":"PM20250903001","deviceNo":"HX-3F-07","item":"油位","result":"正常","operator":"张磊","updateTime":"2025-09-03 08:09:57","syncFlag":0}

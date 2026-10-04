@@ -1,0 +1,4 @@
+vue 3.5.42 (vue.global.js 开发版，带组件实例引用；vue.global.prod.js 生产版)
+vue-router 4.6.4
+element-plus 2.14.5 (index.full.js / index.css / locale zh-cn)
+来源：npm 包 dist 目录原样复制，MIT 协议。

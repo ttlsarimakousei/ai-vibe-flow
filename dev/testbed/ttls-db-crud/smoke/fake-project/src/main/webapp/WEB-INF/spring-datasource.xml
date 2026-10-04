@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+  <!-- 埋点：注释里的历史地址不能被扫出来，它们多半是别的环境 -->
+  <!--<property name="url" value="jdbc:oscar://10.0.0.201:2003/hist"/>-->
+  <!--<property name="url" value="jdbc:oscar://10.0.0.202:2003/hist"/>-->
+  <bean id="ds" class="com.alibaba.druid.pool.DruidDataSource">
+    <property name="url" value="jdbc:oscar://10.0.0.55:2003/report"/>
+    <property name="username" value="rpt_user"/>
+    <property name="password" value="rpt_pwd"/>
+  </bean>
+  <!-- 埋点：占位符没展开的，扫出来要跳过 -->
+  <bean id="ds2" class="com.alibaba.druid.pool.DruidDataSource">
+    <property name="url" value="jdbc:mysql://${db.host}:3306/dyn"/>
+  </bean>
+</beans>

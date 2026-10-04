@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>演示站 F · Vue 3 + Element Plus</title>
+<link rel="stylesheet" href="/vendor/element-plus.css">
+<link rel="stylesheet" href="/f/style.css">
+</head>
+<body>
+<div id="app"></div>
+<!-- 全部走本地 vendor（npm dist 原样复制），不需要构建也不需要联网。vue.global.js 是开发版，DOM 元素上带组件实例引用，用于把差异归因到组件；换成 vue.global.prod.js 则只能靠 data-comp 属性归因 -->
+<script src="/vendor/vue.global.js"></script>
+<script src="/vendor/vue-router.global.js"></script>
+<script src="/vendor/element-plus.full.js"></script>
+<script src="/vendor/element-plus-zh-cn.js"></script>
+<script src="/f/app.js"></script>
+</body>
+</html>

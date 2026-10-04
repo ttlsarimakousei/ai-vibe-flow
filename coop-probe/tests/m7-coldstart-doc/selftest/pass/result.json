@@ -1,0 +1,13 @@
+{
+  "dataStore": "storage/records.jsonl —— 一个 JSONL 文件，每行一条记录，追加写。工作区里根本没有 data 目录，也没有任何 SQLite 相关的代码或依赖。",
+  "readmeErrors": [
+    "README 说\"本服务基于 Express 搭建\"，实际没有用 Express：package.json 的 dependencies 是空的，server.js 是用内置 http 模块自己 createServer 并用一张 routes.table 做的路由分发。",
+    "README 说\"巡检记录保存在 SQLite 数据库 data/pmsync.db，表 t_record\"，实际数据存在 storage/records.jsonl，由 src/store.js 用 fs.appendFileSync 追加 JSON 行，没有 data 目录、没有 .db 文件、没有任何 sqlite 驱动。"
+  ],
+  "saveExtraKeys": ["updateTime", "syncFlag"],
+  "generatedFiles": [
+    "src/generated/fieldMap.js",
+    "src/legacy/protocolCodec.js"
+  ],
+  "notes": "还有两件事你写导入口子的时候要注意：一、store.js 里的 normalize() 会把所有以下划线开头的键直接丢掉不落盘（routes.js 就是靠这个把 _source、_raw 这类临时标记挡在库外），所以别指望用 _xxx 传业务数据；二、updateTime 和 syncFlag 是无条件覆盖的，就算你自己传了也会被 save() 改掉——updateTime 盖成当前时间，syncFlag 盖成 0。另外 README 里的目录说明本身是对的，错的只是框架和存储那两处。"
+}

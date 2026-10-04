@@ -1,0 +1,239 @@
+{
+  "_说明": "tools/smoke.py 用。cmd 相对仓库根，python 会换成当前解释器；expect_contains 每一段都要出现在输出里；expect_exit 默认 0；stream 指定断言看 stdout / stderr / both。这里只测不连库就能定的判断，连库的验证见 docs/urai-db-crud/验证记录.md。",
+  "checks": [
+    {
+      "name": "分类器 45 条离线用例全过",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/sqlguard_selftest.py"
+      ],
+      "expect_contains": [
+        "全部通过"
+      ],
+      "expect_not_contains": [
+        "FAIL"
+      ],
+      "expect_exit": 0
+    },
+    {
+      "name": "落点与剥注释自测：有壳子落后端、没壳子落自己、多模块落聚合根",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/discover_selftest.py"
+      ],
+      "expect_contains": [
+        "全部通过"
+      ],
+      "expect_not_contains": [
+        "FAIL"
+      ],
+      "expect_exit": 0
+    },
+    {
+      "name": "记坑自测：写进配置不弄坏注释和其它连接段，同一条不重复记",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/notes_selftest.py"
+      ],
+      "expect_contains": [
+        "全部通过"
+      ],
+      "expect_not_contains": [
+        "FAIL"
+      ],
+      "expect_exit": 0
+    },
+    {
+      "name": "扫描项目配置：Spring Boot 多数据源 + 老项目 properties + XML 三种形态都认",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--project",
+        "testbed/ttls-db-crud/smoke/fake-project",
+        "discover"
+      ],
+      "expect_contains": [
+        "jdbc:mysql://localhost:3306/shop",
+        "jdbc:dm://10.0.0.9:5236",
+        "jdbc:oracle:thin:@10.0.0.77:1521:orcl",
+        "jdbc:oscar://10.0.0.55:2003/report",
+        "jdbc:kingbase8://10.0.0.30:54321/prod_core",
+        "是生产环境的配置",
+        "跳过：连接串里有没展开的占位符"
+      ],
+      "expect_exit": 0
+    },
+    {
+      "name": "回归：注释掉的旧地址不能被当成配置（它们多半是别的环境甚至生产库）",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--project",
+        "testbed/ttls-db-crud/smoke/fake-project",
+        "discover"
+      ],
+      "expect_not_contains": [
+        "192.168.1.250",
+        "10.0.0.1:1521",
+        "10.0.0.201",
+        "10.0.0.202"
+      ],
+      "expect_exit": 0
+    },
+    {
+      "name": "自检：逐项报环境齐不齐",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/connections.ini",
+        "doctor"
+      ],
+      "expect_contains": [
+        "Python",
+        "java",
+        "执行器",
+        "连接配置",
+        "fake-dm"
+      ],
+      "expect_exit": 0
+    },
+    {
+      "name": "列连接：认出方言和只读标记",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/connections.ini",
+        "conn",
+        "list"
+      ],
+      "expect_contains": [
+        "fake-dm",
+        "达梦",
+        "fake-readonly",
+        "只读"
+      ],
+      "expect_exit": 0,
+      "expect_not_contains": [
+        "口令明文"
+      ]
+    },
+    {
+      "name": "--config 指向不存在的文件时当场报错，不悄悄回退到别处的配置",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/不存在的配置.ini",
+        "conn",
+        "list"
+      ],
+      "stream": "stderr",
+      "expect_contains": [
+        "--config 指定的配置文件不存在"
+      ],
+      "expect_exit": 1
+    },
+    {
+      "name": "删库：连都不用连就拒绝",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/connections.ini",
+        "--conn",
+        "fake-dm",
+        "exec",
+        "--sql",
+        "DROP DATABASE myapp"
+      ],
+      "stream": "stderr",
+      "expect_contains": [
+        "拦住了",
+        "删库删 schema"
+      ],
+      "expect_exit": 3
+    },
+    {
+      "name": "只读连接上的写操作：连都不用连就拒绝",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/connections.ini",
+        "--conn",
+        "fake-readonly",
+        "exec",
+        "--sql",
+        "DELETE FROM t WHERE id=1"
+      ],
+      "stream": "stderr",
+      "expect_contains": [
+        "拦住了",
+        "readonly"
+      ],
+      "expect_exit": 3
+    },
+    {
+      "name": "命中禁止名单：连都不用连就拒绝",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/connections.ini",
+        "--conn",
+        "fake-dm",
+        "exec",
+        "--sql",
+        "DELETE FROM prod_orders WHERE id=1",
+        "--forbid",
+        "prod_*"
+      ],
+      "stream": "stderr",
+      "expect_contains": [
+        "拦住了",
+        "禁止名单"
+      ],
+      "expect_exit": 3
+    },
+    {
+      "name": "一次只收一条语句",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/connections.ini",
+        "--conn",
+        "fake-dm",
+        "exec",
+        "--sql",
+        "SELECT 1; DROP TABLE users"
+      ],
+      "stream": "stderr",
+      "expect_contains": [
+        "一次只执行一条语句"
+      ],
+      "expect_exit": 1
+    },
+    {
+      "name": "口令环境变量没设时说清是哪个变量",
+      "cmd": [
+        "python",
+        "skills/ttls-db-crud/scripts/db.py",
+        "--config",
+        "testbed/ttls-db-crud/smoke/connections.ini",
+        "--conn",
+        "fake-dm",
+        "conn",
+        "test"
+      ],
+      "stream": "stderr",
+      "expect_contains": [
+        "SMOKE_NEVER_SET",
+        "重开 Claude Code"
+      ],
+      "expect_exit": 1
+    }
+  ]
+}

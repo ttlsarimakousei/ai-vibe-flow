@@ -1,0 +1,8 @@
+{
+  "说明": "复制一份改名为 models.json，每个模型一项：name 随便起，报告里用它；base_url 是网关地址，不要带 /v1；api_key 是这个模型的 key；model 可以不填，网关要求特定模型名时再填。装了模型路由的话，第一次运行会自动从路由配置导入，只需补上路由里没配的。models.json 只在本机用，不会写进任何报告和结果目录。",
+  "models": [
+    { "name": "DeepSeek", "base_url": "http://你的网关地址", "api_key": "sk-你的key" },
+    { "name": "GLM", "base_url": "http://你的网关地址", "api_key": "sk-你的key" },
+    { "name": "Kimi", "base_url": "http://你的网关地址", "api_key": "sk-你的key", "model": "可不填" }
+  ]
+}

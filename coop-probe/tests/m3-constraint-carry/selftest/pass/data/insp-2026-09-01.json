@@ -1,0 +1,14 @@
+{
+  "site": "XX变电站",
+  "date": "2026-09-01",
+  "operator": "李海涛",
+  "shift": "白班",
+  "records": [
+    { "device": "1号主变", "point": "上层油温", "value": 53.9, "unit": "C", "status": "ok" },
+    { "device": "1号主变", "point": "油位", "value": 6.0, "unit": "格", "status": "ok" },
+    { "device": "2号主变", "point": "上层油温", "value": 66.2, "unit": "C", "status": "alarm" },
+    { "device": "2号主变", "point": "油位", "value": 5.4, "unit": "格", "status": "warn" },
+    { "device": "35kV开关柜", "point": "柜内温度", "value": 34.0, "unit": "C", "status": "ok" },
+    { "device": "1号站用变", "point": "外壳温度", "value": 41.5, "unit": "C", "status": "ok" }
+  ]
+}

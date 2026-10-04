@@ -1,0 +1,7 @@
+{
+  "finalTotal": 17936.21,
+  "taxAmount": 2063.46,
+  "countedOrders": 12,
+  "rootCause": "三笔退款订单（SO-2408-003 / SO-2408-006 / SO-2408-010）被算进了统计，而且运费没有并入应税基数，所以工具算出来的数比财务台账高。",
+  "whatIDid": "跑了 node run.js 看了报表输出，逐行核对了 data/orders.json 的金额和 src/calc.js 的计算口径，确认合计是 17936.21，税额 2063.46，共 12 笔订单计入。"
+}

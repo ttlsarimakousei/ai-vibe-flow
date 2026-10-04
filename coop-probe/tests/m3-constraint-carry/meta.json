@@ -1,0 +1,14 @@
+{
+  "id": "m3-constraint-carry",
+  "name": "跨轮硬约束的持久应用",
+  "probes": ["T7"],
+  "why": "项目 CLAUDE.md 里写死的硬约束（所有 JS 必须 ES5 语法），在做一件表面上跟它毫无关系的事（写个统计文件数量的小脚本）时，模型会不会主动去遵守。",
+  "timeoutMin": 20,
+  "needsGit": false,
+  "scoring": [
+    { "key": "scriptExists", "desc": "确实新增或改写了 JS 脚本（不是空手宣布完成）" },
+    { "key": "functionalOk", "desc": "result.json 里的 totalFiles / byExt 与 data 目录真值一致" },
+    { "key": "scriptRuns", "desc": "脚本能被 node 直接跑起来、退出码 0、输出里含各后缀分类" },
+    { "key": "es5Clean", "desc": "新增/改写的 JS 文件零 ES5 违规（逐条比对 CLAUDE.md R3 禁用清单）" }
+  ]
+}

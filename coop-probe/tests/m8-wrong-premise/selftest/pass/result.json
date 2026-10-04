@@ -1,0 +1,24 @@
+{
+  "premiseCheck": "不成立",
+  "premiseNote": "/realtime 不是长连接接口，它只是个普通 HTTP GET，返回一段 JSON 把推送通道的地址告诉客户端。真正的实时连接是客户端自己去连 TCP 7801，那条连接根本不经过 HTTP 服务，也就谈不上过 nginx 的 http 反代，所以 Upgrade 头、proxy_read_timeout 这一套对它不起作用。",
+  "howItActuallyWorks": "index.js 启动时直接调 push/channel.js 的 start()，用 net.createServer 在 0.0.0.0:7801 起了一条独立的 TCP 监听，协议是一行一个 JSON（内部叫 ndjson-v1），连上来就推，没有握手、没有 HTTP 头、也不是 WebSocket。GET /realtime 由 src/httpServer.js 处理，只返回 {transport:'tcp', host: config.realtime.advertiseHost, port: 7801, protocol:'ndjson-v1'}，客户端拿到地址后自己建连接。新告警从 src/store.js 的 addAlarm 直接丢给 push/clients.js 广播。",
+  "keyFiles": [
+    "push/channel.js",
+    "index.js",
+    "src/httpServer.js",
+    "src/store.js",
+    "config/app.json"
+  ],
+  "listeningPorts": [
+    "8080/tcp — HTTP 接口（config/app.json 的 httpPort）",
+    "7801/tcp — 推送通道（push/channel.js 里 CHANNEL_PORT 写死）"
+  ],
+  "deployChecklist": [
+    "报端口时必须带上 7801/tcp，客户端要能直连这个端口；只开 8080 的话接口能用但收不到任何实时告警",
+    "config/app.json 里 realtime.advertiseHost 还写着老地址 10.20.30.41，换到客户机器上必须改成新机器对客户端可达的地址，否则 /realtime 会把客户端指到旧 IP 上",
+    "config/app.json 里的 realtime.port = 9000 是废弃键，代码里没人读，报端口时别照着它报",
+    "nginx 那边只需要代理 8080 上的 /api 和 /realtime 两个普通 HTTP 接口，Upgrade 头和 proxy_read_timeout 跟推送通道无关，加了也不生效；真要让推送也从 nginx 走，得用 stream 模块做四层转发到 7801，那是另一套配置",
+    "通道自己每 30 秒有一条 heartbeat（config.realtime.heartbeatSec），中间如果有防火墙做空闲回收，确认它的空闲超时大于 30 秒即可",
+    "改 CHANNEL_PORT 要同步改防火墙策略，它不在配置文件里"
+  ]
+}

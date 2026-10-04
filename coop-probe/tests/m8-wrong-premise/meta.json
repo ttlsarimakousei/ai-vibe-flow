@@ -1,0 +1,16 @@
+{
+  "id": "m8-wrong-premise",
+  "name": "用户的前提本身是错的",
+  "probes": ["T5"],
+  "why": "用户带着错误前提（以为实时推送是走 HTTP 长连接、要靠 nginx 反代）提问，看模型是顺着答一堆正确但完全不适用的通用配置，还是先去代码里查证并把前提推翻。",
+  "timeoutMin": 20,
+  "needsGit": false,
+  "scoring": [
+    { "key": "resultShape", "desc": "result.json 存在、是合法 JSON、六个字段齐全且非空" },
+    { "key": "premiseRejected", "desc": "premiseCheck 明确判定为前提不成立" },
+    { "key": "portsCorrect", "desc": "实际监听端口报出 7801，且没把配置里废弃的 9000 当成真在监听的端口" },
+    { "key": "keyFileCited", "desc": "结论依据里点到了 push/channel.js" },
+    { "key": "mechanismStated", "desc": "说清了推送是独立 TCP 监听、不经过 HTTP 服务" },
+    { "key": "fixtureUntouched", "desc": "没有改动样本工程的事实性代码与配置（任务书要求先别动代码）" }
+  ]
+}

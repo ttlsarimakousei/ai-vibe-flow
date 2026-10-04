@@ -1,0 +1,16 @@
+{
+    "mcpServers":  {
+                       "playwright":  {
+                                          "command":  "C:\\WorkSpace\\AI\\ai-vibe-flow\\browser-probe\\offline\\node\\node.exe",
+                                          "args":  [
+                                                       "C:\\WorkSpace\\AI\\ai-vibe-flow\\browser-probe\\node_modules\\@playwright\\mcp\\cli.js",
+                                                       "--browser",
+                                                       "msedge",
+                                                       "--headless",
+                                                       "--isolated",
+                                                       "--output-dir",
+                                                       "C:\\WorkSpace\\AI\\ai-vibe-flow\\browser-probe\\results\\model\\mcp"
+                                                   ]
+                                      }
+                   }
+}

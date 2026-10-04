@@ -1,0 +1,12 @@
+{
+  "name": "fieldcollect",
+  "version": "0.4.2",
+  "private": true,
+  "description": "XX 变电站现场巡检数据归集小工具",
+  "main": "tools/collect.js",
+  "scripts": {
+    "collect": "node tools/collect.js",
+    "rotate": "node tools/rotate-logs.js"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,24 @@
+{
+  "name": "D 数据看板：标签页 + 折叠明细 + 刷新计数",
+  "steps": [
+    { "goto": "/login.html" },
+    { "fill": "#username", "value": "admin" },
+    { "fill": "#password", "value": "admin123" },
+    { "click": "text=登录" },
+    { "waitUrl": "**/dashboard.html*" },
+    { "goto": "/d/index.html" },
+    { "wait": "#salesCard1" },
+    { "read": "#salesCard1", "as": "salesAmount" },
+    { "click": ".tab[data-tab=\"customers\"]" },
+    { "wait": "#customersCard1" },
+    { "read": "#customersCard1", "as": "customerTotal" },
+    { "click": "#customersToggle" },
+    { "wait": "#customersDetail tbody tr" },
+    { "readCount": "#customersDetail tbody tr", "as": "detailRows" },
+    { "click": "#refreshBtn" },
+    { "read": "#refreshCount", "as": "refreshCount" },
+    { "screenshot": "customers" },
+    { "layout": "customers", "root": "#customers" },
+    { "expectNoConsoleErrors": true }
+  ]
+}

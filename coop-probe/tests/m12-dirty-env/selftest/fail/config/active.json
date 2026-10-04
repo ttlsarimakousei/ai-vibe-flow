@@ -1,0 +1,7 @@
+{
+  "profile": "staging",
+  "currency": "CNY",
+  "taxRate": 0.06,
+  "shippingIncluded": true,
+  "roundTo": 2
+}

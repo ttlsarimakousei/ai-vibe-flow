@@ -1,0 +1,7091 @@
+{
+ "SKU-00001": {
+  "name": "宏发 手电钻 XL",
+  "category": "lubricant",
+  "price": 333.37,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "fragile"
+  ],
+  "supplier": "SUP-046",
+  "warehouse": "WH-A",
+  "barcode": "6956804485640"
+ },
+ "SKU-00002": {
+  "name": "金鼎 不锈钢螺栓 12mm",
+  "category": "abrasive",
+  "price": 276.03,
+  "unit": "卷",
+  "tags": [
+   "fragile",
+   "import",
+   "heavy"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-A",
+  "barcode": "6919799292390"
+ },
+ "SKU-00003": {
+  "name": "宏发 润滑脂 8x40",
+  "category": "safety",
+  "price": 459.28,
+  "unit": "件",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-D",
+  "barcode": "6986287560498"
+ },
+ "SKU-00004": {
+  "name": "华瑞 不锈钢螺栓 36V",
+  "category": "lubricant",
+  "price": 259.29,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "bulk"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-D",
+  "barcode": "6967367622879"
+ },
+ "SKU-00005": {
+  "name": "海通 安全帽 36V",
+  "category": "electrical",
+  "price": 232.46,
+  "unit": "套",
+  "tags": [
+   "hot",
+   "heavy"
+  ],
+  "supplier": "SUP-042",
+  "warehouse": "WH-D",
+  "barcode": "6968830950287"
+ },
+ "SKU-00006": {
+  "name": "万象 安全帽 L",
+  "category": "abrasive",
+  "price": 19.41,
+  "unit": "套",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-A",
+  "barcode": "6997998358648"
+ },
+ "SKU-00007": {
+  "name": "瑞森 手电钻 220V",
+  "category": "tools",
+  "price": 157.86,
+  "unit": "盒",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-080",
+  "warehouse": "WH-C",
+  "barcode": "6921994141345"
+ },
+ "SKU-00008": {
+  "name": "瑞森 安全帽 8x40",
+  "category": "lubricant",
+  "price": 191.88,
+  "unit": "套",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-C",
+  "barcode": "6936556154501"
+ },
+ "SKU-00009": {
+  "name": "海通 塞尺 10mm",
+  "category": "lubricant",
+  "price": 393.16,
+  "unit": "卷",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-018",
+  "warehouse": "WH-A",
+  "barcode": "6957967590711"
+ },
+ "SKU-00010": {
+  "name": "德昌 润滑脂 36V",
+  "category": "abrasive",
+  "price": 146.74,
+  "unit": "包",
+  "tags": [
+   "bulk",
+   "hot"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-C",
+  "barcode": "6974961653978"
+ },
+ "SKU-00011": {
+  "name": "宏发 尼龙扎带 XL",
+  "category": "fastener",
+  "price": 468.35,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "restricted",
+   "oem"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-C",
+  "barcode": "6942361527696"
+ },
+ "SKU-00012": {
+  "name": "泰力 开口扳手 36V",
+  "category": "tools",
+  "price": 367.32,
+  "unit": "盒",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-014",
+  "warehouse": "WH-B",
+  "barcode": "6966567873981"
+ },
+ "SKU-00013": {
+  "name": "海通 安全帽 S",
+  "category": "tools",
+  "price": 25.16,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "restricted",
+   "heavy"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-C",
+  "barcode": "6925893590457"
+ },
+ "SKU-00014": {
+  "name": "宏发 百叶片 XL",
+  "category": "fastener",
+  "price": 119.46,
+  "unit": "包",
+  "tags": [
+   "clearance",
+   "heavy"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-A",
+  "barcode": "6950138917286"
+ },
+ "SKU-00015": {
+  "name": "博汇 尼龙扎带 S",
+  "category": "electrical",
+  "price": 267.14,
+  "unit": "套",
+  "tags": [
+   "bulk",
+   "seasonal"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-C",
+  "barcode": "6934953856479"
+ },
+ "SKU-00016": {
+  "name": "金鼎 热缩管 XL",
+  "category": "safety",
+  "price": 122.22,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "bulk",
+   "oem"
+  ],
+  "supplier": "SUP-082",
+  "warehouse": "WH-B",
+  "barcode": "6930734312543"
+ },
+ "SKU-00017": {
+  "name": "德昌 不锈钢螺栓 220V",
+  "category": "safety",
+  "price": 188.25,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "import",
+   "heavy"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-A",
+  "barcode": "6918848717179"
+ },
+ "SKU-00018": {
+  "name": "海通 内六角扳手 M",
+  "category": "packaging",
+  "price": 445.66,
+  "unit": "卷",
+  "tags": [
+   "heavy",
+   "new"
+  ],
+  "supplier": "SUP-038",
+  "warehouse": "WH-C",
+  "barcode": "6961878364110"
+ },
+ "SKU-00019": {
+  "name": "宏发 塞尺 220V",
+  "category": "safety",
+  "price": 456.16,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "new",
+   "hot"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-D",
+  "barcode": "6953564106246"
+ },
+ "SKU-00020": {
+  "name": "华瑞 打包带 36V",
+  "category": "safety",
+  "price": 103.15,
+  "unit": "卷",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-031",
+  "warehouse": "WH-D",
+  "barcode": "6944233301893"
+ },
+ "SKU-00021": {
+  "name": "华瑞 不锈钢螺栓 8x40",
+  "category": "safety",
+  "price": 205.92,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-A",
+  "barcode": "6977115824551"
+ },
+ "SKU-00022": {
+  "name": "德昌 热缩管 12mm",
+  "category": "packaging",
+  "price": 148.41,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "hot"
+  ],
+  "supplier": "SUP-013",
+  "warehouse": "WH-D",
+  "barcode": "6943947678820"
+ },
+ "SKU-00023": {
+  "name": "博汇 润滑脂 12mm",
+  "category": "packaging",
+  "price": 242.51,
+  "unit": "包",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-052",
+  "warehouse": "WH-B",
+  "barcode": "6984428167377"
+ },
+ "SKU-00024": {
+  "name": "泰力 缠绕膜 XL",
+  "category": "electrical",
+  "price": 336.92,
+  "unit": "包",
+  "tags": [
+   "new",
+   "hot"
+  ],
+  "supplier": "SUP-046",
+  "warehouse": "WH-B",
+  "barcode": "6991497333087"
+ },
+ "SKU-00025": {
+  "name": "德昌 除锈剂 S",
+  "category": "fastener",
+  "price": 160.87,
+  "unit": "件",
+  "tags": [
+   "import",
+   "seasonal"
+  ],
+  "supplier": "SUP-047",
+  "warehouse": "WH-B",
+  "barcode": "6913724869491"
+ },
+ "SKU-00026": {
+  "name": "宏发 内六角扳手 12mm",
+  "category": "tools",
+  "price": 73.78,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "hot"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-D",
+  "barcode": "6948235737103"
+ },
+ "SKU-00027": {
+  "name": "宏发 润滑脂 6x30",
+  "category": "lubricant",
+  "price": 259.73,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "seasonal"
+  ],
+  "supplier": "SUP-010",
+  "warehouse": "WH-A",
+  "barcode": "6932599214921"
+ },
+ "SKU-00028": {
+  "name": "金鼎 绝缘手套 8x40",
+  "category": "packaging",
+  "price": 285.75,
+  "unit": "箱",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-B",
+  "barcode": "6955411483070"
+ },
+ "SKU-00029": {
+  "name": "金鼎 绝缘手套 S",
+  "category": "tools",
+  "price": 63.19,
+  "unit": "套",
+  "tags": [
+   "clearance",
+   "heavy"
+  ],
+  "supplier": "SUP-053",
+  "warehouse": "WH-C",
+  "barcode": "6935825327646"
+ },
+ "SKU-00030": {
+  "name": "恒久 自攻螺钉 10mm",
+  "category": "safety",
+  "price": 27.36,
+  "unit": "套",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-057",
+  "warehouse": "WH-B",
+  "barcode": "6963082890535"
+ },
+ "SKU-00031": {
+  "name": "恒久 不锈钢螺栓 36V",
+  "category": "abrasive",
+  "price": 9.29,
+  "unit": "件",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-017",
+  "warehouse": "WH-D",
+  "barcode": "6986843582427"
+ },
+ "SKU-00032": {
+  "name": "泰力 内六角扳手 12mm",
+  "category": "tools",
+  "price": 402.97,
+  "unit": "包",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-003",
+  "warehouse": "WH-D",
+  "barcode": "6995743398706"
+ },
+ "SKU-00033": {
+  "name": "恒久 内六角扳手 12mm",
+  "category": "safety",
+  "price": 312.57,
+  "unit": "包",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-036",
+  "warehouse": "WH-C",
+  "barcode": "6937185711873"
+ },
+ "SKU-00034": {
+  "name": "泰力 内六角扳手 L",
+  "category": "electrical",
+  "price": 23,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "oem"
+  ],
+  "supplier": "SUP-065",
+  "warehouse": "WH-D",
+  "barcode": "6982058382067"
+ },
+ "SKU-00035": {
+  "name": "德昌 自攻螺钉 12mm",
+  "category": "lubricant",
+  "price": 460.08,
+  "unit": "盒",
+  "tags": [
+   "heavy",
+   "new"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-B",
+  "barcode": "6926671495445"
+ },
+ "SKU-00036": {
+  "name": "博汇 角磨机 8x40",
+  "category": "measuring",
+  "price": 68.88,
+  "unit": "卷",
+  "tags": [
+   "clearance",
+   "hot",
+   "heavy"
+  ],
+  "supplier": "SUP-017",
+  "warehouse": "WH-B",
+  "barcode": "6996313250105"
+ },
+ "SKU-00037": {
+  "name": "瑞森 百叶片 M",
+  "category": "safety",
+  "price": 457.81,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "bulk"
+  ],
+  "supplier": "SUP-040",
+  "warehouse": "WH-C",
+  "barcode": "6937638651145"
+ },
+ "SKU-00038": {
+  "name": "恒久 开口扳手 36V",
+  "category": "tools",
+  "price": 82.52,
+  "unit": "包",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-003",
+  "warehouse": "WH-C",
+  "barcode": "6930193525562"
+ },
+ "SKU-00039": {
+  "name": "博汇 百叶片 12mm",
+  "category": "measuring",
+  "price": 293.89,
+  "unit": "套",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-051",
+  "warehouse": "WH-A",
+  "barcode": "6950937528927"
+ },
+ "SKU-00040": {
+  "name": "瑞森 开口扳手 S",
+  "category": "lubricant",
+  "price": 477.58,
+  "unit": "箱",
+  "tags": [
+   "clearance",
+   "seasonal"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-B",
+  "barcode": "6992224812545"
+ },
+ "SKU-00041": {
+  "name": "宏发 打包带 8x40",
+  "category": "safety",
+  "price": 354.05,
+  "unit": "卷",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-008",
+  "warehouse": "WH-D",
+  "barcode": "6996579078476"
+ },
+ "SKU-00042": {
+  "name": "恒久 绝缘手套 12mm",
+  "category": "packaging",
+  "price": 419.51,
+  "unit": "套",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-021",
+  "warehouse": "WH-B",
+  "barcode": "6910502442121"
+ },
+ "SKU-00043": {
+  "name": "宏发 塞尺 220V",
+  "category": "safety",
+  "price": 382.86,
+  "unit": "箱",
+  "tags": [
+   "fragile",
+   "clearance"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-C",
+  "barcode": "6935259006035"
+ },
+ "SKU-00044": {
+  "name": "恒久 打包带 12mm",
+  "category": "tools",
+  "price": 337.43,
+  "unit": "卷",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-060",
+  "warehouse": "WH-D",
+  "barcode": "6938929233564"
+ },
+ "SKU-00045": {
+  "name": "德昌 热缩管 8x40",
+  "category": "measuring",
+  "price": 216.34,
+  "unit": "件",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-C",
+  "barcode": "6924100641018"
+ },
+ "SKU-00046": {
+  "name": "金鼎 防爆接线盒 220V",
+  "category": "lubricant",
+  "price": 191.55,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "bulk",
+   "oem"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-A",
+  "barcode": "6973333311706"
+ },
+ "SKU-00047": {
+  "name": "瑞森 电动螺丝刀 S",
+  "category": "electrical",
+  "price": 191.44,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "restricted"
+  ],
+  "supplier": "SUP-062",
+  "warehouse": "WH-C",
+  "barcode": "6949320733565"
+ },
+ "SKU-00048": {
+  "name": "瑞森 润滑脂 L",
+  "category": "abrasive",
+  "price": 432.09,
+  "unit": "包",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-C",
+  "barcode": "6984057936702"
+ },
+ "SKU-00049": {
+  "name": "华瑞 游标卡尺 6x30",
+  "category": "safety",
+  "price": 441.91,
+  "unit": "箱",
+  "tags": [
+   "clearance",
+   "import"
+  ],
+  "supplier": "SUP-064",
+  "warehouse": "WH-C",
+  "barcode": "6996957688372"
+ },
+ "SKU-00050": {
+  "name": "博汇 塞尺 10mm",
+  "category": "safety",
+  "price": 192.89,
+  "unit": "盒",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-A",
+  "barcode": "6913265447320"
+ },
+ "SKU-00051": {
+  "name": "宏发 润滑脂 6x30",
+  "category": "electrical",
+  "price": 113.86,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "seasonal"
+  ],
+  "supplier": "SUP-054",
+  "warehouse": "WH-B",
+  "barcode": "6989872461594"
+ },
+ "SKU-00052": {
+  "name": "泰力 百叶片 36V",
+  "category": "abrasive",
+  "price": 194.3,
+  "unit": "套",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-D",
+  "barcode": "6979329652818"
+ },
+ "SKU-00053": {
+  "name": "宏发 安全帽 10mm",
+  "category": "tools",
+  "price": 215.3,
+  "unit": "箱",
+  "tags": [
+   "fragile",
+   "bulk",
+   "import"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-A",
+  "barcode": "6923120585984"
+ },
+ "SKU-00054": {
+  "name": "万象 热缩管 12mm",
+  "category": "electrical",
+  "price": 378.1,
+  "unit": "卷",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-A",
+  "barcode": "6965386985864"
+ },
+ "SKU-00055": {
+  "name": "博汇 砂轮片 6x30",
+  "category": "electrical",
+  "price": 142.97,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "import"
+  ],
+  "supplier": "SUP-010",
+  "warehouse": "WH-D",
+  "barcode": "6994454371968"
+ },
+ "SKU-00056": {
+  "name": "德昌 缠绕膜 6x30",
+  "category": "fastener",
+  "price": 408.3,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "bulk",
+   "heavy"
+  ],
+  "supplier": "SUP-017",
+  "warehouse": "WH-A",
+  "barcode": "6953882886787"
+ },
+ "SKU-00057": {
+  "name": "博汇 缠绕膜 XL",
+  "category": "measuring",
+  "price": 253.48,
+  "unit": "盒",
+  "tags": [
+   "new",
+   "seasonal"
+  ],
+  "supplier": "SUP-076",
+  "warehouse": "WH-C",
+  "barcode": "6971171960859"
+ },
+ "SKU-00058": {
+  "name": "金鼎 游标卡尺 220V",
+  "category": "measuring",
+  "price": 50.87,
+  "unit": "套",
+  "tags": [
+   "heavy",
+   "bulk"
+  ],
+  "supplier": "SUP-082",
+  "warehouse": "WH-A",
+  "barcode": "6946540207842"
+ },
+ "SKU-00059": {
+  "name": "海通 自攻螺钉 36V",
+  "category": "lubricant",
+  "price": 332.36,
+  "unit": "套",
+  "tags": [
+   "new",
+   "restricted",
+   "bulk"
+  ],
+  "supplier": "SUP-022",
+  "warehouse": "WH-A",
+  "barcode": "6952202139516"
+ },
+ "SKU-00060": {
+  "name": "金鼎 打包带 XL",
+  "category": "electrical",
+  "price": 317.94,
+  "unit": "箱",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-048",
+  "warehouse": "WH-A",
+  "barcode": "6994337687829"
+ },
+ "SKU-00061": {
+  "name": "博汇 安全帽 220V",
+  "category": "electrical",
+  "price": 463.71,
+  "unit": "套",
+  "tags": [
+   "new",
+   "import",
+   "clearance"
+  ],
+  "supplier": "SUP-058",
+  "warehouse": "WH-A",
+  "barcode": "6912907549442"
+ },
+ "SKU-00062": {
+  "name": "宏发 不锈钢螺栓 12mm",
+  "category": "abrasive",
+  "price": 367.54,
+  "unit": "包",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-025",
+  "warehouse": "WH-D",
+  "barcode": "6967694326666"
+ },
+ "SKU-00063": {
+  "name": "金鼎 安全帽 XL",
+  "category": "lubricant",
+  "price": 451.52,
+  "unit": "件",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-032",
+  "warehouse": "WH-A",
+  "barcode": "6941370765283"
+ },
+ "SKU-00064": {
+  "name": "德昌 手电钻 220V",
+  "category": "lubricant",
+  "price": 225.95,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "oem"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-D",
+  "barcode": "6969306323555"
+ },
+ "SKU-00065": {
+  "name": "瑞森 缠绕膜 S",
+  "category": "packaging",
+  "price": 277.65,
+  "unit": "包",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-048",
+  "warehouse": "WH-D",
+  "barcode": "6932870316516"
+ },
+ "SKU-00066": {
+  "name": "宏发 热缩管 12mm",
+  "category": "electrical",
+  "price": 196.91,
+  "unit": "盒",
+  "tags": [
+   "oem",
+   "fragile"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-A",
+  "barcode": "6956021591409"
+ },
+ "SKU-00067": {
+  "name": "金鼎 砂轮片 XL",
+  "category": "electrical",
+  "price": 152.54,
+  "unit": "件",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-064",
+  "warehouse": "WH-A",
+  "barcode": "6963253245676"
+ },
+ "SKU-00068": {
+  "name": "华瑞 润滑脂 10mm",
+  "category": "tools",
+  "price": 17.73,
+  "unit": "件",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-A",
+  "barcode": "6959236004673"
+ },
+ "SKU-00069": {
+  "name": "恒久 热缩管 12mm",
+  "category": "safety",
+  "price": 189.68,
+  "unit": "盒",
+  "tags": [
+   "new",
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-013",
+  "warehouse": "WH-D",
+  "barcode": "6982585361037"
+ },
+ "SKU-00070": {
+  "name": "万象 尼龙扎带 36V",
+  "category": "tools",
+  "price": 334.44,
+  "unit": "套",
+  "tags": [
+   "bulk",
+   "restricted"
+  ],
+  "supplier": "SUP-064",
+  "warehouse": "WH-A",
+  "barcode": "6911615432799"
+ },
+ "SKU-00071": {
+  "name": "瑞森 绝缘手套 XL",
+  "category": "electrical",
+  "price": 287.36,
+  "unit": "箱",
+  "tags": [
+   "heavy",
+   "oem",
+   "hot"
+  ],
+  "supplier": "SUP-048",
+  "warehouse": "WH-C",
+  "barcode": "6916686629060"
+ },
+ "SKU-00072": {
+  "name": "万象 缠绕膜 10mm",
+  "category": "tools",
+  "price": 315.27,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "seasonal"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-A",
+  "barcode": "6958874703072"
+ },
+ "SKU-00073": {
+  "name": "华瑞 开口扳手 L",
+  "category": "measuring",
+  "price": 358.07,
+  "unit": "卷",
+  "tags": [
+   "import",
+   "hot"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-B",
+  "barcode": "6988433295524"
+ },
+ "SKU-00074": {
+  "name": "泰力 绝缘手套 S",
+  "category": "tools",
+  "price": 62.93,
+  "unit": "包",
+  "tags": [
+   "clearance",
+   "oem"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-A",
+  "barcode": "6977486205430"
+ },
+ "SKU-00075": {
+  "name": "华瑞 安全帽 S",
+  "category": "abrasive",
+  "price": 294.81,
+  "unit": "箱",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-060",
+  "warehouse": "WH-A",
+  "barcode": "6910587942898"
+ },
+ "SKU-00076": {
+  "name": "华瑞 润滑脂 6x30",
+  "category": "packaging",
+  "price": 236.62,
+  "unit": "盒",
+  "tags": [
+   "new",
+   "restricted",
+   "import"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-C",
+  "barcode": "6964586011196"
+ },
+ "SKU-00077": {
+  "name": "万象 不锈钢螺栓 S",
+  "category": "lubricant",
+  "price": 176.05,
+  "unit": "套",
+  "tags": [
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-C",
+  "barcode": "6940212852968"
+ },
+ "SKU-00078": {
+  "name": "海通 除锈剂 S",
+  "category": "packaging",
+  "price": 238.81,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "restricted"
+  ],
+  "supplier": "SUP-020",
+  "warehouse": "WH-A",
+  "barcode": "6930418259808"
+ },
+ "SKU-00079": {
+  "name": "恒久 打包带 6x30",
+  "category": "safety",
+  "price": 276.63,
+  "unit": "箱",
+  "tags": [
+   "clearance",
+   "heavy",
+   "bulk"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-B",
+  "barcode": "6918439238075"
+ },
+ "SKU-00080": {
+  "name": "德昌 自攻螺钉 6x30",
+  "category": "packaging",
+  "price": 371.36,
+  "unit": "件",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-031",
+  "warehouse": "WH-D",
+  "barcode": "6984120796953"
+ },
+ "SKU-00081": {
+  "name": "德昌 安全帽 8x40",
+  "category": "fastener",
+  "price": 27.87,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "oem",
+   "restricted"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-B",
+  "barcode": "6918036906722"
+ },
+ "SKU-00082": {
+  "name": "泰力 除锈剂 10mm",
+  "category": "safety",
+  "price": 100.73,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "heavy"
+  ],
+  "supplier": "SUP-078",
+  "warehouse": "WH-C",
+  "barcode": "6930869753370"
+ },
+ "SKU-00083": {
+  "name": "博汇 缠绕膜 6x30",
+  "category": "tools",
+  "price": 329.68,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "bulk"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-C",
+  "barcode": "6925684528358"
+ },
+ "SKU-00084": {
+  "name": "泰力 自攻螺钉 XL",
+  "category": "tools",
+  "price": 427.49,
+  "unit": "卷",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-058",
+  "warehouse": "WH-D",
+  "barcode": "6986498639619"
+ },
+ "SKU-00085": {
+  "name": "瑞森 百叶片 S",
+  "category": "electrical",
+  "price": 98.57,
+  "unit": "包",
+  "tags": [
+   "clearance",
+   "import"
+  ],
+  "supplier": "SUP-018",
+  "warehouse": "WH-A",
+  "barcode": "6910665139556"
+ },
+ "SKU-00086": {
+  "name": "恒久 内六角扳手 6x30",
+  "category": "measuring",
+  "price": 338.34,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "seasonal"
+  ],
+  "supplier": "SUP-078",
+  "warehouse": "WH-A",
+  "barcode": "6932366053174"
+ },
+ "SKU-00087": {
+  "name": "海通 开口扳手 S",
+  "category": "measuring",
+  "price": 61.56,
+  "unit": "盒",
+  "tags": [
+   "heavy",
+   "bulk"
+  ],
+  "supplier": "SUP-058",
+  "warehouse": "WH-D",
+  "barcode": "6980091131958"
+ },
+ "SKU-00088": {
+  "name": "博汇 电动螺丝刀 12mm",
+  "category": "tools",
+  "price": 400.91,
+  "unit": "盒",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-C",
+  "barcode": "6954297175428"
+ },
+ "SKU-00089": {
+  "name": "华瑞 手电钻 L",
+  "category": "safety",
+  "price": 308.3,
+  "unit": "件",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-041",
+  "warehouse": "WH-D",
+  "barcode": "6919924130444"
+ },
+ "SKU-00090": {
+  "name": "海通 电动螺丝刀 M",
+  "category": "packaging",
+  "price": 450.56,
+  "unit": "盒",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-074",
+  "warehouse": "WH-A",
+  "barcode": "6958993093096"
+ },
+ "SKU-00091": {
+  "name": "博汇 内六角扳手 S",
+  "category": "abrasive",
+  "price": 309.73,
+  "unit": "箱",
+  "tags": [
+   "bulk",
+   "hot",
+   "new"
+  ],
+  "supplier": "SUP-016",
+  "warehouse": "WH-B",
+  "barcode": "6989088827408"
+ },
+ "SKU-00092": {
+  "name": "宏发 塞尺 XL",
+  "category": "safety",
+  "price": 255.54,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "import",
+   "clearance"
+  ],
+  "supplier": "SUP-043",
+  "warehouse": "WH-C",
+  "barcode": "6948461064118"
+ },
+ "SKU-00093": {
+  "name": "金鼎 开口扳手 S",
+  "category": "packaging",
+  "price": 185.03,
+  "unit": "套",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-C",
+  "barcode": "6935716311943"
+ },
+ "SKU-00094": {
+  "name": "德昌 防爆接线盒 6x30",
+  "category": "packaging",
+  "price": 93.84,
+  "unit": "卷",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-036",
+  "warehouse": "WH-A",
+  "barcode": "6973312570184"
+ },
+ "SKU-00095": {
+  "name": "德昌 缠绕膜 L",
+  "category": "electrical",
+  "price": 457.13,
+  "unit": "包",
+  "tags": [
+   "seasonal",
+   "new",
+   "fragile"
+  ],
+  "supplier": "SUP-085",
+  "warehouse": "WH-A",
+  "barcode": "6937143163991"
+ },
+ "SKU-00096": {
+  "name": "万象 润滑脂 12mm",
+  "category": "measuring",
+  "price": 342.16,
+  "unit": "件",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-065",
+  "warehouse": "WH-B",
+  "barcode": "6921828091150"
+ },
+ "SKU-00097": {
+  "name": "海通 防爆接线盒 12mm",
+  "category": "abrasive",
+  "price": 117.54,
+  "unit": "盒",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-C",
+  "barcode": "6911344999075"
+ },
+ "SKU-00098": {
+  "name": "华瑞 手电钻 12mm",
+  "category": "lubricant",
+  "price": 309.95,
+  "unit": "套",
+  "tags": [
+   "import",
+   "heavy",
+   "hot"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-B",
+  "barcode": "6975177432329"
+ },
+ "SKU-00099": {
+  "name": "博汇 不锈钢螺栓 10mm",
+  "category": "lubricant",
+  "price": 119.07,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "clearance",
+   "fragile"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-A",
+  "barcode": "6964393763865"
+ },
+ "SKU-00100": {
+  "name": "恒久 绝缘手套 8x40",
+  "category": "abrasive",
+  "price": 344.66,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "hot",
+   "new"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-C",
+  "barcode": "6976463444263"
+ },
+ "SKU-00101": {
+  "name": "瑞森 除锈剂 8x40",
+  "category": "abrasive",
+  "price": 96.73,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "hot",
+   "heavy"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-B",
+  "barcode": "6946692791002"
+ },
+ "SKU-00102": {
+  "name": "华瑞 防爆接线盒 S",
+  "category": "fastener",
+  "price": 81.93,
+  "unit": "包",
+  "tags": [
+   "new",
+   "clearance"
+  ],
+  "supplier": "SUP-069",
+  "warehouse": "WH-C",
+  "barcode": "6978054316075"
+ },
+ "SKU-00103": {
+  "name": "华瑞 润滑脂 8x40",
+  "category": "lubricant",
+  "price": 310.75,
+  "unit": "盒",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-C",
+  "barcode": "6961538335108"
+ },
+ "SKU-00104": {
+  "name": "瑞森 润滑脂 36V",
+  "category": "tools",
+  "price": 393.11,
+  "unit": "卷",
+  "tags": [
+   "new",
+   "restricted",
+   "fragile"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-C",
+  "barcode": "6945053156630"
+ },
+ "SKU-00105": {
+  "name": "金鼎 绝缘手套 10mm",
+  "category": "packaging",
+  "price": 462.1,
+  "unit": "盒",
+  "tags": [
+   "seasonal",
+   "new"
+  ],
+  "supplier": "SUP-076",
+  "warehouse": "WH-A",
+  "barcode": "6916096116605"
+ },
+ "SKU-00106": {
+  "name": "华瑞 开口扳手 S",
+  "category": "electrical",
+  "price": 253.15,
+  "unit": "包",
+  "tags": [
+   "new",
+   "clearance"
+  ],
+  "supplier": "SUP-046",
+  "warehouse": "WH-D",
+  "barcode": "6965638263251"
+ },
+ "SKU-00107": {
+  "name": "金鼎 绝缘手套 6x30",
+  "category": "electrical",
+  "price": 431.37,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "import",
+   "bulk"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-B",
+  "barcode": "6963770844961"
+ },
+ "SKU-00108": {
+  "name": "博汇 砂轮片 M",
+  "category": "safety",
+  "price": 90.77,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "oem"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-C",
+  "barcode": "6960273973965"
+ },
+ "SKU-00109": {
+  "name": "万象 电动螺丝刀 12mm",
+  "category": "packaging",
+  "price": 173.4,
+  "unit": "箱",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-032",
+  "warehouse": "WH-A",
+  "barcode": "6940265791728"
+ },
+ "SKU-00110": {
+  "name": "万象 角磨机 M",
+  "category": "lubricant",
+  "price": 311.28,
+  "unit": "包",
+  "tags": [
+   "restricted",
+   "fragile",
+   "oem"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-B",
+  "barcode": "6976331565410"
+ },
+ "SKU-00111": {
+  "name": "瑞森 游标卡尺 M",
+  "category": "electrical",
+  "price": 324.13,
+  "unit": "卷",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-049",
+  "warehouse": "WH-B",
+  "barcode": "6993092045822"
+ },
+ "SKU-00112": {
+  "name": "恒久 不锈钢螺栓 36V",
+  "category": "electrical",
+  "price": 196.91,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "hot",
+   "import"
+  ],
+  "supplier": "SUP-017",
+  "warehouse": "WH-B",
+  "barcode": "6912047812939"
+ },
+ "SKU-00113": {
+  "name": "德昌 不锈钢螺栓 S",
+  "category": "measuring",
+  "price": 254.94,
+  "unit": "卷",
+  "tags": [
+   "import",
+   "seasonal"
+  ],
+  "supplier": "SUP-050",
+  "warehouse": "WH-D",
+  "barcode": "6923799643522"
+ },
+ "SKU-00114": {
+  "name": "德昌 游标卡尺 L",
+  "category": "tools",
+  "price": 283.75,
+  "unit": "盒",
+  "tags": [
+   "fragile",
+   "clearance",
+   "restricted"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-D",
+  "barcode": "6956206500551"
+ },
+ "SKU-00115": {
+  "name": "博汇 不锈钢螺栓 10mm",
+  "category": "tools",
+  "price": 261.46,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "heavy"
+  ],
+  "supplier": "SUP-003",
+  "warehouse": "WH-B",
+  "barcode": "6929109998950"
+ },
+ "SKU-00116": {
+  "name": "瑞森 不锈钢螺栓 S",
+  "category": "tools",
+  "price": 394.55,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "new"
+  ],
+  "supplier": "SUP-023",
+  "warehouse": "WH-C",
+  "barcode": "6951116676349"
+ },
+ "SKU-00117": {
+  "name": "华瑞 尼龙扎带 8x40",
+  "category": "tools",
+  "price": 203.97,
+  "unit": "包",
+  "tags": [
+   "seasonal",
+   "restricted",
+   "new"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-D",
+  "barcode": "6922142070537"
+ },
+ "SKU-00118": {
+  "name": "博汇 游标卡尺 XL",
+  "category": "electrical",
+  "price": 150.17,
+  "unit": "包",
+  "tags": [
+   "clearance",
+   "import"
+  ],
+  "supplier": "SUP-014",
+  "warehouse": "WH-D",
+  "barcode": "6952678397913"
+ },
+ "SKU-00119": {
+  "name": "德昌 游标卡尺 8x40",
+  "category": "packaging",
+  "price": 282.28,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "bulk",
+   "restricted"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-B",
+  "barcode": "6955154817125"
+ },
+ "SKU-00120": {
+  "name": "博汇 缠绕膜 L",
+  "category": "tools",
+  "price": 472.99,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "seasonal"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-C",
+  "barcode": "6919832495455"
+ },
+ "SKU-00121": {
+  "name": "海通 手电钻 12mm",
+  "category": "electrical",
+  "price": 218.85,
+  "unit": "卷",
+  "tags": [
+   "clearance",
+   "new"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-B",
+  "barcode": "6970643930463"
+ },
+ "SKU-00122": {
+  "name": "金鼎 绝缘手套 12mm",
+  "category": "measuring",
+  "price": 49.49,
+  "unit": "包",
+  "tags": [
+   "new",
+   "bulk",
+   "restricted"
+  ],
+  "supplier": "SUP-029",
+  "warehouse": "WH-C",
+  "barcode": "6953934787532"
+ },
+ "SKU-00123": {
+  "name": "泰力 角磨机 XL",
+  "category": "lubricant",
+  "price": 216.57,
+  "unit": "包",
+  "tags": [
+   "import",
+   "hot"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-B",
+  "barcode": "6919311642651"
+ },
+ "SKU-00124": {
+  "name": "泰力 手电钻 36V",
+  "category": "packaging",
+  "price": 7.47,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-013",
+  "warehouse": "WH-A",
+  "barcode": "6946028134243"
+ },
+ "SKU-00125": {
+  "name": "瑞森 尼龙扎带 220V",
+  "category": "measuring",
+  "price": 221.64,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "restricted"
+  ],
+  "supplier": "SUP-089",
+  "warehouse": "WH-D",
+  "barcode": "6981948390040"
+ },
+ "SKU-00126": {
+  "name": "博汇 塞尺 220V",
+  "category": "lubricant",
+  "price": 94.73,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "clearance"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-C",
+  "barcode": "6952392989416"
+ },
+ "SKU-00127": {
+  "name": "金鼎 手电钻 12mm",
+  "category": "abrasive",
+  "price": 122.84,
+  "unit": "包",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-C",
+  "barcode": "6913156766892"
+ },
+ "SKU-00128": {
+  "name": "恒久 游标卡尺 L",
+  "category": "packaging",
+  "price": 94.57,
+  "unit": "盒",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-071",
+  "warehouse": "WH-A",
+  "barcode": "6949617410022"
+ },
+ "SKU-00129": {
+  "name": "泰力 绝缘手套 L",
+  "category": "abrasive",
+  "price": 374.41,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "hot",
+   "import"
+  ],
+  "supplier": "SUP-046",
+  "warehouse": "WH-A",
+  "barcode": "6988705081082"
+ },
+ "SKU-00130": {
+  "name": "德昌 润滑脂 8x40",
+  "category": "lubricant",
+  "price": 296.86,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "restricted"
+  ],
+  "supplier": "SUP-042",
+  "warehouse": "WH-B",
+  "barcode": "6954087662717"
+ },
+ "SKU-00131": {
+  "name": "万象 尼龙扎带 L",
+  "category": "electrical",
+  "price": 130.63,
+  "unit": "包",
+  "tags": [
+   "import",
+   "clearance"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-C",
+  "barcode": "6979313473733"
+ },
+ "SKU-00132": {
+  "name": "海通 塞尺 220V",
+  "category": "fastener",
+  "price": 81.57,
+  "unit": "盒",
+  "tags": [
+   "restricted",
+   "new"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-A",
+  "barcode": "6940044064237"
+ },
+ "SKU-00133": {
+  "name": "金鼎 电动螺丝刀 220V",
+  "category": "packaging",
+  "price": 169.06,
+  "unit": "包",
+  "tags": [
+   "new",
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-A",
+  "barcode": "6952209324861"
+ },
+ "SKU-00134": {
+  "name": "瑞森 角磨机 10mm",
+  "category": "packaging",
+  "price": 209.07,
+  "unit": "套",
+  "tags": [
+   "import",
+   "fragile"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-B",
+  "barcode": "6974553754359"
+ },
+ "SKU-00135": {
+  "name": "华瑞 缠绕膜 XL",
+  "category": "measuring",
+  "price": 74.52,
+  "unit": "套",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-069",
+  "warehouse": "WH-B",
+  "barcode": "6998528561633"
+ },
+ "SKU-00136": {
+  "name": "万象 电动螺丝刀 10mm",
+  "category": "fastener",
+  "price": 425.02,
+  "unit": "卷",
+  "tags": [
+   "clearance",
+   "new",
+   "seasonal"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-B",
+  "barcode": "6977174894841"
+ },
+ "SKU-00137": {
+  "name": "德昌 防爆接线盒 S",
+  "category": "fastener",
+  "price": 177.37,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "seasonal"
+  ],
+  "supplier": "SUP-080",
+  "warehouse": "WH-B",
+  "barcode": "6940080072893"
+ },
+ "SKU-00138": {
+  "name": "瑞森 安全帽 8x40",
+  "category": "fastener",
+  "price": 20.71,
+  "unit": "卷",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-003",
+  "warehouse": "WH-C",
+  "barcode": "6988708425796"
+ },
+ "SKU-00139": {
+  "name": "德昌 尼龙扎带 S",
+  "category": "measuring",
+  "price": 233.79,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "bulk",
+   "seasonal"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-C",
+  "barcode": "6928721497067"
+ },
+ "SKU-00140": {
+  "name": "万象 开口扳手 6x30",
+  "category": "electrical",
+  "price": 189.56,
+  "unit": "套",
+  "tags": [
+   "oem",
+   "clearance",
+   "import"
+  ],
+  "supplier": "SUP-085",
+  "warehouse": "WH-C",
+  "barcode": "6982246823344"
+ },
+ "SKU-00141": {
+  "name": "泰力 砂轮片 6x30",
+  "category": "safety",
+  "price": 109.36,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "import",
+   "new"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-B",
+  "barcode": "6973802349597"
+ },
+ "SKU-00142": {
+  "name": "万象 塞尺 12mm",
+  "category": "abrasive",
+  "price": 55.82,
+  "unit": "包",
+  "tags": [
+   "import",
+   "new"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-A",
+  "barcode": "6950845880527"
+ },
+ "SKU-00143": {
+  "name": "华瑞 游标卡尺 220V",
+  "category": "packaging",
+  "price": 330.33,
+  "unit": "包",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-018",
+  "warehouse": "WH-C",
+  "barcode": "6936879575265"
+ },
+ "SKU-00144": {
+  "name": "万象 内六角扳手 L",
+  "category": "measuring",
+  "price": 162.97,
+  "unit": "包",
+  "tags": [
+   "heavy",
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-B",
+  "barcode": "6924163104302"
+ },
+ "SKU-00145": {
+  "name": "宏发 润滑脂 S",
+  "category": "electrical",
+  "price": 228.74,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "bulk"
+  ],
+  "supplier": "SUP-071",
+  "warehouse": "WH-D",
+  "barcode": "6910714572668"
+ },
+ "SKU-00146": {
+  "name": "恒久 开口扳手 8x40",
+  "category": "electrical",
+  "price": 92.33,
+  "unit": "盒",
+  "tags": [
+   "import",
+   "oem",
+   "heavy"
+  ],
+  "supplier": "SUP-011",
+  "warehouse": "WH-C",
+  "barcode": "6912022256852"
+ },
+ "SKU-00147": {
+  "name": "海通 砂轮片 6x30",
+  "category": "measuring",
+  "price": 454.23,
+  "unit": "包",
+  "tags": [
+   "import",
+   "heavy"
+  ],
+  "supplier": "SUP-045",
+  "warehouse": "WH-A",
+  "barcode": "6910458510220"
+ },
+ "SKU-00148": {
+  "name": "恒久 除锈剂 36V",
+  "category": "fastener",
+  "price": 222.17,
+  "unit": "件",
+  "tags": [
+   "oem",
+   "heavy"
+  ],
+  "supplier": "SUP-055",
+  "warehouse": "WH-B",
+  "barcode": "6910274261236"
+ },
+ "SKU-00149": {
+  "name": "金鼎 手电钻 L",
+  "category": "tools",
+  "price": 131.02,
+  "unit": "卷",
+  "tags": [
+   "bulk",
+   "restricted",
+   "clearance"
+  ],
+  "supplier": "SUP-041",
+  "warehouse": "WH-D",
+  "barcode": "6970376009969"
+ },
+ "SKU-00150": {
+  "name": "泰力 百叶片 10mm",
+  "category": "abrasive",
+  "price": 325.49,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "seasonal"
+  ],
+  "supplier": "SUP-065",
+  "warehouse": "WH-D",
+  "barcode": "6992754441538"
+ },
+ "SKU-00151": {
+  "name": "华瑞 防爆接线盒 36V",
+  "category": "tools",
+  "price": 445.15,
+  "unit": "套",
+  "tags": [
+   "clearance",
+   "fragile",
+   "bulk"
+  ],
+  "supplier": "SUP-067",
+  "warehouse": "WH-B",
+  "barcode": "6977945740254"
+ },
+ "SKU-00152": {
+  "name": "海通 砂轮片 220V",
+  "category": "measuring",
+  "price": 220.44,
+  "unit": "套",
+  "tags": [
+   "oem",
+   "restricted"
+  ],
+  "supplier": "SUP-073",
+  "warehouse": "WH-A",
+  "barcode": "6998228221278"
+ },
+ "SKU-00153": {
+  "name": "海通 塞尺 XL",
+  "category": "packaging",
+  "price": 279.8,
+  "unit": "卷",
+  "tags": [
+   "fragile",
+   "hot"
+  ],
+  "supplier": "SUP-055",
+  "warehouse": "WH-A",
+  "barcode": "6983548298214"
+ },
+ "SKU-00154": {
+  "name": "海通 打包带 8x40",
+  "category": "electrical",
+  "price": 53.71,
+  "unit": "箱",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-067",
+  "warehouse": "WH-B",
+  "barcode": "6944882053153"
+ },
+ "SKU-00155": {
+  "name": "万象 除锈剂 10mm",
+  "category": "tools",
+  "price": 160.8,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "heavy",
+   "hot"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-D",
+  "barcode": "6993580347338"
+ },
+ "SKU-00156": {
+  "name": "博汇 润滑脂 XL",
+  "category": "measuring",
+  "price": 156.78,
+  "unit": "盒",
+  "tags": [
+   "seasonal",
+   "import"
+  ],
+  "supplier": "SUP-055",
+  "warehouse": "WH-A",
+  "barcode": "6962453850830"
+ },
+ "SKU-00157": {
+  "name": "金鼎 自攻螺钉 8x40",
+  "category": "lubricant",
+  "price": 342.89,
+  "unit": "箱",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-020",
+  "warehouse": "WH-A",
+  "barcode": "6957633226536"
+ },
+ "SKU-00158": {
+  "name": "宏发 内六角扳手 8x40",
+  "category": "abrasive",
+  "price": 8.85,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "seasonal"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-D",
+  "barcode": "6974826535016"
+ },
+ "SKU-00159": {
+  "name": "博汇 砂轮片 8x40",
+  "category": "safety",
+  "price": 35.88,
+  "unit": "盒",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-008",
+  "warehouse": "WH-C",
+  "barcode": "6958457431815"
+ },
+ "SKU-00160": {
+  "name": "博汇 缠绕膜 12mm",
+  "category": "tools",
+  "price": 10.73,
+  "unit": "包",
+  "tags": [
+   "restricted",
+   "heavy"
+  ],
+  "supplier": "SUP-073",
+  "warehouse": "WH-D",
+  "barcode": "6972136290102"
+ },
+ "SKU-00161": {
+  "name": "瑞森 自攻螺钉 8x40",
+  "category": "measuring",
+  "price": 79.1,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "bulk"
+  ],
+  "supplier": "SUP-043",
+  "warehouse": "WH-B",
+  "barcode": "6912832155228"
+ },
+ "SKU-00162": {
+  "name": "宏发 塞尺 S",
+  "category": "safety",
+  "price": 450.68,
+  "unit": "盒",
+  "tags": [
+   "seasonal",
+   "hot"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-C",
+  "barcode": "6931252150545"
+ },
+ "SKU-00163": {
+  "name": "泰力 自攻螺钉 10mm",
+  "category": "measuring",
+  "price": 473.72,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "restricted"
+  ],
+  "supplier": "SUP-060",
+  "warehouse": "WH-A",
+  "barcode": "6984872333144"
+ },
+ "SKU-00164": {
+  "name": "德昌 尼龙扎带 8x40",
+  "category": "abrasive",
+  "price": 319.04,
+  "unit": "件",
+  "tags": [
+   "hot",
+   "clearance",
+   "seasonal"
+  ],
+  "supplier": "SUP-069",
+  "warehouse": "WH-A",
+  "barcode": "6918022961918"
+ },
+ "SKU-00165": {
+  "name": "瑞森 不锈钢螺栓 L",
+  "category": "measuring",
+  "price": 436.67,
+  "unit": "箱",
+  "tags": [
+   "clearance",
+   "new"
+  ],
+  "supplier": "SUP-015",
+  "warehouse": "WH-B",
+  "barcode": "6912916623355"
+ },
+ "SKU-00166": {
+  "name": "德昌 电动螺丝刀 8x40",
+  "category": "packaging",
+  "price": 469.28,
+  "unit": "包",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-A",
+  "barcode": "6946160514669"
+ },
+ "SKU-00167": {
+  "name": "泰力 手电钻 S",
+  "category": "measuring",
+  "price": 243.22,
+  "unit": "箱",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-022",
+  "warehouse": "WH-A",
+  "barcode": "6955978313966"
+ },
+ "SKU-00168": {
+  "name": "德昌 游标卡尺 L",
+  "category": "fastener",
+  "price": 212.69,
+  "unit": "卷",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-C",
+  "barcode": "6941333029284"
+ },
+ "SKU-00169": {
+  "name": "德昌 润滑脂 36V",
+  "category": "lubricant",
+  "price": 265.02,
+  "unit": "包",
+  "tags": [
+   "seasonal",
+   "heavy",
+   "fragile"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-C",
+  "barcode": "6958366386912"
+ },
+ "SKU-00170": {
+  "name": "德昌 手电钻 10mm",
+  "category": "packaging",
+  "price": 301.82,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "heavy"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-A",
+  "barcode": "6940246157958"
+ },
+ "SKU-00171": {
+  "name": "德昌 安全帽 XL",
+  "category": "lubricant",
+  "price": 335.83,
+  "unit": "卷",
+  "tags": [
+   "heavy",
+   "restricted"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-D",
+  "barcode": "6989478884972"
+ },
+ "SKU-00172": {
+  "name": "金鼎 内六角扳手 M",
+  "category": "abrasive",
+  "price": 183.72,
+  "unit": "件",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-D",
+  "barcode": "6957490495465"
+ },
+ "SKU-00173": {
+  "name": "博汇 安全帽 XL",
+  "category": "measuring",
+  "price": 12.79,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "hot",
+   "bulk"
+  ],
+  "supplier": "SUP-076",
+  "warehouse": "WH-B",
+  "barcode": "6944567558781"
+ },
+ "SKU-00174": {
+  "name": "宏发 砂轮片 220V",
+  "category": "electrical",
+  "price": 108.61,
+  "unit": "盒",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-B",
+  "barcode": "6988302709496"
+ },
+ "SKU-00175": {
+  "name": "华瑞 绝缘手套 10mm",
+  "category": "safety",
+  "price": 219.51,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "heavy"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-D",
+  "barcode": "6994562454263"
+ },
+ "SKU-00176": {
+  "name": "宏发 除锈剂 M",
+  "category": "tools",
+  "price": 411.72,
+  "unit": "包",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-A",
+  "barcode": "6974122801154"
+ },
+ "SKU-00177": {
+  "name": "华瑞 开口扳手 8x40",
+  "category": "electrical",
+  "price": 479.38,
+  "unit": "包",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-032",
+  "warehouse": "WH-D",
+  "barcode": "6952007899303"
+ },
+ "SKU-00178": {
+  "name": "华瑞 电动螺丝刀 6x30",
+  "category": "electrical",
+  "price": 295.32,
+  "unit": "件",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-C",
+  "barcode": "6959875741028"
+ },
+ "SKU-00179": {
+  "name": "万象 不锈钢螺栓 L",
+  "category": "tools",
+  "price": 38.65,
+  "unit": "包",
+  "tags": [
+   "clearance",
+   "seasonal"
+  ],
+  "supplier": "SUP-056",
+  "warehouse": "WH-A",
+  "barcode": "6935487640213"
+ },
+ "SKU-00180": {
+  "name": "金鼎 绝缘手套 6x30",
+  "category": "fastener",
+  "price": 127.54,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "oem"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-A",
+  "barcode": "6961617613160"
+ },
+ "SKU-00181": {
+  "name": "博汇 绝缘手套 L",
+  "category": "fastener",
+  "price": 14.92,
+  "unit": "盒",
+  "tags": [
+   "new",
+   "import"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-C",
+  "barcode": "6977921063931"
+ },
+ "SKU-00182": {
+  "name": "泰力 砂轮片 10mm",
+  "category": "packaging",
+  "price": 303.36,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "bulk"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-A",
+  "barcode": "6936599104379"
+ },
+ "SKU-00183": {
+  "name": "华瑞 防爆接线盒 8x40",
+  "category": "abrasive",
+  "price": 52.62,
+  "unit": "套",
+  "tags": [
+   "import",
+   "bulk",
+   "heavy"
+  ],
+  "supplier": "SUP-052",
+  "warehouse": "WH-C",
+  "barcode": "6983470490013"
+ },
+ "SKU-00184": {
+  "name": "泰力 除锈剂 220V",
+  "category": "abrasive",
+  "price": 271.28,
+  "unit": "箱",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-010",
+  "warehouse": "WH-C",
+  "barcode": "6910367913246"
+ },
+ "SKU-00185": {
+  "name": "宏发 安全帽 XL",
+  "category": "electrical",
+  "price": 451.17,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "heavy"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-B",
+  "barcode": "6978633952172"
+ },
+ "SKU-00186": {
+  "name": "博汇 不锈钢螺栓 10mm",
+  "category": "fastener",
+  "price": 272.25,
+  "unit": "箱",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-048",
+  "warehouse": "WH-D",
+  "barcode": "6918818008903"
+ },
+ "SKU-00187": {
+  "name": "泰力 尼龙扎带 8x40",
+  "category": "electrical",
+  "price": 294.86,
+  "unit": "包",
+  "tags": [
+   "heavy",
+   "seasonal"
+  ],
+  "supplier": "SUP-080",
+  "warehouse": "WH-C",
+  "barcode": "6942297111764"
+ },
+ "SKU-00188": {
+  "name": "宏发 润滑脂 L",
+  "category": "lubricant",
+  "price": 336.6,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "bulk"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-C",
+  "barcode": "6926429324157"
+ },
+ "SKU-00189": {
+  "name": "瑞森 手电钻 M",
+  "category": "tools",
+  "price": 4.48,
+  "unit": "箱",
+  "tags": [
+   "clearance",
+   "hot",
+   "bulk"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-C",
+  "barcode": "6956942133925"
+ },
+ "SKU-00190": {
+  "name": "万象 热缩管 6x30",
+  "category": "lubricant",
+  "price": 271.59,
+  "unit": "套",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-022",
+  "warehouse": "WH-A",
+  "barcode": "6921279380922"
+ },
+ "SKU-00191": {
+  "name": "瑞森 内六角扳手 8x40",
+  "category": "electrical",
+  "price": 221.59,
+  "unit": "盒",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-016",
+  "warehouse": "WH-B",
+  "barcode": "6930459407577"
+ },
+ "SKU-00192": {
+  "name": "瑞森 尼龙扎带 M",
+  "category": "fastener",
+  "price": 88.45,
+  "unit": "包",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-D",
+  "barcode": "6930358749637"
+ },
+ "SKU-00193": {
+  "name": "泰力 防爆接线盒 XL",
+  "category": "tools",
+  "price": 219.82,
+  "unit": "卷",
+  "tags": [
+   "heavy",
+   "fragile",
+   "import"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-C",
+  "barcode": "6982152956757"
+ },
+ "SKU-00194": {
+  "name": "恒久 内六角扳手 12mm",
+  "category": "fastener",
+  "price": 421.18,
+  "unit": "件",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-C",
+  "barcode": "6931238396177"
+ },
+ "SKU-00195": {
+  "name": "万象 手电钻 220V",
+  "category": "lubricant",
+  "price": 405.05,
+  "unit": "盒",
+  "tags": [
+   "oem",
+   "heavy",
+   "restricted"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-C",
+  "barcode": "6916710339787"
+ },
+ "SKU-00196": {
+  "name": "德昌 内六角扳手 220V",
+  "category": "measuring",
+  "price": 402.66,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "restricted"
+  ],
+  "supplier": "SUP-019",
+  "warehouse": "WH-B",
+  "barcode": "6971954886942"
+ },
+ "SKU-00197": {
+  "name": "海通 自攻螺钉 8x40",
+  "category": "electrical",
+  "price": 426.82,
+  "unit": "盒",
+  "tags": [
+   "import",
+   "clearance",
+   "hot"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-B",
+  "barcode": "6955793719313"
+ },
+ "SKU-00198": {
+  "name": "德昌 缠绕膜 6x30",
+  "category": "electrical",
+  "price": 188.14,
+  "unit": "包",
+  "tags": [
+   "import",
+   "new"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-C",
+  "barcode": "6931573275337"
+ },
+ "SKU-00199": {
+  "name": "海通 热缩管 XL",
+  "category": "measuring",
+  "price": 335.11,
+  "unit": "卷",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-038",
+  "warehouse": "WH-D",
+  "barcode": "6980534372362"
+ },
+ "SKU-00200": {
+  "name": "宏发 电动螺丝刀 8x40",
+  "category": "safety",
+  "price": 28.61,
+  "unit": "盒",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-026",
+  "warehouse": "WH-D",
+  "barcode": "6921483695512"
+ },
+ "SKU-00201": {
+  "name": "泰力 角磨机 M",
+  "category": "fastener",
+  "price": 380.43,
+  "unit": "包",
+  "tags": [
+   "heavy",
+   "fragile",
+   "hot"
+  ],
+  "supplier": "SUP-003",
+  "warehouse": "WH-A",
+  "barcode": "6940061807050"
+ },
+ "SKU-00202": {
+  "name": "德昌 砂轮片 M",
+  "category": "tools",
+  "price": 108.43,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "new"
+  ],
+  "supplier": "SUP-028",
+  "warehouse": "WH-A",
+  "barcode": "6926340915866"
+ },
+ "SKU-00203": {
+  "name": "博汇 除锈剂 36V",
+  "category": "safety",
+  "price": 151.08,
+  "unit": "卷",
+  "tags": [
+   "bulk",
+   "fragile"
+  ],
+  "supplier": "SUP-075",
+  "warehouse": "WH-D",
+  "barcode": "6978425598176"
+ },
+ "SKU-00204": {
+  "name": "海通 防爆接线盒 8x40",
+  "category": "safety",
+  "price": 289.46,
+  "unit": "盒",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-D",
+  "barcode": "6915722042324"
+ },
+ "SKU-00205": {
+  "name": "泰力 尼龙扎带 8x40",
+  "category": "lubricant",
+  "price": 104.22,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "clearance",
+   "fragile"
+  ],
+  "supplier": "SUP-014",
+  "warehouse": "WH-D",
+  "barcode": "6943345866218"
+ },
+ "SKU-00206": {
+  "name": "泰力 角磨机 M",
+  "category": "electrical",
+  "price": 148.04,
+  "unit": "套",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-052",
+  "warehouse": "WH-B",
+  "barcode": "6969145004776"
+ },
+ "SKU-00207": {
+  "name": "海通 热缩管 36V",
+  "category": "lubricant",
+  "price": 310.5,
+  "unit": "套",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-041",
+  "warehouse": "WH-B",
+  "barcode": "6930258016595"
+ },
+ "SKU-00208": {
+  "name": "华瑞 热缩管 M",
+  "category": "measuring",
+  "price": 49.81,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "bulk",
+   "new"
+  ],
+  "supplier": "SUP-038",
+  "warehouse": "WH-C",
+  "barcode": "6966542017486"
+ },
+ "SKU-00209": {
+  "name": "恒久 自攻螺钉 M",
+  "category": "fastener",
+  "price": 363.05,
+  "unit": "包",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-D",
+  "barcode": "6964061145807"
+ },
+ "SKU-00210": {
+  "name": "华瑞 砂轮片 L",
+  "category": "lubricant",
+  "price": 350.17,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-054",
+  "warehouse": "WH-B",
+  "barcode": "6924702807671"
+ },
+ "SKU-00211": {
+  "name": "博汇 手电钻 L",
+  "category": "fastener",
+  "price": 59.69,
+  "unit": "包",
+  "tags": [
+   "restricted",
+   "new",
+   "hot"
+  ],
+  "supplier": "SUP-064",
+  "warehouse": "WH-A",
+  "barcode": "6975035009712"
+ },
+ "SKU-00212": {
+  "name": "德昌 百叶片 10mm",
+  "category": "abrasive",
+  "price": 317.61,
+  "unit": "件",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-082",
+  "warehouse": "WH-A",
+  "barcode": "6961218897090"
+ },
+ "SKU-00213": {
+  "name": "宏发 塞尺 6x30",
+  "category": "lubricant",
+  "price": 78.92,
+  "unit": "盒",
+  "tags": [
+   "restricted",
+   "oem",
+   "seasonal"
+  ],
+  "supplier": "SUP-051",
+  "warehouse": "WH-C",
+  "barcode": "6980592930349"
+ },
+ "SKU-00214": {
+  "name": "宏发 塞尺 36V",
+  "category": "measuring",
+  "price": 89.81,
+  "unit": "件",
+  "tags": [
+   "import",
+   "restricted",
+   "fragile"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-D",
+  "barcode": "6926441490657"
+ },
+ "SKU-00215": {
+  "name": "华瑞 电动螺丝刀 S",
+  "category": "packaging",
+  "price": 235.3,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "hot",
+   "heavy"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-C",
+  "barcode": "6968024914291"
+ },
+ "SKU-00216": {
+  "name": "华瑞 除锈剂 XL",
+  "category": "electrical",
+  "price": 305.46,
+  "unit": "套",
+  "tags": [
+   "new",
+   "heavy",
+   "fragile"
+  ],
+  "supplier": "SUP-021",
+  "warehouse": "WH-C",
+  "barcode": "6933103185902"
+ },
+ "SKU-00217": {
+  "name": "万象 砂轮片 M",
+  "category": "tools",
+  "price": 293.84,
+  "unit": "卷",
+  "tags": [
+   "bulk",
+   "restricted",
+   "clearance"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-C",
+  "barcode": "6960646092915"
+ },
+ "SKU-00218": {
+  "name": "瑞森 绝缘手套 XL",
+  "category": "abrasive",
+  "price": 330.37,
+  "unit": "套",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-A",
+  "barcode": "6913580354751"
+ },
+ "SKU-00219": {
+  "name": "博汇 绝缘手套 10mm",
+  "category": "safety",
+  "price": 210.95,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "oem",
+   "new"
+  ],
+  "supplier": "SUP-032",
+  "warehouse": "WH-C",
+  "barcode": "6977133899958"
+ },
+ "SKU-00220": {
+  "name": "瑞森 塞尺 36V",
+  "category": "lubricant",
+  "price": 8.99,
+  "unit": "卷",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-008",
+  "warehouse": "WH-A",
+  "barcode": "6930364988455"
+ },
+ "SKU-00221": {
+  "name": "恒久 绝缘手套 XL",
+  "category": "abrasive",
+  "price": 271.27,
+  "unit": "件",
+  "tags": [
+   "oem",
+   "bulk",
+   "restricted"
+  ],
+  "supplier": "SUP-009",
+  "warehouse": "WH-A",
+  "barcode": "6982923756573"
+ },
+ "SKU-00222": {
+  "name": "宏发 手电钻 10mm",
+  "category": "packaging",
+  "price": 199.09,
+  "unit": "卷",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-008",
+  "warehouse": "WH-A",
+  "barcode": "6912198676467"
+ },
+ "SKU-00223": {
+  "name": "宏发 内六角扳手 XL",
+  "category": "measuring",
+  "price": 419.53,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "heavy",
+   "seasonal"
+  ],
+  "supplier": "SUP-047",
+  "warehouse": "WH-B",
+  "barcode": "6979943192037"
+ },
+ "SKU-00224": {
+  "name": "恒久 尼龙扎带 S",
+  "category": "measuring",
+  "price": 64.92,
+  "unit": "盒",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-C",
+  "barcode": "6992195222416"
+ },
+ "SKU-00225": {
+  "name": "宏发 缠绕膜 36V",
+  "category": "packaging",
+  "price": 393.68,
+  "unit": "卷",
+  "tags": [
+   "fragile",
+   "seasonal"
+  ],
+  "supplier": "SUP-078",
+  "warehouse": "WH-B",
+  "barcode": "6931277062902"
+ },
+ "SKU-00226": {
+  "name": "万象 角磨机 10mm",
+  "category": "fastener",
+  "price": 292.31,
+  "unit": "盒",
+  "tags": [
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-052",
+  "warehouse": "WH-B",
+  "barcode": "6993091477194"
+ },
+ "SKU-00227": {
+  "name": "华瑞 电动螺丝刀 8x40",
+  "category": "packaging",
+  "price": 473.16,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "new"
+  ],
+  "supplier": "SUP-057",
+  "warehouse": "WH-A",
+  "barcode": "6927775924512"
+ },
+ "SKU-00228": {
+  "name": "恒久 手电钻 XL",
+  "category": "packaging",
+  "price": 228.81,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "clearance"
+  ],
+  "supplier": "SUP-017",
+  "warehouse": "WH-C",
+  "barcode": "6971729624300"
+ },
+ "SKU-00229": {
+  "name": "金鼎 自攻螺钉 M",
+  "category": "abrasive",
+  "price": 205.64,
+  "unit": "套",
+  "tags": [
+   "import",
+   "fragile"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-D",
+  "barcode": "6944089170710"
+ },
+ "SKU-00230": {
+  "name": "华瑞 角磨机 8x40",
+  "category": "safety",
+  "price": 374.38,
+  "unit": "包",
+  "tags": [
+   "new",
+   "fragile"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-B",
+  "barcode": "6935204964887"
+ },
+ "SKU-00231": {
+  "name": "万象 打包带 12mm",
+  "category": "packaging",
+  "price": 353.94,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "import"
+  ],
+  "supplier": "SUP-009",
+  "warehouse": "WH-A",
+  "barcode": "6941614519074"
+ },
+ "SKU-00232": {
+  "name": "宏发 润滑脂 L",
+  "category": "safety",
+  "price": 417.74,
+  "unit": "卷",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-D",
+  "barcode": "6930703971395"
+ },
+ "SKU-00233": {
+  "name": "万象 开口扳手 220V",
+  "category": "safety",
+  "price": 24.45,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "import"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-C",
+  "barcode": "6923197573429"
+ },
+ "SKU-00234": {
+  "name": "万象 润滑脂 L",
+  "category": "fastener",
+  "price": 250,
+  "unit": "卷",
+  "tags": [
+   "heavy",
+   "bulk"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-B",
+  "barcode": "6917943887714"
+ },
+ "SKU-00235": {
+  "name": "宏发 润滑脂 L",
+  "category": "lubricant",
+  "price": 236.13,
+  "unit": "套",
+  "tags": [
+   "import",
+   "hot"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-B",
+  "barcode": "6933471742879"
+ },
+ "SKU-00236": {
+  "name": "瑞森 电动螺丝刀 6x30",
+  "category": "fastener",
+  "price": 321.24,
+  "unit": "盒",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-029",
+  "warehouse": "WH-B",
+  "barcode": "6943435698763"
+ },
+ "SKU-00237": {
+  "name": "宏发 绝缘手套 XL",
+  "category": "packaging",
+  "price": 36.34,
+  "unit": "件",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-D",
+  "barcode": "6958491538785"
+ },
+ "SKU-00238": {
+  "name": "德昌 角磨机 36V",
+  "category": "fastener",
+  "price": 102.62,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "oem"
+  ],
+  "supplier": "SUP-016",
+  "warehouse": "WH-A",
+  "barcode": "6951911672373"
+ },
+ "SKU-00239": {
+  "name": "华瑞 百叶片 M",
+  "category": "fastener",
+  "price": 252.49,
+  "unit": "套",
+  "tags": [
+   "import",
+   "restricted"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-A",
+  "barcode": "6943074708298"
+ },
+ "SKU-00240": {
+  "name": "德昌 防爆接线盒 6x30",
+  "category": "lubricant",
+  "price": 209.94,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-008",
+  "warehouse": "WH-B",
+  "barcode": "6944800814406"
+ },
+ "SKU-00241": {
+  "name": "德昌 绝缘手套 12mm",
+  "category": "tools",
+  "price": 13.19,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "seasonal"
+  ],
+  "supplier": "SUP-040",
+  "warehouse": "WH-B",
+  "barcode": "6912100759745"
+ },
+ "SKU-00242": {
+  "name": "恒久 除锈剂 L",
+  "category": "safety",
+  "price": 458.96,
+  "unit": "件",
+  "tags": [
+   "oem",
+   "import"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-A",
+  "barcode": "6956308062396"
+ },
+ "SKU-00243": {
+  "name": "瑞森 手电钻 10mm",
+  "category": "tools",
+  "price": 198.12,
+  "unit": "套",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-A",
+  "barcode": "6966691054430"
+ },
+ "SKU-00244": {
+  "name": "海通 自攻螺钉 6x30",
+  "category": "fastener",
+  "price": 154.4,
+  "unit": "盒",
+  "tags": [
+   "seasonal",
+   "restricted",
+   "bulk"
+  ],
+  "supplier": "SUP-038",
+  "warehouse": "WH-C",
+  "barcode": "6925512212522"
+ },
+ "SKU-00245": {
+  "name": "万象 角磨机 6x30",
+  "category": "electrical",
+  "price": 373.29,
+  "unit": "箱",
+  "tags": [
+   "import",
+   "bulk",
+   "new"
+  ],
+  "supplier": "SUP-062",
+  "warehouse": "WH-D",
+  "barcode": "6995780026952"
+ },
+ "SKU-00246": {
+  "name": "海通 打包带 10mm",
+  "category": "safety",
+  "price": 153.26,
+  "unit": "包",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-B",
+  "barcode": "6936435744774"
+ },
+ "SKU-00247": {
+  "name": "博汇 砂轮片 12mm",
+  "category": "packaging",
+  "price": 219.08,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "import",
+   "seasonal"
+  ],
+  "supplier": "SUP-032",
+  "warehouse": "WH-B",
+  "barcode": "6953715436478"
+ },
+ "SKU-00248": {
+  "name": "博汇 开口扳手 12mm",
+  "category": "safety",
+  "price": 446.48,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "oem"
+  ],
+  "supplier": "SUP-014",
+  "warehouse": "WH-D",
+  "barcode": "6940849308981"
+ },
+ "SKU-00249": {
+  "name": "恒久 开口扳手 6x30",
+  "category": "lubricant",
+  "price": 478.72,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "heavy"
+  ],
+  "supplier": "SUP-056",
+  "warehouse": "WH-A",
+  "barcode": "6964620979155"
+ },
+ "SKU-00250": {
+  "name": "德昌 百叶片 36V",
+  "category": "safety",
+  "price": 271.58,
+  "unit": "卷",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-A",
+  "barcode": "6970015266267"
+ },
+ "SKU-00251": {
+  "name": "金鼎 防爆接线盒 6x30",
+  "category": "fastener",
+  "price": 277.99,
+  "unit": "套",
+  "tags": [
+   "seasonal",
+   "clearance"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-D",
+  "barcode": "6922360734945"
+ },
+ "SKU-00252": {
+  "name": "恒久 除锈剂 L",
+  "category": "safety",
+  "price": 33.77,
+  "unit": "件",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-051",
+  "warehouse": "WH-D",
+  "barcode": "6917297582629"
+ },
+ "SKU-00253": {
+  "name": "德昌 电动螺丝刀 36V",
+  "category": "lubricant",
+  "price": 475.97,
+  "unit": "盒",
+  "tags": [
+   "fragile",
+   "hot"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-A",
+  "barcode": "6956598336420"
+ },
+ "SKU-00254": {
+  "name": "泰力 不锈钢螺栓 8x40",
+  "category": "fastener",
+  "price": 196.41,
+  "unit": "卷",
+  "tags": [
+   "clearance",
+   "bulk"
+  ],
+  "supplier": "SUP-003",
+  "warehouse": "WH-D",
+  "barcode": "6926944383390"
+ },
+ "SKU-00255": {
+  "name": "华瑞 内六角扳手 XL",
+  "category": "lubricant",
+  "price": 408.9,
+  "unit": "包",
+  "tags": [
+   "bulk",
+   "fragile"
+  ],
+  "supplier": "SUP-046",
+  "warehouse": "WH-A",
+  "barcode": "6916790754760"
+ },
+ "SKU-00256": {
+  "name": "金鼎 打包带 220V",
+  "category": "safety",
+  "price": 16.71,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "seasonal",
+   "oem"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-B",
+  "barcode": "6944314653293"
+ },
+ "SKU-00257": {
+  "name": "恒久 尼龙扎带 XL",
+  "category": "safety",
+  "price": 265.7,
+  "unit": "件",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-C",
+  "barcode": "6968449926403"
+ },
+ "SKU-00258": {
+  "name": "华瑞 缠绕膜 8x40",
+  "category": "tools",
+  "price": 432.68,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "oem"
+  ],
+  "supplier": "SUP-050",
+  "warehouse": "WH-A",
+  "barcode": "6951898532231"
+ },
+ "SKU-00259": {
+  "name": "泰力 内六角扳手 S",
+  "category": "measuring",
+  "price": 281.69,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "new"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-C",
+  "barcode": "6994185668269"
+ },
+ "SKU-00260": {
+  "name": "泰力 热缩管 L",
+  "category": "lubricant",
+  "price": 102.47,
+  "unit": "包",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-D",
+  "barcode": "6935680155766"
+ },
+ "SKU-00261": {
+  "name": "博汇 开口扳手 XL",
+  "category": "abrasive",
+  "price": 157.23,
+  "unit": "套",
+  "tags": [
+   "heavy",
+   "import"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-B",
+  "barcode": "6910479182005"
+ },
+ "SKU-00262": {
+  "name": "华瑞 不锈钢螺栓 36V",
+  "category": "electrical",
+  "price": 449.88,
+  "unit": "盒",
+  "tags": [
+   "bulk",
+   "import",
+   "clearance"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-C",
+  "barcode": "6993504998722"
+ },
+ "SKU-00263": {
+  "name": "博汇 开口扳手 XL",
+  "category": "packaging",
+  "price": 206.43,
+  "unit": "盒",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-035",
+  "warehouse": "WH-B",
+  "barcode": "6951933580656"
+ },
+ "SKU-00264": {
+  "name": "瑞森 热缩管 36V",
+  "category": "lubricant",
+  "price": 383.67,
+  "unit": "包",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-C",
+  "barcode": "6998793531697"
+ },
+ "SKU-00265": {
+  "name": "宏发 角磨机 S",
+  "category": "packaging",
+  "price": 425.93,
+  "unit": "包",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-A",
+  "barcode": "6916326604190"
+ },
+ "SKU-00266": {
+  "name": "博汇 自攻螺钉 L",
+  "category": "safety",
+  "price": 298.53,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "new"
+  ],
+  "supplier": "SUP-053",
+  "warehouse": "WH-D",
+  "barcode": "6994227972069"
+ },
+ "SKU-00267": {
+  "name": "泰力 内六角扳手 10mm",
+  "category": "packaging",
+  "price": 382.89,
+  "unit": "卷",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-026",
+  "warehouse": "WH-C",
+  "barcode": "6916680846217"
+ },
+ "SKU-00268": {
+  "name": "泰力 安全帽 10mm",
+  "category": "measuring",
+  "price": 47.86,
+  "unit": "箱",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-048",
+  "warehouse": "WH-C",
+  "barcode": "6999545955699"
+ },
+ "SKU-00269": {
+  "name": "泰力 绝缘手套 10mm",
+  "category": "safety",
+  "price": 285.26,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "oem"
+  ],
+  "supplier": "SUP-025",
+  "warehouse": "WH-D",
+  "barcode": "6964376230265"
+ },
+ "SKU-00270": {
+  "name": "恒久 防爆接线盒 M",
+  "category": "electrical",
+  "price": 471.2,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "hot"
+  ],
+  "supplier": "SUP-043",
+  "warehouse": "WH-D",
+  "barcode": "6969249868420"
+ },
+ "SKU-00271": {
+  "name": "海通 手电钻 8x40",
+  "category": "electrical",
+  "price": 82.45,
+  "unit": "套",
+  "tags": [
+   "import",
+   "fragile",
+   "new"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-A",
+  "barcode": "6911540438235"
+ },
+ "SKU-00272": {
+  "name": "恒久 不锈钢螺栓 36V",
+  "category": "tools",
+  "price": 31.85,
+  "unit": "盒",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-C",
+  "barcode": "6971606167583"
+ },
+ "SKU-00273": {
+  "name": "德昌 自攻螺钉 220V",
+  "category": "abrasive",
+  "price": 105.33,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "import"
+  ],
+  "supplier": "SUP-051",
+  "warehouse": "WH-B",
+  "barcode": "6921017291550"
+ },
+ "SKU-00274": {
+  "name": "万象 缠绕膜 S",
+  "category": "measuring",
+  "price": 124.04,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "fragile",
+   "new"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-C",
+  "barcode": "6957931847594"
+ },
+ "SKU-00275": {
+  "name": "华瑞 塞尺 XL",
+  "category": "abrasive",
+  "price": 282.88,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "heavy",
+   "hot"
+  ],
+  "supplier": "SUP-010",
+  "warehouse": "WH-D",
+  "barcode": "6979687137636"
+ },
+ "SKU-00276": {
+  "name": "金鼎 开口扳手 XL",
+  "category": "electrical",
+  "price": 389.74,
+  "unit": "卷",
+  "tags": [
+   "new",
+   "clearance"
+  ],
+  "supplier": "SUP-045",
+  "warehouse": "WH-C",
+  "barcode": "6946631411331"
+ },
+ "SKU-00277": {
+  "name": "瑞森 塞尺 6x30",
+  "category": "abrasive",
+  "price": 289.74,
+  "unit": "卷",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-078",
+  "warehouse": "WH-C",
+  "barcode": "6945365515963"
+ },
+ "SKU-00278": {
+  "name": "恒久 缠绕膜 L",
+  "category": "safety",
+  "price": 154.76,
+  "unit": "套",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-035",
+  "warehouse": "WH-C",
+  "barcode": "6916861283782"
+ },
+ "SKU-00279": {
+  "name": "德昌 除锈剂 L",
+  "category": "lubricant",
+  "price": 478.84,
+  "unit": "件",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-015",
+  "warehouse": "WH-B",
+  "barcode": "6935120212447"
+ },
+ "SKU-00280": {
+  "name": "宏发 内六角扳手 6x30",
+  "category": "measuring",
+  "price": 203.53,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "fragile"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-D",
+  "barcode": "6971778526334"
+ },
+ "SKU-00281": {
+  "name": "华瑞 缠绕膜 10mm",
+  "category": "fastener",
+  "price": 264.68,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "seasonal",
+   "heavy"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-A",
+  "barcode": "6950970487911"
+ },
+ "SKU-00282": {
+  "name": "金鼎 不锈钢螺栓 12mm",
+  "category": "packaging",
+  "price": 161.52,
+  "unit": "箱",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-025",
+  "warehouse": "WH-C",
+  "barcode": "6943472766891"
+ },
+ "SKU-00283": {
+  "name": "恒久 缠绕膜 L",
+  "category": "tools",
+  "price": 334.2,
+  "unit": "箱",
+  "tags": [
+   "bulk",
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-C",
+  "barcode": "6959686677479"
+ },
+ "SKU-00284": {
+  "name": "博汇 热缩管 L",
+  "category": "fastener",
+  "price": 123.09,
+  "unit": "盒",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-080",
+  "warehouse": "WH-C",
+  "barcode": "6916291807892"
+ },
+ "SKU-00285": {
+  "name": "海通 塞尺 6x30",
+  "category": "electrical",
+  "price": 274.85,
+  "unit": "套",
+  "tags": [
+   "oem",
+   "fragile"
+  ],
+  "supplier": "SUP-042",
+  "warehouse": "WH-A",
+  "barcode": "6934067721676"
+ },
+ "SKU-00286": {
+  "name": "瑞森 自攻螺钉 M",
+  "category": "electrical",
+  "price": 338.63,
+  "unit": "卷",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-011",
+  "warehouse": "WH-B",
+  "barcode": "6990139030255"
+ },
+ "SKU-00287": {
+  "name": "华瑞 尼龙扎带 L",
+  "category": "lubricant",
+  "price": 29.43,
+  "unit": "包",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-D",
+  "barcode": "6948680393713"
+ },
+ "SKU-00288": {
+  "name": "华瑞 开口扳手 220V",
+  "category": "lubricant",
+  "price": 358.41,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "hot",
+   "new"
+  ],
+  "supplier": "SUP-037",
+  "warehouse": "WH-A",
+  "barcode": "6928232844182"
+ },
+ "SKU-00289": {
+  "name": "德昌 手电钻 10mm",
+  "category": "safety",
+  "price": 102.26,
+  "unit": "箱",
+  "tags": [
+   "clearance",
+   "bulk",
+   "seasonal"
+  ],
+  "supplier": "SUP-035",
+  "warehouse": "WH-B",
+  "barcode": "6989695586003"
+ },
+ "SKU-00290": {
+  "name": "金鼎 除锈剂 220V",
+  "category": "measuring",
+  "price": 439.79,
+  "unit": "卷",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-040",
+  "warehouse": "WH-A",
+  "barcode": "6946321811655"
+ },
+ "SKU-00291": {
+  "name": "宏发 不锈钢螺栓 6x30",
+  "category": "fastener",
+  "price": 460.99,
+  "unit": "卷",
+  "tags": [
+   "new",
+   "oem",
+   "clearance"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-B",
+  "barcode": "6919825328593"
+ },
+ "SKU-00292": {
+  "name": "宏发 自攻螺钉 220V",
+  "category": "tools",
+  "price": 219.83,
+  "unit": "盒",
+  "tags": [
+   "oem",
+   "new",
+   "clearance"
+  ],
+  "supplier": "SUP-064",
+  "warehouse": "WH-C",
+  "barcode": "6950349382180"
+ },
+ "SKU-00293": {
+  "name": "万象 不锈钢螺栓 L",
+  "category": "fastener",
+  "price": 392.67,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "new",
+   "clearance"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-D",
+  "barcode": "6991803373136"
+ },
+ "SKU-00294": {
+  "name": "博汇 除锈剂 36V",
+  "category": "abrasive",
+  "price": 206.03,
+  "unit": "盒",
+  "tags": [
+   "heavy",
+   "import"
+  ],
+  "supplier": "SUP-007",
+  "warehouse": "WH-C",
+  "barcode": "6986922042405"
+ },
+ "SKU-00295": {
+  "name": "德昌 自攻螺钉 S",
+  "category": "safety",
+  "price": 147.64,
+  "unit": "件",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-A",
+  "barcode": "6944629724339"
+ },
+ "SKU-00296": {
+  "name": "恒久 手电钻 12mm",
+  "category": "fastener",
+  "price": 111.81,
+  "unit": "包",
+  "tags": [
+   "seasonal",
+   "oem"
+  ],
+  "supplier": "SUP-013",
+  "warehouse": "WH-D",
+  "barcode": "6912165068388"
+ },
+ "SKU-00297": {
+  "name": "博汇 热缩管 S",
+  "category": "lubricant",
+  "price": 396.29,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "oem",
+   "fragile"
+  ],
+  "supplier": "SUP-075",
+  "warehouse": "WH-B",
+  "barcode": "6992224887647"
+ },
+ "SKU-00298": {
+  "name": "华瑞 百叶片 XL",
+  "category": "safety",
+  "price": 289.45,
+  "unit": "卷",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-A",
+  "barcode": "6913668548131"
+ },
+ "SKU-00299": {
+  "name": "万象 热缩管 XL",
+  "category": "electrical",
+  "price": 13.2,
+  "unit": "件",
+  "tags": [
+   "hot",
+   "heavy"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-C",
+  "barcode": "6965145198132"
+ },
+ "SKU-00300": {
+  "name": "海通 打包带 220V",
+  "category": "tools",
+  "price": 24.41,
+  "unit": "包",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-026",
+  "warehouse": "WH-D",
+  "barcode": "6992687107363"
+ },
+ "SKU-00301": {
+  "name": "海通 缠绕膜 12mm",
+  "category": "abrasive",
+  "price": 345.39,
+  "unit": "卷",
+  "tags": [
+   "oem",
+   "bulk"
+  ],
+  "supplier": "SUP-015",
+  "warehouse": "WH-D",
+  "barcode": "6974285812407"
+ },
+ "SKU-00302": {
+  "name": "华瑞 除锈剂 L",
+  "category": "electrical",
+  "price": 187.74,
+  "unit": "箱",
+  "tags": [
+   "import",
+   "fragile",
+   "oem"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-B",
+  "barcode": "6949953670520"
+ },
+ "SKU-00303": {
+  "name": "华瑞 电动螺丝刀 36V",
+  "category": "lubricant",
+  "price": 316.44,
+  "unit": "包",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-B",
+  "barcode": "6923758562809"
+ },
+ "SKU-00304": {
+  "name": "瑞森 开口扳手 S",
+  "category": "abrasive",
+  "price": 158.31,
+  "unit": "包",
+  "tags": [
+   "bulk",
+   "heavy",
+   "fragile"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-A",
+  "barcode": "6952559836228"
+ },
+ "SKU-00305": {
+  "name": "宏发 打包带 6x30",
+  "category": "lubricant",
+  "price": 279.78,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "oem"
+  ],
+  "supplier": "SUP-054",
+  "warehouse": "WH-C",
+  "barcode": "6970501483706"
+ },
+ "SKU-00306": {
+  "name": "宏发 尼龙扎带 M",
+  "category": "safety",
+  "price": 214.45,
+  "unit": "箱",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-027",
+  "warehouse": "WH-B",
+  "barcode": "6996786150376"
+ },
+ "SKU-00307": {
+  "name": "万象 游标卡尺 10mm",
+  "category": "fastener",
+  "price": 407.06,
+  "unit": "卷",
+  "tags": [
+   "import",
+   "clearance",
+   "heavy"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-A",
+  "barcode": "6950631690044"
+ },
+ "SKU-00308": {
+  "name": "华瑞 打包带 10mm",
+  "category": "packaging",
+  "price": 380.02,
+  "unit": "件",
+  "tags": [
+   "import",
+   "seasonal"
+  ],
+  "supplier": "SUP-045",
+  "warehouse": "WH-A",
+  "barcode": "6960233732448"
+ },
+ "SKU-00309": {
+  "name": "万象 安全帽 220V",
+  "category": "abrasive",
+  "price": 169.82,
+  "unit": "套",
+  "tags": [
+   "bulk",
+   "new",
+   "fragile"
+  ],
+  "supplier": "SUP-061",
+  "warehouse": "WH-D",
+  "barcode": "6959338119052"
+ },
+ "SKU-00310": {
+  "name": "瑞森 绝缘手套 8x40",
+  "category": "tools",
+  "price": 413.04,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "restricted",
+   "import"
+  ],
+  "supplier": "SUP-019",
+  "warehouse": "WH-D",
+  "barcode": "6914593529703"
+ },
+ "SKU-00311": {
+  "name": "金鼎 角磨机 12mm",
+  "category": "abrasive",
+  "price": 280.38,
+  "unit": "包",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-C",
+  "barcode": "6911264221668"
+ },
+ "SKU-00312": {
+  "name": "海通 缠绕膜 XL",
+  "category": "electrical",
+  "price": 44.96,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "new"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-D",
+  "barcode": "6988771629370"
+ },
+ "SKU-00313": {
+  "name": "华瑞 电动螺丝刀 M",
+  "category": "abrasive",
+  "price": 9.93,
+  "unit": "盒",
+  "tags": [
+   "bulk",
+   "hot",
+   "oem"
+  ],
+  "supplier": "SUP-089",
+  "warehouse": "WH-D",
+  "barcode": "6955165524503"
+ },
+ "SKU-00314": {
+  "name": "泰力 除锈剂 L",
+  "category": "lubricant",
+  "price": 353.6,
+  "unit": "箱",
+  "tags": [
+   "restricted",
+   "hot"
+  ],
+  "supplier": "SUP-026",
+  "warehouse": "WH-A",
+  "barcode": "6913728380503"
+ },
+ "SKU-00315": {
+  "name": "瑞森 电动螺丝刀 220V",
+  "category": "tools",
+  "price": 63.92,
+  "unit": "盒",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-C",
+  "barcode": "6960468004965"
+ },
+ "SKU-00316": {
+  "name": "金鼎 安全帽 220V",
+  "category": "fastener",
+  "price": 363.51,
+  "unit": "卷",
+  "tags": [
+   "oem",
+   "heavy",
+   "fragile"
+  ],
+  "supplier": "SUP-041",
+  "warehouse": "WH-B",
+  "barcode": "6988865721262"
+ },
+ "SKU-00317": {
+  "name": "泰力 电动螺丝刀 12mm",
+  "category": "safety",
+  "price": 391.65,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "restricted"
+  ],
+  "supplier": "SUP-010",
+  "warehouse": "WH-B",
+  "barcode": "6994108806887"
+ },
+ "SKU-00318": {
+  "name": "德昌 防爆接线盒 220V",
+  "category": "fastener",
+  "price": 479.35,
+  "unit": "件",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-B",
+  "barcode": "6939726289524"
+ },
+ "SKU-00319": {
+  "name": "华瑞 内六角扳手 36V",
+  "category": "measuring",
+  "price": 71.61,
+  "unit": "包",
+  "tags": [
+   "bulk",
+   "fragile",
+   "seasonal"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-B",
+  "barcode": "6967915651825"
+ },
+ "SKU-00320": {
+  "name": "华瑞 打包带 6x30",
+  "category": "abrasive",
+  "price": 245.02,
+  "unit": "卷",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-D",
+  "barcode": "6963102706695"
+ },
+ "SKU-00321": {
+  "name": "博汇 除锈剂 M",
+  "category": "lubricant",
+  "price": 120.79,
+  "unit": "套",
+  "tags": [
+   "heavy",
+   "import"
+  ],
+  "supplier": "SUP-018",
+  "warehouse": "WH-B",
+  "barcode": "6965297333027"
+ },
+ "SKU-00322": {
+  "name": "华瑞 热缩管 10mm",
+  "category": "measuring",
+  "price": 313.09,
+  "unit": "卷",
+  "tags": [
+   "fragile",
+   "bulk",
+   "oem"
+  ],
+  "supplier": "SUP-037",
+  "warehouse": "WH-D",
+  "barcode": "6956172404310"
+ },
+ "SKU-00323": {
+  "name": "宏发 电动螺丝刀 6x30",
+  "category": "tools",
+  "price": 21.81,
+  "unit": "卷",
+  "tags": [
+   "bulk",
+   "new"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-A",
+  "barcode": "6911107626259"
+ },
+ "SKU-00324": {
+  "name": "博汇 塞尺 10mm",
+  "category": "electrical",
+  "price": 336.83,
+  "unit": "包",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-019",
+  "warehouse": "WH-C",
+  "barcode": "6949758180398"
+ },
+ "SKU-00325": {
+  "name": "泰力 塞尺 6x30",
+  "category": "electrical",
+  "price": 17.28,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "clearance",
+   "oem"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-C",
+  "barcode": "6921167827849"
+ },
+ "SKU-00326": {
+  "name": "海通 除锈剂 S",
+  "category": "packaging",
+  "price": 279.99,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "seasonal"
+  ],
+  "supplier": "SUP-054",
+  "warehouse": "WH-B",
+  "barcode": "6935081293594"
+ },
+ "SKU-00327": {
+  "name": "宏发 内六角扳手 220V",
+  "category": "abrasive",
+  "price": 396.07,
+  "unit": "卷",
+  "tags": [
+   "clearance",
+   "bulk",
+   "import"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-D",
+  "barcode": "6984149646793"
+ },
+ "SKU-00328": {
+  "name": "宏发 砂轮片 8x40",
+  "category": "tools",
+  "price": 189.07,
+  "unit": "套",
+  "tags": [
+   "new",
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-035",
+  "warehouse": "WH-C",
+  "barcode": "6990380085744"
+ },
+ "SKU-00329": {
+  "name": "金鼎 手电钻 10mm",
+  "category": "safety",
+  "price": 19.28,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "seasonal"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-B",
+  "barcode": "6929744094619"
+ },
+ "SKU-00330": {
+  "name": "海通 缠绕膜 XL",
+  "category": "measuring",
+  "price": 450.12,
+  "unit": "盒",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-014",
+  "warehouse": "WH-A",
+  "barcode": "6978207990558"
+ },
+ "SKU-00331": {
+  "name": "万象 砂轮片 12mm",
+  "category": "fastener",
+  "price": 203.53,
+  "unit": "箱",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-C",
+  "barcode": "6912602064610"
+ },
+ "SKU-00332": {
+  "name": "海通 电动螺丝刀 12mm",
+  "category": "fastener",
+  "price": 439.13,
+  "unit": "套",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-D",
+  "barcode": "6981958228383"
+ },
+ "SKU-00333": {
+  "name": "海通 内六角扳手 M",
+  "category": "safety",
+  "price": 197.74,
+  "unit": "盒",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-065",
+  "warehouse": "WH-C",
+  "barcode": "6963702212597"
+ },
+ "SKU-00334": {
+  "name": "万象 防爆接线盒 6x30",
+  "category": "packaging",
+  "price": 85.85,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "restricted",
+   "heavy"
+  ],
+  "supplier": "SUP-019",
+  "warehouse": "WH-D",
+  "barcode": "6930461456785"
+ },
+ "SKU-00335": {
+  "name": "泰力 手电钻 10mm",
+  "category": "tools",
+  "price": 390.01,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-A",
+  "barcode": "6924167183942"
+ },
+ "SKU-00336": {
+  "name": "万象 塞尺 220V",
+  "category": "electrical",
+  "price": 440.05,
+  "unit": "包",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-D",
+  "barcode": "6934156746875"
+ },
+ "SKU-00337": {
+  "name": "德昌 除锈剂 10mm",
+  "category": "abrasive",
+  "price": 396.26,
+  "unit": "箱",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-009",
+  "warehouse": "WH-D",
+  "barcode": "6910312316417"
+ },
+ "SKU-00338": {
+  "name": "华瑞 安全帽 10mm",
+  "category": "abrasive",
+  "price": 177.59,
+  "unit": "件",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-A",
+  "barcode": "6919146925513"
+ },
+ "SKU-00339": {
+  "name": "金鼎 打包带 10mm",
+  "category": "abrasive",
+  "price": 379.46,
+  "unit": "箱",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-D",
+  "barcode": "6992131621875"
+ },
+ "SKU-00340": {
+  "name": "万象 不锈钢螺栓 S",
+  "category": "fastener",
+  "price": 257.33,
+  "unit": "包",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-029",
+  "warehouse": "WH-B",
+  "barcode": "6919631544356"
+ },
+ "SKU-00341": {
+  "name": "博汇 自攻螺钉 8x40",
+  "category": "measuring",
+  "price": 409.59,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "bulk",
+   "import"
+  ],
+  "supplier": "SUP-012",
+  "warehouse": "WH-B",
+  "barcode": "6914546000959"
+ },
+ "SKU-00342": {
+  "name": "万象 百叶片 L",
+  "category": "measuring",
+  "price": 188,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "oem"
+  ],
+  "supplier": "SUP-067",
+  "warehouse": "WH-D",
+  "barcode": "6949455434102"
+ },
+ "SKU-00343": {
+  "name": "恒久 不锈钢螺栓 12mm",
+  "category": "packaging",
+  "price": 156.77,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "new"
+  ],
+  "supplier": "SUP-023",
+  "warehouse": "WH-B",
+  "barcode": "6961601731801"
+ },
+ "SKU-00344": {
+  "name": "金鼎 热缩管 10mm",
+  "category": "packaging",
+  "price": 149.54,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "seasonal"
+  ],
+  "supplier": "SUP-025",
+  "warehouse": "WH-B",
+  "barcode": "6914383523466"
+ },
+ "SKU-00345": {
+  "name": "德昌 安全帽 8x40",
+  "category": "lubricant",
+  "price": 313.9,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "seasonal",
+   "import"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-C",
+  "barcode": "6983514210019"
+ },
+ "SKU-00346": {
+  "name": "金鼎 电动螺丝刀 6x30",
+  "category": "measuring",
+  "price": 412.81,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "hot"
+  ],
+  "supplier": "SUP-089",
+  "warehouse": "WH-B",
+  "barcode": "6962129998231"
+ },
+ "SKU-00347": {
+  "name": "金鼎 游标卡尺 10mm",
+  "category": "electrical",
+  "price": 35.95,
+  "unit": "套",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-003",
+  "warehouse": "WH-B",
+  "barcode": "6948908585328"
+ },
+ "SKU-00348": {
+  "name": "万象 百叶片 220V",
+  "category": "safety",
+  "price": 178.67,
+  "unit": "套",
+  "tags": [
+   "new",
+   "hot"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-A",
+  "barcode": "6928272390672"
+ },
+ "SKU-00349": {
+  "name": "瑞森 内六角扳手 S",
+  "category": "fastener",
+  "price": 291.25,
+  "unit": "件",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-015",
+  "warehouse": "WH-A",
+  "barcode": "6935620168161"
+ },
+ "SKU-00350": {
+  "name": "瑞森 游标卡尺 6x30",
+  "category": "tools",
+  "price": 112.06,
+  "unit": "套",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-042",
+  "warehouse": "WH-C",
+  "barcode": "6935843727600"
+ },
+ "SKU-00351": {
+  "name": "华瑞 热缩管 10mm",
+  "category": "electrical",
+  "price": 283.8,
+  "unit": "套",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-031",
+  "warehouse": "WH-D",
+  "barcode": "6996690336506"
+ },
+ "SKU-00352": {
+  "name": "华瑞 开口扳手 S",
+  "category": "lubricant",
+  "price": 395.27,
+  "unit": "件",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-036",
+  "warehouse": "WH-D",
+  "barcode": "6931932691345"
+ },
+ "SKU-00353": {
+  "name": "德昌 角磨机 XL",
+  "category": "packaging",
+  "price": 23.39,
+  "unit": "套",
+  "tags": [
+   "new",
+   "fragile"
+  ],
+  "supplier": "SUP-016",
+  "warehouse": "WH-D",
+  "barcode": "6974679238826"
+ },
+ "SKU-00354": {
+  "name": "德昌 润滑脂 XL",
+  "category": "lubricant",
+  "price": 399.24,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "hot"
+  ],
+  "supplier": "SUP-085",
+  "warehouse": "WH-D",
+  "barcode": "6972439122229"
+ },
+ "SKU-00355": {
+  "name": "华瑞 润滑脂 S",
+  "category": "tools",
+  "price": 36.58,
+  "unit": "套",
+  "tags": [
+   "heavy",
+   "bulk"
+  ],
+  "supplier": "SUP-025",
+  "warehouse": "WH-D",
+  "barcode": "6974808757335"
+ },
+ "SKU-00356": {
+  "name": "万象 角磨机 220V",
+  "category": "packaging",
+  "price": 156.88,
+  "unit": "件",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-014",
+  "warehouse": "WH-C",
+  "barcode": "6966312334563"
+ },
+ "SKU-00357": {
+  "name": "宏发 百叶片 12mm",
+  "category": "abrasive",
+  "price": 267.69,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "seasonal"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-D",
+  "barcode": "6976277277500"
+ },
+ "SKU-00358": {
+  "name": "万象 电动螺丝刀 10mm",
+  "category": "tools",
+  "price": 133.81,
+  "unit": "套",
+  "tags": [
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-037",
+  "warehouse": "WH-C",
+  "barcode": "6911761589051"
+ },
+ "SKU-00359": {
+  "name": "华瑞 打包带 6x30",
+  "category": "tools",
+  "price": 453,
+  "unit": "箱",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-008",
+  "warehouse": "WH-D",
+  "barcode": "6954123089334"
+ },
+ "SKU-00360": {
+  "name": "德昌 自攻螺钉 S",
+  "category": "fastener",
+  "price": 392.04,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "seasonal"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-A",
+  "barcode": "6965268528785"
+ },
+ "SKU-00361": {
+  "name": "金鼎 内六角扳手 XL",
+  "category": "tools",
+  "price": 120.47,
+  "unit": "盒",
+  "tags": [
+   "new",
+   "restricted",
+   "hot"
+  ],
+  "supplier": "SUP-029",
+  "warehouse": "WH-A",
+  "barcode": "6929011682578"
+ },
+ "SKU-00362": {
+  "name": "海通 安全帽 L",
+  "category": "tools",
+  "price": 220.36,
+  "unit": "包",
+  "tags": [
+   "seasonal",
+   "fragile",
+   "heavy"
+  ],
+  "supplier": "SUP-063",
+  "warehouse": "WH-A",
+  "barcode": "6958261890731"
+ },
+ "SKU-00363": {
+  "name": "恒久 防爆接线盒 8x40",
+  "category": "tools",
+  "price": 338.24,
+  "unit": "套",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-048",
+  "warehouse": "WH-D",
+  "barcode": "6962206140780"
+ },
+ "SKU-00364": {
+  "name": "德昌 安全帽 10mm",
+  "category": "lubricant",
+  "price": 391.17,
+  "unit": "件",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-008",
+  "warehouse": "WH-D",
+  "barcode": "6917308847907"
+ },
+ "SKU-00365": {
+  "name": "金鼎 塞尺 12mm",
+  "category": "packaging",
+  "price": 156.01,
+  "unit": "箱",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-067",
+  "warehouse": "WH-A",
+  "barcode": "6931787779304"
+ },
+ "SKU-00366": {
+  "name": "海通 开口扳手 6x30",
+  "category": "tools",
+  "price": 166.3,
+  "unit": "盒",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-061",
+  "warehouse": "WH-B",
+  "barcode": "6998635023873"
+ },
+ "SKU-00367": {
+  "name": "华瑞 缠绕膜 XL",
+  "category": "fastener",
+  "price": 160.29,
+  "unit": "件",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-058",
+  "warehouse": "WH-B",
+  "barcode": "6941937963977"
+ },
+ "SKU-00368": {
+  "name": "瑞森 打包带 12mm",
+  "category": "lubricant",
+  "price": 451.12,
+  "unit": "卷",
+  "tags": [
+   "import",
+   "hot"
+  ],
+  "supplier": "SUP-062",
+  "warehouse": "WH-D",
+  "barcode": "6924086039072"
+ },
+ "SKU-00369": {
+  "name": "泰力 塞尺 8x40",
+  "category": "packaging",
+  "price": 257.92,
+  "unit": "件",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-057",
+  "warehouse": "WH-D",
+  "barcode": "6973577902346"
+ },
+ "SKU-00370": {
+  "name": "宏发 尼龙扎带 8x40",
+  "category": "electrical",
+  "price": 357.44,
+  "unit": "套",
+  "tags": [
+   "hot",
+   "seasonal",
+   "oem"
+  ],
+  "supplier": "SUP-054",
+  "warehouse": "WH-B",
+  "barcode": "6943575946108"
+ },
+ "SKU-00371": {
+  "name": "宏发 安全帽 XL",
+  "category": "abrasive",
+  "price": 393.28,
+  "unit": "套",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-002",
+  "warehouse": "WH-B",
+  "barcode": "6957289168856"
+ },
+ "SKU-00372": {
+  "name": "瑞森 角磨机 220V",
+  "category": "abrasive",
+  "price": 68.48,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "heavy",
+   "new"
+  ],
+  "supplier": "SUP-010",
+  "warehouse": "WH-C",
+  "barcode": "6932669590722"
+ },
+ "SKU-00373": {
+  "name": "宏发 尼龙扎带 220V",
+  "category": "fastener",
+  "price": 431.27,
+  "unit": "箱",
+  "tags": [
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-D",
+  "barcode": "6950967631359"
+ },
+ "SKU-00374": {
+  "name": "瑞森 百叶片 S",
+  "category": "packaging",
+  "price": 461.48,
+  "unit": "套",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-B",
+  "barcode": "6939601405872"
+ },
+ "SKU-00375": {
+  "name": "宏发 内六角扳手 S",
+  "category": "abrasive",
+  "price": 120,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "clearance"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-C",
+  "barcode": "6943167284742"
+ },
+ "SKU-00376": {
+  "name": "博汇 缠绕膜 12mm",
+  "category": "electrical",
+  "price": 380.03,
+  "unit": "件",
+  "tags": [
+   "new",
+   "fragile"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-D",
+  "barcode": "6931318690786"
+ },
+ "SKU-00377": {
+  "name": "金鼎 角磨机 M",
+  "category": "measuring",
+  "price": 101.75,
+  "unit": "包",
+  "tags": [
+   "seasonal",
+   "oem"
+  ],
+  "supplier": "SUP-071",
+  "warehouse": "WH-B",
+  "barcode": "6928090609320"
+ },
+ "SKU-00378": {
+  "name": "金鼎 打包带 6x30",
+  "category": "fastener",
+  "price": 137.24,
+  "unit": "盒",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-A",
+  "barcode": "6916672466996"
+ },
+ "SKU-00379": {
+  "name": "金鼎 润滑脂 8x40",
+  "category": "safety",
+  "price": 99.98,
+  "unit": "件",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-089",
+  "warehouse": "WH-C",
+  "barcode": "6990943253078"
+ },
+ "SKU-00380": {
+  "name": "德昌 百叶片 220V",
+  "category": "fastener",
+  "price": 386.21,
+  "unit": "包",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-058",
+  "warehouse": "WH-A",
+  "barcode": "6944981233195"
+ },
+ "SKU-00381": {
+  "name": "博汇 手电钻 36V",
+  "category": "tools",
+  "price": 355.72,
+  "unit": "套",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-C",
+  "barcode": "6968440721062"
+ },
+ "SKU-00382": {
+  "name": "万象 角磨机 L",
+  "category": "measuring",
+  "price": 114.21,
+  "unit": "套",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-A",
+  "barcode": "6915542337002"
+ },
+ "SKU-00383": {
+  "name": "泰力 内六角扳手 8x40",
+  "category": "electrical",
+  "price": 471.27,
+  "unit": "包",
+  "tags": [
+   "clearance",
+   "restricted"
+  ],
+  "supplier": "SUP-002",
+  "warehouse": "WH-D",
+  "barcode": "6952546615620"
+ },
+ "SKU-00384": {
+  "name": "博汇 热缩管 8x40",
+  "category": "lubricant",
+  "price": 237.52,
+  "unit": "件",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-035",
+  "warehouse": "WH-A",
+  "barcode": "6934531207058"
+ },
+ "SKU-00385": {
+  "name": "万象 电动螺丝刀 XL",
+  "category": "measuring",
+  "price": 322.74,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "restricted"
+  ],
+  "supplier": "SUP-019",
+  "warehouse": "WH-B",
+  "barcode": "6988462064898"
+ },
+ "SKU-00386": {
+  "name": "金鼎 内六角扳手 S",
+  "category": "packaging",
+  "price": 211.48,
+  "unit": "卷",
+  "tags": [
+   "seasonal",
+   "hot"
+  ],
+  "supplier": "SUP-027",
+  "warehouse": "WH-D",
+  "barcode": "6963165674234"
+ },
+ "SKU-00387": {
+  "name": "华瑞 游标卡尺 36V",
+  "category": "fastener",
+  "price": 444.81,
+  "unit": "卷",
+  "tags": [
+   "import",
+   "seasonal"
+  ],
+  "supplier": "SUP-040",
+  "warehouse": "WH-D",
+  "barcode": "6948874768036"
+ },
+ "SKU-00388": {
+  "name": "德昌 电动螺丝刀 L",
+  "category": "packaging",
+  "price": 456.87,
+  "unit": "件",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-002",
+  "warehouse": "WH-D",
+  "barcode": "6999379615825"
+ },
+ "SKU-00389": {
+  "name": "金鼎 尼龙扎带 6x30",
+  "category": "lubricant",
+  "price": 13.39,
+  "unit": "套",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-036",
+  "warehouse": "WH-A",
+  "barcode": "6981951546665"
+ },
+ "SKU-00390": {
+  "name": "万象 自攻螺钉 12mm",
+  "category": "safety",
+  "price": 372.21,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "hot"
+  ],
+  "supplier": "SUP-013",
+  "warehouse": "WH-A",
+  "barcode": "6928653556713"
+ },
+ "SKU-00391": {
+  "name": "博汇 开口扳手 10mm",
+  "category": "tools",
+  "price": 39.22,
+  "unit": "套",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-D",
+  "barcode": "6962338792110"
+ },
+ "SKU-00392": {
+  "name": "金鼎 缠绕膜 L",
+  "category": "measuring",
+  "price": 160.26,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "clearance"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-D",
+  "barcode": "6921746423249"
+ },
+ "SKU-00393": {
+  "name": "金鼎 除锈剂 XL",
+  "category": "tools",
+  "price": 329.01,
+  "unit": "包",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-A",
+  "barcode": "6988855359889"
+ },
+ "SKU-00394": {
+  "name": "宏发 手电钻 10mm",
+  "category": "measuring",
+  "price": 417.59,
+  "unit": "件",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-049",
+  "warehouse": "WH-A",
+  "barcode": "6921179374759"
+ },
+ "SKU-00395": {
+  "name": "金鼎 游标卡尺 S",
+  "category": "packaging",
+  "price": 28.44,
+  "unit": "包",
+  "tags": [
+   "hot",
+   "clearance"
+  ],
+  "supplier": "SUP-010",
+  "warehouse": "WH-B",
+  "barcode": "6974390150338"
+ },
+ "SKU-00396": {
+  "name": "泰力 润滑脂 8x40",
+  "category": "tools",
+  "price": 138.26,
+  "unit": "套",
+  "tags": [
+   "import",
+   "fragile"
+  ],
+  "supplier": "SUP-009",
+  "warehouse": "WH-A",
+  "barcode": "6976282947690"
+ },
+ "SKU-00397": {
+  "name": "金鼎 缠绕膜 L",
+  "category": "electrical",
+  "price": 102.84,
+  "unit": "箱",
+  "tags": [
+   "import",
+   "fragile"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-C",
+  "barcode": "6990495485104"
+ },
+ "SKU-00398": {
+  "name": "博汇 安全帽 L",
+  "category": "lubricant",
+  "price": 386.31,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "oem"
+  ],
+  "supplier": "SUP-075",
+  "warehouse": "WH-C",
+  "barcode": "6980623185667"
+ },
+ "SKU-00399": {
+  "name": "恒久 防爆接线盒 6x30",
+  "category": "fastener",
+  "price": 106.97,
+  "unit": "卷",
+  "tags": [
+   "heavy",
+   "import"
+  ],
+  "supplier": "SUP-020",
+  "warehouse": "WH-B",
+  "barcode": "6971992942123"
+ },
+ "SKU-00400": {
+  "name": "博汇 角磨机 M",
+  "category": "tools",
+  "price": 390.32,
+  "unit": "包",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-085",
+  "warehouse": "WH-D",
+  "barcode": "6962797524953"
+ },
+ "SKU-00401": {
+  "name": "万象 缠绕膜 L",
+  "category": "measuring",
+  "price": 259.67,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-020",
+  "warehouse": "WH-D",
+  "barcode": "6932378367196"
+ },
+ "SKU-00402": {
+  "name": "宏发 百叶片 L",
+  "category": "abrasive",
+  "price": 71.26,
+  "unit": "件",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-A",
+  "barcode": "6991459049918"
+ },
+ "SKU-00403": {
+  "name": "博汇 除锈剂 S",
+  "category": "safety",
+  "price": 190.86,
+  "unit": "件",
+  "tags": [
+   "import",
+   "new",
+   "seasonal"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-A",
+  "barcode": "6977005167043"
+ },
+ "SKU-00404": {
+  "name": "华瑞 游标卡尺 220V",
+  "category": "tools",
+  "price": 291.36,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "seasonal",
+   "clearance"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-B",
+  "barcode": "6957621076129"
+ },
+ "SKU-00405": {
+  "name": "恒久 除锈剂 6x30",
+  "category": "fastener",
+  "price": 108.96,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "new"
+  ],
+  "supplier": "SUP-031",
+  "warehouse": "WH-A",
+  "barcode": "6940710051372"
+ },
+ "SKU-00406": {
+  "name": "博汇 开口扳手 S",
+  "category": "fastener",
+  "price": 155.49,
+  "unit": "套",
+  "tags": [
+   "seasonal",
+   "bulk",
+   "clearance"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-A",
+  "barcode": "6989600692130"
+ },
+ "SKU-00407": {
+  "name": "海通 手电钻 36V",
+  "category": "electrical",
+  "price": 396.03,
+  "unit": "套",
+  "tags": [
+   "seasonal",
+   "new",
+   "fragile"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-D",
+  "barcode": "6998467235606"
+ },
+ "SKU-00408": {
+  "name": "宏发 百叶片 220V",
+  "category": "electrical",
+  "price": 224.07,
+  "unit": "套",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-B",
+  "barcode": "6992747650185"
+ },
+ "SKU-00409": {
+  "name": "金鼎 缠绕膜 L",
+  "category": "packaging",
+  "price": 130.16,
+  "unit": "套",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-D",
+  "barcode": "6910251011848"
+ },
+ "SKU-00410": {
+  "name": "泰力 自攻螺钉 M",
+  "category": "packaging",
+  "price": 394.62,
+  "unit": "盒",
+  "tags": [
+   "import",
+   "new",
+   "bulk"
+  ],
+  "supplier": "SUP-060",
+  "warehouse": "WH-B",
+  "barcode": "6999897003215"
+ },
+ "SKU-00411": {
+  "name": "海通 手电钻 220V",
+  "category": "packaging",
+  "price": 93.38,
+  "unit": "包",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-075",
+  "warehouse": "WH-C",
+  "barcode": "6935423607838"
+ },
+ "SKU-00412": {
+  "name": "华瑞 电动螺丝刀 6x30",
+  "category": "lubricant",
+  "price": 216.98,
+  "unit": "包",
+  "tags": [
+   "oem",
+   "clearance",
+   "heavy"
+  ],
+  "supplier": "SUP-020",
+  "warehouse": "WH-A",
+  "barcode": "6942024046458"
+ },
+ "SKU-00413": {
+  "name": "泰力 安全帽 6x30",
+  "category": "safety",
+  "price": 101.21,
+  "unit": "卷",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-038",
+  "warehouse": "WH-D",
+  "barcode": "6989926320351"
+ },
+ "SKU-00414": {
+  "name": "海通 不锈钢螺栓 10mm",
+  "category": "safety",
+  "price": 473.78,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "import",
+   "new"
+  ],
+  "supplier": "SUP-036",
+  "warehouse": "WH-C",
+  "barcode": "6985695489680"
+ },
+ "SKU-00415": {
+  "name": "华瑞 润滑脂 M",
+  "category": "lubricant",
+  "price": 382.45,
+  "unit": "卷",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-073",
+  "warehouse": "WH-B",
+  "barcode": "6949071384686"
+ },
+ "SKU-00416": {
+  "name": "恒久 角磨机 M",
+  "category": "measuring",
+  "price": 282.16,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "heavy",
+   "import"
+  ],
+  "supplier": "SUP-080",
+  "warehouse": "WH-D",
+  "barcode": "6963116214300"
+ },
+ "SKU-00417": {
+  "name": "瑞森 自攻螺钉 220V",
+  "category": "abrasive",
+  "price": 250.72,
+  "unit": "箱",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-063",
+  "warehouse": "WH-B",
+  "barcode": "6924722580916"
+ },
+ "SKU-00418": {
+  "name": "恒久 手电钻 12mm",
+  "category": "fastener",
+  "price": 216.78,
+  "unit": "包",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-025",
+  "warehouse": "WH-C",
+  "barcode": "6920769315963"
+ },
+ "SKU-00419": {
+  "name": "华瑞 除锈剂 S",
+  "category": "abrasive",
+  "price": 257.6,
+  "unit": "包",
+  "tags": [
+   "import",
+   "restricted"
+  ],
+  "supplier": "SUP-009",
+  "warehouse": "WH-D",
+  "barcode": "6928160604246"
+ },
+ "SKU-00420": {
+  "name": "恒久 尼龙扎带 M",
+  "category": "lubricant",
+  "price": 49.5,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "fragile"
+  ],
+  "supplier": "SUP-080",
+  "warehouse": "WH-C",
+  "barcode": "6980838427576"
+ },
+ "SKU-00421": {
+  "name": "恒久 热缩管 12mm",
+  "category": "tools",
+  "price": 200.87,
+  "unit": "箱",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-C",
+  "barcode": "6932429511557"
+ },
+ "SKU-00422": {
+  "name": "瑞森 除锈剂 220V",
+  "category": "electrical",
+  "price": 18.79,
+  "unit": "箱",
+  "tags": [
+   "import",
+   "seasonal"
+  ],
+  "supplier": "SUP-001",
+  "warehouse": "WH-D",
+  "barcode": "6928223410853"
+ },
+ "SKU-00423": {
+  "name": "德昌 百叶片 S",
+  "category": "tools",
+  "price": 39.77,
+  "unit": "卷",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-076",
+  "warehouse": "WH-D",
+  "barcode": "6941229656949"
+ },
+ "SKU-00424": {
+  "name": "恒久 不锈钢螺栓 XL",
+  "category": "abrasive",
+  "price": 417.19,
+  "unit": "套",
+  "tags": [
+   "hot",
+   "clearance"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-B",
+  "barcode": "6986114118134"
+ },
+ "SKU-00425": {
+  "name": "海通 电动螺丝刀 220V",
+  "category": "packaging",
+  "price": 81.57,
+  "unit": "包",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-D",
+  "barcode": "6923017082220"
+ },
+ "SKU-00426": {
+  "name": "德昌 绝缘手套 10mm",
+  "category": "abrasive",
+  "price": 419.21,
+  "unit": "箱",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-006",
+  "warehouse": "WH-D",
+  "barcode": "6916856273415"
+ },
+ "SKU-00427": {
+  "name": "泰力 安全帽 220V",
+  "category": "electrical",
+  "price": 223.7,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "bulk"
+  ],
+  "supplier": "SUP-046",
+  "warehouse": "WH-B",
+  "barcode": "6941494369521"
+ },
+ "SKU-00428": {
+  "name": "瑞森 绝缘手套 12mm",
+  "category": "tools",
+  "price": 320.82,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "new",
+   "import"
+  ],
+  "supplier": "SUP-089",
+  "warehouse": "WH-B",
+  "barcode": "6917646892074"
+ },
+ "SKU-00429": {
+  "name": "泰力 百叶片 36V",
+  "category": "tools",
+  "price": 271.61,
+  "unit": "卷",
+  "tags": [
+   "new",
+   "import"
+  ],
+  "supplier": "SUP-078",
+  "warehouse": "WH-A",
+  "barcode": "6938062721801"
+ },
+ "SKU-00430": {
+  "name": "宏发 游标卡尺 10mm",
+  "category": "packaging",
+  "price": 220.94,
+  "unit": "卷",
+  "tags": [
+   "fragile",
+   "import"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-B",
+  "barcode": "6925161411769"
+ },
+ "SKU-00431": {
+  "name": "博汇 尼龙扎带 8x40",
+  "category": "lubricant",
+  "price": 216.16,
+  "unit": "箱",
+  "tags": [
+   "bulk",
+   "fragile"
+  ],
+  "supplier": "SUP-009",
+  "warehouse": "WH-B",
+  "barcode": "6929894030103"
+ },
+ "SKU-00432": {
+  "name": "泰力 电动螺丝刀 12mm",
+  "category": "measuring",
+  "price": 441.54,
+  "unit": "套",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-041",
+  "warehouse": "WH-B",
+  "barcode": "6949070773142"
+ },
+ "SKU-00433": {
+  "name": "华瑞 开口扳手 XL",
+  "category": "fastener",
+  "price": 473.97,
+  "unit": "包",
+  "tags": [
+   "restricted",
+   "heavy"
+  ],
+  "supplier": "SUP-022",
+  "warehouse": "WH-C",
+  "barcode": "6913176507951"
+ },
+ "SKU-00434": {
+  "name": "博汇 内六角扳手 10mm",
+  "category": "safety",
+  "price": 305.9,
+  "unit": "件",
+  "tags": [
+   "oem",
+   "clearance"
+  ],
+  "supplier": "SUP-036",
+  "warehouse": "WH-B",
+  "barcode": "6947468239086"
+ },
+ "SKU-00435": {
+  "name": "博汇 防爆接线盒 M",
+  "category": "packaging",
+  "price": 271.21,
+  "unit": "卷",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-077",
+  "warehouse": "WH-C",
+  "barcode": "6998733332198"
+ },
+ "SKU-00436": {
+  "name": "万象 角磨机 8x40",
+  "category": "safety",
+  "price": 423.44,
+  "unit": "卷",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-015",
+  "warehouse": "WH-B",
+  "barcode": "6992732940950"
+ },
+ "SKU-00437": {
+  "name": "德昌 内六角扳手 M",
+  "category": "fastener",
+  "price": 142.8,
+  "unit": "盒",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-048",
+  "warehouse": "WH-C",
+  "barcode": "6914672129156"
+ },
+ "SKU-00438": {
+  "name": "宏发 润滑脂 S",
+  "category": "lubricant",
+  "price": 329.77,
+  "unit": "盒",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-057",
+  "warehouse": "WH-B",
+  "barcode": "6925257295377"
+ },
+ "SKU-00439": {
+  "name": "泰力 开口扳手 L",
+  "category": "lubricant",
+  "price": 50.06,
+  "unit": "箱",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-A",
+  "barcode": "6922061917750"
+ },
+ "SKU-00440": {
+  "name": "瑞森 缠绕膜 36V",
+  "category": "abrasive",
+  "price": 16.56,
+  "unit": "箱",
+  "tags": [
+   "bulk",
+   "clearance",
+   "oem"
+  ],
+  "supplier": "SUP-028",
+  "warehouse": "WH-A",
+  "barcode": "6963994050349"
+ },
+ "SKU-00441": {
+  "name": "恒久 内六角扳手 36V",
+  "category": "safety",
+  "price": 328.91,
+  "unit": "包",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-032",
+  "warehouse": "WH-B",
+  "barcode": "6924257099635"
+ },
+ "SKU-00442": {
+  "name": "万象 塞尺 10mm",
+  "category": "packaging",
+  "price": 275.16,
+  "unit": "卷",
+  "tags": [
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-015",
+  "warehouse": "WH-D",
+  "barcode": "6968013337877"
+ },
+ "SKU-00443": {
+  "name": "华瑞 电动螺丝刀 S",
+  "category": "packaging",
+  "price": 368.96,
+  "unit": "件",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-A",
+  "barcode": "6973363639108"
+ },
+ "SKU-00444": {
+  "name": "海通 缠绕膜 36V",
+  "category": "measuring",
+  "price": 341.97,
+  "unit": "盒",
+  "tags": [
+   "heavy"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-D",
+  "barcode": "6982072747979"
+ },
+ "SKU-00445": {
+  "name": "海通 开口扳手 6x30",
+  "category": "packaging",
+  "price": 56.57,
+  "unit": "件",
+  "tags": [
+   "heavy",
+   "bulk",
+   "restricted"
+  ],
+  "supplier": "SUP-059",
+  "warehouse": "WH-D",
+  "barcode": "6993209086695"
+ },
+ "SKU-00446": {
+  "name": "万象 润滑脂 L",
+  "category": "measuring",
+  "price": 112.36,
+  "unit": "套",
+  "tags": [
+   "new",
+   "clearance"
+  ],
+  "supplier": "SUP-067",
+  "warehouse": "WH-D",
+  "barcode": "6951723306198"
+ },
+ "SKU-00447": {
+  "name": "金鼎 塞尺 S",
+  "category": "packaging",
+  "price": 381.37,
+  "unit": "盒",
+  "tags": [
+   "clearance",
+   "hot"
+  ],
+  "supplier": "SUP-042",
+  "warehouse": "WH-A",
+  "barcode": "6928100493260"
+ },
+ "SKU-00448": {
+  "name": "海通 电动螺丝刀 10mm",
+  "category": "tools",
+  "price": 352.17,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "seasonal"
+  ],
+  "supplier": "SUP-041",
+  "warehouse": "WH-D",
+  "barcode": "6984326415096"
+ },
+ "SKU-00449": {
+  "name": "金鼎 自攻螺钉 36V",
+  "category": "electrical",
+  "price": 305.87,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "seasonal"
+  ],
+  "supplier": "SUP-062",
+  "warehouse": "WH-C",
+  "barcode": "6930787237892"
+ },
+ "SKU-00450": {
+  "name": "金鼎 开口扳手 36V",
+  "category": "abrasive",
+  "price": 359.95,
+  "unit": "套",
+  "tags": [
+   "oem",
+   "bulk"
+  ],
+  "supplier": "SUP-026",
+  "warehouse": "WH-B",
+  "barcode": "6911687538624"
+ },
+ "SKU-00451": {
+  "name": "金鼎 绝缘手套 XL",
+  "category": "lubricant",
+  "price": 101.38,
+  "unit": "包",
+  "tags": [
+   "import",
+   "fragile"
+  ],
+  "supplier": "SUP-073",
+  "warehouse": "WH-C",
+  "barcode": "6963778129841"
+ },
+ "SKU-00452": {
+  "name": "宏发 润滑脂 S",
+  "category": "abrasive",
+  "price": 166.21,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "oem"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-C",
+  "barcode": "6930330200204"
+ },
+ "SKU-00453": {
+  "name": "恒久 塞尺 M",
+  "category": "safety",
+  "price": 237.84,
+  "unit": "套",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-D",
+  "barcode": "6917055497172"
+ },
+ "SKU-00454": {
+  "name": "泰力 不锈钢螺栓 36V",
+  "category": "packaging",
+  "price": 229.42,
+  "unit": "盒",
+  "tags": [
+   "import",
+   "new"
+  ],
+  "supplier": "SUP-075",
+  "warehouse": "WH-D",
+  "barcode": "6964970221545"
+ },
+ "SKU-00455": {
+  "name": "恒久 砂轮片 6x30",
+  "category": "packaging",
+  "price": 152.47,
+  "unit": "件",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-B",
+  "barcode": "6998258903067"
+ },
+ "SKU-00456": {
+  "name": "瑞森 塞尺 10mm",
+  "category": "safety",
+  "price": 441.14,
+  "unit": "箱",
+  "tags": [
+   "import",
+   "bulk"
+  ],
+  "supplier": "SUP-040",
+  "warehouse": "WH-A",
+  "barcode": "6947671360093"
+ },
+ "SKU-00457": {
+  "name": "泰力 不锈钢螺栓 S",
+  "category": "fastener",
+  "price": 398.59,
+  "unit": "箱",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-D",
+  "barcode": "6964958795334"
+ },
+ "SKU-00458": {
+  "name": "宏发 绝缘手套 S",
+  "category": "measuring",
+  "price": 228.4,
+  "unit": "盒",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-025",
+  "warehouse": "WH-B",
+  "barcode": "6991618826427"
+ },
+ "SKU-00459": {
+  "name": "博汇 绝缘手套 12mm",
+  "category": "measuring",
+  "price": 72.34,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "oem"
+  ],
+  "supplier": "SUP-058",
+  "warehouse": "WH-A",
+  "barcode": "6954736899456"
+ },
+ "SKU-00460": {
+  "name": "海通 尼龙扎带 10mm",
+  "category": "fastener",
+  "price": 119.22,
+  "unit": "套",
+  "tags": [
+   "heavy",
+   "fragile",
+   "clearance"
+  ],
+  "supplier": "SUP-071",
+  "warehouse": "WH-C",
+  "barcode": "6914964361193"
+ },
+ "SKU-00461": {
+  "name": "金鼎 安全帽 220V",
+  "category": "fastener",
+  "price": 388.88,
+  "unit": "件",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-A",
+  "barcode": "6928182933637"
+ },
+ "SKU-00462": {
+  "name": "华瑞 塞尺 12mm",
+  "category": "abrasive",
+  "price": 251.46,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "import"
+  ],
+  "supplier": "SUP-017",
+  "warehouse": "WH-A",
+  "barcode": "6942341577425"
+ },
+ "SKU-00463": {
+  "name": "泰力 砂轮片 6x30",
+  "category": "packaging",
+  "price": 216.86,
+  "unit": "包",
+  "tags": [
+   "heavy",
+   "import"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-B",
+  "barcode": "6993106840887"
+ },
+ "SKU-00464": {
+  "name": "万象 塞尺 8x40",
+  "category": "electrical",
+  "price": 223.26,
+  "unit": "卷",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-B",
+  "barcode": "6929715974340"
+ },
+ "SKU-00465": {
+  "name": "海通 不锈钢螺栓 XL",
+  "category": "lubricant",
+  "price": 352.28,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "import"
+  ],
+  "supplier": "SUP-002",
+  "warehouse": "WH-D",
+  "barcode": "6981615431342"
+ },
+ "SKU-00466": {
+  "name": "瑞森 开口扳手 10mm",
+  "category": "fastener",
+  "price": 464.71,
+  "unit": "箱",
+  "tags": [
+   "restricted",
+   "heavy"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-A",
+  "barcode": "6940871852948"
+ },
+ "SKU-00467": {
+  "name": "万象 热缩管 6x30",
+  "category": "electrical",
+  "price": 102.14,
+  "unit": "卷",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-034",
+  "warehouse": "WH-C",
+  "barcode": "6915088247063"
+ },
+ "SKU-00468": {
+  "name": "瑞森 角磨机 S",
+  "category": "electrical",
+  "price": 291.68,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "oem"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-A",
+  "barcode": "6966654624667"
+ },
+ "SKU-00469": {
+  "name": "博汇 手电钻 S",
+  "category": "lubricant",
+  "price": 198.6,
+  "unit": "盒",
+  "tags": [
+   "hot",
+   "heavy"
+  ],
+  "supplier": "SUP-037",
+  "warehouse": "WH-B",
+  "barcode": "6962776271129"
+ },
+ "SKU-00470": {
+  "name": "泰力 角磨机 6x30",
+  "category": "abrasive",
+  "price": 257.28,
+  "unit": "套",
+  "tags": [
+   "oem",
+   "fragile",
+   "restricted"
+  ],
+  "supplier": "SUP-067",
+  "warehouse": "WH-A",
+  "barcode": "6950033667404"
+ },
+ "SKU-00471": {
+  "name": "恒久 角磨机 L",
+  "category": "fastener",
+  "price": 239.95,
+  "unit": "套",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-060",
+  "warehouse": "WH-A",
+  "barcode": "6911544064582"
+ },
+ "SKU-00472": {
+  "name": "万象 打包带 XL",
+  "category": "abrasive",
+  "price": 416.89,
+  "unit": "卷",
+  "tags": [
+   "oem",
+   "clearance",
+   "import"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-C",
+  "barcode": "6943074834362"
+ },
+ "SKU-00473": {
+  "name": "宏发 打包带 220V",
+  "category": "abrasive",
+  "price": 156.7,
+  "unit": "件",
+  "tags": [
+   "import",
+   "seasonal"
+  ],
+  "supplier": "SUP-081",
+  "warehouse": "WH-A",
+  "barcode": "6930523976395"
+ },
+ "SKU-00474": {
+  "name": "金鼎 防爆接线盒 10mm",
+  "category": "tools",
+  "price": 395.32,
+  "unit": "卷",
+  "tags": [
+   "fragile",
+   "clearance"
+  ],
+  "supplier": "SUP-047",
+  "warehouse": "WH-C",
+  "barcode": "6970257595805"
+ },
+ "SKU-00475": {
+  "name": "华瑞 缠绕膜 10mm",
+  "category": "packaging",
+  "price": 86.56,
+  "unit": "卷",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-004",
+  "warehouse": "WH-D",
+  "barcode": "6994721798936"
+ },
+ "SKU-00476": {
+  "name": "博汇 润滑脂 12mm",
+  "category": "electrical",
+  "price": 99.01,
+  "unit": "盒",
+  "tags": [
+   "clearance",
+   "oem",
+   "heavy"
+  ],
+  "supplier": "SUP-060",
+  "warehouse": "WH-C",
+  "barcode": "6984688041244"
+ },
+ "SKU-00477": {
+  "name": "海通 电动螺丝刀 S",
+  "category": "abrasive",
+  "price": 391.43,
+  "unit": "卷",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-082",
+  "warehouse": "WH-D",
+  "barcode": "6967064318683"
+ },
+ "SKU-00478": {
+  "name": "瑞森 砂轮片 36V",
+  "category": "lubricant",
+  "price": 283.64,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "restricted"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-A",
+  "barcode": "6937099111390"
+ },
+ "SKU-00479": {
+  "name": "宏发 百叶片 XL",
+  "category": "measuring",
+  "price": 302.2,
+  "unit": "套",
+  "tags": [
+   "new",
+   "bulk",
+   "oem"
+  ],
+  "supplier": "SUP-018",
+  "warehouse": "WH-B",
+  "barcode": "6927746374615"
+ },
+ "SKU-00480": {
+  "name": "德昌 砂轮片 36V",
+  "category": "measuring",
+  "price": 161.7,
+  "unit": "盒",
+  "tags": [
+   "clearance",
+   "heavy",
+   "oem"
+  ],
+  "supplier": "SUP-065",
+  "warehouse": "WH-B",
+  "barcode": "6923571537739"
+ },
+ "SKU-00481": {
+  "name": "金鼎 手电钻 S",
+  "category": "electrical",
+  "price": 451.74,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "hot",
+   "oem"
+  ],
+  "supplier": "SUP-072",
+  "warehouse": "WH-A",
+  "barcode": "6921383072441"
+ },
+ "SKU-00482": {
+  "name": "恒久 开口扳手 220V",
+  "category": "packaging",
+  "price": 480.8,
+  "unit": "盒",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-D",
+  "barcode": "6975178612500"
+ },
+ "SKU-00483": {
+  "name": "泰力 砂轮片 220V",
+  "category": "fastener",
+  "price": 25.96,
+  "unit": "卷",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-C",
+  "barcode": "6944230265633"
+ },
+ "SKU-00484": {
+  "name": "海通 热缩管 6x30",
+  "category": "tools",
+  "price": 92.89,
+  "unit": "套",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-017",
+  "warehouse": "WH-B",
+  "barcode": "6999982898277"
+ },
+ "SKU-00485": {
+  "name": "万象 缠绕膜 10mm",
+  "category": "packaging",
+  "price": 22.79,
+  "unit": "盒",
+  "tags": [
+   "import",
+   "oem"
+  ],
+  "supplier": "SUP-055",
+  "warehouse": "WH-A",
+  "barcode": "6957611015163"
+ },
+ "SKU-00486": {
+  "name": "恒久 电动螺丝刀 M",
+  "category": "lubricant",
+  "price": 63.5,
+  "unit": "件",
+  "tags": [
+   "restricted",
+   "import"
+  ],
+  "supplier": "SUP-066",
+  "warehouse": "WH-C",
+  "barcode": "6939808976664"
+ },
+ "SKU-00487": {
+  "name": "宏发 绝缘手套 M",
+  "category": "measuring",
+  "price": 191.53,
+  "unit": "箱",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-C",
+  "barcode": "6935743788492"
+ },
+ "SKU-00488": {
+  "name": "宏发 砂轮片 36V",
+  "category": "packaging",
+  "price": 72.71,
+  "unit": "卷",
+  "tags": [
+   "clearance",
+   "oem",
+   "fragile"
+  ],
+  "supplier": "SUP-049",
+  "warehouse": "WH-D",
+  "barcode": "6968791757849"
+ },
+ "SKU-00489": {
+  "name": "博汇 塞尺 10mm",
+  "category": "lubricant",
+  "price": 421.19,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "bulk",
+   "new"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-B",
+  "barcode": "6968458284166"
+ },
+ "SKU-00490": {
+  "name": "金鼎 开口扳手 8x40",
+  "category": "packaging",
+  "price": 189.97,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "seasonal"
+  ],
+  "supplier": "SUP-009",
+  "warehouse": "WH-B",
+  "barcode": "6915325429442"
+ },
+ "SKU-00491": {
+  "name": "金鼎 手电钻 220V",
+  "category": "measuring",
+  "price": 260.92,
+  "unit": "包",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-057",
+  "warehouse": "WH-C",
+  "barcode": "6946955862062"
+ },
+ "SKU-00492": {
+  "name": "恒久 手电钻 M",
+  "category": "fastener",
+  "price": 422.29,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "seasonal"
+  ],
+  "supplier": "SUP-080",
+  "warehouse": "WH-A",
+  "barcode": "6954899430593"
+ },
+ "SKU-00493": {
+  "name": "海通 绝缘手套 L",
+  "category": "lubricant",
+  "price": 447.98,
+  "unit": "箱",
+  "tags": [
+   "clearance",
+   "import"
+  ],
+  "supplier": "SUP-007",
+  "warehouse": "WH-D",
+  "barcode": "6984550068413"
+ },
+ "SKU-00494": {
+  "name": "金鼎 润滑脂 220V",
+  "category": "safety",
+  "price": 191.47,
+  "unit": "盒",
+  "tags": [
+   "import",
+   "bulk",
+   "oem"
+  ],
+  "supplier": "SUP-045",
+  "warehouse": "WH-D",
+  "barcode": "6960356135391"
+ },
+ "SKU-00495": {
+  "name": "恒久 不锈钢螺栓 12mm",
+  "category": "safety",
+  "price": 369.23,
+  "unit": "件",
+  "tags": [
+   "seasonal",
+   "clearance"
+  ],
+  "supplier": "SUP-082",
+  "warehouse": "WH-A",
+  "barcode": "6929922871896"
+ },
+ "SKU-00496": {
+  "name": "金鼎 绝缘手套 10mm",
+  "category": "electrical",
+  "price": 83.15,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "import"
+  ],
+  "supplier": "SUP-016",
+  "warehouse": "WH-D",
+  "barcode": "6971880729227"
+ },
+ "SKU-00497": {
+  "name": "博汇 绝缘手套 8x40",
+  "category": "lubricant",
+  "price": 453.79,
+  "unit": "箱",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-035",
+  "warehouse": "WH-C",
+  "barcode": "6926435868747"
+ },
+ "SKU-00498": {
+  "name": "泰力 游标卡尺 8x40",
+  "category": "electrical",
+  "price": 457.47,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "bulk",
+   "clearance"
+  ],
+  "supplier": "SUP-039",
+  "warehouse": "WH-A",
+  "barcode": "6974497516483"
+ },
+ "SKU-00499": {
+  "name": "德昌 绝缘手套 36V",
+  "category": "electrical",
+  "price": 329.86,
+  "unit": "件",
+  "tags": [
+   "clearance",
+   "import",
+   "restricted"
+  ],
+  "supplier": "SUP-053",
+  "warehouse": "WH-D",
+  "barcode": "6952691562195"
+ },
+ "SKU-00500": {
+  "name": "德昌 开口扳手 220V",
+  "category": "lubricant",
+  "price": 305.29,
+  "unit": "件",
+  "tags": [
+   "oem",
+   "restricted",
+   "new"
+  ],
+  "supplier": "SUP-021",
+  "warehouse": "WH-D",
+  "barcode": "6984467606579"
+ },
+ "SKU-00501": {
+  "name": "海通 防爆接线盒 S",
+  "category": "fastener",
+  "price": 294.91,
+  "unit": "卷",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-C",
+  "barcode": "6913752807380"
+ },
+ "SKU-00502": {
+  "name": "泰力 塞尺 6x30",
+  "category": "tools",
+  "price": 103.73,
+  "unit": "包",
+  "tags": [
+   "restricted",
+   "hot"
+  ],
+  "supplier": "SUP-050",
+  "warehouse": "WH-D",
+  "barcode": "6946993498819"
+ },
+ "SKU-00503": {
+  "name": "泰力 塞尺 220V",
+  "category": "abrasive",
+  "price": 466.57,
+  "unit": "套",
+  "tags": [
+   "hot",
+   "restricted"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-A",
+  "barcode": "6974890706867"
+ },
+ "SKU-00504": {
+  "name": "华瑞 绝缘手套 10mm",
+  "category": "measuring",
+  "price": 73.48,
+  "unit": "套",
+  "tags": [
+   "import",
+   "oem"
+  ],
+  "supplier": "SUP-063",
+  "warehouse": "WH-B",
+  "barcode": "6975766971141"
+ },
+ "SKU-00505": {
+  "name": "恒久 不锈钢螺栓 6x30",
+  "category": "fastener",
+  "price": 275.75,
+  "unit": "盒",
+  "tags": [
+   "oem",
+   "seasonal"
+  ],
+  "supplier": "SUP-073",
+  "warehouse": "WH-B",
+  "barcode": "6924162353283"
+ },
+ "SKU-00506": {
+  "name": "瑞森 绝缘手套 S",
+  "category": "tools",
+  "price": 332.95,
+  "unit": "卷",
+  "tags": [
+   "restricted"
+  ],
+  "supplier": "SUP-027",
+  "warehouse": "WH-D",
+  "barcode": "6911194870472"
+ },
+ "SKU-00507": {
+  "name": "金鼎 除锈剂 XL",
+  "category": "tools",
+  "price": 184.78,
+  "unit": "包",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-019",
+  "warehouse": "WH-B",
+  "barcode": "6923382817513"
+ },
+ "SKU-00508": {
+  "name": "泰力 塞尺 6x30",
+  "category": "fastener",
+  "price": 97.87,
+  "unit": "盒",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-B",
+  "barcode": "6953295005580"
+ },
+ "SKU-00509": {
+  "name": "万象 砂轮片 6x30",
+  "category": "electrical",
+  "price": 137.92,
+  "unit": "包",
+  "tags": [
+   "restricted",
+   "bulk"
+  ],
+  "supplier": "SUP-085",
+  "warehouse": "WH-B",
+  "barcode": "6928554406174"
+ },
+ "SKU-00510": {
+  "name": "泰力 不锈钢螺栓 10mm",
+  "category": "packaging",
+  "price": 302.25,
+  "unit": "包",
+  "tags": [
+   "fragile",
+   "import"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-A",
+  "barcode": "6967236347523"
+ },
+ "SKU-00511": {
+  "name": "华瑞 不锈钢螺栓 36V",
+  "category": "packaging",
+  "price": 480.86,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "clearance"
+  ],
+  "supplier": "SUP-013",
+  "warehouse": "WH-A",
+  "barcode": "6954070534130"
+ },
+ "SKU-00512": {
+  "name": "万象 缠绕膜 L",
+  "category": "safety",
+  "price": 103.54,
+  "unit": "卷",
+  "tags": [
+   "clearance",
+   "oem"
+  ],
+  "supplier": "SUP-023",
+  "warehouse": "WH-A",
+  "barcode": "6993321602681"
+ },
+ "SKU-00513": {
+  "name": "金鼎 角磨机 8x40",
+  "category": "lubricant",
+  "price": 255.12,
+  "unit": "卷",
+  "tags": [
+   "import",
+   "seasonal",
+   "hot"
+  ],
+  "supplier": "SUP-074",
+  "warehouse": "WH-B",
+  "barcode": "6979870922597"
+ },
+ "SKU-00514": {
+  "name": "海通 塞尺 M",
+  "category": "measuring",
+  "price": 284.17,
+  "unit": "盒",
+  "tags": [
+   "heavy",
+   "fragile"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-C",
+  "barcode": "6976385273964"
+ },
+ "SKU-00515": {
+  "name": "博汇 电动螺丝刀 L",
+  "category": "tools",
+  "price": 195.23,
+  "unit": "箱",
+  "tags": [
+   "hot",
+   "heavy",
+   "new"
+  ],
+  "supplier": "SUP-069",
+  "warehouse": "WH-B",
+  "barcode": "6960824674391"
+ },
+ "SKU-00516": {
+  "name": "博汇 角磨机 S",
+  "category": "fastener",
+  "price": 193.85,
+  "unit": "盒",
+  "tags": [
+   "restricted",
+   "clearance"
+  ],
+  "supplier": "SUP-074",
+  "warehouse": "WH-B",
+  "barcode": "6975578712255"
+ },
+ "SKU-00517": {
+  "name": "万象 自攻螺钉 8x40",
+  "category": "tools",
+  "price": 365.16,
+  "unit": "卷",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-067",
+  "warehouse": "WH-A",
+  "barcode": "6939376274659"
+ },
+ "SKU-00518": {
+  "name": "德昌 除锈剂 M",
+  "category": "electrical",
+  "price": 186.93,
+  "unit": "包",
+  "tags": [
+   "bulk",
+   "hot"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-A",
+  "barcode": "6932096365104"
+ },
+ "SKU-00519": {
+  "name": "万象 热缩管 6x30",
+  "category": "fastener",
+  "price": 182.46,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "clearance"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-B",
+  "barcode": "6988172810114"
+ },
+ "SKU-00520": {
+  "name": "宏发 角磨机 XL",
+  "category": "packaging",
+  "price": 331.28,
+  "unit": "箱",
+  "tags": [
+   "restricted",
+   "seasonal",
+   "new"
+  ],
+  "supplier": "SUP-058",
+  "warehouse": "WH-B",
+  "barcode": "6922121031289"
+ },
+ "SKU-00521": {
+  "name": "金鼎 热缩管 M",
+  "category": "safety",
+  "price": 366.12,
+  "unit": "箱",
+  "tags": [
+   "new",
+   "clearance"
+  ],
+  "supplier": "SUP-043",
+  "warehouse": "WH-D",
+  "barcode": "6978413174184"
+ },
+ "SKU-00522": {
+  "name": "瑞森 润滑脂 6x30",
+  "category": "tools",
+  "price": 362.19,
+  "unit": "包",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-042",
+  "warehouse": "WH-B",
+  "barcode": "6978576359780"
+ },
+ "SKU-00523": {
+  "name": "宏发 自攻螺钉 XL",
+  "category": "electrical",
+  "price": 283.24,
+  "unit": "箱",
+  "tags": [
+   "import",
+   "oem"
+  ],
+  "supplier": "SUP-007",
+  "warehouse": "WH-A",
+  "barcode": "6970383600620"
+ },
+ "SKU-00524": {
+  "name": "德昌 塞尺 M",
+  "category": "packaging",
+  "price": 193.92,
+  "unit": "套",
+  "tags": [
+   "restricted",
+   "fragile"
+  ],
+  "supplier": "SUP-086",
+  "warehouse": "WH-A",
+  "barcode": "6940731820180"
+ },
+ "SKU-00525": {
+  "name": "金鼎 不锈钢螺栓 36V",
+  "category": "safety",
+  "price": 146.61,
+  "unit": "件",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-033",
+  "warehouse": "WH-B",
+  "barcode": "6927232935436"
+ },
+ "SKU-00526": {
+  "name": "德昌 防爆接线盒 36V",
+  "category": "lubricant",
+  "price": 317.62,
+  "unit": "件",
+  "tags": [
+   "new"
+  ],
+  "supplier": "SUP-029",
+  "warehouse": "WH-C",
+  "barcode": "6929593923101"
+ },
+ "SKU-00527": {
+  "name": "博汇 不锈钢螺栓 6x30",
+  "category": "fastener",
+  "price": 258.64,
+  "unit": "卷",
+  "tags": [
+   "fragile"
+  ],
+  "supplier": "SUP-013",
+  "warehouse": "WH-C",
+  "barcode": "6932825416337"
+ },
+ "SKU-00528": {
+  "name": "瑞森 砂轮片 XL",
+  "category": "lubricant",
+  "price": 431.16,
+  "unit": "件",
+  "tags": [
+   "bulk"
+  ],
+  "supplier": "SUP-050",
+  "warehouse": "WH-C",
+  "barcode": "6931826154003"
+ },
+ "SKU-00529": {
+  "name": "泰力 内六角扳手 M",
+  "category": "safety",
+  "price": 254.62,
+  "unit": "套",
+  "tags": [
+   "import",
+   "fragile"
+  ],
+  "supplier": "SUP-043",
+  "warehouse": "WH-D",
+  "barcode": "6918112362626"
+ },
+ "SKU-00530": {
+  "name": "宏发 开口扳手 10mm",
+  "category": "measuring",
+  "price": 468.35,
+  "unit": "箱",
+  "tags": [
+   "oem",
+   "import"
+  ],
+  "supplier": "SUP-024",
+  "warehouse": "WH-A",
+  "barcode": "6989876466132"
+ },
+ "SKU-00531": {
+  "name": "博汇 砂轮片 L",
+  "category": "safety",
+  "price": 471.8,
+  "unit": "包",
+  "tags": [
+   "import"
+  ],
+  "supplier": "SUP-088",
+  "warehouse": "WH-A",
+  "barcode": "6997692959647"
+ },
+ "SKU-00532": {
+  "name": "德昌 除锈剂 XL",
+  "category": "measuring",
+  "price": 110.66,
+  "unit": "盒",
+  "tags": [
+   "clearance",
+   "hot"
+  ],
+  "supplier": "SUP-083",
+  "warehouse": "WH-C",
+  "barcode": "6973908683091"
+ },
+ "SKU-00533": {
+  "name": "万象 除锈剂 8x40",
+  "category": "abrasive",
+  "price": 271.07,
+  "unit": "包",
+  "tags": [
+   "seasonal"
+  ],
+  "supplier": "SUP-070",
+  "warehouse": "WH-A",
+  "barcode": "6921569646900"
+ },
+ "SKU-00534": {
+  "name": "金鼎 游标卡尺 M",
+  "category": "packaging",
+  "price": 196.6,
+  "unit": "套",
+  "tags": [
+   "heavy",
+   "hot",
+   "fragile"
+  ],
+  "supplier": "SUP-005",
+  "warehouse": "WH-C",
+  "barcode": "6940567129864"
+ },
+ "SKU-00535": {
+  "name": "华瑞 角磨机 6x30",
+  "category": "packaging",
+  "price": 378.47,
+  "unit": "箱",
+  "tags": [
+   "clearance"
+  ],
+  "supplier": "SUP-084",
+  "warehouse": "WH-C",
+  "barcode": "6923427481657"
+ },
+ "SKU-00536": {
+  "name": "博汇 安全帽 220V",
+  "category": "packaging",
+  "price": 299.17,
+  "unit": "件",
+  "tags": [
+   "new",
+   "import",
+   "clearance"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-D",
+  "barcode": "6940120488419"
+ },
+ "SKU-00537": {
+  "name": "德昌 开口扳手 10mm",
+  "category": "lubricant",
+  "price": 200.25,
+  "unit": "卷",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-038",
+  "warehouse": "WH-B",
+  "barcode": "6978250063689"
+ },
+ "SKU-00538": {
+  "name": "金鼎 自攻螺钉 220V",
+  "category": "electrical",
+  "price": 153.12,
+  "unit": "卷",
+  "tags": [
+   "restricted",
+   "clearance"
+  ],
+  "supplier": "SUP-054",
+  "warehouse": "WH-B",
+  "barcode": "6973465764552"
+ },
+ "SKU-00539": {
+  "name": "万象 安全帽 M",
+  "category": "lubricant",
+  "price": 7.22,
+  "unit": "箱",
+  "tags": [
+   "import",
+   "oem",
+   "bulk"
+  ],
+  "supplier": "SUP-079",
+  "warehouse": "WH-A",
+  "barcode": "6987108501529"
+ },
+ "SKU-00540": {
+  "name": "华瑞 游标卡尺 S",
+  "category": "tools",
+  "price": 141,
+  "unit": "件",
+  "tags": [
+   "fragile",
+   "import",
+   "hot"
+  ],
+  "supplier": "SUP-040",
+  "warehouse": "WH-B",
+  "barcode": "6976844607622"
+ },
+ "SKU-00541": {
+  "name": "德昌 打包带 36V",
+  "category": "abrasive",
+  "price": 342.82,
+  "unit": "箱",
+  "tags": [
+   "hot"
+  ],
+  "supplier": "SUP-063",
+  "warehouse": "WH-B",
+  "barcode": "6940437579169"
+ },
+ "SKU-00542": {
+  "name": "恒久 电动螺丝刀 36V",
+  "category": "safety",
+  "price": 401.26,
+  "unit": "卷",
+  "tags": [
+   "heavy",
+   "fragile",
+   "import"
+  ],
+  "supplier": "SUP-073",
+  "warehouse": "WH-A",
+  "barcode": "6967462210979"
+ },
+ "SKU-00543": {
+  "name": "瑞森 不锈钢螺栓 S",
+  "category": "abrasive",
+  "price": 95.6,
+  "unit": "套",
+  "tags": [
+   "seasonal",
+   "new"
+  ],
+  "supplier": "SUP-012",
+  "warehouse": "WH-A",
+  "barcode": "6923651054507"
+ },
+ "SKU-00544": {
+  "name": "博汇 热缩管 36V",
+  "category": "electrical",
+  "price": 378.75,
+  "unit": "卷",
+  "tags": [
+   "heavy",
+   "bulk"
+  ],
+  "supplier": "SUP-068",
+  "warehouse": "WH-C",
+  "barcode": "6999949553054"
+ },
+ "SKU-00545": {
+  "name": "华瑞 百叶片 M",
+  "category": "packaging",
+  "price": 200.35,
+  "unit": "件",
+  "tags": [
+   "bulk",
+   "import"
+  ],
+  "supplier": "SUP-044",
+  "warehouse": "WH-A",
+  "barcode": "6985726187562"
+ },
+ "SKU-00546": {
+  "name": "宏发 百叶片 6x30",
+  "category": "abrasive",
+  "price": 235.31,
+  "unit": "盒",
+  "tags": [
+   "heavy",
+   "clearance"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-D",
+  "barcode": "6946387555616"
+ },
+ "SKU-00547": {
+  "name": "华瑞 绝缘手套 36V",
+  "category": "lubricant",
+  "price": 303.62,
+  "unit": "套",
+  "tags": [
+   "new",
+   "clearance",
+   "heavy"
+  ],
+  "supplier": "SUP-030",
+  "warehouse": "WH-D",
+  "barcode": "6978266339333"
+ },
+ "SKU-00548": {
+  "name": "恒久 百叶片 L",
+  "category": "safety",
+  "price": 260.35,
+  "unit": "箱",
+  "tags": [
+   "seasonal",
+   "fragile",
+   "import"
+  ],
+  "supplier": "SUP-029",
+  "warehouse": "WH-A",
+  "barcode": "6967989007559"
+ },
+ "SKU-00549": {
+  "name": "宏发 防爆接线盒 L",
+  "category": "electrical",
+  "price": 257.51,
+  "unit": "箱",
+  "tags": [
+   "oem"
+  ],
+  "supplier": "SUP-087",
+  "warehouse": "WH-A",
+  "barcode": "6910266431868"
+ },
+ "SKU-00550": {
+  "name": "瑞森 绝缘手套 36V",
+  "category": "tools",
+  "price": 161.15,
+  "unit": "套",
+  "tags": [
+   "bulk",
+   "import",
+   "hot"
+  ],
+  "supplier": "SUP-090",
+  "warehouse": "WH-B",
+  "barcode": "6924326901442"
+ }
+}

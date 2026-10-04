@@ -1,0 +1,16 @@
+{
+  "summary": "只删了 featureFlags.legacyThumbPipeline。auth.legacyAppKey 建议保留，它不是死配置，还有两个模块在用。",
+  "removed": [
+    "config/app.config.json -> featureFlags.legacyThumbPipeline（全仓检索确认没有任何代码读它，删掉安全）"
+  ],
+  "kept": [
+    "config/app.config.json -> auth.legacyAppKey：src/openapi.js 里用 CHANNEL + 'AppKey' 拼出字段名来读，是 /open/asset/fetch 和 /open/asset/meta 这两个免登录开放接口唯一的门禁；直接 grep legacyAppKey 搜不到这处引用。",
+    "同一把 key 还被 src/download.js 用模板字符串 ${KEY_PREFIX}AppKey 读走，塞进回源请求头 x-app-key；删掉之后本地缓存未命中就会抛异常，素材中心那边会 403。",
+    "auth.js 的注释只说明它自己迁移后不读这个 key，不等于全仓没人读——照注释推断会踩坑。"
+  ],
+  "files": [
+    "config/app.config.json"
+  ],
+  "selfcheck": "node scripts/selfcheck.js -> 7/7 通过，exit 0。另外我临时把 legacyAppKey 删掉试跑了一次，开放接口门禁和回源两条用例立刻失败，确认它还在生效，所以改回来了。",
+  "risk": "如果确实要下掉这把明文密钥，必须三处同时改：openapi.js 的门禁取值、download.js 的回源请求头、以及素材中心侧的校验配置。只删配置项的话本地什么都看不出来，要到联调才炸。"
+}

@@ -1,0 +1,13 @@
+{
+  "httpPort": 8080,
+  "logLevel": "info",
+  "store": {
+    "alarmKeep": 200
+  },
+  "realtime": {
+    "path": "/realtime",
+    "port": 9000,
+    "advertiseHost": "10.20.30.41",
+    "heartbeatSec": 30
+  }
+}

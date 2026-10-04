@@ -1,0 +1,14 @@
+[
+  { "id": "SO-2408-001", "customer": "华中机电", "amount": 1280.00, "shipping": 18.00, "refunded": false },
+  { "id": "SO-2408-002", "customer": "同和商贸", "amount": 356.50, "shipping": 12.00, "refunded": false },
+  { "id": "SO-2408-003", "customer": "宁通物流", "amount": 2140.00, "shipping": 0.00, "refunded": true },
+  { "id": "SO-2408-004", "customer": "个人客户", "amount": 89.90, "shipping": 8.00, "refunded": false },
+  { "id": "SO-2408-005", "customer": "海联电子", "amount": 1799.00, "shipping": 25.00, "refunded": false },
+  { "id": "SO-2408-006", "customer": "个人客户", "amount": 640.00, "shipping": 15.00, "refunded": true },
+  { "id": "SO-2408-007", "customer": "同和商贸", "amount": 322.75, "shipping": 12.00, "refunded": false },
+  { "id": "SO-2408-008", "customer": "华中机电", "amount": 5600.00, "shipping": 0.00, "refunded": false },
+  { "id": "SO-2408-009", "customer": "个人客户", "amount": 148.00, "shipping": 8.00, "refunded": false },
+  { "id": "SO-2408-010", "customer": "宁通物流", "amount": 970.20, "shipping": 18.00, "refunded": true },
+  { "id": "SO-2408-011", "customer": "海联电子", "amount": 2450.00, "shipping": 30.00, "refunded": false },
+  { "id": "SO-2408-012", "customer": "个人客户", "amount": 76.40, "shipping": 8.00, "refunded": false }
+]

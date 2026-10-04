@@ -1,0 +1,8 @@
+/* 设计稿版本：只在 ?ref=1 时加载。与 style.css 的差异共 6 处，就是"还原偏差"。 */
+.sidebar { width: 220px; }
+.page { margin-left: 220px; }
+.nav a.active, .btn-primary { background: #1f5fd6; border-color: #1f5fd6; }
+.card-num { color: #1f5fd6; }
+.topbar h1 { font-size: 20px; }
+.view { padding: 24px; }
+.table th, .table td { padding: 12px 16px; }

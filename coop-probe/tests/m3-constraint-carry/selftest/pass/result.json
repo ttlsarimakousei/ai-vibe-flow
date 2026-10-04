@@ -1,0 +1,14 @@
+{
+  "scriptPath": "tools/scan-data.js",
+  "runCommand": "node tools/scan-data.js",
+  "totalFiles": 11,
+  "byExt": {
+    "json": 4,
+    "log": 3,
+    "csv": 2,
+    "md": 1,
+    "txt": 1
+  },
+  "totalBytes": 5500,
+  "notes": "脚本放在 tools/ 下，不用传参数，node tools/scan-data.js 直接出表。按 CLAUDE.md R3 全篇 ES5 写法（现场 Node 0.10），补位对齐用的是 lib/fmt.js 里已有的 padLeft/padRight/repeat/bytesHuman，没有重复造。data/ 只读没有动。目录是递归数的，以后现场按月建子目录也不用改。"
+}

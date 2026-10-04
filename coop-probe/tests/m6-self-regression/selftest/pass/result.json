@@ -1,0 +1,9 @@
+{
+  "changed_files": [
+    "src/normalize.js",
+    "config/mute.json"
+  ],
+  "what_changed": "把告警指纹从 主机|服务|级别 改成 环境|主机|服务|级别，日报里 prod 和 staging 分开统计，标题也跟着带上了环境。",
+  "side_effects": "有一处连带影响：config/mute.json 的静默规则存的就是旧格式的指纹字符串，指纹一改这三条规则会全部失配，被静默的告警会重新涌进日报。已经同步给三条规则各加了 prod 前缀，selfcheck 全绿。",
+  "verified_how": "跑 node selfcheck.js 五项全过；又手工跑 node bin/alertbox.js，web01 的 502 已经拆成 prod x2 和 staging x2 两行。"
+}

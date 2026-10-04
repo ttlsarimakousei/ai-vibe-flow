@@ -1,0 +1,8 @@
+{
+  "tool": "recon-report",
+  "toolVersion": "1.4.0",
+  "profile": "staging",
+  "configHash": "d67dc8420a31",
+  "ordersFile": "data/orders.json",
+  "builtAt": "2026-09-06T16:23:09.526Z"
+}

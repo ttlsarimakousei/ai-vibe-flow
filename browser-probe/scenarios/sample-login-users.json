@@ -1,0 +1,17 @@
+{
+  "name": "登录并检查用户列表",
+  "steps": [
+    { "goto": "/login.html" },
+    { "fill": "#username", "value": "admin" },
+    { "fill": "#password", "value": "admin123" },
+    { "click": "text=登录" },
+    { "waitUrl": "**/dashboard.html*" },
+    { "expectText": "当前用户：admin" },
+    { "click": ".nav a[href=\"#users\"]" },
+    { "wait": "#userTable tbody tr" },
+    { "expectCount": "#userTable tbody tr", "count": 5 },
+    { "screenshot": "users" },
+    { "layout": "users", "root": "main" },
+    { "expectNoConsoleErrors": true }
+  ]
+}

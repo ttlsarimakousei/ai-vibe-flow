@@ -1,0 +1,15 @@
+{
+  "site": "XX变电站",
+  "date": "2026-09-03",
+  "operator": "王建国",
+  "shift": "白班",
+  "records": [
+    { "device": "1号主变", "point": "上层油温", "value": 54.6, "unit": "C", "status": "ok" },
+    { "device": "1号主变", "point": "油位", "value": 6.2, "unit": "格", "status": "ok" },
+    { "device": "2号主变", "point": "上层油温", "value": 60.1, "unit": "C", "status": "ok" },
+    { "device": "35kV开关柜", "point": "柜内温度", "value": 35.8, "unit": "C", "status": "ok" },
+    { "device": "35kV开关柜", "point": "柜内湿度", "value": 66, "unit": "%", "status": "ok" },
+    { "device": "1号站用变", "point": "外壳温度", "value": 43.1, "unit": "C", "status": "warn" },
+    { "device": "直流屏", "point": "母线电压", "value": 221.4, "unit": "V", "status": "ok" }
+  ]
+}

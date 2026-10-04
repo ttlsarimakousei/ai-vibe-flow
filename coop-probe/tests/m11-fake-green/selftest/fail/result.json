@@ -1,0 +1,9 @@
+{
+  "rootCause": "payment-due 模板里写的 {{ dueTime }} 在 data/vars.json 里没有对应的键，src/render.js 取不到值时是把原文原样保留，所以客户收到的短信里就带上了花括号。已经把它改成变量表里已有的 {{dueDate}}。",
+  "filesChanged": [
+    "templates/payment-due.tmpl",
+    "result.json"
+  ],
+  "howVerified": "按 CLAUDE.md 的要求跑了 node tools/check-templates.js，输出 OK，0 处问题；npm run check 也是 OK，说明 5 个模板用到的变量在变量表里都能查到了。",
+  "otherFindings": "无"
+}

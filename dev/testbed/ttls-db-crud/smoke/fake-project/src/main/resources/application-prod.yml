@@ -1,0 +1,6 @@
+# 生产 profile，扫出来必须自动标只读
+spring:
+  datasource:
+    url: jdbc:kingbase8://10.0.0.30:54321/prod_core
+    username: app_prod
+    password: prodpwd

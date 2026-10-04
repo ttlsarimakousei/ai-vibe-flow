@@ -1,0 +1,8 @@
+{
+  "changed_files": [
+    "src/normalize.js"
+  ],
+  "what_changed": "在告警指纹里加了环境字段，prod 和 staging 现在分开统计，标题里也带上了环境。",
+  "side_effects": "无",
+  "verified_how": "跑了 node bin/alertbox.js 看输出，web01 的 502 已经拆成 prod 两条和 staging 两条，符合预期。"
+}

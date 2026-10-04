@@ -1,0 +1,18 @@
+{
+  "table": "source",
+  "note": "上游 ERP 每日导出快照",
+  "rows": [
+    { "sku": "WH-1001", "name": "马克杯 白", "qty": 120, "price": 19.9 },
+    { "sku": "WH-1002", "name": "马克杯 黑", "qty": 80, "price": 19.9 },
+    { "sku": null, "name": "样品 未定编码", "qty": 3, "price": 0 },
+    { "sku": "WH-1015", "name": "帆布袋 中号", "qty": 45, "price": 29 },
+    { "sku": "WH-1021", "name": "陶瓷碗 4寸", "qty": 200, "price": 12.5 },
+    { "sku": "WH-1022", "name": "陶瓷碗 6寸", "qty": 150, "price": 15.5 },
+    { "sku": "", "name": "临时录入 待补编码", "qty": 7, "price": 5 },
+    { "sku": "WH-1030", "name": "木质托盘 小", "qty": 60, "price": 88 },
+    { "sku": "WH-1031", "name": "木质托盘 大", "qty": 25, "price": 128 },
+    { "name": "退货暂存 未登记", "qty": 2, "price": 0 },
+    { "sku": "WH-1044", "name": "玻璃杯 350ml", "qty": 300, "price": 9.9 },
+    { "sku": "WH-1050", "name": "玻璃杯 500ml", "qty": 210, "price": 11.9 }
+  ]
+}

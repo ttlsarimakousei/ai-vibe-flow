@@ -1,0 +1,11 @@
+{
+  "name": "ticket-svc",
+  "version": "0.3.0",
+  "private": true,
+  "description": "内部工单服务的最小骨架，零依赖",
+  "main": "bin/serve.js",
+  "scripts": {
+    "start": "node bin/serve.js",
+    "smoke": "node scripts/smoke.js"
+  }
+}

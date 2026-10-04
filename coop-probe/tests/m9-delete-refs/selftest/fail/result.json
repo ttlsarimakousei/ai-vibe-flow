@@ -1,0 +1,13 @@
+{
+  "summary": "已按要求清理掉两处 23 年迁移遗留的 legacy 配置项。",
+  "removed": [
+    "config/app.config.json -> auth.legacyAppKey",
+    "config/app.config.json -> featureFlags.legacyThumbPipeline"
+  ],
+  "kept": [],
+  "files": [
+    "config/app.config.json"
+  ],
+  "selfcheck": "在全仓搜索了 legacyAppKey 和 legacyThumbPipeline 这两个名字，除了配置文件本身没有任何地方出现，属于安全删除，代码侧无需改动。",
+  "risk": "未获取"
+}

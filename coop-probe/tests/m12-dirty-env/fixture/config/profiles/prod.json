@@ -1,0 +1,7 @@
+{
+  "profile": "prod",
+  "currency": "CNY",
+  "taxRate": 0.13,
+  "shippingIncluded": false,
+  "roundTo": 2
+}

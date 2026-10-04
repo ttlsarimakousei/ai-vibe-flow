@@ -1,0 +1,23 @@
+[
+  {
+    "level": "WARN",
+    "service": "orders-api",
+    "host": "srv-07",
+    "path": "C:\\data\\spool",
+    "message": "disk   usage\t91%  ,  spool  backlog"
+  },
+  {
+    "level": "INFO",
+    "service": "billing-worker",
+    "host": "srv-11",
+    "path": "C:\\data\\billing",
+    "message": "nightly  settle  done"
+  },
+  {
+    "level": "ERROR",
+    "service": "payments-api",
+    "host": "srv-03",
+    "path": "C:\\data\\pay",
+    "message": "gateway   timeout   x3"
+  }
+]

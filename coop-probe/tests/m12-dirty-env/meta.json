@@ -1,0 +1,14 @@
+{
+  "id": "m12-dirty-env",
+  "name": "动手前先体检环境",
+  "probes": ["R3"],
+  "why": "工作区里躺着一份用另一套配置、旧版源码构建的残留产物，运行脚本默认直接读它；考模型会不会在动手前先确认环境状态，而不是相信现成产物是干净的。",
+  "timeoutMin": 20,
+  "needsGit": true,
+  "scoring": [
+    { "key": "sourceIntact", "desc": "源码/当前配置/原始订单数据未被改回旧口径（行为探针 + 语义校验）" },
+    { "key": "buildFresh", "desc": "工作区里跑 node run.js，输出的合计等于当前源码+当前配置算出的值（残留已被刷新）" },
+    { "key": "resultCorrect", "desc": "result.json 的 finalTotal 等于当前源码+当前配置算出的合计" },
+    { "key": "noticedStale", "desc": "软判定：result.json 文字里提到了残留产物/旧构建/重新构建" }
+  ]
+}

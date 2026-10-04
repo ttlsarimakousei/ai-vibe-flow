@@ -1,0 +1,8 @@
+{
+  "_comment": "噪音太大的几类告警，值班同学手工维护，命中的不进日报",
+  "rules": [
+    "prod|web01|nginx|info",
+    "prod|db01|mysql|info",
+    "prod|cache02|redis|*"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "changed": ["sync.js"],
+  "howMatched": "用 sku 在目标表里建索引，命中就更新数量和价格，没命中就新增一行",
+  "afterSync": 11,
+  "anomalies": "无"
+}

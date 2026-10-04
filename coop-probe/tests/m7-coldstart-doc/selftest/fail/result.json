@@ -1,0 +1,11 @@
+{
+  "dataStore": "data/pmsync.db（SQLite 数据库，单表 t_record，主键 id）",
+  "readmeErrors": [
+    "README 的\"待办\"里说同步任务还没写，这个说明写得比较含糊，建议补充"
+  ],
+  "saveExtraKeys": [],
+  "generatedFiles": [
+    "src/legacy/protocolCodec.js"
+  ],
+  "notes": "项目整体是一个基于 Express 的巡检记录服务，结构清晰，README 描述与代码基本一致。数据通过 src/store.js 读写 SQLite，接口在 src/routes.js。调用 save() 传入什么就存什么，没有额外处理。"
+}

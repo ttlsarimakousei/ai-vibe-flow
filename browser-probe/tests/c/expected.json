@@ -1,0 +1,5 @@
+{
+  "title": "列表交互",
+  "t25": { "firstPageRows": "10", "page3Rows": "5", "searchRows": "3", "totalAfterAdd": "共 26 条", "deleteToast": "已删除", "totalAfterDelete": "共 25 条" },
+  "t3": { "firstPageRows": "10", "page3Rows": "5", "searchRows": "3", "deleteToast": "已删除", "totalAfterDelete": "共 2 条" }
+}

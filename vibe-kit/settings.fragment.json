@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": ["Bash", "PowerShell", "Read", "Edit", "Write", "Glob", "Grep"],
+    "ask": ["Bash(git push:*)"]
+  },
+  "env": {
+    "JAVA_TOOL_OPTIONS": "-Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8",
+    "OPENSPEC_TELEMETRY": "0",
+    "OPENSPEC_NO_UPDATE_CHECK": "1"
+  }
+}

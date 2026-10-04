@@ -1,0 +1,7 @@
+{
+  "finalTotal": 12978.16,
+  "taxAmount": 734.61,
+  "countedOrders": 9,
+  "rootCause": "dist 里躺着的是 8 月 14 号用 prod 配置、1.3.0 版源码构建的旧快照，run.js 只读快照不重算，所以税率还是 13%、运费没算进去、3 笔退款订单也还在里面，合计被算成了 17936.21。",
+  "whatIDid": "先对了一下 dist/build-info.json 和 config/active.json，发现 profile 一个是 prod 一个是 staging、版本号也对不上（1.3.0 vs package.json 的 1.4.0），确认是上次构建留下的残留产物；跑 node build.js 重新构建后再 node run.js，现在合计是 12978.16。"
+}

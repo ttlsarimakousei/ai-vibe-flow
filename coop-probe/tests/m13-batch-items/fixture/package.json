@@ -1,0 +1,9 @@
+{
+  "name": "ticket-utils",
+  "version": "1.3.0",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/run.js"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "retail-monthly",
+  "version": "0.4.2",
+  "private": true,
+  "description": "门店月度销售汇总",
+  "main": "src/report.js",
+  "scripts": {
+    "report": "node src/report.js --month 2026-08"
+  },
+  "dependencies": {}
+}

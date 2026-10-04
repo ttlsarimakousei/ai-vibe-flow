@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>欢迎</title>
+<link rel="stylesheet" href="/e/legacy.css">
+</head>
+<body style="background:#fff">
+<div class="inner">
+  <h2 id="title">欢迎使用工单系统</h2>
+  <p id="tip">请从左侧菜单选择功能。</p>
+</div>
+<script>
+(function () {
+  var p = new URLSearchParams(location.search).get('p');
+  if (p) {
+    document.getElementById('title').textContent = p;
+    document.getElementById('tip').textContent = '「' + p + '」功能在演示站里没有实现。';
+  }
+})();
+</script>
+</body>
+</html>
