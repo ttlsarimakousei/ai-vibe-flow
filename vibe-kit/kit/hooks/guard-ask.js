@@ -18,6 +18,8 @@ function handle(j) {
       const name = String(inp.skill || inp.command || inp.name || '');
       const cfg = readConfigFor(j);
       if (cfg.autoSwitch && !cfg.autoMode && FLOW_SKILL.test(name)) { setFlow(j, true, '调了 ' + name.trim().split(/\s+/)[0]); hookLog('全自动模式 这个会话进了 OpenSpec 流程：调了 ' + name.trim().slice(0, 40)); }
+      // 模型自己调交接的技能（提问框里选了"现在交接"、全自动到线自己写）：也数进"写交接记录"。用户自己敲 /ttls-handover 的在 task-anchor 里数
+      if (/^\/?(ttls-)?handover$/i.test(name.trim().split(/\s+/)[0])) { try { require('../lib/usage.js').bump('handover.write'); } catch (e) { /* 数不了就算了 */ } }
     } catch (e) { /* 记不了不影响调技能 */ }
     return null;
   }
@@ -31,6 +33,7 @@ function handle(j) {
       report.note(j, { kind: 'ask', title: String((q && (q.question || q.header)) || '（没写问题）'), detail: opts.join(' / ') });
     }
   } catch (e) { /* 记不了不影响 */ }
+  try { require('../lib/feedback.js').countBlock('guard-ask', '[vibe-kit] 全自动模式：提问框没人答', String((j && j.session_id) || '')); } catch (e) { /* 数不了不影响 */ }
   return blockOut('PreToolUse', '[vibe-kit] 全自动模式：我不在，提问框没人答，活会停在这里。你想问的已经记进全自动报告，我回来会看到。现在自己定，然后接着做：能查的先查（代码、库、接口、日志、文档）；查不到的选推荐的、影响面最小的那个，记进 revisions.md（起因：自动模式决定）。要我动手的事（查库的工具不肯执行的改库操作、改 redis 里的数据、改公共配置、动 git 历史、push、要账号密码）：不做也不等，在那项任务后面加上"（留给用户：原因）"，不打勾，接着做不依赖它的。');
 }
 

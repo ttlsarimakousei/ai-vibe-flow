@@ -1571,16 +1571,18 @@ function handle(j) {
   // cd 和别的命令串在一条里。放在改套件、读令牌那几道后面查：那几道的话更要紧（它们拦下时顺带提一句）
   let cdHit = null;
   try { cdHit = ps ? null : cdCompoundIssue(cmd, j.cwd); } catch (e) { cdHit = null; }
+  // 不走拦截编号的几处（串着 cd、关钩子、调路由的接口、全自动下的 push）也数一笔：哪条规矩拦得多，使用情况里要看得到
+  const counted = (kind, text) => { try { if (feedback && feedback.countBlock) feedback.countBlock(kind, text, String(j.session_id || '')); } catch (e) { /* 数不了不影响 */ } return blockOut('PreToolUse', text); };
   const cdBlock = () => {
     if (!cdHit) return null;
     hookLog('guard-commit 拦下串着 cd 的命令：' + cmd.replace(/\s+/g, ' ').slice(0, 100));
-    return blockOut('PreToolUse', cdCompoundText(cdHit, j.cwd));
+    return counted('cd', cdCompoundText(cdHit, j.cwd));
   };
   if (cfg.kitLock !== false) {
     // disableAllHooks 会把套件的检查一起关掉：只在命令要写东西的时候拦。只读的命令（grep 排查、cat）、提交信息、文档里提到这个词不拦
-    if (/disableAllHooks/i.test(cmd) && !readOnlyCommand(cmd, ps) && (/settings[\w.-]*\.json/i.test(cmd) || /(>|\b(set-content|sc|out-file|add-content|ac|tee|tee-object)\b|sed\s+-i|writefile|write_text|\.write\s*\(|\bnode(\.exe)?\s+-e\b|\bpython3?(\.exe)?\s+-c\b)/i.test(cmd))) return blockOut('PreToolUse', '[vibe-kit] 不许写 disableAllHooks：它会把套件的所有检查一起关掉。钩子拦错了就把原因告诉用户，由用户来定；不要绕过。');
+    if (/disableAllHooks/i.test(cmd) && !readOnlyCommand(cmd, ps) && (/settings[\w.-]*\.json/i.test(cmd) || /(>|\b(set-content|sc|out-file|add-content|ac|tee|tee-object)\b|sed\s+-i|writefile|write_text|\.write\s*\(|\bnode(\.exe)?\s+-e\b|\bpython3?(\.exe)?\s+-c\b)/i.test(cmd))) return counted('kit', '[vibe-kit] 不许写 disableAllHooks：它会把套件的所有检查一起关掉。钩子拦错了就把原因告诉用户，由用户来定；不要绕过。');
     const api = routerApiIssue(cmd, ps, j.cwd);
-    if (api) return blockOut('PreToolUse', api);
+    if (api) return counted('kit', api);
   }
   // push 不看任何开关，一律要用户确认；拆命令没认出来的写法由 pushAnywhere 兜底
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishAnywhere(cmd, j.cwd) ? '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。' : '';
@@ -1614,7 +1616,7 @@ function handle(j) {
     if (st.push) {
       hookLog('guard-commit 全自动模式不 push：' + cmd.slice(0, 80));
       try { if (report) report.note(j, { kind: 'hand', title: '它想' + (/发布/.test(st.push) ? '发布安装包' : '执行 git push') + '，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '推到远端要你自己来' }); } catch (e) { /* 记不了不影响 */ }
-      return blockOut('PreToolUse', '[vibe-kit] 全自动模式：' + (/发布/.test(st.push) ? '发布' : 'push') + '留给用户做，已经记进全自动报告。不要再试，也不要等：提交留在本地，接着做别的；最后的交代里说一句哪些提交还没推。');
+      return counted('auto-push', '[vibe-kit] 全自动模式：' + (/发布/.test(st.push) ? '发布' : 'push') + '留给用户做，已经记进全自动报告。不要再试，也不要等：提交留在本地，接着做别的；最后的交代里说一句哪些提交还没推。');
     }
     if (st.secret) { try { if (report) report.note(j, { kind: 'secret', title: '提交放行了，里面像是有密码或 key', detail: st.secret.replace(/\[vibe-kit 提交检查\]\s*/, '').split('\n').slice(0, 6).join('；') }); } catch (e) { /* 记不了不影响 */ } hookLog('guard-commit 全自动模式：提交里像有密码，放行并记进报告'); }
     if (st.used.length) return feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);

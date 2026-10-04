@@ -324,7 +324,8 @@
         <div><div class="t">自动压缩线</div><div class="d">上下文用到上限的百分之多少，Claude Code 自己压缩。50 到 95；填 0：不管，照 Claude Code 自己的。</div>
           <details class="more"><summary>细节</summary><ul>
             <li>新版的 Claude Code（2.1.259 这类）没设这一项时不按用量压缩，要等模型接口报"请求太长"才补救。内网模型报的错它认不出，上下文会一直涨，过了 100% 也不压缩。</li>
-            <li>套件把它写进 settings.json 的 <span class="mono">autoCompactWindow</span>（窗口 = 上限 × 这个百分比 + 3.3 万，Claude Code 在"窗口 − 3.3 万"处压缩）。2.1.120 和 2.1.259 都认。</li>
+            <li>套件把它写进 settings.json 的 <span class="mono">autoCompactWindow</span>（窗口 = 上限 × 这个百分比 + 3.3 万，Claude Code 在"窗口 − 3.3 万"处压缩）。2.1.120、2.1.259、2.1.289 都认。</li>
+            <li>窗口最大写到 96 万，也就是最晚用到 92.7 万压缩：实测窗口再大，Claude Code 还没压缩就先报 Prompt is too long 了。上限填得比 100 万大、这里填 95 的，都按这个数算，下面的预览里写着。</li>
             <li>改了之后新开的会话生效。开着的会话在 Claude Code 里敲下面算好的那条 <span class="mono">/autocompact</span> 命令，马上生效。</li>
             <li>比交接线高：先到交接线，提醒你交接；没交接、接着用，到这里 Claude Code 自己压缩。</li>
           </ul></details></div>
@@ -463,12 +464,14 @@
       <h2>拉代码和提交</h2>
       <p class="hint">开工前拉一次代码；只提交，从不 push。push 一律要你自己确认；全自动模式下直接拦下，留给你。</p>
       <div class="opt">
-        <div><div class="t">开工前拉代码</div><div class="d">开着：你提了需求、敲了 /opsx:… 命令、接着交接记录做的那一句话，先把会话所在的仓库和下面的子项目拉到最新，再开始分析、写代码。同一个仓库 2 小时里只拉一次。</div>
+        <div><div class="t">开工前拉代码</div><div class="d">开着：你提了需求、敲了 /opsx:… 命令、接着交接记录做的那一句话，先把会话所在的仓库（壳子里加上子项目）拉到最新，再开始分析、写代码。同一个仓库 2 小时里只拉一次。</div>
           <details class="more"><summary>细节</summary><ul>
-            <li>只快进：先 fetch，再 merge --ff-only 跟踪的远端分支。不做合并提交、不变基、不动你没提交的改动。</li>
+            <li>只快进：先 fetch，再 merge --ff-only 跟踪的远端分支。不做合并提交、不变基、不动你没提交的改动（配了 merge.autoStash 也不藏改动）。</li>
             <li>本地有没推的提交、远端也有新的（分叉了）：不拉，告诉 Claude，要合并先问你。没提交的改动和远端改的是同一些文件：git 自己拒绝，什么都不变。</li>
-            <li>已经在流程里说"继续""好"不拉，做到一半不换底下的代码。</li>
-            <li>连不上、没权限：没拉成，照本地的做。不弹登录框，一个仓库最多等 15 秒。全自动模式下没拉成的写进报告"留给你做的"。</li>
+            <li>已经在流程里说"继续""好""不要停"不拉，做到一半不换底下的代码。中间插了一句问话再说"继续"也不拉。</li>
+            <li>不是壳子的目录（一堆不相干的项目放在一起的上级目录）不带下面的仓库。壳子下面超过 12 个子项目的，一次拉 12 个，先拉最久没拉过的。</li>
+            <li>连不上、没权限、连远端 15 秒没下完：没拉成，照本地的做。不弹登录框，登不上也不会拿别的东西当口令去试。全自动模式下没拉成的写进报告"留给你做的"。</li>
+            <li>合并做到一半不结束它，等它做完：中途结束会留下 index.lock 和改了一半的工作区。合完了、只剩仓库自己的 post-merge 钩子在跑的，等 20 秒结束钩子。</li>
           </ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_pullBeforeWork"><i></i></label></div>
       </div>
@@ -619,9 +622,9 @@
       <details class="plain" style="margin-top:8px"><summary>拦得最多的规矩<span id="fbStatCount"></span></summary><p class="hint" style="margin:6px 0">次数高的，要么提示写得不清楚，要么检查判断错了。这不算问题；每天各道检查拦了几次跟着使用情况上报。</p><div class="scroll"><table><thead><tr><th>检查</th><th class="num">次数</th><th class="num">会话数</th><th>最近一次</th><th>拦下时的第一句</th></tr></thead><tbody id="fbStats"></tbody></table></div></details>
       <div id="riExportBox" class="hide" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
         <h2>导出 issue</h2>
-        <p class="hint">这台电脑是维护套件的。把仓库里开放中的 issue 连同下面的补充合成一份 .md，由浏览器下载（在浏览器的下载目录里），交给改套件的人。最后附上各台电脑的使用情况。下载之后这一批在 GitLab 上关闭，所以每次导出的都是上次之后新冒出来的。</p>
+        <p class="hint">这台电脑是维护套件的。把仓库里开放中的 issue 连同下面的补充合成一份 .md，由浏览器下载（在浏览器的下载目录里），交给改套件的人。最后附上各台电脑的使用情况。下载之后页面问你文件存下来没有，你确认了，这一批才在 GitLab 上关闭，所以每次导出的都是上次之后新冒出来的。</p>
         <div class="opt">
-          <div><div class="t">下载之后把这一批关掉</div><div class="d">关掉的在 GitLab 上按编号还能查到。同样的问题再出现，会新建一条。各台电脑的"使用情况"不关。</div></div>
+          <div><div class="t">下载之后把这一批关掉</div><div class="d">关之前问你一句文件存下来没有。关掉的在 GitLab 上按编号还能查到。同样的问题再出现，会新建一条。导出之后又有人补充过的不关，下次导出带上。各台电脑的"使用情况"不关。</div></div>
           <div class="ctl"><label class="switch"><input type="checkbox" id="r_exportClose" checked><i></i></label></div>
         </div>
         <div class="row"><button class="btn primary" id="riExport">导出开放中的 issue</button><a id="riDownload" class="hide" href="#">再下载一次</a><span class="dim" id="riLastExport"></span></div>
@@ -1024,6 +1027,7 @@
   /**
    * 保存。keys 不给就是这个页面上所有改过的项；给了就只存其中改过的。返回 { saved: 存了哪几项, adjusted: 存下来的和填的不一样的 }，没存返回 null
    */
+  let saveSeq = 0;
   async function saveFields(keys, msgEl, okText) {
     if (!base) { say(msgEl, '开关还没读出来，刷新页面再试', false); return null; }
     // 在页面上动过的项（这时候比的还是保存之前的那份）
@@ -1035,15 +1039,21 @@
     for (const k of dirty) { const v = F[k].get(); if (v && v.error) errors.push({ k, error: v.error }); else values[k] = v; }
     if (errors.length) { say(msgEl, errors.map((e) => e.error).join('；') + '。这次什么都没保存，改对了再点', false); const el = $(F[errors[0].k].id); if (el && el.focus) el.focus(); return null; }
     try {
+      const my = ++saveSeq;
       const r = await api('POST', '/api/kit/config', values);
       const c = r.config || {};
       const adjusted = dirty.filter((k) => !sameVal(values[k], c[k]));
       // 存的这一会儿又在页面上动过的（比如上下文那几项自动保存时，手已经在改别的了）：也算动过，不拿存下的值盖掉
       const editing = dirtyKeys();
-      if (kit) kit.config = c;
-      base = c;
-      // 用实际存下的值填回去：这次存的几项，加上没在页面上动过的（别处改过的话，这里跟着变）。动过、这次没存的留着
-      fillFields(c, Object.keys(F).filter((k) => dirty.includes(k) || (!touched.includes(k) && !editing.includes(k))));
+      // 这次存的几项里，存的这一会儿又被改过的（页面上现在的值已经不是发出去的那个）：留着后改的，不盖回去
+      const retyped = dirty.filter((k) => { try { return !sameVal(F[k].get(), values[k]); } catch (e) { return false; } });
+      // 后面又发了一次保存、还没回来的：页面等那一次的结果来填（两次的应答先后反了，也不会把页面填回旧的）
+      if (my === saveSeq) {
+        if (kit) kit.config = c;
+        base = c;
+        // 用实际存下的值填回去：这次存的几项，加上没在页面上动过的（别处改过的话，这里跟着变）。动过、这次没存的留着
+        fillFields(c, Object.keys(F).filter((k) => (dirty.includes(k) && !retyped.includes(k)) || (!touched.includes(k) && !editing.includes(k))));
+      }
       const names = dirty.map((k) => F[k].label).join('、');
       const tail = adjusted.length ? '。其中 ' + adjusted.map((k) => F[k].label).join('、') + ' 存下来的和你填的不一样，以页面上现在显示的为准' : '';
       const restart = [dirty.includes('autoMemory') ? '"自动记忆"' : '', dirty.includes('ccAutoMode') ? '"Claude Code 自带的自动模式"' : ''].filter(Boolean);
@@ -1103,7 +1113,7 @@
     const line = Number($('k_handoverPercent').value) || 70;
     const acp = Number($('k_autoCompactPercent').value);
     // 和套件里算 autoCompactWindow 的办法一样（kit/lib/session.js 的 autoCompactWindowOf）
-    const acw = acp > 0 ? Math.max(100000, Math.min(1000000, Math.round((limit > 0 ? limit : 1000000) * Math.min(acp, 95) / 100) + 33000)) : 0;
+    const acw = acp > 0 ? Math.max(100000, Math.min(960000, Math.round((limit > 0 ? limit : 1000000) * Math.min(acp, 95) / 100) + 33000)) : 0;
     const compact = acw ? '；用到 ' + tok(acw - 33000) + ' 时 Claude Code 自己压缩（开着的会话敲 /autocompact ' + acw + ' 马上生效）' : '；自动压缩照 Claude Code 自己的';
     $('ctxPreview').textContent = (limit > 0
       ? '按现在填的：上限 ' + tok(limit) + '，用到 ' + tok(Math.round(limit * line / 100)) + '（' + line + '%）时提醒交接'
@@ -1376,7 +1386,7 @@
         + '<tr><td style="width:150px" class="dim">这台电脑记下的</td><td>' + i.total + ' 条，已经上报 ' + i.uploaded + ' 条' + (i.waiting ? (i.on ? '，<b>' + i.waiting + ' 条等着上报</b>' : '，' + i.waiting + ' 条没传（问题上报关着）') : '') + '</td></tr>'
         + '<tr><td class="dim">上次上报</td><td>' + (i.lastSyncAt ? esc(at(i.lastSyncAt)) : '<span class="dim">还没有</span>') + (i.lastError ? '<div style="color:var(--bad)">最近一次没成功（' + esc(at(i.lastTryAt)) + '）：' + esc(i.lastError) + (blocked ? '。先停到 ' + esc(at(i.blockedUntil)) + '，点"立即上报"可以马上再试' : '') + '</div>' : '') + '</td></tr>'
         + '</tbody></table></div>';
-      $('riLastExport').textContent = i.lastExport ? '上一次：' + at(i.lastExport.at) + '，导出 ' + i.lastExport.count + ' 条，关掉 ' + (i.lastExport.closed || 0) + ' 条' : '还没导出过';
+      $('riLastExport').textContent = i.lastExport ? '上一次：' + at(i.lastExport.at) + '，导出 ' + i.lastExport.count + ' 条，关掉 ' + (i.lastExport.closed || 0) + ' 条' + (i.lastExport.later ? '，' + i.lastExport.later + ' 条导出之后又有人补充、没关' : '') : '还没导出过';
       const u = i.usage || {};
       $('usStatus').innerHTML = '<div class="scroll"><table><tbody>'
         + '<tr><td style="width:150px" class="dim">传到了哪一天</td><td>' + (u.lastDay ? esc(u.lastDay) + (u.iid ? '　' + (u.url ? '<a href="' + esc(u.url) + '" target="_blank" rel="noopener">#' + esc(u.iid) + '</a>' : '#' + esc(u.iid)) : '') : '<span class="dim">还没传过</span>') + (u.on ? '' : '　' + tag('off', '关着')) + '</td></tr>'
@@ -1461,11 +1471,11 @@
     else if (x.skipped) say($('riMsg'), x.skipped, false);
     else say($('riMsg'), x.error ? '没传成：' + x.error : (x.created || x.noted ? '新建 ' + x.created + ' 条，在已有的下面补充 ' + x.noted + ' 条' + (x.left ? '，还剩 ' + x.left + ' 条下次传' : '') : '没有要上报的'), !x.error);
   });
-  // 导出：后台只把文件内容交回来，这里交给浏览器下载（本机不存）；页面上留一个"再下载一次"。勾着"下载之后关掉"的，再让后台关掉这一批
+  // 导出：后台只把文件内容交回来，这里交给浏览器下载（本机不存）；页面上留一个"再下载一次"。勾着"下载之后关掉"的，先问一句文件存下来没有，
+  // 确认了再让后台关掉这一批：浏览器可能把下载拦了（一个页面连着下载几个文件、组策略、另存为里点了取消），文件没到手就关，这一批就再也导不出来了
   let lastDownload = '';
   $('riExport').onclick = () => busy($('riExport'), $('riMsg'), '导出中…', async () => {
     const close = $('r_exportClose').checked;
-    if (close && !confirm('导出仓库里开放中的全部 issue，由浏览器下载，下载之后把这一批关掉（关掉的在 GitLab 上按编号还能查到）。继续吗？')) return;
     const d = await api('POST', '/api/kit/remote/issues/export', {});
     renderRemote(d, false);
     const x = d.export || {};
@@ -1478,12 +1488,15 @@
     link.click();
     const got = '已导出 ' + x.count + ' 条' + (x.usageDays ? '、' + x.usageDays + ' 个人天的使用情况' : '') + '（浏览器的下载目录里：' + x.name + '）';
     if (!close) { say($('riMsg'), got + '，没有关闭', true); return; }
+    const what = x.count ? '把这 ' + x.count + ' 条在 GitLab 上关掉（关掉的按编号还能查到）' : '记下这一次交出去了，下次导出的使用情况从现在算起';
+    if (!confirm('文件 ' + x.name + ' 已经交给浏览器下载。\n\n存下来了，点"确定"：' + what + '。\n没存下来，点"取消"：不关，这一批还开着；可以点"再下载一次"，或者下次再导出。')) { say($('riMsg'), got + '。你选了先不关：这一批还开着，下次导出会再带上', true); return; }
     const c = await api('POST', '/api/kit/remote/issues/close', { iids: x.iids || [], name: x.name });
     renderRemote(c, false);
     const y = c.close || {};
     if (y.ok === false) { say($('riMsg'), got + '。关闭没做成：' + (y.why || '没跑出结果') + '。这一批还开着，下次导出会再带上', false); return; }
     const failed = Array.isArray(y.failed) ? y.failed : [];
-    say($('riMsg'), got + '，关掉 ' + (y.closed || []).length + ' 条' + (failed.length ? '，有 ' + failed.length + ' 条没关成：' + failed.join('、') : ''), !failed.length);
+    const later = Array.isArray(y.later) ? y.later : [];
+    say($('riMsg'), got + '，关掉 ' + (y.closed || []).length + ' 条' + (later.length ? '，有 ' + later.length + ' 条导出之后又有人补充了，没关，下次导出会带上：' + later.map((n) => '#' + n).join('、') : '') + (failed.length ? '，有 ' + failed.length + ' 条没关成：' + failed.join('、') : ''), !failed.length);
   });
   // 使用情况：看看要传的是什么样子、立即传
   $('usPreview').onclick = () => busy($('usPreview'), $('usMsg'), '读取中…', async () => {

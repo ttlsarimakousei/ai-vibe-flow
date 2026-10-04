@@ -47,10 +47,10 @@ function sealConfig(kitDir, cfg) {
  * 只敲了 /ttls-onboard，收工检查却催着"直接开始 /opsx:apply"（议题 #9）。
  * 每个会话记一份"现在是不是在走 OpenSpec 流程"（state/<会话>-flow.json），用户开口时定（hooks/task-anchor.js）：
  *   敲了 /opsx:…、/openspec-…；提了要走提案的需求；接着交接记录做；点了没归档的变更的名字让它做  → 在流程里
- *   "继续""好"这类话                                                                          → 跟上一轮一样（上一轮是插进来的一句问话，就跟再上一轮）
+ *   "继续""好"这类话，"不要停""别等我，做完再说"                                               → 跟上一轮一样（上一轮是插进来的一句问话，就跟再上一轮）
  *   已经在流程里，又说了一句不是问句的话（"3.3 我执行过了，接着归档"）                           → 还在流程里
  *   自己敲 /ttls-cross-review、/ttls-see-page、/ttls-handover                                   → 跟上一轮一样
- *   问句、别的斜杠命令（/ttls-onboard…）、"停""等等"                                           → 不在流程里
+ *   问句、别的斜杠命令（/ttls-onboard…）、让它停的话（"停""等等，先别提交""不用了"）            → 不在流程里
  * 这一轮里模型自己调了 OpenSpec 的技能、建了变更（用户用大白话让它出提案），也算进了流程（hooks/guard-ask.js、guard-commit.js）。
  * 不在流程里时，钩子拿到的 cfg.autoMode 是 false：照有人在的样子来（能问、不催着往下做、不出全自动报告）。cfg.autoSwitch 是开关本身。
  * 开关关着的时候也照样定、照样记：这一轮做到一半才在配置页打开全自动的，照这一轮开头定的算。
@@ -62,13 +62,12 @@ const FLOW_TAG = /<command-name>\s*\/?(opsx:|openspec[-:])/i;
 const FLOW_SKILL = /^\s*\/?(opsx:|openspec[-:])/i;
 const flowKey = (j) => (j && j.session_id && j.session_id !== 'unknown' ? String(j.session_id) + '-flow' : '');
 function flowState(j) { const k = flowKey(j); return k ? readState(k) : {}; }
+// 这两个都是读-改-写，走 updateState：文件正好读不出来（别的钩子在写、杀毒软件占着）时放弃这一次。
+// 以前用 readState，读不出来拿到的是空对象，写回去就把"在不在流程里""动过哪些变更"冲掉了
 function setFlow(j, on, why) {
   const k = flowKey(j);
   if (!k) return false;
-  const st = readState(k);
-  const next = Object.assign({}, st, { on: !!on, why: String(why || ''), at: Date.now() });
-  if (on) next.was = Date.now();
-  writeState(k, next);
+  updateState(k, (st) => { st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; return st; });
   return !!on;
 }
 /** 这个会话在流程里动手做了这个变更 */
@@ -76,10 +75,10 @@ function flowTouch(j, dir) {
   const k = flowKey(j);
   if (!k || !dir) return;
   try {
-    const st = readState(k);
     const d = normKey(dir);
-    const list = Array.isArray(st.changes) ? st.changes : [];
-    if (!list.includes(d)) writeState(k, Object.assign({}, st, { changes: list.concat(d).slice(-50) }));
+    const cur = flowState(j).changes;
+    if (Array.isArray(cur) && cur.includes(d)) return;
+    updateState(k, (st) => { const list = Array.isArray(st.changes) ? st.changes : []; if (!list.includes(d)) st.changes = list.concat(d).slice(-50); return st; });
   } catch (e) { /* 记不了：收工时不催这个变更，不影响干活 */ }
 }
 function flowChanges(j) { const c = flowState(j).changes; return Array.isArray(c) ? c : []; }
@@ -415,14 +414,17 @@ function contextPercent(used, windowSize, cfg) {
  * 为什么要设：2.1.259 这类新版本，没设这个窗口时不按用量自己压缩，要等接口报"请求太长"才补救；内网网关、内网模型的报错它认不出，
  * 上下文就一直涨，过了 100% 也不压缩（2026-10-01 用户遇到的，真的 Claude Code 加假模型实测过）。设了之后它在"窗口 − 2 万（留给输出）− 1.3 万"处压缩。
  * 所以窗口 = 上下文上限 × 自动压缩线（autoCompactPercent，默认 90%）+ 3.3 万：用到上限的 90% 左右压缩。
- * 上限填 0（跟着 Claude Code 报的窗口走）的按 100 万算：Claude Code 取它和模型窗口里小的那个。Claude Code 只认 10 万到 100 万
+ * 上限填 0（跟着 Claude Code 报的窗口走）的按 100 万算：Claude Code 取它和模型窗口里小的那个。Claude Code 只认 10 万到 100 万。
+ * 窗口最大只写到 96 万（用到 92.7 万压缩）：2.1.259 上实测窗口设到 97.7 万以上，还没压缩就先报 Prompt is too long 了，
+ * 正是这个功能要防的事；压缩线和那条线之间还要留出一轮对话涨的量。压缩线填 95%、上限填得比 100 万大的，都落在这个数上
  */
 const COMPACT_RESERVE = 33000;
+const COMPACT_WINDOW_MAX = 960000;
 function autoCompactWindowOf(cfg) {
   const p = Number(cfg && cfg.autoCompactPercent);
   if (!(p > 0)) return 0;
   const limit = Number(cfg && cfg.contextLimitTokens) > 0 ? Number(cfg.contextLimitTokens) : 1000000;
-  return Math.max(100000, Math.min(1000000, Math.round(limit * Math.min(p, 95) / 100) + COMPACT_RESERVE));
+  return Math.max(100000, Math.min(COMPACT_WINDOW_MAX, Math.round(limit * Math.min(p, 95) / 100) + COMPACT_RESERVE));
 }
 /** 这个会话用到多少 token 时 Claude Code 会自己压缩：自动压缩窗口和 Claude Code 报的窗口里小的那个，减去它留的余量。没设窗口返回 0 */
 function autoCompactAt(cfg, windowSize) {

@@ -842,6 +842,8 @@ async function handle(j) {
 
   if (todo.length) {
     writeState(gkey, { turnId, codeEditsAtBlock: codeNeedingCheck.length, specChecked, at: Date.now() });
+    // 收工检查拦了一次：数进使用情况和"拦得最多的规矩"（按第一条算是哪条规矩）
+    try { if (feedback && feedback.countBlock) feedback.countBlock('verify-gate', todo[0], String(j.session_id || '')); } catch (e) { /* 数不了不影响收工 */ }
     return blockOut('Stop', '[vibe-kit 收工检查] ' + todo.join('\n'));
   }
   // 全自动模式收工：把这一轮的报告交给它，照着交代

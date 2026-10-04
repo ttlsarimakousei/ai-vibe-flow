@@ -364,16 +364,19 @@ async function run(opt) {
   try {
     const cfg = readConfig();
     const st = readState('update');
+    // 这一次真的跑过安装器没有（等路由空闲没等到的不算）
+    let installed = false;
     if (modeOf(cfg) !== 'off' || o.force) {
       if (o.force || Date.now() - (st.lastCheckAt || 0) >= hoursOf(cfg) * 3600000 || !st.remoteVersion) out.check = check();
       if ((modeOf(cfg) === 'auto' || o.force) && needInstall(!!o.force)) {
-        if (o.force || await waitIdle(o.waitMs, o.quietMs)) out.apply = apply();
+        if (o.force || await waitIdle(o.waitMs, o.quietMs)) { out.apply = apply(); installed = true; }
         else { log('一直有请求在跑，这次先不装，十分钟后再看'); out.apply = { ok: false, why: '路由一直在忙' }; }
       }
     }
-    // 刚装过新版的话，这个进程里载入的还是旧代码：上报留给下一次（新代码来做）
-    if (cfg.issueUpload !== 'off' && !o.noIssues && !out.apply) { try { out.issues = await require('./issues.js').sync(); } catch (e) { log('上报问题时出错：' + ((e && e.message) || e)); } }
-    if (cfg.usageReport !== 'off' && !o.noIssues && !out.apply) { try { out.usage = await require('./issues.js').syncUsage(); } catch (e) { log('上报使用情况时出错：' + ((e && e.message) || e)); } }
+    // 刚装过新版的话，这个进程里载入的还是旧代码：上报留给下一次（新代码来做）。
+    // 只是没等到路由空闲、没装成的，照常上报：不然全自动挂着跑、请求不断的那段时间里，问题和使用情况一直传不上去
+    if (cfg.issueUpload !== 'off' && !o.noIssues && !installed) { try { out.issues = await require('./issues.js').sync(); } catch (e) { log('上报问题时出错：' + ((e && e.message) || e)); } }
+    if (cfg.usageReport !== 'off' && !o.noIssues && !installed) { try { out.usage = await require('./issues.js').syncUsage(); } catch (e) { log('上报使用情况时出错：' + ((e && e.message) || e)); } }
   } catch (e) { log('后台更新出错：' + ((e && e.stack) || e)); out.error = String((e && e.message) || e); } finally { unlock(); }
   return out;
 }

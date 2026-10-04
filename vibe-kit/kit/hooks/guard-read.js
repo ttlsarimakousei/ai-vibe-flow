@@ -35,6 +35,7 @@ function handle(j) {
   const hit = SECRETS.map((s) => kit + '/' + s).find((s) => s === base || s.startsWith(base + '/') || base.startsWith(s + '/'));
   if (!hit) return null;
   hookLog('guard-read block Grep ' + String(input.path || '.'));
+  try { require('../lib/feedback.js').countBlock('guard-read', '[vibe-kit] 搜索的范围里有放令牌、放模型 key 的文件', String(j.session_id || '')); } catch (e) { /* 数不了不影响 */ }
   return blockOut('PreToolUse', '[vibe-kit] 这次搜索的范围（' + String(input.path || '当前目录') + '）里有放令牌、放模型 key 的文件，它们的内容不能搜出来：搜出来会进会话记录。把 path 缩小到具体的子目录（比如套件的 hooks、lib，或者你要查的那个项目），或者把 output_mode 换成 files_with_matches 只看文件名。要知道令牌、模型配没配好，让用户看配置页。');
 }
 

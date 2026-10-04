@@ -28,10 +28,22 @@ try { hookHealth = require('../lib/hook-health.js').check; } catch (e) { /* 老�
  */
 const NEED = /(需求|功能|想要|想做|要做|做一个|做个|加一个|加个|新增|新建|新做|实现|支持|改成|改为|改造|重做|优化|重构|增加|开发|页面|接口|导出|导入|报表|统计|集成|对接)/;
 const QUESTION = /(为什么|为啥|是什么|什么意思|怎么看|怎么理解|吗[？?]?$|[？?]$|解释|说明一下|看看|看一下|查一下|查查|检查|核对|对比)/;
-const SMALL_TALK = /^(继续|好|好的|嗯|行|可以|ok|okay|不用|不要|停|等等|谢谢)/i;
-/** 这句话像不像一条需求（不是问句、不是闲话、不是斜杠命令） */
+// 闲话：整句就是应一声（"好的""行，就这样"）。开头碰巧是这几个字的不算（"好友列表加个搜索""行程管理做个导出"）；"继续…"后面跟什么都是接着做，不是新需求
+const SMALL_TALK = /^继续|^(好|好的|嗯|行|可以|ok|okay|谢谢)(的|吧|啊|呀|了|哦)*([\s，,。.！!？?~～…、]|$)/i;
+// "不要停""别等我，做完再说""不用问我"：开头是"不 / 别"，意思却是接着做
+const KEEP_GOING = /^(不要|不用|别|甭|不必|无需)再?(停|等|问|管我|确认|请示|汇报|担心)/;
+// 让它停的话，只认两种。以前只看开头是不是"不用 / 不要 / 别 / 停"："不要停，把剩下的做完"也被当成停，全自动这一轮就按没开算，提问框不拦，活停在那里等人
+//   开头就是"停 / 暂停 / 等等 / 等一下 / stop"，后面是标点、语气词或者没了（"停车场加个导出"不算）
+//   整句很短（去掉标点不超过 8 个字），开头是"不用 / 不要 / 别做 / 先别 / 算了 / 取消 / 等等"这类
+const HALT = /^(请?先?停|暂停|等等|等一下|等会儿?|stop)(了|下|一下|住|吧|啊)*([\s，,。.！!~～…、；;:：]|$)/i;
+const SHORT_NO = /^(不用|不要|别[做弄改动写提继管搞跑执推再了急]|先别|算了|取消|先停|暂停|等等|等一下|等会)/;
+function isStop(p) {
+  if (KEEP_GOING.test(p)) return false;
+  return HALT.test(p) || (SHORT_NO.test(p) && p.replace(/[\s，,。.！!？?~～…、；;:：]/g, '').length <= 8);
+}
+/** 这句话像不像一条需求（不是问句、不是闲话、不是让它停、不是斜杠命令） */
 function looksLikeRequirement(p) {
-  if (!p || p.length < 6 || p.length > 3000 || /^\s*\//.test(p) || SMALL_TALK.test(p) || QUESTION.test(p) || !NEED.test(p)) return false;
+  if (!p || p.length < 6 || p.length > 3000 || /^\s*\//.test(p) || SMALL_TALK.test(p) || isStop(p) || QUESTION.test(p) || !NEED.test(p)) return false;
   return !/接着上一个会话的交接记录继续/.test(p);
 }
 /**
@@ -39,29 +51,34 @@ function looksLikeRequirement(p) {
  * 定下来记进 state/<会话>-flow.json，别的钩子照着它算 autoMode。resumed：这句话接上了一份刚写的交接记录
  */
 const CONTINUE_WORDS = /^(继续|接着|接着做|继续做|往下做|下一步|好|好的|嗯|行|可以|ok|okay|go on|continue|next|做吧|开始吧)[\s。！!，,.~～]*$/i;
-const STOP_WORDS = /^(停|先停|暂停|等等|等一下|不用|不要|别|stop)/i;
 // 流程里会用到的那几个技能（审查、看页面、交接）：用户自己敲它们，不算进流程也不算出流程，跟上一轮一样
 const SAME_SLASH = /^\s*\/(ttls-)?(cross-review|see-page|handover)(\s|$)/i;
+/** 返回 { on: 这一轮在不在流程里, cont: 是不是"继续"这类话接回去的（不算新开工：不拉代码、不数"进流程"） } */
 function decideFlow(j, cfg, note, resumed) {
   let prev = flowState(j);
   // 装这一版之前就开着的会话头一回开口：先照以前的算法接过来（它动过变更就算在流程里），"继续"才接得上
   if (prev.at === undefined && cfg.autoSwitch) prev = flowAdopt(j);
   // 后台任务做完的通知不是用户说的话：跟原来一样
-  if (note) return !!prev.on;
+  if (note) return { on: !!prev.on, cont: true };
   const p = String(j.prompt || '').trim();
   let named = [];
   // 点了名的变更：没归档的都算。任务全打了勾、等着复审和归档的也是流程里的事（"接着做：复审 a1 的代码，没问题就归档"）
   try { named = allChanges(j.cwd || process.cwd()).filter((c) => mentionsChange(p, c.name)); } catch (e) { named = []; }
   let on = false;
   let why = '';
+  let cont = false;
+  // 上一轮在流程里；或者上一轮只是插进来问了一句、再上一轮在流程里（一天之内）
+  const going = !!prev.on || (!!prev.was && Date.now() - prev.was < 86400000);
   if (FLOW_SLASH.test(p) || FLOW_TAG.test(p)) { on = true; why = '敲了 OpenSpec 的命令'; }
   else if (SAME_SLASH.test(p)) { on = !!prev.on; why = on ? '接着上一轮' : ''; }
   // 别的斜杠命令（/ttls-onboard、自己的命令）：这一轮做的是那件事，不在流程里（议题 #9）
   else if (/^\s*\//.test(p)) { on = false; }
   else if (resumed || /接着上一个会话的交接记录继续/.test(p)) { on = true; why = '接着交接记录做'; }
-  else if (STOP_WORDS.test(p)) { on = false; }
+  // "不要停，把剩下的做完""别等我"：接着做。原来不在流程里的不算，照下面的规矩看这句话本身
+  else if (KEEP_GOING.test(p) && going) { on = true; why = '接着上一轮'; cont = true; }
+  else if (isStop(p)) { on = false; }
   // "继续"：上一轮在流程里就接着；上一轮只是插进来问了一句的，跟再上一轮（一天之内）
-  else if (CONTINUE_WORDS.test(p)) { on = !!prev.on || (!!prev.was && Date.now() - prev.was < 86400000); why = on ? '接着上一轮' : ''; }
+  else if (CONTINUE_WORDS.test(p)) { on = going; why = on ? '接着上一轮' : ''; cont = true; }
   // 问句只回答：这一轮不在流程里（说"继续"就接回去）
   else if (QUESTION.test(p)) { on = false; }
   // 正在流程里，又说了一句不是问句的话（"3.3 我执行过了，接着归档""字段名不对，应该是 X"）：还在流程里
@@ -71,7 +88,7 @@ function decideFlow(j, cfg, note, resumed) {
   setFlow(j, on, why);
   if (on) for (const c of named) flowTouch(j, c.dir);
   if (cfg.autoSwitch && !!prev.on !== on) hookLog('全自动模式 ' + (on ? '这个会话进了 OpenSpec 流程：' + why : '这一轮不在 OpenSpec 流程里，照有人在的样子来'));
-  return on;
+  return { on, cont };
 }
 function requirementHint(j, cfg) {
   const p = String(j.prompt || '').trim();
@@ -313,7 +330,9 @@ async function handle(j) {
   let prevOn = false;
   try { let st = flowState(j); if (st.at === undefined && cfg.autoSwitch) st = flowAdopt(j); prevOn = !!st.on; } catch (e) { prevOn = false; }
   let on = false;
-  try { on = decideFlow(j, cfg, note, resumed); } catch (e) { on = false; }
+  // cont：这句话是"继续""不要停"这类，接回原来的流程（中间插过一句问话的也算）——不是新开工
+  let cont = false;
+  try { const d = decideFlow(j, cfg, note, resumed); on = d.on; cont = d.cont; } catch (e) { on = false; }
   cfg.autoMode = cfg.autoSwitch && on;
   // 用户开口了：全自动报告新开一轮（后台任务的通知不算用户开口）
   if (!note && cfg.autoMode) { try { require('../lib/report.js').begin(j); } catch (e) { /* 老版本没有，或者记不了：不影响对话 */ } }
@@ -323,15 +342,15 @@ async function handle(j) {
     try {
       const U = require('../lib/usage.js');
       U.bump('prompt');
-      if (on && !prevOn) U.bump('flow.enter');
+      if (on && !prevOn && !cont) U.bump('flow.enter');
       if (resumed) U.bump('handover.resume');
       if (/^\s*\/(ttls-)?handover(\s|$)/i.test(said)) U.bump('handover.write');
     } catch (e) { /* 数不了不影响对话 */ }
   }
-  // 写代码之前先拉代码：这句话让会话进了流程（提了需求、敲了 /opsx:…、接着交接记录做）才拉；已经在流程里说"继续"不拉。
-  // 同一个仓库 2 小时里只拉一次（lib/pull.js）
+  // 写代码之前先拉代码：这句话让会话进了流程（提了需求、敲了 /opsx:…、接着交接记录做）才拉；已经在流程里说"继续"不拉，
+  // 中间插了一句问话再说"继续"也不拉（cont）：做到一半不换底下的代码。同一个仓库 2 小时里只拉一次（lib/pull.js）
   let pulled = '';
-  if (!note && on && cfg.pullBeforeWork !== false && (!prevOn || FLOW_SLASH.test(said) || FLOW_TAG.test(said) || resumed || looksLikeRequirement(said))) {
+  if (!note && on && !cont && cfg.pullBeforeWork !== false && (!prevOn || FLOW_SLASH.test(said) || FLOW_TAG.test(said) || resumed || looksLikeRequirement(said))) {
     try { const r = await require('../lib/pull.js').beforeWork(j, cfg); if (r && r.text) pulled = r.text; } catch (e) { /* 拉不了不影响对话 */ }
   }
   if (note && j.transcript_path) { try { syncReviews(tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 记不了不影响对话 */ } }

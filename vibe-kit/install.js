@@ -293,7 +293,7 @@ function autoMemoryNote(r) {
  * 自动压缩的窗口（config.json 的 autoCompactPercent，默认 90；0 = 不管，照 Claude Code 自己的）。
  * 2.1.259 这类新版本，没设窗口时不按用量自己压缩，要等接口报"请求太长"才补救；内网网关、内网模型的报错它认不出，
  * 上下文一直涨，过了 100% 也不压缩（2026-10-01 用户遇到的，真的 Claude Code 加假模型实测过）。设了之后它在"窗口 − 3.3 万"处压缩。
- * 窗口 = 上下文上限 × 百分比 + 3.3 万，钳到 10 万到 100 万（和 lib/session.js 的 autoCompactWindowOf 一样的算法）。
+ * 窗口 = 上下文上限 × 百分比 + 3.3 万，钳到 10 万到 96 万（和 lib/session.js 的 autoCompactWindowOf 一样的算法；为什么最大 96 万见那里）。
  * 写在 settings.json 的 autoCompactWindow（Claude Code 自己的设置，2.1.120、2.1.259 都认）。这一项归配置页管：
  * 在 Claude Code 里用 /autocompact 改过的，下次保存开关、升级时换回配置页算出来的值。
  * 关掉（填 0）、卸载时，只收回自己写的那个值（installed.json 的 autoCompactWindow 记着）；装之前你自己设过的，记在 autoCompactWindowOrig，收回时还给你。
@@ -304,7 +304,7 @@ function autoCompactWindow() {
   const p = c.autoCompactPercent === undefined ? 90 : Number(c.autoCompactPercent);
   if (!(p > 0)) return 0;
   const limit = Number(c.contextLimitTokens) > 0 ? Number(c.contextLimitTokens) : 1000000;
-  return Math.max(100000, Math.min(1000000, Math.round(limit * Math.min(p, 95) / 100) + 33000));
+  return Math.max(100000, Math.min(960000, Math.round(limit * Math.min(p, 95) / 100) + 33000));
 }
 function applyAutoCompact(s, man, remove) {
   const want = remove ? 0 : autoCompactWindow();
@@ -379,7 +379,9 @@ function mergeSettings(s, remove, hooksOnly) {
       { matcher: 'Grep', hooks: [fast('guard-read')] }],
     // 读文件时提醒（提示规则）2026-09-30 去掉了，不再登记；这一项留着空的，是为了把以前登记过的摘掉
     PostToolUse: [],
-    UserPromptSubmit: [{ hooks: [hook('task-anchor.js')] }],
+    // 用户开口的钩子，Claude Code 默认只等 30 秒（官方文档：UserPromptSubmit 上命令钩子的默认超时从 600 秒降到了 30 秒），到点就结束它、丢掉输出。
+    // 开工前拉代码在这个钩子里：连远端最多 15 秒，合并做到一半又不能被结束（会留下 index.lock 和改了一半的工作区），所以写明等 300 秒
+    UserPromptSubmit: [{ hooks: [Object.assign(hook('task-anchor.js'), { timeout: 300 })] }],
     SessionStart: [{ hooks: [hook('session-start.js')] }],
     Stop: [{ hooks: [fast('verify-gate')] }],
   };

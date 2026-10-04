@@ -262,7 +262,8 @@ function newBlockId(taken) {
 }
 /**
  * 同一条规矩拦了多少次（state/block-stats.json）：配置页"更新和上报"那一页列成一张表，给改套件的人看哪条规矩拦得多。不记成问题。
- * 每天各道检查拦了几次也数进使用情况（lib/usage.js），跟着上报
+ * 每天各道检查拦了几次也数进使用情况（lib/usage.js），跟着上报。
+ * 能不能申请放行的都数：以前只数能放行的八道，串着 cd 的命令、改套件、读令牌、编码保护、收工检查这些拦得最多的反而是 0
  */
 function countBlock(hook, reason, sid) {
   try { require('./usage.js').bump('block.' + hook); } catch (e) { /* 数不了就算了 */ }
@@ -287,8 +288,8 @@ function countBlock(hook, reason, sid) {
  * 不能放行的检查返回空串。target：这一步是对着什么做的（改文件是文件路径，归档是变更名），通行证按它认
  */
 function registerBlock(j, hook, sig, reason, action, target) {
-  if (!BYPASSABLE[hook]) return '';
   const sid = String((j && j.session_id) || '');
+  if (!BYPASSABLE[hook]) { countBlock(hook || 'other', reason, sid); return ''; }
   const now = Date.now();
   let id = ''; let times = 0;
   updateState('blocks', (o) => {
@@ -462,4 +463,4 @@ function bypassLog(n) {
   return (readState('bypass').passes || []).filter((p) => p && p.at).sort((a, b) => b.at - a.at).slice(0, n || 50);
 }
 
-module.exports = { DIR, BYPASSABLE, sigOf, redact, noteSession, sessionForCwd, record, listRecords, sessionRecords, recordHookError, registerBlock, passesFor, validPasses, pickPass, bypassOutcome, requestBypass, markRecord, audit, auditList, blockStats, bypassLog, isNoise };
+module.exports = { DIR, BYPASSABLE, sigOf, redact, noteSession, sessionForCwd, record, listRecords, sessionRecords, recordHookError, registerBlock, countBlock, passesFor, validPasses, pickPass, bypassOutcome, requestBypass, markRecord, audit, auditList, blockStats, bypassLog, isNoise };

@@ -313,41 +313,56 @@ async function exportIssues() {
     + '\n\n给改套件的人：每条的编号（#数字）是议题号。修好之后在《更新说明.md》那一版里写上"修了 #编号"，发布时会在对应的议题下面留一句是哪一版修的。\n\n'
     + (pick.length ? '| 类型 | 条数 |\n|---|---|\n' + Object.keys(kinds).sort((a, b) => kinds[b] - kinds[a]).map((k) => '| ' + k + ' | ' + kinds[k] + ' |').join('\n') + '\n' : '现在没有开放中的问题议题。\n');
   const text = head + (parts.length ? '\n---\n\n' + parts.join('\n\n---\n\n') + '\n' : '') + (usage ? '\n---\n\n' + usage : '');
-  updateState('issues-exported', (x) => Object.assign(x, { last: { at: Date.now(), name, count: pick.length, closed: 0, failed: 0, usageDays: days.length } }));
+  // 每条导出时的"最近更新"记下来：关的时候对一下，导出之后又有人补充过的不关
+  const stamps = {};
+  for (const i of pick) stamps[i.iid] = String(i.updated_at || '');
+  updateState('issues-exported', (x) => Object.assign(x, { last: { at: Date.now(), name, count: pick.length, closed: 0, failed: 0, later: 0, usageDays: days.length, stamps } }));
   return { ok: true, name, text, count: pick.length, iids: pick.map((i) => i.iid), usageDays: days.length };
 }
 /**
  * 导出之后：把导出的这一批在 GitLab 上关掉，每条下面留一句"已导出"。使用情况的议题不关。
+ * 导出之后又有人补充过的（"最近更新"和导出时记的不一样）不关：新补充的不在导出的文件里，关了就没人看得到了；下次导出会整条带上。
  * 这一次导出算"交出去了"：下次导出的使用情况从这一次导出的时刻算起（没有问题议题、iids 是空的也算）。
- * 返回 { ok, closed, failed }
+ * 返回 { ok, closed, failed, later }
  */
 async function closeExported(iids, name) {
   const want = [...new Set((iids || []).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 500);
   const tag = String(name || '').replace(/[^\w.\-\u4e00-\u9fa5]/g, '').slice(0, 80);
-  const mark = (closed, failed) => updateState('issues-exported', (x) => {
-    if (x.last && (!tag || x.last.name === tag)) { Object.assign(x.last, { closed: (x.last.closed || 0) + closed, failed }); x.usageFrom = x.last.at; }
+  const mark = (closed, failed, later) => updateState('issues-exported', (x) => {
+    if (x.last && (!tag || x.last.name === tag)) { Object.assign(x.last, { closed: (x.last.closed || 0) + closed, failed, later: later || 0 }); x.usageFrom = x.last.at; }
     return x;
   });
-  if (!want.length) { mark(0, 0); return { ok: true, closed: [], failed: [] }; }
+  if (!want.length) { mark(0, 0, 0); return { ok: true, closed: [], failed: [], later: [] }; }
+  const last = readState('issues-exported').last || {};
+  const stamps = (!tag || last.name === tag) && last.stamps && typeof last.stamps === 'object' ? last.stamps : {};
   const c = await connect(readConfig());
   if (!c.ok) return { ok: false, why: c.why };
   const api = c.api;
   const ctx = c.ctx;
   const closed = [];
   const failed = [];
+  const later = [];
   for (const iid of want) {
     const cur = await call(ctx, 'GET', api.base + '/issues/' + iid);
     if (cur.status !== 200 || !cur.json) { failed.push('#' + iid + '（' + (cur.status === 404 ? '没有这个议题' : gl.explain(cur, '读议题')) + '）'); continue; }
     if (isUsageIssue(cur.json) || cur.json.state === 'closed') continue;
+    if (stamps[iid] && cur.json.updated_at && String(cur.json.updated_at) !== stamps[iid]) { later.push(iid); continue; }
     await call(ctx, 'POST', api.base + '/issues/' + iid + '/notes', { body: '已导出，交给改套件的人处理（' + when(Date.now()) + (tag ? '，' + tag : '') + '）。关掉之后同样的问题再出现，会重新报上来。' });
     const r = await call(ctx, 'PUT', api.base + '/issues/' + iid, { state_event: 'close' });
     if (r.status === 200) closed.push(iid); else failed.push('#' + iid + '（' + gl.explain(r, '关闭') + '）');
   }
-  mark(closed.length, failed.length);
-  return { ok: true, closed, failed };
+  mark(closed.length, failed.length, later.length);
+  return { ok: true, closed, failed, later };
 }
 /** 上一次导出的情况（配置页上显示） */
-function lastExport() { const x = readState('issues-exported').last; return x && x.at ? x : null; }
+function lastExport() {
+  const x = readState('issues-exported').last;
+  if (!x || !x.at) return null;
+  // 每条的"最近更新"是关的时候对账用的，页面用不着
+  const o = Object.assign({}, x);
+  delete o.stamps;
+  return o;
+}
 
 // ---------- 使用情况（lib/usage.js）：每台电脑一条议题，一天一条补充 ----------
 /** 这台电脑的记号：电脑名的指纹（重装套件也还是这一条） */
