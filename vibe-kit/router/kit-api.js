@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on' };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off' };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -89,6 +89,8 @@ function cleanConfig(x, base) {
   for (const k of ['statusUsage', 'pullBeforeWork']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
   // 使用情况上报：每天一条，只有次数和名字（见套件 lib/usage.js）
   if (x && ['on', 'off'].includes(x.usageReport)) c.usageReport = x.usageReport;
+  // Claude Code 自带的自动模式（auto mode）：off = 套件把它关掉（settings.json 的 permissions.disableAutoMode），on = 不管它
+  if (x && ['off', 'on'].includes(x.ccAutoMode)) c.ccAutoMode = x.ccAutoMode;
   return c;
 }
 

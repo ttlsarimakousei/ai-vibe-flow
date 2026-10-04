@@ -330,7 +330,41 @@ function autoCompactNote(r, s) {
   const env = s && isObj(s.env) ? s.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW : undefined;
   if (env !== undefined && (r === 'set' || r === 'kept')) console.log('  [!] settings.json 的 env 里你自己设了 CLAUDE_CODE_AUTO_COMPACT_WINDOW=' + env + '，Claude Code 以它为准，配置页的"自动压缩线"不起作用');
 }
-/** hooksOnly：只重新登记钩子（--sync 时用），不碰状态栏、权限；环境变量里只管"自动记忆"那一项、再加自动压缩的窗口（它们跟着配置页的开关走） */
+/**
+ * Claude Code 自带的"自动模式"（auto mode，和套件的"全自动模式"是两回事）。2.1.284 起，没配权限模式的会话默认进它：
+ * 有风险的命令（node -e、curl 这类）先发给一个分类模型审，系统提示有 14 万字符；经网关用的话每条这样的命令多一次请求、算用量，
+ * 分类模型答得不合格式就重试，最多十次，然后把命令拦下（2026-10-05 在 2.1.289 上用假网关实测：套件的端到端测试因此挂了 31 项）。
+ * 内网的模型当不了这个分类器，所以套件默认把它关掉：在 settings.json 里写 permissions.disableAutoMode = "disable"
+ * （2.1.289 实测：会话照以前的普通模式起，也不再弹"要不要把自动模式设成默认"；2.1.120、2.1.259 不认识这一项，照常用，设置文件不受影响）。
+ * 跟着配置页的开关走（config.json 的 ccAutoMode：off 关掉 / on 不管它），规矩和"自动记忆"一样：
+ *   off：没有就加上，记成自己加的（installed.json 的 disableAutoMode，卸载时收回）；你自己写了别的值就不动；
+ *        你自己把 defaultMode 设成了 auto 的，是你选的，不加，提醒一句
+ *   on ：是自己加的就去掉；你自己写的不动
+ * 命令行带 --dangerously-skip-permissions、自己配了 defaultMode 的不受影响。返回 added / removed / kept / user / user-auto / none
+ */
+function applyCcAutoMode(s, man, remove) {
+  const off = !remove && kitConfig().ccAutoMode !== 'on';
+  const perms = isObj(s.permissions) ? s.permissions : {};
+  const cur = perms.disableAutoMode;
+  const ours = cur !== undefined && man.disableAutoMode !== undefined && cur === man.disableAutoMode;
+  const drop = () => { delete perms.disableAutoMode; if (Object.keys(perms).length) s.permissions = perms; else delete s.permissions; delete man.disableAutoMode; };
+  if (off) {
+    if (perms.defaultMode === 'auto') { if (ours) drop(); else delete man.disableAutoMode; return 'user-auto'; }
+    if (cur === undefined) { perms.disableAutoMode = 'disable'; s.permissions = perms; man.disableAutoMode = 'disable'; return 'added'; }
+    if (ours) return 'kept';
+    delete man.disableAutoMode;
+    return 'user';
+  }
+  if (ours) { drop(); return 'removed'; }
+  delete man.disableAutoMode;
+  return cur === undefined ? 'none' : 'user';
+}
+function ccAutoModeNote(r) {
+  if (r === 'added') console.log('  [OK] Claude Code 自带的"自动模式"已关掉（2.1.284 起没配权限模式时默认进它：有风险的命令先发给分类模型审，经网关每条多一次大请求，内网的模型当不了这个分类器）。会话照以前的普通模式起；想用它，在配置页"保护"里改。重新打开 Claude Code 后生效');
+  else if (r === 'removed') console.log('  [OK] 不再关着 Claude Code 自带的"自动模式"，照 Claude Code 自己的默认。重新打开 Claude Code 后生效');
+  else if (r === 'user-auto') console.log('  [!] settings.json 里你自己把 permissions.defaultMode 设成了 auto，没动它。提醒：经网关用自动模式，有风险的命令每条多一次带 14 万字符系统提示的请求；分类模型答得不合格式，命令会被拦下');
+}
+/** hooksOnly：只重新登记钩子（--sync 时用），不碰状态栏、权限；跟着配置页的开关走的三项照样管："自动记忆"那一项环境变量、自动压缩的窗口、关掉 Claude Code 自带的自动模式 */
 function mergeSettings(s, remove, hooksOnly) {
   const before = JSON.stringify(s);
   const kitPath = (rel) => path.join(KIT, rel).split(path.sep).join('/');
@@ -369,10 +403,13 @@ function mergeSettings(s, remove, hooksOnly) {
     const man0 = readManifest();
     const am = applyAutoMemory(s, man0);
     const ac = applyAutoCompact(s, man0, false);
-    if (JSON.stringify(s) !== before) { backup(SETTINGS, 'settings.json'); fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2) + '\n'); console.log('  [OK] settings.json 里的钩子' + (am === 'added' || am === 'removed' ? '、自动记忆的设置' : '') + (ac === 'set' || ac === 'removed' ? '、自动压缩的窗口' : '') + '已更新'); }
-    if (am === 'added' || am === 'removed' || ac !== 'kept') { try { saveManifest(man0); } catch (e) { /* 记不了：卸载时这一项就留着 */ } }
+    const manBefore = JSON.stringify(man0.disableAutoMode);
+    const cm = applyCcAutoMode(s, man0, false);
+    if (JSON.stringify(s) !== before) { backup(SETTINGS, 'settings.json'); fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2) + '\n'); console.log('  [OK] settings.json 里的钩子' + (am === 'added' || am === 'removed' ? '、自动记忆的设置' : '') + (ac === 'set' || ac === 'removed' ? '、自动压缩的窗口' : '') + (cm === 'added' || cm === 'removed' ? '、Claude Code 自带的自动模式' : '') + '已更新'); }
+    if (am === 'added' || am === 'removed' || ac !== 'kept' || manBefore !== JSON.stringify(man0.disableAutoMode)) { try { saveManifest(man0); } catch (e) { /* 记不了：卸载时这一项就留着 */ } }
     if (am === 'added' || am === 'removed') autoMemoryNote(am);
     autoCompactNote(ac, s);
+    if (cm === 'added' || cm === 'removed') ccAutoModeNote(cm);
     return null;
   }
 
@@ -419,6 +456,7 @@ function mergeSettings(s, remove, hooksOnly) {
     man.known.env = union(man.known.env, Object.keys(fragEnv));
     mergeSettings.autoMemory = applyAutoMemory(s, man);
     mergeSettings.autoCompact = applyAutoCompact(s, man, false);
+    mergeSettings.ccAutoMode = applyCcAutoMode(s, man, false);
   } else {
     // 路由要停了：先把 Claude Code 连路由的设置改回去
     mergeSettings.unlinked = unlinkRouter(s);
@@ -433,6 +471,7 @@ function mergeSettings(s, remove, hooksOnly) {
       }
     }
     mergeSettings.keptDeny = keepDeny.filter((x) => s.permissions && Array.isArray(s.permissions.deny) && s.permissions.deny.includes(x));
+    applyCcAutoMode(s, man, true);
     if (s.permissions && !Object.keys(s.permissions).length) delete s.permissions;
     for (const k of Object.keys(man.env)) if (s.env && s.env[k] === man.env[k]) delete s.env[k];
     if (s.env && !Object.keys(s.env).length) delete s.env;
@@ -824,6 +863,7 @@ if (mode === 'install') {
     + (mergeSettings.transport === 'http' ? '。改文件、跑命令、收工这几个检查在模型路由里跑（HTTP 方式，不用每次起进程）' : ''));
   autoMemoryNote(mergeSettings.autoMemory);
   autoCompactNote(mergeSettings.autoCompact, s);
+  ccAutoModeNote(mergeSettings.ccAutoMode);
   // 这一份安装里有没有路由程序（这次装的，或者 --no-router 时以前装的还留着）：卸载时有才去停
   man.router = fs.existsSync(path.join(KIT, 'router', 'service.js'));
   man.absorbed = man0.absorbed;
