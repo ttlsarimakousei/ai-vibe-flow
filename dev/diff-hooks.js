@@ -131,8 +131,9 @@ add('命令：循环里对老仓库整仓 add', 'guard-commit', cmd('for r in . 
 // 20260930.1505 有意改的：cd 和别的命令串在一条里，Claude Code 会停下来要人确认（跳过权限模式也问），拦下并给出不用 cd 的写法；起服务的提示里写了 --dir
 add('命令：cd src && git push', 'guard-commit', cmd('cd src && git push'), /这条命令先 cd 到 src，再跑 git[\s\S]*git -C \\"src\\" push/, V1505);
 add('命令：cd 到子目录再编译', 'guard-commit', cmd('cd src && mvn -q -o compile'), /mvn -f \\"src\/pom\.xml\\" -q -o compile/, V1505);
-add('命令：mvn spring-boot:run', 'guard-commit', cmd('mvn spring-boot:run'), /起服务自测用 devserver\.js[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1505);
-add('命令：npm run dev', 'guard-commit', cmd('npm run dev'), /起服务自测用 devserver\.js[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1505);
+// 1007：端口改成 --port auto --avoid <配置里的端口>，提示里的命令和说法跟着改
+add('命令：mvn spring-boot:run', 'guard-commit', cmd('mvn spring-boot:run'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, NEXT);
+add('命令：npm run dev', 'guard-commit', cmd('npm run dev'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, NEXT);
 add('命令：删经验规则文件', 'guard-commit', cmd('rm .claude/rules/vibe-lessons-java.md'), /会改到经验规则的文件/);
 add('命令：提交经验规则文件', 'guard-commit', cmd('git add .claude/rules/vibe-lessons-java.md && git commit -m "docs: 更新经验规则"'));
 
