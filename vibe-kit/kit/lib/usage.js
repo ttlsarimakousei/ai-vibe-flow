@@ -148,7 +148,7 @@ function rowsOf(n) {
   const blockSum = blocks.reduce((a, x) => a + x[1], 0);
   return [
     ['会话', '新开 ' + g('session.startup') + '，恢复 ' + g('session.resume') + '，/clear ' + g('session.clear') + '，压缩后接着 ' + g('session.compact')],
-    ['开口', g('prompt') + ' 次；进 OpenSpec 流程 ' + g('flow.enter') + ' 次；接着交接记录做 ' + g('handover.resume') + ' 次；写交接记录 ' + g('handover.write') + ' 次；全自动收工报告 ' + g('auto.report') + ' 次'],
+    ['开口', g('prompt') + ' 次；进 OpenSpec 流程 ' + g('flow.enter') + ' 次；开工 ' + g('flow.apply') + ' 次；接着交接记录做 ' + g('handover.resume') + ' 次；写交接记录 ' + g('handover.write') + ' 次；全自动收工报告 ' + g('auto.report') + ' 次'],
     ['上下文', '到 70% 的会话 ' + g('ctx.70') + ' 个，到 90% 的 ' + g('ctx.90') + ' 个，超过上限的 ' + g('ctx.100') + ' 个'],
     ['审查', '提案 ' + g('review.proposal') + ' 轮，代码 ' + g('review.code') + ' 轮，其中报"问题 0 条"的 ' + g('review.clean') + ' 轮；轮数用完 ' + g('review.exhausted') + ' 次'],
     ['拦下', blockSum ? '共 ' + blockSum + ' 次：' + blocks.slice(0, 12).map((x) => x[0] + ' ' + x[1]).join('，') : '0 次'],

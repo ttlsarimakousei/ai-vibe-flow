@@ -8,7 +8,10 @@
  *      仓库下面套着别的 git 仓库（壳子）时，add 子项目目录也拦（会被提交成 gitlink，公司红线）。登记成子模块的不算。
  *      新建的仓库第一次入仓（还没有任何提交、下面没套着别的仓库）整仓 add 不拦。git -C 的目录写在变量里的：
  *      是 for 循环的变量、取值写在命令里，就挨个代进去查；代不出来的不猜是哪个仓库。
- *   4. 归档门槛（开关 specGate）：openspec archive、或者把 openspec/changes/<名字> 挪进 archive，要任务全打勾、代码真的审过。
+ *   4. 归档门槛（开关 specGate）：openspec archive、或者把 openspec/changes/<名字> 挪进 archive，要任务全打勾、代码真的审过，
+ *      还要用户自测过、说了归档（会话记录里他最后一句话是"归档"，或者提问框里选了"归档"；用户 2026-10-07 定的。这一条不能放行）。
+ *  12. 不走 OpenSpec 的改动，提交之前要用户点头（开关 plainCommit，用户 2026-10-07 定的）：这个会话没动过任何变更、他最后一句又不是
+ *      "提交"，git commit 拦下，让它交代改了什么、用提问框问。全自动、提交的是 openspec 产物或经验规则文件的不问。不能放行。
  *   5. 禁止改套件（开关 kitLock）：命令动到套件的文件、直接调路由的 /api、命令里出现 disableAllHooks，都拦。
  *   6. 装了路由时，不许一把结束所有 node 进程（taskkill /IM node.exe 之类），也不许结束路由自己的进程：路由一停，模型连不上、走 HTTP 的检查全部失效。
  *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（开关 serverGuard）：不重复起、不换端口。
@@ -30,7 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { readConfig, readConfigFor, setFlow, flowTouch, flowChanges, sessionHome, allChanges, archivedNames, nestedRepos, blockOut, askOut, changeRoots, readState, writeState, updateState, normKey, KIT, CFG_DIR, realish, isKitPath, isKitSkillScript, expandHome, codeReviewIssue, touchChange, isDeferredTask, syncReviews, syncReviewRounds, reviewLoopIssue, tailEntries, toolCalls, toolResults, hookLog, cli } = require('../lib/session');
+const { readConfig, readConfigFor, flowState, setFlow, flowTouch, flowChanges, sessionChanges, userSaid, mentionsChange, sessionHome, allChanges, archivedNames, nestedRepos, blockOut, askOut, changeRoots, readState, writeState, updateState, normKey, KIT, CFG_DIR, realish, isKitPath, isKitSkillScript, expandHome, codeReviewIssue, touchChange, isDeferredTask, syncReviews, syncReviewRounds, reviewLoopIssue, tailEntries, toolCalls, toolResults, hookLog, cli } = require('../lib/session');
 let tidy = null;
 try { tidy = require('../lib/tidy.js'); } catch (e) { /* 老版本没有 */ }
 let feedback = null;
@@ -543,7 +546,7 @@ function archiveIssue(t, dir, j) {
   const name = path.basename(chDir);
   const cfg = readConfigFor(j);
   // 归档命令点到的变更：算这个会话在流程里动手做的（收工时照着它往下催、写进报告）
-  if (cfg.autoMode) flowTouch(j, chDir);
+  if (cfg.autoSwitch && flowState(j).on) flowTouch(j, chDir);
   const issues = [];
   let waiting = 0;
   try {
@@ -559,8 +562,17 @@ function archiveIssue(t, dir, j) {
     const lo = reviewLoopIssue('code', chDir, cfg);
     if (lo) issues.push(lo);
   }
-  if (!issues.length) return null;
   const who = guessed ? '这条命令没写变更名，没归档的变更只有 ' + name + ' 一个，查的是它（要归档的是别的，把名字写上）。' : '';
+  if (!issues.length) {
+    // 任务都打了勾、代码也审过了：还要用户自测过、说了归档（用户 2026-10-07 定的）。认会话记录里他最后一句话；点了别的变更的名不算
+    const said = userSaid(es, 'archive');
+    let others = [];
+    try { if (said.ok && said.text) others = allChanges(dir).map((c) => c.name).filter((n) => mentionsChange(said.text, n)); } catch (e) { others = []; }
+    const wrong = others.length > 0 && !others.some((n) => n.toLowerCase() === name.toLowerCase());
+    if (said.ok && !wrong) return null;
+    const why = wrong ? '我说的是归档 ' + others.join('、') + '，不是它' : '我还没自测、还没说归档';
+    return { name, noBypass: true, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 的任务都打了勾、代码也审过了，但' + why + '。归档要我自测过、我说了才做：先交代做了什么、怎么自测（起服务的命令、要看的页面、要调的接口、要执行的脚本），然后' + (cfg.autoMode ? '收工交报告，写进"留给你做的"：等我自测过说归档。不要再试归档。' : '用提问框问我自测过了没有、能不能归档（选项写"归档"和"还要改"）。我说还要改什么，改完再问；我说归档了再归档。') };
+  }
   const tail = !cfg.autoMode ? '确实要放弃这个变更，告诉我，我来删。'
     : waiting ? '留给用户做的任务还没做，这个变更先不归档：写进最后的交代，接着做别的。' : '';
   return { name, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 还不能归档：' + issues.map((s) => s.replace(/。$/, '')).join('；') + '。顺序是：任务全部打勾 → /ttls-cross-review 审代码 → 修掉成立的问题并验证 → 再归档。' + tail };
@@ -1345,10 +1357,36 @@ function secretIssue(g, st) {
     + '\n确认是可以进仓库的（测试环境、示例值）就点同意；不该提交的点拒绝，改成占位符（比如 ${DB_PASSWORD}）或者放进不进仓库的配置里。';
 }
 
+// ---------- 不走 OpenSpec 的改动，提交之前要用户点头（开关 plainCommit） ----------
+/*
+ * 用户 2026-10-07 定的：修 bug、改配置、改文案这类不走提案的活（他叫"非 OpenSpec 的长任务"），改完先交代、问他，他说了提交才提交。
+ * 哪些不用问：全自动模式（在做任务那一段，按自动提交的档位来）；这个会话动过某个 OpenSpec 变更的（提案、任务都在流程里，按提交节奏来）；
+ * 提交的只有 openspec 的产物、经验规则的文件（套件自己催着提交的），或者提交信息是 docs: 提案 / 修订 / 归档 / 同步规格 / 更新经验规则。
+ * 怎么算他点了头：会话记录里他最后一次开口（自己打的字、提问框里选的）是"提交"（lib/session.js 的 userSaid）。
+ */
+function consentIssue(g, st, cfg, docs) {
+  if ((cfg.plainCommit || 'ask') !== 'ask' || cfg.autoMode) return '';
+  const j = st.j || {};
+  const msg = messageOf(g.args, docs);
+  if (msg !== null && /^docs: (更新经验规则|提案|修订|归档|同步规格)/.test(msg)) return '';
+  const root = repoRoot(g.dir) || g.dir;
+  const rk = normKey(root);
+  const added = [...st.added].filter((a) => a === rk || a.startsWith(rk + '/'));
+  const kitFile = (a) => /\/\.claude\/rules\/[^/]*lessons-[^/]*\.md$/i.test(a) || /\/openspec\//i.test(a);
+  if (added.length && added.every(kitFile)) return '';
+  let es = [];
+  try { if (j.transcript_path) es = tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain); } catch (e) { es = []; }
+  // 这个会话动过 OpenSpec 变更：按提交节奏来
+  try { if (flowChanges(j).length > 0 || sessionChanges(j.session_id, es, allChanges(st.cwd0)).length > 0) return ''; } catch (e) { /* 认不出就按没动过算：问一句不伤事 */ }
+  if (userSaid(es, 'commit').ok) return '';
+  return '[vibe-kit] 不走 OpenSpec 的改动，提交之前要我点头（配置页"不走 OpenSpec 的改动，验证过之后"选了"先问我"）。先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说还要改什么，改完再问；我说提交了再提交。';
+}
+
 // ---------- 主流程 ----------
 /**
  * 拦下这条命令。kind 是哪一类检查：server、process、archive、commit-format、new-files 可以申请放行（lib/feedback.js），
- * 这一步申请过、通行证还有效的，这一类就跳过（记下用了哪张），接着查别的；kill、kit、git-scope（整仓 add、commit -a、gitlink）永远不放行
+ * 这一步申请过、通行证还有效的，这一类就跳过（记下用了哪张），接着查别的；kill、kit、git-scope（整仓 add、commit -a、gitlink）、
+ * archive-ok（用户没说归档）、commit-ok（不走 OpenSpec 的提交用户没点头）永远不放行
  */
 function setBlock(st, kind, msg, target) {
   if (st.block || !msg) return;
@@ -1423,7 +1461,7 @@ function analyze(cmd, ps, st, cfg, depth) {
       if (!viaTool && cfg.serverGuard !== false && !st.block) { const s = serverStart(ws, head, st.dir); if (s) setBlock(st, 'server', serverMsg(s)); }
       if (cfg.vibeTidy !== false && tidy && !st.block) { const p = processTarget(x, head, st.dir); if (p && tidy.blockOnce(st.j.session_id, p.key)) setBlock(st, 'process', tidy.processMsg(p.show)); }
       if (cfg.vibeTidy !== false && tidy && !st.block) { let k = ''; try { k = keepIssue(x, head, st.dir, st, cfg); } catch (e) { k = ''; } if (k) setBlock(st, 'keep', k); }
-      if (cfg.specGate !== false && !st.block) { const t = archiveTarget(ws, head, st.dir); if (t) { const a = archiveIssue(t, st.dir, st.j); if (a) setBlock(st, 'archive', a.msg, 'archive:' + a.name.toLowerCase()); } }
+      if (cfg.specGate !== false && !st.block) { const t = archiveTarget(ws, head, st.dir); if (t) { const a = archiveIssue(t, st.dir, st.j); if (a) setBlock(st, a.noBypass ? 'archive-ok' : 'archive', a.msg, 'archive:' + a.name.toLowerCase()); } }
       const g0 = parseGit(ws, st.dir);
       if (!g0) continue;
       // 目录写在循环变量里（for r in a b c; do git -C "$r" …）：取值挨个代进去查；代不出来的按"算不出是哪个仓库"查
@@ -1450,6 +1488,8 @@ function analyze(cmd, ps, st, cfg, depth) {
       }
       // 提交信息格式可以申请放行；整仓 add、commit -a、gitlink（公司红线）不行
       if (cfg.commitCheck && !st.block) { const c = gitIssue(g, docs); if (c) setBlock(st, /提交信息不符合公司规范/.test(c) ? 'commit-format' : 'git-scope', c); }
+      // 不走 OpenSpec 的改动，提交之前要用户点头（开关 plainCommit）：会话记录里他最后一句得是"提交"。不能放行
+      if (g.sub === 'commit' && !st.block && !commitAll(g.args)) { let c = ''; try { c = consentIssue(g, st, cfg, docs); } catch (e) { c = ''; } if (c) setBlock(st, 'commit-ok', c); }
       // 下面两道要去那个仓库里看：目录算不出来的不查
       if (g.dyn) continue;
       if (g.sub === 'commit' && cfg.commitCheck && !st.block && !commitAll(g.args)) { const n = newFilesIssue(g, st); if (n) setBlock(st, 'new-files', n); }
@@ -1563,7 +1603,8 @@ function handle(j) {
   if (!cmd.trim()) return null;
   let cfg = readConfigFor(j);
   // 全自动模式开着、这个会话还没进 OpenSpec 流程，这条命令在建变更（用户用大白话让它出提案，它照 OpenSpec 的步骤做）：从这时起算进了流程
-  if (cfg.autoSwitch && !cfg.autoMode && /(^|[\s;&|("'])openspec(\.cmd)?\s+new\s+change\b/i.test(cmd)) { setFlow(j, true, '建了变更'); hookLog('全自动模式 这个会话进了 OpenSpec 流程：建了变更'); cfg = readConfigFor(j); }
+  // 建变更是写提案那一段（plan）：全自动还不算数，用户要看过提案、说了开工才算
+  if (cfg.autoSwitch && !cfg.autoMode && !flowState(j).on && /(^|[\s;&|("'])openspec(\.cmd)?\s+new\s+change\b/i.test(cmd)) { setFlow(j, true, '建了变更', 'plan'); hookLog('全自动模式 这个会话进了 OpenSpec 流程：建了变更（写提案那一段，照有人在的样子来）'); cfg = readConfigFor(j); }
   // 查库、查 redis 的工具只看得到开关，看不到这个会话在不在流程里：跑它们之前留一张条子（按当前目录记，工具那头两分钟内认），
   // 说这个会话现在算不算全自动。不留的话，开关开着、用户却在场的会话里，工具会照"用户不在"来
   if (cfg.autoSwitch && /\b(db\.py|redis\.js)\b/i.test(cmd)) noteToolFlow(j, cfg);

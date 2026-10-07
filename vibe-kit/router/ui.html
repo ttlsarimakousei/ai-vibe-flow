@@ -332,8 +332,8 @@
         <div class="ctl"><input type="number" id="k_autoCompactPercent" min="0" max="95"><span class="dim">%</span></div>
       </div>
       <div class="opt">
-        <div><div class="t">到了交接线之后</div><div class="d">选"问我"：这一轮说完，Claude 用提问框问你要不要交接。你选"再做一会儿"，再涨 10% 才会再问。</div></div>
-        <div class="ctl"><select id="k_handoverAsk"><option value="ask">用提问框问我要不要交接</option><option value="off">不问，只在状态栏和消息里提醒</option></select></div>
+        <div><div class="t">到了交接线之后</div><div class="d">选"问我"：这一轮说完，Claude 用提问框问你要不要交接；选"再做一会儿"，再涨 10% 才再问。选"不问"：只提醒一句，你说交接它才写。</div></div>
+        <div class="ctl"><select id="k_handoverAsk"><option value="ask">用提问框问我要不要交接</option><option value="off">不问，只提醒；我说交接才交接</option></select></div>
       </div>
       <div class="opt">
         <div><div class="t">/clear 之后自动接着干</div><div class="d">开着：你敲 /clear 之后不用说话，新会话自己读交接记录接着干。关着：你说一句"继续"它才接。</div>
@@ -438,11 +438,11 @@
 
     <div class="card" id="sec-auto" data-sec="全自动模式">
       <h2>全自动模式</h2>
-      <p class="hint">你开会、下班的时候用。只在走 OpenSpec 流程时算数：它不问你，不等你，一路做到归档，收工时给你一份报告。别的时候照常。</p>
+      <p class="hint">你开会、下班的时候用。只在走 OpenSpec 流程时算数，而且只管做任务那一段：你说了开工，它不问你、不等你，任务做完、代码审过停下等你自测，收工时给你一份报告。探索、提案那一段和别的时候照常。</p>
       <div class="opt danger">
-        <div><div class="t">全自动模式</div><div class="d">开着、又在走 OpenSpec 流程：提问框用不了；被检查拦下它自己申请放行；要你动手的事它留给你。打开之后不用重开会话。</div>
+        <div><div class="t">全自动模式</div><div class="d">开着、又在做变更的任务：提问框用不了；被检查拦下它自己申请放行；做完审过停下等你自测，不归档。打开之后不用重开会话。</div>
           <details class="more"><summary>细节</summary><ul>
-            <li><b>什么时候算数</b>：你敲了 /opsx:…，提了要走提案的需求，让它接着做某个变更、接着交接记录做，或者接着上一轮说"继续"。你问问题、让它检索、跑别的技能，这一轮不算：它照常能问你，做完你交代的事就收工，不会自己去接着做工作区里没做完的变更。做到一半才打开这个开关的，照那一轮开头你说的话算。</li>
+            <li><b>什么时候算数</b>：做任务那一段——你敲了 /opsx:apply，说了"开工""把 1.1 做了"，让它接着做某个已经打过勾的变更，或者接着上一轮说"继续"。探索、提案、审提案那一段（你提需求、敲 /opsx:propose、改提案）它照常问你：提案审过了停下给你看，你说开工才做。你问问题、让它检索、跑别的技能，这一轮也不算：做完你交代的事就收工，不会自己去接着做工作区里没做完的变更。做到一半才打开这个开关的，照那一轮开头你说的话算。</li>
             <li><b>只管自己做的变更</b>：收工时只催这个窗口在流程里动手做过的变更。另一个窗口正在做的，它不碰。</li>
             <li><b>不问</b>：它想用提问框问的问题会被拦下，记进报告。缺信息它先去查，查不到选影响面最小的做法。</li>
             <li><b>放行</b>：被带拦截编号的检查拦下、照提示改不了的，它写明原因申请放行，不用你点。每次放行都记进报告。</li>
@@ -462,7 +462,7 @@
 
     <div class="card" id="sec-commit" data-sec="拉代码和提交">
       <h2>拉代码和提交</h2>
-      <p class="hint">开工前拉一次代码；只提交，从不 push。push 一律要你自己确认；全自动模式下直接拦下，留给你。</p>
+      <p class="hint">开工前拉一次代码；只提交，从不 push。push 一律要你自己确认；全自动模式下直接拦下，留给你。不走 OpenSpec 的改动，提交前先问你。</p>
       <div class="opt">
         <div><div class="t">开工前拉代码</div><div class="d">开着：你提了需求、敲了 /opsx:… 命令、接着交接记录做的那一句话，先把会话所在的仓库（壳子里加上子项目）拉到最新，再开始分析、写代码。同一个仓库 2 小时里只拉一次。</div>
           <details class="more"><summary>细节</summary><ul>
@@ -476,8 +476,12 @@
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_pullBeforeWork"><i></i></label></div>
       </div>
       <div class="opt">
-        <div><div class="t">验证过之后提交吗</div><div class="d">只 add 它这一轮改的和新建的文件。你工作区里原来就有的改动不会被带上。"一个阶段"是 tasks.md 里同一个大编号的任务（1.x、2.x）：每项太碎、整个变更太大时选它。</div></div>
+        <div><div class="t">OpenSpec 的变更，验证过之后提交吗</div><div class="d">只 add 它这一轮改的和新建的文件。你工作区里原来就有的改动不会被带上。"一个阶段"是 tasks.md 里同一个大编号的任务（1.x、2.x）：每项太碎、整个变更太大时选它。</div></div>
         <div class="ctl"><select id="k_autoCommit"><option value="task">每完成一件事提交一次</option><option value="phase">一个阶段做完提交一次（tasks.md 里同一个大编号的任务）</option><option value="change">一个变更整个做完才提交</option><option value="off">不自动提交，我说了才提交</option></select></div>
+      </div>
+      <div class="opt">
+        <div><div class="t">不走 OpenSpec 的改动，验证过之后</div><div class="d">修 bug、改配置、改文案这类不用提案的活。选"先问我"：它交代改了什么、怎么验的，用提问框问你，你说提交了才提交；没点头就 git commit 会被拦下。</div></div>
+        <div class="ctl"><select id="k_plainCommit"><option value="ask">先问我，我说提交了才提交</option><option value="auto">直接提交，不用问</option></select></div>
       </div>
       <div class="opt">
         <div><div class="t">提交检查</div><div class="d">开着：提交信息要写成"类型: 内容"；不许 git add -A、git add .、git commit -a；提交里像有密码的先让你看。</div>
@@ -1010,7 +1014,7 @@
   fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('reviewMaxRounds', '最多审几轮', 1, 5);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fBool('pullBeforeWork', '开工前拉代码'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
-  fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('autoCommit', '验证过之后提交吗', ['task', 'phase', 'change', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
+  fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('autoCommit', 'OpenSpec 的变更，验证过之后提交吗', ['task', 'phase', 'change', 'off']); fSel('plainCommit', '不走 OpenSpec 的改动，验证过之后', ['ask', 'auto']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('autoOnboard', '后台自动探索'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);

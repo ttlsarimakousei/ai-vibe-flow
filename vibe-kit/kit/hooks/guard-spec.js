@@ -17,7 +17,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { readConfig, readConfigFor, flowTouch, blockOut, artifactOf, findHedges, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, nestedRepos, looksLikeProject, hookLog, tailEntries, turnStart, toolCalls, toolResults, projectReads, tickedLines, verifyPartOf, resolveVerify, verifyPlan, pathTokens, pathExists, NEW_FILE, declaredNew, missingPathIssue, readState, normKey, proposalReviewed, syncReviews, syncReviewRounds, reviewLoopIssue, handoverReadIn, normTicks, pendingReviewsIn, taskNotes, allChanges, syncTicks, cli } = require('../lib/session');
+const { readConfig, readConfigFor, flowState, flowTouch, lastUserVoice, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, blockOut, artifactOf, findHedges, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, nestedRepos, looksLikeProject, hookLog, tailEntries, turnStart, toolCalls, toolResults, projectReads, tickedLines, verifyPartOf, resolveVerify, verifyPlan, pathTokens, pathExists, NEW_FILE, declaredNew, missingPathIssue, readState, normKey, proposalReviewed, syncReviews, syncReviewRounds, reviewLoopIssue, handoverReadIn, normTicks, pendingReviewsIn, taskNotes, allChanges, syncTicks, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 
@@ -50,6 +50,14 @@ function recentHandover(cwd) {
  * 先探索再提案。探索和提案要分两轮：只认"用户提需求（开口钩子记下的时刻）之后、这一轮之前"的探索——会话里更早读过的不相干的文件不算。
  * 没有提需求的记录（用户的话不像需求）就认这一轮之前的所有探索。交接之后的新会话（读过一天内的交接记录）不要求分轮
  */
+/** 用户报的是做完的功能上的问题、没说要走提案，模型却要新建提案：拦一次，让它先查清原因、改动小直接改（用户 2026-10-07 定的） */
+function bugFixFirstIssue(j) {
+  if (!j.transcript_path) return '';
+  const es = tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain);
+  const v = lastUserVoice(es);
+  if (!v || v.kind !== 'prompt' || !BUG_REPORT.test(v.text) || WANTS_PROPOSAL.test(v.text)) return '';
+  return '我报的是做完的功能上的问题，没说要走提案，先别新建变更：' + SMALL_FIX_TEXT;
+}
 function exploreFirstIssue(j, art, cfg) {
   if (!j.transcript_path) return '';
   const roots = [art.root].concat(nestedRepos(art.root));
@@ -185,7 +193,7 @@ function handle(j, opts) {
   if (file && !path.isAbsolute(file) && j.cwd) file = path.resolve(j.cwd, file);
   const art = artifactOf(file);
   // 全自动模式、在流程里：这个会话动手做了这个变更（收工时只催动手做过的变更往下走）
-  if (art && cfg.autoMode) flowTouch(j, art.dir);
+  if (art && cfg.autoSwitch && flowState(j).on) flowTouch(j, art.dir);
   if (!art || art.kind === 'revisions') return null;
   let tk = null;
   let oldText = '';
@@ -222,10 +230,12 @@ function handle(j, opts) {
     // 第一次写 tasks.md 就带着 [x]：当成从 [ ] 打的勾，审没审、验没验照样查
     else if (/^\s*[-*]\s*\[[xX]\]/m.test(newText)) tk = tickCheck(j, file, normTicks(newText), newText, art, cfg, roots);
     if (tk) flow.push(...tk.issues);
+    // 还在写提案那一段（用户没说开工）就打勾：拦下。用户 2026-10-07 定的：任务清单要他看过、他说了开工才开始做（规矩见 lib/session.js"流程分两段"）
+    if (tk && tk.ticked.length) { const fl = flowState(j); if (fl.on && fl.stage === 'plan') flow.unshift('我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工"和"还要改"）；我说开工、或者我自己敲 /opsx:apply 之后再做'); }
   }
   if (art.kind === 'spec') format.push(...checkSpec(newText, isAdded));
   if (art.kind === 'design') format.push(...checkDesign(newText, isAdded, roots, !existed, isDeclared));
-  if (art.kind === 'proposal' && !existed) { const e = exploreFirstIssue(j, art, cfg); if (e) flow.push(e); }
+  if (art.kind === 'proposal' && !existed) { let b = ''; try { b = bugFixFirstIssue(j); } catch (e) { b = ''; } if (b) flow.push(b); const e = exploreFirstIssue(j, art, cfg); if (e) flow.push(e); }
   const issues = flow.concat(format);
   // 只要打勾记录、不要结论（这一步申请过放行，由 pre-edit 调）
   if (opts && opts.tickOnly) { if (tk && tk.ticked.length) afterTick(j, art, cfg, tk); return null; }

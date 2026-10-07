@@ -133,8 +133,9 @@ process.stdin.on('end', () => {
 
   // 第二行：全自动模式开没开。它只在走 OpenSpec 流程的会话里算数，所以把这个会话在不在流程里也写上
   if (cfg.autoMode === true) {
-    const on = j.session_id ? !!flowState({ session_id: j.session_id }).on : false;
-    line2.push(C.yellow + '全自动 开' + C.reset + (on ? C.yellow + '·这个会话在流程里' + C.reset : C.dim + '·这个会话不在流程里，照常' + C.reset));
+    const fl = j.session_id ? flowState({ session_id: j.session_id }) : {};
+    // 在流程里又分两段：写提案那一段照常（全自动只管做任务那一段）
+    line2.push(C.yellow + '全自动 开' + C.reset + (fl.on ? (fl.stage === 'plan' ? C.dim + '·这个会话在流程里，还在写提案，照常' + C.reset : C.yellow + '·这个会话在流程里，在做任务' + C.reset) : C.dim + '·这个会话不在流程里，照常' + C.reset));
   } else line2.push(C.dim + '全自动 关' + C.reset);
   // Claude Code 会在用到多少时自己压缩（套件写进 settings.json 的 autoCompactWindow；新开的会话才认）
   const at = autoCompactAt(cfg, windowSize);

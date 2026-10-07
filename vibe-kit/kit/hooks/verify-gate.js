@@ -6,7 +6,9 @@
  *   2. 改了页面文件，但之后没跑过页面场景                        → 让它按 /ttls-see-page 跑一遍（开关 autoSeePage）
  *   3. 这一轮把某个 OpenSpec 变更的最后一项任务打了勾，代码还没审过 → 让它 /ttls-cross-review（开关 autoCrossReview；每个变更催一次）
  *   4. 这一轮改过的文件在 git 里还没提交                          → 让它提交（开关 autoCommit：task / phase / change / off；每一轮只提一次。
- *      phase = 按阶段：tasks.md 里同一个大编号的任务全打勾了才催，做到一半不催，见 phaseDone）
+ *      phase = 按阶段：tasks.md 里同一个大编号的任务全打勾了才催，做到一半不催，见 phaseDone）。
+ *      不走 OpenSpec 的改动（这个会话没动过任何变更）而且开关 plainCommit = ask：不催它提交，催它交代了用提问框问用户，用户说了提交才提交。
+ *      审查过程不进提交（用户 2026-10-07 定的）：还没开工的变更的产物（提案阶段）不催；多轮审查报了问题还没审到 0 条的，先不催
  *   4b. 这个会话里新建、还没进 git 的文件，项目里留下的备份、日志 → 要交的提交，临时的删掉（开关 vibeTidy；同一批只提一次，说做完了再提一次）
  *   4c. 说了是套件的问题却没记问题反馈 → 让它记；做完了、这个会话记过套件问题 → 交代里单独列"套件问题"（lib/feedback.js）
  *   4d. 审查报了问题、处理过了，却没记经验 → 让它挑"还会再犯"的记下来；经验规则文件改了没提交 → 让它提交（开关 lessons，lib/lessons.js）
@@ -21,7 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
+const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 let tidy = null;
@@ -94,6 +96,26 @@ const notApplicable = (notes, key) => new RegExp('^\\s*[-*]?\\s*(?:' + key + ')\
 
 /** 自动提交的档位：task 每项任务 / phase 每个阶段 / change 整个变更 / off 用户说了才提交 */
 const commitMode = (cfg) => (['task', 'phase', 'change', 'off'].includes(cfg.autoCommit) ? cfg.autoCommit : 'task');
+/** 这个会话碰过的变更里，有没有审查还没审完的（多轮审查报了问题、还没复审到"问题 0 条"）：有就先不催提交，审查过程不进提交 */
+function reviewOpenFor(sid, entries, changes) {
+  try {
+    const rr = readState('review-rounds');
+    return sessionChanges(sid, entries, changes()).some((c) => ['code', 'proposal'].some((k) => { const x = rr[k + '|' + normKey(c.dir)]; return !!(x && !x.done); }));
+  } catch (e) { return false; }
+}
+// 它最后那句已经在问要不要提交
+const ASKED_COMMIT = /(提交|commit)[^。！!\n]{0,16}[吗么？?]|要不要提交|提不提交|是否提交|能不能提交|可以提交吗/i;
+/**
+ * 不走 OpenSpec 的改动（开关 plainCommit = ask，用户 2026-10-07 定的）：改完先问用户，他说了提交才提交。
+ * 返回 ''（按自动提交的档位来：全自动、这个会话动过变更、开关是直接提交、用户已经说了提交）、'asked'（它最后那句已经在问）、'ask'（要它去问）
+ */
+function plainCommitAsk(j, cfg, entries, changes, lastSaid) {
+  if ((cfg.plainCommit || 'ask') !== 'ask' || cfg.autoMode) return '';
+  try { if (flowChanges(j).length || sessionChanges(j.session_id, entries, changes()).length) return ''; } catch (e) { /* 认不出就当没动过变更 */ }
+  if (userSaid(entries, 'commit').ok) return '';
+  if (ASKED_COMMIT.test(String(lastSaid || ''))) return 'asked';
+  return 'ask';
+}
 /** 仓库最近一次提交是什么时候（毫秒，按那一秒的末尾算）。没提交过、查不了返回 0 */
 function lastCommitAt(root) {
   try { const s = require('child_process').execFileSync('git', ['--no-optional-locks', '-C', root, 'log', '-1', '--format=%ct'], { encoding: 'utf8', timeout: 8000, windowsHide: true }).trim(); return /^\d+$/.test(s) ? Number(s) * 1000 + 999 : 0; } catch (e) { return 0; }
@@ -298,7 +320,8 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start) {
       if (tidy.isProcessFile(abs)) { if (mine || fresh(abs)) proc.set(k, { abs, dir: false }); continue; }
       const d = tidy.processDirOf(abs, root, false, dirCache);
       if (d) { if (mine || fresh(abs)) proc.set(normKey(d), { abs: d, dir: true }); continue; }
-      if (mine) newFiles.push(abs);
+      // 还没开工的变更的产物（提案阶段）：用户说了开工再一起提交，这里不提
+      if (mine) { const a = artifactOf(abs); if (a && !changeStarted(a.dir)) continue; newFiles.push(abs); }
     }
   }));
   // 改过的文件旁边：A.java 旁边的 A.java.bak、A_old.java（git 忽略了的也算），git 跟踪着的不算
@@ -340,7 +363,9 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start) {
   if (newFiles.length) {
     const mode = commitMode(cfg);
     const midChange = (mode === 'change' || mode === 'phase') && changes().some((c) => c.todo > 0);
-    if (mode === 'off') parts.push('你这个会话里新建、还没进 git 的文件：' + show(newFiles) + '。为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；要交的留着，等我提交。');
+    let plain = '';
+    try { plain = plainCommitAsk(j, cfg, entries, changes, lastSaid); } catch (e) { plain = ''; }
+    if (mode === 'off' || plain) parts.push('你这个会话里新建、还没进 git 的文件：' + show(newFiles) + '。为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；要交的留着，' + (mode === 'off' ? '等我提交。' : '问我提不提交，我说了再提交。'));
     else parts.push('你这个会话里新建的这些文件还没进 git：' + show(newFiles) + '（git 不会自动带上新文件）。是这件事要交的，git add 后' + (midChange ? (mode === 'phase' ? '跟着这一阶段一起提交' : '跟着整个变更一起提交') : '提交') + '；是为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；还要接着用的，说一句留着干什么。');
   }
   hookLog('verify-gate leftover ' + (final ? 'final ' : '') + 'new=' + newFiles.length + ' proc=' + procList.length);
@@ -543,7 +568,8 @@ function reviewLoopTodo(j, cfg, entries, reviews, turnId) {
 }
 /**
  * 全自动模式（开关 autoMode）：用户不在，流程也要往下走。收工时看这个会话动过的变更（壳子里 git pull 下来的同事的变更不算）到了哪一步，该干什么就催一句：
- *   提案审过了还没开工 → 直接 apply；做了一半停下 → 接着做下一项；全做完没审代码 → 审；审出的问题还没处理 → 处理；审过了 → 归档。
+ *   提案审过了还没开工 → 直接 apply；做了一半停下 → 接着做下一项；全做完没审代码 → 审；审出的问题还没处理 → 处理；
+ *   审过了 → 不催（归档要用户自测过、说了才做，用户 2026-10-07 定的；收工报告里写明等他自测）。只在做任务那一段（stage = apply）算全自动。
  * 它已经明说卡住、要人定的不催。循环保护：同一轮里再次收工，只有有进展（打勾数增加）才再催，没进展就放行。快到网关上限也不催。
  */
 const HAND_TIP = '改库照查库技能的两步走，不用等我确认（它留改前快照和还原脚本、记下新增的主键）。要我动手的事（查库的工具说备份不了的改库操作、改 redis、要账号密码、push）不做也不等：在那项任务后面加上"（留给用户：原因）"，不打勾，接着做不依赖它的。';
@@ -565,7 +591,7 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
     const prev = st[key] || {};
     const left = c.todo - (c.waiting || 0);
     let msg = '';
-    if (left > 0 && c.done === 0) { if (proposalReviewed(c.dir)) msg = '全自动模式：' + c.name + ' 的提案审过了，不用问我，直接开始 /opsx:apply，一项一项做到全部打勾（每项：做 → 跑验法 → 打勾 → 提交）。' + HAND_TIP; }
+    if (left > 0 && c.done === 0) { if (proposalReviewed(c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + ' 的提案也审过了，不用问我，直接开始 /opsx:apply，一项一项做到全部打勾（每项：做 → 跑验法 → 打勾 → 提交）。' + HAND_TIP; }
     else if (left > 0) msg = '全自动模式：' + c.name + ' 还有 ' + left + ' 项没做完，不用问我，接着做下一项：' + c.next + '。' + HAND_TIP;
     else if (c.done > 0) {
       const loop = readState('review-rounds')['code|' + key];
@@ -573,9 +599,9 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
       const cr = codeReviewIssue(c.dir);
       // 代码审查还在后台跑：等它的结论（通知到了会接着一轮），不催
       if (busy && busy(c.dir, 'code')) msg = '';
-      else if (cr) msg = '全自动模式：' + c.name + ' 能做的任务都做完了，' + cr + '。成立的问题修掉并验证' + (c.waiting ? '。' : '，再归档。');
-      else if (loopOpen) msg = '全自动模式：' + c.name + ' 的代码审查报了 ' + (loop.issues || 0) + ' 条问题还没处理：成立的改掉并验证（改完收工检查会催复审），不成立的在 revisions.md 逐条记下理由（起因：审查）' + (c.waiting ? '。' : '；处理完再归档。');
-      else if (!c.waiting) msg = '全自动模式：' + c.name + ' 任务全部完成、代码审过了，不用问我，直接 /opsx:archive ' + c.name + ' 归档（规格要同步就同步）。归档完就收工，收工时套件会给你一份这一轮的报告，照着交代。';
+      else if (cr) msg = '全自动模式：' + c.name + ' 能做的任务都做完了，' + cr + '。成立的问题修掉并验证。';
+      else if (loopOpen) msg = '全自动模式：' + c.name + ' 的代码审查报了 ' + (loop.issues || 0) + ' 条问题还没处理：成立的改掉并验证（改完收工检查会催复审），不成立的在 revisions.md 逐条记下理由（起因：审查）。';
+      // 任务全部完成、代码审过了：不归档，归档要用户自测过、说了才做。什么都不催，收工时报告里写明等他自测
     }
     if (!msg) continue;
     // 循环保护：同一轮里再次收工，只有有进展（打勾数增加）才再催，没进展就看下一个变更
@@ -608,7 +634,7 @@ function autoReport(j, cfg, entries, lastSaid, changes) {
   hookLog('verify-gate 全自动报告 ' + r.file + ' 留给用户=' + c.hand + ' 改库=' + c.db + ' 想问=' + c.asks + ' 没验证=' + c.unverified + ' 放行=' + c.bypass);
   return '[vibe-kit 全自动报告] 这一轮的情况套件记下来了' + (r.file ? '，报告在 ' + r.file : '') + '：\n' + r.brief + '\n'
     + '现在写最后的交代，照下面的顺序，一节一个小标题，没有的写"没有"。上面列的照实写，你知道而套件没记到的补上：\n'
-    + '1. 做了什么（哪个变更、做到第几项、归档了没有）\n'
+    + '1. 做了什么（哪个变更、做到第几项、代码审过没有；任务都做完的写明怎么自测：起服务的命令、要看的页面、要调的接口。归档等我自测过说了再做）\n'
     + '2. 留给你做的（查库的工具说备份不了、没执行的改库操作，要改 redis 的，要账号密码的，push，放哪还没定的产出，要你看一眼的页面）\n'
     + '3. 库里改过的（哪张表、几行、新增的主键、还原脚本在哪）\n'
     + '4. 自己定的事（没问就定了的，各写一句理由）\n'
@@ -712,12 +738,21 @@ async function handle(j) {
   // 全自动模式只在走 OpenSpec 流程时算开着。用户开口时定过一次（task-anchor）；这一轮里它自己调了 OpenSpec 的技能的，
   // 调的那一刻也记了（guard-ask）。这里兜底再看一遍这一轮的调用：那两处没经过（钩子走的是老的登记）也认得出
   if (cfg.autoSwitch && !cfg.autoMode) {
-    const viaSkill = calls.find((c) => /^(Skill|SlashCommand)$/.test(c.name) && !failed(c) && FLOW_SKILL.test(String(c.input.skill || c.input.command || c.input.name || '')));
-    if (viaSkill) { setFlow(j, true, '调了 OpenSpec 的技能'); cfg.autoMode = true; hookLog('全自动模式 这个会话进了 OpenSpec 流程：这一轮调了 OpenSpec 的技能'); }
+    const skills = calls.filter((c) => /^(Skill|SlashCommand)$/.test(c.name) && !failed(c) && FLOW_SKILL.test(String(c.input.skill || c.input.command || c.input.name || '')));
+    const last = skills[skills.length - 1];
+    if (last) {
+      // 调的是 apply / archive：在做任务那一段，全自动算数；调的是 propose / explore：在写提案那一段，照有人在的样子来（用户 2026-10-07 定的）
+      const nm = String(last.input.skill || last.input.command || last.input.name || '').trim().replace(/^\//, '');
+      const stage = /^(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i.test(nm) ? 'apply' : 'plan';
+      setFlow(j, true, '调了 OpenSpec 的技能', stage);
+      if (stage === 'apply') { cfg.autoMode = true; hookLog('全自动模式 这个会话进了 OpenSpec 流程：这一轮调了 OpenSpec 的技能（做任务那一段）'); }
+      else hookLog('全自动模式 这个会话这一轮调了 OpenSpec 的技能，在写提案那一段，照有人在的样子来');
+    }
   }
   // 在流程里动手做过的变更：收工时只催这几个往下走。算动手的：写过它的产物、打过勾；openspec 命令、技能的参数里点了它的名
-  // （/opsx:apply 没带名字，它照 OpenSpec 的步骤先跑 openspec status --change <名字>）。只是读过它的 tasks.md 不算：那可能是别的窗口在做的
-  if (cfg.autoMode) {
+  // （/opsx:apply 没带名字，它照 OpenSpec 的步骤先跑 openspec status --change <名字>）。只是读过它的 tasks.md 不算：那可能是别的窗口在做的。
+  // 写提案那一段也记（那时 autoMode 是 false）：用户说了开工之后，收工时才知道催哪个
+  if (cfg.autoSwitch && flowState(j).on) {
     try {
       const named = [];
       for (const c of calls) {
@@ -806,13 +841,18 @@ async function handle(j) {
   }
 
   // 提交：这一轮自己改成功的文件（.vibe、.claude 里的不算）在 git 里还是没提交的状态。每一轮只提一次
+  // 不走 OpenSpec 的改动、开关选了"先问我"：不催它提交，催它交代了问我（它这一轮已经在问的不再说）
   const mode = commitMode(cfg);
   if (mode !== 'off' && j.session_id !== undefined) {
-    const mine = [...new Set(calls.filter(isEdit).map(fileOf).filter((f) => !/(^|[\\/])\.(vibe|claude)[\\/]/.test(f)))];
+    // 提案阶段的产物（这个变更还没开工，tasks.md 里一个勾都没有）不催提交：审完、用户说了开工再一起提交 docs: 提案
+    const planArtifact = (f) => { const a = artifactOf(f); return !!(a && !changeStarted(a.dir)); };
+    const mine = [...new Set(calls.filter(isEdit).map(fileOf).filter((f) => !/(^|[\\/])\.(vibe|claude)[\\/]/.test(f) && !planArtifact(f)))];
     const ckey = sid + '-commit';
     const once = turnId ? readState(ckey).turnId !== turnId : !j.stop_hook_active;
     const active = changes().filter((c) => c.todo > 0);
-    if (mine.length && once && !(mode === 'change' && active.length)) {
+    // 审查还没审完（多轮审查报了问题、还没复审到 0 条）：先不催，全部审完再一起提交
+    const reviewing = mine.length && cfg.reviewLoop ? reviewOpenFor(sid, entries, changes) : false;
+    if (mine.length && once && !reviewing && !(mode === 'change' && active.length)) {
       const dirty = await uncommitted(mine);
       // 按阶段：还有没做完的变更时，只有刚做完一个阶段（那一组最后一个勾打在仓库最近一次提交之后）才催；做到一半不催
       const since = mode === 'phase' && active.length && dirty.length ? Math.min(...dirty.map((d) => lastCommitAt(d.root))) : 0;
@@ -822,7 +862,10 @@ async function handle(j) {
         const where = dirty.map((d) => path.basename(d.root) + '（' + d.count + ' 个文件）').join('、');
         const unit = mode === 'phase' ? '一个阶段（tasks.md 里同一个大编号的任务）一次提交，信息写这一组做了什么' : mode === 'change' ? '整个变更一次提交' : '一项任务一次提交';
         const how = '先自己把 diff 过一遍（有没有调试代码、误改、漏改），然后进到对应的仓库（git -C <目录>），只 git add 你这一轮改的和新建的文件（新建的 git 不会自动带上；不用 -A、.、-u，也不用 commit -a），' + unit + '，信息按"类型: 内容"写（例：feat: 新增修改页面）；只提交不 push';
-        if (todo.length) todo.push('验证过了就接着提交，不用等我说：' + how + '。验证没过、还没做完的先不提交。');
+        const plain = plainCommitAsk(j, cfg, entries, changes, lastSaid);
+        if (plain === 'asked') { /* 它最后那句已经在问我提不提交：等我答 */ }
+        else if (plain === 'ask') todo.push('这一轮改过的文件还没提交：' + where + '。不走 OpenSpec 的改动，提交之前要我点头：先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说提交了再提交，只提交不 push。');
+        else if (todo.length) todo.push('验证过了就接着提交，不用等我说：' + how + '。验证没过、还没做完的先不提交。');
         else todo.push('这一轮改过的文件还没提交：' + where + '。已经做完并且验证过的，现在提交：' + how + '。还没做完、验证没过的先不提交，说明原因就行。');
       }
     }

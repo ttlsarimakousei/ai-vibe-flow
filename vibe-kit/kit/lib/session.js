@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 
 const KIT = path.join(__dirname, '..');
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off' };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask' };
 /**
  * 套件开关（~/.claude/vibe-kit/config.json），可以在路由的配置页里改，也可以手改。
  * 三个"放松保护"的（kitLock 关掉、kitBypass 改成 auto、autoMode 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
@@ -53,6 +53,7 @@ function sealConfig(kitDir, cfg) {
  *   问句、别的斜杠命令（/ttls-onboard…）、让它停的话（"停""等等，先别提交""不用了"）            → 不在流程里
  *   让它出一份代码之外的东西（说明、报告、清单，"生成一个文件记一下"）                        → 不在流程里（放哪照常问，全自动不作数）
  * 这一轮里模型自己调了 OpenSpec 的技能、建了变更（用户用大白话让它出提案），也算进了流程（hooks/guard-ask.js、guard-commit.js）。
+ * 流程又分两段（stage，见下面"流程分两段"）：写提案那一段 plan，做任务那一段 apply。全自动只在 apply 那一段算开着。
  * 不在流程里时，钩子拿到的 cfg.autoMode 是 false：照有人在的样子来（能问、不催着往下做、不出全自动报告）。cfg.autoSwitch 是开关本身。
  * 开关关着的时候也照样定、照样记：这一轮做到一半才在配置页打开全自动的，照这一轮开头定的算。
  * changes 是这个会话在流程里动手做过的变更（写过它的产物、打过勾、命令里点了名）：收工时只催这几个往下走，
@@ -65,10 +66,10 @@ const flowKey = (j) => (j && j.session_id && j.session_id !== 'unknown' ? String
 function flowState(j) { const k = flowKey(j); return k ? readState(k) : {}; }
 // 这两个都是读-改-写，走 updateState：文件正好读不出来（别的钩子在写、杀毒软件占着）时放弃这一次。
 // 以前用 readState，读不出来拿到的是空对象，写回去就把"在不在流程里""动过哪些变更"冲掉了
-function setFlow(j, on, why) {
+function setFlow(j, on, why, stage) {
   const k = flowKey(j);
   if (!k) return false;
-  updateState(k, (st) => { st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; return st; });
+  updateState(k, (st) => { st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; if (stage === 'plan' || stage === 'apply') st.stage = stage; return st; });
   return !!on;
 }
 /** 这个会话在流程里动手做了这个变更 */
@@ -83,6 +84,131 @@ function flowTouch(j, dir) {
   } catch (e) { /* 记不了：收工时不催这个变更，不影响干活 */ }
 }
 function flowChanges(j) { const c = flowState(j).changes; return Array.isArray(c) ? c : []; }
+/** 这个会话在流程的哪一段：plan / apply；没记的（装这一版之前就开着的会话）按 apply 算 */
+function flowStage(j) { const s = flowState(j).stage; return s === 'plan' ? 'plan' : 'apply'; }
+
+// ===================== 流程分两段：写提案（plan）和做任务（apply） =====================
+/*
+ * 用户 2026-10-07 定的：全自动只管 apply 之后（做任务、审代码、修审出的问题、收工交报告）。探索、提案、规格、设计、任务清单
+ * 这些阶段他要看、要改（他发现初版需求里没提的操作被写进了提案），他说了开工才开始做任务；任务全部完成、代码审过之后停下等他自测，
+ * 他说了归档才归档。所以每个会话的流程记录里多一项 stage。怎么定（hooks/task-anchor.js 的 decideFlow）：
+ *   敲 /opsx:apply、/opsx:archive、/opsx:verify                                   → apply
+ *   敲 /opsx:propose、/opsx:explore、/opsx:new、/opsx:ff；提了需求                   → plan
+ *   "开工""开始做""把 1.1 做了""按提案做"；点名让它接着做一个已经打过勾的变更          → apply
+ *   "提案里 X 不对，改一下""tasks 第 3 项的验法改成…"；点名一个还没开工的变更          → plan
+ *   "继续""好"、别的话                                                               → 跟上一轮一样
+ *   接着交接记录做                                                                   → 记录里提到的变更开过工就是 apply，不然 plan
+ * 模型自己调 /opsx:apply 的技能、在 plan 那一段打勾：拦下，让它先把提案交代给用户、问能不能开工（hooks/guard-ask.js、guard-spec.js）。
+ * 没记 stage 的（装这一版之前就开着的会话）按 apply 算：全自动正跑着的会话不能因为升级突然变成有人在的样子，会停在提问框上。
+ */
+const APPLY_SLASH = /^\s*\/(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i;
+const APPLY_TAG = /<command-name>\s*\/?(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i;
+// 明说开工的话。HARD 怎么都算；SOFT、WEAK 在同一句里说的是提案那一段的事（"开始做提案""接着做 a1 的提案"）时不算
+const APPLY_HARD = /开工|开干|开搞|\bapply\b|(按|照|依)(提案|任务|tasks|清单)(做|实现|开发)|可以(做|开工|实现|开始做)了/i;
+const APPLY_SOFT = /动手|开始(做|实现|开发|写代码|执行|干)/;
+const APPLY_WEAK = /做吧|干吧|做起来|去做|实现吧|执行吧|继续做|接着做|做完|做掉|实现掉|写完|开始吧|可以开始了/;
+// 做某一项任务："把 1.1 做了""第 3 项做完""任务 2 打上勾"
+const TASK_NUM = /(^|[^\d.])\d+\.\d+(?![\d.])|第\s*\d+\s*[项条步]|任务\s*\d/;
+const TASK_DO = /(做|实现|开发|完成|搞定|写代码|执行|动手|打勾|打上勾|开始)/;
+// 在说提案那一段的事：改提案、补规格、看设计、调任务清单和验法
+const PLAN_EDIT = /(改|调整|修改|补|加|看|审|重写|更新|完善|细化|拆|做|写|出|重新|讨论|核对|确认)[^，,。！!？?\n]{0,8}(提案|proposal|需求|规格|specs?\b|设计|design|任务清单|tasks|验法|方案)|(提案|proposal|需求|规格|specs?\b|设计|design|任务清单|tasks|验法|方案)[^，,。！!？?\n]{0,8}(改|调整|不对|有问题|要加|少了|多了|去掉|换成|补|重写|不行|不够)/i;
+/** 这句话是不是让它开始做任务（开工） */
+function applyIntent(p) {
+  const s = String(p || '');
+  if (APPLY_SLASH.test(s) || APPLY_TAG.test(s) || APPLY_HARD.test(s)) return true;
+  if (TASK_NUM.test(s) && TASK_DO.test(s)) return true;
+  return (APPLY_SOFT.test(s) || APPLY_WEAK.test(s)) && !PLAN_EDIT.test(s);
+}
+/** 这句话是不是在说提案那一段的事 */
+const planIntent = (p) => PLAN_EDIT.test(String(p || ''));
+/** 这个变更开工了没有：tasks.md 里有打过勾的任务 */
+function changeStarted(dir) { try { return /^\s*[-*]\s*\[[xX]\]/m.test(fs.readFileSync(path.join(dir, 'tasks.md'), 'utf8')); } catch (e) { return false; } }
+/** 接着交接记录做：记录里提到的变更开过工就是 apply；没提变更的，看记录里有没有在说任务 */
+function handoverStage(cwd) {
+  try {
+    let d = path.resolve(cwd || process.cwd());
+    let text = '';
+    for (let i = 0; i < 2; i++) { const f = path.join(d, '.vibe', 'handover.md'); if (fs.existsSync(f)) { text = fs.readFileSync(f, 'utf8'); break; } const up = path.dirname(d); if (up === d) break; d = up; }
+    if (!text) return 'apply';
+    const named = allChanges(cwd || process.cwd()).filter((c) => mentionsChange(text, c.name));
+    if (named.length) return named.some((c) => changeStarted(c.dir)) ? 'apply' : 'plan';
+    return /apply|打勾|任务\s*\d|(^|[^\d.])\d+\.\d+(?![\d.])/i.test(text) ? 'apply' : 'plan';
+  } catch (e) { return 'apply'; }
+}
+
+// ===================== 做完的功能上发现的问题：先查清原因，改动小直接改 =====================
+/*
+ * 用户 2026-10-07 定的：自测、测试、用户反馈发现的问题（两个弹窗顺序反了这种，改两三个前端文件就好），不要起一整条 OpenSpec 流程。
+ * 先查清原因（归档过的用 tools/trace.js 溯源），改动小——三个文件以内、不改接口和表结构、不改需求——就直接改、验证、按代码模式简单审一下改动点。
+ * 改动大、要改需求或规格、接口、表结构的，先告诉用户要改什么，用户说了走提案再 /opsx:propose。
+ * 怎么认"在报问题"：BUG_REPORT（用户开口时提醒，hooks/task-anchor.js；要新建提案时拦一次，hooks/guard-spec.js）。用户明说要走提案、开变更的（WANTS_PROPOSAL）不算。
+ */
+const BUG_REPORT = /(测试|自测|验收|用户|客户|现场|联调|试了|点了|跑了|看了)[^。！？\n]{0,12}(发现|反馈|报|说|看到)|bug|缺陷|报错|有问题|出问题|反了|没生效|不显示|显示不|不出来|没反应|点不了|打不开|进不去|不能用|用不了|失效|异常|乱码|错位|闪退|卡住了/i;
+const WANTS_PROPOSAL = /提案|变更|propose|opsx:|走流程|走 ?openspec/i;
+const SMALL_FIX_TEXT = '先查清原因，改动小（三个文件以内、不改接口和表结构、不改需求）就直接改、验证过，按 /ttls-cross-review 的代码模式只给改动点简单审一下，再交代，不要新开变更；改的是没归档的变更做出来的东西，在它的 revisions.md 记一条（起因：用户要求）。改动大、要改需求或规格、接口、表结构的，先告诉我要改什么、为什么，我说走提案再 /opsx:propose。';
+
+// ===================== 用户最后说的那句话：归档、提交要他点头 =====================
+/*
+ * 用户 2026-10-07 定的：归档要他自测过、说了才归档；不走 OpenSpec 的改动提交之前要问他、他说了才提交。
+ * 认的是会话记录里他最后一次开口：自己打的字，或者提问框里选的答案（tool_result 里 "User has answered your questions: "问题"="答案""）。
+ * 钩子附在消息里的提醒（[vibe-kit 开头的行）、后台任务的通知、打断标记、别的系统消息不算他说的话；斜杠命令认 <command-name>。
+ * 只看最后一句：他说过"归档"之后又说"等等，还有个问题"，就得改完再问一次。
+ */
+const ANSWERED = /^\s*User has answered your questions?:/;
+/** 提问框答案里的 "问题"="答案" 一对一对 */
+function answersOf(text) {
+  const out = [];
+  const re = /"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"/g;
+  let m;
+  while ((m = re.exec(String(text || '')))) out.push({ q: m[1], a: m[2] });
+  return out;
+}
+/** 用户最后一次开口：{ kind: prompt | answer | command, text, at, pos }；没有返回 null */
+function lastUserVoice(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const e = list[i];
+    if (!e || e.type !== 'user' || e.isSidechain) continue;
+    const at = Date.parse(e.timestamp || '') || 0;
+    const c = e.message && e.message.content;
+    if (Array.isArray(c) && c.some((b) => b && b.type === 'tool_result')) {
+      for (const b of c) {
+        if (!b || b.type !== 'tool_result') continue;
+        const t = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map((x) => (x && x.text) || '').join('\n') : '';
+        if (ANSWERED.test(t)) return { kind: 'answer', text: t, answers: answersOf(t), at, pos: i };
+      }
+      continue;
+    }
+    if (!isUserTurn(e) || isTaskNote(e)) continue;
+    const raw = textOf(e);
+    if (/\[Request interrupted by user/.test(raw)) continue;
+    const cmd = raw.match(/<command-name>\s*\/?([^<\s]+)\s*<\/command-name>/);
+    if (cmd) { const a = raw.match(/<command-args>([\s\S]*?)<\/command-args>/); return { kind: 'command', command: cmd[1], text: '/' + cmd[1] + (a && a[1].trim() ? ' ' + a[1].trim() : ''), at, pos: i }; }
+    if (/^\s*</.test(raw)) continue;
+    const text = raw.split('\n').filter((l) => !/^\s*\[vibe-kit/.test(l)).join('\n').trim();
+    if (!text) continue;
+    return { kind: 'prompt', text, at, pos: i };
+  }
+  return null;
+}
+const YES_SHORT = /^(可以|好|是|行|同意|确认|没问题|对|嗯|ok|okay|yes|y)(的|吧|了|啊|呀)?[\s。！!]*$/i;
+const NO_BEFORE = '(先别|别|不要|不用|不能|不准|不必|无需|先不|暂不|暂时不|不急着|不着急|等等再|晚点再|过会再|还不能|还不要|不可以|不让|没法)[^，,。！!？?\n]{0,6}';
+const SAID = {
+  archive: { yes: /归档|archive|验收(通过|过了|没问题|ok)/i, no: new RegExp(NO_BEFORE + '(归档|archive)|(归档|archive)(之前|前|以后再说|稍后|晚点|等等|先等)|(归档|archive)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)归档', 'i'), command: /^(opsx:|openspec[-:])(archive|bulk-archive)$/i },
+  commit: { yes: /提交|commit/i, no: new RegExp(NO_BEFORE + '(提交|commit)|(提交|commit)(之前|前|以后再说|稍后|晚点|等等|先等)|(提交|commit)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)提交|提不提交', 'i'), command: /^$/ },
+};
+/** 用户最后一句是不是让它做这件事（topic：archive 归档 / commit 提交）。返回 { ok, voice, text } */
+function userSaid(entries, topic) {
+  const g = SAID[topic];
+  const v = lastUserVoice(entries);
+  if (!g || !v) return { ok: false, voice: v, text: '' };
+  if (v.kind === 'answer') {
+    const hit = v.answers.some((x) => (g.yes.test(x.a) && !g.no.test(x.a)) || (g.yes.test(x.q) && !g.no.test(x.a) && YES_SHORT.test(x.a.trim())));
+    return { ok: hit, voice: v, text: v.answers.map((x) => x.a).join('；') };
+  }
+  if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || (g.yes.test(v.text) && !g.no.test(v.text)), voice: v, text: v.text };
+  return { ok: g.yes.test(v.text) && !g.no.test(v.text), voice: v, text: v.text };
+}
 /**
  * 这个会话是在哪个目录启动的。钩子收到的 cwd 是"现在所在的目录"：模型单独跑过一条 cd，它就跟着变了。
  * 议题 #8：会话在壳子里启动，后来 cwd 成了 子项目/ui——套件把 ui 当成一个项目去探索、把全自动报告写进 ui/.vibe、
@@ -134,19 +260,19 @@ function flowAdopt(j) {
   try { dirs = (readState(String(j.session_id) + '-changes').dirs || []).filter((d) => fs.existsSync(d)); } catch (e) { dirs = []; }
   const on = dirs.length > 0;
   const next = { on, why: on ? '装这一版之前就在做变更' : '', at: Date.now(), changes: dirs.slice(-50) };
-  if (on) next.was = next.at;
+  if (on) { next.was = next.at; next.stage = 'apply'; }
   writeState(k, next);
   if (on) hookLog('全自动模式 这个会话装这一版之前就在做变更，算在 OpenSpec 流程里：' + dirs.map((d) => path.basename(d)).join('、'));
   return next;
 }
-/** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里，autoMode 按关着算 */
+/** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */
 function readConfigFor(j) {
   const c = readConfig();
   c.autoSwitch = c.autoMode === true;
   if (!c.autoSwitch) return c;
   let st = flowState(j);
   if (st.at === undefined) st = flowAdopt(j);
-  if (!st.on) c.autoMode = false;
+  if (!st.on || st.stage === 'plan') c.autoMode = false;
   return c;
 }
 
@@ -2018,7 +2144,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, flowState, setFlow, flowTouch, flowChanges, flowAdopt, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewRecord, recordReview, proposalReviewed, codeReviewed,

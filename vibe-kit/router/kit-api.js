@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off' };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask' };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -56,6 +56,8 @@ function cleanConfig(x, base) {
   if (x && ['ask', 'off'].includes(x.handoverAsk)) c.handoverAsk = x.handoverAsk;
   // 自动提交：task 每完成一件事就提交；change 整个 OpenSpec 变更做完再提交一次；off 用户说了才提交
   if (x && ['task', 'phase', 'change', 'off'].includes(x.autoCommit)) c.autoCommit = x.autoCommit;
+  // 不走 OpenSpec 的改动（修 bug、改配置）：ask 改完先问用户、他说了提交才提交；auto 验证过就提交
+  if (x && ['ask', 'auto'].includes(x.plainCommit)) c.plainCommit = x.plainCommit;
   // 钩子运行方式：auto 装了路由就走 HTTP、否则走命令；http、command 固定用一种。别的值丢掉，用默认的 auto
   if (x && ['auto', 'http', 'command'].includes(x.hookTransport)) c.hookTransport = x.hookTransport;
   // 被检查拦住、它确信是套件拦错了：ask 申请后弹确认框等你点头；auto 记下问题就放行；off 不许申请

@@ -108,7 +108,7 @@ function changeView(c, since, revs) {
   try { if (readConfig().reviewLoop) { const x = readState('review-rounds')['code|' + normKey(c.dir)]; if (x && !x.done) loop = x; } } catch (e) { loop = null; }
   if (c.done === 0 && c.todo > 0) state.push(proposalReviewed(c.dir) ? '提案审过，还没开工' : '提案还没审');
   else if (loop) state.push('代码审了 ' + loop.rounds + ' 轮，上一轮报了 ' + (loop.issues || 0) + ' 条，还没复审');
-  else if (c.todo === 0) state.push(issue ? '代码还没审完' : '代码审过，可以归档');
+  else if (c.todo === 0) state.push(issue ? '代码还没审完' : '代码审过，等用户自测后归档');
   else if (reviewRecord('code', c.dir)) state.push('代码审过一次');
   let ticks = {};
   try { ticks = syncTicks(c.dir); } catch (e) { ticks = {}; }
