@@ -56,6 +56,7 @@ const V0930 = '20260930.1200'; // 六件事加全仓审查那一版：自动收�
 const V1505 = '20260930.1505'; // 串着 cd 的命令拦下、壳子和起服务的提示里写不用 cd 的办法
 const V2248 = '20260930.2248'; // 提示规则去掉了；过程文件的提示里写明变更的留到归档；整仓 add 的提示里说了新仓库第一次入仓不拦
 const V1005 = '20261005.0302'; // 闲话、"让它停"不再只看开头几个字：开头碰巧是"不用""好"的需求照需求提醒
+const V1007 = '20261007.1217'; // 起服务的提示：端口改成 --port auto --avoid <配置里的端口>
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -132,8 +133,8 @@ add('命令：循环里对老仓库整仓 add', 'guard-commit', cmd('for r in . 
 add('命令：cd src && git push', 'guard-commit', cmd('cd src && git push'), /这条命令先 cd 到 src，再跑 git[\s\S]*git -C \\"src\\" push/, V1505);
 add('命令：cd 到子目录再编译', 'guard-commit', cmd('cd src && mvn -q -o compile'), /mvn -f \\"src\/pom\.xml\\" -q -o compile/, V1505);
 // 1007：端口改成 --port auto --avoid <配置里的端口>，提示里的命令和说法跟着改
-add('命令：mvn spring-boot:run', 'guard-commit', cmd('mvn spring-boot:run'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, NEXT);
-add('命令：npm run dev', 'guard-commit', cmd('npm run dev'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, NEXT);
+add('命令：mvn spring-boot:run', 'guard-commit', cmd('mvn spring-boot:run'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1007);
+add('命令：npm run dev', 'guard-commit', cmd('npm run dev'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1007);
 add('命令：删经验规则文件', 'guard-commit', cmd('rm .claude/rules/vibe-lessons-java.md'), /会改到经验规则的文件/);
 add('命令：提交经验规则文件', 'guard-commit', cmd('git add .claude/rules/vibe-lessons-java.md && git commit -m "docs: 更新经验规则"'));
 
