@@ -86,6 +86,18 @@ function flowTouch(j, dir) {
 function flowChanges(j) { const c = flowState(j).changes; return Array.isArray(c) ? c : []; }
 /** 这个会话在流程的哪一段：plan / apply；没记的（装这一版之前就开着的会话）按 apply 算 */
 function flowStage(j) { const s = flowState(j).stage; return s === 'plan' ? 'plan' : 'apply'; }
+/**
+ * 这个会话的流程走完了：它动过的变更（流程记录里的；没记的看会话碰过的）一个都不在了（归档了、删了）。
+ * 用户 2026-10-07 反馈：变更归档之后状态栏还写着"在流程里，在做任务"。收工时据此把流程记成不在（hooks/verify-gate.js），
+ * 用户开口时也不再凭"上一轮在流程里"接回去（hooks/task-anchor.js），状态栏写"变更归档了，照常"
+ */
+function flowDone(j) {
+  try {
+    let dirs = flowChanges(j);
+    if (!dirs.length && j && j.session_id && j.session_id !== 'unknown') dirs = readState(String(j.session_id) + '-changes').dirs || [];
+    return dirs.length > 0 && dirs.every((d) => !fs.existsSync(d));
+  } catch (e) { return false; }
+}
 
 // ===================== 流程分两段：写提案（plan）和做任务（apply） =====================
 /*
@@ -1621,7 +1633,7 @@ function reviewsIn(calls, results, changes, notes, archived) {
       if (prev) mode = prev.mode;
       else { const st = readState('review-rounds'); const k = normKey(change.dir); const open = ['proposal', 'code'].filter((m) => st[m + '|' + k] && !st[m + '|' + k].done); if (open.length === 1) mode = open[0]; }
     }
-    out.push({ id: c.id, key: c.key || c.id, raw: c.raw || c.id, mode, recheck, change, source: lessonSourceOf(prompt, change, archived), issues, idx, at, pos, text: String(text || '') });
+    out.push({ id: c.id, key: c.key || c.id, raw: c.raw || c.id, i: c.i, mode, recheck, change, source: lessonSourceOf(prompt, change, archived), issues, idx, at, pos, text: String(text || '') });
   });
   return out;
 }
@@ -1673,6 +1685,7 @@ function recordReview(kind, dir, issues, reviewKey, at) {
   });
   // 使用情况：新记上的一次审查（提案、代码，报"问题 0 条"的另数）
   if (fresh) { try { const U = require('./usage.js'); U.bump('review.' + (kind === 'proposal' ? 'proposal' : 'code')); if (Number(issues) === 0) U.bump('review.clean'); } catch (e) { /* 数不了就算了 */ } }
+  return fresh;
 }
 /**
  * 把会话记录里做完了的审查都记上（前台的看 tool_result，后台的看通知）。收工检查、打勾检查、用户开口时都先调一下，
@@ -1685,7 +1698,9 @@ function syncReviews(entries, cwd) {
     if (!r.change) continue;
     // 认不出审的是提案还是代码：不记到任何一边（记错了比不记更糟），流水账里留一句，每次审查只留一次
     if (!r.mode) { noteUnknownReview(r); continue; }
-    recordReview(r.mode, r.change.dir, r.issues, r.key, r.at);
+    const fresh = recordReview(r.mode, r.change.dir, r.issues, r.key, r.at);
+    // 使用情况：这次审查从调用到结论花了多久（审查慢的时候看它；两小时以上的不算，多半是会话断过）
+    if (fresh) { try { const t0 = Date.parse(((entries || [])[r.i] || {}).timestamp || '') || 0; const ms = t0 && r.at > t0 ? r.at - t0 : 0; if (ms > 0 && ms < 7200000) require('./usage.js').bump('review.ms', ms); } catch (e) { /* 数不了就算了 */ } }
   }
   return found;
 }
@@ -2144,7 +2159,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewRecord, recordReview, proposalReviewed, codeReviewed,

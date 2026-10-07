@@ -20,7 +20,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, planIntent, changeStarted, handoverStage, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, syncReviews, sessionChanges, KIT, cli } = require('../lib/session');
+const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, planIntent, changeStarted, handoverStage, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, syncReviews, sessionChanges, KIT, cli } = require('../lib/session');
 let hookHealth = () => '';
 try { hookHealth = require('../lib/hook-health.js').check; } catch (e) { /* 老版本没有 */ }
 
@@ -66,6 +66,8 @@ function decideFlow(j, cfg, note, resumed) {
   let prev = flowState(j);
   // 装这一版之前就开着的会话头一回开口：先照以前的算法接过来（它动过变更就算在流程里），"继续"才接得上
   if (prev.at === undefined && cfg.autoSwitch) prev = flowAdopt(j);
+  // 它动过的变更都归档了：流程走完了，"继续""好"不再接回去（点名新的变更、敲 /opsx:… 照样进；收工时已经记成不在流程里的，这里把"上一轮在流程里"的时间也抹掉）
+  if (flowDone(j)) { if (prev.on) setFlow(j, false, '变更归档了'); prev = Object.assign({}, prev, { on: false, was: 0 }); }
   const prevStage = prev.stage === 'plan' ? 'plan' : 'apply';
   // 后台任务做完的通知不是用户说的话：跟原来一样
   if (note) return { on: !!prev.on, cont: true, stage: prevStage, applyStart: false };

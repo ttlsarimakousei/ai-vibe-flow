@@ -14,7 +14,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { activeChanges, tailEntries, lastUsageTokens, readConfig, contextPercent, autoCompactAt, nearGatewayLimit, readState, writeState, flowState } = require('./lib/session');
+const { activeChanges, tailEntries, lastUsageTokens, readConfig, contextPercent, autoCompactAt, nearGatewayLimit, readState, writeState, flowState, flowDone } = require('./lib/session');
 
 const C = { dim: '\x1b[2m', reset: '\x1b[0m', green: '\x1b[32m', yellow: '\x1b[33m', red: '\x1b[31m', cyan: '\x1b[36m' };
 const SEP = C.dim + ' │ ' + C.reset;
@@ -135,7 +135,8 @@ process.stdin.on('end', () => {
   if (cfg.autoMode === true) {
     const fl = j.session_id ? flowState({ session_id: j.session_id }) : {};
     // 在流程里又分两段：写提案那一段照常（全自动只管做任务那一段）
-    line2.push(C.yellow + '全自动 开' + C.reset + (fl.on ? (fl.stage === 'plan' ? C.dim + '·这个会话在流程里，还在写提案，照常' + C.reset : C.yellow + '·这个会话在流程里，在做任务' + C.reset) : C.dim + '·这个会话不在流程里，照常' + C.reset));
+    const over = fl.on && j.session_id ? flowDone({ session_id: j.session_id }) : false;
+    line2.push(C.yellow + '全自动 开' + C.reset + (fl.on && !over ? (fl.stage === 'plan' ? C.dim + '·这个会话在流程里，还在写提案，照常' + C.reset : C.yellow + '·这个会话在流程里，在做任务' + C.reset) : C.dim + (over ? '·这个会话的变更归档了，照常' : '·这个会话不在流程里，照常') + C.reset));
   } else line2.push(C.dim + '全自动 关' + C.reset);
   // Claude Code 会在用到多少时自己压缩（套件写进 settings.json 的 autoCompactWindow；新开的会话才认）
   const at = autoCompactAt(cfg, windowSize);

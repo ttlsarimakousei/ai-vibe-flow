@@ -23,7 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
+const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, flowDone, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 let tidy = null;
@@ -934,6 +934,8 @@ async function handle(j) {
     try { if (feedback && feedback.countBlock) feedback.countBlock('verify-gate', todo[0], String(j.session_id || '')); } catch (e) { /* 数不了不影响收工 */ }
     return blockOut('Stop', '[vibe-kit 收工检查] ' + todo.join('\n'));
   }
+  // 这个会话动过的变更都归档了：流程走完了，记成不在流程里（状态栏不再写"在做任务"，下一句"继续"也不接回去）。报告照交，它认的是上面算好的 cfg
+  try { if (flowState(j).on && flowDone(j)) { setFlow(j, false, '变更归档了'); hookLog('全自动模式 这个会话动过的变更都归档了，流程走完，记成不在流程里'); } } catch (e) { /* 记不了不影响收工 */ }
   // 全自动模式收工：把这一轮的报告交给它，照着交代
   try { const rp = autoReport(j, cfg, entries, lastSaid, changes()); if (rp) return blockOut('Stop', rp); } catch (e) { hookLog('verify-gate 全自动报告出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（全自动报告）', j, e); }
   // 验证的事都没落下，再看要不要问一句交接（两件事不挤在一起说）
