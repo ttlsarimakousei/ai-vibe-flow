@@ -47,7 +47,8 @@ node dev/pack.js
 | `test-1001.js` | 1001 这一批：安装器写 settings.json 的自动压缩窗口（改开关跟着改、填 0 和卸载时还回原来的）；状态栏三行；使用情况数次数、要传的那一段不带路径；开工前拉代码（真的 git 仓库和远端：快进、分叉、和没提交的改动冲突、没有远端、连不上、壳子、全自动记进报告）；问题列表标上报了没有 |
 | `test-1005.js` | 1005 这一批：安装器默认关掉 Claude Code 自带的自动模式（配置页改成"不管它"就去掉、你自己写的不动、卸载只收回自己加的、从上一版升上来也加上）；全局约定里有官方那句；开工前拉代码"本来就是最新"不占上下文；使用情况里模型名字带的内网地址遮掉；起一个临时路由，配置页的接口不收别的网站的页面发来的请求。逻辑审查之后改的也在这里：拉代码时合并做到一半不结束（用一个慢的检出过滤器、一个 sleep 的 post-merge 钩子造出来，环境变量 `VIBE_KIT_PULL_PATIENCE_MS` 把"等多久"调小）、`merge.autoStash`、不是壳子不带子项目、登不上的远端（假 GitLab，端口是路由端口加一）、"不要停"不算停、压缩窗口最大 96 万、不能放行的拦截也数。第一个参数是路由端口，第二个给上一版的目录（要比 1005 早的，run-all 会自己挑） |
 | `test-1007.js` | 1007 这一批：让它出文档、生成文件不算流程里的活（全自动不作数）；公共配置里被 dev 盖掉的库不算开发库；devserver `--port auto` 自动挑端口（范围、避开、同一个服务同一个端口、`{port}` 和环境变量）；自动提交的"按阶段"那一档。第一个参数是端口 |
-| `probes/` | 探测，不是回归测试：真的 Claude Code 加假网关，看某个版本在一件事上是怎么做的，输出给人看。`cc-compact.js`（到多少自动压缩）、`cc-automode.js`（没配权限模式进不进自带的自动模式、分类请求长什么样）、`cc-statusline.js`（交互界面里状态栏照不照常，用 winpty 抓屏）、`cc-http-hooks.js`（钩子走 HTTP 照不照常）。见下面"换 Claude Code 版本之前" |
+| `test-1008.js` | 1008 这一批：归档要用户自测过、说了才做；不走 OpenSpec 的提交要用户点头（开关 plainCommit）；流程分写提案 / 做任务两段，全自动只管做任务那一段，模型自己调 /opsx:apply、提案阶段打勾都拦；开工时告诉用户全自动开没开（systemMessage）；审查过程不进提交；做完的功能上的问题改动小直接改；交接的"不问"只提醒 |
+| `probes/` | 探测，不是回归测试：真的 Claude Code 加假网关，看某个版本在一件事上是怎么做的，输出给人看。`cc-compact.js`（到多少自动压缩）、`cc-automode.js`（没配权限模式进不进自带的自动模式、分类请求长什么样）、`cc-statusline.js`（交互界面里状态栏照不照常，用 winpty 抓屏）、`cc-http-hooks.js`（钩子走 HTTP 照不照常）、`cc-system-message.js`（用户开口的钩子用 JSON 输出时 systemMessage 显不显示、给模型的提醒送不送到）。见下面"换 Claude Code 版本之前" |
 | `test-page-0929.js` | 看页面的场景：同一步里写断言、上传、应答文件选择框、点被盖住的控件。用本机的 Edge 无头跑 |
 | `test-devserver-0929.js` | 起服务的工具：最后一行是结果，停的时候进程清干净 |
 | `ui-kit-0929.js` | 配置页重排之后：接口、页面上每个开关都在、保存条、三张表。第二个参数给目录就存截图 |
@@ -100,7 +101,7 @@ node dev/run-all.js --old dev/baseline/20261001.0303/vibe-kit
 
 ## 换 Claude Code 版本之前
 
-内网要升 Claude Code、或者官方出了新版想知道套件受不受影响，先把那个版本装到上面说的目录，跑四个探测，再拿它跑端到端：
+内网要升 Claude Code、或者官方出了新版想知道套件受不受影响，先把那个版本装到上面说的目录，跑五个探测，再拿它跑端到端：
 
 ```bash
 node dev/probes/cc-compact.js 2.1.289
@@ -116,6 +117,10 @@ node dev/probes/cc-statusline.js 2.1.289
 
 ```bash
 node dev/probes/cc-http-hooks.js 2.1.289
+```
+
+```bash
+node dev/probes/cc-system-message.js 2.1.289
 ```
 
 ```bash

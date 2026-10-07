@@ -22,12 +22,12 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | 时机 | 钩子 | 做什么 |
 |---|---|---|
 | 会话开始（新开、/clear、压缩后、恢复） | `session-start.js`（一直走命令） | 把项目说明、交接记录、壳子结构交给模型；记下会话的启动目录；套件代码的指纹对不对；清过期的过程文件；数使用情况 |
-| 用户开口 | `task-anchor.js`（一直走命令） | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程"；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；HTTP 钩子自检 |
+| 用户开口 | `task-anchor.js`（一直走命令） | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；HTTP 钩子自检 |
 | 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑五道检查：`guard-kit`（套件的文件不许改）→ `guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
-| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add、像密码的内容）、push 一律要确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛 |
-| 提问框、调技能之前 | `guard-ask.js` | 全自动模式下拦提问框，问题记进报告；模型自己调 OpenSpec 技能时算进流程 |
+| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add、像密码的内容）、push 一律要确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）、不走 OpenSpec 的提交要用户点头 |
+| 提问框、调技能之前 | `guard-ask.js` | 全自动模式下拦提问框，问题记进报告；模型自己调 OpenSpec 技能时算进流程（propose 算写提案那一段，archive 算做任务那一段）；用户没说开工就调 /opsx:apply 拦下 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有放令牌、key 的地方，而且要把内容搜出来的，拦下 |
-| 模型说做完了 | `verify-gate.js` | 改了代码要验证、改了页面要看页面、任务全打勾要审代码、改了的文件要提交、改了产物要记修订、到交接线问要不要交接；全自动模式下催着往下做、收工时出报告 |
+| 模型说做完了 | `verify-gate.js` | 改了代码要验证、改了页面要看页面、任务全打勾要审代码、改了的文件要提交、改了产物要记修订、到交接线问要不要交接；全自动模式下催着往下做（不催归档）、收工时出报告；提案阶段、审查没审完不催提交 |
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
 
@@ -39,7 +39,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 
 | 文件 | 管什么 |
 |---|---|
-| `session.js` | 最底层的公共库：读开关（`readConfig`，带放松保护的开关的封条校验）、读写状态文件、读会话记录、找 OpenSpec 变更、壳子识别、审查记账、全自动模式的"在不在流程里"、自动压缩窗口的算法。别的库都依赖它，它不依赖别人 |
+| `session.js` | 最底层的公共库：读开关（`readConfig`，带放松保护的开关的封条校验）、读写状态文件、读会话记录、找 OpenSpec 变更、壳子识别、审查记账、全自动模式的"在不在流程里、在写提案还是做任务那一段"、用户最后一句话（归档、提交要他点头）、自动压缩窗口的算法。别的库都依赖它，它不依赖别人 |
 | `feedback.js` | 问题反馈的记录（`~/.claude/vibe-kit/feedback/`），拦截编号和通行证，拦得最多的规矩、放行记录、开关改动记录 |
 | `report.js` | 全自动模式的报告 |
 | `lessons.js` | 经验规则：审查里反复出现的问题沉淀成 `.claude/rules/ttls-lessons-*.md` |
@@ -72,7 +72,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 |---|---|
 | 开关 | `~/.claude/vibe-kit/config.json`（放松保护的三个开关另有封条 `state/config-seal.json`） |
 | 本机环境（JDK、Maven、Tomcat） | `~/.claude/vibe-kit/local.json`，sync 后生成到全局约定的"本机环境"一节 |
-| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里 |
+| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`（在不在流程里、写提案还是做任务）、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里 |
 | 钩子流水账 | `state/hooks.log`（出问题先看它） |
 | 问题反馈 | `~/.claude/vibe-kit/feedback/`（装新版、卸载都不删），对应的议题记在 `feedback/issues.json` |
 | 安装清单 | `~/.claude/vibe-kit/installed.json`：套件往 settings.json 里加了什么，卸载时只收回这些 |

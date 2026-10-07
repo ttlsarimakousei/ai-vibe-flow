@@ -13,6 +13,7 @@
 - SessionStart、UserPromptSubmit、PostToolUse 的 `additionalContext` 都送得到；PreToolUse、PostToolUse、Stop、SessionEnd 都会触发。
 - **拦截要用 JSON 输出**（顶层 `decision: "block"` 加 `reason`；PreToolUse 另带 `permissionDecision: "deny"`），退出码 0。Windows 上 Claude Code 可能经 PowerShell 跑钩子，退出码 2 会变成 1，被当成"钩子出错、不拦"。
 - PreToolUse 的 `permissionDecision: "ask"`：权限规则里放行了也照样弹确认框。套件的 push 确认用的就是它。
+- UserPromptSubmit 钩子用 JSON 输出（`hookSpecificOutput.additionalContext` 加顶层 `systemMessage`）：2.1.120、2.1.289 实测（`dev/probes/cc-system-message.js`）additionalContext 照样送到模型（放在用户消息的 system-reminder 里，和纯文本输出一样），systemMessage 显示在交互界面的对话里、不进模型的上下文。套件开工时用它告诉用户全自动开没开。
 - 同一个事件的多个命令钩子是并行跑的；每个钩子起 shell + node 要 0.3 到 0.9 秒。
 - **`type: "http"` 的钩子能用**（2.1.120 起），一次 0.1 秒左右，服务不在时当放行。Claude Code 发的钩子请求不带 Origin、Sec-Fetch 这类头。
 - **PreToolUse 读会话记录时，正在执行的这一次调用已经写进去了**（还没有结果）。判断"上一次改文件"要按"有没有工具结果"区分，不然会把这一次当成上一次。
