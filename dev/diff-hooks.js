@@ -57,7 +57,7 @@ const V1505 = '20260930.1505'; // 串着 cd 的命令拦下、壳子和起服务
 const V2248 = '20260930.2248'; // 提示规则去掉了；过程文件的提示里写明变更的留到归档；整仓 add 的提示里说了新仓库第一次入仓不拦
 const V1005 = '20261005.0302'; // 闲话、"让它停"不再只看开头几个字：开头碰巧是"不用""好"的需求照需求提醒
 const V1007 = '20261007.1217'; // 起服务的提示：端口改成 --port auto --avoid <配置里的端口>
-const V1008 = '99999999.0000'; // 不走 OpenSpec 的提交要用户点头；归档要用户说了才做；全自动只管 apply（开工时告诉用户开没开）。打包后换成版本号
+const V1008 = '20261007.1622'; // 不走 OpenSpec 的提交要用户点头；归档要用户说了才做；全自动只管 apply（开工时告诉用户开没开）；报问题的提醒改了说法
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -127,7 +127,7 @@ for (const c of ['Remove-Item -Recurse $env:USERPROFILE\\.claude\\vibe-kit', 'Ge
   add('PowerShell：' + c, 'guard-commit', cmd(c, 'PowerShell'));
 // 1008 有意改的：敲 /opsx:apply 开工时告诉用户全自动开没开（systemMessage），给模型的提醒里也有一句
 add('开口：敲 /opsx:apply（开工时说全自动开没开）', 'task-anchor', prompt('/opsx:apply add-export'), /开始 apply：全自动模式关着/, V1008);
-add('开口：说"开工"（点名变更）', 'task-anchor', prompt('提案看过了，开工 add-export', null, () => [H.tr.user('做一个导出功能'), H.tr.say('提案写好了')]), /开始 apply：全自动模式关着/, V1008);
+add('开口：说"开工"（点名变更）', 'task-anchor', (kit) => { const r = prompt('提案看过了，开工 add-export', null, () => [H.tr.user('做一个导出功能'), H.tr.say('提案写好了')])(kit); r.j.session_id = 'sess-diff-start'; return r; }, /开始 apply：全自动模式关着/, V1008);
 // 这一版有意改的：整仓 add 的提示里说了新建的仓库第一次入仓不拦；过程文件的提示里写明事由是变更名的留到变更归档；
 // 变更没归档之前不让删它的过程文件；目录写在变量里的 git 命令说清是算不出是哪个仓库
 for (const c of ['git add -A', 'git add .']) add('命令：' + c, 'guard-commit', cmd(c), /新建的仓库第一次入仓（还没有任何提交）不拦，可以整仓 add/, V2248);
