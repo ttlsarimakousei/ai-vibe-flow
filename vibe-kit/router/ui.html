@@ -476,8 +476,8 @@
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_pullBeforeWork"><i></i></label></div>
       </div>
       <div class="opt">
-        <div><div class="t">验证过之后提交吗</div><div class="d">只 add 它这一轮改的和新建的文件。你工作区里原来就有的改动不会被带上。</div></div>
-        <div class="ctl"><select id="k_autoCommit"><option value="task">每完成一件事提交一次</option><option value="change">一个变更整个做完才提交</option><option value="off">不自动提交，我说了才提交</option></select></div>
+        <div><div class="t">验证过之后提交吗</div><div class="d">只 add 它这一轮改的和新建的文件。你工作区里原来就有的改动不会被带上。"一个阶段"是 tasks.md 里同一个大编号的任务（1.x、2.x）：每项太碎、整个变更太大时选它。</div></div>
+        <div class="ctl"><select id="k_autoCommit"><option value="task">每完成一件事提交一次</option><option value="phase">一个阶段做完提交一次（tasks.md 里同一个大编号的任务）</option><option value="change">一个变更整个做完才提交</option><option value="off">不自动提交，我说了才提交</option></select></div>
       </div>
       <div class="opt">
         <div><div class="t">提交检查</div><div class="d">开着：提交信息要写成"类型: 内容"；不许 git add -A、git add .、git commit -a；提交里像有密码的先让你看。</div>
@@ -1010,7 +1010,7 @@
   fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('reviewMaxRounds', '最多审几轮', 1, 5);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fBool('pullBeforeWork', '开工前拉代码'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
-  fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('autoCommit', '验证过之后提交吗', ['task', 'change', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
+  fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('autoCommit', '验证过之后提交吗', ['task', 'phase', 'change', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('autoOnboard', '后台自动探索'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);

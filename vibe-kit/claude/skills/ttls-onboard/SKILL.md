@@ -46,7 +46,7 @@ description: 项目说明（.vibe/project.md）一般由套件在后台自动探
 1. **这是什么项目**：Maven（单模块／多模块／Spring Boot 几）、Gradle、前端（Vue／React，Vite／webpack）、还是没有 pom、在 IDE 里配 Tomcat 启动的老式 Java Web。一个仓库里常常套着好几个（后端一个目录，前端一个目录），分别记。
 2. **快检**：改完一处（可能涉及几个文件），只检查改过的这几个文件，几秒内出结果的命令。
 3. **全量**：收尾时整体编译或构建一次的命令，记下大概要多久。
-4. **启动**：怎么跑起来，端口是多少，怎么判断它起来了。试跑用 `node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name <名字> --port <端口> -- <启动命令>`（它会记下来，查完 `stop --all`），项目说明里记原始的启动命令和端口。登录账号问用户，记到 `.vibe/login.json`，不要猜。
+4. **启动**：怎么跑起来，端口是多少，怎么判断它起来了。试跑用 `node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name <名字> --port auto --avoid <配置里的端口> -- <启动命令>`（端口它自己挑，离配置里的远；它会记下来，查完 `stop --all`），项目说明里记原始的启动命令和配置里的端口。登录账号问用户，记到 `.vibe/login.json`，不要猜。
 5. **编码**：源码是 UTF-8、GBK 还是混着的。
 
 ## 不是代码工程时，"验证"指什么

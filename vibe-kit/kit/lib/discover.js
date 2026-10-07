@@ -20,7 +20,7 @@
  * 依据：文件名、所在目录、YAML 和 properties 里分的文档（spring.profiles、on-profile）、数据源的名字、地址和库名里的字样，
  *   还有这个目录的 application.yml 默认激活的是哪个环境。
  * "算开发环境的" = dev，或者 base / other 而且默认激活的不是测试、生产环境；地址和库名里没有测试、生产的字样；
- *   同一个地址没有在别处被认成测试、生产环境。
+ *   同一个地址没有在别处被认成测试、生产环境；公共配置里的这一条没有被同一处的开发环境配置用同一个键盖掉（见 overriddenByDev）。
  * 拿不准的不算开发环境：宁可少找一个，不能把生产库配进来。每一条不算的都带着原因（why）。
  */
 const fs = require('fs');
@@ -233,6 +233,27 @@ function whyNotDev(env, active) {
   if (env === 'unknown') return '看不出是哪个环境的配置';
   if (active && active.bad) return '是公共配置，但这个项目默认激活的是 ' + active.bad + ' 环境';
   return '';
+}
+/**
+ * 公共配置（application.yml、jdbc.properties）里的连接，同一处的开发环境配置（application-dev.yml，同一个文件里 on-profile: dev 那一段，
+ * 或者 config/ 子目录里的）用同一个键写了另一个连接：跑开发环境时公共配置里这一条被盖掉了，实际连的是开发环境那一条。
+ * 公共配置里留着的多半是测试、生产库，以前照样被算成开发库写进了连接配置（用户 2026-10-07 反馈）。
+ * keyOf 给出每一条的键：库是连接串那一行的键（spring.datasource.url），redis 是那一块的名字（spring.redis）
+ */
+function overriddenByDev(all, keyOf) {
+  const dirOf = (f) => path.dirname(f.file).replace(/\\/g, '/').toLowerCase();
+  const devKeys = new Map();
+  for (const f of all) { const k = keyOf(f); if (f.env !== 'dev' || !k) continue; const d = dirOf(f); if (!devKeys.has(d)) devKeys.set(d, new Map()); if (!devKeys.get(d).has(k)) devKeys.get(d).set(k, f.source); }
+  for (const f of all) {
+    const k = keyOf(f);
+    if (!f.devOnly || !k || f.env === 'dev') continue;
+    const d = dirOf(f);
+    // Spring 读配置的位置：和公共配置同一个目录，或者它的 config/ 子目录；公共配置自己在 config/ 里的，看上一层
+    for (const cand of [d, d + '/config', /\/config$/.test(d) ? d.replace(/\/config$/, '') : '']) {
+      const by = cand && devKeys.has(cand) ? devKeys.get(cand).get(k) : '';
+      if (by) { f.devOnly = false; f.why = '是公共配置，' + by + ' 里用同一个键写了开发环境的连接，跑开发环境时这一条被盖掉'; break; }
+    }
+  }
 }
 /** 文件名说的环境和文档里自己写的环境合起来：文件是测试、生产的，取更不像开发环境的那个；不然文档自己写的更准 */
 function mergeEnv(fileEnv, docEnv) {
@@ -489,7 +510,7 @@ function scanDb(root, opts) {
         if (!e || !e.val) continue;
         const u = expand(e.val);
         if (!JDBC_HEAD.test(u.text)) continue;
-        hits.push({ line: e.i + 1, url: u, user: inBlock(ents, e, USER_KEYS), pw: inBlock(ents, e, PASS_KEYS), block: prefixOf(e.full), docEnv: docEnvs[e.i] || '' });
+        hits.push({ line: e.i + 1, url: u, user: inBlock(ents, e, USER_KEYS), pw: inBlock(ents, e, PASS_KEYS), block: prefixOf(e.full), docEnv: docEnvs[e.i] || '', key: e.full });
       }
     } else {
       const lines = stripComments(raw, '.xml').split('\n');
@@ -499,7 +520,7 @@ function scanDb(root, opts) {
         while ((m = JDBC_IN_XML.exec(lines[i]))) {
           const b = xmlBlock(lines, i);
           const find = (keys) => { for (let d = 0; d <= 40; d++) for (const j of d ? [i + d, i - d] : [i]) if (j >= b.from && j <= b.to) { const v = pickXml(lines[j], keys); if (v) return v; } return ''; };
-          hits.push({ line: i + 1, url: expand(unescapeXml(m[0])), user: find(USER_KEYS), pw: find(PASS_KEYS), block: b.name, docEnv: '' });
+          hits.push({ line: i + 1, url: expand(unescapeXml(m[0])), user: find(USER_KEYS), pw: find(PASS_KEYS), block: b.name, docEnv: '', key: '' });
         }
       }
     }
@@ -522,10 +543,11 @@ function scanDb(root, opts) {
         source: rel, file, line: h.line, dialect, driver: driverKeyOf(url), env, unresolved: h.url.unresolved || user.unresolved,
         // 连接叫什么：多数据源里的名字（master、slave）→ 连接串里的库名 → 数据库的种类（dm、mysql）
         nameHint: ownerName(h.block) || hint || dialect || 'db',
-        devOnly: !why, why,
+        devOnly: !why, why, key: h.key || '',
       });
     }
   }
+  overriddenByDev(all, (f) => f.key);
   // 同一个地址、同一个账号只留一条。它在哪一处被认成不是开发环境的，就整个不算：开发、生产共用一个库的，那就是生产库
   const found = [];
   const byKey = new Map();
@@ -628,11 +650,12 @@ function scanRedis(root, opts) {
         host: host.text, port: Number(port.text) || 6379, password: isEncrypted(pwRaw) || pw.unresolved ? '' : pw.text, encrypted: isEncrypted(pwRaw),
         db: Number(db.text) || 0, mode: g.mode || (g.nodes ? 'cluster' : ''), tls,
         source: rel, file, line: g.line, env, unresolved: host.unresolved || !host.text, nameHint: env === 'dev' ? 'dev' : 'main',
-        devOnly: !why, why,
+        devOnly: !why, why, key: String(g.owner || '').toLowerCase(),
       };
       if (f.host) all.push(f);
     }
   }
+  overriddenByDev(all, (f) => f.key);
   const found = [];
   const byKey = new Map();
   for (const f of all) {

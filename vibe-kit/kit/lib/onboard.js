@@ -395,7 +395,7 @@ function facts(root) {
     const sf = springFacts(runMod ? runMod.dir : root, tracked);
     if (usesBoot) {
       const port = sf.port || '8080';
-      add('启动', 'mvn spring-boot:run' + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起');
+      add('启动', 'mvn spring-boot:run' + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + port + '，它认环境变量 SERVER_PORT，命令不用改');
       if (sf.active) notes.push('配置里写的当前环境是 ' + sf.active);
     } else if ((pom && pom.war) || mods.some((m) => m.war)) add('启动', '打成 war 放进 Tomcat，或者在 IDE 里启动' + NOT_RUN);
     else add('启动', '没认出怎么启动（不是 Spring Boot，也不是 war）：用到的时候问我');
@@ -410,7 +410,7 @@ function facts(root) {
     add('类型', '代码工程。Gradle' + (usesBoot ? '，Spring Boot' : '') + (front && !same(frontDir, root) ? '；前端在 ' + rel(root, frontDir) + '（' + [front.fw, front.bundler].filter(Boolean).join(' + ') + '）' : ''));
     add('快检', g + ' compileJava --offline -q' + NOT_RUN + '。离线不行就去掉 --offline');
     add('全量', g + ' compileJava -q' + NOT_RUN);
-    if (usesBoot) { const sf = springFacts(root, tracked); add('启动', g + ' bootRun，端口 ' + (sf.port || '8080') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + NOT_RUN + '。用 devserver.js 起'); }
+    if (usesBoot) { const sf = springFacts(root, tracked); add('启动', g + ' bootRun，端口 ' + (sf.port || '8080') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + (sf.port || '8080') + '，它认环境变量 SERVER_PORT，命令不用改'); }
   } else if (front && same(frontDir, root)) {
     kind = 'frontend';
     add('类型', '前端。' + [front.fw, front.bundler].filter(Boolean).join(' + '));
@@ -472,7 +472,7 @@ function facts(root) {
       add('全量', front.build ? 'npm run ' + front.build + NOT_RUN : '');
     } else if (front.build) add('前端全量', npmRun(front.build) + NOT_RUN);
     if (front.typeCheck) add(pre + '类型检查', npmRun(front.typeCheck) + NOT_RUN + '。现在就有的错先存成基线，只看新增的');
-    if (front.dev) add(pre + '启动', npmRun(front.dev) + (front.port ? '，端口 ' + front.port + (front.portFrom ? '（' + front.portFrom + '）' : '（默认的）') : '') + (front.proxies.length ? '，接口代理到 ' + front.proxies.join('、') : '') + NOT_RUN + '。用 devserver.js 起，加 --hot');
+    if (front.dev) add(pre + '启动', npmRun(front.dev) + (front.port ? '，端口 ' + front.port + (front.portFrom ? '（' + front.portFrom + '）' : '（默认的）') : '') + (front.proxies.length ? '，接口代理到 ' + front.proxies.join('、') : '') + NOT_RUN + '。用 devserver.js 起，加 --hot，--port auto' + (front.port ? ' --avoid ' + front.port : '') + (/^(Vite|webpack)$/.test(front.bundler) ? '，' + front.bundler + ' 不认环境变量 PORT，命令写 ' + npmRun(front.dev) + ' -- --port {port}' : '，它认环境变量 PORT，命令不用改'));
     for (const n of front.notes) notes.push(n);
   }
   add('编码', encodingFacts(root));

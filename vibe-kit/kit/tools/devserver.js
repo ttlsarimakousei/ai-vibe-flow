@@ -2,10 +2,15 @@
 /*
  * 起服务自测的管家：记住起过哪些服务，不重复起、不换端口、测完能一把停掉。
  *
- *   node devserver.js start --name <名字> --port <端口> [--hot] [--wait 秒] [--env K=V ...] [--dir 项目目录] [--cwd 运行目录] -- <启动命令>
+ *   node devserver.js start --name <名字> --port auto [--avoid 端口,端口] [--hot] [--wait 秒] [--env K=V ...] [--dir 项目目录] [--cwd 运行目录] -- <启动命令>
+ *   node devserver.js start --name <名字> --port <端口> …                        指定端口（前端代理写死了后端端口这类情况）
  *   node devserver.js stop [--name <名字> | --all] [--dir 项目目录]
  *   node devserver.js status [--dir 项目目录]
  *
+ * 端口（用户 2026-10-07 定的）：--port auto 在 30000 到 39999 里挑，离 --avoid 给的端口（项目配置里写的）至少 1000——用户自己在 IDE 里按配置的
+ *   端口起同一个服务不会撞上，这一类项目端口顺着编（8080、8081……）的也撞不上。起点按项目目录和服务名算，同一个服务每次挑到同一个端口。
+ *   挑到的端口怎么交给服务：命令里的 {port} 换成它；环境变量 PORT、SERVER_PORT、VIBE_PORT 也设成它（Spring Boot 认 SERVER_PORT，Vue CLI、
+ *   Next、CRA 认 PORT；Vite、webpack-dev-server 不认，命令里要写 -- --port {port}）。起来之后最后一行说用的是哪个端口。
  * start 的意思是"确保这个服务在跑，而且跑的是现在的代码"：
  *   - 记着的服务还在跑：代码在它启动之后没改过（或者它会热更新，--hot），就直接用，不再起一个；改过就在同一个端口重启。
  *   - 端口被占着、却没有记录：看占着的进程是谁。它的命令行里有这个项目的目录：Claude Code 起的、没人管的（起它的程序已经不在了）停掉重起；
@@ -45,6 +50,26 @@ const readRec = (name) => { try { return JSON.parse(fs.readFileSync(recFile(name
 const allRecs = () => { try { return fs.readdirSync(runDir).filter((f) => /\.json$/i.test(f)).map((f) => { try { return JSON.parse(fs.readFileSync(path.join(runDir, f), 'utf8')); } catch (e) { return null; } }).filter(Boolean); } catch (e) { return []; } };
 const dropRec = (name) => { try { fs.unlinkSync(recFile(name)); } catch (e) { /* 没有 */ } };
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 90 ? s + ' 秒前' : s < 5400 ? Math.round(s / 60) + ' 分钟前' : s < 172800 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
+
+// ---------- 自动挑端口 ----------
+const AUTO_LOW = 30000;
+const AUTO_SPAN = 10000;
+const AUTO_GAP = 1000;
+/** 在 30000 到 39999 里挑一个：起点按项目目录和服务名算，往后找第一个空着的；离 avoid 里的端口至少 1000；这个项目别的服务记着的端口也避开 */
+async function pickPort(name, avoid, rec) {
+  const h = require('crypto').createHash('sha1').update(normPath(dir) + '|' + name).digest();
+  const seed = h.readUInt16BE(0) % AUTO_SPAN;
+  const taken = allRecs().filter((r) => r.name !== name && r.port > 0).map((r) => r.port);
+  for (let k = 0; k < AUTO_SPAN; k++) {
+    const p = AUTO_LOW + ((seed + k * 7919) % AUTO_SPAN);   // 7919 和 10000 互质：走一圈每个端口正好过一次
+    if (avoid.some((a) => Math.abs(a - p) < AUTO_GAP) || taken.includes(p)) continue;
+    // 记着的就是这个端口：是自己上一次起的，老的还在听也不算被占（下面会停掉重起）
+    if (rec && rec.port === p) return p;
+    if (await portOpen(p, 200)) continue;
+    return p;
+  }
+  return 0;
+}
 
 // ---------- 进程和端口 ----------
 function alive(pid) { if (!(pid > 0)) return false; try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }
@@ -284,11 +309,12 @@ function keep() {
   c.on('close', (code) => process.exit(code == null ? 1 : code));
 }
 const quote = (a) => (/^[\w.\-/:\\=@%+,]+$/.test(a) ? a : '"' + String(a).replace(/"/g, '\\"') + '"');
-async function launch(name, port, command) {
+async function launch(name, port, command, meta) {
   fs.mkdirSync(runDir, { recursive: true });
   const log = logFile(name);
   const fd = fs.openSync(log, 'w');
-  const env = Object.assign({}, process.env);
+  // 端口交给服务：Spring Boot 认 SERVER_PORT，Vue CLI、Next、CRA 认 PORT。--env 里写的优先
+  const env = Object.assign({}, process.env, { PORT: String(port), SERVER_PORT: String(port), VIBE_PORT: String(port) });
   for (const kv of envs) { const i = kv.indexOf('='); if (i > 0) env[kv.slice(0, i)] = kv.slice(i + 1); }
   const cwd = path.resolve(dir, opt('cwd') || '.');
   const child = WIN
@@ -296,7 +322,7 @@ async function launch(name, port, command) {
     : spawn(command, { shell: true, detached: true, stdio: ['ignore', fd, fd], cwd, env });
   child.unref();
   fs.closeSync(fd);
-  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot'), log };
+  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot'), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [] };
   fs.writeFileSync(recFile(name), JSON.stringify(rec, null, 2));
   return waitUp(rec, Number(opt('wait')) || 180);
 }
@@ -330,7 +356,7 @@ async function waitUp(rec, waitSec) {
       const who = whoListens(rec.port);
       // 这一行放在最后：输出的最后一行就是结果
       console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
-      console.log('起来了：' + rec.name + '，端口 ' + rec.port + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
+      console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
       return 0;
     }
     // 启动命令自己退了（startup.bat 这类把服务甩到后台就走）：服务可能还在起，再等它 15 秒
@@ -346,15 +372,23 @@ async function waitUp(rec, waitSec) {
 
 async function start() {
   const name = opt('name') || 'app';
-  const port = Number(opt('port'));
-  if (!(port > 0 && port < 65536)) { console.log('要写 --port <端口>：这个服务监听的端口（项目说明里记的那个）。不要换端口另起一个。'); return 2; }
-  if (!cmdArgs.length) { console.log('要在 -- 后面写启动命令，比如：node devserver.js start --name backend --port 8080 -- mvn spring-boot:run'); return 2; }
-  // -- 后面只有一个参数（整条命令加了引号）：原样用，不再包一层引号
-  const command = cmdArgs.length === 1 ? cmdArgs[0] : cmdArgs.map(quote).join(' ');
+  const portArg = String(opt('port') || '').trim().toLowerCase();
+  const auto = portArg === 'auto';
+  let port = Number(portArg);
+  if (!auto && !(port > 0 && port < 65536)) { console.log('要写 --port auto（在 30000 到 39999 里挑一个空着的，离 --avoid 给的端口远）或者 --port <端口>。'); return 2; }
+  if (!cmdArgs.length) { console.log('要在 -- 后面写启动命令，比如：node devserver.js start --name backend --port auto --avoid 8080 -- mvn spring-boot:run'); return 2; }
+  const avoid = String(opt('avoid') || '').split(/[,，\s]+/).map(Number).filter((n) => n > 0 && n < 65536);
   const cwd = path.resolve(dir, opt('cwd') || '.');
+  const rec = readRec(name);
+  if (auto) {
+    // 记着的服务上次就是自动挑的：还用那个端口，同一个服务每次都是同一个端口（场景文件里写的地址不用改）
+    port = rec && rec.auto && rec.port > 0 && !avoid.some((a) => Math.abs(a - rec.port) < AUTO_GAP) ? rec.port : await pickPort(name, avoid, rec);
+    if (!port) { console.log('没起来：30000 到 39999 里挑不出空着的端口。'); return 1; }
+  }
+  // -- 后面只有一个参数（整条命令加了引号）：原样用，不再包一层引号。命令里的 {port} 换成这次用的端口
+  const command = (cmdArgs.length === 1 ? cmdArgs[0] : cmdArgs.map(quote).join(' ')).split('{port}').join(String(port)).split('{PORT}').join(String(port));
   // 同一个服务：命令、端口、运行目录都一样（同名同端口换了个子项目，不能拿另一个子项目的服务来用）
   const same = (r) => r.cmd === command && r.port === port && normPath(r.cwd || dir) === normPath(cwd);
-  const rec = readRec(name);
   const recUp = rec ? await portOpen(rec.port, 500) : false;
   if (rec && sameProc(rec) && !recUp) {
     // 进程还在、端口没通：多半还在启动。同一个服务就接着等，不结束重来（大项目起得慢，结束重来可能永远起不来）
@@ -401,7 +435,7 @@ async function start() {
     for (const x of who) killTree(x.i.pid);
     if (!(await waitClosed(port, 8000))) { console.log('停不掉占着端口 ' + port + ' 的进程，没有起新的。'); return 1; }
   }
-  return launch(name, port, command);
+  return launch(name, port, command, { auto, avoid });
 }
 
 async function stop() {
@@ -428,7 +462,7 @@ async function status() {
     if (!open) { console.log(r.name + '：还在启动（进程 ' + r.pid + ' 在，端口 ' + r.port + ' 还没通，' + ago(r.startedAt) + '起的）。等一会儿；start 一次会接着等它。\n  命令：' + r.cmd + '\n  日志：' + r.log); continue; }
     const changed = !r.hot ? changedSince(r.startedAt, r.cwd) : [];
     const who = whoListens(r.port);
-    console.log(r.name + '：在跑，端口 ' + r.port + (who ? '，听这个端口的是 ' + who : '') + '，' + ago(r.startedAt) + '起的' + (r.hot ? '，会热更新' : changed.length ? '，之后代码改过（' + changed.slice(0, 3).join('、') + (changed.length > 3 ? ' 等' : '') + '），测之前要 start 一下（会自动重启）' : '，跑的是现在的代码') + '\n  命令：' + r.cmd + '\n  运行目录：' + (r.cwd || dir) + '\n  日志：' + r.log);
+    console.log(r.name + '：在跑，端口 ' + r.port + (r.auto ? '（自动挑的）' : '') + (who ? '，听这个端口的是 ' + who : '') + '，' + ago(r.startedAt) + '起的' + (r.hot ? '，会热更新' : changed.length ? '，之后代码改过（' + changed.slice(0, 3).join('、') + (changed.length > 3 ? ' 等' : '') + '），测之前要 start 一下（会自动重启）' : '，跑的是现在的代码') + '\n  命令：' + r.cmd + '\n  运行目录：' + (r.cwd || dir) + '\n  日志：' + r.log);
   }
   return 0;
 }

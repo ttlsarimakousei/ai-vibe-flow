@@ -5,7 +5,8 @@
  *   1. 改了代码，但最后一次修改之后没成功跑过像验证的命令        → 让它跑快检（开关 autoVerify）
  *   2. 改了页面文件，但之后没跑过页面场景                        → 让它按 /ttls-see-page 跑一遍（开关 autoSeePage）
  *   3. 这一轮把某个 OpenSpec 变更的最后一项任务打了勾，代码还没审过 → 让它 /ttls-cross-review（开关 autoCrossReview；每个变更催一次）
- *   4. 这一轮改过的文件在 git 里还没提交                          → 让它提交（开关 autoCommit：task / change / off；每一轮只提一次）
+ *   4. 这一轮改过的文件在 git 里还没提交                          → 让它提交（开关 autoCommit：task / phase / change / off；每一轮只提一次。
+ *      phase = 按阶段：tasks.md 里同一个大编号的任务全打勾了才催，做到一半不催，见 phaseDone）
  *   4b. 这个会话里新建、还没进 git 的文件，项目里留下的备份、日志 → 要交的提交，临时的删掉（开关 vibeTidy；同一批只提一次，说做完了再提一次）
  *   4c. 说了是套件的问题却没记问题反馈 → 让它记；做完了、这个会话记过套件问题 → 交代里单独列"套件问题"（lib/feedback.js）
  *   4d. 审查报了问题、处理过了，却没记经验 → 让它挑"还会再犯"的记下来；经验规则文件改了没提交 → 让它提交（开关 lessons，lib/lessons.js）
@@ -20,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, cli } = require('../lib/session');
+const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 let tidy = null;
@@ -91,6 +92,35 @@ function projectNotesFor(file) {
 }
 const notApplicable = (notes, key) => new RegExp('^\\s*[-*]?\\s*(?:' + key + ')\\s*[:：]\\s*不适用', 'm').test(notes);
 
+/** 自动提交的档位：task 每项任务 / phase 每个阶段 / change 整个变更 / off 用户说了才提交 */
+const commitMode = (cfg) => (['task', 'phase', 'change', 'off'].includes(cfg.autoCommit) ? cfg.autoCommit : 'task');
+/** 仓库最近一次提交是什么时候（毫秒，按那一秒的末尾算）。没提交过、查不了返回 0 */
+function lastCommitAt(root) {
+  try { const s = require('child_process').execFileSync('git', ['--no-optional-locks', '-C', root, 'log', '-1', '--format=%ct'], { encoding: 'utf8', timeout: 8000, windowsHide: true }).trim(); return /^\d+$/.test(s) ? Number(s) * 1000 + 999 : 0; } catch (e) { return 0; }
+}
+/**
+ * 按阶段提交：这个变更有没有"刚做完的阶段"——tasks.md 里同一个大编号（1.x、2.x）的任务全部打勾，而且最后那一个勾打在仓库最近一次提交之后。
+ * 没有编号的任务各算一组（和每项任务提交一样）。since 是仓库最近一次提交的时间，0 = 没提交过。
+ * 用户 2026-10-07 定的：每项任务提交太碎，整个变更提交太大，按阶段是中间那一档
+ */
+function phaseDone(c, since) {
+  let text;
+  try { text = fs.readFileSync(path.join(c.dir, 'tasks.md'), 'utf8'); } catch (e) { return false; }
+  let ticks = {};
+  try { ticks = syncTicks(c.dir) || {}; } catch (e) { ticks = {}; }
+  const groups = new Map();
+  for (const l of text.split(/\r?\n/)) {
+    const m = l.match(TASK_LINE);
+    if (!m) continue;
+    const body = m[3].trim();
+    const num = /^(\d+)(?:[.．]\d+)*/.exec(body);
+    const g = num ? num[1] : body.slice(0, 20);
+    if (!groups.has(g)) groups.set(g, { open: 0, last: 0 });
+    const x = groups.get(g);
+    if (m[2] === ' ') x.open++; else x.last = Math.max(x.last, Number(ticks[taskKey(body)]) || 0);
+  }
+  return [...groups.values()].some((x) => !x.open && x.last > since);
+}
 /** 这些文件里，哪些在 git 看来还没提交。按仓库分组各问一次 git（不抢 IDE 的 index 锁）；被忽略的文件 git 不会列出来 */
 function gitStatus(root, rel) {
   return new Promise((resolve) => {
@@ -196,7 +226,7 @@ function lessonTodo(j, cfg, entries, reviews, lastSaid) {
 }
 function lessonCommitTodo(j, cfg, turnId, changes) {
   if (!lessons || !j.session_id || lessons.settings(cfg).mode === 'off') return '';
-  const mode = ['task', 'change', 'off'].includes(cfg.autoCommit) ? cfg.autoCommit : 'task';
+  const mode = commitMode(cfg);
   if (mode === 'off') return '';
   if (mode === 'change' && changes().some((c) => c.todo > 0)) return '';
   const list = lessons.uncommitted(j.cwd || process.cwd());
@@ -308,10 +338,10 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start) {
   const parts = [];
   if (procList.length) parts.push('项目里留下了过程文件（备份、日志、临时文件）：' + show(procList) + '。删掉，或者挪进 .vibe/tmp/<事由>/；不要留在项目里，也不要提交。是程序运行时自己生成的（比如上传目录、运行日志），不用动，说一句就行。');
   if (newFiles.length) {
-    const mode = ['task', 'change', 'off'].includes(cfg.autoCommit) ? cfg.autoCommit : 'task';
-    const midChange = mode === 'change' && changes().some((c) => c.todo > 0);
+    const mode = commitMode(cfg);
+    const midChange = (mode === 'change' || mode === 'phase') && changes().some((c) => c.todo > 0);
     if (mode === 'off') parts.push('你这个会话里新建、还没进 git 的文件：' + show(newFiles) + '。为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；要交的留着，等我提交。');
-    else parts.push('你这个会话里新建的这些文件还没进 git：' + show(newFiles) + '（git 不会自动带上新文件）。是这件事要交的，git add 后' + (midChange ? '跟着整个变更一起提交' : '提交') + '；是为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；还要接着用的，说一句留着干什么。');
+    else parts.push('你这个会话里新建的这些文件还没进 git：' + show(newFiles) + '（git 不会自动带上新文件）。是这件事要交的，git add 后' + (midChange ? (mode === 'phase' ? '跟着这一阶段一起提交' : '跟着整个变更一起提交') : '提交') + '；是为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；还要接着用的，说一句留着干什么。');
   }
   hookLog('verify-gate leftover ' + (final ? 'final ' : '') + 'new=' + newFiles.length + ' proc=' + procList.length);
   return (final ? '收尾：这件事做完了，下面这些还留着。' : '') + parts.join('\n');
@@ -776,18 +806,22 @@ async function handle(j) {
   }
 
   // 提交：这一轮自己改成功的文件（.vibe、.claude 里的不算）在 git 里还是没提交的状态。每一轮只提一次
-  const mode = ['task', 'change', 'off'].includes(cfg.autoCommit) ? cfg.autoCommit : 'task';
+  const mode = commitMode(cfg);
   if (mode !== 'off' && j.session_id !== undefined) {
     const mine = [...new Set(calls.filter(isEdit).map(fileOf).filter((f) => !/(^|[\\/])\.(vibe|claude)[\\/]/.test(f)))];
     const ckey = sid + '-commit';
     const once = turnId ? readState(ckey).turnId !== turnId : !j.stop_hook_active;
-    const midChange = mode === 'change' && changes().some((c) => c.todo > 0);
-    if (mine.length && once && !midChange) {
+    const active = changes().filter((c) => c.todo > 0);
+    if (mine.length && once && !(mode === 'change' && active.length)) {
       const dirty = await uncommitted(mine);
-      if (dirty.length) {
+      // 按阶段：还有没做完的变更时，只有刚做完一个阶段（那一组最后一个勾打在仓库最近一次提交之后）才催；做到一半不催
+      const since = mode === 'phase' && active.length && dirty.length ? Math.min(...dirty.map((d) => lastCommitAt(d.root))) : 0;
+      const ready = mode !== 'phase' || !active.length || active.some((c) => phaseDone(c, since));
+      if (dirty.length && ready) {
         writeState(ckey, { turnId, at: Date.now() });
         const where = dirty.map((d) => path.basename(d.root) + '（' + d.count + ' 个文件）').join('、');
-        const how = '先自己把 diff 过一遍（有没有调试代码、误改、漏改），然后进到对应的仓库（git -C <目录>），只 git add 你这一轮改的和新建的文件（新建的 git 不会自动带上；不用 -A、.、-u，也不用 commit -a），一项任务一次提交，信息按"类型: 内容"写（例：feat: 新增修改页面）；只提交不 push';
+        const unit = mode === 'phase' ? '一个阶段（tasks.md 里同一个大编号的任务）一次提交，信息写这一组做了什么' : mode === 'change' ? '整个变更一次提交' : '一项任务一次提交';
+        const how = '先自己把 diff 过一遍（有没有调试代码、误改、漏改），然后进到对应的仓库（git -C <目录>），只 git add 你这一轮改的和新建的文件（新建的 git 不会自动带上；不用 -A、.、-u，也不用 commit -a），' + unit + '，信息按"类型: 内容"写（例：feat: 新增修改页面）；只提交不 push';
         if (todo.length) todo.push('验证过了就接着提交，不用等我说：' + how + '。验证没过、还没做完的先不提交。');
         else todo.push('这一轮改过的文件还没提交：' + where + '。已经做完并且验证过的，现在提交：' + how + '。还没做完、验证没过的先不提交，说明原因就行。');
       }

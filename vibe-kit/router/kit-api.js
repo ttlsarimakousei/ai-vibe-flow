@@ -55,7 +55,7 @@ function cleanConfig(x, base) {
   const rounds = Number(x && x.reviewMaxRounds); if (rounds >= 1 && rounds <= 5) c.reviewMaxRounds = Math.round(rounds);
   if (x && ['ask', 'off'].includes(x.handoverAsk)) c.handoverAsk = x.handoverAsk;
   // 自动提交：task 每完成一件事就提交；change 整个 OpenSpec 变更做完再提交一次；off 用户说了才提交
-  if (x && ['task', 'change', 'off'].includes(x.autoCommit)) c.autoCommit = x.autoCommit;
+  if (x && ['task', 'phase', 'change', 'off'].includes(x.autoCommit)) c.autoCommit = x.autoCommit;
   // 钩子运行方式：auto 装了路由就走 HTTP、否则走命令；http、command 固定用一种。别的值丢掉，用默认的 auto
   if (x && ['auto', 'http', 'command'].includes(x.hookTransport)) c.hookTransport = x.hookTransport;
   // 被检查拦住、它确信是套件拦错了：ask 申请后弹确认框等你点头；auto 记下问题就放行；off 不许申请

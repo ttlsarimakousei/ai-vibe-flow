@@ -41,9 +41,9 @@ function isStop(p) {
   if (KEEP_GOING.test(p)) return false;
   return HALT.test(p) || (SHORT_NO.test(p) && p.replace(/[\s，,。.！!？?~～…、；;:：]/g, '').length <= 8);
 }
-/** 这句话像不像一条需求（不是问句、不是闲话、不是让它停、不是斜杠命令） */
+/** 这句话像不像一条需求（不是问句、不是闲话、不是让它停、不是让它出一份文档、不是斜杠命令） */
 function looksLikeRequirement(p) {
-  if (!p || p.length < 6 || p.length > 3000 || /^\s*\//.test(p) || SMALL_TALK.test(p) || isStop(p) || QUESTION.test(p) || !NEED.test(p)) return false;
+  if (!p || p.length < 6 || p.length > 3000 || /^\s*\//.test(p) || SMALL_TALK.test(p) || isStop(p) || looksLikeOutputRequest(p) || QUESTION.test(p) || !NEED.test(p)) return false;
   return !/接着上一个会话的交接记录继续/.test(p);
 }
 /**
@@ -81,6 +81,9 @@ function decideFlow(j, cfg, note, resumed) {
   else if (CONTINUE_WORDS.test(p)) { on = going; why = on ? '接着上一轮' : ''; cont = true; }
   // 问句只回答：这一轮不在流程里（说"继续"就接回去）
   else if (QUESTION.test(p)) { on = false; }
+  // 让它出一份代码之外的东西（说明、报告、清单，或者"生成一个文件记一下"）：也是插进来的一句，不在流程里——放哪照常问用户，全自动不作数。
+  // 以前"正在流程里，又说了一句不是问句的话"把这种也算在流程里，全自动开着时就不问、自己挑地方放了（用户 2026-10-07 反馈）
+  else if (looksLikeOutputRequest(p)) { on = false; }
   // 正在流程里，又说了一句不是问句的话（"3.3 我执行过了，接着归档""字段名不对，应该是 X"）：还在流程里
   else if (prev.on) { on = true; why = '接着上一轮'; }
   else if (looksLikeRequirement(p)) { on = true; why = '提了需求'; }
@@ -101,12 +104,21 @@ function requirementHint(j, cfg) {
  * 这句话要的东西里像是有代码之外的产出（DDL、说明文档、分析报告、表格）：开工前先定好放哪。
  * 写文件那一刻钩子（guard-output）还会查一次，这里是让它在动手之前就想到，别写完了才被拦。开关 outputGate
  */
-const OUTPUT_NOUN = /(ddl|建表|sql\s*脚本|报告|说明文档|功能说明|设计文档|接口文档|操作手册|使用手册|手册|纪要|清单|excel|xlsx|word|docx|表格|文档)/i;
-const OUTPUT_VERB = /(写|出|生成|整理|做|输出|导出|给我|弄|起草|编)/;
+const OUTPUT_NOUN = /(ddl|建表|sql\s*脚本|报告|说明文档|功能说明|设计文档|接口文档|操作手册|使用手册|手册|纪要|清单|excel|xlsx|word|docx|表格|文档|笔记|备忘|markdown|\.md\b|\.txt\b)/i;
+const OUTPUT_VERB = /(写|出|生成|整理|做|输出|导出|给我|弄|起草|编|记)/;
+// "生成一个文件记录一下""建个 md 记一下"：没点明是哪种文档，但就是要一个文件来记东西
+const NEW_FILE = /(生成|新建|建|创建|写|做|弄|开)(一个|个|一份|份|一张|张)?(新的?)?(文件|md|markdown|txt|记录)/i;
+// 这些是代码的活（功能、接口、页面……），不算"让它出一份东西"。"接口文档""功能说明"是文档，不算代码的活
+const CODE_WORK = /(功能(?!说明)|模块|页面|接口(?!文档|说明)|代码|实现|开发|改造|重构|优化|集成|对接|bug|报错|组件|服务|字段)/i;
+/** 这句话是不是让它出一份代码之外的东西（文档、报告、清单、一个记东西的文件），而不是做代码的活 */
+function looksLikeOutputRequest(p) {
+  if (!p || p.length > 3000 || /^\s*\//.test(p) || CODE_WORK.test(p)) return false;
+  return (OUTPUT_NOUN.test(p) && OUTPUT_VERB.test(p)) || NEW_FILE.test(p);
+}
 function outputHint(j, cfg) {
   if (!cfg || cfg.outputGate === false) return '';
   const p = String(j.prompt || '').trim();
-  if (!p || p.length > 3000 || !OUTPUT_NOUN.test(p) || !OUTPUT_VERB.test(p)) return '';
+  if (!p || p.length > 3000 || !((OUTPUT_NOUN.test(p) && OUTPUT_VERB.test(p)) || NEW_FILE.test(p))) return '';
   if (cfg.autoMode) return '这次要是会产出代码之外的文件（DDL 脚本、说明文档、分析报告、表格……）：项目说明的"产出位置"里有的照着放；没有的先放 .vibe/pending/，最后交代时列进"等你回来定的事"，不要自己挑地方。';
   return '这次要是会产出代码之外的文件（DDL 脚本、说明文档、分析报告、表格……），开工前先定好放哪：项目说明的"产出位置"里有的照着放；没有的现在就用提问框问我，选项写实际目录，定了记进项目说明，别等写完了才问。';
 }
