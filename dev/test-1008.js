@@ -256,6 +256,49 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   }
 
   // ---------------------------------------------------------------------------------------------
+  H.section('归档之后出流程；审查者只读不跑编译，使用情况里记审查耗时');
+  {
+    const h = H.makeHome('t1008-done', null, Object.assign({ autoMode: true }, QUIET));
+    const proj = H.makeRepo(path.join(h.work, 'crm'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', 'openspec/changes/done-y/tasks.md': '- [x] 1.1 改 src/A.java；验：mvn -q compile\n' });
+    const chg = path.join(proj, 'openspec', 'changes', 'done-y');
+    const sid = 'd1';
+    H.inFlow(h, sid, [chg], true, 'apply');
+    const tf = path.join(h.root, 'd.jsonl');
+    const sl = () => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
+    H.ok('变更还在：状态栏说在做任务', /在流程里，在做任务/.test(sl()), sl());
+    fs.mkdirSync(path.join(proj, 'openspec', 'changes', 'archive'), { recursive: true });
+    fs.renameSync(chg, path.join(proj, 'openspec', 'changes', 'archive', '2026-10-07-done-y'));
+    H.ok('变更归档了、收工检查还没跑：状态栏就说归档了，照常', /这个会话的变更归档了，照常/.test(sl()) && !/在做任务/.test(sl()), sl());
+    H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('归档'), H.tr.ran('Bash', { command: 'openspec archive done-y --yes' }, 'ok'), H.tr.say('归档好了')]), stop_hook_active: false, last_assistant_message: '归档好了' });
+    const flow = () => readJson(path.join(h.kit, 'state', sid + '-flow.json'));
+    H.ok('收工时记成不在流程里', flow().on === false && /归档/.test(flow().why), flow());
+    H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt: '继续', transcript_path: tf });
+    H.ok('再说"继续"不接回去', flow().on === false, flow());
+    H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt: '/opsx:propose add-z', transcript_path: tf });
+    H.ok('敲 /opsx:propose 照样进流程（写提案那一段）', flow().on === true && flow().stage === 'plan', flow());
+    // 审查者的说法
+    const agent = H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || '';
+    H.ok('审查者：不编译、不跑测试，最多读 20 个文件', /不编译、不跑测试、不起服务/.test(agent) && /最多读 20 个文件/.test(agent) && !/能跑的就跑/.test(agent), agent.slice(0, 200));
+    const skill = H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || '';
+    H.ok('技能：验证结果贴给它，它不自己跑；只核实会出错、有隐患的；写了慢的时候看哪里', /它不自己编译、不跑测试/.test(skill) && /只核实"会出错""有隐患"的/.test(skill) && /## 审查慢的时候看哪里/.test(skill), skill.slice(0, 200));
+    // 审查耗时：一次审查从调用到结论 3 分钟
+    const chg2 = path.join(proj, 'openspec', 'changes', 'add-z');
+    H.write(path.join(chg2, 'tasks.md'), '- [x] 1.1 改 src/A.java；验：mvn -q compile\n');
+    const t0 = Date.now() - 600000;
+    const call = Object.assign(H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：openspec/changes/add-z/\n材料…' }, 'toolu_rev1'), { timestamp: new Date(t0).toISOString() });
+    const res = Object.assign(H.tr.result('toolu_rev1', '审完了。\n结论：问题 0 条'), { timestamp: new Date(t0 + 180000).toISOString() });
+    H.hook(h, 'verify-gate', { session_id: 'd2', cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('审一下 add-z 的代码'), call, res, H.tr.say('审完了，0 条')]), stop_hook_active: false, last_assistant_message: '审完了，0 条' });
+    const days = readJson(path.join(h.kit, 'state', 'usage.json')).days || {};
+    const sum = (k) => Object.values(days).reduce((a, d) => a + Number((d.n || {})[k] || 0), 0);
+    H.ok('使用情况里记了这次审查的耗时（3 分钟）', sum('review.code') === 1 && sum('review.ms') >= 179000 && sum('review.ms') <= 181000, days);
+    const U = require(path.join(h.kit, 'lib', 'usage.js'));
+    const rows = U.render ? '' : '';
+    void rows;
+    const text = JSON.stringify(Object.values(days));
+    H.ok('（记在当天的 n 里）', /review\.ms/.test(text), text.slice(0, 200));
+  }
+
+  // ---------------------------------------------------------------------------------------------
   H.section('交接："不问"只提醒一句，不让它自己写交接记录');
   {
     const h = H.makeHome('t1008-ho', null, Object.assign({ handoverAsk: 'off', handoverPercent: 70 }, QUIET));
