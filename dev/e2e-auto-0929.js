@@ -150,7 +150,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   H.setConfig(h, { autoMode: true, reviewLoop: true, reviewMaxRounds: 3, autoCommit: 'off', lessons: 'off', vibeTidy: false, autoUpdate: 'off', issueUpload: 'off' });
   const sync = H.node(h, path.join(kit, 'install.js'), ['--sync'], { cwd: root, timeout: 180000 });
   const md = H.read(path.join(cfg, 'CLAUDE.md')) || '';
-  H.ok('全局约定里有全自动模式那一节，最前面说了以它为准', sync.code === 0 && /### 全自动模式（已开）/.test(md) && /> 全自动模式开着：走 OpenSpec 流程的时候/.test(md) && /别的时候我在，照常来/.test(md) && /以这一节为准/.test(md), sync.out + sync.err);
+  H.ok('全局约定里有全自动模式那一节，最前面说了以它为准', sync.code === 0 && /### 全自动模式（已开）/.test(md) && /> 全自动模式开着：做 OpenSpec 变更的任务的时候/.test(md) && /别的时候我在，照常来/.test(md) && /以这一节为准/.test(md), sync.out + sync.err);
   const st = JSON.parse(H.read(path.join(cfg, 'settings.json')));
   H.ok('环境变量里关掉了 OpenSpec 的遥测和更新检查', st.env && st.env.OPENSPEC_TELEMETRY === '0' && st.env.OPENSPEC_NO_UPDATE_CHECK === '1', st.env);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));

@@ -100,7 +100,8 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     install(h, H.SRC);
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
     H.ok('约定里有 "Please remove all mannered prose."，只出现一次', (md.match(/Please remove all mannered prose\./g) || []).length === 1, md.slice(0, 300));
-    H.ok('约定总长没有失控（默认开关不超过 7000 字符）', md.length > 3000 && md.length <= 7000, md.length);
+    // 1008 那一批加了归档、提交要点头和小改动直接改的规矩，涨到 7,000 出头
+    H.ok('约定总长没有失控（默认开关不超过 7200 字符）', md.length > 3000 && md.length <= 7200, md.length);
   }
 
   // ---------------------------------------------------------------------------------------------

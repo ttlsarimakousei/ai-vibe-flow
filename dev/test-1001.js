@@ -261,7 +261,8 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     H.write(path.join(shell, 'web', 'mine.txt'), 'x\n'); H.git(path.join(shell, 'web'), ['add', '-A']); H.git(path.join(shell, 'web'), ['-c', 'user.email=t@e.com', '-c', 'user.name=t', 'commit', '-q', '-m', 'feat: 我的']);
     H.write(path.join(mate2, 'index.html'), '<p>3</p>\n'); H.git(mate2, ['commit', '-qam', 'feat: 页面 3']); H.git(mate2, ['push', '-q', 'origin', 'main']);
     forget();
-    const t10 = raw('做一个导出订单的功能', shell, 'sp-auto');
+    // 1008 起全自动只管做任务那一段：提需求是写提案那一段（有人在），拿敲 /opsx:apply 来测全自动的说法
+    const t10 = raw('/opsx:apply export-orders', shell, 'sp-auto');
     const rep = readJson(path.join(w.kit, 'state', 'sp-auto-report.json'));
     H.ok('全自动：分叉了照本地的做，写进最后的交代', /web：本地有 1 个没推的提交，远端也有 1 个新提交（分叉了），没拉。全自动模式：照本地的做/.test(t10), t10);
     H.ok('全自动：记进报告"留给你做的"', (rep.items || []).some((i) => i.kind === 'hand' && /开工前没拉成代码：web/.test(i.title) && /git pull --rebase/.test(i.detail)), rep);

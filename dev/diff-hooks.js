@@ -57,6 +57,7 @@ const V1505 = '20260930.1505'; // 串着 cd 的命令拦下、壳子和起服务
 const V2248 = '20260930.2248'; // 提示规则去掉了；过程文件的提示里写明变更的留到归档；整仓 add 的提示里说了新仓库第一次入仓不拦
 const V1005 = '20261005.0302'; // 闲话、"让它停"不再只看开头几个字：开头碰巧是"不用""好"的需求照需求提醒
 const V1007 = '20261007.1217'; // 起服务的提示：端口改成 --port auto --avoid <配置里的端口>
+const V1008 = '99999999.0000'; // 不走 OpenSpec 的提交要用户点头；归档要用户说了才做；全自动只管 apply（开工时告诉用户开没开）。打包后换成版本号
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -113,13 +114,20 @@ add('命令：归档没做完的变更', 'guard-commit', cmd('openspec archive a
 add('命令：注释里提到套件的路径', 'guard-commit', cmd('# 先用 node "$HOME/.claude/vibe-kit/tools/trace.js" 溯源过了\ngit checkout -- src/main/java/com/x/A.java'), /放行，没有输出/, V0929);
 add('命令：注释里写了 git push', 'guard-commit', cmd('git status # 之后再 git push'), /放行，没有输出/, V0929);
 add('规格的需求没放在增量标题下面', 'pre-edit', edit('openspec/changes/add-export/specs/export/spec.md', 'Write', { content: '## 需求\n\n### Requirement: 导出\n\n系统应当能导出。\n\n#### Scenario: 正常导出\n\n- WHEN 选中 3 条点导出\n- THEN 下载的文件里有 3 行\n' }), /没放在增量标题下面/, V0929);
-for (const c of ['ls -la', 'git status', 'mvn -q -o compile', 'git commit -m "改了点东西"', 'git commit -m "feat: 新增导出"', 'git commit -m "fix: 导出漏了表头（源自 add-export 2.3）"', 'git add src/main/java/com/x/A.java && git commit -m "feat: 新增导出"', 'git commit -am "feat: x"',
+// 1008 有意改的：不走 OpenSpec 的提交（这个会话没动过变更）要用户点头
+for (const c of ['git commit -m "feat: 新增导出"', 'git commit -m "fix: 导出漏了表头（源自 add-export 2.3）"', 'git add src/main/java/com/x/A.java && git commit -m "feat: 新增导出"']) add('命令：' + c, 'guard-commit', cmd(c), /不走 OpenSpec 的改动，提交之前要我点头/, V1008);
+add('命令：用户说了提交再提交', 'guard-commit', (kit) => { const proj = project(kit); const j = base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git add src/main/java/com/x/A.java && git commit -m "feat: 新增导出"' } }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), [H.tr.user('改好了，提交')]); return { proj, j }; });
+for (const c of ['ls -la', 'git status', 'mvn -q -o compile', 'git commit -m "改了点东西"', 'git commit -am "feat: x"',
   'git push', 'git -C "<项目>" push origin main', 'rm -rf ~/.claude/vibe-kit/hooks', 'cat ~/.claude/vibe-kit/config.json', 'echo x > ~/.claude/settings.json', 'node ~/.claude/vibe-kit/install.js --uninstall',
   'node "$HOME/.claude/vibe-kit/tools/feedback.js" list', 'taskkill //F //IM node.exe', 'pkill node', 'node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name a --port 8080 -- mvn spring-boot:run',
   'curl -s http://127.0.0.1:15730/api/kit -H "x-vibe-router: 1"', 'curl -s http://127.0.0.1:8080/api/orders',
   'git add src/main/java/com/x/A.java.bak', 'grep -rn disableAllHooks .', 'echo \'{"disableAllHooks":true}\' > .claude/settings.local.json']) add('命令：' + c, 'guard-commit', cmd(c));
-for (const c of ['git commit -m "feat: 新增导出"; if ($?) { git push }', 'Remove-Item -Recurse $env:USERPROFILE\\.claude\\vibe-kit', 'Get-Content $env:USERPROFILE\\.claude\\vibe-kit\\config.json', 'Stop-Process -Name node -Force'])
+add('PowerShell：git commit -m "feat: 新增导出"; if ($?) { git push }', 'guard-commit', cmd('git commit -m "feat: 新增导出"; if ($?) { git push }', 'PowerShell'), /不走 OpenSpec 的改动，提交之前要我点头/, V1008);
+for (const c of ['Remove-Item -Recurse $env:USERPROFILE\\.claude\\vibe-kit', 'Get-Content $env:USERPROFILE\\.claude\\vibe-kit\\config.json', 'Stop-Process -Name node -Force'])
   add('PowerShell：' + c, 'guard-commit', cmd(c, 'PowerShell'));
+// 1008 有意改的：敲 /opsx:apply 开工时告诉用户全自动开没开（systemMessage），给模型的提醒里也有一句
+add('开口：敲 /opsx:apply（开工时说全自动开没开）', 'task-anchor', prompt('/opsx:apply add-export'), /开始 apply：全自动模式关着/, V1008);
+add('开口：说"开工"（点名变更）', 'task-anchor', prompt('提案看过了，开工 add-export', null, () => [H.tr.user('做一个导出功能'), H.tr.say('提案写好了')]), /开始 apply：全自动模式关着/, V1008);
 // 这一版有意改的：整仓 add 的提示里说了新建的仓库第一次入仓不拦；过程文件的提示里写明事由是变更名的留到变更归档；
 // 变更没归档之前不让删它的过程文件；目录写在变量里的 git 命令说清是算不出是哪个仓库
 for (const c of ['git add -A', 'git add .']) add('命令：' + c, 'guard-commit', cmd(c), /新建的仓库第一次入仓（还没有任何提交）不拦，可以整仓 add/, V2248);
@@ -193,7 +201,7 @@ add('收工：审查报了问题、改了、验了（自动收开着）', 'verif
 add('开口：提需求', 'task-anchor', prompt('加一个导出订单的功能'));
 add('开口：问问题', 'task-anchor', prompt('这里为什么这么写？'));
 add('开口：提到表结构（提示规则去掉了）', 'task-anchor', prompt('看一下订单表的表结构'), /放行，没有输出/, V2248);
-add('开口：说测试发现问题', 'task-anchor', prompt('测试发现导出报错了'));
+add('开口：说测试发现问题', 'task-anchor', prompt('测试发现导出报错了'), /这像是在做完的功能上发现的问题（变更还没归档）：先查清原因，改动小（三个文件以内、不改接口和表结构、不改需求）就直接改/, V1008);
 add('开口：继续', 'task-anchor', prompt('继续'));
 // 1005：闲话、"让它停"只看开头几个字的毛病改了——开头碰巧是"不用""好"的需求，照需求提醒
 add('开口：开头是"不用"的需求', 'task-anchor', prompt('不用写提案，直接在 OrderService 加导出接口'), /这像一条需求/, V1005);

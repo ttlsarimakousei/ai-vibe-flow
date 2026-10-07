@@ -132,6 +132,8 @@ H.section('审过代码之后打勾、改验法，审查照样算数（F20260928
   // 用户做完了 6.1，模型打勾；又改了一句验法。tasks.md 的修改时间比审查晚
   fs.writeFileSync(tasks, fs.readFileSync(tasks, 'utf8').replace('- [ ] 6.1', '- [x] 6.1').replace('返回 admin', '返回 admin 一行'));
   H.ok('反馈原样：审查之后打了不改代码的任务的勾，照样算审过', S.codeReviewed(chg), S.codeReviewIssue(chg));
+  // 1008 起归档还要用户说了才做：会话记录里用户最后一句说了归档
+  H.transcript(tfile, [H.tr.user('审完了，归档 gate2')]);
   const r = H.hook(h, 'guard-commit', Object.assign(base('s-b1b'), { tool_name: 'Bash', tool_input: { command: 'mv openspec/changes/gate2 openspec/changes/archive/2026-09-29-gate2 && ls openspec/changes/' } }));
   H.ok('反馈原样：可以归档', r === null, H.reasonOf(r));
   // 审查之后才做的代码任务：代码没审到
@@ -278,7 +280,8 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   H.ok('归档被拦（还有任务没打勾、没审代码）', ra && ra.decision === 'block' && !!ida, H.reasonOf(ra));
   const ba = bypass(ida, '这几项任务每项都有对应的提交，当轮验证都通过了，是打勾的时候被拦才没打上', []);
   H.ok('反馈原样：归档门槛在全自动模式下也能放行', ba.code === 0 && /会直接放行/.test(ba.out), ba.out + ba.err);
-  H.transcript(tfile, [H.tr.user('全自动做完'), ranBypass(ida, ba.out)]);
+  // 1008 起归档还要用户说了才做：会话记录里用户最后一句带上"归档"
+  H.transcript(tfile, [H.tr.user('全自动做完，然后归档'), ranBypass(ida, ba.out)]);
   const ra2 = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'openspec archive miping-acceptance-fix --skip-specs --yes' } }));
   H.ok('命令写法变了（多了个参数），还是同一个变更：放行', ra2 === null, H.reasonOf(ra2));
   const ra3 = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'openspec archive other-change --yes' } }));
@@ -374,8 +377,9 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   const c = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git add src/main/resources/app.properties && git commit -m "feat: 加配置"' } }));
   H.ok('提交里像有密码：不弹框，放行', c === null, c);
   H.ok('报告里记了，密码遮住了', R.stateOf({ session_id: sid }).items.some((x) => x.kind === 'secret' && /app\.properties/.test(x.detail) && !/Abc12345xyz/.test(x.detail)), R.stateOf({ session_id: sid }).items);
-  // 有人在的时候照旧弹框
+  // 有人在的时候照旧弹框（1008 起不走 OpenSpec 的提交要用户点头：会话记录里用户最后一句说了提交）
   H.setConfig(h, { autoMode: false });
+  H.transcript(tfile, [H.tr.user('改好了，提交')]);
   const push2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git push' } }));
   H.ok('有人在：push 弹确认框', push2 && push2.hookSpecificOutput && push2.hookSpecificOutput.permissionDecision === 'ask', push2);
   const c2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git add src/main/resources/app.properties && git commit -m "feat: 加配置"' } }));

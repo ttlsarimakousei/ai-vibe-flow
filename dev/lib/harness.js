@@ -317,12 +317,13 @@ process.on('uncaughtException', (e) => { console.log('测试脚本出错：' + (
 
 /**
  * 全自动模式只在走 OpenSpec 流程的会话里算数（kit/lib/session.js）：测全自动的行为时，先把这个会话记成"在流程里"。
- * changes 是这个会话在流程里动手做过的变更的目录（收工时只催这几个）
+ * changes 是这个会话在流程里动手做过的变更的目录（收工时只催这几个）；stage 见下面
  */
-function inFlow(h, sid, changes, on) {
+function inFlow(h, sid, changes, on, stage) {
   const f = path.join(h.kit, 'state', String(sid).replace(/[^\w.-]/g, '_').slice(0, 80) + '-flow.json');
   const norm = (p) => path.resolve(p).split(path.sep).join('/').toLowerCase();
-  write(f, JSON.stringify({ on: on !== false, why: '测试', at: Date.now(), was: Date.now(), changes: (changes || []).map(norm) }));
+  // stage：plan（写提案那一段，全自动不算数）/ apply（做任务那一段）；不给的按 apply 算（1008 之前的记录没有这一项，也按 apply 算）
+  write(f, JSON.stringify(Object.assign({ on: on !== false, why: '测试', at: Date.now(), was: Date.now(), changes: (changes || []).map(norm) }, stage ? { stage } : {})));
 }
 
 module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, makePackage, runtime, inFlow, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done };

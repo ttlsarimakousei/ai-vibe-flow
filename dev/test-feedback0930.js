@@ -272,7 +272,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   H.ok('敲 /opsx:apply：进了流程，点名的变更记下了', flow(s3).on === true && (flow(s3).changes || []).includes(S.normKey(chgA)), flow(s3));
   H.ok('流程里：提问框被拦', (ask(s3) || {}).decision === 'block');
   const r3 = stop(s3, [H.tr.user('/opsx:apply add-ec-expiry-remind'), H.tr.ran('Read', { file_path: path.join(chgA, 'tasks.md') }, 'x'), H.tr.ran('Read', { file_path: path.join(chgB, 'tasks.md') }, 'x'), H.tr.say('读完了')], '读完了');
-  H.ok('流程里：催的是这个会话在流程里做的那个变更', /全自动模式：add-ec-expiry-remind 的提案审过了/.test(H.reasonOf(r3)) && !/other-window-change/.test(H.reasonOf(r3)), H.reasonOf(r3));
+  H.ok('流程里：催的是这个会话在流程里做的那个变更', /全自动模式：我已经说了开工，add-ec-expiry-remind 的提案也审过了/.test(H.reasonOf(r3)) && !/other-window-change/.test(H.reasonOf(r3)), H.reasonOf(r3));
   // 流程里插了一句问话，再说"继续"
   prompt(s3, '这个变更为什么要加两个字段？');
   H.ok('流程里插一句问话：这一轮不在流程里', flow(s3).on === false && flow(s3).was > 0, flow(s3));
@@ -300,7 +300,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   const s9 = 's-apply-noname';
   prompt(s9, '/opsx:apply');
   const r9 = stop(s9, [H.tr.user('/opsx:apply'), H.tr.ran('Bash', { command: 'openspec status --change "add-ec-expiry-remind" --json' }, '{}'), H.tr.ran('Read', { file_path: path.join(chgB, 'tasks.md') }, 'x'), H.tr.say('看完了')], '看完了');
-  H.ok('/opsx:apply 没带名字：openspec 命令里点了名的变更算它在做的，只读过 tasks.md 的不算', /全自动模式：add-ec-expiry-remind /.test(H.reasonOf(r9)) && !/other-window-change/.test(H.reasonOf(r9)) && (flow(s9).changes || []).includes(S.normKey(chgA)) && !(flow(s9).changes || []).includes(S.normKey(chgB)), [H.reasonOf(r9), flow(s9)]);
+  H.ok('/opsx:apply 没带名字：openspec 命令里点了名的变更算它在做的，只读过 tasks.md 的不算', /全自动模式：我已经说了开工，add-ec-expiry-remind /.test(H.reasonOf(r9)) && !/other-window-change/.test(H.reasonOf(r9)) && (flow(s9).changes || []).includes(S.normKey(chgA)) && !(flow(s9).changes || []).includes(S.normKey(chgB)), [H.reasonOf(r9), flow(s9)]);
   // 大白话让它出提案：它自己调了 OpenSpec 的技能、建了变更
   const s5 = 's-skill';
   prompt(s5, '看一下这个');
@@ -336,7 +336,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   H.ok('老会话头一回开口就说"继续"：也接得上', flow(s13).on === true && (flow(s13).changes || []).includes(S.normKey(chgA)), flow(s13));
   // 会话开始时的说明
   const ss = H.hook(h, 'session-start', { session_id: 's-ss', cwd: proj, hook_event_name: 'SessionStart', source: 'startup', transcript_path: tfile });
-  H.ok('会话开始时说清了：只在走 OpenSpec 流程时算数，别的时候不要自己去接着做', /全自动模式开着，只在走 OpenSpec 流程时算数/.test(H.reasonOf(ss)) && /不要自己去接着做/.test(H.reasonOf(ss)), H.reasonOf(ss).slice(0, 600));
+  H.ok('会话开始时说清了：只在走 OpenSpec 流程时算数，别的时候不要自己去接着做', /全自动模式开着，只管 OpenSpec 变更做任务的那一段/.test(H.reasonOf(ss)) && /不要自己去接着做/.test(H.reasonOf(ss)), H.reasonOf(ss).slice(0, 600));
   // 查库、查 redis 的工具：跑之前留一张条子，说这个会话算不算全自动
   const tk = () => ((readJson(path.join(h.kit, 'state', 'tool-flow.json')).byCwd || {})[S.normKey(proj)]) || {};
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python "$HOME/.claude/skills/ttls-db-crud/scripts/db.py" --conn dev exec --sql-file .vibe/tmp/x/a.sql' } });
