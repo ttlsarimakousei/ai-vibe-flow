@@ -37,6 +37,15 @@ const PAGE =/\.(vue|jsx|tsx|html?|css|scss|sass|less|styl)$/i;
 const CODE = /\.(java|kt|groovy|js|mjs|cjs|ts|py|go|cs|xml|sql)$/i;
 const SAID_UNVERIFIED = /没有?验证|未验证|无法验证|没法验证|验证不了/;
 const SAID_NO_PAGE = /没有?看页面|不影响(页面|显示|界面|样式)|页面(没|未)验|无法(打开|启动)/;
+// 它说要攒着打勾（"等提交时一起勾""这一组做完再统一打勾"）：打勾不攒，做完一项勾一项。用户 2026-10-07 反馈：按阶段提交那一版之后它连勾都不打了
+const TICK_LATER = /(攒着|攒到|留到|等到|等)[^。！!\n]{0,12}(一起|统一|再)?(打勾|勾上|打上勾)|(提交|阶段|做完|最后)[^。！!\n]{0,8}(再|一起|统一)(打勾|勾上|打上勾|勾)|先不打勾|暂不打勾|稍后(再)?打勾|一起打勾|统一打勾/;
+function saidTickLater(text) {
+  const s = String(text || '');
+  const re = new RegExp(TICK_LATER.source, 'g');
+  let m;
+  while ((m = re.exec(s))) { if (!/(不|没|别|不会|不要|不用)\S{0,3}$/.test(s.slice(Math.max(0, m.index - 6), m.index))) return true; }
+  return false;
+}
 // 全自动模式下"卡住了、要人定"的明确说法；"等你回来定的事"是交代里的固定标题，不算
 const SAID_STUCK = /卡住了|卡在|无法继续|做不下去|进行不下去|需要你(来)?(决定|确认|定)|需要用户(决定|确认)|等你回来(决定|再定)|不可逆/;
 const RESOLVED = /(已|已经)(解决|修复|修好|搞定|处理好?|排除)|解决了|修好了|搞定了|处理好了/;
@@ -817,6 +826,8 @@ async function handle(j) {
     if (v) todo.push(v);
     const lp = pageEdits.length ? calls.indexOf(pageEdits[pageEdits.length - 1]) : -1;
     if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /ttls-see-page 的做法跑一遍受影响的页面：已有场景文件就直接重跑，没有就写一个最小的；以执行器读到的值和页面结构为准，不必读截图。这次改动确实不影响页面显示，就说明原因。');
+    // 它说要攒着打勾：不行，做完一项勾一项（提交才按档位攒）
+    if (saidTickLater(lastSaid)) todo.push('打勾不攒：每项任务做完、验法跑过就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完并验证过的任务都勾上，再收工。');
   } else if (sameTurn && codeNeedingCheck.length > (gate.codeEditsAtBlock || 0)) {
     // 续跑：拦下之后又改了代码（常见于审查之后的修复），没验证就再说一次
     const v = verifyIssue();

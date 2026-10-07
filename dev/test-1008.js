@@ -241,6 +241,18 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
     H.ok('规范里写的提交节奏：提案阶段不提交，审代码审出的问题全部轮次审完再提交一次', /提案阶段（写、审、改）不提交/.test(md) && /不一轮一提交/.test(md) && !/提案写好提交一次/.test(md), md.slice(0, 200));
     H.ok('交叉审查的技能也改了说法', /审查过程不进提交，审一轮提交一轮不行/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
+    // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
+    const later = '1.2 做完了，验证过了。打勾攒着等这一阶段提交时一起勾。';
+    const r4 = stop('v5', [H.tr.user('接着做 add-x 的 1.2'), editA, H.tr.say(later)], later);
+    H.ok('它说攒着打勾：拦下，让它现在勾', blocked(r4) && /打勾不攒/.test(H.reasonOf(r4)), H.reasonOf(r4));
+    const fine = '1.2 做完了，勾也打上了，不攒着打勾。';
+    const r5 = stop('v6', [H.tr.user('接着做'), H.tr.say(fine)], fine);
+    H.ok('说的是"不攒着打勾"：不拦', !/打勾不攒/.test(H.reasonOf(r5)), H.reasonOf(r5));
+    H.ok('OpenSpec 规范写明做完一项勾一项、打勾不攒', /做完一项勾一项，不攒到提交时一起勾/.test(md), md.slice(0, 200));
+    H.setConfig(h, { autoCommit: 'phase' });
+    H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
+    const mdp = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
+    H.ok('按阶段提交那一档的约定写明打勾不攒', /打勾不攒：每项任务做完、验法跑过就勾/.test(mdp) && /一组做到一半不提交（打勾不攒，做完一项勾一项）/.test(mdp), mdp.slice(0, 200));
   }
 
   // ---------------------------------------------------------------------------------------------

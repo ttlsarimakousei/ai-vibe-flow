@@ -521,8 +521,8 @@ const PLAIN_COMMIT_TEXT = {
 };
 const AUTO_COMMIT_TEXT = {
   task: '- OpenSpec 的变更：一项任务（最小的一件事）完成了就直接提交，不用等我说。"完成"的标准有两条：验证过（快检过了，该看的页面看过了）；提交前自己把这一项的 diff 过了一遍（git diff -- <这一项改的文件>：有没有调试代码、误改、漏改、和这项任务无关的改动）。做了一半的、验证没过的不要提交。',
-  phase: '- OpenSpec 的变更按阶段提交：tasks.md 里同一个大编号的任务（1.x、2.x……）全部完成、验证过，就把这一组的改动提交一次，信息写这一组做了什么（例：feat: 订单导出的数据层）；一组做到一半不提交。做了一半的、验证没过的不要提交。',
-  change: '- OpenSpec 的变更：全部任务做完、交叉审查过之后提交一次，中途不提交。做了一半的、验证没过的不要提交。',
+  phase: '- OpenSpec 的变更按阶段提交：tasks.md 里同一个大编号的任务（1.x、2.x……）全部完成、验证过，就把这一组的改动提交一次，信息写这一组做了什么（例：feat: 订单导出的数据层）；一组做到一半不提交（打勾不攒：每项任务做完、验法跑过就勾，不等提交一起勾）。做了一半的、验证没过的不要提交。',
+  change: '- OpenSpec 的变更：全部任务做完、交叉审查过之后提交一次，中途不提交（打勾照旧做完一项勾一项）。做了一半的、验证没过的不要提交。',
   off: '- OpenSpec 的变更：我让你提交时才提交。',
 };
 /** 约定里"页面用 /ttls-see-page 看一眼"那一句，跟着"改了页面文件没看页面 → 拦一次"的开关走（config.json 的 autoSeePage）。关掉 = 不自动起服务看页面，用户让看时再看 */
@@ -542,8 +542,8 @@ const PROPOSAL_COMMIT = '提案阶段（写、审、改）不提交；我说了�
 const REVIEW_COMMIT = '审代码审出的问题：全部轮次审完、修完验证过再提交一次（fix），不一轮一提交；';
 const COMMIT_RHYTHM_TEXT = {
   task: PROPOSAL_COMMIT + 'apply 每完成一项任务提交一次（代码和打勾的 tasks.md 不在一个仓库时各提各的）；apply 中途改了产物：改过的产物和 revisions.md 一起 `docs: 修订 <名字>：<一句话原因>`；' + REVIEW_COMMIT + '归档连同 plan.md `docs: 归档 <名字>`。',
-  phase: PROPOSAL_COMMIT + '写 tasks.md 时把任务按阶段分组（大编号一组：数据层、接口、页面……，一组三五项）；apply 按阶段提交：一组的任务全部打勾时提交一次（代码和打勾的 tasks.md 不在一个仓库时各提各的），一组做到一半不提交；apply 中途改了产物：改过的产物和 revisions.md 一起 `docs: 修订 <名字>：<一句话原因>`；' + REVIEW_COMMIT + '归档连同 plan.md `docs: 归档 <名字>`。',
-  change: PROPOSAL_COMMIT + 'apply 中途不提交，全部任务做完、代码审完（全部轮次）、修完之后，代码和打勾的 tasks.md 各在自己的仓库提交一次；归档连同 plan.md `docs: 归档 <名字>`。',
+  phase: PROPOSAL_COMMIT + '写 tasks.md 时把任务按阶段分组（大编号一组：数据层、接口、页面……，一组三五项）；apply 按阶段提交：一组的任务全部打勾时提交一次（代码和打勾的 tasks.md 不在一个仓库时各提各的），一组做到一半不提交（打勾不攒，做完一项勾一项）；apply 中途改了产物：改过的产物和 revisions.md 一起 `docs: 修订 <名字>：<一句话原因>`；' + REVIEW_COMMIT + '归档连同 plan.md `docs: 归档 <名字>`。',
+  change: PROPOSAL_COMMIT + 'apply 中途不提交（打勾照旧做完一项勾一项），全部任务做完、代码审完（全部轮次）、修完之后，代码和打勾的 tasks.md 各在自己的仓库提交一次；归档连同 plan.md `docs: 归档 <名字>`。',
   off: '我让你提交时才提交（提案、代码、修订、归档都一样），提交信息照这个写：`docs: 提案 <名字>`、`docs: 修订 <名字>：<一句话原因>`、`docs: 归档 <名字>`。',
 };
 function kitConfig() {
