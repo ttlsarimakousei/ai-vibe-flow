@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const stateStore = require('./state-store');
 const { execFileSync } = require('child_process');
 
 const KIT = path.join(__dirname, '..');
@@ -627,25 +628,10 @@ const safeId = (id) => String(id || 'unknown').replace(/[^\w.-]/g, '_').slice(0,
 const stateFile = (name) => path.join(KIT, 'state', safeId(name) + '.json');
 /** 读状态。文件不存在返回 {}；存在但读不懂（别人正在写）重试几次，还不行也返回 {}（只读的地方够用；要写回的用 updateState） */
 function readState(name) {
-  const f = stateFile(name);
-  for (let i = 0; i < 3; i++) {
-    let t;
-    try { t = fs.readFileSync(f, 'utf8'); } catch (e) { return {}; }
-    try { return JSON.parse(t); } catch (e) { sleepMs(15); }
-  }
-  return {};
+  return stateStore.read(stateFile(name));
 }
 function writeState(name, obj) {
-  try {
-    const d = path.join(KIT, 'state');
-    fs.mkdirSync(d, { recursive: true });
-    const f = stateFile(name);
-    const tmp = f + '.' + process.pid + '.' + Math.random().toString(36).slice(2, 8) + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(obj));
-    for (let i = 0; i < 6; i++) { try { fs.renameSync(tmp, f); return true; } catch (e) { sleepMs(20); } }
-    try { fs.unlinkSync(tmp); } catch (e) { /* 已经没了 */ }
-  } catch (e) { /* 写不了不影响使用 */ }
-  return false;
+  return stateStore.write(stateFile(name), obj);
 }
 /**
  * 读-改-写：fn 收到当前内容（对象），改完返回（或者直接改传进去的对象）。
@@ -655,24 +641,7 @@ function writeState(name, obj) {
  * 返回写进去的对象；放弃了、写不进去（杀毒软件占着文件）时返回 null
  */
 function updateState(name, fn) {
-  const f = stateFile(name);
-  let obj = {};
-  if (fs.existsSync(f)) {
-    let ok = false;
-    for (let i = 0; i < 4 && !ok; i++) { try { const t = fs.readFileSync(f, 'utf8'); obj = t.trim() ? JSON.parse(t) : {}; ok = true; } catch (e) { sleepMs(20); } }
-    if (!ok) {
-      let age = 0;
-      try { age = Date.now() - fs.statSync(f).mtimeMs; } catch (e) { age = 0; }
-      if (age < 5000) return null;
-      try { fs.renameSync(f, f + '.bad'); } catch (e) { return null; }
-      hookLog('状态文件 ' + path.basename(f) + ' 坏了（读不懂），改名留成 .bad，从空的重新记');
-      obj = {};
-    }
-  }
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) obj = {};
-  const r = fn(obj);
-  const next = r === undefined ? obj : r;
-  return writeState(name, next) ? next : null;
+  return stateStore.update(stateFile(name), fn, hookLog);
 }
 /** 钩子的流水账（state/hooks.log）：什么时候跑的、看到了什么、做了什么。出问题时看这个，不用猜 */
 function hookLog(line) {
