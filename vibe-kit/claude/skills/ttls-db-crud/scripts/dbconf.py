@@ -27,6 +27,8 @@ import os
 import pathlib
 import re
 import sys
+import xml.etree.ElementTree as ET
+import zipfile
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -221,6 +223,7 @@ def _parse(path):
             raise ConfError("连接 [%s] 没写 jdbc 连接串" % name)
         conns[name] = {
             "name": name,
+            "_config_root": str(pathlib.Path(path).resolve().parent.parent if pathlib.Path(path).parent.name == ".vibe" else pathlib.Path(path).resolve().parent),
             "dialect": dialect,
             "jdbc": jdbc,
             "user": (sec.get("user") or "").strip(),
@@ -429,7 +432,60 @@ def find_java(env=None):
 
 # ============================================================ 找驱动 jar
 
-def registry_driver(key):
+def project_driver_versions(project_root, patterns):
+    """只看当前项目及其本地父 pom，不借用兄弟项目的版本，也不连接数据库。"""
+    if not project_root:
+        return set()
+    p = pathlib.Path(project_root) / "pom.xml"
+    docs = []
+    seen = set()
+    for _ in range(6):
+        if not p.is_file() or str(p.resolve()) in seen:
+            break
+        seen.add(str(p.resolve()))
+        try:
+            root = ET.parse(p).getroot()
+        except (ET.ParseError, OSError):
+            break
+        for e in root.iter():
+            e.tag = e.tag.split("}")[-1]
+        docs.append(root)
+        parent = root.find("parent")
+        if parent is None:
+            break
+        rel = parent.find("relativePath")
+        if rel is not None and not (rel.text or "").strip():
+            break
+        p = p.parent / ((rel.text or "").strip() if rel is not None else "../pom.xml")
+    props = {}
+    for root in reversed(docs):
+        props.update({e.tag: (e.text or "").strip() for e in root.findall("properties/*")})
+    def resolve(v):
+        for _ in range(6):
+            nv = re.sub(r"\$\{([^}]+)\}", lambda m: props.get(m[1], m[0]), v)
+            if nv == v:
+                break
+            v = nv
+        return v if chr(36) + "{" not in v else ""
+    managed = {}
+    for root in reversed(docs):
+        for d in root.findall("dependencyManagement/dependencies/dependency"):
+            managed[d.findtext("artifactId", "")] = resolve(d.findtext("version", ""))
+    direct = {}
+    for root in reversed(docs):
+        for d in root.findall("dependencies/dependency"):
+            artifact = resolve(d.findtext("artifactId", ""))
+            if not any(re.search(x, artifact + ".jar", re.I) for x in patterns):
+                continue
+            version = resolve(d.findtext("version", "")) or managed.get(artifact, "")
+            group = resolve(d.findtext("groupId", ""))
+            direct[(group, artifact)] = version
+    if any(not v for v in direct.values()):
+        raise ConfError("项目声明了驱动依赖，但版本需要外部 BOM、profile 或未解析的属性。请在连接里明确写 driver_jar，不拿默认版本代替。")
+    return set(direct.values())
+
+
+def registry_driver(key, project_root=None):
     """
     vibe-kit 的驱动登记表（~/.claude/vibe-kit/drivers.json）里这种数据库用哪个 jar。
     在配置页"数据库驱动"里登记，或者用 tools/drivers.js。没登记、文件不在了返回 None。
@@ -437,6 +493,19 @@ def registry_driver(key):
     """
     reg = vibe.kit_json("drivers.json", {}) or {}
     d = (reg.get("drivers") or {}).get(key) or {}
+    info = DRIVER_ONLY.get(key) or DIALECT_INFO.get(key, {})
+    wanted = project_driver_versions(project_root, info.get("jar_patterns", ()))
+    versions = d.get("versions") or ([d] if d.get("jar") else [])
+    if len(wanted) > 1:
+        raise ConfError("项目声明了多个%s驱动版本，不能猜用哪一个；在连接里明确写 driver_jar。" % key)
+    if wanted:
+        version = next(iter(wanted))
+        hit = [x for x in versions if x.get("version") == version and os.path.isfile(x.get("jar", ""))]
+        if not hit:
+            raise ConfError("项目声明的%s驱动版本%s还没有登记。请添加该版本，不能拿另一个版本代替。" % (key, version))
+        if len({x["jar"] for x in hit}) > 1:
+            raise ConfError("同一版本有多个驱动文件，在连接里明确写 driver_jar。")
+        return hit[0]["jar"]
     jar = d.get("jar")
     if jar and os.path.isfile(jar):
         return jar
@@ -450,6 +519,21 @@ def drivers_tool():
         return None
     t = k / "tools" / "drivers.js"
     return t if t.is_file() else None
+
+
+def driver_project_root(conn, project_root):
+    """壳子里选某个连接时，从它的配置来源找到所属子项目，不扫描兄弟项目。"""
+    owner = pathlib.Path(conn.get("_config_root") or project_root or os.getcwd()).resolve()
+    source = conn.get("source") or ""
+    if source:
+        file = (owner / source).resolve()
+        if file.is_file() and (file == owner or owner in file.parents):
+            for parent in file.parents:
+                if (parent / "pom.xml").is_file():
+                    return str(parent)
+                if parent == owner:
+                    break
+    return project_root
 
 
 def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
@@ -477,15 +561,20 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
         patterns = (patterns,)
     regexes = [re.compile(p, re.I) for p in patterns]
 
+    project_root = driver_project_root(conn, project_root)
+    wanted = project_driver_versions(project_root, patterns)
+    if len(wanted) > 1:
+        raise ConfError("项目声明了多个驱动版本，在连接里明确写 driver_jar。")
+    version = next(iter(wanted)) if wanted else None
     searched = []
     # 项目自己的驱动排最前：它的版本和项目实际连的库对得上。这一步只看两三个目录，很快，不走缓存
     for base, label in _project_dirs(project_root, extra_dirs):
         searched.append(str(base))
-        hit = _scan_for_jar(base, regexes, max_depth=2)
+        hit = _scan_for_jar(base, regexes, max_depth=2, version=version, unique=True)
         if hit:
             return hit, label
 
-    reg = registry_driver(key)
+    reg = registry_driver(key, project_root)
     if reg:
         return reg, "配置页里登记的"
     k = vibe.kit_dir()
@@ -583,10 +672,11 @@ def _fallback_dirs():
     return [(p, label) for p, label in out if p.is_dir()]
 
 
-def _scan_for_jar(base, regexes, max_depth=8):
+def _scan_for_jar(base, regexes, max_depth=8, version=None, unique=False):
     """
     在一个目录下找匹配的 jar。Maven 仓库很深，限制递归层数免得扫穿整个磁盘。
-    同名多版本时取文件名排序最大的那个，通常就是版本最新的。
+    有声明版本只匹配该版本；项目目录多个文件时要求明确选，不按文件名猜新旧。
+    没有项目版本要求的公共回退目录保留原来的排序选择。
     """
     hits = []
     base_depth = len(base.parts)
@@ -601,9 +691,23 @@ def _scan_for_jar(base, regexes, max_depth=8):
                 continue
             for rx in regexes:
                 if rx.search(fn):
-                    hits.append(os.path.join(dirpath, fn))
+                    file = os.path.join(dirpath, fn)
+                    matched = not version or bool(re.search(r"(?<![\w.])" + re.escape(version) + r"(?=\.jar$|[-_])", fn, re.I))
+                    if version and not matched:
+                        try:
+                            with zipfile.ZipFile(file) as z:
+                                info = z.getinfo("META-INF/MANIFEST.MF")
+                                if info.file_size <= 65536:
+                                    manifest = z.read(info).decode("utf-8", errors="replace")
+                                    matched = bool(re.search(r"^Implementation-Version:\s*" + re.escape(version) + r"\s*$", manifest, re.M))
+                        except (OSError, KeyError, zipfile.BadZipFile):
+                            pass
+                    if matched:
+                        hits.append(file)
                     break
     if not hits:
         return None
+    if unique and len(hits) > 1:
+        raise ConfError("项目目录有多个匹配的驱动文件，在连接里明确写 driver_jar。")
     hits.sort()
     return hits[-1]
