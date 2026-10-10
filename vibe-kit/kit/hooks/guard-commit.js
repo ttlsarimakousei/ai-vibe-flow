@@ -1558,6 +1558,26 @@ function analyze(cmd, ps, st, cfg, depth) {
       }
       // 提交信息格式可以申请放行；整仓 add、commit -a、gitlink（公司红线）不行
       if (cfg.commitCheck && !st.block) { const c = gitIssue(g, docs); if (c) setBlock(st, /提交信息不符合公司规范/.test(c) ? 'commit-format' : 'git-scope', c); }
+      // 提案在别人电脑上也要能实施：命令写入和已经暂存的产物同样查，不能只守编辑工具。
+      if (g.sub === 'commit' && !g.dyn && cfg.specGate !== false && !st.block) {
+        try {
+          const root = repoRoot(g.dir) || g.dir;
+          const staged = execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\x00').filter(Boolean);
+          const check = require('../lib/proposal-files');
+          const found = [];
+          for (const f of staged) {
+            const abs = path.resolve(root, f); const art = require('../lib/session').artifactOf(abs);
+            if (!art || art.kind === 'revisions' || /\/changes\/archive\//i.test(normKey(abs))) continue;
+            const added = [...st.added].some((p) => normKey(abs) === p || normKey(abs).startsWith(p + '/'));
+            const text = added ? fs.readFileSync(abs, 'utf8') : execFileSync('git', ['-C', root, 'show', ':' + f], { encoding: 'utf8', windowsHide: true, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] });
+            found.push(...check.issuesIn(text, art));
+          }
+          const dirs = new Map();
+          for (const p of st.added) { const a = require('../lib/session').artifactOf(p); if (a && a.kind !== 'revisions' && !/\/changes\/archive\//i.test(p)) dirs.set(normKey(a.dir), a); }
+          for (const a of dirs.values()) found.push(...check.changeIssues(a));
+          if (found.length) setBlock(st, 'spec', '[vibe-kit] 提案材料不能交付：' + found.slice(0, 3).join('\n'));
+        } catch (e) { /* 检查出错照常放行，由收工再次核对 */ }
+      }
       // 不走 OpenSpec 的改动，提交之前要用户点头（开关 plainCommit）：会话记录里他最后一句得是"提交"。不能放行
       if (g.sub === 'commit' && !st.block && !commitAll(g.args)) { let c = ''; try { c = consentIssue(g, st, cfg, docs); } catch (e) { c = ''; } if (c) setBlock(st, 'commit-ok', c); }
       // 下面两道要去那个仓库里看：目录算不出来的不查

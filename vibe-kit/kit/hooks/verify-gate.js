@@ -932,6 +932,7 @@ async function handle(j) {
     if (rv) todo.push(rv);
     if (touched.size && !specChecked) {
       const before = todo.length;
+      for (const a of touched.values()) todo.push(...require('../lib/proposal-files').changeIssues(a).map((s) => '变更 ' + a.name + ' 的材料不能交付：' + s));
       todo.push(...capabilityTodo(touched));
       const snapFiles = (readState(sid + '-artifacts').files) || {};
       todo.push(...designGroundingTodo(calls, isEdit, fileOf, snapFiles, toolCalls(entries, 0)));

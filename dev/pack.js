@@ -35,7 +35,7 @@ const RUNTIME = ['kit/secrets.json', 'kit/gitlab.json', 'kit/update', 'kit/issue
 const stray = RUNTIME.filter((r) => fs.existsSync(path.join(SRC, r)));
 if (stray.length) fail('源目录里有运行时才该有的东西：' + stray.join('、') + '。多半是测试跑到源目录里了，清掉再打包');
 for (const need of ['kit/hooks/guard-read.js', 'kit/.ignore', 'publish.js', '发布到 GitLab（双击我）.bat', '.gitattributes', 'kit/lib/gitlab.js', 'kit/lib/updater.js', 'kit/lib/issues.js', 'install.js', 'README.md', '更新说明.md', '安装（双击我）.bat', 'settings.fragment.json', 'claude/CLAUDE.md', 'kit/lib/session.js', 'kit/lib/lessons.js', 'kit/tools/lesson.js', 'router/router.js', 'router/ui.html', 'kit/page/node_modules/playwright-core/package.json', 'kit/page/node_modules/pixelmatch/package.json', 'kit/page/node_modules/pngjs/package.json', 'kit/page/node_modules/playwright/package.json',
-  'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/ttls-reviewer.md',
+  'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/lib/proposal-files.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/ttls-reviewer.md',
   // source-hint.js 是个空壳，但不能没有：20260930.1505 和更早的版本自动更新到新版时，装后自检（跑的是旧版的代码）要载它，载不到就装回旧版，永远升不上来
   'kit/hooks/source-hint.js', 'kit/lib/report.js', 'kit/lib/outputs.js', 'kit/lib/tidy.js', 'kit/tools/skills-check.js', 'kit/lib/usage.js', 'kit/lib/pull.js', 'kit/lib/merge-push.js', 'kit/tools/merge-push.js',
   'claude/skills/ttls-onboard/SKILL.md', 'claude/skills/ttls-see-page/SKILL.md', 'claude/skills/ttls-cross-review/SKILL.md', 'claude/skills/ttls-handover/SKILL.md',

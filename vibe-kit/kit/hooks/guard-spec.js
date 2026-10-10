@@ -30,8 +30,7 @@ const GUIDE = {
 };
 const HEDGE_GUIDE = '不许写"以后再说"。拿不准的写成决策项：未定什么、默认按哪种做、理由（同一行写明"默认按…做"就算）；我不接受会改。本次不做的写成"本次不做：X（原因）"。';
 const MAX_LINES = 250;
-// 任务行里"验：…"之前的部分：要改、要建的文件写在这里。验法里的脚本（.vibe 里现写的临时脚本）写任务的时候还不存在，不查；
-// 真没有的话，打勾之前跑验法那一步自然过不去
+// 验法中的材料由 proposal-files 检查可交付性，不能依赖本机临时脚本。
 const beforeVerify = (line) => String(line || '').split(/(?:验|验证|验收|检验|核对)\s*[:：]/)[0];
 
 /** 这个会话是不是接着一份交接记录干的：一天内写的 .vibe/handover.md（当前目录或上一级） */
@@ -203,11 +202,12 @@ function handle(j, opts) {
   const newText = simulate(j.tool_name, inp, oldText, existed);
   if (newText === null) return null;
   const isAdded = addedLines(oldText, newText);
-  const roots = [art.root].concat(nestedRepos(art.root));
+  const roots = [art.root, art.dir, path.dirname(file)].concat(nestedRepos(art.root));
   const cwd = path.resolve(j.cwd || process.cwd());
   if (!roots.some((r) => path.resolve(r).toLowerCase() === cwd.toLowerCase())) roots.push(cwd);
 
   const format = [];   // 写法上的问题：附上写法说明
+  format.push(...require('../lib/proposal-files').issuesIn(newText, art, isAdded));
   const flow = [];     // 流程上的问题（没验证、没审、没探索）：只说这件事
   const hedges = findHedges(newText, isAdded);
   for (const h of hedges) format.push('第 ' + h.line + ' 行有"' + h.word + '"：' + h.text);
