@@ -59,6 +59,7 @@ const V1005 = '20261005.0302'; // 闲话、"让它停"不再只看开头几个�
 const V1007 = '20261007.1217'; // 起服务的提示：端口改成 --port auto --avoid <配置里的端口>
 const V1008 = '20261007.1622'; // 不走 OpenSpec 的提交要用户点头；归档要用户说了才做；全自动只管 apply（开工时告诉用户开没开）；报问题的提醒改了说法
 const V1010 = '20261010.1057'; // 1007 导出议题：包装命令、否定归因、当场推送授权和发布确认
+const V1010B = '20261010.1617'; // 1010 反馈、提案材料、提交和多版本驱动
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -225,11 +226,11 @@ add('开口：开头是"不用"的需求', 'task-anchor', prompt('不用写提�
 add('开口：开头是"好"字的需求', 'task-anchor', prompt('好友列表页面加一个搜索功能'), /这像一条需求/, V1005);
 add('开口：应一声', 'task-anchor', prompt('好的，谢谢'));
 add('开口：让它停', 'task-anchor', prompt('等等，先别提交'));
-add('提交：提案要单独确认', 'guard-commit', cmd('git commit -m "docs: 提案 add-export"'), /提案提交要单独确认/, NEXT);
-add('开口：合并push提示确定性工具', 'task-anchor', prompt('合并push'), /merge-push\.js[\s\S]*只处理未推送的本地提交|merge-push\.js/, NEXT);
-add('提交：普通文档修订标题不能免确认', 'guard-commit', cmd('git add README.md && git commit -m "docs: 修订使用说明"'), /不走 OpenSpec 的改动，提交之前要我点头/, NEXT);
-add('提案：不能引用本机临时输入', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Write', { content: '## Why\n参考 .vibe/tmp/reference.json\n' }, { 'openspec/changes/add-export/proposal.md': '## Why\n业务现状\n', '.vibe/tmp/reference.json': '{}' }), /另一台电脑拿不到[\s\S]*assets/, NEXT);
-add('提交：整目录不能遗漏临时输入', 'guard-commit', cmd('git add openspec/changes/add-export && git commit -m "docs: 修订产物"', null, { 'openspec/changes/add-export/proposal.md': '## Why\n参考 .vibe/tmp/reference.json\n', 'openspec/changes/add-export/tasks.md': '- [ ] 1.1 改 src/main/java/A.java；验：mvn -q compile\n' }), /材料不能交付/, NEXT);
+add('提交：提案要单独确认', 'guard-commit', cmd('git commit -m "docs: 提案 add-export"'), /提案提交要单独确认/, V1010B);
+add('开口：合并push提示确定性工具', 'task-anchor', prompt('合并push'), /merge-push\.js[\s\S]*只处理未推送的本地提交|merge-push\.js/, V1010B);
+add('提交：普通文档修订标题不能免确认', 'guard-commit', cmd('git add README.md && git commit -m "docs: 修订使用说明"'), /不走 OpenSpec 的改动，提交之前要我点头/, V1010B);
+add('提案：不能引用本机临时输入', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Write', { content: '## Why\n参考 .vibe/tmp/reference.json\n' }, { 'openspec/changes/add-export/proposal.md': '## Why\n业务现状\n', '.vibe/tmp/reference.json': '{}' }), /另一台电脑拿不到[\s\S]*assets/, V1010B);
+add('提交：整目录不能遗漏临时输入', 'guard-commit', cmd('git add openspec/changes/add-export && git commit -m "docs: 修订产物"', null, { 'openspec/changes/add-export/proposal.md': '## Why\n参考 .vibe/tmp/reference.json\n', 'openspec/changes/add-export/tasks.md': '- [ ] 1.1 改 src/main/java/A.java；验：mvn -q compile\n' }), /材料不能交付/, V1010B);
 
 // ---------- 会话开始、读文件提醒、提问框 ----------
 // 项目说明不一定是 /onboard 查的了（后台自动探索也会写）：带给模型的那句话里不再说是谁查的
