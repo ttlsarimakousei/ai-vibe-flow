@@ -1574,6 +1574,11 @@ function analyze(cmd, ps, st, cfg, depth) {
           }
           const dirs = new Map();
           for (const p of st.added) { const a = require('../lib/session').artifactOf(p); if (a && a.kind !== 'revisions' && !/\/changes\/archive\//i.test(p)) dirs.set(normKey(a.dir), a); }
+          // git add 变更目录和逐文件 add 都要查；目录本身不是 artifactOf 能识别的产物。
+          for (const c of allChanges(root)) if ([...st.added].some((p) => normKey(c.dir) === p || normKey(c.dir).startsWith(p + '/'))) {
+            const a = require('../lib/session').artifactOf(path.join(c.dir, 'proposal.md'));
+            if (a) dirs.set(normKey(a.dir), a);
+          }
           for (const a of dirs.values()) found.push(...check.changeIssues(a));
           if (found.length) setBlock(st, 'spec', '[vibe-kit] 提案材料不能交付：' + found.slice(0, 3).join('\n'));
         } catch (e) { /* 检查出错照常放行，由收工再次核对 */ }

@@ -49,6 +49,7 @@ const denied = r => !!r && (r.decision === 'block' || r.hookSpecificOutput && r.
   H.ok('设计里的变更内路径不会被误判不存在', !denied(assetDesign), H.reasonOf(assetDesign));
   H.write(path.join(dir, 'proposal.md'), '## Why\n参考 .vibe/tmp/check.js\n');
   H.ok('通过命令写的临时依赖在提交前也查', /材料不能交付/.test(H.reasonOf(commit('git add openspec/changes/a/proposal.md && git commit -m "docs: 修订提案"'))));
+  H.ok('同条命令 add 整个变更目录也检查临时依赖', /材料不能交付/.test(H.reasonOf(commit('git add openspec/changes/a && git commit -m "docs: 修订产物"'))));
   H.git(repo, ['add', 'openspec/changes/a/proposal.md']);
   H.write(path.join(dir, 'proposal.md'), '## Why\n参考 assets/check.js\n');
   H.ok('工作区修正但暂存区仍引用临时文件不能提交', /材料不能交付/.test(H.reasonOf(commit('git commit -m "docs: 修订产物"'))));
