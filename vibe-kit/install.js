@@ -683,7 +683,14 @@ if (mode === 'uninstall') {
   }
   // 从改名之前的版本直接卸载：旧名字的技能也是套件装的，一起收回
   removeOldNames();
-  const finish = () => {
+  const finish = async () => {
+    try {
+      const f = path.join(KIT, 'lib', 'idea-mcp.js');
+      if (fs.existsSync(f)) {
+        const r = await require(f).sync({ claudeDir: CLAUDE, remove: true });
+        if (r.busy || r.status !== 'off') console.log('  [!] IDEA MCP 登记没能收回，请在 Claude Code 的 /mcp 里检查；用户配置没有覆盖。');
+      }
+    } catch (e) { console.log('  [!] IDEA MCP 登记没能收回，请在 Claude Code 的 /mcp 里检查。'); }
     // 基础约定你改过（和装进去的原样不一样）：删之前先备份
     const kitMd = path.join(KIT, 'CLAUDE.md');
     if (fs.existsSync(kitMd) && !same(kitMd, path.join(KIT, 'pristine', 'CLAUDE.md'))) console.log('  [!] 你改过 ' + kitMd + '，删除前备份在 ' + backup(kitMd, 'vibe-kit/CLAUDE.md'));
@@ -971,7 +978,7 @@ async function setupRouter(svc) {
   }
 }
 
-function finishInstall() {
+async function finishInstall() {
 if (!fs.existsSync(path.join(KIT, 'CLAUDE.md'))) { console.log('  [X] 还没安装过。到安装包目录里运行 node install.js'); process.exit(1); }
 // --sync（配置页保存开关、本机环境也走这里）：全局 CLAUDE.md 不是 UTF-8 就什么都不动
 if (mode === 'sync' && readGlobalMd().text === null) { explainNotUtf8('这次什么都没动：开关和本机环境已经存下了，但全局约定和钩子登记还是上次生成的，套件其余部分照常工作。转好之后运行 node "' + path.join(KIT, 'install.js') + '" --sync。'); process.exit(1); }
@@ -981,13 +988,20 @@ if (changed === null) { explainNotUtf8('全局约定没写进去；其余部分�
 else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化') + '；启用的规范：' + (block.rules.length ? block.rules.join('，') : '（无）'));
 // 钩子跑的方式（HTTP / 命令）、自动记忆的开关改了之后，settings.json 里的登记要跟着变
 if (mode === 'sync') mergeSettings(readSettings(), false, true);
+// 只接已开启的 IDEA 本机 MCP，失败不影响安装和更新。新增 MCP 要在新会话里加载。
+try {
+  const r = await require(path.join(KIT, 'lib', 'idea-mcp.js')).sync({ claudeDir: CLAUDE });
+  const notes = { ready: 'IDEA MCP 已核验并登记，重新打开 Claude Code 后在 /mcp 里查看。', 'no-idea': '没找到 IDEA 的 MCP 设置，之后会在后台再检查。', 'not-enabled': 'IDEA MCP 还没开，在 IDEA 设置的 Tools / MCP Server 里开启并应用。', 'not-running': 'IDEA MCP 没在运行，打开 IDEA 后会在后台再检查。', 'user-changed': '你改过或删过 IDEA MCP 登记，保留你的改动；关掉再打开自动接入可恢复。', 'config-error': 'Claude Code 的用户配置无法解析，没改 MCP 登记。', 'config-busy': 'Claude Code 的用户配置正在变化，这次没改，之后重试。', 'name-conflict': 'IDEA MCP 的登记名已被占用，保留原配置。', 'check-error': 'IDEA MCP 检查没完成，之后重试。' };
+  if (r.busy) console.log('  [!] IDEA MCP 正在由另一个进程检查，这次没有修改登记；之后重试。');
+  else if (r.status !== 'off') console.log('  [' + (r.status === 'ready' ? 'OK' : '!') + '] ' + (notes[r.status] || 'IDEA MCP 检查没完成，之后重试。'));
+} catch (e) { console.log('  [!] IDEA MCP 检查没完成，套件其余部分照常安装。'); }
 const tail = () => {
   console.log('');
   console.log('  加规范、改约定：改 ' + KIT + ' 里的 CLAUDE.md 或 rules/*.md（文件名不以下划线开头的才生效），再运行 node "' + path.join(KIT, 'install.js') + '" --sync');
-  console.log('  已经开着的 Claude Code 不用重开，也不用 /clear：钩子立刻生效；约定和技能变了的部分，在你下一次发消息时由钩子带给它。');
+  console.log('  钩子、约定和技能：已经开着的 Claude Code 不用重开，也不用 /clear。钩子立刻生效；约定和技能变了的部分，在你下一次发消息时由钩子带给它。MCP 登记按上面的提示重新打开 Claude Code。');
 };
 const svcFile = path.join(KIT, 'router', 'service.js');
 if (mode !== 'install' || NO_ROUTER || !fs.existsSync(svcFile)) return tail();
 setupRouter(require(svcFile)).catch((e) => console.log('  [X] 模型路由没装好：' + ((e && e.message) || e))).then(tail);
 }
-if (mode !== 'uninstall') finishInstall();
+if (mode !== 'uninstall') finishInstall().catch((e) => { console.error('  [X] 安装收尾失败：' + e.message); process.exitCode = 1; });

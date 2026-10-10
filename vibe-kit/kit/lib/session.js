@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 
 const KIT = path.join(__dirname, '..');
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask' };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true };
 /**
  * 套件开关（~/.claude/vibe-kit/config.json），可以在路由的配置页里改，也可以手改。
  * 三个"放松保护"的（kitLock 关掉、kitBypass 改成 auto、autoMode 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
@@ -684,7 +684,7 @@ function hookLog(line) {
   } catch (e) { /* 记不了就算了 */ }
 }
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|pull)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|pull|idea-mcp)\.json$|^hooks\.log/;
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
 function cleanState(days) {

@@ -270,6 +270,12 @@
       <label class="f" style="margin-top:14px"><span>其他要让 Claude 知道的：私服地址、代理、哪个盘放代码</span><textarea id="notes"></textarea></label>
       <div class="row end"><span class="msg" id="localMsg"></span><button class="btn primary" id="saveLocal">保存并生效</button></div>
     </div>
+    <div class="card" id="sec-idea">
+      <div class="row between"><h2>IDEA MCP</h2><button class="btn" id="ideaCheck">重新检测</button></div>
+      <div class="opt"><div><b>自动接上 IDEA</b><p>安装、更新时检查；会话触发后台检查，五分钟内不重复。只接本机已开启的 IDEA MCP，保留你已有的配置。</p></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_ideaMcp"><i></i></label></div></div>
+      <p class="hint">IDEA 2025.2 或更新版本：在设置的 Tools / MCP Server 开启并应用。登记后重新打开 Claude Code，用 /mcp 查看。这里不会下载 IDEA、改变 IDE 的授权选项。</p>
+      <p id="ideaStatus" class="hint">还没检查</p><div id="ideaConnections"></div><p class="msg" id="ideaMsg"></p>
+    </div>
   </section>
 
   <section id="tab-data" class="tab hide">
@@ -1014,6 +1020,7 @@
   fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('reviewMaxRounds', '最多审几轮', 1, 5);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fBool('pullBeforeWork', '开工前拉代码'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
+  fBool('ideaMcp', '自动接上 IDEA');
   fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('autoCommit', 'OpenSpec 的变更，验证过之后提交吗', ['task', 'phase', 'change', 'off']); fSel('plainCommit', '不走 OpenSpec 的改动，验证过之后', ['ask', 'auto']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
@@ -1064,6 +1071,7 @@
       const note = restart.length ? '。' + restart.join('、') + '那一项要重新打开 Claude Code 才生效' : '';
       say(msgEl, r.synced === false && r.output ? '已保存 ' + dirty.length + ' 项（' + names + '）' + tail + '。' + r.output : (okText || '已保存') + '：' + names + tail + note, r.synced !== false && !adjusted.length);
       loadHooks();
+      if (r.ideaMcp) renderIdea(r.ideaMcp);
       return { saved: dirty, adjusted, r };
     } catch (e) { say(msgEl, e.message, false); return null; }
   }
@@ -1072,6 +1080,7 @@
     try {
       const first = !kit;
       const fresh = await api('GET', '/api/kit');
+      renderIdea(fresh.ideaMcp);
       const c = fresh.config || {};
       if (first) {
         kit = fresh;
@@ -1094,6 +1103,17 @@
       }
     } catch (e) { say($('localMsg'), e.message, false); }
   }
+  function renderIdea(s) {
+    const names = { unchecked: '还没检查', ready: 'IDEA MCP 已核验，登记后需要重新打开 Claude Code，用 /mcp 查看', off: '自动接入已关掉，只收回套件加的登记', 'no-idea': '没找到 IDEA 的 MCP 设置，打开并开启服务后再检测', 'not-enabled': 'IDEA MCP 尚未开启，请在 IDEA 设置里开启并应用', 'not-running': '没有找到正在运行的 IDEA MCP，打开 IDEA 后再检测', 'user-changed': '你改过或删过登记，自动补登记已暂停；关掉再打开此开关可恢复', 'config-error': 'Claude Code 用户配置无法解析，这次没有修改', 'config-busy': 'Claude Code 用户配置正在变化，稍后再试', 'check-error': '检查没有完成，稍后再试', 'name-conflict': '登记名已被占用，原配置保留' };
+    $('ideaStatus').textContent = names[s && s.status] || '还没检查';
+    $('ideaConnections').innerHTML = ((s && s.connections) || []).map((c) => '<p class="mono">' + esc(c.name) + ' · ' + esc(c.url) + ' · ' + esc(c.version) + ' · ' + (c.managed ? '套件登记' : '已有配置') + '</p>').join('');
+  }
+  $('ideaCheck').onclick = async () => {
+    $('ideaCheck').disabled = true;
+    try { const r = await api('POST', '/api/kit/idea/check', {}); renderIdea(r.ideaMcp); say($('ideaMsg'), r.ideaMcp && r.ideaMcp.busy ? '另一个检查正在进行，稍后再试' : '检测完成', true); }
+    catch (e) { say($('ideaMsg'), e.message, false); }
+    finally { $('ideaCheck').disabled = false; }
+  };
   $('detect').onclick = async () => {
     say($('localMsg'), '探测中…', true);
     try {
@@ -1171,7 +1191,7 @@
   }
   let barTimer = 0;
   const renderBarSoon = () => { clearTimeout(barTimer); barTimer = setTimeout(renderBar, 60); };
-  for (const ev of ['input', 'change', 'click']) for (const id of ['tab-kit', 'tab-lessons', 'tab-remote', 'tab-data']) $(id).addEventListener(ev, renderBarSoon);
+  for (const ev of ['input', 'change', 'click']) for (const id of ['tab-kit', 'tab-lessons', 'tab-remote', 'tab-data', 'tab-local']) $(id).addEventListener(ev, renderBarSoon);
   $('barSave').onclick = async () => {
     $('barSave').disabled = true;
     try {
