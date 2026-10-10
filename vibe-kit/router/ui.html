@@ -278,7 +278,7 @@
 
     <div class="card" id="sec-drv" data-sec="现在用的驱动">
       <div class="row between"><div><h2>现在用的驱动</h2><p class="hint">每种数据库一个。登记在 <span class="mono" id="drvReg"></span>，装新版、卸载都不删。项目自己的 lib 目录里带着驱动的，查库时优先用项目的。</p></div><div class="row" style="flex-wrap:nowrap"><button class="btn primary" id="drvAuto">自动搜索</button><button class="btn" id="drvRefresh">刷新</button></div></div>
-      <p class="hint">"自动搜索"到 Maven 本地仓库里找，还没有驱动的自动登记一个（查库用的 JDK 加载得了的里面最新的），已经登记的不动。要换成别的 jar，点那一行的"换驱动"去硬盘上选：选中的 jar 拷一份到套件的驱动目录，原来的文件不动。</p>
+      <p class="hint">同一种数据库可以登记多个驱动版本。点"换驱动"添加版本，已有版本保留。查库先用连接指定或项目自带的 jar，再按当前项目 pom 声明的版本选择；未声明版本时用默认。</p>
       <div id="drvRepos" class="dim" style="margin-bottom:6px"></div>
       <p class="msg" id="drvFindMsg" style="margin:0 0 8px"></p>
       <div class="scroll"><table><thead><tr><th>数据库</th><th>驱动</th><th>版本</th><th>从哪来</th><th class="num">大小</th><th></th></tr></thead><tbody id="drvList"></tbody></table></div>
@@ -1274,8 +1274,9 @@
     // 每一行后面：换驱动（去硬盘上选一个 jar）；已经有驱动的还能"不用了"
     const pick = (d, text) => '<button class="btn" data-drvpick="' + esc(d.dialect) + '" data-name="' + esc(d.name) + '" data-jar="' + esc(d.jar || '') + '">' + text + '</button>';
     const drop = (d, text) => '<button class="btn danger" data-drvrm="' + esc(d.dialect) + '" data-name="' + esc(d.name) + '">' + text + '</button>';
+    const versions = (d) => '<details><summary>已登记 ' + (d.versions || []).length + ' 个版本</summary>' + (d.versions || []).map((v) => '<div class="mono">' + esc(v.version || '版本未知') + ' ' + esc(v.file) + (v.default ? ' 默认' : ' <button class="btn" data-drvuse="' + esc(v.jar) + '" data-dialect="' + esc(d.dialect) + '" data-name="' + esc(d.name) + '">设默认</button>') + ' <button class="btn danger" data-drvrm="' + esc(d.dialect) + '" data-rmjar="' + esc(v.jar) + '" data-name="' + esc(d.name) + '">去掉此版本</button></div>').join('') + '</details>';
     $('drvList').innerHTML = (s.drivers || []).map((d) => '<tr><td style="white-space:nowrap"><b>' + esc(d.name) + '</b><div class="dim mono" style="font-size:12px">' + esc(d.url) + '…</div></td>'
-      + (d.ok ? '<td class="mono">' + esc(d.file) + javaTag(d.java) + '<div class="dim" style="font-size:12px;word-break:break-all">' + esc(d.jar) + '</div></td><td class="mono" style="white-space:nowrap">' + esc(d.version || '') + '</td><td style="white-space:nowrap">' + esc(DRV_FROM[d.from] || d.from || '') + '</td><td class="num">' + mb(d.size) + '</td><td style="white-space:nowrap">' + pick(d, '换驱动') + ' ' + drop(d, '不用了') + '</td>'
+      + (d.ok ? '<td class="mono">' + esc(d.file) + javaTag(d.java) + '<div class="dim" style="font-size:12px;word-break:break-all">' + esc(d.jar) + '</div>' + versions(d) + '</td><td class="mono" style="white-space:nowrap">' + esc(d.version || '') + '</td><td style="white-space:nowrap">' + esc(DRV_FROM[d.from] || d.from || '') + '</td><td class="num">' + mb(d.size) + '</td><td style="white-space:nowrap">' + pick(d, '换驱动') + ' ' + drop(d, '不用了') + '</td>'
         : d.lost ? '<td colspan="4"><span class="tag bad">登记的文件不见了</span> <span class="mono dim">' + esc(d.jar) + '</span></td><td style="white-space:nowrap">' + pick(d, '换驱动') + ' ' + drop(d, '去掉') + '</td>'
         : '<td colspan="4"><span class="tag off">还没有驱动</span>' + (removed.includes(d.dialect) ? ' <span class="dim">你去掉过：后台不会自动登记它，要用的时候点"自动搜索"，或者点右边的"选驱动"</span>' : '') + '</td><td style="white-space:nowrap">' + pick(d, '选驱动') + '</td>') + '</tr>').join('');
     const repos = s.repos || [];
@@ -1330,9 +1331,15 @@
       return openPicker(start, '', true, 'jar', (p) => { drvLastDir = p.replace(/[\\/][^\\/]*$/, ''); drvUse(p, dialect, name); }, '选 ' + name + ' 的驱动 jar');
     }
     if (t.dataset.drvrm) {
+      if (t.dataset.rmjar) {
+        try { const r = await api('POST', '/api/kit/drivers/remove', { dialect: t.dataset.drvrm, jar: t.dataset.rmjar }); say($('drvMsg'), r.msg || '', !!r.ok); if (r.status) renderDrivers(r.status); }
+        catch (e) { say($('drvMsg'), e.message, false); }
+        return;
+      }
       if (!confirm(t.dataset.name + '的驱动不用了？\n只是从登记表里去掉，jar 文件留在驱动目录里。\n去掉之后后台不会再自动登记它；要用的时候点"自动搜索"，或者点这一行的"选驱动"。')) return;
       try { const r = await api('POST', '/api/kit/drivers/remove', { dialect: t.dataset.drvrm }); say($('drvMsg'), r.msg || '', !!r.ok); if (r.status) renderDrivers(r.status); } catch (e) { say($('drvMsg'), e.message, false); }
     }
+    if (t.dataset.drvuse) drvUse(t.dataset.drvuse, t.dataset.dialect, t.dataset.name);
   });
   const dur = (ms) => (ms >= 1000 ? (ms / 1000).toFixed(1) + ' 秒' : Math.round(ms) + ' 毫秒');
   async function loadToolUse() {

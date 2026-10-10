@@ -79,7 +79,7 @@ try {
       process.exitCode = r.ok ? 0 : 1;
     }
   } else if (cmd === 'remove') {
-    const r = D.remove(args[1] || '');
+    const r = D.remove(args[1] || '', valOf('--jar'));
     out(r, r.msg);
     process.exitCode = r.ok ? 0 : 1;
   } else {

@@ -7,7 +7,7 @@
  *   命令行：node tools/drivers.js auto / scan / use <jar> / list
  *
  * 放在哪：
- *   ~/.claude/vibe-kit/drivers.json      登记表：每种数据库现在用哪个 jar。ttls-db-crud 的脚本（Python）直接读它，格式不要随便改
+ *   ~/.claude/vibe-kit/drivers.json      登记表：每种数据库的多个版本和默认 jar。Python 按当前项目声明选择，旧格式仍能读取
  *   ~/.claude/vibe-kit/drivers/          选中的 jar 拷一份放这里（Maven 仓库被清了也不受影响）
  * 这两样装新版、卸载都不删。
  *
@@ -140,6 +140,11 @@ function readRegistry() {
   for (const k of Object.keys(DIALECTS)) if (isObj(d[k]) && typeof d[k].jar === 'string' && d[k].jar) out[k] = d[k];
   return out;
 }
+/** 旧表的一条就是一个候选；新表同一种数据库保留多个版本，jar 表示默认。 */
+function variants(rec) {
+  const list = rec && Array.isArray(rec.versions) ? rec.versions : (rec && rec.jar ? [rec] : []);
+  return list.filter((x) => isObj(x) && typeof x.jar === 'string' && x.jar).map((x) => { const v = Object.assign({}, x); delete v.versions; return v; });
+}
 /** 用户在配置页里去掉过的那几种数据库：后台自动探索不再自动登记回来 */
 function removedByUser() {
   const r = readRaw().removed;
@@ -150,7 +155,7 @@ function writeRegistry(drivers, removed) {
   const keep = removed || (isObj(readRaw().removed) ? readRaw().removed : {});
   for (const k of Object.keys(keep)) if (drivers[k]) delete keep[k];
   const tmp = REGISTRY + '.' + process.pid + '.' + Math.random().toString(36).slice(2, 8) + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify({ version: 1, note: '每种数据库现在用哪个驱动。在配置页"数据库驱动"里改，或者用 tools/drivers.js。', drivers, removed: keep }, null, 2) + '\n');
+  fs.writeFileSync(tmp, JSON.stringify({ version: 2, note: '每种数据库可登记多个版本；jar 是默认，项目声明版本时按项目选择。', drivers, removed: keep }, null, 2) + '\n');
   try { fs.renameSync(tmp, REGISTRY); } catch (e) { fs.writeFileSync(REGISTRY, fs.readFileSync(tmp)); try { fs.unlinkSync(tmp); } catch (e2) { /* 忽略 */ } }
 }
 const sha1 = (f) => crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex');
@@ -174,16 +179,30 @@ function use(jar, o) {
     if (!fs.existsSync(dst)) fs.copyFileSync(abs, dst);
   }
   const reg = readRegistry();
-  reg[info.dialect] = { jar: dst, from: opt.from || 'manual', source: abs, version: info.version, driverClass: info.driverClass, size: info.size, java: info.java || 0, at: Date.now() };
+  const entry = { jar: dst, from: opt.from || 'manual', source: abs, version: info.version, driverClass: info.driverClass, size: info.size, java: info.java || 0, at: Date.now() };
+  const list = variants(reg[info.dialect]).filter((x) => !samePath(x.jar, dst));
+  list.push(entry);
+  const def = opt.keepDefault && reg[info.dialect] ? Object.assign({}, reg[info.dialect]) : entry;
+  reg[info.dialect] = Object.assign({}, def, { versions: list });
   writeRegistry(reg);
   const jdk = jdkMajor();
   const warn = info.java && jdk && info.java > jdk ? '。★ 这个驱动要 Java ' + info.java + ' 以上，"本机环境"里默认的 JDK 是 ' + jdk + '：查库会加载不了它，换一个老一点的驱动，或者把默认的 JDK 换成新的' : '';
   return { ok: true, dialect: info.dialect, name: DIALECTS[info.dialect].name, jar: dst, version: info.version, java: info.java || 0, msg: DIALECTS[info.dialect].name + '的驱动登记好了：' + path.basename(dst) + (info.version ? '（' + info.version + '）' : '') + warn };
 }
 /** 不用了：从登记表里去掉，并记下"用户去掉过"。jar 留在驱动目录里不删（别的数据库没登记它、你想删就自己删） */
-function remove(dialect) {
+function remove(dialect, jar) {
   const reg = readRegistry();
   if (!reg[dialect]) return { ok: false, msg: '这种数据库没有登记驱动：' + dialect };
+  if (jar) {
+    if (!variants(reg[dialect]).some((x) => samePath(x.jar, jar))) return { ok: false, msg: '这个版本没有登记，其他版本没动。' };
+    const list = variants(reg[dialect]).filter((x) => !samePath(x.jar, jar));
+    if (list.length) {
+      const def = list.find((x) => samePath(x.jar, reg[dialect].jar)) || list[0];
+      reg[dialect] = Object.assign({}, def, { versions: list });
+      writeRegistry(reg);
+      return { ok: true, msg: '已去掉这个版本，其他版本保留。' };
+    }
+  }
   delete reg[dialect];
   const removed = isObj(readRaw().removed) ? readRaw().removed : {};
   removed[dialect] = Date.now();
@@ -337,12 +356,17 @@ function auto(o) {
   for (const k of Object.keys(DIALECTS)) {
     if (opt.only && opt.only.length && !opt.only.includes(k)) continue;
     const has = reg[k] && fs.existsSync(reg[k].jar);
-    if (has && !opt.force) { kept.push(k); continue; }
+    if (has && !opt.force) {
+      kept.push(k);
+      for (const x of (r.found[k] || []).slice(0, 20)) use(x.jar, { dialect: k, from: 'maven', keepDefault: true });
+      continue;
+    }
     if (removed.includes(k)) { skipped.push(k); continue; }
     const best = pick(r.found[k], opt.prefer, jdk);
     if (!best) continue;
     const u = use(best.jar, { dialect: k, from: 'maven' });
     if (u.ok) used.push(Object.assign({ source: best.jar, why: best.why || '' }, u));
+    for (const x of (r.found[k] || []).slice(0, 20)) if (!samePath(x.jar, best.jar)) use(x.jar, { dialect: k, from: 'maven', keepDefault: true });
   }
   const now = readRegistry();
   const missing = Object.keys(DIALECTS).filter((k) => (!opt.only || !opt.only.length || opt.only.includes(k)) && !(now[k] && fs.existsSync(now[k].jar)));
@@ -408,9 +432,9 @@ function status() {
   const list = Object.keys(DIALECTS).map((k) => {
     const r = reg[k];
     const ok = !!(r && fs.existsSync(r.jar));
-    return { dialect: k, name: DIALECTS[k].name, url: DIALECTS[k].url, ok, jar: r ? r.jar : '', file: r ? path.basename(r.jar) : '', version: r ? r.version || '' : '', from: r ? r.from || '' : '', source: r ? r.source || '' : '', at: r ? r.at || 0 : 0, size: r ? r.size || 0 : 0, java: r ? r.java || 0 : 0, lost: !!(r && !ok) };
+    return { dialect: k, name: DIALECTS[k].name, url: DIALECTS[k].url, ok, jar: r ? r.jar : '', file: r ? path.basename(r.jar) : '', version: r ? r.version || '' : '', from: r ? r.from || '' : '', source: r ? r.source || '' : '', at: r ? r.at || 0 : 0, size: r ? r.size || 0 : 0, java: r ? r.java || 0 : 0, lost: !!(r && !ok), versions: variants(r).map((x) => Object.assign({}, x, { file: path.basename(x.jar), ok: fs.existsSync(x.jar), default: samePath(x.jar, r.jar) })) };
   });
   return { drivers: list, store: STORE, registry: REGISTRY, repos: mavenRepos(), jdk: jdkMajor(), removed: removedByUser() };
 }
 
-module.exports = { DIALECTS, KIT, REGISTRY, STORE, zipEntries, inspect, readRegistry, removedByUser, jdkMajor, use, remove, mavenRepos, repoOfSettings, cmpVersion, scan, pick, auto, projectDrivers, rescueFrom, status };
+module.exports = { DIALECTS, KIT, REGISTRY, STORE, zipEntries, inspect, readRegistry, variants, removedByUser, jdkMajor, use, remove, mavenRepos, repoOfSettings, cmpVersion, scan, pick, auto, projectDrivers, rescueFrom, status };

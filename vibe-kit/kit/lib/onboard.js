@@ -778,7 +778,14 @@ function explore(root, why) {
     drv = require('./drivers.js');
     const reg = drv.readRegistry();
     const removed = drv.removedByUser ? drv.removedByUser() : [];
-    need = [...new Set(dbNames.map((d) => d.x.driver || d.x.dialect))].filter((k) => k && !(reg[k] && exists(reg[k].jar)) && !removed.includes(k));
+    const declared = [...new Set([...dbGroups.keys()])].flatMap((owner) => drv.projectDrivers(owner));
+    need = [...new Set(dbNames.map((d) => d.x.driver || d.x.dialect))].filter((k) => {
+      if (!k || removed.includes(k)) return false;
+      if (!(reg[k] && exists(reg[k].jar))) return true;
+      const pool = reg[k].versions || [reg[k]];
+      const wanted = declared.filter((p) => (drv.DIALECTS[k].names || []).some((re) => re.test(p.artifactId + '-' + p.version + '.jar')));
+      return wanted.some((p) => !pool.some((v) => v.version === p.version && exists(v.jar)));
+    });
   } catch (e) { drv = null; need = []; }
   const missed = Array.isArray(rec.driverMiss) ? rec.driverMiss : [];
   const search = need.length > 0 && (why === '手动' || Date.now() - (Number(rec.driverSearchAt) || 0) > RESCAN_MS || need.some((k) => !missed.includes(k)));

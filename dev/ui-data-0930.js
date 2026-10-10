@@ -88,7 +88,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('驱动和数据库对不上：不登记，说清它是谁的', wrong.ok === false && /这是达梦的驱动，不是Oracle的/.test(wrong.msg), wrong);
     const au = (await call('POST', '/api/kit/drivers/auto', {})).json;
     H.ok('自动：没有驱动的登记上，已经登记的不动', au.used.length === 1 && au.used[0].dialect === 'dm' && au.kept.join() === 'mysql' && au.missing.sort().join() === 'kingbase,oracle,oscar,postgresql' && au.status.drivers.find((d) => d.dialect === 'mysql').version === '8.0.33', au);
-    H.ok('jar 拷进了套件的驱动目录', fs.readdirSync(path.join(h.kit, 'drivers')).sort().join() === 'DmJdbcDriver18-8.1.1.134.jar,mysql-connector-java-8.0.33.jar');
+    H.ok('jar 多版本都拷进了套件的驱动目录', fs.readdirSync(path.join(h.kit, 'drivers')).sort().join() === 'DmJdbcDriver18-8.1.1.134.jar,mysql-connector-j-8.4.0.jar,mysql-connector-java-8.0.33.jar');
     const rm = (await call('POST', '/api/kit/drivers/remove', { dialect: 'mysql' })).json;
     H.ok('不用了：从登记表里去掉，文件留着', rm.ok && !rm.status.drivers.find((d) => d.dialect === 'mysql').ok && fs.existsSync(path.join(h.kit, 'drivers', 'mysql-connector-java-8.0.33.jar')), rm);
   }
@@ -172,7 +172,7 @@ const call = (method, url, body) => new Promise((resolve) => {
       await page.press('#pkJump', 'Enter');
       await page.waitForSelector('#drvMsg.bad:has-text("not-a-driver")');
       H.ok('不是驱动的 jar：页面上说清楚', /打不开|没有.*驱动类/.test(await page.locator('#drvMsg').innerText()), await page.locator('#drvMsg').innerText());
-      await page.locator('#drvList button[data-drvrm="kingbase"]').click();
+      await page.locator('#drvList button[data-drvrm="kingbase"]:not([data-rmjar])').click();
       await page.waitForSelector('#drvMsg:has-text("去掉了")');
       H.ok('不用了：那一行变回"还没有驱动"，说了要用的时候点哪里', (await page.locator('#drvList .tag.off').count()) === 4 && /你去掉过：后台不会自动登记它，要用的时候点"自动搜索"，或者点右边的"选驱动"/.test(await page.locator('#drvList').innerText()), await page.locator('#drvList').innerText());
     }

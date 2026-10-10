@@ -348,7 +348,7 @@ async function handle(method, url, body, kitDir, ctx) {
     // 页面上点的"找"：用户自己去掉过的那几种也照常登记（后台自动探索不登记它们）
     if (act === 'auto') args.push('--by-user');
     if (act === 'use') { const jar = pathStr(body && body.jar); if (!jar) throw new Error('要给 jar 的路径'); args.push(jar); const d = str(body && body.dialect); if (/^[a-z]{2,12}$/.test(d)) args.push('--dialect', d); }
-    if (act === 'remove') { const d = str(body && body.dialect); if (!/^[a-z]{2,12}$/.test(d)) throw new Error('要说是哪种数据库'); args.push(d); }
+    if (act === 'remove') { const d = str(body && body.dialect); if (!/^[a-z]{2,12}$/.test(d)) throw new Error('要说是哪种数据库'); args.push(d); const jar = pathStr(body && body.jar); if (jar) args.push('--jar', jar); }
     const r = await runTool(kitDir, 'drivers.js', args.concat('--json'), act === 'scan' || act === 'auto' ? 90000 : 30000);
     if (act === 'use' || act === 'remove') r.status = await inWorker('drivers', { kitDir, action: 'status' }, '读驱动的登记表').catch(() => null);
     return r;
