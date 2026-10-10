@@ -447,6 +447,9 @@ async function handle(j) {
     }
   }
   if (th) lines.push(th);
+  if (/^\s*(?:请|现在|直接)?\s*合并\s*(?:push|推送)\s*[。！!]*$/i.test(String(j.prompt || ''))) {
+    lines.push('[vibe-kit 合并push] 用户要求整理尚未推送的本地提交再推送。先在本次工作的仓库逐个运行 node "' + path.join(KIT, 'tools', 'merge-push.js') + '" plan --dir <仓库>，把事件分组和提交数告诉用户，再运行同一工具 apply --dir <仓库> --plan <计划文件> --push。只合并有同一来源标记或同一变更路径的事件；不改远端历史、不 force，不把工作区未提交改动带上。失败就说明原因，不能换成 reset/rebase 硬做。');
+  }
   const oh = note || anchored.overLine ? '' : outputHint(j, cfg);
   if (oh) lines.push(oh);
   // 开工了：告诉用户这次全自动开没开（systemMessage 给人看，additionalContext 给模型）

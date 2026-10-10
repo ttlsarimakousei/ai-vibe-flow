@@ -1697,6 +1697,12 @@ function handle(j) {
   }
   // push 不看任何开关，没有当场授权就确认；拆命令没认出来的写法由 pushAnywhere 兜底
   const publishing = publishAnywhere(cmd, j.cwd);
+  const mergeApply = /\bmerge-push\.js["']?\s+apply\b/i.test(cmd);
+  if (mergeApply) {
+    const voice = require('../lib/session').lastUserVoice(tailEntries(j.transcript_path));
+    const text = voice && (voice.kind === 'answer' ? voice.answers.map((a) => a.a).join('；') : voice.text);
+    if (!/^\s*(?:请|现在|直接)?\s*合并\s*(?:push|推送)\s*[。！!]*$/i.test(text || '')) return counted('auto-push', '[vibe-kit] 合并本地提交并推送要用户明确说“合并push”；普通的推送许可不能用于改写提交。');
+  }
   const publishNotice = '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。';
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
   if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find)\b/i.test(cmd)) return cdBlock();
