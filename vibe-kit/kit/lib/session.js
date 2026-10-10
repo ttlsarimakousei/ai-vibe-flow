@@ -116,7 +116,7 @@ function flowDone(j) {
 const APPLY_SLASH = /^\s*\/(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i;
 const APPLY_TAG = /<command-name>\s*\/?(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i;
 // 明说开工的话。HARD 怎么都算；SOFT、WEAK 在同一句里说的是提案那一段的事（"开始做提案""接着做 a1 的提案"）时不算
-const APPLY_HARD = /开工|开干|开搞|\bapply\b|(按|照|依)(提案|任务|tasks|清单)(做|实现|开发)|可以(做|开工|实现|开始做)了/i;
+const APPLY_HARD = /开工|开干|开搞|\bapply\b|(按|照|依)(提案|任务|tasks|清单)(做|实现|开发)|按照现在的方案修改|可以(做|开工|实现|开始做)了/i;
 const APPLY_SOFT = /动手|开始(做|实现|开发|写代码|执行|干)/;
 const APPLY_WEAK = /做吧|干吧|做起来|去做|实现吧|执行吧|继续做|接着做|做完|做掉|实现掉|写完|开始吧|可以开始了/;
 // 做某一项任务："把 1.1 做了""第 3 项做完""任务 2 打上勾"
@@ -166,7 +166,7 @@ const SMALL_FIX_TEXT = '先查清原因，改动小（三个文件以内、不�
  * 钩子附在消息里的提醒（[vibe-kit 开头的行）、后台任务的通知、打断标记、别的系统消息不算他说的话；斜杠命令认 <command-name>。
  * 只看最后一句：他说过"归档"之后又说"等等，还有个问题"，就得改完再问一次。
  */
-const ANSWERED = /^\s*User has answered your questions?:/;
+const ANSWERED = /^\s*(?:User has answered your questions?|Your questions? have been answered):/i;
 /** 提问框答案里的 "问题"="答案" 一对一对 */
 function answersOf(text) {
   const out = [];
@@ -187,7 +187,8 @@ function lastUserVoice(entries) {
       for (const b of c) {
         if (!b || b.type !== 'tool_result') continue;
         const t = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map((x) => (x && x.text) || '').join('\n') : '';
-        if (ANSWERED.test(t)) {
+        const structured = e.toolUseResult && e.toolUseResult.answers;
+        if (ANSWERED.test(t) || (structured && typeof structured === 'object' && !Array.isArray(structured))) {
           // 只认真正提问框的结果；脚本输出里引用同样的文字不算人工确认。
           // 提问后用户又发了新指令，旧提问迟到的答案也不能盖过新指令。
           let fromAsk = false;
@@ -198,7 +199,11 @@ function lastUserVoice(entries) {
             const call = Array.isArray(blocks) && blocks.find((x) => x && x.type === 'tool_use' && x.id === b.tool_use_id);
             if (call) { fromAsk = call.name === 'AskUserQuestion'; break; }
           }
-          if (fromAsk) return { kind: 'answer', text: t, answers: answersOf(t), at, pos: i };
+          if (fromAsk) {
+            const answers = answersOf(t);
+            if (!answers.length && structured) for (const [q, a] of Object.entries(structured)) if (typeof a === 'string') answers.push({ q, a });
+            if (answers.length) return { kind: 'answer', text: t, answers, at, pos: i };
+          }
         }
       }
       continue;
@@ -234,6 +239,16 @@ function userSaid(entries, topic) {
   if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || (g.yes.test(v.text) && !g.no.test(v.text)), voice: v, text: v.text };
   const text = topic === 'push' ? v.text.replace(/```[\s\S]*?```/g, '').split('\n').filter((l) => !/^\s*>/.test(l)).join('\n') : v.text;
   return { ok: g.yes.test(text) && !g.no.test(text), voice: v, text: v.text };
+}
+/** 提问框不触发用户开口钩子：用技能、打勾前补读最新的真实开工答案。 */
+function confirmApply(j) {
+  const st = flowState(j);
+  if (!st.on || st.stage !== 'plan' || !j.transcript_path) return false;
+  const v = lastUserVoice(tailEntries(j.transcript_path, 3000000));
+  const text = v && (v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text);
+  if (!text || !applyIntent(text) || /不要|先别|还要改|不开工|[？?]/.test(text)) return false;
+  setFlow(j, true, '用户确认开工', 'apply');
+  return true;
 }
 /**
  * 这个会话是在哪个目录启动的。钩子收到的 cwd 是"现在所在的目录"：模型单独跑过一条 cd，它就跟着变了。
@@ -2173,7 +2188,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewRecord, recordReview, proposalReviewed, codeReviewed,

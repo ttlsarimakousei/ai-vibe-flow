@@ -9,7 +9,7 @@
  *     调 /opsx:apply 的技能：用户还没说开工（不在流程里，或者还在写提案那一段）就拦下——提案、任务清单要他看过、他说了开工才做
  *     （用户 2026-10-07 定的，规矩见 lib/session.js"流程分两段"）。不能放行。
  */
-const { readConfigFor, flowState, setFlow, FLOW_SKILL, blockOut, hookLog, cli } = require('../lib/session');
+const { readConfigFor, flowState, setFlow, FLOW_SKILL, blockOut, hookLog, cli, confirmApply } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 
@@ -30,6 +30,12 @@ function handle(j) {
         const st = flowState(j);
         const cfg = readConfigFor(j);
         if (/^(opsx:|openspec[-:])apply\b/i.test(first)) {
+          // 提问框的答案不触发 UserPromptSubmit，开工许可要在用技能前补读。
+          if (confirmApply(j)) {
+            st.stage = 'apply';
+            const now = readConfigFor(j);
+            out = { systemMessage: '[vibe-kit] 开始 apply：全自动模式' + (now.autoMode ? '开着，只管实现、验证和审查；提交照你选的档位。' : '关着。') };
+          }
           if (!st.on || st.stage === 'plan') out = applyGate(j);
         } else if (/^(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b/i.test(first)) {
           if (!st.on) setFlow(j, true, '调了 ' + first, 'apply');

@@ -95,6 +95,7 @@ function scenarioFinder(roots) {
  * 返回 { issues, ticked, skipped }：skipped 是验法里明说"不做"的部分（打勾放行，记进全自动报告）
  */
 function tickCheck(j, file, oldText, newText, art, cfg, roots) {
+  if (require('../lib/session').confirmApply(j)) Object.assign(cfg, readConfigFor(j));
   const ticked = tickedLines(oldText, newText);
   const skipped = [];
   if (!ticked.length) return { issues: [], ticked, skipped };
