@@ -120,14 +120,28 @@ const ASKED_COMMIT = /(提交|commit)[^。！!\n]{0,16}[吗么？?]|要不要提
  */
 function plainCommitAsk(j, cfg, entries, changes, lastSaid) {
   if ((cfg.plainCommit || 'ask') !== 'ask' || cfg.autoMode) return '';
-  try { if (flowChanges(j).length || sessionChanges(j.session_id, entries, changes()).length) return ''; } catch (e) { /* 认不出就当没动过变更 */ }
+  try { const fl = flowState(j); if (fl.on && fl.stage === 'apply') return ''; } catch (e) { /* 认不出就当没动过变更 */ }
   if (userSaid(entries, 'commit').ok) return '';
   if (ASKED_COMMIT.test(String(lastSaid || ''))) return 'asked';
   return 'ask';
 }
-/** 仓库最近一次提交是什么时候（毫秒，按那一秒的末尾算）。没提交过、查不了返回 0 */
+/** 最近提交的毫秒时刻：当前 HEAD 的提交 reflog 用文件时间，缺少可靠 reflog 时保守按秒末。 */
 function lastCommitAt(root) {
-  try { const s = require('child_process').execFileSync('git', ['--no-optional-locks', '-C', root, 'log', '-1', '--format=%ct'], { encoding: 'utf8', timeout: 8000, windowsHide: true }).trim(); return /^\d+$/.test(s) ? Number(s) * 1000 + 999 : 0; } catch (e) { return 0; }
+  const git = (args) => require('child_process').execFileSync('git', ['--no-optional-locks', '-C', root].concat(args), { encoding: 'utf8', timeout: 8000, windowsHide: true }).trim();
+  try {
+    const [head, seconds] = git(['log', '-1', '--format=%H%x00%ct']).split('\x00');
+    if (!/^\d+$/.test(seconds)) return 0;
+    const time = Number(seconds) * 1000;
+    try {
+      const file = path.resolve(root, git(['rev-parse', '--git-path', 'logs/HEAD']));
+      const st = fs.statSync(file); const fd = fs.openSync(file, 'r');
+      let line = '';
+      try { const b = Buffer.alloc(Math.min(4096, st.size)); fs.readSync(fd, b, 0, b.length, st.size - b.length); line = b.toString('utf8').trimEnd().split('\n').pop() || ''; }
+      finally { fs.closeSync(fd); }
+      if (line.split(' ')[1] === head && /\tcommit(?: \(initial\))?:/.test(line) && st.mtimeMs >= time && st.mtimeMs < time + 2000) return st.mtimeMs;
+    } catch (e) { /* 没有 reflog 或不是当前提交的记录，用保守时刻 */ }
+    return time + 999;
+  } catch (e) { return 0; }
 }
 /**
  * 按阶段提交：这个变更有没有"刚做完的阶段"——tasks.md 里同一个大编号（1.x、2.x）的任务全部打勾，而且最后那一个勾打在仓库最近一次提交之后。
@@ -158,7 +172,7 @@ function gitStatus(root, rel) {
     execFile('git', ['--no-optional-locks', '-C', root, '-c', 'core.quotepath=false', 'status', '--porcelain', '--'].concat(rel.slice(0, 60)), { encoding: 'utf8', timeout: 8000, windowsHide: true }, (err, stdout) => resolve(err ? null : String(stdout || '')));
   });
 }
-async function uncommitted(files) {
+async function uncommitted(files, includeNew) {
   const byRoot = new Map();
   for (const f of files) {
     const root = repoRootOf(f);
@@ -169,8 +183,8 @@ async function uncommitted(files) {
   const out = [];
   await Promise.all([...byRoot].map(async ([root, rel]) => {
     const s = await gitStatus(root, [...rel]);
-    // 只算已跟踪文件的改动；新建的（??）由下面的"新建、没进 git 的文件"那一条单独说
-    const n = s === null ? 0 : s.split('\n').filter((l) => l.trim() && !l.startsWith('??')).length;
+    // 普通新文件由收尾检查说；新提案产物也必须算进提案自己的提交确认。
+    const n = s === null ? 0 : s.split('\n').filter((l) => l.trim() && (includeNew || !l.startsWith('??'))).length;
     if (n) out.push({ root, count: n });
   }));
   return out;
@@ -336,7 +350,7 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start) {
       if (tidy.isProcessFile(abs)) { if (mine || fresh(abs)) proc.set(k, { abs, dir: false }); continue; }
       const d = tidy.processDirOf(abs, root, false, dirCache);
       if (d) { if (mine || fresh(abs)) proc.set(normKey(d), { abs: d, dir: true }); continue; }
-      // 还没开工的变更的产物（提案阶段）：用户说了开工再一起提交，这里不提
+      // 提案产物另走审完后确认提交的检查，这里不当成普通的新文件催提交。
       if (mine) { const a = artifactOf(abs); if (a && !changeStarted(a.dir)) continue; newFiles.push(abs); }
     }
   }));
@@ -862,7 +876,18 @@ async function handle(j) {
   // 不走 OpenSpec 的改动、开关选了"先问我"：不催它提交，催它交代了问我（它这一轮已经在问的不再说）
   const mode = commitMode(cfg);
   if (mode !== 'off' && j.session_id !== undefined) {
-    // 提案阶段的产物（这个变更还没开工，tasks.md 里一个勾都没有）不催提交：审完、用户说了开工再一起提交 docs: 提案
+    // 提案是可单独交付的一件事。审完后问是否提交，不把确认拖到 apply。
+    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && proposalReviewed(a.dir); });
+    const pkey = sid + '-plancommit';
+    const planOnce = turnId ? readState(pkey).turnId !== turnId : !j.stop_hook_active;
+    if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !pending.some((p) => p.mode === 'proposal') && !userSaid(entries, 'commit').ok && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
+      const dirtyPlan = await uncommitted(plans, true);
+      if (dirtyPlan.length) {
+        writeState(pkey, { turnId, at: Date.now() });
+        todo.push('提案已经写完并审过：交代提案要点和审查结果，问我是否提交这些产物（选项"提交提案"和"还要改"）。我同意后单独提交 docs: 提案 <变更名>；提交不等于开工，不要自己执行 apply。');
+      }
+    }
+    // 提案产物只走上面的确认提交，不混进 apply 的任务提交。
     const planArtifact = (f) => { const a = artifactOf(f); return !!(a && !changeStarted(a.dir)); };
     const mine = [...new Set(calls.filter(isEdit).map(fileOf).filter((f) => !/(^|[\\/])\.(vibe|claude)[\\/]/.test(f) && !planArtifact(f)))];
     const ckey = sid + '-commit';
@@ -951,5 +976,5 @@ async function handle(j) {
   return null;
 }
 
-module.exports = { handle };
+module.exports = { handle, phaseDone, lastCommitAt };
 if (require.main === module) cli(handle);
