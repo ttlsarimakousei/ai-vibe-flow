@@ -46,7 +46,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `outputs.js` | 代码之外的产出位置 |
 | `tidy.js` | `.vibe` 的整理和过程文件的清理 |
 | `onboard.js`、`discover.js` | 后台自动探索：认工程、推命令和端口、找开发环境的数据库和 redis 连接 |
-| `drivers.js`、`toolstats.js` | 数据库驱动的登记；查库、查 redis 工具的用量和毛病 |
+| `drivers.js`、`toolstats.js` | 多版本驱动登记、默认和单版删除；查库、查 redis 的匿名类别计数 |
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |
 | `usage.js` | 使用情况：每天数次数，第二天传到 GitLab |
 | `pull.js` | 开工前拉代码 |
@@ -88,3 +88,13 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 ## 看页面（vibe-kit/kit/page）
 
 立项时把浏览器验证分成四档（1 系统 Edge 无头命令行、2 Playwright 脚本、2.5 场景执行器、3 Playwright MCP 让模型直接驱动），套件带的是第 2 档和第 2.5 档：模型写场景文件、脚本执行（`scenario-run.js`，默认的验证通道），以及取布局树、像素比对（`layout-tree.js`、`pixel-diff.js`）。浏览器用系统自带的 Edge，不下载浏览器。还原设计稿靠数字对比，不靠让模型读截图。
+
+## 1010 补充：许可、审查和合并 push
+
+真实 AskUserQuestion 的答案配对给 lastUserVoice，包括两种前缀和结构化 answers；用户后发取消优先。confirmApply 在 apply 和打勾前补读开工答案，解决答案不触发 UserPromptSubmit 的状态遗漏。verify-gate 的 <会话>-plancommit 状态只去重该轮提案确认，新建未跟踪的产物也计算。
+
+后台审查以真实启动调用登记 agentId，task-id 通知关联最近调用；通知没有 result 时只读启动结果登记的有限大小输出文件。SendMessage 只续已知审查代理，保留变更与模式；最新结论记账，相同通知去重。
+
+`merge-push.js` 库核对远端与线性本地历史，按确定事件分组，独立 index 重建并比 tree，备份 ref 后原子更新当前分支，再普通 push。工具计划在项目 `.vibe/tmp/merge-push/`，不是跨会话套件状态；guard-commit 只接受最新真人“合并push”的专门授权。它不修改已推送历史。
+
+`proposal-files.js` 只检查四个产物引用的临时材料，以及变更内 assets/references 文件的存在、忽略规则和链接归属，不读取材料内容、不自动拷入秘密。guard-spec 查新改行；verify-gate 查触碰变更的完整产物；guard-commit 补查命令写入和暂存区，旧引用仍在 index 时不能提交。相对材料路径以变更目录为准，设计检查同时支持产物所在目录。
