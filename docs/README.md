@@ -9,6 +9,8 @@
 | [claude-code-facts.md](claude-code-facts.md) | 在真的 Claude Code（2.1.120、2.1.259）上实测过的行为 |
 | [decisions.md](decisions.md) | 设计决定和原因，哪些是用户定的不能改回去 |
 | [glossary.md](glossary.md) | 术语 |
+| [reviews/20261011-vibe-kit-neutral-review.md](reviews/20261011-vibe-kit-neutral-review.md) | 20261010.2210 的中立审查、边界复现和改进顺序，结论以对应源码提交为准 |
+| [plans/20261011-vibe-kit-development-optimization.md](plans/20261011-vibe-kit-development-optimization.md) | 开发流程优化方案，含测试与审查任务、审查限时与替代方式、自动压缩及旧交接处理，尚未实施 |
 | [history/](history/) | 早期的方案、审查报告、体检报告。当时的记录，只读，内容可能已经过时 |
 
 别处的文档：
