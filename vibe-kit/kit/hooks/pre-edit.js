@@ -43,6 +43,7 @@ function handle(j) {
   let sig = '';
   let passes = {};
   const cfg = readConfigFor(j);
+  if (f) { try { const no = require('../lib/apply-scope').check(j, f); if (no) return require('../lib/session').blockOut('PreToolUse', '[vibe-kit 范围] ' + no); } catch (e) { if (feedback) feedback.recordHookError('pre-edit 范围', j, e); } }
   const target = f ? 'file:' + normKey(f) : '';
   const action = String(j.tool_name || '') + '：' + f;
   try { if (feedback) { sig = actionSig(j, f); passes = feedback.passesFor(sig, cfg, j, target); } } catch (e) { passes = {}; }

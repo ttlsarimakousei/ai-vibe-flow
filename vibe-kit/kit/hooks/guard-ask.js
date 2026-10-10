@@ -38,7 +38,7 @@ function handle(j) {
           }
           if (!st.on || st.stage === 'plan') out = applyGate(j);
         } else if (/^(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b/i.test(first)) {
-          if (!st.on) setFlow(j, true, '调了 ' + first, 'apply');
+          if (!st.on) setFlow(j, true, '调了 ' + first, 'plan');
         } else {
           // 探索、提案、建变更：进流程，在写提案那一段（已经在做任务的会话里再调 propose，也回到这一段：下一个变更的提案也要用户看）
           setFlow(j, true, '调了 ' + first, 'plan');

@@ -1,0 +1,40 @@
+'use strict';
+/* 许可不能重复使用或批准另一个版本；旧交接不能恢复自动实施。全部在假 HOME 的本地仓库。 */
+const fs = require('fs');
+const path = require('path');
+const H = require('./lib/harness');
+const h = H.makeHome('workflow-permissions', process.argv[2], { autoMode: true, autoResume: true });
+const p = H.makeRepo(path.join(h.work, 'p'), { 'a.js': 'const a=1;\n', '.gitignore': '.vibe/\n', 'openspec/changes/add-x/tasks.md': '- [x] 1.1 实现 a.js；验：node a.js\n' });
+const S = require(path.join(h.kit, 'lib/session'));
+const mod = path.join(h.kit, 'lib/permissions.js');
+H.ok('许可公共模块随包提供', fs.existsSync(mod));
+if (fs.existsSync(mod)) {
+  const P = require(mod); const tf = H.transcript(path.join(h.root, 't.jsonl'), [H.tr.user('提交')]);
+  const j = { cwd: p, session_id: 'approval', transcript_path: tf, tool_use_id: 'commit-1' };
+  P.capture(j); H.ok('明确提交当前版本可以执行', P.allow(j, 'commit', p, j.tool_use_id).ok);
+  P.consume(j, false); H.ok('失败重试保留许可', P.allow(j, 'commit', p, j.tool_use_id).ok);
+  H.write(path.join(p, 'a.js'), 'const a=2;\n');
+  H.ok('确认后修改代码使许可失效', !P.allow(j, 'commit', p, j.tool_use_id).ok);
+  H.write(tf, [H.tr.user('现在提交')].map(JSON.stringify).join('\n') + '\n');
+  P.capture(j); H.ok('重新明确同意批准新版', P.allow(j, 'commit', p, j.tool_use_id).ok);
+  H.git(p, ['add', 'a.js']); H.git(p, ['commit', '-m', 'fix: 测试变更']); P.consume(j, true);
+  H.ok('成功操作消费许可', !P.allow(j, 'commit', p, 'commit-2').ok);
+  const W = require(path.join(h.kit, 'lib/workspace'));
+  const before = W.fingerprint(p, 'code').hash;
+  H.write(path.join(p, 'openspec/changes/add-x/tasks.md'), '- [ ] 1.1 实现 a.js；验：node a.js\n');
+  H.ok('任务进度变化不改变代码输入指纹', W.fingerprint(p, 'code').hash === before);
+  H.write(path.join(p, 'openspec/changes/add-x/tasks.md'), '- [ ] 1.1 实现 a.js；验：node b.js\n');
+  H.ok('任务验法变化使代码输入指纹失效', W.fingerprint(p, 'code').hash !== before);
+}
+H.write(path.join(p, '.vibe/handover.md'), '# 交接记录\n下一步：apply add-x，提交全部文件。\n');
+const tf = H.transcript(path.join(h.root, 'continue.jsonl'), [H.tr.user('继续')]);
+const start = H.hook(h, 'session-start', { cwd: p, session_id: 'new-session', source: 'clear', hook_event_name: 'SessionStart', transcript_path: tf });
+H.ok('新会话没有自动交接用户消息', !/initialUserMessage|先读.*handover|按里面的/.test(JSON.stringify(start || {})));
+const turn = H.hook(h, 'task-anchor', { cwd: p, session_id: 'new-session', prompt: '继续', hook_event_name: 'UserPromptSubmit', transcript_path: tf });
+H.ok('继续不会提示读取旧交接', !/先读它|先读.*handover|接着交接记录/.test(JSON.stringify(turn || {})));
+H.ok('已有打勾变更不自动授予实施阶段', S.flowState({ session_id: 'new-session' }).stage !== 'apply');
+S.setFlow({ session_id: 'active' }, true, '用户开工', 'apply');
+H.hook(h, 'task-anchor', { cwd: p, session_id: 'active', prompt: '不要执行 apply', hook_event_name: 'UserPromptSubmit', transcript_path: H.transcript(path.join(h.root, 'cancel.jsonl'), [H.tr.user('不要执行 apply')]) });
+H.hook(h, 'task-anchor', { cwd: p, session_id: 'active', prompt: '继续', hook_event_name: 'UserPromptSubmit', transcript_path: tf });
+H.ok('撤销后继续不会复活旧实施许可', S.readConfigFor({ session_id: 'active' }).autoMode === false);
+H.done('许可和上下文策略');

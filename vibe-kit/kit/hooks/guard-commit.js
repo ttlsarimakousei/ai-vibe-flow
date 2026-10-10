@@ -596,8 +596,9 @@ function archiveIssue(t, dir, j) {
     let others = [];
     try { if (said.ok && said.text) others = allChanges(dir).map((c) => c.name).filter((n) => mentionsChange(said.text, n)); } catch (e) { others = []; }
     const wrong = others.length > 0 && !others.some((n) => n.toLowerCase() === name.toLowerCase());
-    if (said.ok && !wrong) return null;
-    const why = wrong ? '我说的是归档 ' + others.join('、') + '，不是它' : '我还没自测、还没说归档';
+    const permit = said.ok && !wrong ? require('../lib/permissions').allow(j, 'archive', chDir, j.tool_use_id) : { ok: false };
+    if (permit.ok) return null;
+    const why = wrong ? '我说的是归档 ' + others.join('、') + '，不是它' : permit.reason || '我还没自测、还没说归档';
     return { name, noBypass: true, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 的任务都打了勾、代码也审过了，但' + why + '。归档要我自测过、我说了才做：先交代做了什么、怎么自测（起服务的命令、要看的页面、要调的接口、要执行的脚本），然后' + (cfg.autoMode ? '收工交报告，写进"留给你做的"：等我自测过说归档。不要再试归档。' : '用提问框问我自测过了没有、能不能归档（选项写"归档"和"还要改"）。我说还要改什么，改完再问；我说归档了再归档。') };
   }
   const tail = !cfg.autoMode ? '确实要放弃这个变更，告诉我，我来删。'
@@ -1407,13 +1408,18 @@ function consentIssue(g, st, cfg, docs) {
   const msg = messageOf(g.args, docs);
   let es = [];
   try { if (j.transcript_path) es = tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain); } catch (e) { es = []; }
-  const approved = userSaid(es, 'commit').ok;
+  const permit = userSaid(es, 'commit').ok ? require('../lib/permissions').allow(j, 'commit', repoRoot(g.dir) || g.dir, j.tool_use_id) : { ok: false };
+  if (permit.reason && !permit.ok) return '[vibe-kit] ' + permit.reason + '。交代当前改动后重新确认是否提交。';
+  const approved = permit.ok;
   const fl = flowState(j);
   if (!approved && ((msg !== null && /^docs: 提案/.test(msg)) || (fl.on && fl.stage === 'plan'))) return '[vibe-kit] 提案提交要单独确认：先交代提案和审查结果，问用户是否提交；开工许可不能代替提交许可。';
   if (cfg.autoMode && !approved) {
     if (cfg.autoCommit === 'off') return '[vibe-kit] 自动提交选了"我说了才提交"，全自动模式也不改变这个选择。';
     const current = allChanges(st.cwd0).filter((c) => flowChanges(j).some((d) => normKey(d) === normKey(c.dir)));
     if (!current.length) return '[vibe-kit] 这次提交没有对应的当前 OpenSpec 变更，不能借用全自动许可；交代改动后问用户是否提交。';
+    const root = repoRoot(g.dir) || g.dir; const baselines = readState('work-baselines');
+    const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
+    if (original.size) { const staged = execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000 }).split('\0').filter(Boolean); const mixed = staged.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
     const rounds = syncReviewRounds(es, syncReviews(es, st.cwd0));
     const rr = readState('review-rounds');
     const open = (cfg.reviewLoop && current.some((c) => ['proposal', 'code'].some((k) => rr[k + '|' + normKey(c.dir)] && !rr[k + '|' + normKey(c.dir)].done))) || rounds.some((x) => current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && !x.rec.done && (cfg.reviewLoop || (x.rec.pendingFix && !x.fixed)));
@@ -1440,7 +1446,7 @@ function consentIssue(g, st, cfg, docs) {
   if (onlyMetadata(g, st)) return '';
   // 只看这一轮的 apply 状态；历史上碰过变更不能替普通任务授权。
   if (fl.on && fl.stage === 'apply') return '';
-  if (userSaid(es, 'commit').ok) return '';
+  if (approved) return '';
   return '[vibe-kit] 不走 OpenSpec 的改动，提交之前要我点头（配置页"不走 OpenSpec 的改动，验证过之后"选了"先问我"）。先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说还要改什么，改完再问；我说提交了再提交。';
 }
 
@@ -1760,7 +1766,7 @@ function handle(j) {
   if (cb) return cb;
   // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告；提交里像有密码的放行，记进报告
   // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
-  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok;
+  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
   // 当场授权 push 不能顺便跳过同一条命令里提交内容的凭据提醒。
   if (pushApproved && st.secret) return askOut(st.secret);
   if (cfg.autoMode) {

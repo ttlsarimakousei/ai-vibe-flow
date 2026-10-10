@@ -20,6 +20,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const intent = require('../lib/intent');
 const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, planIntent, changeStarted, handoverStage, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, syncReviews, sessionChanges, KIT, cli } = require('../lib/session');
 let hookHealth = () => '';
 try { hookHealth = require('../lib/hook-health.js').check; } catch (e) { /* 老版本没有 */ }
@@ -68,7 +69,7 @@ function decideFlow(j, cfg, note, resumed) {
   if (prev.at === undefined && cfg.autoSwitch) prev = flowAdopt(j);
   // 它动过的变更都归档了：流程走完了，"继续""好"不再接回去（点名新的变更、敲 /opsx:… 照样进；收工时已经记成不在流程里的，这里把"上一轮在流程里"的时间也抹掉）
   if (flowDone(j)) { if (prev.on) setFlow(j, false, '变更归档了'); prev = Object.assign({}, prev, { on: false, was: 0 }); }
-  const prevStage = prev.stage === 'plan' ? 'plan' : 'apply';
+  const prevStage = prev.stage === 'apply' ? 'apply' : 'plan';
   // 后台任务做完的通知不是用户说的话：跟原来一样
   if (note) return { on: !!prev.on, cont: true, stage: prevStage, applyStart: false };
   const p = String(j.prompt || '').trim();
@@ -79,7 +80,7 @@ function decideFlow(j, cfg, note, resumed) {
   let why = '';
   let cont = false;
   // 在流程的哪一段：默认跟上一轮一样（没记过的还是没记，按 apply 算）
-  let stage = prev.stage;
+  let stage = prevStage;
   // 这句话是让它做任务（开工）还是在说提案那一段的事：开工算 apply，改提案算 plan，都不是就用给定的那个
   const stageOf = (fallback) => (applyIntent(p) ? 'apply' : planIntent(p) ? 'plan' : fallback);
   // 上一轮在流程里；或者上一轮只是插进来问了一句、再上一轮在流程里（一天之内）
@@ -88,10 +89,10 @@ function decideFlow(j, cfg, note, resumed) {
   else if (SAME_SLASH.test(p)) { on = !!prev.on; why = on ? '接着上一轮' : ''; }
   // 别的斜杠命令（/ttls-onboard、自己的命令）：这一轮做的是那件事，不在流程里（议题 #9）
   else if (/^\s*\//.test(p)) { on = false; }
-  else if (resumed || /接着上一个会话的交接记录继续/.test(p)) { on = true; why = '接着交接记录做'; stage = handoverStage(j.cwd || process.cwd()); }
+  else if (resumed) { on = true; why = '用户明确选择手动交接'; stage = 'plan'; }
   // "不要停，把剩下的做完""别等我"：接着做。原来不在流程里的不算，照下面的规矩看这句话本身
   else if (KEEP_GOING.test(p) && going) { on = true; why = '接着上一轮'; cont = true; }
-  else if (isStop(p)) { on = false; }
+  else if (isStop(p) || intent.denied(p, 'apply')) { on = false; stage = 'plan'; }
   // "继续"：上一轮在流程里就接着；上一轮只是插进来问了一句的，跟再上一轮（一天之内）
   else if (CONTINUE_WORDS.test(p)) { on = going; why = on ? '接着上一轮' : ''; cont = true; }
   // 问句只回答：这一轮不在流程里（说"继续"就接回去）
@@ -103,12 +104,17 @@ function decideFlow(j, cfg, note, resumed) {
   else if (prev.on) { on = true; why = '接着上一轮'; stage = stageOf(prev.stage); }
   else if (looksLikeRequirement(p)) { on = true; why = '提了需求'; stage = 'plan'; }
   // 点了名的变更：让它开工、或者这个变更已经打过勾的算 apply；还没开工的、说的是提案的事算 plan
-  else if (named.length && p.length <= 3000) { on = true; why = '点了变更 ' + named[0].name; stage = stageOf(named.some((c) => changeStarted(c.dir)) ? 'apply' : 'plan'); }
+  else if (named.length && p.length <= 3000) { on = true; why = '点了变更 ' + named[0].name; stage = stageOf('plan'); }
   setFlow(j, on, why, on ? stage : undefined);
+  if (on && stage === 'apply' && applyIntent(p)) {
+    const permit = require('../lib/apply-scope').grant(j, p);
+    if (!permit.ok) { stage = 'plan'; setFlow(j, true, permit.reason, 'plan'); }
+  }
+  if (isStop(p) || intent.denied(p, 'apply')) require('../lib/session').updateState(String(j.session_id) + '-flow', (s) => { s.was = 0; s.stage = 'plan'; delete s.applyScope; });
   if (on) for (const c of named) flowTouch(j, c.dir);
-  const nowStage = stage === 'plan' ? 'plan' : 'apply';
+  const nowStage = stage === 'apply' ? 'apply' : 'plan';
   // 这句话开工了：敲了 /opsx:apply，或者上一轮还不在做任务那一段。点名让它归档的不算
-  const applyStart = on && nowStage === 'apply' && !(ARCHIVE_TALK.test(p) && !APPLY_CMD.test(p)) && (APPLY_CMD.test(p) || !prev.on || prev.stage !== 'apply');
+  const applyStart = on && nowStage === 'apply' && applyIntent(p);
   if (cfg.autoSwitch && (!!prev.on !== on || (on && prevStage !== nowStage))) hookLog('全自动模式 ' + (on ? '这个会话' + (prev.on ? '' : '进了 OpenSpec 流程：' + why + '，') + (nowStage === 'apply' ? '在做任务那一段（全自动算数）' : '在写提案那一段（照有人在的样子来）') : '这一轮不在 OpenSpec 流程里，照有人在的样子来'));
   return { on, cont, stage: nowStage, applyStart };
 }
@@ -121,7 +127,7 @@ function applyNotice(cfg) {
   return {
     user: '[vibe-kit] 开始 apply：全自动模式' + (auto ? '开着。这个会话从现在起不问你、不等你；任务全部完成、代码审过就停下等你自测，不归档。' : '关着，照常问你。'),
     model: '现在开始 apply（做任务）：全自动模式' + (auto ? '开着，我不在——照约定"全自动模式（已开）"一节做，不问我、不等我；任务全部完成、代码审过就收工交报告，不归档，等我自测。' : '关着，我在——拿不准的问我；任务全部完成、代码审过了停下，交代怎么自测，等我说归档。')
-      + (cfg.autoCommit === 'off' ? '' : '开工前先把这个变更的 proposal、specs、design、tasks、revisions 提交一次（docs: 提案 <变更名>；提案阶段一直没提交，已经提交过的跳过），再开始做任务。'),
+      + '提案提交许可和 apply 开工许可分别判断；没有明确提交许可时不在开工节点补提案提交。',
   };
 }
 function requirementHint(j, cfg) {
@@ -240,27 +246,28 @@ function wroteHandover(entries, file) {
   });
 }
 function handoverContinuation(j, cfg) {
+  // 历史交接只在用户点名选择时读取；"继续"和 autoResume 不再借用旧记录。
+  if (!/(?:读取|接着|恢复|使用|按)[^。！？\n]{0,36}(?:\.vibe[\\/]handover\.md|交接记录)|(?:交接记录|handover\.md)[^。！？\n]{0,20}(?:继续|接着|恢复)/i.test(intent.plain(j.prompt))) return '';
   try {
     let d = path.resolve(j.cwd || process.cwd());
     let file = '';
     for (let i = 0; i < 2; i++) { const f = path.join(d, '.vibe', 'handover.md'); if (fs.existsSync(f)) { file = f; break; } const up = path.dirname(d); if (up === d) break; d = up; }
     if (!file) return '';
     const m = fs.statSync(file).mtimeMs;
-    if (Date.now() - m > 60 * 60000) return '';
-    const used = readState('handover-consumed');
+    const handoverKey = String(j.session_id || 'unknown') + '-manual-handover';
+    const used = readState(handoverKey);
     if (used.file === file && used.mtime === m) return '';
     const stale = handoverStale(file, j.cwd || process.cwd());
-    if (stale) { writeState('handover-consumed', { file, mtime: m, at: Date.now(), stale }); hookLog('task-anchor handover stale: ' + stale); return ''; }
+    if (stale) hookLog('task-anchor 明确选择的交接记录已过时，需要核对当前事实');
     const entries = j.transcript_path ? tailEntries(j.transcript_path, 600000) : [];
-    if (wroteHandover(entries, file)) return '';
     const auto = /接着上一个会话的交接记录继续/.test(String(j.prompt || ''));
-    const resumeOn = !!(cfg && cfg.autoResume === true);
+    const resumeOn = false;
     // 关着"自动接着干"：用户没说要接着做，就不接、也不记成接过（一小时内他说"继续"照样接得上）
-    if (!auto && !resumeOn && !RESUME_WORDS.test(String(j.prompt || ''))) return '';
-    writeState('handover-consumed', { file, mtime: m, at: Date.now() });
+    if (intent.denied(j.prompt, 'apply')) return '';
+    writeState(handoverKey, { file, mtime: m, at: Date.now() });
     hookLog('task-anchor handover ' + (auto ? 'auto message arrived' : 'continuation injected') + ' file=' + file);
     if (auto) return '';
-    return '上一个会话刚写了交接记录：' + file + '。先读它，用 git status、tasks.md 核对实际状态，然后按里面的"下一步"接着做。' + (resumeOn ? '我这句话如果是另一件事，就先做我说的，做完再回到交接记录。' : '');
+    return '用户明确选择手动交接记录：' + file + (stale ? '。记录已过时：' + stale : '') + '。读取后核对 git status、tasks.md 与当前代码，先交代差异和待确认范围；旧记录不能授予 apply、提交、归档或 push。';
   } catch (e) { return ''; }
 }
 
@@ -323,7 +330,7 @@ function anchorLines(j, cfg, note) {
     const fresh = !!st.at && Date.now() - st.at < 6 * 3600000;
     const used = (fresh && st.used) || lastUsageTokens(entries);
     let overLine = false;
-    if (used) {
+    if (used && cfg.contextStrategy === 'handover') {
       const pct = Math.round(contextPercent(used, fresh ? st.windowSize : 0, cfg).pct);
       const line = Number(cfg.handoverPercent) || 70;
       const gw = nearGatewayLimit(used);
@@ -369,9 +376,10 @@ async function handle(j) {
   // 后台任务做完的通知（审查结论这类，2.1.259 起 Agent 默认在后台跑）也会走到这里，但它不是用户说的话：
   // 不当需求、不当"接着交接"、不按消息里的词给提醒、不重记产物指纹；先把它带来的审查结论记上，下面"提案还没审过"才不会说错
   const note = isTaskNotePrompt(j.prompt);
+  if (!note) { try { require('../lib/permissions').capture(j); } catch (e) { /* 记录失败由执行入口重新核对 */ } }
   // 接上刚写的交接记录（新会话里说"继续"、或者自动发来的那句）：放在定流程之前，接上了就算在流程里
   const ho = note ? '' : handoverContinuation(j, cfg);
-  const resumed = !!ho || (!note && /接着上一个会话的交接记录继续/.test(String(j.prompt || '')));
+  const resumed = !!ho;
   // 全自动模式只在走 OpenSpec 流程时算开着：这句话算不算，在这里定。不算的话下面都照有人在的样子来。
   // 开关关着也定、也记：这一轮做到一半才在配置页打开全自动的，别的钩子照这一轮开头定的算
   cfg.autoSwitch = cfg.autoMode === true;
@@ -381,13 +389,16 @@ async function handle(j) {
   let on = false;
   // cont：这句话是"继续""不要停"这类，接回原来的流程（中间插过一句问话的也算）——不是新开工
   let cont = false;
-  let stage = 'apply';
+  let stage = 'plan';
   let applyStart = false;
   try { const d = decideFlow(j, cfg, note, resumed); on = d.on; cont = d.cont; stage = d.stage; applyStart = d.applyStart; } catch (e) { on = false; }
   // 全自动只在做任务那一段（apply）算开着；写提案那一段用户在
-  cfg.autoMode = cfg.autoSwitch && on && stage !== 'plan';
+  cfg.autoMode = require('../lib/session').flowView(j).effective;
   // 用户开口了：全自动报告新开一轮（后台任务的通知不算用户开口）
   if (!note && cfg.autoMode) { try { require('../lib/report.js').begin(j); } catch (e) { /* 老版本没有，或者记不了：不影响对话 */ } }
+  if (applyStart) {
+    try { const named = allChanges(j.cwd).filter((c) => mentionsChange(j.prompt, c.name)); const targets = named.length ? named : allChanges(j.cwd); if (targets.length === 1 || named.length) require('../lib/review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 基线未知时审查明确要求 --base */ }
+  }
   const said = String(j.prompt || '').trim();
   // 使用情况：开口、进流程、接着交接记录做、写交接记录各几次（只数次数）
   if (!note) {
@@ -411,6 +422,7 @@ async function handle(j) {
   const slash = /^\s*\//.test(String(j.prompt || ''));
   const anchored = slash ? [] : anchorLines(j, cfg, note);
   const lines = [...anchored];
+  if (!note) { try { const conflicts = require('../lib/work-sessions').touch(j); if (conflicts.length) lines.push('同一变更还有活跃实施会话：' + conflicts.join('、') + '。先核对各自负责的文件，避免覆盖；检索照常。共享工作区未被隔离。'); } catch (e) { /* 冲突记录失败不阻断工作 */ } }
   if (pulled) lines.push(pulled);
   // 放松保护的开关被绕开配置页改了：没按它来，告诉它；每个会话记一次问题反馈
   if (cfg._tampered) {

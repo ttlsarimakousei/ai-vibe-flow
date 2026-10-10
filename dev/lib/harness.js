@@ -323,7 +323,7 @@ function inFlow(h, sid, changes, on, stage) {
   const f = path.join(h.kit, 'state', String(sid).replace(/[^\w.-]/g, '_').slice(0, 80) + '-flow.json');
   const norm = (p) => path.resolve(p).split(path.sep).join('/').toLowerCase();
   // stage：plan（写提案那一段，全自动不算数）/ apply（做任务那一段）；不给的按 apply 算（1008 之前的记录没有这一项，也按 apply 算）
-  write(f, JSON.stringify(Object.assign({ on: on !== false, why: '测试', at: Date.now(), was: Date.now(), changes: (changes || []).map(norm) }, stage ? { stage } : {})));
+  write(f, JSON.stringify({ on: on !== false, why: '测试', at: Date.now(), was: Date.now(), changes: (changes || []).map(norm), stage: stage || 'apply' }));
 }
 
 module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, makePackage, runtime, inFlow, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done };

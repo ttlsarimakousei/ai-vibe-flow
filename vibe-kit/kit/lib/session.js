@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const stateStore = require('./state-store');
+const intent = require('./intent');
 const { execFileSync } = require('child_process');
 
 const KIT = path.join(__dirname, '..');
@@ -86,7 +87,7 @@ function flowTouch(j, dir) {
 }
 function flowChanges(j) { const c = flowState(j).changes; return Array.isArray(c) ? c : []; }
 /** 这个会话在流程的哪一段：plan / apply；没记的（装这一版之前就开着的会话）按 apply 算 */
-function flowStage(j) { const s = flowState(j).stage; return s === 'plan' ? 'plan' : 'apply'; }
+function flowStage(j) { const s = flowState(j).stage; return s === 'apply' ? 'apply' : 'plan'; }
 /**
  * 这个会话的流程走完了：它动过的变更（流程记录里的；没记的看会话碰过的）一个都不在了（归档了、删了）。
  * 用户 2026-10-07 反馈：变更归档之后状态栏还写着"在流程里，在做任务"。收工时据此把流程记成不在（hooks/verify-gate.js），
@@ -114,8 +115,8 @@ function flowDone(j) {
  * 模型自己调 /opsx:apply 的技能、在 plan 那一段打勾：拦下，让它先把提案交代给用户、问能不能开工（hooks/guard-ask.js、guard-spec.js）。
  * 没记 stage 的（装这一版之前就开着的会话）按 apply 算：全自动正跑着的会话不能因为升级突然变成有人在的样子，会停在提问框上。
  */
-const APPLY_SLASH = /^\s*\/(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i;
-const APPLY_TAG = /<command-name>\s*\/?(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i;
+const APPLY_SLASH = /^\s*\/(opsx:|openspec[-:])apply\b/i;
+const APPLY_TAG = /<command-name>\s*\/?(opsx:|openspec[-:])apply\b/i;
 // 明说开工的话。HARD 怎么都算；SOFT、WEAK 在同一句里说的是提案那一段的事（"开始做提案""接着做 a1 的提案"）时不算
 const APPLY_HARD = /开工|开干|开搞|\bapply\b|(按|照|依)(提案|任务|tasks|清单)(做|实现|开发)|按照现在的方案修改|可以(做|开工|实现|开始做)了/i;
 const APPLY_SOFT = /动手|开始(做|实现|开发|写代码|执行|干)/;
@@ -128,9 +129,8 @@ const PLAN_EDIT = /(改|调整|修改|补|加|看|审|重写|更新|完善|细�
 /** 这句话是不是让它开始做任务（开工） */
 function applyIntent(p) {
   const s = String(p || '');
-  if (APPLY_SLASH.test(s) || APPLY_TAG.test(s) || APPLY_HARD.test(s)) return true;
-  if (TASK_NUM.test(s) && TASK_DO.test(s)) return true;
-  return (APPLY_SOFT.test(s) || APPLY_WEAK.test(s)) && !PLAN_EDIT.test(s);
+  if (APPLY_SLASH.test(s) || APPLY_TAG.test(s)) return true;
+  return intent.explicit(s, 'apply') && !PLAN_EDIT.test(s.replace(/按(?:照)?(?:提案|方案)(?:做|实现|开发)/g, ''));
 }
 /** 这句话是不是在说提案那一段的事 */
 const planIntent = (p) => PLAN_EDIT.test(String(p || ''));
@@ -224,6 +224,7 @@ function lastUserVoice(entries) {
 const YES_SHORT = /^(可以|好|是|行|同意|确认|没问题|对|嗯|ok|okay|yes|y)(的|吧|了|啊|呀)?[\s。！!]*$/i;
 const NO_BEFORE = '(先别|别|不要|不用|不能|不准|不必|无需|先不|暂不|暂时不|不急着|不着急|等等再|晚点再|过会再|还不能|还不要|不可以|不让|没法)[^，,。！!？?\n]{0,6}';
 const SAID = {
+  accept: { yes: /自测|验收/, command: /^$/ },
   push: { yes: /(?:^|[，,。；;\n])\s*(?:\d+[.、]\s*)?(?:(?:请|帮我|现在|直接|立即|及时|继续|顺便|可以|同意|确认|执行)\s*)*(?:提交(?:并|和|后)?\s*)?(?:git\s+(?:-C\s+\S+\s+)?push\b|push\b|推送|推到远端)(?!\s*(?:策略|规则|规范|检查|权限|功能|提示|失败|报错|问题|日志|脚本|命令|配置|结果|状态|记录|成功|完成|被|测试|的|的时候|时|过|了))/i, no: new RegExp(NO_BEFORE + '(推送|push|推到远端)|(推送|push)(之前|前|以后再说|稍后|晚点|等等|先等)|(推送|push)[^。！!\n]{0,40}([吗么？?]|怎么|怎样|如何|什么|为什么|是否|会不会)|(能不能|可不可以|要不要|是否)(推送|push)|推不推|(?:push|推送)[^。！!\n]{0,8}(我自己|我来|留给我)|(?:解释|讲解|示例|举例)[^。！!\n]{0,16}(push|推送)', 'i'), command: /^$/ },
   archive: { yes: /归档|archive|验收(通过|过了|没问题|ok)/i, no: new RegExp(NO_BEFORE + '(归档|archive)|(归档|archive)(之前|前|以后再说|稍后|晚点|等等|先等)|(归档|archive)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)归档', 'i'), command: /^(opsx:|openspec[-:])(archive|bulk-archive)$/i },
   commit: { yes: /提交|commit/i, no: new RegExp(NO_BEFORE + '(提交|commit)|(提交|commit)(之前|前|以后再说|稍后|晚点|等等|先等)|(提交|commit)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)提交|提不提交', 'i'), command: /^$/ },
@@ -234,12 +235,11 @@ function userSaid(entries, topic) {
   const v = lastUserVoice(entries);
   if (!g || !v) return { ok: false, voice: v, text: '' };
   if (v.kind === 'answer') {
-    const hit = v.answers.some((x) => (g.yes.test(x.a) && !g.no.test(x.a)) || (g.yes.test(x.q) && !g.no.test(x.a) && YES_SHORT.test(x.a.trim())));
+    const hit = v.answers.some((x) => intent.explicit(x.a, topic) || (g.yes.test(x.q) && !intent.denied(x.a, topic) && YES_SHORT.test(x.a.trim())));
     return { ok: hit, voice: v, text: v.answers.map((x) => x.a).join('；') };
   }
-  if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || (g.yes.test(v.text) && !g.no.test(v.text)), voice: v, text: v.text };
-  const text = topic === 'push' ? v.text.replace(/```[\s\S]*?```/g, '').split('\n').filter((l) => !/^\s*>/.test(l)).join('\n') : v.text;
-  return { ok: g.yes.test(text) && !g.no.test(text), voice: v, text: v.text };
+  if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || v.command.replace(/^\//, '').toLowerCase() === topic, voice: v, text: v.text };
+  return { ok: intent.explicit(v.text, topic), voice: v, text: v.text };
 }
 /** 提问框不触发用户开口钩子：用技能、打勾前补读最新的真实开工答案。 */
 function confirmApply(j) {
@@ -247,7 +247,8 @@ function confirmApply(j) {
   if (!st.on || st.stage !== 'plan' || !j.transcript_path) return false;
   const v = lastUserVoice(tailEntries(j.transcript_path, 3000000));
   const text = v && (v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text);
-  if (!text || !applyIntent(text) || /不要|先别|还要改|不开工|[？?]/.test(text)) return false;
+  if (!text || !applyIntent(text)) return false;
+  if (!require('./apply-scope').grant(j, text).ok) return false;
   setFlow(j, true, '用户确认开工', 'apply');
   return true;
 }
@@ -282,7 +283,7 @@ function sessionHome(j) {
 }
 /** 会话开始（不是压缩之后）：记下启动目录。/clear 出来的新会话收到的也是"现在所在的目录"，先按会话记录的目录名认 */
 function noteSessionHome(j) {
-  try { if (j && j.session_id && j.session_id !== 'unknown' && j.cwd) writeState(String(j.session_id) + '-home', { dir: homeByTranscript(j) || path.resolve(j.cwd), at: Date.now() }); } catch (e) { /* 记不了就靠会话记录的目录名认 */ }
+  try { if (j && j.session_id && j.session_id !== 'unknown' && j.cwd) writeState(String(j.session_id) + '-home', { dir: homeByTranscript(j) || path.resolve(j.cwd), ownerPid: process.ppid, at: Date.now() }); } catch (e) { /* 记不了就靠会话记录的目录名认 */ }
 }
 /** 同一份输入，cwd 换成会话的启动目录（原来的留在 realCwd） */
 function atHome(j) {
@@ -302,7 +303,7 @@ function flowAdopt(j) {
   try { dirs = (readState(String(j.session_id) + '-changes').dirs || []).filter((d) => fs.existsSync(d)); } catch (e) { dirs = []; }
   const on = dirs.length > 0;
   const next = { on, why: on ? '装这一版之前就在做变更' : '', at: Date.now(), changes: dirs.slice(-50) };
-  if (on) { next.was = next.at; next.stage = 'apply'; }
+  if (on) { next.was = next.at; next.stage = 'plan'; }
   writeState(k, next);
   if (on) hookLog('全自动模式 这个会话装这一版之前就在做变更，算在 OpenSpec 流程里：' + dirs.map((d) => path.basename(d)).join('、'));
   return next;
@@ -314,8 +315,17 @@ function readConfigFor(j) {
   if (!c.autoSwitch) return c;
   let st = flowState(j);
   if (st.at === undefined) st = flowAdopt(j);
-  if (!st.on || st.stage === 'plan') c.autoMode = false;
+  if (!flowView(j).effective) c.autoMode = false;
   return c;
+}
+/** 展示和执行共用结果，需求改变、等待验收或归档后不能显示为自动实施。 */
+function flowView(j) {
+  const cfg = readConfig(); const st = flowState(j); const over = st.on && flowDone(j);
+  const scope = st.on && st.stage === 'apply' ? require('./apply-scope').valid(j) : { ok: true };
+  const typed = require('./task-types'); const dirs = flowChanges(j).filter((d) => fs.existsSync(d));
+  const userWait = dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0) && dirs.some((d) => typed.tasks(d).some((t) => t.kind === 'user' && !t.done));
+  const waiting = st.waiting || (!scope.ok ? '范围变化，等用户确认' : userWait ? '等用户自测验收' : '');
+  return { switchOn: cfg.autoMode === true, effective: cfg.autoMode === true && st.on === true && st.stage === 'apply' && !over && !waiting, phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over };
 }
 
 /**
@@ -2230,4 +2240,4 @@ module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH
   taskNotes, isTaskNote, isTaskNotePrompt,
   CFG_DIR, realish, protectedKitPaths, expandHome, isKitPath, isKitSkillScript, isClaudeSettingsFile,
   mentionsChange, handoverStale, readTextFileRaw, readPlan, planStatusOf, refreshPlan, planSummary, changeNames, archivedChanges, planMissingInfo, planInit, planUnlisted,
-  mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice };
+  mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice, flowView };
