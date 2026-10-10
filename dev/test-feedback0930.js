@@ -535,7 +535,7 @@ H.section('工具的调用记录里的错：每天汇总一次，记成问题反
   const dm = recs.find((r) => /SQL_ERROR/.test(r.title)) || { meta: {}, text: '', title: '' };
   const rd = recs.find((r) => /CONN_REFUSED/.test(r.title)) || { meta: {}, text: '', title: '' };
   H.ok('满一天：一种错一条，类型是"工具报错"', ids.length === 2 && dm.meta['类型'] === '工具报错' && dm.meta['涉及'] === 'ttls-db-crud' && dm.title === '达梦 SQL_ERROR:42S02:-2106' && rd.meta['涉及'] === 'ttls-redis', recs.map((r) => [r.title, r.meta['类型'], r.meta['涉及']]));
-  H.ok('写了次数、哪几条命令出的、这种错一般是怎么回事', /最近 25 小时出了 3 次（query 2 次、peek 1 次）/.test(dm.text) && /SQLSTATE 和厂商的错误码/.test(dm.text) && /连不上/.test(rd.text), dm.text.slice(0, 500));
+  H.ok('写了次数、哪几条命令出的、这种错一般是怎么回事', /最近 25 小时出了 3 次（query 2 次、peek 1 次）/.test(dm.text) && /SQLSTATE 和厂商错误码/.test(dm.text) && /连不上/.test(rd.text), dm.text.slice(0, 500));
   H.ok('不算到任何会话头上，不带项目名', !dm.meta['会话'] && dm.meta['项目'] === '（不知道）', dm.meta);
   H.ok('报完清零，下一个周期重新攒', Object.keys(state('tool-stats').errs || {}).length === 0 && state('tool-stats').reportAt > 0, state('tool-stats'));
   const I = require(path.join(h.kit, 'lib', 'issues.js'));
