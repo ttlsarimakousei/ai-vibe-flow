@@ -58,14 +58,14 @@ const KEEP_RECORDS = 1000;
 const pad = (n) => String(n).padStart(2, '0');
 const stamp = (t) => { const d = new Date(t || Date.now()); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); };
 const clip = (s, n) => { const t = String(s == null ? '' : s); return t.length > n ? t.slice(0, n) + '…（后面省略 ' + (t.length - n) + ' 字）' : t; };
-const firstLine = (s) => String(s || '').trim().split(/\r?\n/)[0].slice(0, 200);
+const firstLine = (s) => redact(String(s || '')).trim().split(/\r?\n/)[0].slice(0, 200);
 /** 拦下的是哪条规矩：第一行去掉引号里的具体内容和数字（提交信息、文件名不同，也算同一条） */
 const ruleOf = (s) => firstLine(s).replace(/"[^"]*"|“[^”]*”|「[^」]*」|'[^']*'|`[^`]*`/g, '…').replace(/\d+/g, 'N').slice(0, 120);
 const sigOf = (parts) => crypto.createHash('sha1').update(parts.map((p) => String(p == null ? '' : p)).join('\u0000')).digest('hex').slice(0, 16);
 
 /** 把密码、token、内网地址之类遮掉：记录会被收走、给别人看 */
 function redact(s) {
-  return String(s == null ? '' : s)
+  return require('./redact').text(s)
     // 认证头：Bearer / Basic / Token / Digest 后面的整段（放最前，免得只遮掉 "Bearer" 这个词）
     .replace(/\b(Bearer|Basic|Token|Digest)(\s+)[A-Za-z0-9._~+/=-]{6,}/gi, '$1$2***')
     .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/g, '***')
@@ -194,7 +194,7 @@ function record(r) {
       const count = Number(old.meta['次数'] || 1) + 1;
       let t = setMeta(old.text, { '次数': count, '更新': stamp(now) });
       if (!/\n## 又出现了\n/.test(t)) t = t.replace(/\s*$/, '\n\n## 又出现了\n');
-      t = t.replace(/\s*$/, '\n- ' + stamp(now) + '　项目 ' + (cwd || '？') + '　会话 ' + sid.slice(0, 8) + (r.note ? '　' + redact(clip(r.note, 200)).replace(/\r?\n/g, ' ') : '') + '\n');
+      t = t.replace(/\s*$/, '\n- ' + stamp(now) + '　项目 ' + (cwd || '？') + '　会话 ' + sid.slice(0, 8) + (r.note ? '　' + clip(redact(r.note), 200).replace(/\r?\n/g, ' ') : '') + '\n');
       fs.writeFileSync(old.file, t);
       markDirty();
       return { id: old.meta.id, file: old.file, repeated: true, count };
@@ -207,13 +207,13 @@ function record(r) {
     '放行': r.bypass || '没有申请', '套件版本': kitVersion(), 'Claude Code': info.claudeCode || '（不知道）', '模型': info.model || '（不知道）',
     '电脑': os.hostname(), '项目': cwd || '（不知道）', '会话': sid, '签名': r.sig || '',
   };
-  const sec = (h, v) => (v && String(v).trim() ? '\n## ' + h + '\n' + redact(clip(v, 6000)).trim() + '\n' : '');
-  const code = (h, v) => (v && String(v).trim() ? '\n## ' + h + '\n```\n' + redact(clip(v, 6000)).trim() + '\n```\n' : '');
-  const body = '# ' + redact(clip(r.title || '（没写标题）', 120)).replace(/\r?\n/g, ' ') + '\n'
+  const sec = (h, v) => (v && String(v).trim() ? '\n## ' + h + '\n' + clip(redact(v), 6000).trim() + '\n' : '');
+  const code = (h, v) => (v && String(v).trim() ? '\n## ' + h + '\n```\n' + clip(redact(v), 6000).trim() + '\n```\n' : '');
+  const body = '# ' + clip(redact(r.title || '（没写标题）'), 120).replace(/\r?\n/g, ' ') + '\n'
     + sec('现象', r.what) + sec('当时在做什么', r.action) + sec('为什么认为是套件的问题', r.why) + sec('怎么处理的', r.did) + sec('建议怎么改', r.suggest)
     + code('附：拦下时的原话', r.blocked) + code('附：出错的位置', r.stack) + code('附：钩子流水账（最后 20 行）', hookLogTail(20).join('\n'));
   const text = '---\n' + Object.keys(meta).map((k) => k + ': ' + String(meta[k]).replace(/\r?\n/g, ' ')).join('\n') + '\n---\n' + body;
-  const file = path.join(DIR, id + '-' + fileSlug(r.title) + '.md');
+  const file = path.join(DIR, id + '-' + fileSlug(redact(r.title)) + '.md');
   fs.writeFileSync(file, text);
   try { const all = listRecords(); for (const x of all.slice(KEEP_RECORDS)) fs.unlinkSync(x.file); } catch (e) { /* 删不了下次再说 */ }
   markDirty();

@@ -23,6 +23,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
+const diagnostic = require(fs.existsSync(path.join(__dirname, '..', 'lib', 'redact.js')) ? '../lib/redact' : '../kit/lib/redact');
+let diagnosticSecrets = [];
+const scrub = (s) => diagnostic.text(s, diagnosticSecrets);
+const refreshSecrets = (c) => { diagnosticSecrets = [...new Set(diagnosticSecrets.concat((c.providers || []).map((p) => p.api_key).filter(Boolean)))].slice(-300); };
 
 const VERSION = '3.0';
 const argv = process.argv.slice(2);
@@ -56,7 +60,7 @@ const ERROR_BODY_TIMEOUT_MS = 15000;  // 上游回了错误状态码却迟迟不
 // 在终端里跑、或者被别的程序用管道读的时候照常输出。
 const LOG_TO_CONSOLE = (() => { try { return !fs.fstatSync(1).isFile(); } catch (e) { return true; } })();
 function log(msg) {
-  const line = '[' + new Date().toLocaleString('zh-CN', { hour12: false }) + '] ' + msg;
+  const line = '[' + new Date().toLocaleString('zh-CN', { hour12: false }) + '] ' + scrub(msg);
   if (LOG_TO_CONSOLE) console.log(line);
   try {
     if (fs.existsSync(LOG_PATH) && fs.statSync(LOG_PATH).size > 5 * 1024 * 1024) fs.renameSync(LOG_PATH, LOG_PATH + '.1');
@@ -136,6 +140,7 @@ let configSource = '';
 function loadConfig(isReload) {
   try {
     config = parseConfigFile(CONFIG_PATH);
+    refreshSecrets(config);
     configError = '';
     configSource = CONFIG_PATH;
     configWarnings = problemsOf(config);
@@ -144,10 +149,10 @@ function loadConfig(isReload) {
     if (configWarnings.length) log('配置里有几处不对（已跳过，其余照常用）：' + configWarnings.join('；'));
     return true;
   } catch (e) {
-    configError = (fs.existsSync(CONFIG_PATH) ? '配置文件有问题：' : '还没有配置文件：') + e.message;
+    configError = (fs.existsSync(CONFIG_PATH) ? '配置文件有问题：' : '还没有配置文件：') + scrub(e.message);
     log(configError + (isReload ? '。继续用上一份好的配置' : ''));
     if (!isReload) {
-      try { config = parseConfigFile(LAST_GOOD); configSource = LAST_GOOD; log('已改用上一份好的配置 ' + LAST_GOOD); } catch (e2) { config = normalize({}); configSource = ''; }
+      try { config = parseConfigFile(LAST_GOOD); refreshSecrets(config); configSource = LAST_GOOD; log('已改用上一份好的配置 ' + LAST_GOOD); } catch (e2) { config = normalize({}); configSource = ''; }
       configWarnings = problemsOf(config);
     }
     return false;
@@ -197,10 +202,10 @@ const hOf = (name) => { if (!health.has(name)) health.set(name, { until: 0, reas
 const onCooldown = (name) => hOf(name).until > Date.now();
 /** 额度用完、停用到重置时间的（到点自动恢复；配置页"手动恢复"也能提前放开） */
 const quotaOut = (name) => { const h = hOf(name); return !!h.quota && h.until > Date.now(); };
-function markFail(name, reason, sec) { const h = hOf(name); h.until = Date.now() + sec * 1000; h.reason = reason; h.lastFailAt = Date.now(); h.fails++; if (h.quota) { h.quota = false; saveQuota(); } }
+function markFail(name, reason, sec) { const h = hOf(name); h.until = Date.now() + sec * 1000; h.reason = scrub(reason); h.lastFailAt = Date.now(); h.fails++; if (h.quota) { h.quota = false; saveQuota(); } }
 function markOk(name) { const h = hOf(name); const wasQuota = h.quota; h.until = 0; h.reason = ''; h.lastOkAt = Date.now(); h.fails = 0; h.quota = false; if (wasQuota) saveQuota(); }
 /** 额度用完：停用到上游说的重置时间 */
-function markQuota(name, until, reason) { const h = hOf(name); h.until = until; h.reason = reason; h.quota = true; h.lastFailAt = Date.now(); h.fails++; saveQuota(); }
+function markQuota(name, until, reason) { const h = hOf(name); h.until = until; h.reason = scrub(reason); h.quota = true; h.lastFailAt = Date.now(); h.fails++; saveQuota(); }
 // 额度用完的标记要跨重启保留：停用常常是好几个小时，路由重启（装新版、重启电脑）之后不能又去撞一次
 const QUOTA_PATH = path.join(DATA_DIR, 'quota.json');
 function saveQuota() {
@@ -280,6 +285,7 @@ let usageDirty = false;
  * 算一次请求（它确实发到网关了），但不算这个模型失败。
  */
 function record(r) {
+  r = diagnostic.tree(r, diagnosticSecrets);
   const cancelled = !!r.cancelled;
   const ok = !cancelled && !r.failed && r.status > 0 && r.status < 400;
   const bucket = cancelled ? 'cancelled' : ok ? 'success' : 'fail';
@@ -430,7 +436,7 @@ function classify(status, body, isMessages) {
   if (status === 404 && isMessages) return { failover: true, sec: 0, reason: '地址不对或不认识这个模型名（404）' };
   return { failover: false };
 }
-const snippet = (s) => String(s || '').replace(/\s+/g, ' ').slice(0, 240);
+const snippet = (s) => diagnostic.clip(String(s || '').replace(/\s+/g, ' '), 240, diagnosticSecrets);
 /** 上游的 retry-after / retry-after-ms 请求头：秒数、毫秒数或 HTTP 日期，换算成毫秒；没有就 0 */
 function retryAfterMs(h) {
   const ms = Number(h['retry-after-ms']);
@@ -474,7 +480,7 @@ function sendError(res, status, type, message, extraHeaders) {
   if (res.destroyed || res.writableEnded) return;
   if (res.headersSent) { try { res.end(); } catch (e) { /* 已经断了 */ } return; }
   res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, extraHeaders || {}));
-  res.end(JSON.stringify({ type: 'error', error: { type, message } }));
+  res.end(JSON.stringify({ type: 'error', error: { type, message: scrub(message) } }));
 }
 
 /**
@@ -595,6 +601,14 @@ function forward(ctx, list, idx, tried) {
   };
 
   const onResponse = (ur) => {
+    const encoding = String(ur.headers['content-encoding'] || '').toLowerCase();
+    if (encoding && encoding !== 'identity') {
+      const z = require('zlib'); const decoder = encoding === 'gzip' ? z.createGunzip() : encoding === 'deflate' ? z.createInflate() : encoding === 'br' ? z.createBrotliDecompress() : null;
+      if (!decoder) { ur.resume(); return fail('上游压缩格式无法处理，未转发原始诊断', CONNECT_COOLDOWN_SEC, 502, ''); }
+      const rawResponse = ur; decoder.headers = Object.assign({}, ur.headers); decoder.statusCode = ur.statusCode; delete decoder.headers['content-encoding']; delete decoder.headers['content-length'];
+      rawResponse.on('error', (e) => decoder.destroy(e)); decoder.on('end', () => { decoder.complete = rawResponse.complete; });
+      rawResponse.pipe(decoder); ur = decoder;
+    }
     clearTimeout(timer);
     if (settled) { ur.resume(); return; }
     const headerMs = Date.now() - started;
@@ -668,8 +682,10 @@ function forward(ctx, list, idx, tried) {
         settled = true;
         record({ kind, model, provider: provider.name, status, headerMs, totalMs: Date.now() - started, failover: idx > 0, error: snippet(text) });
         const h = Object.assign({}, ur.headers); for (const k of ['transfer-encoding', 'connection', 'keep-alive', 'content-length']) delete h[k];
-        h['content-length'] = String(raw.length);
-        res.writeHead(status, h); res.end(raw);
+        const safe = Buffer.from(diagnostic.errorBody(text, diagnosticSecrets));
+        h['content-length'] = String(safe.length);
+        for (const k of Object.keys(h)) if (typeof h[k] === 'string') h[k] = scrub(h[k]);
+        res.writeHead(status, h); res.end(safe);
       };
       const bodyTimer = setTimeout(() => decide(false), ERROR_BODY_TIMEOUT_MS);
       ur.on('data', (c) => { if (size < 262144) { parts.push(c); size += c.length; } });
@@ -691,6 +707,7 @@ function forward(ctx, list, idx, tried) {
       }
     }
     const h = Object.assign({}, ur.headers); for (const k of ['transfer-encoding', 'connection', 'keep-alive']) delete h[k];
+    if (isMessages) delete h['content-length'];
     res.writeHead(status, h);
     if (res.flushHeaders) res.flushHeaders();
     const tap = usageTap(ur.headers['content-type']);
@@ -736,7 +753,11 @@ function forward(ctx, list, idx, tried) {
     };
     const armIdle = () => { clearTimeout(idle); idle = setTimeout(() => finish('上游 ' + Math.round(idleMs / 1000) + ' 秒没有再发数据'), idleMs); };
     armIdle();
-    ur.on('data', (c) => { armIdle(); res.write(c); if (isMessages) tap.feed(c); });
+    const filtered = isMessages && tap.sse ? diagnostic.sse(() => diagnosticSecrets, (b) => res.write(b)) : null;
+    const jsonParts = isMessages && !tap.sse && /json/i.test(String(ur.headers['content-type'] || '')) ? [] : null;
+    let jsonBytes = 0;
+    ur.on('data', (c) => { armIdle(); if (isMessages) tap.feed(c); try { if (filtered) filtered.feed(c); else if (jsonParts) { jsonBytes += c.length; if (jsonBytes > 16 * 1024 * 1024) throw new Error('模型 JSON 回复超过本机处理上限'); jsonParts.push(c); } else res.write(c); } catch (e) { finish(e.message); } });
+    ur.on('end', () => { try { if (filtered) filtered.end(); if (jsonParts) { const body = Buffer.concat(jsonParts); let error = false; try { const x = JSON.parse(body.toString('utf8')); error = x.type === 'error'; } catch (e) { /* 原传输错误由完成检查处理 */ } res.write(error ? diagnostic.errorBody(body.toString('utf8'), diagnosticSecrets) : body); } } catch (e) { finish(e.message); } });
     ur.on('end', () => finish(ur.complete === false ? '上游没发完就断了' : ''));
     ur.on('error', (e) => finish((e && e.message) || '上游断了'));
     ur.on('aborted', () => finish('上游中途断开'));
@@ -747,6 +768,7 @@ function forward(ctx, list, idx, tried) {
     const target = new URL(provider.base_url);
     const lib = target.protocol === 'https:' ? https : http;
     const headers = Object.assign({}, req.headers);
+    headers['accept-encoding'] = 'identity';
     for (const k of HOP_HEADERS) delete headers[k];
     headers['x-api-key'] = provider.api_key;
     headers['authorization'] = 'Bearer ' + provider.api_key;
@@ -916,7 +938,7 @@ function mergeIncoming(inc) {
 function readBody(req, limit) {
   return new Promise((resolve, reject) => { const parts = []; let n = 0; req.on('data', (c) => { n += c.length; if (n > limit) { reject(new Error('请求太大')); req.destroy(); } else parts.push(c); }); req.on('end', () => resolve(Buffer.concat(parts))); req.on('error', reject); });
 }
-const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
+const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(diagnostic.tree(obj, diagnosticSecrets))); };
 /** 请求头里的 Host 是不是本机。网页用"域名解析到 127.0.0.1"的办法绕进来时，Host 是它自己的域名 */
 function hostIsLocal(req) {
   const h = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
