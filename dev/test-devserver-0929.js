@@ -114,7 +114,7 @@ const startArgs = ['start', '--name', 'app', '--port', String(PORT), '--hot', '-
   fs.mkdirSync(path.join(proj, '.vibe', 'run'), { recursive: true });
   fs.writeFileSync(path.join(proj, '.vibe', 'run', 'old.json'), JSON.stringify({ name: 'old', port: PORT, pid: 999999, startedAt: Date.now() - 86400000, upAt: Date.now() - 86400000 + 5000, cmd: 'node srv.js', tree: [{ pid: 999998, name: 'node.exe', created: Date.now() - 86400000 }] }));
   const st1 = tool(['stop', '--all']);
-  H.ok('过期的记录：端口上的别的程序没有被停，说清了不是这个项目起的', alive(otherPid) && (await open(PORT)) && /不是这个项目起的/.test(st1.out), [st1.out, otherPid]);
+  H.ok('过期的记录：无法确认归属时没有停别的程序', alive(otherPid) && (await open(PORT)) && /无法确认归属，没有动它/.test(st1.out), [st1.out, otherPid]);
   try { process.kill(otherPid); } catch (e) { /* 已经没了 */ }
   try { const p = JSON.parse(fs.readFileSync(path.join(proj, 'pids.json'), 'utf8')); for (const x of [p.srv, p.helper]) { try { process.kill(x); } catch (e) { /* 没了 */ } } } catch (e) { /* 没有 */ }
   await waitOpen(false);

@@ -156,7 +156,10 @@ const normPath = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').
 function belongs(info, rec, live) {
   if (!info || !info.pid || info.pid === routerPid() || info.pid === process.pid) return false;
   const d = normPath(dir);
-  if (d.split('/').filter(Boolean).length >= 2 && normPath(info.cmd).includes(d + '/')) return true;
+  const cmd = normPath(info.cmd);
+  const at = cmd.indexOf(d);
+  // -Dmaven.multiModuleProjectDirectory=<目录> 后面可以直接是引号或空白，并不一定有斜杠。
+  if (d.split('/').filter(Boolean).length >= 2 && at >= 0 && /^(?:[\/\s"']|$)/.test(cmd.slice(at + d.length))) return true;
   if (!rec || !live || !info.created) return false;
   return info.created >= rec.startedAt - 3000 && info.created <= (rec.upAt || Date.now()) + 5000;
 }
@@ -418,7 +421,7 @@ async function start() {
     const others = infos.filter((i) => !belongs(i, null));
     if (!pids.length || others.length) {
       const who = others.length ? others.map((i) => (i.name || '进程') + '（PID ' + i.pid + (i.pid === routerPid() ? '，这是模型路由' : '') + '）' + (i.cmd ? '：' + i.cmd.slice(0, 200) : '')).join('；') : '查不到是哪个进程';
-      console.log('端口 ' + port + ' 被占着：' + who + '。它不是这个项目（' + dir + '）起的服务，没有动它。\n确认它是没用的就停掉它（taskkill /PID <PID> /T /F），拿不准就问用户；不要换端口另起一个——前端代理、配置里写的都是这个端口，换了测的就不是你改的这一份。');
+      console.log('端口 ' + port + ' 被占着：' + who + '。无法确认它归这个项目（' + dir + '）管，没有动它。可能是用户在 IDEA 或终端里启动的服务；先核实来源和用途，不要直接结束它。');
       return 1;
     }
     // 这个项目的进程，但没有记录：看是谁起的。Claude Code 起的、没人管的（起它的进程已经不在了）停掉重起；
@@ -446,7 +449,7 @@ async function stop() {
     const s = await stopRec(r);
     const n = s.killed.filter((k) => k.name !== '看管进程').map((k) => String(k.name || '进程').replace(/\.exe$/i, '') + ' ' + k.pid);
     if (s.free) console.log((s.killed.length ? '停了：' : '本来就没在跑，记录清掉了：') + r.name + '，端口 ' + r.port + ' 空出来了' + (n.length ? '（结束了 ' + n.slice(0, 6).join('、') + '）' : '') + '。');
-    else { bad++; console.log('没停干净：' + r.name + '，端口 ' + r.port + ' 还被占着：' + (s.left.map((i) => (i.name || '进程') + '（PID ' + i.pid + '）' + (i.cmd ? ' ' + i.cmd.slice(0, 120) : '')).join('；') || '查不到是哪个进程') + '。它不是这个项目起的，没有动它；先弄清它是谁，不要换端口另起一个。'); }
+    else { bad++; console.log('没停干净：' + r.name + '，端口 ' + r.port + ' 还被占着：' + (s.left.map((i) => (i.name || '进程') + '（PID ' + i.pid + '）' + (i.cmd ? ' ' + i.cmd.slice(0, 120) : '')).join('；') || '查不到是哪个进程') + '。无法确认归属，没有动它；先弄清它是谁，不要直接结束它。'); }
   }
   return bad ? 1 : 0;
 }
