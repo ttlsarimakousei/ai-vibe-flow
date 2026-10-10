@@ -60,6 +60,7 @@ const V1007 = '20261007.1217'; // 起服务的提示：端口改成 --port auto 
 const V1008 = '20261007.1622'; // 不走 OpenSpec 的提交要用户点头；归档要用户说了才做；全自动只管 apply（开工时告诉用户开没开）；报问题的提醒改了说法
 const V1010 = '20261010.1057'; // 1007 导出议题：包装命令、否定归因、当场推送授权和发布确认
 const V1010B = '20261010.1617'; // 1010 反馈、提案材料、提交和多版本驱动
+const V1010C = '20261010.2210'; // IDEA MCP 的自动接入和工具保护
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -77,6 +78,18 @@ const edit = (rel, tool, input, files, entries) => (kit) => {
 const cmd = (command, tool, files) => (kit) => { const proj = project(kit, files); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: tool || 'Bash', tool_input: { command: command.split('<项目>').join(proj.replace(/\\/g, '/')) } }) }; };
 const stop = (entries, extra, files) => (kit) => { const proj = project(kit, files); const es = entries(proj); const j = base(proj, kit, Object.assign({ hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '做完了' }, extra)); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), es); return { proj, j }; };
 const prompt = (text, files, entries) => (kit) => { const proj = project(kit, files); const j = base(proj, kit, { hook_event_name: 'UserPromptSubmit', prompt: text }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), entries ? entries(proj) : [H.tr.user(text)]); return { proj, j }; };
+
+// IDEA 工具直接调用和路由调用都要经过原有保护；普通源码查询仍放行。
+const idea = (name, input) => kit => {
+  const proj = project(kit);
+  return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'mcp__vibe-idea-64342__' + name, tool_input: { projectPath: proj, ...input(kit, proj) } }) };
+};
+add('IDEA MCP 直接读令牌', 'guard-commit', idea('read_file', kit => ({ file_path: path.join(kit.kit, 'secrets.json') })), /令牌|key/, V1010C);
+add('IDEA MCP 路由读模型配置', 'guard-commit', idea('execute_tool', kit => ({ command: 'read_file --file_path ' + JSON.stringify(path.join(kit.kit, 'router-data/config.json').replace(/\\/g, '/')) })), /令牌|key/, V1010C);
+add('IDEA MCP 数据库入口保留查库流程', 'guard-commit', idea('execute_sql_query', () => ({ query: 'select 1' })), /数据库操作继续用/, V1010C);
+add('IDEA MCP 批量补丁不跳文件检查', 'guard-commit', idea('apply_patch', () => ({ input: '*** Begin Patch' })), /尚未适配套件检查/, V1010C);
+add('IDEA MCP 冲突路径不盖过令牌路径', 'guard-commit', idea('get_file_text_by_path', kit => ({ file_path: 'src/main/java/com/x/A.java', pathInProject: path.join(kit.kit, 'secrets.json') })), /文件路径参数不一致/, V1010C);
+add('IDEA MCP 普通符号查询', 'guard-commit', idea('search_symbol', () => ({ q: 'A' })));
 
 // ---------- 改文件 ----------
 add('反馈1007：env -C 跑套件场景脚本', 'guard-commit', cmd('env -C "<项目>" node "$HOME/.claude/vibe-kit/page/scenario-run.js" .vibe/scenarios/check.json --base http://127.0.0.1:34907'), /放行，没有输出/, V1010);

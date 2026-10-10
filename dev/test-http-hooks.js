@@ -50,6 +50,8 @@ const clean = (o) => JSON.stringify(o === null || (o && typeof o === 'object' &&
     H.transcript(tfile, turn);
     const base = { cwd: proj, transcript_path: tfile };
     const cases = [
+      ['IDEA MCP 读令牌', 'guard-commit', { hook_event_name: 'PreToolUse', tool_name: 'mcp__vibe-idea-64342__execute_tool', tool_input: { projectPath: proj, command: 'read_file --file_path ' + JSON.stringify(path.join(h.kit, 'secrets.json').replace(/\\/g, '/')) } }, /令牌|key/],
+      ['IDEA MCP 普通索引查询', 'guard-commit', { hook_event_name: 'PreToolUse', tool_name: 'mcp__vibe-idea-64342__search_symbol', tool_input: { projectPath: proj, q: 'A' } }, null],
       ['改经验规则文件', 'pre-edit', { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: rule, old_string: '- 分页', new_string: '- 改了' } }, /经验规则的文件，不要直接改/],
       ['改普通代码', 'pre-edit', { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(proj, 'src/main/java/A.java'), old_string: 'class A {}', new_string: 'class A { }' } }, null],
       ['命令删经验规则文件', 'guard-commit', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'rm .claude/rules/ttls-lessons-java.md' } }, /会改到经验规则的文件/],

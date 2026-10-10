@@ -1694,6 +1694,8 @@ function noteToolFlow(j, cfg) {
 }
 
 function handle(j) {
+  // IDEA 的终端、工具路由也走现有检查；其它 MCP 不受这个适配影响。
+  if (/^mcp__/.test(String(j.tool_name || ''))) return require('../lib/idea-tools').handle(j);
   const cmd = String((j.tool_input && j.tool_input.command) || '');
   if (!cmd.trim()) return null;
   let cfg = readConfigFor(j);

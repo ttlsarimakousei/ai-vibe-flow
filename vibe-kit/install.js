@@ -374,7 +374,7 @@ function mergeSettings(s, remove, hooksOnly) {
   const fast = (name) => (transport === 'http' ? { type: 'http', url: 'http://127.0.0.1:' + port + '/vibe-kit/hook/' + name } : hook(name + '.js'));
   const OURS = {
     // 改文件的三个检查（套件文件不许改、编码保护、OpenSpec 门槛）合成一个入口 pre-edit：一次编辑只起一个进程（或只发一次请求）
-    PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand', hooks: [fast('guard-ask')] },
+    PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand', hooks: [fast('guard-ask')] },
       // 搜文件内容：范围里有放令牌、放模型 key 的地方就拦（权限规则管不到"对着上级目录搜"）
       { matcher: 'Grep', hooks: [fast('guard-read')] }],
     // 读文件时提醒（提示规则）2026-09-30 去掉了，不再登记；这一项留着空的，是为了把以前登记过的摘掉

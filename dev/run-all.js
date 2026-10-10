@@ -49,6 +49,8 @@ for (const c of claudes) suites.push(['端到端（全自动）' + path.basename
 // 不给 --rt 的话查库那几项不测（第三个参数给一个不存在的目录）
 for (const c of claudes) suites.push(['端到端（0930）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-0930.js', [c, path.basename(path.resolve(c, '../../../../..')), rt || path.join(__dirname, '没有运行环境'), '18765']]);
 
+suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
+
 const rows = [];
 for (const [name, file, a] of suites) {
   const t0 = Date.now();
