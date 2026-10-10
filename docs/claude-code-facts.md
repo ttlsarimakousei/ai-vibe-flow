@@ -4,6 +4,12 @@
 
 没写版本的，2.1.120 和 2.1.259 都一样。拿不准的写着"没实测"。换 Claude Code 版本之前，先跑 `dev/probes/` 里的四个探测（见 [dev/README.md](../dev/README.md)）。
 
+## IDEA MCP
+
+2026-10-10 MCP 实测：本机 IDEA 2026.2.3 内置 HTTP MCP 在 `127.0.0.1:64342/stream`，握手返回 `IntelliJ IDEA MCP Server`、协议 `2025-06-18`。启用工具路由后只暴露 `execute_tool`，不是没有工具。已核对项目模块和运行配置；当前测试项目没有运行配置，普通 Run 的停止、重启和旧日志未验证。
+
+Claude Code 用户级 MCP 在 `~/.claude.json` 顶层 `mcpServers`；设置 `CLAUDE_CONFIG_DIR` 时改为该目录里的 `.claude.json`，不是 `settings.json`。HTTP 登记要写 `type: "http"`。在假用户目录、假本机 MCP 服务上，2.1.120、2.1.259、2.1.289 的 `claude mcp get` 都能识别此登记，不调用模型接口。官方位置说明见 [MCP 快速入门](https://code.claude.com/docs/en/mcp-quickstart#find-your-configuration-on-disk)。
+
 ## 读写文件
 
 - **只认 UTF-8**（2.1.258 / 2.1.260 实测，内网是 2.1.259）：Edit 改 GBK 文件，改的地方对了，但整个文件的中文都变成乱码（U+FFFD），工具照常返回成功；Write 会把文件悄悄转成 UTF-8，GBK 的工程再编译就读错。判断编码只看 BOM。Grep 用 UTF-8 的中文搜 GBK 文件也搜不到。套件的 `guard-encoding` 就是为这个拦的，`tools/to-utf8.js` 用来转。

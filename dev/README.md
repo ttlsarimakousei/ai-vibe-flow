@@ -88,6 +88,8 @@ node dev/pack.js
 | `lib/fake-gitlab.js` | 假 GitLab：git 的 http 通道加 issue 的接口 |
 | `lib/fake-ssh.js` | 假 ssh：拉仓库、推仓库、申请令牌 |
 | `lib/fake-busy.js` | 装成路由，只回答"现在忙不忙" |
+| `test-idea-mcp.js` | 假 IDEA HTTP 和事件流：安装、同步、后台接入、端口变化、多实例、用户修改和删除、卸载、损坏配置、已有凭据保留；给 --claude 时核验 CLI 识别登记；参数可给旧版目录验证失败 |
+| `test-idea-tools.js` | IDEA 直接工具和路由的真实钩子入口：令牌、搜索范围、提交、push、数据库、单文件编辑及未适配操作；不执行 IDE 工具。可给旧版目录验证失败 |
 | `lib/watch-windows.ps1` | 盯着桌面，测试跑的时候冒出来的窗口都记下来，一闪就关的也算 |
 | `lib/harness.js` | 公共部分：假用户目录、假会话记录、结尾核对真实文件没变 |
 
