@@ -1120,6 +1120,17 @@ function toolResults(entries) {
 const unXml = (s) => String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 function taskNotes(entries) {
   const out = new Map();
+  out.history = [];
+  const calls = toolCalls(entries, 0);
+  const results = toolResults(entries);
+  const agents = new Map();
+  const reviewList = reviewCalls(calls, results);
+  for (const c of reviewList) {
+    const r = results.get(c.id);
+    const a = r && /(?:agentId|agent_id)\s*[:=]\s*["']?([\w-]+)/i.exec(r.text);
+    const agent = a ? a[1] : String(c.input.recipient || c.input.agent_id || c.input.resume || '');
+    if (agent) { const list = agents.get(agent) || []; list.push(c); agents.set(agent, list); }
+  }
   // 通知里写的是原来的 id；id 重复过的（uniquifyToolIds 改过名），认通知之前最近的那次调用
   const renamed = [];
   entries.forEach((e, pos) => {
@@ -1137,11 +1148,31 @@ function taskNotes(entries) {
     for (const block of text.split('<task-notification>').slice(1)) {
       const body = block.split('</task-notification>')[0];
       const rawId = (body.match(/<tool-use-id>\s*([^<\s]+)\s*<\/tool-use-id>/) || [])[1];
-      if (!rawId) continue;
-      const id = renamed.length ? idAt(rawId, pos) : rawId;
+      const taskId = (body.match(/<task-id>\s*([^<\s]+)\s*<\/task-id>/) || [])[1];
+      if (!rawId && !agents.has(taskId)) continue;
+      const candidates = agents.get(taskId) || [];
+      const nearest = candidates.filter((c) => c.i < pos).pop();
+      if (!rawId && !nearest) continue;
+      const id = rawId ? (renamed.length ? idAt(rawId, pos) : rawId) : nearest.id;
       const s = body.indexOf('<result>');
       const t = body.lastIndexOf('</result>');
-      out.set(id, { status: ((body.match(/<status>\s*([^<]+?)\s*<\/status>/) || [])[1] || '').toLowerCase(), text: s >= 0 && t > s ? unXml(body.slice(s + 8, t)) : '', at: Date.parse(e.timestamp || '') || 0, pos });
+      const status = ((body.match(/<status>\s*([^<]+?)\s*<\/status>/) || [])[1] || '').toLowerCase();
+      let result = s >= 0 && t > s ? unXml(body.slice(s + 8, t)) : '';
+      // 没有内嵌 result：只读真正启动审查时返回的输出文件，不照通知里任意的路径读文件。
+      if (!result && status === 'completed') {
+        const c = reviewList.find((x) => x.id === id);
+        const r = c && results.get(c.id);
+        const origin = c && results.get(c._reviewOrigin);
+        const fileOf = (v) => v && /(?:output[_ -]?file|fullOutputPath)\s*[:=]\s*["']?([^\r\n"']+\.output)/i.exec(v.text);
+        const f = fileOf(r) || fileOf(origin);
+        try { if (f && /[/\\](?:tasks|subagents)[/\\]/i.test(f[1]) && fs.statSync(f[1]).size <= 2000000) result = fs.readFileSync(f[1], 'utf8'); } catch (err) { /* 文件读不到，等明确的结论 */ }
+      }
+      const note = { status, text: result, at: Date.parse(e.timestamp || '') || 0, pos };
+      // queue 与送达的 user 会重复同一通知：相同结论且相同任务，只留送达时的一份。
+      const prev = out.history.findIndex((n) => n.id === id && n.text === result && n.status === status);
+      if (prev >= 0) out.history.splice(prev, 1);
+      out.history.push(Object.assign({ id }, note));
+      out.set(id, note);
     }
   });
   return out;
@@ -1632,6 +1663,32 @@ function archivedSince(dir) {
 const reviewIssues = (text) => { let n = null; for (const m of String(text || '').matchAll(/结论\s*[:：]\s*问题\s*(\d+)\s*条/g)) n = Number(m[1]); return n; };
 // 审查代理改名之前叫 vibe-reviewer：会话记录里的旧调用照样算
 const isReviewCall = (c) => /^(Agent|Task)$/.test(c.name) && /(ttls|vibe)-reviewer/.test(String(c.input.subagent_type || ''));
+/** 复审续同一个代理时，只认前面真正启动过的审查代理，不把任意消息当审查。 */
+function reviewCalls(calls, results) {
+  const known = new Map();
+  const out = [];
+  for (const c of calls) {
+    if (isReviewCall(c)) {
+      out.push(c);
+      const r = results.get(c.id);
+      const id = r && /(?:agentId|agent_id)\s*[:=]\s*["']?([\w-]+)/i.exec(r.text);
+      if (id) known.set(id[1], c);
+      continue;
+    }
+    const to = String(c.input.recipient || c.input.agent_id || c.input.resume || '');
+    const base = known.get(to);
+    if (!base || !/^(SendMessage|Agent|Task)$/.test(c.name)) continue;
+    const prompt = String(c.input.content || c.input.message || c.input.prompt || '');
+    if (!isRecheck(prompt)) continue;
+    const mode = reviewModeOf(prompt);
+    const inheritedMode = reviewModeOf(base.input.prompt);
+    const head = (mode ? '' : '模式：复审' + (inheritedMode === 'proposal' ? '提案' : '代码') + '\n') + (changeLineOf(prompt) ? '' : '变更：' + (changeLineOf(base.input.prompt) || '无') + '\n');
+    const next = Object.assign({}, c, { name: 'Agent', _reviewOrigin: base._reviewOrigin || base.id, input: Object.assign({}, c.input, { subagent_type: 'ttls-reviewer', prompt: head + prompt }) });
+    out.push(next);
+    known.set(to, next);
+  }
+  return out;
+}
 /**
  * 一段调用里真的做完了的审查：[{ id, key, raw, mode, recheck, change, issues, idx, at, pos }]。
  * 结论在哪：前台跑的在 tool_result 里；后台跑的（2.1.259 起默认）在后来的通知里（notes = taskNotes(entries)，通知状态要是 completed）。
@@ -1640,7 +1697,14 @@ const isReviewCall = (c) => /^(Agent|Task)$/.test(c.name) && /(ttls|vibe)-review
  */
 function reviewsIn(calls, results, changes, notes, archived) {
   const out = [];
-  calls.forEach((c, idx) => {
+  const expanded = [];
+  for (const c of reviewCalls(calls, results)) {
+    const done = notes && notes.history && notes.history.filter((n) => n.id === c.id && n.status === 'completed' && reviewIssues(n.text) !== null);
+    if (done && done.length) {
+      for (const n of done) expanded.push(Object.assign({}, c, { _note: n, key: (c.key || c.id) + ':note:' + shaReview(n.text) }));
+    } else expanded.push(c);
+  }
+  expanded.forEach((c, idx) => {
     if (!isReviewCall(c)) return;
     const r = results.get(c.id);
     if (r && r.error) return;
@@ -1648,7 +1712,7 @@ function reviewsIn(calls, results, changes, notes, archived) {
     let at = r ? r.at : 0;
     let pos = r ? r.pos : -1;
     let text = r ? r.text : '';
-    const n = notes && notes.get(c.id);
+    const n = c._note || (notes && notes.get(c.id));
     if (issues === null && n && n.status === 'completed') { issues = reviewIssues(n.text); at = n.at; pos = n.pos; text = n.text; }
     if (issues === null) return;
     const prompt = String(c.input.prompt || '');
@@ -1666,14 +1730,14 @@ function reviewsIn(calls, results, changes, notes, archived) {
   });
   return out;
 }
+const shaReview = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 12);
 /**
  * 在后台跑着、还没送回结论的审查（刚发出去，通知还没到）：[{ id, mode, change }]。这时候不要再催它审一遍。
  * 发出去超过 30 分钟还没回来的不算（多半是 Claude Code 退出过，子代理跟着没了，通知永远不会来）
  */
 function pendingReviewsIn(calls, results, changes, notes) {
   const out = [];
-  for (const c of calls) {
-    if (!isReviewCall(c)) continue;
+  for (const c of reviewCalls(calls, results)) {
     const r = results.get(c.id);
     if (!r || r.error || !/Async agent launched|working in the background/i.test(r.text)) continue;
     if (notes && notes.has(c.id)) continue;

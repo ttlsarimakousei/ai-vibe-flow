@@ -834,7 +834,7 @@ async function handle(j) {
     const lp = pageEdits.length ? calls.indexOf(pageEdits[pageEdits.length - 1]) : -1;
     if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /ttls-see-page 的做法跑一遍受影响的页面：已有场景文件就直接重跑，没有就写一个最小的；以执行器读到的值和页面结构为准，不必读截图。这次改动确实不影响页面显示，就说明原因。');
     // 它说要攒着打勾：不行，做完一项勾一项（提交才按档位攒）
-    if (saidTickLater(lastSaid)) todo.push('打勾不攒：每项任务做完、验法跑过就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完并验证过的任务都勾上，再收工。');
+    if (saidTickLater(lastSaid) && !pending.some((p) => p.mode === 'proposal') && !reviewOpenFor(sid, entries, changes)) todo.push('打勾不攒：每项任务做完、验法跑过就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完并验证过的任务都勾上，再收工。');
   } else if (sameTurn && codeNeedingCheck.length > (gate.codeEditsAtBlock || 0)) {
     // 续跑：拦下之后又改了代码（常见于审查之后的修复），没验证就再说一次
     const v = verifyIssue();
