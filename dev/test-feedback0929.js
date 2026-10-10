@@ -374,6 +374,7 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   H.ok('报告里记了：想 push、想问的问题和选项、没让改的文件、没让跑的命令', items.some((x) => x.kind === 'hand' && /git push/.test(x.title)) && items.some((x) => x.kind === 'ask' && /文件名用哪种格式/.test(x.title) && x.detail === '带日期 / 不带日期') && items.some((x) => x.kind === 'hand' && /review-rounds\.json/.test(x.title)) && items.some((x) => x.kind === 'hand' && /git add -A/.test(x.title)), items);
   // 提交里像有密码：不弹框，放行，记进报告
   H.write(path.join(proj, 'src/main/resources/app.properties'), 'db.password=Abc12345xyz\n');
+  H.transcript(tfile, [H.tr.user('改好了，提交')]);
   const c = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git add src/main/resources/app.properties && git commit -m "feat: 加配置"' } }));
   H.ok('提交里像有密码：不弹框，放行', c === null, c);
   H.ok('报告里记了，密码遮住了', R.stateOf({ session_id: sid }).items.some((x) => x.kind === 'secret' && /app\.properties/.test(x.detail) && !/Abc12345xyz/.test(x.detail)), R.stateOf({ session_id: sid }).items);

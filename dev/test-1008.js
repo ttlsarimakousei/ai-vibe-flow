@@ -86,7 +86,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('提问框里选了"提交"：放行', commit('c1', [H.tr.user('修一下'), editA(), answered('改好了，提交吗？', '提交')]) === null);
     H.ok('提问框里选了"还要改"：拦', blocked(commit('c1', [H.tr.user('修一下'), editA(), answered('改好了，提交吗？', '还要改')])));
     H.ok('经验规则的文件：套件自己催的，不问', commit('c1', [H.tr.user('修一下')], 'git add .claude/rules/ttls-lessons-java.md && git commit -m "docs: 更新经验规则"') === null);
-    H.ok('提交信息是 docs: 提案 / 修订 / 归档：不问', commit('c1', [H.tr.user('修一下')], 'git commit -m "docs: 提案 add-x"') === null && commit('c1', [H.tr.user('修一下')], 'git commit -m "docs: 归档 add-x"') === null);
+    H.write(path.join(proj, 'openspec/changes/archive/2026-10-10-add-x/tasks.md'), '- [x] 1.1 完成\n');
+    H.ok('提案单独确认，归档产物按实际文件提交', blocked(commit('c1', [H.tr.user('修一下')], 'git commit -m "docs: 提案 add-x"')) && commit('c1', [H.tr.user('修一下')], 'git add openspec/changes/archive/2026-10-10-add-x/tasks.md && git commit -m "docs: 归档 add-x"') === null);
     H.ok('提交信息不合规范的照旧先拦格式', /提交信息不符合公司规范/.test(H.reasonOf(commit('c1', [H.tr.user('修一下')], 'git commit -m "改了点东西"'))));
     H.setConfig(h, { plainCommit: 'auto' });
     H.ok('开关选"直接提交"：不问', commit('c1', [H.tr.user('修一下 A 的空指针'), editA(), H.tr.say('修好了')]) === null);
@@ -94,11 +95,12 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     // 这个会话动过 OpenSpec 变更：按提交节奏来，不问
     const po = H.makeRepo(path.join(h.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', 'openspec/changes/add-x/tasks.md': '- [ ] 1.1 改 src/A.java；验：mvn -q compile\n' });
     const tasks = path.join(po, 'openspec', 'changes', 'add-x', 'tasks.md');
-    H.ok('会话里动过变更（/opsx:apply add-x、打过勾）：按提交节奏，不问', commit('c2', [H.tr.user('/opsx:apply add-x'), H.tr.ran('Edit', { file_path: tasks, old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, 'ok')], 'git add src/A.java && git commit -m "feat: 1.1"', po) === null);
+    H.inFlow(h, 'c2', [path.dirname(tasks)], true, 'apply');
+    H.ok('当前正在 apply：按提交节奏，不问', commit('c2', [H.tr.user('/opsx:apply add-x'), H.tr.ran('Edit', { file_path: tasks, old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, 'ok')], 'git add src/A.java && git commit -m "feat: 1.1"', po) === null);
     // 全自动（在做任务那一段）：不问
     H.setConfig(h, { autoMode: true });
     H.inFlow(h, 'c3');
-    H.ok('全自动做任务：不问', commit('c3', [H.tr.user('全自动做完'), editA()]) === null);
+    H.ok('全自动标记没有当前任务不能替普通改动授权', blocked(commit('c3', [H.tr.user('全自动做完'), editA()])));
     H.setConfig(h, { autoMode: false });
     // 收工检查：不催它提交，催它问我
     H.write(A, 'class A { int x; }\n');
@@ -210,7 +212,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('审查过程不进提交：提案阶段不催提交，审没审完不催提交，开工前把提案一起提交');
+  H.section('审查过程不进提交：提案审完询问提交，审查未收尾不催提交');
   {
     const h = H.makeHome('t1008-rev', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', specGate: false, reviewLoop: true, reviewMaxRounds: 3 });
     const proj = H.makeRepo(path.join(h.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', 'openspec/changes/add-x/tasks.md': '- [ ] 1.1 改 src/A.java；验：mvn -q compile\n' });
@@ -239,8 +241,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { autoCommit: 'task' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-    H.ok('规范里写的提交节奏：提案阶段不提交，审代码审出的问题全部轮次审完再提交一次', /提案阶段（写、审、改）不提交/.test(md) && /不一轮一提交/.test(md) && !/提案写好提交一次/.test(md), md.slice(0, 200));
-    H.ok('交叉审查的技能也改了说法', /审查过程不进提交，审一轮提交一轮不行/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
+    H.ok('规范里写的提交节奏：提案审完单独问，审查修复全部轮次收尾后提交', /提案写完、审完、修完后交代要点，先问我是否提交/.test(md) && /提交不等于同意开工/.test(md) && /不一轮一提交/.test(md), md.slice(0, 200));
+    H.ok('交叉审查的技能也改了说法', /非 OpenSpec 的改动仍先问用户，不审一轮提交一轮/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
     // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
     const later = '1.2 做完了，验证过了。打勾攒着等这一阶段提交时一起勾。';
     const r4 = stop('v5', [H.tr.user('接着做 add-x 的 1.2'), editA, H.tr.say(later)], later);

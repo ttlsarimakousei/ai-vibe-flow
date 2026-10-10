@@ -225,6 +225,10 @@ add('开口：开头是"不用"的需求', 'task-anchor', prompt('不用写提�
 add('开口：开头是"好"字的需求', 'task-anchor', prompt('好友列表页面加一个搜索功能'), /这像一条需求/, V1005);
 add('开口：应一声', 'task-anchor', prompt('好的，谢谢'));
 add('开口：让它停', 'task-anchor', prompt('等等，先别提交'));
+add('提交：提案要单独确认', 'guard-commit', cmd('git commit -m "docs: 提案 add-export"'), /提案提交要单独确认/, NEXT);
+add('开口：合并push提示确定性工具', 'task-anchor', prompt('合并push'), /merge-push\.js[\s\S]*只处理未推送的本地提交|merge-push\.js/, NEXT);
+add('提交：普通文档修订标题不能免确认', 'guard-commit', cmd('git add README.md && git commit -m "docs: 修订使用说明"'), /不走 OpenSpec 的改动，提交之前要我点头/, NEXT);
+add('提案：不能引用本机临时输入', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Write', { content: '## Why\n参考 .vibe/tmp/reference.json\n' }, { 'openspec/changes/add-export/proposal.md': '## Why\n业务现状\n', '.vibe/tmp/reference.json': '{}' }), /另一台电脑拿不到[\s\S]*assets/, NEXT);
 
 // ---------- 会话开始、读文件提醒、提问框 ----------
 // 项目说明不一定是 /onboard 查的了（后台自动探索也会写）：带给模型的那句话里不再说是谁查的

@@ -59,7 +59,7 @@ const writeDesign = (content) => H.hook(h, 'guard-spec', Object.assign({}, base,
 
 H.section('tasks.md：要新建的文件、验法里的脚本（F004）');
 {
-  const good = ['## 1. 脚本', '', '- [ ] 1.1 写预检脚本：新建 deploy/sql/secflow-gate_precheck.sql；验：`node .vibe/tmp/secflow-gate/q.js` 输出 0 行',
+  const good = ['## 1. 脚本', '', '- [ ] 1.1 写预检脚本：新建 deploy/sql/secflow-gate_precheck.sql、新建 assets/q.js；验：`node openspec/changes/secflow-gate/assets/q.js` 输出 0 行',
     '- [ ] 1.2 执行预检并写 DDL：deploy/sql/secflow-gate_precheck.sql、新建 deploy/sql/secflow-gate_ddl.sql；验：node q.js 输出 0 行',
     '- [ ] 1.3 回滚脚本：编写 deploy/sql/secflow-gate_rollback.sql；验：`mvn -q -o compile`',
     '- [ ] 2.1 执行 deploy/sql/secflow-gate_ddl.sql 之后改 src/main/java/A.java；验：`mvn -q -o compile`', ''].join('\n');

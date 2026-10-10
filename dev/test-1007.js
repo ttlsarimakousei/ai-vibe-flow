@@ -141,6 +141,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     const tasks = path.join(chg, 'tasks.md');
     const tfile = path.join(ph.root, 'p.jsonl');
     const sid = 's-phase';
+    H.inFlow(ph, sid, [chg], true, 'apply');
     // 仓库刚建好就打勾、改文件：提交和打勾落在同一秒里，分不出先后（真用的时候提交早就在前面了）
     await H.sleep(1200);
     const sync = () => H.node(ph, '-e', ['require(' + JSON.stringify(path.join(ph.kit, 'lib', 'session.js')) + ').syncTicks(' + JSON.stringify(chg) + ')'], { cwd: pp });
