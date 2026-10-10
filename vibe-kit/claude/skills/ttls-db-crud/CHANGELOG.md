@@ -1,6 +1,13 @@
 # ttls-db-crud 变更记录
 
-> 当前版本 **1.1.0**。这个技能原来叫 urai-db-crud，在 skytech-skills 仓库里；2026-09-30 并进 vibe-kit，以后在 vibe-kit 这边维护。
+> 当前版本 **1.1.1**。这个技能原来叫 urai-db-crud，在 skytech-skills 仓库里；2026-09-30 并进 vibe-kit，以后在 vibe-kit 这边维护。
+
+## 1.1.1 —— 2026-10-10　中文 SQL 走文件、ASCII 确认串、JSON 查询结果
+
+- `--sql` 拒绝非 ASCII 字符以及只有通配符的 LIKE 模式，核对原 SQL 后改用 `--sql-file`，避免 Windows 命令行丢中文后误判数据。
+- 新确认串用 `3rows`、`rows-unknown`，表名也转换为 ASCII；`exec --ack-file` 读取 UTF-8 文件里的旧中文确认串。确认、影响面、指纹和一次性检查保留。
+- 同类中文参数问题：`find --keyword-file`、`peek --eq-file` 可从 UTF-8 文件读关键字和条件，命令行保持 ASCII。空的条件文件直接停止，不退化成无筛选查询。
+- `query --json` 不补齐、不按终端列宽截断，保留取数截断标记；文本表格按显示宽度补齐，不能按字符下标切列。
 
 ---
 

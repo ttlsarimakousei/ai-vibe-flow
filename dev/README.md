@@ -6,6 +6,12 @@
 
 ## 怎么用
 
+`test-feedback1007.js auto [旧套件目录]` 验证导出的 #11 至 #17：包装命令、否定归因、审查路径、push 授权、内网发布单独确认、ASCII 确认串和空条件文件。新增数据库文件确认和 JSON 截断验证在 `test-dbcrud.js auto`。旧版 20261007.1653 的专项测试有失败，新版全部通过；#14 的外部技能没有打进套件。
+
+不给 run-all 的 --rt 时，专项只测 Node 钩子，不要求 Python；加 --rt auto 才测数据库参数和 H2。
+
+打包器明确加载 Windows PowerShell 自带的 Archive 模块，避免宿主的 PSModulePath 指向另一份 PowerShell 导致压缩失败；不改系统执行策略。
+
 ```bash
 node dev/run-all.js
 ```

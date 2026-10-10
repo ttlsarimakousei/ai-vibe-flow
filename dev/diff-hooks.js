@@ -58,6 +58,7 @@ const V2248 = '20260930.2248'; // 提示规则去掉了；过程文件的提示�
 const V1005 = '20261005.0302'; // 闲话、"让它停"不再只看开头几个字：开头碰巧是"不用""好"的需求照需求提醒
 const V1007 = '20261007.1217'; // 起服务的提示：端口改成 --port auto --avoid <配置里的端口>
 const V1008 = '20261007.1622'; // 不走 OpenSpec 的提交要用户点头；归档要用户说了才做；全自动只管 apply（开工时告诉用户开没开）；报问题的提醒改了说法
+const V1010 = '20261010.1057'; // 1007 导出议题：包装命令、否定归因、当场推送授权和发布确认
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -77,6 +78,22 @@ const stop = (entries, extra, files) => (kit) => { const proj = project(kit, fil
 const prompt = (text, files, entries) => (kit) => { const proj = project(kit, files); const j = base(proj, kit, { hook_event_name: 'UserPromptSubmit', prompt: text }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), entries ? entries(proj) : [H.tr.user(text)]); return { proj, j }; };
 
 // ---------- 改文件 ----------
+add('反馈1007：env -C 跑套件场景脚本', 'guard-commit', cmd('env -C "<项目>" node "$HOME/.claude/vibe-kit/page/scenario-run.js" .vibe/scenarios/check.json --base http://127.0.0.1:34907'), /放行，没有输出/, V1010);
+add('反馈1007：否定套件问题不报反馈', 'verify-gate', stop(() => [H.tr.user('查一下'), H.tr.say('不是 vibe-kit 套件的问题。')], { last_assistant_message: '不是 vibe-kit 套件的问题。' }), /放行，没有输出/, V1010, { autoVerify: false, autoCrossReview: false, autoCommit: 'off', vibeTidy: false, lessons: 'off' });
+add('反馈1007：全自动时用户当场要求 push', 'guard-commit', (kit) => {
+  const r = cmd('git push origin main')(kit);
+  r.j.session_id = 'feedback1007-push';
+  r.j.transcript_path = H.transcript(path.join(path.dirname(r.proj), 'push.jsonl'), [H.tr.user('3.推送远端')]);
+  H.inFlow(kit, r.j.session_id, [path.join(r.proj, 'openspec/changes/add-export')]);
+  return r;
+}, /放行，没有输出/, V1010, { autoMode: true });
+add('反馈1007：env -C 下的相对发布脚本仍确认', 'guard-commit', (kit) => {
+  const r = cmd('env -C "<项目>/pkg" node publish.js')(kit);
+  H.write(path.join(r.proj, 'pkg/install.js'), '// 测试占位\n');
+  H.write(path.join(r.proj, 'pkg/publish.js'), '// 只检查，不运行发布\n');
+  H.write(path.join(r.proj, 'pkg/kit/VERSION'), '20261007.1653\n');
+  return r;
+}, /发布要你确认/, V1010);
 add('改普通代码', 'pre-edit', edit('src/main/java/com/x/A.java', 'Edit', { old_string: 'class A {}', new_string: 'class A { int x; }' }));
 add('往 .vibe 根下新建脚本', 'pre-edit', edit('.vibe/Tq.java', 'Write', { content: 'class Tq {}' }), /事由是变更名的留着别删，变更归档之后套件自己清；别的事由，那件事做完就把整个目录删掉，七天没动的也会自动清掉/, V2248);
 add('往 .vibe/tmp 根下新建', 'pre-edit', edit('.vibe/tmp/commitmsg.txt', 'Write', { content: 'x' }), /事由是变更名的留着别删，变更归档之后套件自己清；别的事由，那件事做完就把整个目录删掉，七天没动的也会自动清掉/, V2248);

@@ -50,13 +50,13 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
 
   H.section('建表、插入（两步确认）');
   const c1 = execBoth('CREATE TABLE T_ORDER (ID INT PRIMARY KEY, CUSTOMER VARCHAR(50), STATUS VARCHAR(20), AMOUNT DECIMAL(10,2), CREATED TIMESTAMP, NOTE VARCHAR(200))');
-  H.ok('第一步：什么都没改，给了确认串，退出码 4', c1.a.code === 4 && /--ack CREATE-T_ORDER-行数未知-[0-9a-f]{8}/.test(c1.a.out) && /风险    SAFE/.test(c1.a.out), c1.a.out + c1.a.err);
+  H.ok('第一步：什么都没改，给了确认串，退出码 4', c1.a.code === 4 && /--ack CREATE-T_ORDER-rows-unknown-[0-9a-f]{8}/.test(c1.a.out) && /风险    SAFE/.test(c1.a.out), c1.a.out + c1.a.err);
   H.ok('第二步：执行了', c1.b.code === 0 && /执行完成/.test(c1.b.out), c1.b.out + c1.b.err);
   H.ok('第二步只起了一次 java', lastUse().java === 1 && lastUse().cmd === 'exec', lastUse());
   execBoth("COMMENT ON COLUMN T_ORDER.STATUS IS '订单状态：待支付、已支付'");
   execBoth('CREATE TABLE TXORDER (ID INT, X VARCHAR(10))');
   const ins = execBoth("INSERT INTO T_ORDER VALUES (1, '张三', '待支付', 12.50, '2026-09-29 10:00:00', NULL), (2, '李四', '已支付', 99.00, '2026-09-29 11:00:00', ''), (3, 'O''Brien', '待支付', 5, '2026-09-28 09:30:00', '带''引号''')");
-  H.ok('插入：确认串里写着 3 行', /--ack INSERT-T_ORDER-3行-/.test(ins.a.out) && ins.b.code === 0 && /影响 3 行/.test(ins.b.out), ins.a.out + ins.b.out + ins.b.err);
+  H.ok('插入：确认串里写着 3 行', /--ack INSERT-T_ORDER-3rows-/.test(ins.a.out) && ins.b.code === 0 && /影响 3 行/.test(ins.b.out), ins.a.out + ins.b.out + ins.b.err);
 
   H.section('找表、看结构');
   const f1 = db(['find', '订单']);
@@ -103,13 +103,13 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   H.section('更新：两步确认，行数在事务里核对');
   const uf = sqlFile('u.sql', "UPDATE T_ORDER SET STATUS = '已取消' WHERE STATUS = '待支付'");
   const u1 = db(['exec', '--sql-file', uf]);
-  H.ok('第一步：影响 2 行，带 WHERE 的更新是 WARN', u1.code === 4 && /影响面  2 行/.test(u1.out) && /风险    WARN/.test(u1.out) && /--ack UPDATE-T_ORDER-2行-/.test(u1.out), u1.out + u1.err);
+  H.ok('第一步：影响 2 行，带 WHERE 的更新是 WARN', u1.code === 4 && /影响面  2 行/.test(u1.out) && /风险    WARN/.test(u1.out) && /--ack UPDATE-T_ORDER-2rows-/.test(u1.out), u1.out + u1.err);
   const dry = db(['exec', '--sql-file', uf, '--dry-run']);
   H.ok('--dry-run：不给确认串', dry.code === 0 && !/--ack/.test(dry.out) && /什么都没改/.test(dry.out), dry.out);
   // 确认之后、执行之前，别人又插了一行待支付的
   execBoth("INSERT INTO T_ORDER VALUES (4, '王五', '待支付', 1, '2026-09-29 12:00:00', NULL)");
   const u2 = db(['exec', '--sql-file', uf, '--ack', ackOf(u1)]);
-  H.ok('行数变了：不执行，把现在的影响面和新的确认串打出来', u2.code === 4 && /没有执行：确认的时候影响 2 行，现在是 3 行/.test(u2.out) && /--ack UPDATE-T_ORDER-3行-/.test(u2.out) && lastUse().java === 1, [u2.out + u2.err, lastUse()]);
+  H.ok('行数变了：不执行，把现在的影响面和新的确认串打出来', u2.code === 4 && /没有执行：确认的时候影响 2 行，现在是 3 行/.test(u2.out) && /--ack UPDATE-T_ORDER-3rows-/.test(u2.out) && lastUse().java === 1, [u2.out + u2.err, lastUse()]);
   H.ok('数据没动', /^3\s*$/m.test(db(['peek', '--table', 'T_ORDER', '--eq', 'status=待支付', '--count']).out));
   const bad = db(['exec', '--sql-file', uf, '--ack', 'UPDATE-T_ORDER-3行-00000000']);
   H.ok('确认串是编的：对不上，不执行', bad.code === 4 && /确认串对不上/.test(bad.err), bad.out + bad.err);
@@ -231,7 +231,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const i2 = db(['exec', '--sql-file', inc, '--ack', ackOf(i1)]);
   const amount = valueOf(3, 'AMOUNT');
   const i3 = db(['exec', '--sql-file', inc, '--ack', ackOf(i1)]);
-  H.ok('同一个确认串再用一次：不执行，说清这个串用过了，给一个新的', i2.code === 0 && i3.code === 4 && /确认串对不上/.test(i3.err) && /已经用过了/.test(i3.err) && /--ack UPDATE-T_ORDER-1行-/.test(i3.out) && ackOf(i3) !== ackOf(i1), i3.out + i3.err);
+  H.ok('同一个确认串再用一次：不执行，说清这个串用过了，给一个新的', i2.code === 0 && i3.code === 4 && /确认串对不上/.test(i3.err) && /已经用过了/.test(i3.err) && /--ack UPDATE-T_ORDER-1rows-/.test(i3.out) && ackOf(i3) !== ackOf(i1), i3.out + i3.err);
   H.ok('数据只加了一次', Number(amount) === 15 && Number(valueOf(3, 'AMOUNT')) === 15, [amount, valueOf(3, 'AMOUNT')]);
   const i4 = db(['exec', '--sql-file', inc]);
   H.ok('同一条语句每次第一步给的确认串都不一样', i4.code === 4 && ackOf(i4) && ackOf(i4) !== ackOf(i1) && ackOf(i4) !== ackOf(i3), [ackOf(i1), ackOf(i3), ackOf(i4)]);
@@ -245,7 +245,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const aliasEntry = lastEntry('update');
   H.ok('执行完说了怎么还原', /exec --undo/.test(al.b.out), al.b.out);
   const un1 = db(['exec', '--undo', aliasEntry]);
-  H.ok('第一步：说清还原的是哪一次、几条语句，给了确认串，什么都没改', un1.code === 4 && /还原    [^\n]*那一次 UPDATE/.test(un1.out) && /语句    1 条 UPDATE/.test(un1.out) && /--ack UNDO-T_ORDER-1行-/.test(un1.out) && valueOf(3, 'NOTE') === 'alias', un1.out + un1.err);
+  H.ok('第一步：说清还原的是哪一次、几条语句，给了确认串，什么都没改', un1.code === 4 && /还原    [^\n]*那一次 UPDATE/.test(un1.out) && /语句    1 条 UPDATE/.test(un1.out) && /--ack UNDO-T_ORDER-1rows-/.test(un1.out) && valueOf(3, 'NOTE') === 'alias', un1.out + un1.err);
   const un2 = db(['exec', '--undo', aliasEntry, '--ack', ackOf(un1)]);
   H.ok('第二步：还原了', un2.code === 0 && /还原完成：1 条语句，影响 1 行/.test(un2.out) && valueOf(3, 'NOTE') === 'semi', [un2.out + un2.err, valueOf(3, 'NOTE')]);
   const un3 = db(['exec', '--undo', aliasEntry]);
@@ -299,6 +299,47 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   H.ok('--width 0：不截', w3r.code === 0 && w3r.out.includes(long) && !/被截断/.test(w3r.out), w3r.out + w3r.err);
   const w4r = db(['peek', '--table', 'T_ORDER', '--width', '200']);
   H.ok('--width 200：放宽', w4r.code === 0 && w4r.out.includes(long), w4r.out + w4r.err);
+
+  H.section('1007 反馈：命令行丢中文、JSON 输出、文件确认');
+  const nonAscii = db(['query', '--sql', "SELECT * FROM T_ORDER WHERE CUSTOMER LIKE '%张%'", '--json']);
+  H.ok('非 ASCII 的 --sql 在连库前拒绝，提示原 SQL 走文件', nonAscii.code === 1 && /--sql-file/.test(nonAscii.err) && lastUse().java === 0, nonAscii.out + nonAscii.err);
+  const findFile = db(['find', '--keyword-file', sqlFile('keyword.txt', '\ufeff订单\n')]);
+  H.ok('中文查表关键字可走 UTF-8 文件，命令行不带中文', findFile.code === 0 && /订单状态/.test(findFile.out), findFile.out + findFile.err);
+  const eqFile = db(['peek', '--table', 'T_ORDER', '--eq-file', sqlFile('eq.txt', 'CUSTOMER=张三\n'), '--count']);
+  H.ok('按中文值找数据也可走参数文件', eqFile.code === 0 && /1 行/.test(eqFile.out), eqFile.out + eqFile.err);
+  const emptyEq = db(['peek', '--table', 'T_ORDER', '--eq-file', sqlFile('empty-eq.txt', '\n  \n')]);
+  H.ok('空的条件文件不能退化成无筛选查询', emptyEq.code === 1 && /无筛选查询/.test(emptyEq.err) && lastUse().java === 0, emptyEq.out + emptyEq.err);
+  const lost = db(['query', '--sql', "SELECT COUNT(*) FROM T_ORDER WHERE CUSTOMER LIKE '%%'"]);
+  H.ok('中文已经丢失变成空 LIKE，也先停下来核对', lost.code === 1 && /模式只有通配符/.test(lost.err) && lastUse().java === 0, lost.out + lost.err);
+  const badFile = sqlFile('bad-encoding.sql', '');
+  fs.writeFileSync(badFile, Buffer.from([0x81]));
+  const badEncoding = db(['query', '--sql-file', badFile]);
+  H.ok('SQL 文件坏字节不能替换后静默执行', badEncoding.code === 1 && /不能替换坏字节/.test(badEncoding.err) && lastUse().java === 0, badEncoding.out + badEncoding.err);
+  const commented = db(['query', '--sql', "SELECT 1 AS N -- example LIKE '%%'", '--json']);
+  H.ok('注释中的空 LIKE 不是查询条件，不误拦', commented.code === 0 && JSON.parse(commented.out).rows[0][0] === '1', commented.out + commented.err);
+  const jf = sqlFile('json.sql', "SELECT CUSTOMER, STATUS FROM T_ORDER WHERE CUSTOMER = '张三'");
+  const json = db(['query', '--sql-file', jf, '--json']);
+  let jr = {}; try { jr = JSON.parse(json.out); } catch (e) { /* 断言展示输出 */ }
+  H.ok('JSON 不混入连接备注，中文按原值返回', json.code === 0 && jr.rows && jr.rows[0][0] === '张三' && jr.truncated_cell === false && jr.truncated_rows === false, json.out + json.err);
+  const cut = db(['query', '--sql', "SELECT REPEAT('x', 21000) AS V", '--json']);
+  let cr = {}; try { cr = JSON.parse(cut.out); } catch (e) { /* 断言展示输出 */ }
+  H.ok('JSON 明确标记单元格截断及上限', cut.code === 0 && cr.truncated_cell === true && cr.max_cell > 0, cut.out.slice(0, 150) + cut.err);
+  const rowLimit = db(['query', '--sql', 'SELECT * FROM T_ORDER ORDER BY ID', '--max-rows', '1', '--json']);
+  let rr = {}; try { rr = JSON.parse(rowLimit.out); } catch (e) { /* 断言展示输出 */ }
+  H.ok('JSON 明确标记没有取全的行', rowLimit.code === 0 && rr.truncated_rows === true && rr.rows.length === 1, rowLimit.out + rowLimit.err);
+  const many = db(['query', '--sql', 'SELECT 1 AS N', '--sql', 'SELECT * FROM NO_SUCH', '--json']);
+  let mr = {}; try { mr = JSON.parse(many.out); } catch (e) { /* 断言展示输出 */ }
+  H.ok('多条 JSON 查询保留每条成功、失败，不把部分结果当全成功', many.code !== 0 && mr.results && mr.results[0].ok && !mr.results[1].ok, many.out + many.err);
+  const ackSql = sqlFile('ackfile.sql', "UPDATE T_ORDER SET NOTE='ack-file' WHERE ID=1");
+  const pre = db(['exec', '--sql-file', ackSql]);
+  const ackPath = sqlFile('ack.txt', '\ufeff' + ackOf(pre) + '\n');
+  const written = db(['exec', '--sql-file', ackSql, '--ack-file', ackPath]);
+  H.ok('UTF-8 BOM 文件里的确认串执行同一条写操作', pre.code === 4 && written.code === 0 && valueOf(1, 'NOTE') === 'ack-file', written.out + written.err);
+  const replay = db(['exec', '--sql-file', ackSql, '--ack-file', ackPath]);
+  H.ok('文件确认不能重复使用，也不能跳过重新确认', replay.code === 4 && /确认串对不上/.test(replay.err), replay.out + replay.err);
+  H.write(ackPath, ackOf(pre) + '\n' + ackOf(replay));
+  const multiAck = db(['exec', '--sql-file', ackSql, '--ack-file', ackPath]);
+  H.ok('确认文件只能有一条串，不执行多条确认', multiAck.code === 1 && /只放一条/.test(multiAck.err) && lastUse().java === 0, multiAck.out + multiAck.err);
   execBoth("UPDATE T_ORDER SET NOTE = 'semi' WHERE ID = 3");
 
   H.section('peek 的条件和排序：拼进 SQL 之前先查');

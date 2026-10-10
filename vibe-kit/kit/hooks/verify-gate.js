@@ -197,11 +197,18 @@ function porcelainUntracked(root) {
  *   它说做完了，这个会话记过套件问题（它记的、钩子自动记的），交代里没有"套件问题"一节：让它单独列出来（同一批只提一次）
  */
 const SAID_KIT_BUG = /(钩子|套件|vibe-kit)(本身|自己)?的(问题|bug|缺陷|毛病)|(钩子|套件)(拦错|误拦|有 ?bug|有缺陷|出错|坏了)|是(钩子|套件)(的)?(bug|问题)/i;
+/** 按句子认肯定的归因。标题、否定句不算；前一句排除了 A，也不能把后一句确认 B 的问题一起排除。 */
+function saidKitBug(text) {
+  return String(text || '').split(/[\n。！？!?；;]|[，,]\s*(?:但|不过|可是|而)/).some((line) => {
+    if (/^\s*#{1,6}\s/.test(line) || !SAID_KIT_BUG.test(line)) return false;
+    return !/(不是|并非|不算|没有|没发现|未发现|不存在|排除)[^，,]{0,32}(钩子|套件|vibe-kit)|(钩子|套件|vibe-kit)[^，,]{0,16}(没有问题|没问题|无问题|正常)|(?:套件问题|钩子问题)\s*[:：]\s*(无|没有)/i.test(line);
+  });
+}
 function kitIssueTodo(j, lastSaid) {
   if (!feedback || !j.session_id) return '';
   const said = String(lastSaid || '');
   const recs = feedback.sessionRecords(j.session_id);
-  if (SAID_KIT_BUG.test(said) && !/(不是|并非|不算|没有)(钩子|套件)/.test(said) && !recs.some((r) => /模型反馈|申请放行/.test(r.meta['来源'] || ''))) {
+  if (saidKitBug(said) && !recs.some((r) => /模型反馈|申请放行/.test(r.meta['来源'] || ''))) {
     const k = j.session_id + '-kitissue-ask';
     if (!readState(k).at) {
       writeState(k, { at: Date.now() });

@@ -1,7 +1,8 @@
 'use strict';
 /*
  * PreToolUse 钩子（Bash / PowerShell）：看模型要跑的命令。
- *   1. git push 要用户确认：任何写法（git -C x push、cd x && git push、cmd /c、bash -c、powershell -Command 里的）都返回 permissionDecision: ask。
+ *   1. git push 要用户确认：任何写法（git -C x push、cd x && git push、cmd /c、bash -c、powershell -Command 里的）都检查。
+ *      最后一句真实用户消息明确要求 push 就算当场授权；取消、问句、后台通知不算。没有授权时普通模式 ask，全自动模式留给用户。
  *      权限规则 Bash(git push:*) 按前缀匹配，实测 2.1.259 上 git -C sub push 能绕过它；这一道不看任何开关。
  *   2. 提交信息要符合公司规范："类型: 内容"（例：feat: 新增修改页面）。heredoc、here-string、-m"x"、-mx 这些写法都认。
  *   3. 不许把原来就有的改动带进提交：git add -A / --all / . / :/ / -u、git commit -a 一律拦；
@@ -207,6 +208,8 @@ function headOf(ws) {
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(ws[i].raw)) { i++; continue; }
     if (ws[i].raw === '&' || ws[i].raw === '.') { i++; continue; }
     const name = baseName(ws[i].text);
+    // env -C 的目录是参数，不能当成命令名；交给 innerCommand 按临时工作目录检查。
+    if (name === 'env' && ws.slice(i + 1).some((w) => /^(?:-C|--chdir)(?:=|$)|^-C.+/.test(w.text))) break;
     if (CONTROL.has(name)) { i++; continue; }
     if (name === 'npx' && ws[i + 1] && baseName(ws[i + 1].text) === 'cross-env') { i += 2; continue; }
     if (WRAPPER.has(name)) { i++; while (i < ws.length && /^-/.test(ws[i].text)) i++; continue; }
@@ -262,6 +265,30 @@ function docOf(list, docs) {
 }
 function innerCommand(ws, head, dir, docs) {
   const rest = ws.slice(head.i + 1);
+  if (head.name === 'env') {
+    let cwd = dir;
+    let k = 0;
+    for (; k < rest.length; k++) {
+      const w = rest[k];
+      if (w.text === '--') { k++; break; }
+      if (w.text === '-C' || w.text === '--chdir') {
+        const next = rest[++k];
+        if (!next || dynamicPath(next)) return null;
+        cwd = path.resolve(cwd, local(next.text));
+      } else if (/^--chdir=|^-C.+/.test(w.text)) {
+        const value = w.text.replace(/^--chdir=|^-C/, '');
+        if (dynamicPath({ raw: value })) return null;
+        cwd = path.resolve(cwd, local(value));
+      } else if (w.text === '-u' || w.text === '--unset') {
+        if (!rest[++k]) return null;
+      } else if (/^(?:-i|--ignore-environment|-u.+|--unset=.+)$/.test(w.text) || /^[A-Za-z_]\w*=/.test(w.text)) {
+        continue;
+      } else if (w.text.startsWith('-')) return null;
+      else break;
+    }
+    if (k < rest.length) return { cmd: rest.slice(k).map((w) => w.raw).join(' '), ps: false, dir: cwd };
+    return null;
+  }
   const script = (p, ps) => {
     try {
       const f = path.resolve(dir || process.cwd(), local(p));
@@ -1415,6 +1442,8 @@ function hasReaderIn(cmd, ps, depth) {
   return false;
 }
 function analyze(cmd, ps, st, cfg, depth) {
+  // 包装命令换过目录后，相对发布脚本也要按内层的目录检查。
+  if (publishAnywhere(cmd, st.dir)) st.publishing = true;
   const { s, docs } = preprocess(cmd, ps);
   if (st.easy === undefined) st.easy = easyListing(cmd, ps);
   if (st.hasReader === undefined) st.hasReader = st.easy ? false : hasReaderIn(cmd, ps, 0);
@@ -1455,7 +1484,13 @@ function analyze(cmd, ps, st, cfg, depth) {
         continue;
       }
       const inner = innerCommand(ws, head, st.dir, docs);
-      if (inner && depth < 3) { analyze(inner.cmd, inner.ps, st, cfg, depth + 1); continue; }
+      if (inner && depth < 3) {
+        const outer = st.dir;
+        if (inner.dir) st.dir = inner.dir;
+        analyze(inner.cmd, inner.ps, st, cfg, depth + 1);
+        if (inner.dir) st.dir = outer;
+        continue;
+      }
       // 经过 devserver.js 起的：它自己查重、查端口，这一段里带的启动命令不拦（只免这一段，同一条命令里别的段照查）
       const viaTool = ws.some((w) => /devserver\.js$/i.test(w.text));
       if (!viaTool && cfg.serverGuard !== false && !st.block) { const s = serverStart(ws, head, st.dir); if (s) setBlock(st, 'server', serverMsg(s)); }
@@ -1625,18 +1660,21 @@ function handle(j) {
     const api = routerApiIssue(cmd, ps, j.cwd);
     if (api) return counted('kit', api);
   }
-  // push 不看任何开关，一律要用户确认；拆命令没认出来的写法由 pushAnywhere 兜底
-  const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishAnywhere(cmd, j.cwd) ? '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。' : '';
+  // push 不看任何开关，没有当场授权就确认；拆命令没认出来的写法由 pushAnywhere 兜底
+  const publishing = publishAnywhere(cmd, j.cwd);
+  const publishNotice = '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。';
+  const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
   if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find)\b/i.test(cmd)) return cdBlock();
   const cwd0 = path.resolve(j.cwd || process.cwd());
-  const st = { dir: cwd0, cwd0, pushed: [], block: '', kind: '', target: '', ask: '', push: '', secret: '', j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
+  const st = { dir: cwd0, cwd0, pushed: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, secret: '', j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
   // 先按名字挑出进程再结束的写法（Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process）：拆成组之后认不出来，整条看一遍
   if (!st.block) { const k = killAnywhere(cmd, ps); if (k) setBlock(st, 'kill', k); }
   // 兜底放行：这个会话里申请过、还能用的通行证
   const action = (j.tool_name || 'Bash') + '：' + cmd;
   try { if (feedback) { st.sig = feedback.sigOf([j.tool_name || 'Bash', cmd.trim()]); st.passes = feedback.validPasses(cfg, j); } } catch (e) { st.passes = []; }
   analyze(cmd, ps, st, cfg, 0);
-  if (!st.push && pushAsk) st.push = pushAsk;
+  if (st.publishing) st.push = publishNotice;
+  else if (!st.push && pushAsk) st.push = pushAsk;
   if (st.block) {
     let tail = '';
     try { if (feedback && st.sig) tail = feedback.registerBlock(j, st.kind, st.sig, st.block, action, st.target); } catch (e) { /* 记不了编号也照样拦 */ }
@@ -1653,8 +1691,12 @@ function handle(j) {
   const cb = cdBlock();
   if (cb) return cb;
   // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告；提交里像有密码的放行，记进报告
+  // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
+  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok;
+  // 当场授权 push 不能顺便跳过同一条命令里提交内容的凭据提醒。
+  if (pushApproved && st.secret) return askOut(st.secret);
   if (cfg.autoMode) {
-    if (st.push) {
+    if (st.push && !pushApproved) {
       hookLog('guard-commit 全自动模式不 push：' + cmd.slice(0, 80));
       try { if (report) report.note(j, { kind: 'hand', title: '它想' + (/发布/.test(st.push) ? '发布安装包' : '执行 git push') + '，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '推到远端要你自己来' }); } catch (e) { /* 记不了不影响 */ }
       return counted('auto-push', '[vibe-kit] 全自动模式：' + (/发布/.test(st.push) ? '发布' : 'push') + '留给用户做，已经记进全自动报告。不要再试，也不要等：提交留在本地，接着做别的；最后的交代里说一句哪些提交还没推。');
@@ -1663,7 +1705,7 @@ function handle(j) {
     if (st.used.length) return feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);
     return null;
   }
-  const ask = [st.push, st.secret].filter(Boolean).join('\n');
+  const ask = [pushApproved ? '' : st.push, st.secret].filter(Boolean).join('\n');
   if (st.used.length) {
     const out = feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);
     // 放行申请和 push 确认一起问

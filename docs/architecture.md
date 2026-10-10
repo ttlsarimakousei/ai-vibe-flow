@@ -24,7 +24,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | 会话开始（新开、/clear、压缩后、恢复） | `session-start.js`（一直走命令） | 把项目说明、交接记录、壳子结构交给模型；记下会话的启动目录；套件代码的指纹对不对；清过期的过程文件；数使用情况 |
 | 用户开口 | `task-anchor.js`（一直走命令） | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；HTTP 钩子自检 |
 | 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑五道检查：`guard-kit`（套件的文件不许改）→ `guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
-| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add、像密码的内容）、push 一律要确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）、不走 OpenSpec 的提交要用户点头 |
+| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add、像密码的内容）、push 没当场授权就确认，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）、不走 OpenSpec 的提交要用户点头 |
 | 提问框、调技能之前 | `guard-ask.js` | 全自动模式下拦提问框，问题记进报告；模型自己调 OpenSpec 技能时算进流程（propose 算写提案那一段，archive 算做任务那一段）；用户没说开工就调 /opsx:apply 拦下 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有放令牌、key 的地方，而且要把内容搜出来的，拦下 |
 | 模型说做完了 | `verify-gate.js` | 改了代码要验证、改了页面要看页面、任务全打勾要审代码、改了的文件要提交、改了产物要记修订、到交接线问要不要交接；全自动模式下催着往下做（不催归档）、收工时出报告；提案阶段、审查没审完不催提交；变更都归档了记成出流程 |
@@ -57,7 +57,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 - `CLAUDE.md`：全局约定的模板。里面的 `{{AUTO_COMMIT}}`、`{{AUTO_MODE}}` 这类占位由 `install.js` 的 `fill()` 按开关生成。生成后放在 `~/.claude/CLAUDE.md` 两行标记之间，每个请求都带着，所以要短。
 - `rules/`：规范，启用的并进全局约定（`10-openspec.md`、`20-git-commit.md`）。文件名前加下划线就停用。
 - `skills/`：六个技能，都带 `ttls-` 前缀：`ttls-onboard`、`ttls-see-page`、`ttls-cross-review`、`ttls-handover`、`ttls-db-crud`、`ttls-redis`。
-- `agents/ttls-reviewer.md`：审查代理。审查提示第一行写"模式：提案 / 代码 / 复审提案 / 复审代码"，第二行写变更名；审查者最后一行写"结论：问题 N 条"，钩子靠这两处记账。
+- `agents/ttls-reviewer.md`：审查代理。审查提示第一行写"模式：提案 / 代码 / 复审提案 / 复审代码"，第二行统一写裸变更名（兼容目录、完整路径）；审查者最后一行写"结论：问题 N 条"，钩子靠这两处记账。前台结果和带 result 的后台通知都认，不存在的变更不借用材料里另一个变更。
 
 ## 模型路由（vibe-kit/router）
 

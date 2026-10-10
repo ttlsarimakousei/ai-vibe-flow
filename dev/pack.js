@@ -117,7 +117,10 @@ const all = walk(SRC, '', []);
 const zip = path.join(REPO, 'vibe-kit-' + version + '.zip');
 if (fs.existsSync(zip)) fs.unlinkSync(zip);
 const ps = path.join(SYS32, 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-execFileSync(fs.existsSync(ps) ? ps : 'powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath '" + SRC.replace(/'/g, "''") + "' -DestinationPath '" + zip.replace(/'/g, "''") + "' -CompressionLevel Optimal"], { stdio: 'inherit', windowsHide: true, timeout: 600000 });
+// 宿主的 PSModulePath 可能先指向另一份 PowerShell，明确加载 Windows 自带的模块，不改执行策略。
+const archive = path.join(path.dirname(ps), 'Modules', 'Microsoft.PowerShell.Archive', 'Microsoft.PowerShell.Archive.psd1');
+const loadArchive = fs.existsSync(archive) ? "Import-Module '" + archive.replace(/'/g, "''") + "' -ErrorAction Stop; " : '';
+execFileSync(fs.existsSync(ps) ? ps : 'powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop'; " + loadArchive + "Compress-Archive -LiteralPath '" + SRC.replace(/'/g, "''") + "' -DestinationPath '" + zip.replace(/'/g, "''") + "' -CompressionLevel Optimal"], { stdio: 'inherit', windowsHide: true, timeout: 600000 });
 if (!fs.existsSync(zip)) fail('没压出来：' + zip);
 
 // 5. 解压出来核对：一个不多、一个不少，内容逐字节相同

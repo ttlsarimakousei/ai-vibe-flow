@@ -15,7 +15,7 @@ db.py —— ttls-db-crud 技能的入口。只用 Python 标准库。
   python db.py columns      --conn dev-dm --table T_ORDER,T_ORDER_ITEM
   python db.py peek         --conn dev-dm --table T_ORDER --eq STATUS=待支付 --limit 5
   python db.py query        --conn dev-dm --sql "SELECT ..." [--sql "SELECT ..."] [--max-rows 200]
-  python db.py exec         --conn dev-dm --sql-file u.sql [--ack 确认串]
+  python db.py exec         --conn dev-dm --sql-file u.sql [--ack ASCII确认串 | --ack-file 文件]
 
 口令从不出现在命令行上：由本脚本解析后，经子进程的环境变量交给 Java。
 
@@ -698,7 +698,8 @@ def cmd_find(args, conn, project_root):
 
 def cmd_query(args, conn, project_root):
     """只读查询。可以一次给几条（几个 --sql，或者文件里用分号隔开），一次连库跑完。"""
-    show_notes(conn)
+    if not args.json:
+        show_notes(conn)
     texts = read_sqls(args)
     stmts = []
     for t in texts:
@@ -720,13 +721,19 @@ def cmd_query(args, conn, project_root):
                        extra_args=["--max-rows", str(args.max_rows)] + cell, timeout=args.timeout)
         if not r.get("ok"):
             return die(r, conn)
-        print_rows(r, width)
+        if args.json:
+            print(json.dumps(r, ensure_ascii=False))
+        else:
+            print_rows(r, width)
         return EXIT_OK
 
     r = run_runner(conn, "multi", project_root, sql_segments=[s.raw for s in stmts],
                    extra_args=["--max-rows", str(args.max_rows)] + cell, timeout=args.timeout)
     if not r.get("ok"):
         return die(r, conn)
+    if args.json:
+        print(json.dumps(r, ensure_ascii=False))
+        return EXIT_FAILED if any(not one.get("ok") for one in r.get("results", [])) else EXIT_OK
     code = EXIT_OK
     for i, (s, one) in enumerate(zip(stmts, r.get("results", []))):
         if i:
@@ -1892,8 +1899,8 @@ def new_ack(conn, kind, table, rows, fingerprint):
     """
     nonce = hashlib.sha256(os.urandom(32)).hexdigest()[:16]
     digest = hashlib.sha256((fingerprint + nonce).encode("utf-8")).hexdigest()[:8]
-    name = re.sub(r"\s+", "_", (table or "未知表").split(".")[-1])
-    n = "%d行" % rows if rows is not None and rows >= 0 else "行数未知"
+    name = re.sub(r"[^A-Za-z0-9_-]", "_", (table or "table").split(".")[-1])[:80] or "table"
+    n = "%drows" % rows if rows is not None and rows >= 0 else "rows-unknown"
     token = "%s-%s-%s-%s" % (kind, name, n, digest)
     journal.pending_put(token, fingerprint)
     return token
@@ -2101,7 +2108,10 @@ def _read_sql_file(path):
     try:
         return p.read_text(encoding="utf-8-sig")
     except UnicodeDecodeError:
-        return p.read_text(encoding="gbk", errors="replace")
+        try:
+            return p.read_text(encoding="gbk")
+        except UnicodeDecodeError:
+            raise dbconf.ConfError("SQL 文件不是有效的 UTF-8 或 GBK，不能替换坏字节后执行，请先修正编码")
 
 
 def read_sql(args):
@@ -2109,7 +2119,7 @@ def read_sql(args):
     if args.sql_file:
         return _read_sql_file(args.sql_file)
     if args.sql:
-        return args.sql if isinstance(args.sql, str) else args.sql[0]
+        return command_sql(args.sql if isinstance(args.sql, str) else args.sql[0])
     raise dbconf.ConfError("要么 --sql-file，要么 --sql，总得给一条 SQL")
 
 
@@ -2119,10 +2129,27 @@ def read_sqls(args):
     if args.sql_file:
         out.append(_read_sql_file(args.sql_file))
     for s in (args.sql or []):
-        out.append(s)
+        out.append(command_sql(s))
     if not out:
         raise dbconf.ConfError("要么 --sql-file，要么 --sql，总得给一条 SQL")
     return out
+
+
+def command_sql(text):
+    """命令行只收 ASCII 短 SQL。中文可能在到达 Python 前丢掉；已经退化成空 LIKE 的也先停，改走文件。"""
+    if not text.isascii():
+        raise dbconf.ConfError("--sql 不收非 ASCII 字符：Windows 命令行可能吞掉中文。把原 SQL 写进 UTF-8 文件，用 --sql-file。")
+    if re.search(r"\bLIKE\s+(?:N)?'%{1,2}'", sqlguard.strip_comments(text), re.IGNORECASE):
+        raise dbconf.ConfError("--sql 的 LIKE 模式只有通配符，可能是中文丢失。核对原 SQL 后用 --sql-file；不要按当前结果判断数据。")
+    return text
+
+
+def argument_file(filename):
+    """中文参数从 UTF-8 文件读取，避免 Windows shell 拼接实参时损坏。"""
+    try:
+        return pathlib.Path(filename).read_text(encoding="utf-8-sig").strip()
+    except (OSError, UnicodeError):
+        raise dbconf.ConfError("参数文件读不到或不是 UTF-8，请核对文件路径和编码")
 
 
 # ============================================================ 入口
@@ -2153,7 +2180,8 @@ def build_parser():
     t.add_argument("--pattern", help="表名匹配，如 T_ORDER%%")
 
     fd = sub.add_parser("find", help="按关键字找表和字段（表名、列名、注释里带这个词的）")
-    fd.add_argument("keyword", nargs="+", help="关键字，中文英文都行")
+    fd.add_argument("keyword", nargs="*", help="关键字，中文英文都行；shell 无法传中文时用 --keyword-file")
+    fd.add_argument("--keyword-file", help="UTF-8 文件里的查找关键字，与命令行关键字二选一")
     fd.add_argument("--schema")
     fd.add_argument("--tables-only", action="store_true", help="只找表，不找字段（库很大时快得多）")
     fd.add_argument("--limit", type=int, default=100, help="表和字段各最多列多少条")
@@ -2165,6 +2193,7 @@ def build_parser():
 
     pk = sub.add_parser("peek", help="看看这张表里有什么（不用写 SQL）")
     pk.add_argument("--table", required=True)
+    pk.add_argument("--eq-file", help="UTF-8 文件，每行一个列名=值，与 --eq 合并。适合 shell 无法传中文时")
     pk.add_argument("--schema")
     pk.add_argument("--eq", action="append", metavar="列名=值",
                     help="等值条件，值不用加引号。可以写好几个，之间是「并且」")
@@ -2184,13 +2213,16 @@ def build_parser():
     q.add_argument("--sql", action="append", help="直接写一条短 SQL。可以写好几个 --sql，一次连库跑完")
     q.add_argument("--max-rows", type=int, default=200)
     q.add_argument("--width", type=int, default=None, help=width_help)
+    q.add_argument("--json", action="store_true", help="原始 JSON 结果，不补齐、不按列宽截断；含 truncated_cell、truncated_rows 标记")
 
     e = sub.add_parser("exec", help="写操作。先看影响面，确认后才执行")
     e.add_argument("--sql-file", help="SQL 文件")
     e.add_argument("--sql", help="直接写一条短 SQL")
     e.add_argument("--undo", metavar="留痕目录",
                    help="照某一次写操作留下的 undo.sql 还原（那一次执行完打印的留痕目录）。一样两步确认")
-    e.add_argument("--ack", help="确认串。第一次跑会打印出来给你。一个串只能用一次")
+    ack = e.add_mutually_exclusive_group()
+    ack.add_argument("--ack", help="ASCII 确认串。第一次跑会打印出来给你。一个串只能用一次")
+    ack.add_argument("--ack-file", help="UTF-8 文件里的一条确认串，兼容旧版中文串。照样核对影响面、指纹和一次性使用")
     e.add_argument("--schema", help="表所在的 schema，用来找主键")
     e.add_argument("--dry-run", action="store_true", help="只看影响面和风险，绝不执行")
     limit_help = "只能比连接配置里写的更严，放宽的不作数"
@@ -2228,6 +2260,23 @@ def main(argv=None):
     ENV = vibe.Env(project_root)
     code = EXIT_USAGE
     try:
+        if args.cmd == "find":
+            if args.keyword_file:
+                if args.keyword:
+                    raise dbconf.ConfError("关键字和 --keyword-file 只能选一种")
+                args.keyword = [argument_file(args.keyword_file)]
+            if not args.keyword or not " ".join(args.keyword).strip():
+                raise dbconf.ConfError("find 要提供关键字或 --keyword-file")
+        if args.cmd == "peek" and args.eq_file:
+            lines = [line.strip() for line in argument_file(args.eq_file).splitlines() if line.strip()]
+            if not lines:
+                raise dbconf.ConfError("--eq-file 不能是空文件，避免退化成无筛选查询")
+            args.eq = (args.eq or []) + lines
+        if getattr(args, "ack_file", None):
+            value = argument_file(args.ack_file)
+            if not value or re.search(r"\s", value) or len(value) > 1024:
+                raise dbconf.ConfError("--ack-file 必须只放一条确认串，不能放多条或其他文字")
+            args.ack = value
         code = _dispatch(args, project_root)
         return code
     except dbconf.ConfError as e:

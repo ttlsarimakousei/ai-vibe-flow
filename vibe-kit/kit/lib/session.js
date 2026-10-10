@@ -187,7 +187,19 @@ function lastUserVoice(entries) {
       for (const b of c) {
         if (!b || b.type !== 'tool_result') continue;
         const t = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map((x) => (x && x.text) || '').join('\n') : '';
-        if (ANSWERED.test(t)) return { kind: 'answer', text: t, answers: answersOf(t), at, pos: i };
+        if (ANSWERED.test(t)) {
+          // 只认真正提问框的结果；脚本输出里引用同样的文字不算人工确认。
+          // 提问后用户又发了新指令，旧提问迟到的答案也不能盖过新指令。
+          let fromAsk = false;
+          for (let k = i - 1; k >= 0; k--) {
+            const prev = list[k];
+            if (isUserTurn(prev) && !isTaskNote(prev)) break;
+            const blocks = prev && !prev.isSidechain && prev.type === 'assistant' && prev.message && prev.message.content;
+            const call = Array.isArray(blocks) && blocks.find((x) => x && x.type === 'tool_use' && x.id === b.tool_use_id);
+            if (call) { fromAsk = call.name === 'AskUserQuestion'; break; }
+          }
+          if (fromAsk) return { kind: 'answer', text: t, answers: answersOf(t), at, pos: i };
+        }
       }
       continue;
     }
@@ -206,10 +218,11 @@ function lastUserVoice(entries) {
 const YES_SHORT = /^(可以|好|是|行|同意|确认|没问题|对|嗯|ok|okay|yes|y)(的|吧|了|啊|呀)?[\s。！!]*$/i;
 const NO_BEFORE = '(先别|别|不要|不用|不能|不准|不必|无需|先不|暂不|暂时不|不急着|不着急|等等再|晚点再|过会再|还不能|还不要|不可以|不让|没法)[^，,。！!？?\n]{0,6}';
 const SAID = {
+  push: { yes: /(?:^|[，,。；;\n])\s*(?:\d+[.、]\s*)?(?:(?:请|帮我|现在|直接|立即|及时|继续|顺便|可以|同意|确认|执行)\s*)*(?:提交(?:并|和|后)?\s*)?(?:git\s+(?:-C\s+\S+\s+)?push\b|push\b|推送|推到远端)(?!\s*(?:策略|规则|规范|检查|权限|功能|提示|失败|报错|问题|日志|脚本|命令|配置|结果|状态|记录|成功|完成|被|测试|的|的时候|时|过|了))/i, no: new RegExp(NO_BEFORE + '(推送|push|推到远端)|(推送|push)(之前|前|以后再说|稍后|晚点|等等|先等)|(推送|push)[^。！!\n]{0,40}([吗么？?]|怎么|怎样|如何|什么|为什么|是否|会不会)|(能不能|可不可以|要不要|是否)(推送|push)|推不推|(?:push|推送)[^。！!\n]{0,8}(我自己|我来|留给我)|(?:解释|讲解|示例|举例)[^。！!\n]{0,16}(push|推送)', 'i'), command: /^$/ },
   archive: { yes: /归档|archive|验收(通过|过了|没问题|ok)/i, no: new RegExp(NO_BEFORE + '(归档|archive)|(归档|archive)(之前|前|以后再说|稍后|晚点|等等|先等)|(归档|archive)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)归档', 'i'), command: /^(opsx:|openspec[-:])(archive|bulk-archive)$/i },
   commit: { yes: /提交|commit/i, no: new RegExp(NO_BEFORE + '(提交|commit)|(提交|commit)(之前|前|以后再说|稍后|晚点|等等|先等)|(提交|commit)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)提交|提不提交', 'i'), command: /^$/ },
 };
-/** 用户最后一句是不是让它做这件事（topic：archive 归档 / commit 提交）。返回 { ok, voice, text } */
+/** 用户最后一句是不是让它做这件事（topic：archive 归档 / commit 提交 / push 推送）。返回 { ok, voice, text } */
 function userSaid(entries, topic) {
   const g = SAID[topic];
   const v = lastUserVoice(entries);
@@ -219,7 +232,8 @@ function userSaid(entries, topic) {
     return { ok: hit, voice: v, text: v.answers.map((x) => x.a).join('；') };
   }
   if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || (g.yes.test(v.text) && !g.no.test(v.text)), voice: v, text: v.text };
-  return { ok: g.yes.test(v.text) && !g.no.test(v.text), voice: v, text: v.text };
+  const text = topic === 'push' ? v.text.replace(/```[\s\S]*?```/g, '').split('\n').filter((l) => !/^\s*>/.test(l)).join('\n') : v.text;
+  return { ok: g.yes.test(text) && !g.no.test(text), voice: v, text: v.text };
 }
 /**
  * 这个会话是在哪个目录启动的。钩子收到的 cwd 是"现在所在的目录"：模型单独跑过一条 cd，它就跟着变了。

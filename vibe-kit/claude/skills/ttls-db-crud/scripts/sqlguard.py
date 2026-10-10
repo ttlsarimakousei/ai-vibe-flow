@@ -631,13 +631,13 @@ def fragment_problem(text, what, dialect=None):
 
 def rows_in_token(token):
     """
-    从确认串里取出确认时的影响行数。串长这样：UPDATE-T_ORDER-3行-11fd6ccd。
+    从确认串里取出确认时的影响行数。新串用 3rows / rows-unknown，兼容旧版中文串。
     返回 (认得出, 行数)：行数是整数，或者 None（串里写的是"行数未知"）。认不出返回 (False, None)。
     """
-    m = re.search(r"-(\d+)行-[0-9a-f]{8}$", str(token or ""))
+    m = re.search(r"-(\d+)(?:rows|行)-[0-9a-f]{8}$", str(token or ""))
     if m:
         return True, int(m.group(1))
-    if re.search(r"-行数未知-[0-9a-f]{8}$", str(token or "")):
+    if re.search(r"-(?:rows-unknown|行数未知)-[0-9a-f]{8}$", str(token or "")):
         return True, None
     return False, None
 
