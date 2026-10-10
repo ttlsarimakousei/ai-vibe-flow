@@ -266,10 +266,10 @@ const PROD_SECRET = 'Prod-绝密-0001';
   const r5 = H.node(h, path.join(h.kit, 'tools', 'onboard.js'), ['run', '--dir', shell], { cwd: shell, env: live });
   const ini3 = H.read(path.join(back, '.vibe', 'db-crud.ini')) || '';
   H.ok('手动跑：说了改了什么', r5.code === 0 && /backend/.test(r5.out) && /数据库连接多了 localdb/.test(r5.out), r5.out + r5.err);
-  H.ok('找不到了的连接：不删，加一行说明；记的坑还在', new RegExp('\\[' + name + '\\]\\n; ★ 来源文件里已经找不到这个连接了').test(ini3) && /标识符要用大写/.test(ini3), ini3);
+  H.ok('开发来源消失后撤回自动连接并保留无口令退役原因', !ini3.includes('[' + name + ']') && fs.existsSync(path.join(back, '.vibe/connections-retired.json')), ini3);
   H.ok('新文件里的连接加进来了', /\[localdb\]\ndialect = mysql\njdbc = jdbc:mysql:\/\/127\.0\.0\.1:3306\/localdb\nuser = root\npassword = root\nsource = app-admin\/src\/main\/resources\/application-local\.yml:3/.test(ini3), ini3);
   const rj3 = readJson(path.join(back, '.vibe', 'redis.json')) || {};
-  H.ok('redis 的连接没了：标上，不删', rj3.connections && rj3.connections.dev && /找不到这个连接了/.test(rj3.connections.dev.gone || ''), rj3);
+  H.ok('开发 redis 来源消失后撤回自动连接', !rj3.connections || !rj3.connections.dev, rj3);
   H.ok('项目说明里 redis 那一行去掉了', !/- redis：/.test(H.read(pmB) || ''), H.read(pmB));
   const st = H.node(h, path.join(h.kit, 'tools', 'onboard.js'), ['status', '--dir', shell], { cwd: shell, env: live });
   H.ok('status：两个都探索过，说了有生产环境的连接没配进来', st.code === 0 && (st.out.match(/✓/g) || []).length === 2 && /测试、生产环境的连接没配进来/.test(st.out), st.out + st.err);
@@ -499,7 +499,7 @@ const PROD_SECRET = 'Prod-绝密-0001';
     H.ok('人在壳子上：找得到后端的配置', up.code === 0 && /backend/.test(up.out), up.out + up.err);
   }
   const rc = H.node(h, path.join(h.cfg, 'skills', 'ttls-redis', 'scripts', 'redis.js'), ['conns'], { cwd: back });
-  H.ok('redis.js conns：读得了生成的配置，不带口令', rc.code === 0 && /"name":"dev"/.test(rc.out) && !rc.out.includes(SECRET), rc.out + rc.err);
+  H.ok('撤回后 redis 工具不能继续使用旧连接', /NO_CONFIG/.test(rc.out), rc.out);
 
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);

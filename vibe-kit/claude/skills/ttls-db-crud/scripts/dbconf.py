@@ -23,6 +23,7 @@ dbconf.py —— 连接配置、驱动定位、Java 定位。只用 Python 标�
   明文              直接写，内网开发库常这么用，不会因此警告
 """
 import configparser
+import hashlib
 import os
 import pathlib
 import re
@@ -200,18 +201,31 @@ def _parse(path):
     cp = configparser.ConfigParser(interpolation=None)   # 关掉 % 插值，免得和 SQL 里的 % 打架
     try:
         # 配置文件可能是 GBK 存的，UTF-8 读不了就退回去试一次
+        raw = pathlib.Path(path).read_bytes()
         try:
-            with open(path, "r", encoding="utf-8-sig") as f:
-                cp.read_file(f)
+            text = raw.decode("utf-8-sig")
         except UnicodeDecodeError:
-            with open(path, "r", encoding="gbk", errors="replace") as f:
-                cp.read_file(f)
+            text = raw.decode("gbk", errors="replace")
+        cp.read_string(text)
     except configparser.Error as e:
-        raise ConfError("配置文件读不动 %s：%s" % (path, e))
+        raise ConfError("配置文件格式无法解析：%s；请在本机核对 INI 格式，原始配置不输出。" % path)
 
+    # 旧版只写失效注释，连接仍可执行；升级首次探索前也不能继续选中。
+    expired = set()
+    section = ""
+    for line in text.splitlines():
+        m = re.match(r"\s*\[([^\]]+)\]", line)
+        if m:
+            section = m.group(1)
+        elif "来源文件里已经找不到这个连接" in line and line.lstrip().startswith((";", "#")):
+            expired.add(section)
     conns = {}
     for name in cp.sections():
         sec = cp[name]
+        if not sec.getboolean("enabled", fallback=True):
+            continue
+        if sec.get("source") and (name in expired or sec.get("disabled_reason")):
+            continue
         dialect = (sec.get("dialect") or "").strip().lower()
         if not dialect:
             raise ConfError("连接 [%s] 没写 dialect，可选：%s" % (name, "、".join(SUPPORTED_DIALECTS)))
@@ -223,6 +237,8 @@ def _parse(path):
             raise ConfError("连接 [%s] 没写 jdbc 连接串" % name)
         conns[name] = {
             "name": name,
+            "_config_path": str(pathlib.Path(path).resolve()),
+            "_config_stamp": hashlib.sha256(raw).hexdigest(),
             "_config_root": str(pathlib.Path(path).resolve().parent.parent if pathlib.Path(path).parent.name == ".vibe" else pathlib.Path(path).resolve().parent),
             "dialect": dialect,
             "jdbc": jdbc,

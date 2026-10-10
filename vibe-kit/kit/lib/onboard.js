@@ -25,6 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const D = require('./discover.js');
+const connections = require('./connection-lifecycle');
 
 const KIT = path.join(__dirname, '..');
 const RESCAN_MS = 6 * 3600000;
@@ -516,7 +517,7 @@ function dbConfigFile(owner) {
  * 把找到的连接并进一个项目的连接配置。
  *   配置里已经有同一个地址、同一个账号的连接：自动探索写的（带 source）而且项目里的口令变了就更新，人写的不动
  *   没有：加一段
- *   自动探索写的连接，这次在项目里找不到了：加一行注释说明，不删（上面可能记着坑）
+ *   自动探索写的连接，这次不再确认为开发环境：移出可执行配置，只保留不含凭据的来源记录；人工连接不动。
  * memo 记着上一次从项目里找到的是什么（只存指纹）：配置里的口令和找到的不一样时，
  *   找到的和上次一样 = 项目那头没变，是人在配置里改的，不动；找到的变了 = 项目那头改了，跟着改。
  * 找到的是空的（没找到账号、口令是占位符）不拿去盖已有的值。
@@ -551,7 +552,9 @@ function mergeDb(owner, found, memo) {
           if (/^\s*password\s*=/.test(L[i]) && pwFresh(hit.name, f, valueAt(i, 'password'))) { L[i] = 'password = ' + f.password; if (!out.updated.includes(hit.name)) out.updated.push(hit.name); }
           if (/^\s*source\s*=/.test(L[i]) && valueAt(i, 'source') !== f.source + ':' + f.line) L[i] = 'source = ' + f.source + ':' + f.line;
           if (/^;\s*★ 来源文件里已经找不到这个连接/.test(L[i])) L[i] = null;
+          if (/^\s*(enabled|disabled_reason)\s*=/.test(L[i] || '')) L[i] = null;
         }
+        connections.restored(owner, 'db', hit.name);
       }
       seen[hit.name] = { pw: sha8(f.password || '') };
       continue;
@@ -565,8 +568,10 @@ function mergeDb(owner, found, memo) {
         if (/^\s*jdbc\s*=/.test(L[i])) L[i] = 'jdbc = ' + f.url;
         else if (/^\s*user\s*=/.test(L[i])) { if (f.user) L[i] = 'user = ' + f.user; } else if (/^\s*password\s*=/.test(L[i])) { if (pwFresh(moved.name, f, valueAt(i, 'password'))) L[i] = 'password = ' + f.password; } else if (/^\s*source\s*=/.test(L[i])) L[i] = 'source = ' + f.source + ':' + f.line;
         else if (/^;\s*★ 来源文件里已经找不到这个连接/.test(L[i])) L[i] = null;
+        else if (/^\s*(enabled|disabled_reason)\s*=/.test(L[i])) L[i] = null;
       }
       out.updated.push(moved.name);
+      connections.restored(owner, 'db', moved.name);
       seen[moved.name] = { pw: sha8(f.password || '') };
       continue;
     }
@@ -583,13 +588,24 @@ function mergeDb(owner, found, memo) {
     sec.push('source = ' + f.source + ':' + f.line);
     tail.push(...sec);
     seen[name] = { pw: sha8(f.password || '') };
+    connections.restored(owner, 'db', name);
   }
   for (const s of ini.secs) {
     if (matched.has(s.name) || !ini.get(s, 'source')) continue;
     out.gone.push(s.name);
-    let noted = false;
-    for (let i = s.start + 1; i < s.end; i++) if (/^;\s*★ 来源文件里已经找不到这个连接/.test(L[i] || '')) noted = true;
-    if (!noted) edits.push({ at: s.start + 1, ins: '; ★ 来源文件里已经找不到这个连接了（' + today() + '）。确实不用了就把这一段删掉' });
+    const src = ini.get(s, 'source');
+    const srcFile = path.resolve(owner, src.replace(/:\d+$/, ''));
+    if (exists(srcFile) && readStrict(srcFile) === null) {
+      for (let i = s.start + 1; i < s.end; i++) if (/^\s*(enabled|disabled_reason)\s*=/.test(L[i] || '')) L[i] = null;
+      edits.push({ at: s.start + 1, ins: 'enabled = false\ndisabled_reason = 来源暂时不可读，重新探索确认后恢复' });
+    } else {
+      if (connections.retire(owner, 'db', s.name, src)) {
+        for (let i = s.start; i < s.end; i++) L[i] = null;
+      } else {
+        for (let i = s.start + 1; i < s.end; i++) if (/^\s*(enabled|disabled_reason)\s*=/.test(L[i] || '')) L[i] = null;
+        edits.push({ at: s.start + 1, ins: 'enabled = false\ndisabled_reason = 来源已失效，失效记录暂未写成，重新探索后处理' });
+      }
+    }
   }
   for (const e of edits.sort((a, b) => b.at - a.at)) L.splice(e.at, 0, e.ins);
   let text = L.filter((l) => l !== null).join('\n').replace(/\n+$/, '') + (tail.length ? '\n' + tail.join('\n') : '') + '\n';
@@ -633,6 +649,8 @@ function mergeRedis(owner, found, memo) {
         const keep = had && (!f.password || (seen[name] && seen[name].pw === sha8(f.password)));
         conns[name] = Object.assign({}, conns[name], fresh, keep ? { password: had } : {});
         delete conns[name].gone;
+        delete conns[name].enabled;
+        connections.restored(owner, 'redis', name);
         if (JSON.stringify(conns[name]) !== old) out.updated.push(name);
       }
       seen[name] = { pw: sha8(f.password || '') };
@@ -646,10 +664,18 @@ function mergeRedis(owner, found, memo) {
     out.names.push(name);
     out.added.push(name);
     seen[name] = { pw: sha8(f.password || '') };
+    connections.restored(owner, 'redis', name);
   }
-  for (const k of Object.keys(conns)) if (conns[k].auto && !matched.has(k)) { out.gone.push(k); if (!conns[k].gone) conns[k].gone = '来源文件里已经找不到这个连接了（' + today() + '）'; }
+  for (const k of Object.keys(conns)) if (conns[k].auto && !matched.has(k)) {
+    out.gone.push(k);
+    const src = String(conns[k].source || '');
+    const srcFile = path.resolve(owner, src.replace(/:\d+$/, ''));
+    if (exists(srcFile) && readStrict(srcFile) === null) { conns[k].enabled = false; conns[k].gone = '来源暂时不可读，重新探索确认后恢复'; }
+    else if (connections.retire(owner, 'redis', k, src)) delete conns[k];
+    else { conns[k].enabled = false; conns[k].gone = '来源已失效，失效记录暂未写成，重新探索后处理'; }
+  }
   out.changed = JSON.stringify(conns) !== before;
-  if (out.changed && Object.keys(conns).length) writeAtomic(file, JSON.stringify({ note: 'ttls-redis 的连接配置。auto 为 true 的是 vibe-kit 后台自动探索从项目的配置文件里找到的（只找开发环境的），来源文件改了会跟着更新；不想被更新的把 auto 改成 false。这里面有口令，.vibe/ 不要提交。', connections: conns }, null, 2) + '\n');
+  if (out.changed) writeAtomic(file, JSON.stringify({ note: 'ttls-redis 的连接配置。auto 为 true 的是 vibe-kit 后台自动探索从项目的配置文件里找到的（只找开发环境的），来源文件改了会跟着更新；不想被更新的把 auto 改成 false。这里面有口令，.vibe/ 不要提交。', connections: conns }, null, 2) + '\n');
   return out;
 }
 

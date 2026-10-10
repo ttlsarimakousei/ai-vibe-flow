@@ -149,7 +149,7 @@ function loadConnections(start, explicit) {
   if (!j) throw mkErr('NO_CONFIG', '配置文件读不了（不是合法的 JSON）：' + c.file);
   const conns = {};
   if (c.kind === 'legacy') conns.main = j.redis;
-  else if (isObj(j.connections)) for (const k of Object.keys(j.connections)) if (isObj(j.connections[k])) conns[k] = j.connections[k];
+  else if (isObj(j.connections)) for (const k of Object.keys(j.connections)) if (isObj(j.connections[k]) && j.connections[k].enabled !== false && !(j.connections[k].auto && j.connections[k].gone)) conns[k] = j.connections[k];
   if (!Object.keys(conns).length) throw mkErr('NO_CONFIG', '配置文件里一个连接都没有：' + c.file);
   return { file: c.file, conns };
 }

@@ -137,7 +137,10 @@ def run_runner(conn, mode, project_root, sql_segments=None, extra_args=(), timeo
 
     result = None
     if daemon.enabled():
-        result = daemon.request(java, classpath, RUNNER_CLASS, args, stdin_data, password, timeout, JVM_FLAGS)
+        daemon_args = list(args)
+        if conn.get("_config_path") and conn.get("_config_stamp"):
+            daemon_args += ["--config-file", conn["_config_path"], "--config-stamp", conn["_config_stamp"]]
+        result = daemon.request(java, classpath, RUNNER_CLASS, daemon_args, stdin_data, password, timeout, JVM_FLAGS)
         if result is not None and RUN is not None:
             RUN.launched(via_daemon=True)
     if result is None:

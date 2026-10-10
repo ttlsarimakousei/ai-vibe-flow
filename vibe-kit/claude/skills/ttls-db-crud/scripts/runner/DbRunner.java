@@ -15,6 +15,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -1485,7 +1487,33 @@ public final class DbRunner {
 
     /** 留着的连接：同一个地址、同一个账号、同一个口令用同一条。 */
     private static final Map<String, Connection> POOL = new LinkedHashMap<String, Connection>();
+    private static final Map<String, String> POOL_FILES = new HashMap<String, String>();
+    private static final Map<String, String> POOL_STAMPS = new HashMap<String, String>();
     private static volatile long lastUsed = System.currentTimeMillis();
+
+    private static String digest(byte[] bytes) {
+        try {
+            StringBuilder out = new StringBuilder();
+            for (byte b : MessageDigest.getInstance("SHA-256").digest(bytes)) out.append(String.format("%02x", b & 0xff));
+            return out.toString();
+        } catch (Exception e) { throw new IllegalStateException("无法计算连接指纹"); }
+    }
+
+    private static String configStamp(String file) {
+        try { return digest(Files.readAllBytes(new File(file).toPath())); }
+        catch (Exception e) { return ""; }
+    }
+
+    /** 配置删除、失效或修改后，旧连接不再复用；空闲时最多五秒也会关闭。 */
+    private static void invalidatePool() {
+        for (String key : new ArrayList<String>(POOL_FILES.keySet())) {
+            if (!String.valueOf(POOL_STAMPS.get(key)).equals(configStamp(POOL_FILES.get(key)))) {
+                closeQuietly(POOL.remove(key));
+                POOL_FILES.remove(key);
+                POOL_STAMPS.remove(key);
+            }
+        }
+    }
 
     /**
      * 后台执行器：只听本机（127.0.0.1），端口由系统分配，连同一个随机的口令牌写进 --state-file。
@@ -1525,6 +1553,7 @@ public final class DbRunner {
                     + ",\"pid\":" + pid() + ",\"started\":" + System.currentTimeMillis() + ",\"hello\":1}");
             stdout.println("{\"ok\":true,\"mode\":\"serve\",\"port\":" + server.getLocalPort() + "}");
             for (;;) {
+                invalidatePool();
                 // 状态文件没了（被停掉了）、已经是别的执行器的了（那头另起了一个）、或者太久没人用：退出
                 if (!ownsState(stateFile, token) || System.currentTimeMillis() - lastUsed > idleMs) {
                     break;
@@ -1557,6 +1586,8 @@ public final class DbRunner {
                 closeQuietly(c);
             }
             POOL.clear();
+            POOL_FILES.clear();
+            POOL_STAMPS.clear();
             if (server != null) {
                 try {
                     server.close();
@@ -1672,6 +1703,7 @@ public final class DbRunner {
             return true;
         }
         String mode = opt.get("mode");
+        invalidatePool();
         if ("stop".equals(mode)) {
             reply.println("{\"ok\":true,\"mode\":\"stop\"}");
             return false;
@@ -1686,9 +1718,15 @@ public final class DbRunner {
         }
         // 这个请求可能要跑很久（大查询）：读完请求之后不再限时
         s.setSoTimeout(0);
+        String configFile = opt.get("config-file");
+        String expected = opt.get("config-stamp");
+        if (!empty(configFile) && !String.valueOf(expected).equals(configStamp(configFile))) {
+            failTo(reply, "STALE_CONFIG", "连接配置在请求前已变更，未执行操作；重新读取配置后再决定。", null);
+            return true;
+        }
         DbRunner r = new DbRunner(reply, input == null ? "" : input.toString(), password);
-        String key = String.valueOf(opt.get("url")) + "\n" + opt.get("user") + "\n" + String.valueOf(password).hashCode()
-                + "\n" + opt.get("driver-class");
+        String key = String.valueOf(opt.get("url")) + "\n" + opt.get("user") + "\n" + digest(String.valueOf(password).getBytes("UTF-8"))
+                + "\n" + opt.get("driver-class") + "\n" + configFile + "\n" + expected;
         Connection conn = POOL.get(key);
         boolean fresh = false;
         try {
@@ -1700,6 +1738,7 @@ public final class DbRunner {
             if (conn == null) {
                 conn = r.connect(opt);
                 POOL.put(key, conn);
+                if (!empty(configFile)) { POOL_FILES.put(key, configFile); POOL_STAMPS.put(key, expected); }
                 fresh = true;
             }
             r.run(mode, conn, opt);
