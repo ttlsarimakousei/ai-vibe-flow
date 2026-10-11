@@ -92,6 +92,8 @@ function api(req, res, u, body) {
     if (!i) return send(res, 404, { message: '404 Not found' });
     if (!im[2] && req.method === 'GET') return send(res, 200, pub(i));
     if (!im[2] && req.method === 'PUT') {
+      if (json && typeof json.title === 'string') i.title = json.title;
+      if (json && typeof json.description === 'string') i.description = json.description;
       if (json && json.state_event === 'close' && i.state !== 'closed') { i.state = 'closed'; i.updated_at = now(); i.notes.push({ id: ++noteSeq, body: 'closed', system: true, author: { name: who.user, username: who.user }, created_at: now() }); }
       if (json && json.state_event === 'reopen') { i.state = 'opened'; i.updated_at = now(); }
       save();

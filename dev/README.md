@@ -197,3 +197,5 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 `node dev/probes/cc-post-tool.js 2.1.289` 实测完成钩子；2.1.120、2.1.259、2.1.289 都仅连假网关，成功返回 tool_use_id 与 stdout/stderr/interrupted，失败走 PostToolUseFailure，不登记通过。IDEA 输出替换的形状来自官方协议，未在真实 IDE 上注入凭据做破坏性测试。
 
 全回归使用三版 CLI、四份旧基线、--rt auto 和 Windows 窗口监视器。日志放仓库 .vibe/tmp/，全过后再打包、从最新两版压缩包验升级。
+
+`test-usage-identity.js` 用假电脑名和假 GitLab 检查持久随机标识、改名、不同安装及旧议题迁移。假 GitLab 支持正常标题和正文更新；不会改真实 GitLab。旧版有六项反例失败。

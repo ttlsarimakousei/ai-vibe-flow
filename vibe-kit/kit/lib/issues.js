@@ -26,7 +26,7 @@
  * 本机不存（2026-10-01 起：以前在 ~/.claude/vibe-kit/issue-exports/ 存一份）。页面拿到文件之后再调 closeExported 关掉这一批，
  * 下面留一句"已导出"。所以每次导出的都是上次导出之后新冒出来的。关掉之后同样的问题再出现，会新建一条（写明之前是哪条），下次导出就能看到。
  *
- * 使用情况（lib/usage.js）：每台电脑一条"[使用情况] 电脑名"的议题，一天一条补充（syncUsage）。开关 usageReport。
+ * 使用情况（lib/usage.js）：每份安装一条匿名设备议题，一天一条补充（syncUsage）。开关 usageReport。
  * 它不是问题：导出时不当问题列、不关掉，各台电脑的数汇总在导出文件的最后（上次导出之后的，没导出过就是最近 7 天）。
  */
 const fs = require('fs');
@@ -366,26 +366,45 @@ function lastExport() {
 
 // ---------- 使用情况（lib/usage.js）：每台电脑一条议题，一天一条补充 ----------
 /** 这台电脑的记号：电脑名的指纹（重装套件也还是这一条） */
-const hostSig = () => crypto.createHash('sha1').update(String(os.hostname()).toLowerCase()).digest('hex').slice(0, 12);
+const hostSig = () => crypto.createHash('sha1').update(String(os.hostname()).toLowerCase()).digest('hex').slice(0, 12); // 仅找回旧版议题。
+const usageMark = () => USAGE_MARK + require('./usage').deviceId();
 function usageDescription() {
   return '这台电脑每天用 vibe-kit 的次数，一天一条补充。只有次数和版本号，不含路径、项目名、代码、提示词。\n\n'
     + '给改套件的人看哪里能优化，不是问题：导出议题时不当问题列，也不会被关掉，各台电脑的数汇总在导出文件的最后。'
     + '不想传：配置页"更新和上报"那一页把"使用情况上报"关掉。\n\n'
-    + '| 项 | 内容 |\n|---|---|\n| 电脑 | ' + cell(os.hostname()) + ' |\n\n---\n由 vibe-kit 自动上报。' + USAGE_MARK + hostSig() + '\n';
+    + '| 项 | 内容 |\n|---|---|\n| 电脑 | ' + cell(require('./usage').deviceId()) + ' |\n\n---\n由 vibe-kit 自动上报。' + usageMark() + '\n';
 }
 /** 找这台电脑开着的那一条；没有就建一条。返回 { iid, url } 或 { error } */
 async function usageIssue(api, ctx, rec) {
+  const id = require('./usage').deviceId();
+  const mark = usageMark();
+  const identified = async cur => {
+    const oldName = clip(os.hostname(), 80);
+    const title = String(cur.title || '').replace(oldName, id);
+    let description = String(cur.description || '').replace('| 电脑 | ' + cell(os.hostname()) + ' |', '| 电脑 | ' + cell(id) + ' |');
+    if (!description.includes(mark)) description += '\n' + mark + '\n';
+    if (title !== cur.title || description !== cur.description) {
+      const result = await call(ctx, 'PUT', api.base + '/issues/' + cur.iid, { title, description });
+      if (result.status !== 200) return { error: result };
+    }
+    return { iid: cur.iid, url: cur.web_url || rec.url || '' };
+  };
   if (rec.iid) {
     const cur = await call(ctx, 'GET', api.base + '/issues/' + rec.iid);
-    if (cur.status === 200 && cur.json && cur.json.state === 'opened' && isUsageIssue(cur.json)) return { iid: cur.json.iid, url: cur.json.web_url || rec.url || '' };
+    if (cur.status === 200 && cur.json && cur.json.state === 'opened' && isUsageIssue(cur.json)) return identified(cur.json);
     if (cur.status !== 200 && cur.status !== 404) return { error: cur };
   }
-  const mark = USAGE_MARK + hostSig();
   const s = await call(ctx, 'GET', api.base + '/issues?state=opened&per_page=20&search=' + encodeURIComponent(mark));
   if (s.status !== 200 || !Array.isArray(s.json)) return { error: s };
   const hit = s.json.find((i) => i && String(i.description || '').includes(mark));
-  if (hit) return { iid: hit.iid, url: hit.web_url || '' };
-  const body = { title: USAGE_TITLE + ' ' + clip(os.hostname(), 80), description: usageDescription(), labels: 'vibe-kit使用情况' };
+  if (hit) return identified(hit);
+  // 保留旧版的归属查找；找到后改标题和固定表格，不重写历史补充或人工说明。
+  const legacyMark = USAGE_MARK + hostSig();
+  const legacy = await call(ctx, 'GET', api.base + '/issues?state=opened&per_page=20&search=' + encodeURIComponent(legacyMark));
+  if (legacy.status !== 200 || !Array.isArray(legacy.json)) return { error: legacy };
+  const old = legacy.json.find(i => i && String(i.description || '').includes(legacyMark));
+  if (old) return identified(old);
+  const body = { title: USAGE_TITLE + ' ' + id, description: usageDescription(), labels: 'vibe-kit使用情况' };
   let x = await call(ctx, 'POST', api.base + '/issues', body);
   if (x.status === 400 || x.status === 403 || x.status === 422) { const y = await call(ctx, 'POST', api.base + '/issues', { title: body.title, description: body.description }); if (y.status === 201) x = y; }
   if (x.status === 201 && x.json && x.json.iid) return { iid: x.json.iid, url: x.json.web_url || '' };

@@ -4,7 +4,7 @@
  * 收集大家用 CLI 的过程信息，看套件哪里能优化。
  *
  *   攒在哪   state/usage.json，按天（本机日期），留最近 14 天。钩子、状态栏顺手 +1（bump），一次读写一个小文件
- *   传到哪   GitLab 上这台电脑的那条议题"[使用情况] 电脑名"下面，一天一条补充（lib/issues.js 的 syncUsage）。
+ *   传到哪   GitLab 上这份安装的"[使用情况] 设备标识"下面，一天一条补充（lib/issues.js 的 syncUsage）。不传原电脑名。
  *            只传过完了的日子（今天的明天传），由后台进程（lib/updater.js 的 run）顺带传；传过哪几天记在 feedback/issues.json
  *   开关     config.json 的 usageReport：on（默认）/ off。off 不传，本机照样数（配置页"更新和上报"那一页能看要传的样子）
  *   给谁看   改套件的人。维护套件的那台电脑导出议题时，各台电脑的汇总在导出文件的最后（lib/issues.js 的 exportIssues）
@@ -18,11 +18,20 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { KIT, DEFAULT_CONFIG, readConfig, readState, updateState } = require('./session');
 
 const KEEP_DAYS = 14;
 const MAX_KEYS = 300;
 const MARK = 'vibe-kit-usage';
+/** 随机标识跨进程保存，不从电脑名派生；写入失败停止上报，不能退回原电脑名。 */
+function deviceId() {
+  const valid = s => s && !Array.isArray(s) && /^[a-f0-9]{24}$/.test(s.id || '');
+  let s = readState('usage-device');
+  if (!valid(s)) s = updateState('usage-device', old => Object.assign({}, !Array.isArray(old) ? old : {}, { id: valid(old) ? old.id : crypto.randomBytes(12).toString('hex') }));
+  if (!valid(s)) throw new Error('匿名设备标识暂时无法保存，停止使用情况上报');
+  return '设备-' + s.id;
+}
 const pad = (n) => String(n).padStart(2, '0');
 /** 本机日期 YYYY-MM-DD */
 const dayKey = (t) => { const d = t ? new Date(t) : new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
@@ -127,7 +136,7 @@ function collect(day) {
     hints = ts.hints().map((h) => maskAddr(h.what).slice(0, 120)).slice(0, 8);
   } catch (e) { tools = []; hints = []; }
   return {
-    v: 1, day: d, host: os.hostname().slice(0, 60),
+    v: 1, day: d, host: deviceId(),
     kit: Array.isArray(u.kit) && u.kit.length ? u.kit : [kitVersion()].filter(Boolean), cc: Array.isArray(u.cc) ? u.cc : [],
     os: process.platform + ' ' + os.release(), node: process.version, hook: String(cfg.hookTransport || 'auto'), autoMode: cfg.autoMode === true,
     changed, n: Object.fromEntries(Object.entries(u.n || {}).filter(([k]) => !/\.ms$|duration|latency|elapsed|average/i.test(k))), models,
@@ -231,4 +240,4 @@ function aggregate(list, from, to) {
     + names.map((k) => { const h = hosts[k]; return '| ' + cell(k) + ' | ' + h.days.size + ' | ' + cell(h.kit) + ' | ' + cell(h.cc) + ' | ' + h.prompt + ' | ' + h.blocks + ' | ' + h.over + ' | ' + h.requests + ' |'; }).join('\n') + '\n';
 }
 
-module.exports = { MARK, KEEP_DAYS, dayKey, bump, seen, days, collect, render, summary, parse, aggregate, maskAddr };
+module.exports = { MARK, KEEP_DAYS, dayKey, bump, seen, days, collect, render, summary, parse, aggregate, maskAddr, deviceId };

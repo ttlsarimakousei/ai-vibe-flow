@@ -674,7 +674,7 @@ function hookLog(line) {
   } catch (e) { /* 记不了就算了 */ }
 }
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|pull|idea-mcp|evidence|review-jobs|work-baselines|review-local-metrics|work-sessions|readiness)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|work-baselines|review-local-metrics|work-sessions|readiness)\.json$|^hooks\.log/;
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
 function cleanState(days) {
