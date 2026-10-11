@@ -21,13 +21,14 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 
 | 时机 | 钩子 | 做什么 |
 |---|---|---|
-| 会话开始（新开、/clear、压缩后、恢复） | `session-start.js`（一直走命令） | 把项目说明、交接记录、壳子结构交给模型；记下会话的启动目录；套件代码的指纹对不对；清过期的过程文件；数使用情况 |
+| 会话开始（新开、/clear、压缩后、恢复） | `session-start.js`（一直走命令） | 送项目说明、只读就绪摘要和壳子结构；压缩恢复时核对当前事实；不自动续接旧交接许可；记启动目录、核对套件指纹、清过期文件、数使用情况 |
 | 用户开口 | `task-anchor.js`（一直走命令） | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；HTTP 钩子自检 |
 | 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑五道检查：`guard-kit`（套件的文件不许改）→ `guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
-| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add、像密码的内容）、push 没当场授权就确认，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）、不走 OpenSpec 的提交要用户点头 |
-| 提问框、调技能之前 | `guard-ask.js` | 全自动模式下拦提问框，问题记进报告；模型自己调 OpenSpec 技能时算进流程（propose 算写提案那一段，archive 算做任务那一段）；用户没说开工就调 /opsx:apply 拦下 |
-| 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有放令牌、key 的地方，而且要把内容搜出来的，拦下 |
-| 模型说做完了 | `verify-gate.js` | 改了代码要验证、改了页面要看页面、任务全打勾要审代码、改了的文件要提交、改了产物要记修订、到交接线问要不要交接；全自动模式下催着往下做（不催归档）、收工时出报告；提案阶段、审查没审完不催提交；变更都归档了记成出流程 |
+| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add、像密码的内容）、push 核对预览后的真人确认，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）、不走 OpenSpec 的提交要用户点头 |
+| 提问框、调技能之前 | `guard-ask.js` | 仅当前有效 apply 的全自动阶段拦提问框并记报告；propose 是计划阶段，archive 不创建实施许可；用户没说开工就调 /opsx:apply 拦下 |
+| 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下；IDEA 读取复用相同范围判断 |
+| 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据、推送预览和消费许可；失败或后台启动不算通过；已适配 IDEA 完成输出先遮盖凭据 |
+| 模型说做完了 | `verify-gate.js` | 改代码要验证、改页面要看页面；实现和必要测试完成就可独立审查，不等待审查任务自身打勾；按档位处理提交，提案和普通任务仍先确认；默认不催交接，用户验收和归档由用户决定 |
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
 
@@ -39,7 +40,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 
 | 文件 | 管什么 |
 |---|---|
-| `session.js` | 最底层的公共库：读开关（`readConfig`，带放松保护的开关的封条校验）、读写状态文件、读会话记录、找 OpenSpec 变更、壳子识别、审查记账、全自动模式的"在不在流程里、在写提案还是做任务那一段"、用户最后一句话（归档、提交要他点头）、自动压缩窗口的算法。别的库都依赖它，它不依赖别人 |
+| `session.js` | 公共入口：开关与封条、会话记录、变更、壳子、审查记账、阶段展示、真人动作和压缩窗口。状态锁、调用缓存、意图与范围指纹拆到专用模块，保持旧调用方接口 |
 | `feedback.js` | 问题反馈的记录（`~/.claude/vibe-kit/feedback/`），拦截编号和通行证，拦得最多的规矩、放行记录、开关改动记录 |
 | `report.js` | 全自动模式的报告 |
 | `lessons.js` | 经验规则：审查里反复出现的问题沉淀成 `.claude/rules/ttls-lessons-*.md` |
@@ -105,6 +106,22 @@ IDEA MCP 的归属、检查时间和连接状态存在 `state/idea-mcp.json`，�
 
 后台审查以真实启动调用登记 agentId，task-id 通知关联最近调用；通知没有 result 时只读启动结果登记的有限大小输出文件。SendMessage 只续已知审查代理，保留变更与模式；最新结论记账，相同通知去重。
 
-`merge-push.js` 库核对远端与线性本地历史，按确定事件分组，独立 index 重建并比 tree，备份 ref 后原子更新当前分支，再普通 push。工具计划在项目 `.vibe/tmp/merge-push/`，不是跨会话套件状态；guard-commit 只接受最新真人“合并push”的专门授权。它不修改已推送历史。
+`merge-push.js` 在普通 push 指令时也核对远端并生成预览，按确定事件分组。`after-tool` 只有成功生成实际计划才写会话 `<sid>-push-preview`；`guard-commit` 核对预览后另一条真人确认、计划编号及当前目标指纹。独立 index 重建并比 tree，备份 ref 后原子更新当前分支，再普通 push。含 merge、签名或标签时保留原历史。计划在项目 `.vibe/tmp/merge-push/`，会话预览凭据按会话清理，不恢复跨会话许可；它不修改已推送历史。
 
 `proposal-files.js` 只检查四个产物引用的临时材料，以及变更内 assets/references 文件的存在、忽略规则和链接归属，不读取材料内容、不自动拷入秘密。guard-spec 查新改行；verify-gate 查触碰变更的完整产物；guard-commit 补查命令写入和暂存区，旧引用仍在 index 时不能提交。相对材料路径以变更目录为准，设计检查同时支持产物所在目录。
+
+## 20261011 优化模块
+
+`session.js` 逐步只保留公共入口，状态原子写与锁拆到 `state-store.js`，一次调用缓存拆到 `invocation.js`。`intent.js`、`apply-scope.js`、`permissions.js` 统一真人意图、范围和版本许可；`flowView` 供执行与展示共用。
+
+`after-tool.js` 登记 PostToolUse 和 Failure，消费成功操作许可并采集本机证据；IDEA 结果仅适配已识别工具。`evidence.js`、`workspace.js` 计算当前输入与环境指纹。`task-types.js` 区分审查、意见处理和用户验收，不制造审查循环。
+
+`review-runner.js` 与 `tools/review.js` 管有限材料、独立请求、总预算、取消与意见处理；`readiness.js`、`workflow.js` 提供就绪、交付、提交计划、自测和恢复事实；`work-sessions.js` 提示同变更冲突。`connection-lifecycle.js` 留无凭据退役记录；`redact.js` 统一诊断出口；`local-backup.js` 和 `entry-check.js` 管本地恢复与入口行为自检。
+
+跨会话状态加入 GLOBAL_STATE：evidence、review-jobs、work-baselines、review-local-metrics、work-sessions、readiness。许可仍按会话清理。审查材料和诊断明细不上传，耗时仅留本机。用户可见行为以 vibe-kit/开发流程.md 为准，旧表中的自动交接和 archive 算 apply 已被这版替代。
+
+`state-store.atomicWrite` 写结构化对象，`atomicText` 写 Markdown 等原文；调用方检查保存结果。`workspace` 的相同只读 Git 查询只在一次钩子调用内复用，下一次调用重新核对。审查读材料前检查真实路径、文件类型和编码，范围外链接与未覆盖材料不会算作完整审查。
+
+审查重开预算的许可在本次启动时消费，失败或取消也不能反复重用；已用时间跨重试累计。新的完整审查清除上一轮意见处理状态，修复意见须有当前版本的成功复验。零问题或仅驳回意见不能批准后来修改的代码。
+
+本地恢复包只包含受管程序，清单记录文件哈希和目录集合；额外文件、敏感文件、目录链接、清单变化均使恢复包失效。新版失败优先使用可验证的本地上一版，保留原来的远端恢复政策。活进程锁不因续期丢失随机身份。
