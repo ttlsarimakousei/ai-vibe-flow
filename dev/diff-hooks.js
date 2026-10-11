@@ -85,6 +85,8 @@ add('解包：JAR 不能写入项目根', 'guard-commit', cmd('jar xf dependency
 add('解包：ZIP 不能写入源码', 'guard-commit', cmd('unzip dependency.jar -d src'), /归档解包/, NEXT);
 add('解包：关闭 kitLock 后仍检查', 'guard-commit', cmd('tar xf app.tar'), /归档解包/, NEXT, { kitLock: false });
 add('解包：条目落盘也用事由目录', 'guard-commit', cmd('unzip -p dependency.jar entry.txt > inspect.txt'), /归档解包/, NEXT);
+add('解包：Start-Process 完整程序路径', 'guard-commit', (kit, proj) => ({ ...cmd("Start-Process -FilePath 'C:\\jdk\\bin\\jar.exe' -ArgumentList 'xf dependency.jar' -WindowStyle Hidden")(kit, proj), tool_name: 'PowerShell' }), /归档解包/, NEXT);
+add('解包：cmd start 带空格的程序路径', 'guard-commit', (kit, proj) => ({ ...cmd('cmd /c start "" "C:\\Program Files\\jdk\\bin\\jar.exe" xf dependency.jar')(kit, proj), tool_name: 'PowerShell' }), /归档解包/, NEXT);
 add('解包：事由目录直接解包放行', 'guard-commit', cmd('unzip dependency.jar -d .vibe/tmp/查看依赖'));
 add('解包：只读列表放行', 'guard-commit', cmd('jar tf dependency.jar'));
 

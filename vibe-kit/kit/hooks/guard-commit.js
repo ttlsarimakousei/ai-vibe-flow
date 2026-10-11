@@ -225,8 +225,19 @@ function headOf(ws) {
   }
   return { i, name: i < ws.length ? baseName(ws[i].text) : '' };
 }
-/** 拆开的词拼回一条命令（带空格的加引号），给"包在里面的命令"再查一遍用 */
-const joinWords = (list) => list.map((w) => (/[\s;&|]/.test(w.text) ? '"' + w.text.replace(/"/g, '\\"') + '"' : w.text)).join(' ');
+/** 拆开的词拼回供 Bash 拆词器检查的命令。完整 Windows 路径和空参数也要保留，不能把反斜杠再当成转义吃掉。 */
+const joinWords = (list) => list.map((w) => (!w.text || /[\s;&|\\'"]/.test(w.text) ? '"' + w.text.replace(/[\\"]/g, '\\$&') + '"' : w.text)).join(' ');
+/** Windows 原生命令中的反斜杠是路径字符。只转换检查用的文本，不改变用户命令；保留原有 &、管道和引号边界。 */
+function nativeBackslashes(s) {
+  let out = '', q = '';
+  for (const ch of s) {
+    if (ch === '\\' && q !== "'") { out += '\\\\'; continue; }
+    if (ch === q) q = '';
+    else if (!q && (ch === '"' || ch === "'")) q = ch;
+    out += ch;
+  }
+  return out;
+}
 function repoRoot(dir) {
   let d = dir;
   for (let i = 0; i < 12; i++) { if (fs.existsSync(path.join(d, '.git'))) return d; const up = path.dirname(d); if (up === d) break; d = up; }
@@ -303,7 +314,12 @@ function innerCommand(ws, head, dir, docs) {
   const textOf = (list) => list.map((w) => { const m = HD.exec(String(w.text)); return m && docs && docs[Number(m[1])] !== undefined ? String(docs[Number(m[1])]) : w.text; }).join(' ');
   if (head.name === 'cmd') {
     const k = rest.findIndex((w) => /^\/\/?[ck]$/i.test(w.text));
-    if (k >= 0) return { cmd: textOf(rest.slice(k + 1)), ps: false };
+    if (k >= 0) {
+      const body = rest.slice(k + 1);
+      // 单个命令字符串先去外层引用；多个参数保留各自引号，避免带空格的程序路径变成几条参数。
+      const command = body.length === 1 ? textOf(body) : body.map((w) => HD.test(w.text) ? textOf([w]) : w.raw).join(' ');
+      return { cmd: nativeBackslashes(command), ps: false };
+    }
   }
   if (['bash', 'sh', 'zsh', 'dash'].includes(head.name)) {
     const k = rest.findIndex((w) => w.text === '-c' || /^-[a-z]*c$/.test(w.text));
@@ -346,8 +362,8 @@ function innerCommand(ws, head, dir, docs) {
       const args = argl ? argl.v : (pos[1] && pos[1].text) || '';
       const work = named(/^-workingdirectory$/i);
       if (work && dynamicPath({ raw: work.v })) return null;
-      const program = /\s/.test(prog) ? '"' + prog.replace(/"/g, '\\"') + '"' : prog;
-      if (prog) return { cmd: [program].concat(String(args).split(',').map((x) => x.trim()).filter(Boolean)).join(' '), ps: false, dir: work ? path.resolve(dir, local(work.v)) : dir };
+      const program = joinWords([{ text: prog }]);
+      if (prog) return { cmd: [program, nativeBackslashes(String(args).split(',').map((x) => x.trim()).filter(Boolean).join(' '))].join(' '), ps: false, dir: work ? path.resolve(dir, local(work.v)) : dir };
     } else {
       // cmd 的 start [/b /min /wait /d 目录] ["标题"] 命令 …
       let k = 0;

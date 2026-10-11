@@ -200,4 +200,4 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 
 `test-usage-identity.js` 用假电脑名和假 GitLab 检查持久随机标识、改名、不同安装及旧议题迁移。假 GitLab 支持正常标题和正文更新；不会改真实 GitLab。旧版有六项反例失败。
 
-`test-archive-extract.js [旧套件目录]` 检查 JAR、ZIP、WAR、TAR、7z、Python 命令行、PowerShell 与 IDEA 终端的解包目录，以及条目和目录列表经重定向或管道落盘。覆盖只读放行、旧 JDK 兼容路径、事由目录、上级目录逃出、目录联接、包装命令的实际工作目录、重复执行、关闭 kitLock 和全自动；未知路径放行，不执行待测命令。旧版应检出漏拦，假项目用完清理。
+`test-archive-extract.js [旧套件目录]` 检查 JAR、ZIP、WAR、TAR、7z、Python 命令行、PowerShell 与 IDEA 终端的解包目录，以及条目和目录列表经重定向或管道落盘。覆盖只读放行、旧 JDK 兼容路径、事由目录、上级目录逃出、目录联接、包装命令的实际工作目录、Windows 完整程序路径、重复执行、关闭 kitLock 和全自动；同时确认包装命令仍保留单个 `&` 后的令牌检查和推送确认。未知路径放行，不执行待测命令。旧版应检出漏拦，假项目用完清理。

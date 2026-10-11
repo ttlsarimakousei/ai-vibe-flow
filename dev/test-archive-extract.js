@@ -66,6 +66,11 @@ for (const [label, command, tool] of [
   ['Start-Process 明确源码工作目录', 'Start-Process -FilePath jar -ArgumentList "xf app.jar" -WorkingDirectory src -WindowStyle Hidden', 'PowerShell'],
   ['cmd start 指定源码工作目录', 'cmd /c start "" /d src jar xf app.jar'],
   ['PowerShell WhatIf 为 false 仍落盘', 'Expand-Archive app.zip src -WhatIf:$false', 'PowerShell'],
+  ['Start-Process 完整反斜杠程序路径', "Start-Process -FilePath 'C:\\jdk\\bin\\jar.exe' -ArgumentList 'xf app.jar' -WindowStyle Hidden", 'PowerShell'],
+  ['cmd start 完整反斜杠程序路径', 'cmd /c start "" C:\\jdk\\bin\\jar.exe xf app.jar', 'PowerShell'],
+  ['cmd start 程序路径里有空格', 'cmd /c start "" "C:\\Program Files\\jdk\\bin\\jar.exe" xf app.jar', 'PowerShell'],
+  ['cmd 单字符串的完整程序路径', 'cmd /c "C:\\jdk\\bin\\jar.exe xf app.jar"', 'PowerShell'],
+  ['xargs 保留完整程序路径', "echo app.jar | xargs 'C:\\jdk\\bin\\jar.exe' xf", 'PowerShell'],
 ]) bad(label, command, tool);
 
 for (const [label, command, tool, cwd] of [
@@ -112,7 +117,26 @@ for (const [label, command, tool, cwd] of [
   ['未知工作目录不按旧目录误拦', 'Set-Location $dest; jar xf app.jar', 'PowerShell'],
   ['未知目录之后恢复绝对工作目录', 'Set-Location $dest; Set-Location ' + q(tmp) + '; jar xf app.jar', 'PowerShell'],
   ['项目外的正式解包安装不接管', 'unzip sdk.zip -d ' + q(path.join(h.root, 'programs/sdk'))],
+  ['Start-Process 完整程序路径安全目录', "Start-Process -FilePath 'C:\\jdk\\bin\\jar.exe' -ArgumentList 'xf app.jar' -WorkingDirectory " + q(tmp) + ' -WindowStyle Hidden', 'PowerShell'],
+  ['Start-Process 反斜杠目标参数', "Start-Process -FilePath unzip -ArgumentList 'app.jar','-d','.vibe\\tmp\\1011-查包' -WindowStyle Hidden", 'PowerShell'],
+  ['cmd start 完整程序路径安全目录', 'cmd /c start "" /d ' + q(tmp) + ' C:\\jdk\\bin\\jar.exe xf app.jar', 'PowerShell'],
+  ['cmd start 有空格的完整程序路径安全目录', 'cmd /c start "" /d ' + q(tmp) + ' "C:\\Program Files\\jdk\\bin\\jar.exe" xf app.jar', 'PowerShell'],
+  ['包装命令数据里的路径不算解包', "cmd /c echo 'C:\\jdk\\bin\\jar.exe xf app.jar'", 'PowerShell'],
 ]) good(label, command, tool, cwd);
+
+// 修包装路径时，不能把单个 & 当调用符而漏掉后面的保护命令，也不能把只读数据当命令。
+for (const [label, command, expected] of [
+  ['完整路径的推送仍需确认', 'cmd /c "C:\\git\\bin\\git.exe" push', /推送|push/],
+  ['Start-Process 的推送仍需确认', "Start-Process -FilePath 'C:\\git\\bin\\git.exe' -ArgumentList 'push' -WindowStyle Hidden", /推送|push/],
+  ['cmd 命令字符串中的单个 & 不漏保护', 'cmd /c \'echo ok & "C:\\tools\\cat.exe" "' + path.join(h.kit, 'secrets.json') + '"\'', /令牌|不许改/],
+  ['Start-Process 保留受保护的文件路径', "Start-Process -FilePath 'C:\\tools\\cat.exe' -ArgumentList '\"" + path.join(h.kit, 'secrets.json') + "\"' -WindowStyle Hidden", /令牌|不许改/],
+  ['xargs 保留受保护的文件路径', "echo ignored | xargs 'C:\\tools\\cat.exe' '" + path.join(h.kit, 'secrets.json') + "'", /令牌|不许改/],
+]) {
+  const r = call(command, 'PowerShell');
+  H.ok(label, denied(r) && expected.test(H.reasonOf(r)), H.reasonOf(r));
+}
+good('cmd 完整路径的只读查询照常', 'cmd /c "C:\\git\\bin\\git.exe" status', 'PowerShell');
+good('Start-Process 只读普通配置照常', "Start-Process -FilePath 'C:\\tools\\cat.exe' -ArgumentList '\"" + path.join(h.kit, 'config.json') + "\"' -WindowStyle Hidden", 'PowerShell');
 
 const link = path.join(tmp, 'linked-src');
 try {
