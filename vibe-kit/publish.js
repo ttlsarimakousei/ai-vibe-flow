@@ -146,7 +146,7 @@ function fixedIssues(version) {
   G(['symbolic-ref', 'HEAD', 'refs/heads/publish']);
   // 只放安装包本来的内容：在解压出来的包目录里开过 Claude Code、跑过测试留下的 .vibe、临时文件、Python 缓存不推上去
   // （-f 连 .gitignore 挡住的也会加，所以按清单挑，不能 add .）
-  const PACKAGE = ['install.js', 'settings.fragment.json', 'publish.js', 'README.md', '更新说明.md', '.gitattributes', 'kit', 'claude', 'router'].concat(fs.readdirSync(SRC).filter((n) => /\.bat$/i.test(n)));
+  const PACKAGE = ['install.js', 'settings.fragment.json', 'publish.js', 'README.md', '开发流程.md', '更新说明.md', '.gitattributes', 'kit', 'claude', 'router'].concat(fs.readdirSync(SRC).filter((n) => /\.bat$/i.test(n)));
   const junk = fs.readdirSync(SRC).filter((n) => !PACKAGE.includes(n));
   if (junk.length) say('包目录里有这些不是安装包的东西，不发：' + junk.slice(0, 8).join('、') + (junk.length > 8 ? ' 等 ' + junk.length + ' 项' : ''));
   const add = G(['add', '-f', '--'].concat(PACKAGE.filter((n) => fs.existsSync(path.join(SRC, n))), [':(exclude)**/__pycache__', ':(exclude)**/*.pyc', ':(exclude)**/.vibe', ':(exclude)kit/state', ':(exclude)kit/feedback', ':(exclude)kit/config.json', ':(exclude)kit/secrets.json', ':(exclude)kit/router-data']), { timeout: 600000 });

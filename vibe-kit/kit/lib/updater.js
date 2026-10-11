@@ -28,6 +28,7 @@ const http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const { KIT, CFG_DIR, readConfig, readState, updateState } = require('./session');
 const gl = require('./gitlab');
+const stateStore = require('./state-store');
 
 const DIR = path.join(KIT, 'update');
 const STAGE = path.join(DIR, 'repo');
@@ -56,20 +57,19 @@ const setState = (patch) => updateState('update', (o) => Object.assign(o, patch)
 // ---------- 同一时间只跑一个 ----------
 function pidAlive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; } }
 function lockHeld() {
-  try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && Date.now() - (l.at || 0) < LOCK_MS && pidAlive(l.pid) && l.pid !== process.pid; } catch (e) { return false; }
+  try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && pidAlive(l.pid) && l.pid !== process.pid; } catch (e) { return false; }
 }
+let updateLock = null;
 function lock() {
-  if (lockHeld()) return false;
-  try { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, at: Date.now() })); return true; } catch (e) { return false; }
+  if (updateLock) return false;
+  updateLock = stateStore.acquire(LOCK, { waitMs: 0 });
+  return !!updateLock;
 }
-function unlock() { try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); if (l && l.pid === process.pid) fs.unlinkSync(LOCK); } catch (e) { /* 没有锁 */ } }
+function unlock() { if (updateLock) updateLock.release(); updateLock = null; }
 /** 锁还是自己的吗 */
-function ownLock() { try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && l.pid === process.pid; } catch (e) { return false; } }
-/**
- * 续一下锁：一次跑得长（拉仓库几条路各等十分钟、等空闲最多半小时、装、装回上一版）会超过锁的有效期，
- * 别的钩子看锁过期了会再甩一个进程出来，两个一起装。长的步骤前后都续一下
- */
-function touchLock() { try { if (ownLock()) fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, at: Date.now() })); } catch (e) { /* 续不了就算了 */ } }
+function ownLock() { try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && l.pid === process.pid && !!updateLock && l.token === updateLock.token; } catch (e) { return false; } }
+/** 活进程持有的锁没有租期；核对归属，不覆盖随机 token 和线程身份。 */
+function touchLock() { return ownLock(); }
 
 // ---------- 问仓库、拉到暂存处 ----------
 /** 仓库现在是哪个提交。没指定分支就用仓库的默认分支。返回 { ok, commit, branch, empty, route, why } */
@@ -249,7 +249,7 @@ function selfCheck() {
     "const fs = require('fs'); const path = require('path');", 'const kit = ' + JSON.stringify(KIT) + ';',
     "for (const d of ['lib', 'hooks']) for (const f of fs.readdirSync(path.join(kit, d)).sort()) if (/[.]js$/.test(f)) { try { require(path.join(kit, d, f)); } catch (e) { console.log('载不进来：' + d + '/' + f + '：' + (e && e.message)); process.exit(3); } }",
     "for (const h of ['pre-edit', 'guard-commit', 'guard-ask', 'guard-read', 'verify-gate', 'session-start', 'task-anchor']) if (typeof require(path.join(kit, 'hooks', h + '.js')).handle !== 'function') { console.log('钩子 ' + h + ' 没有 handle'); process.exit(3); }",
-    "console.log('ok');",
+    "const entry = path.join(kit, 'lib', 'entry-check.js'); if (fs.existsSync(entry)) { const r = require(entry).check(); if (!r.ok) { console.log(r.why); process.exit(3); } } console.log('ok');",
   ].join('\n');
   const a = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', windowsHide: true, timeout: 60000 });
   if (a.status !== 0 || !/ok/.test(String(a.stdout))) return { ok: false, why: (String(a.stdout || '') + String(a.stderr || '')).trim().split(/\r?\n/).slice(0, 3).join('；') || '自检进程没跑完' };
@@ -258,6 +258,12 @@ function selfCheck() {
   return { ok: true };
 }
 function rollback(prev, s) {
+  const backup = readState('update').localBackup;
+  if (backup && backup.version === prev && require('./local-backup').verify(path.join(DIR, 'previous-package'), backup)) {
+    const restored = runInstaller(path.join(DIR, 'previous-package'));
+    if (restored.ok && installedVersion() === prev && selfCheck().ok) { log('已从本地恢复上一版 ' + prev); return { ok: true, local: true }; }
+    log('本地恢复未通过，沿用仓库标签恢复');
+  }
   if (!VERSION_RE.test(prev)) return { ok: false, why: '装之前的版本没有版本号，没法从仓库里找回来' };
   const tag = 'refs/tags/v' + prev;
   const f = gl.viaRoutes(s, (route) => gl.git(STAGE, ['fetch', '-q', '--depth', '1', route.url, '+' + tag + ':' + tag], { settings: s, route, timeout: 300000 }));
@@ -284,6 +290,8 @@ function apply() {
   if (!ownLock()) return { ok: false, why: '更新的锁被别的进程拿走了，这次不装' };
   touchLock();
   log('开始安装 ' + to + '（现在是 ' + (from || '没有版本号') + '）');
+  const backup = require('./local-backup').save(KIT, path.join(DIR, 'previous-package'));
+  setState({ localBackup: backup.ok ? { version: backup.version, manifestHash: backup.manifestHash, at: Date.now() } : null });
   const r = runInstaller(STAGE);
   let why = '';
   if (!r.ok) why = '安装器没跑完（' + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
@@ -304,7 +312,7 @@ function apply() {
   // 暂存处回到仓库最新的那个提交，下次检查不用重新下载
   try { if (st.remoteCommit) gl.git(STAGE, ['checkout', '-q', '-f', st.remoteCommit], { timeout: 120000 }); } catch (e) { /* 下次检查会重新拉 */ }
   try { require('./feedback.js').record({ kind: '出错', hook: '自动更新', source: '钩子自动记录', title: '自动更新到 ' + to + ' 没装成：' + why.slice(0, 60), what: '从 ' + from + ' 更新到 ' + to + ' 时：' + why + '。' + (back.ok ? '已经装回 ' + from + '。' : '没能装回上一版：' + back.why), stack: readText(INSTALL_LOG).slice(-3000), sig: require('./feedback.js').sigOf(['update', to, why.slice(0, 40)]) }); } catch (e) { /* 记不了就算了 */ }
-  return { ok: false, why, rolledBack: back.ok, version: to, from };
+  return { ok: false, why, rolledBack: back.ok, rollbackSource: back.ok ? back.local ? 'local' : 'remote' : '', version: to, from };
 }
 
 // ---------- 现在的情况（配置页、状态栏用） ----------

@@ -351,8 +351,18 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     H.ok('记了一笔', state(c).lastApplied && state(c).lastApplied.to === W, state(c));
   }
 
+  H.section('新版失败后断网也能恢复');
+  const disconnected = H.makePackage('pkg-offline', '20260910.0900', (d) => fs.appendFileSync(path.join(d, 'kit/hooks/verify-gate.js'), '\nfunction ( {{ 故意损坏\n'));
+  const published = publish(disconnected, ['--no-install']);
+  H.ok('发布断网恢复测试包到假仓库', published.code === 0, published.out + published.err);
+  const cached = run(['check']);
+  H.ok('断网前只缓存新版而不安装', cached.json && cached.json.remote === '20260910.0900' && version(u) === W, cached.out + cached.err);
+  gl.ssh({ mode: 'denied' });
   gl.stop();
   await H.sleep(300);
+  const offline = run(['apply']);
+  H.ok('仓库服务停止后新版失败仍恢复上一版', offline.json && offline.json.apply && !offline.json.apply.ok && offline.json.apply.rolledBack && offline.json.apply.rollbackSource === 'local' && version(u) === W, offline.out + offline.err);
+  H.ok('日志明确记录本地恢复', /已从本地恢复上一版/.test(H.read(path.join(u.kit, 'update/update.log')) || ''));
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
   H.done('自动更新和发布');
