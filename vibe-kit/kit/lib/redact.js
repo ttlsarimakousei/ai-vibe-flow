@@ -19,9 +19,18 @@ function material(value) {
     .replace(/(\/\/[^:/\s@]+:)[^@\s/]+@/g, '$1***@');
 }
 function clip(value, n, secrets) { const s = text(value, secrets); return s.length > n ? s.slice(0, n) + '…' : s; }
+// 仅保留经过模式核验的非秘密元数据；同名字段塞入任意字符串仍遮盖。
+function publicOption(key, value) {
+  if (key === 'kitBypass') return ['ask', 'auto', 'off'].includes(value);
+  if (key === 'sshToken') return ['auto', 'off'].includes(value);
+  if (key === 'tokenSource') return ['', 'manual', 'ssh'].includes(value);
+  if (key === 'tokenExpires') return value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (key === 'tokenMasked') return value === '' || value === '****' || /^[A-Za-z0-9_-]{6}…[A-Za-z0-9_-]{4}$/.test(value);
+  return false;
+}
 function tree(value, secrets) {
   if (Array.isArray(value)) return value.map((v) => tree(v, secrets));
-  if (value && typeof value === 'object') { const out = {}; for (const [k, v] of Object.entries(value)) out[k] = /pass(?:word)?|secret|token|api[-_]?key|authorization|cookie/i.test(k) && typeof v === 'string' ? '***' : tree(v, secrets); return out; }
+  if (value && typeof value === 'object') { const out = {}; for (const [k, v] of Object.entries(value)) out[k] = /pass(?:word)?|secret|token|api[-_]?key|authorization|cookie/i.test(k) && !publicOption(k, v) && (typeof v === 'string' || /(?:password|passwd|pwd|secret|token|api[-_]?key|authorization|cookie)$/i.test(k)) ? '***' : tree(v, secrets); return out; }
   return typeof value === 'string' ? text(value, secrets) : value;
 }
 function errorBody(body, secrets) { try { return JSON.stringify(tree(JSON.parse(String(body)), secrets)); } catch (e) { return text(body, secrets); } }
