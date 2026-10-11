@@ -161,7 +161,7 @@ async function run(opts, progress) {
   try { const U = require('./usage'); U.bump(result.status === 'timed_out' ? 'review.timeout' : 'review.' + result.status); } catch (e) { /* 计数失败不改变结论 */ }
   if (change && result.status === 'completed') {
     S.recordReview(opts.mode, change.dir, result.issues.length, id, Date.now());
-    S.updateState(opts.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (opts.mode === 'code') r.fingerprint = before.hash; r.reportFile = file; r.executor = 'direct'; r.covered = result.covered; } });
+    S.updateState(opts.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (opts.mode === 'code') r.fingerprint = before.hash; else r.proposalHash = require('./apply-scope').planHash(change.dir); r.reportFile = file; r.executor = 'direct'; r.covered = result.covered; } });
   }
   return result;
 }

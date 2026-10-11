@@ -1772,7 +1772,7 @@ function recordReview(kind, dir, issues, reviewKey, at) {
     const prev = o[key] && typeof o[key] === 'object' ? o[key] : {};
     if (prev.done && prev.born === born && ((reviewKey && prev.key === reviewKey) || (prev.at && when < prev.at))) return o;
     o[key] = Object.assign({}, prev, { done: true, at: when, born, issues, key: reviewKey });
-    for (const field of ['id', 'resolved', 'resolvedAt', 'resolvedFingerprint', 'decisions', 'fingerprint', 'reportFile', 'executor', 'covered', 'partial']) delete o[key][field];
+    for (const field of ['id', 'resolved', 'resolvedAt', 'resolvedFingerprint', 'decisions', 'fingerprint', 'proposalHash', 'reportFile', 'executor', 'covered', 'partial']) delete o[key][field];
     fresh = true;
     return o;
   });
@@ -1807,7 +1807,7 @@ function noteUnknownReview(r) {
   } catch (e) { /* 记不了不影响 */ }
 }
 /** 提案审过了吗 */
-function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done); }
+function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir))); }
 /**
  * 每项任务是什么时候打的勾（state/task-ticks.json，按变更目录记）。"代码审过了吗"要用：审查之后才打勾的任务，它的代码审到了没有。
  * 每次调用拿 tasks.md 对一遍：打了勾、还没记时间的，记成现在——头一回见到这个变更的记成 0（不知道什么时候打的，当作早就打了）；
