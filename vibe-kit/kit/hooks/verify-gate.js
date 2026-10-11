@@ -618,10 +618,10 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
   const st = readState(skey);
   // 这个会话碰过的变更挨个看：头一个还有事可做的，催它往下走。能做的都做完了、只剩留给用户的那个变更，放着，看下一个
   for (const c of mine) {
-    const key = normKey(c.dir);
     const direct = require('../lib/review-runner').stateFor(c.dir, 'code');
     if (direct.status !== 'none' && direct.status !== 'completed' && direct.status !== 'running') continue; // 失败后交代限制，不能自行无限重启。
     if (busy && busy(c.dir, 'code')) continue;
+    const key = normKey(c.dir);
     const prev = st[key] || {};
     const remaining = require('../lib/task-types').automatedLeft(c.dir);
     const left = remaining.length;

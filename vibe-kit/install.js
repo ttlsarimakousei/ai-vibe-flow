@@ -383,6 +383,8 @@ function mergeSettings(s, remove, hooksOnly) {
     // 开工前拉代码在这个钩子里：连远端最多 15 秒，合并做到一半又不能被结束（会留下 index.lock 和改了一半的工作区），所以写明等 300 秒
     UserPromptSubmit: [{ hooks: [Object.assign(hook('task-anchor.js'), { timeout: 300 })] }],
     SessionStart: [{ hooks: [hook('session-start.js')] }],
+    PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|mcp__.*', hooks: [fast('after-tool')] }],
+    PostToolUseFailure: [{ matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('after-tool')] }],
     Stop: [{ hooks: [fast('verify-gate')] }],
   };
   // 钩子：先把自己以前加的摘掉（按单个钩子摘，不连累同一组里别人的钩子；命令方式、HTTP 方式的都认），再加新的。重复安装不会越加越多

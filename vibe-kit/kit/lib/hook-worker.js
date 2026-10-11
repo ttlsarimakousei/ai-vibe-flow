@@ -19,12 +19,12 @@ if (parentPort) {
   parentPort.on('message', (m) => {
     const id = m && m.id;
     Promise.resolve()
-      .then(() => load(String(m.name)).handle(m.input || {}))
+      .then(() => require('./invocation').run(() => load(String(m.name)).handle(m.input || {})))
       .then((out) => parentPort.postMessage({ id, ok: true, out: out == null ? null : out }))
       .catch((e) => {
         // 出错当放行（路由那边回空），记进问题反馈：用户和模型都看不到，只有那里有
         try { require('./feedback.js').recordHookError(String(m.name), m.input || {}, e); } catch (err) { /* 记不了就算了 */ }
-        parentPort.postMessage({ id, ok: false, error: String((e && e.stack) || e).slice(0, 2000) });
+        parentPort.postMessage({ id, ok: false, error: require('./redact').clip((e && e.stack) || e, 2000) });
       });
   });
 }

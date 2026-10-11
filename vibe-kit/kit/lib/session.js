@@ -9,7 +9,7 @@ const intent = require('./intent');
 const { execFileSync } = require('child_process');
 
 const KIT = path.join(__dirname, '..');
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 /**
  * 套件开关（~/.claude/vibe-kit/config.json），可以在路由的配置页里改，也可以手改。
  * 三个"放松保护"的（kitLock 关掉、kitBypass 改成 auto、autoMode 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
@@ -375,7 +375,7 @@ function cli(handle) {
   process.stdin.on('end', () => {
     let j = {};
     try { j = JSON.parse(raw || '{}'); } catch (e) { process.exit(0); }
-    Promise.resolve().then(() => handle(j)).then((out) => {
+    Promise.resolve().then(() => require('./invocation').run(() => handle(j))).then((out) => {
       if (out == null || out === '') return;
       const text = typeof out === 'string' ? out : JSON.stringify(out);
       try { fs.writeSync(1, text); } catch (e) { process.stdout.write(text); }
@@ -539,6 +539,9 @@ function uniquifyToolIds(entries) {
 }
 /** 读会话记录最后 maxBytes 字节，解析成条目数组（第一行可能是半截，丢掉）。工具调用的 id 已经改成唯一的（uniquifyToolIds） */
 function tailEntries(file, maxBytes) {
+  return require('./invocation').memo('transcript|' + file + '|' + (maxBytes || 400000), () => tailEntriesRaw(file, maxBytes));
+}
+function tailEntriesRaw(file, maxBytes) {
   try {
     const st = fs.statSync(file);
     const size = Math.min(st.size, maxBytes || 400000);
@@ -659,11 +662,11 @@ function hookLog(line) {
     const d = path.join(KIT, 'state'); fs.mkdirSync(d, { recursive: true });
     const f = path.join(d, 'hooks.log');
     try { if (fs.statSync(f).size > 200 * 1024) fs.renameSync(f, f + '.1'); } catch (e) { /* 还没有 */ }
-    fs.appendFileSync(f, new Date().toLocaleString('zh-CN', { hour12: false }) + ' ' + line + '\n');
+    fs.appendFileSync(f, new Date().toLocaleString('zh-CN', { hour12: false }) + ' ' + require('./redact').text(line) + '\n');
   } catch (e) { /* 记不了就算了 */ }
 }
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|pull|idea-mcp)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|pull|idea-mcp|evidence|review-jobs|work-baselines|review-local-metrics|work-sessions|readiness)\.json$|^hooks\.log/;
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
 function cleanState(days) {
@@ -673,6 +676,7 @@ function cleanState(days) {
     for (const f of fs.readdirSync(d)) {
       const p = path.join(d, f);
       let st; try { st = fs.statSync(p); } catch (e) { continue; }
+      if (/\.(?:lock|recover)$/.test(f)) { const owner = stateStore.read(p); if (owner.pid) { try { process.kill(owner.pid, 0); continue; } catch (e) { if (e.code === 'EPERM') continue; } } }
       if (/\.tmp$/.test(f)) { if (st.mtimeMs < Date.now() - 3600000) try { fs.unlinkSync(p); } catch (e) { /* 别人在用 */ } continue; }
       if (GLOBAL_STATE.test(f)) continue;
       if (st.mtimeMs < dead) try { fs.unlinkSync(p); } catch (e) { /* 别人在用 */ }
@@ -1078,6 +1082,9 @@ function turnStart(entries) {
 }
 /** 工具调用 id → { error: 是否报错, text: 结果文本, at: 结果送到的时间, pos: 在会话记录里的位置 } */
 function toolResults(entries) {
+  return require('./invocation').object(entries, 'results', () => toolResultsRaw(entries));
+}
+function toolResultsRaw(entries) {
   const out = new Map();
   entries.forEach((e, pos) => {
     const c = e && e.type === 'user' && e.message && e.message.content;
@@ -1165,6 +1172,9 @@ const isTaskNotePrompt = (prompt) => /^\s*<task-notification>/.test(String(promp
  * 读多读少、换个时候再读都不变——id 会重复，不能拿来记
  */
 function toolCalls(entries, from, to) {
+  return require('./invocation').object(entries, 'calls|' + (from || 0) + '|' + (to == null ? '' : to), () => toolCallsRaw(entries, from, to));
+}
+function toolCallsRaw(entries, from, to) {
   const out = [];
   const end = to == null ? entries.length : to;
   for (let i = from || 0; i < end; i++) {
@@ -1694,6 +1704,8 @@ function reviewsIn(calls, results, changes, notes, archived) {
     const n = c._note || (notes && notes.get(c.id));
     if (issues === null && n && n.status === 'completed') { issues = reviewIssues(n.text); at = n.at; pos = n.pos; text = n.text; }
     if (issues === null) return;
+    const budget = Math.max(10, Number(readConfig().reviewBudgetSeconds) || 300) * 1000;
+    if (c.at && at && at - c.at > budget) return; // 迟到结论不能补成完整审查。
     const prompt = String(c.input.prompt || '');
     // text 是审查者的原话、source 是出处：自动收审查报的问题时要用（lib/lessons.js 的 autoCollect）
     const change = reviewTargetOf(prompt, changes);
@@ -1704,8 +1716,6 @@ function reviewsIn(calls, results, changes, notes, archived) {
       const prev = out.filter((r) => r.change && r.mode && normKey(r.change.dir) === normKey(change.dir)).pop();
       if (prev) mode = prev.mode;
       else { const st = readState('review-rounds'); const k = normKey(change.dir); const open = ['proposal', 'code'].filter((m) => st[m + '|' + k] && !st[m + '|' + k].done); if (open.length === 1) mode = open[0]; }
-    const budget = Math.max(10, Number(readConfig().reviewBudgetSeconds) || 300) * 1000;
-    if (c.at && at && at - c.at > budget) return; // 迟到结论不能补成完整审查。
     }
     out.push({ id: c.id, key: c.key || c.id, raw: c.raw || c.id, i: c.i, mode, recheck, change, source: lessonSourceOf(prompt, change, archived), issues, idx, at, pos, text: String(text || '') });
   });
@@ -1851,6 +1861,7 @@ function unreviewedAfter(dir, rec) {
     const m = l.match(TASK_LINE);
     if (!m || m[2] === ' ') continue;
     const body = m[3].trim();
+    if (['review', 'review-fix', 'user'].includes(require('./task-types').kind(l))) continue;
     if (!((ticks[taskKey(body)] || 0) > at + 1000)) continue;
     roots = roots || projectRootsOf(dir);
     const late = taskCodeFiles(body, roots).filter((f) => { try { return fs.statSync(f).mtimeMs > at + 1000; } catch (e) { return false; } });
@@ -1861,10 +1872,10 @@ function unreviewedAfter(dir, rec) {
 /**
  * 代码审过了吗：要有一次真的代码审查，而且审查之后没有再做新的代码任务（见 unreviewedAfter）。老版本留下的记录（只有时间）照认。
  */
-    if (['review', 'review-fix', 'user'].includes(require('./task-types').kind(l))) continue;
 function codeReviewed(dir) {
   const r = reviewRecord('code', dir);
   if (!r) return false;
+  if (r.fingerprint) return (r.resolvedFingerprint || r.fingerprint) === require('./workspace').fingerprint(dir, 'code').hash;
   if (r.legacy) return true;
   return unreviewedAfter(dir, r).length === 0;
 }
@@ -1872,10 +1883,10 @@ function codeReviewed(dir) {
 function codeReviewIssue(dir) {
   const r = reviewRecord('code', dir);
   if (!r) return '还没做过代码审查（/ttls-cross-review 的代码模式，前端后端都在内；审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
+  if (r.fingerprint && !codeReviewed(dir)) return '代码或任务验法在审查后变更，需要针对变更部分复验和补审；仅打勾不会触发重复审查。';
   if (r.legacy) return '';
   const late = unreviewedAfter(dir, r);
   if (!late.length) return '';
-  if (r.fingerprint) return (r.resolvedFingerprint || r.fingerprint) === require('./workspace').fingerprint(dir, 'code').hash;
   const rel = (f) => path.basename(f);
   return '代码审查之后又做了 ' + late.length + ' 项任务，这部分代码没审到：' + late.slice(0, 3).map((x) => '"' + x.task.slice(0, 30) + '"（' + x.files.slice(0, 2).map(rel).join('、') + '）').join('；') + '。再按 /ttls-cross-review 的代码模式审一遍这几项的改动（审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
 }
@@ -1883,7 +1894,6 @@ function codeReviewIssue(dir) {
 // ===================== 多轮审查（开关 reviewLoop） =====================
 // 一轮审查报了问题：改了东西就复审改动点，报"问题 0 条"才算审完；审查意见都不成立、之后只在这个变更的 revisions.md 里记了理由的，算处理完；
 // 轮数用完还有问题：问用户一次（全自动按原则自己定），也算完。状态在 state/review-rounds.json，按"模式|变更目录"计。
-  if (r.fingerprint && !codeReviewed(dir)) return '代码或任务验法在审查后变更，需要针对变更部分复验和补审；仅打勾不会触发重复审查。';
 const underDir = (file, dir) => { const f = normKey(file); const d = normKey(dir); return f === d || f.startsWith(d + '/'); };
 const reviewMax = (cfg) => Math.min(5, Math.max(1, Number(cfg.reviewMaxRounds) || 3));
 /**

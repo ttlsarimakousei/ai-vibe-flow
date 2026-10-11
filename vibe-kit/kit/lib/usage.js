@@ -130,7 +130,8 @@ function collect(day) {
     v: 1, day: d, host: os.hostname().slice(0, 60),
     kit: Array.isArray(u.kit) && u.kit.length ? u.kit : [kitVersion()].filter(Boolean), cc: Array.isArray(u.cc) ? u.cc : [],
     os: process.platform + ' ' + os.release(), node: process.version, hook: String(cfg.hookTransport || 'auto'), autoMode: cfg.autoMode === true,
-    changed, n: Object.assign({}, u.n || {}), models, hooks, tools, hints,
+    changed, n: Object.fromEntries(Object.entries(u.n || {}).filter(([k]) => !/\.ms$|duration|latency|elapsed|average/i.test(k))), models,
+    hooks: hooks.map((h) => ({ name: h.name, n: h.n, errors: h.errors })), tools: tools.map((t) => ({ tool: t.tool, cmd: t.cmd, n: t.n, fail: t.fail })), hints: [],
   };
 }
 const num = (x) => Number(x) || 0;
@@ -150,7 +151,7 @@ function rowsOf(n) {
     ['会话', '新开 ' + g('session.startup') + '，恢复 ' + g('session.resume') + '，/clear ' + g('session.clear') + '，压缩后接着 ' + g('session.compact')],
     ['开口', g('prompt') + ' 次；进 OpenSpec 流程 ' + g('flow.enter') + ' 次；开工 ' + g('flow.apply') + ' 次；接着交接记录做 ' + g('handover.resume') + ' 次；写交接记录 ' + g('handover.write') + ' 次；全自动收工报告 ' + g('auto.report') + ' 次'],
     ['上下文', '到 70% 的会话 ' + g('ctx.70') + ' 个，到 90% 的 ' + g('ctx.90') + ' 个，超过上限的 ' + g('ctx.100') + ' 个'],
-    ['审查', '提案 ' + g('review.proposal') + ' 轮，代码 ' + g('review.code') + ' 轮，其中报"问题 0 条"的 ' + g('review.clean') + ' 轮；轮数用完 ' + g('review.exhausted') + ' 次' + (g('review.ms') && (g('review.proposal') + g('review.code')) ? '；平均一次 ' + (g('review.ms') / (g('review.proposal') + g('review.code')) / 60000).toFixed(1) + ' 分钟' : '')],
+    ['审查', '提案 ' + g('review.proposal') + ' 轮，代码 ' + g('review.code') + ' 轮，其中报"问题 0 条"的 ' + g('review.clean') + ' 轮；轮数用完 ' + g('review.exhausted') + ' 次；超时 ' + g('review.timeout') + ' 次；部分覆盖 ' + g('review.partial') + ' 次；取消 ' + g('review.cancelled') + ' 次'],
     ['拦下', blockSum ? '共 ' + blockSum + ' 次：' + blocks.slice(0, 12).map((x) => x[0] + ' ' + x[1]).join('，') : '0 次'],
     ['放行', '没问人的 ' + g('bypass.auto') + ' 次，问了人的 ' + g('bypass.ask') + ' 次'],
     ['拉代码', '拉到了新代码 ' + g('pull.updated') + ' 次，本来就是最新 ' + g('pull.latest') + ' 次，没拉成 ' + g('pull.fail') + ' 次'],
@@ -171,9 +172,9 @@ function render(x) {
     ['和默认不一样的开关', Object.keys(x.changed).map((k) => k + '=' + x.changed[k]).join('，') || '没有'],
   ];
   const rows = rowsOf(x.n).concat(env);
-  const hooks = x.hooks && x.hooks.length ? '\n钩子在路由里跑的耗时（累计到现在）：' + x.hooks.map((h) => h.name + ' ' + h.n + ' 次、平均 ' + h.avg + ' 毫秒' + (h.errors ? '、出错 ' + h.errors + ' 次' : '')).join('；') + '\n' : '';
+  const hooks = x.hooks && x.hooks.length ? '\n钩子调用（累计到现在）：' + x.hooks.map((h) => h.name + ' ' + h.n + ' 次' + (h.errors ? '、出错 ' + h.errors + ' 次' : '')).join('；') + '\n' : '';
   const sec = (ms) => (ms >= 1000 ? (ms / 1000).toFixed(1) + ' 秒' : ms + ' 毫秒');
-  const tools = x.tools && x.tools.length ? '\n查库、查 redis 的工具（累计到现在）：' + x.tools.map((t) => t.tool + ' ' + t.cmd + ' ' + t.n + ' 次' + (t.fail ? '（出错 ' + t.fail + '）' : '') + '、平均 ' + sec(t.avg)).join('；') + '\n' : '';
+  const tools = x.tools && x.tools.length ? '\n查库、查 redis 的工具（累计到现在）：' + x.tools.map((t) => t.tool + ' ' + t.cmd + ' ' + t.n + ' 次' + (t.fail ? '（出错 ' + t.fail + '）' : '')).join('；') + '\n' : '';
   const hints = x.hints && x.hints.length ? '\n从用量里看出来能优化的：' + x.hints.join('；') + '\n' : '';
   const models = x.models ? '\n路由里各个模型（这一天一共 ' + x.models.requests + ' 次请求）：\n\n' + (modelTable(x.models.by) || '没有。\n') : '';
   const data = JSON.stringify(x).replace(/--/g, '-\\u002d');

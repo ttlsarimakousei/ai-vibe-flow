@@ -25,6 +25,7 @@ function norm(p) {
 }
 const SECRETS = ['secrets.json', 'router-data'];
 
+function protectedRange(base) { const kit = norm(KIT); base = norm(base); return SECRETS.some((s) => { const f = kit + '/' + s; return f === base || f.startsWith(base + '/') || base.startsWith(f + '/'); }); }
 function handle(j) {
   if (!j || j.tool_name !== 'Grep') return null;
   const input = j.tool_input || {};
@@ -39,5 +40,5 @@ function handle(j) {
   return blockOut('PreToolUse', '[vibe-kit] 这次搜索的范围（' + String(input.path || '当前目录') + '）里有放令牌、放模型 key 的文件，它们的内容不能搜出来：搜出来会进会话记录。把 path 缩小到具体的子目录（比如套件的 hooks、lib，或者你要查的那个项目），或者把 output_mode 换成 files_with_matches 只看文件名。要知道令牌、模型配没配好，让用户看配置页。');
 }
 
-module.exports = { handle };
+module.exports = { handle, protectedRange };
 if (require.main === module) cli(handle);

@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const { Worker } = require('worker_threads');
 
-const NAMES = new Set(['pre-edit', 'guard-commit', 'guard-ask', 'guard-read', 'source-hint', 'verify-gate']);
+const NAMES = new Set(['pre-edit', 'guard-commit', 'guard-ask', 'guard-read', 'source-hint', 'verify-gate', 'after-tool']);
 const MAX_WORKERS = 3;
 const CALL_TIMEOUT_MS = 25000;
 const SESSION_KEEP_MS = 3 * 86400000;
@@ -57,7 +57,9 @@ function createHost(opts) {
   // ---------- 工作线程 ----------
   function end(x) {
     workers = workers.filter((y) => y !== x);
-    try { x.w.removeAllListeners(); x.w.on('error', () => {}); x.w.terminate().catch(() => {}); } catch (e) { /* 已经没了 */ }
+    const tid = x.tid;
+    const clean = () => { try { require('./state-store').releaseThread(path.join(kitDir, 'state'), tid); } catch (e) { /* 旧版模块不存在 */ } };
+    try { x.w.removeAllListeners(); x.w.on('error', () => {}); x.w.terminate().then(clean, clean); } catch (e) { clean(); }
   }
   function broken(x, why) {
     if (!workers.includes(x)) return;
@@ -68,7 +70,7 @@ function createHost(opts) {
   function spawn() {
     const w = new Worker(WORKER_FILE);
     w.unref();
-    const x = { w, inflight: new Map(), retired: false };
+    const x = { w, tid: w.threadId, inflight: new Map(), retired: false };
     w.on('message', (m) => {
       const c = x.inflight.get(m && m.id);
       if (!c) return;

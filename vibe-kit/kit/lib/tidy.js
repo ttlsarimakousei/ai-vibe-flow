@@ -24,9 +24,9 @@ const { execFileSync } = require('child_process');
 const { normKey, CFG_DIR, updateState } = require('./session');
 
 // 后面三项是 0930 加的：查库的连接配置、探测缓存、表结构缓存（以前的名字带 urai-）；查 redis 的连接配置；后台自动探索的记录和锁
-const ROOT_KEEP = /^(project\.md|handover\.md|login\.json|cp\.txt|javac\.args|[^/]*baseline[^/]*|[^/]*\.args|classpath[^/]*\.txt|(urai-)?db-crud\.(ini|env\.json|cache\.json)|redis\.json|onboard\.(json|lock))$/i;
+const ROOT_KEEP = /^(project\.md|handover\.md|login\.json|cp\.txt|javac\.args|[^/]*baseline[^/]*|[^/]*\.args|classpath[^/]*\.txt|(urai-)?db-crud\.(ini|env\.json|cache\.json)|redis\.json|connections-retired\.json|onboard\.(json|lock))$/i;
 // run/：devserver.js 记着起过的服务和它们的日志；lessons/：经验规则的候选（tools/lesson.js 记的）
-const DIR_KEEP = new Set(['scenarios', 'out', 'design', 'pending', 'run', 'lessons', 'reports']);
+const DIR_KEEP = new Set(['scenarios', 'out', 'design', 'pending', 'run', 'lessons', 'reports', 'reviews']);
 
 /** 路径里 .vibe 这一段的位置：返回 { vibeDir, rel }（rel 是 .vibe 里面的相对路径，正斜杠） */
 function vibePart(file) {
