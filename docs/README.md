@@ -10,6 +10,7 @@
 | [decisions.md](decisions.md) | 设计决定和原因，哪些是用户定的不能改回去 |
 | [glossary.md](glossary.md) | 术语 |
 | [reviews/20261011-vibe-kit-neutral-review.md](reviews/20261011-vibe-kit-neutral-review.md) | 20261010.2210 的中立审查、边界复现和改进顺序，结论以对应源码提交为准 |
+| [reviews/20261011-archive-inspection-verification.md](reviews/20261011-archive-inspection-verification.md) | 解包临时目录、Windows 包装路径修复、回归结果和适用边界 |
 | [plans/20261011-vibe-kit-development-optimization.md](plans/20261011-vibe-kit-development-optimization.md) | 已获用户同意的完整优化方案，含测试与审查任务、审查预算、自动压缩及旧交接处理 |
 | [plans/20261011-implementation-progress.md](plans/20261011-implementation-progress.md) | 各项实施结果、回归发现、验证记录和适用边界 |
 | [history/](history/) | 早期的方案、审查报告、体检报告。当时的记录，只读，内容可能已经过时 |

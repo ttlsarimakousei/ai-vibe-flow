@@ -509,6 +509,8 @@ node "%USERPROFILE%\.claude\vibe-kit\tools\devserver.js" stop --all
 `.vibe/`（不进仓库）只放套件长期要用的：项目说明 `project.md`、交接记录 `handover.md`、账号 `login.json`、快检的中间文件（`cp.txt`、`javac.args`、`*baseline*`，别的名字要写进项目说明）、看页面的 `scenarios/`、`out/`、`design/`、起服务的记录 `run/`，全自动模式下放哪还没定的产出 `pending/`。
 
 - 过程文件（备份、临时脚本、草稿、测试数据、日志、导出的中间结果）放 `.vibe/tmp/<事由>/`，一件事一个目录（做 OpenSpec 变更时事由就是变更名，否则写日期加一两个词）。往 `.vibe` 里别处新建文件会被拦下，告诉它放哪。
+- 临时查看 JAR、ZIP、WAR、TAR、7z 等归档时，优先只列目录或读取条目，例如 `jar tf`、`unzip -l`、`unzip -p`。直接解包到项目根、源码目录或 `.vibe/tmp` 根会被拦，即使文件被忽略、不准备提交也一样；改放 `.vibe/tmp/<事由>/`。检查覆盖 Bash、PowerShell、IDEA 终端、常见包装命令和 Python 的 zipfile/tarfile 命令行；读取结果经重定向、`tee`、`Out-File` 落盘也查。目标目录有联接时核对实际位置。相同解包命令重复执行不会自动放行；正式导入项目资源误拦时说明用途后申请放行。任意程序内部的写文件行为和变量拼接路径无法静态判断，模型仍须遵守这个目录约定。
+- `jar` 的解包目录选项随 JDK 版本不同。兼容旧 JDK 时，把工具工作目录设为事由目录，再用归档完整路径执行 `jar xf`；Bash 切目录和解包不要串成一条命令。支持 `--dir` 的新 JDK 可显式指定事由目录。普通构建工具自己的解包产物和项目外的正式安装不受这道检查影响，临时检查样本仍放事由目录。审查代理只读，不自行解包；缺材料由主会话准备。
 - 什么时候删：事由是变更名的（`.vibe/tmp/<变更名>/`、`.vibe/tmp/<变更名>-xxx/`，`.vibe/out/` 里的一样）留到变更归档，没归档之前 `rm`、`Remove-Item`、`find -delete` 删它会被拦下，归档之后套件自己清（收工时、会话开始时）；归档之后又动过的目录不清，那是归档后接着修问题用的。别的事由，那件事做完就把整个目录删掉。全自动模式下，这个会话做的变更还没归档之前，`.vibe/tmp`、`.vibe/out` 里的都先留着。
 - 往项目里留过程文件也拦：用 Write 写，或者用 `cp`、`mv`、`Copy-Item`、`> 文件`、`| tee` 这类命令生成，都让它改放 `.vibe/tmp/<事由>/`。改文件之前不用另存备份：已提交的 git 里有，没提交的先复制到 `.vibe/tmp`。`git add` 过程文件也拦（不该提交）。怎么认：
   - 名字一看就是的：`A.java.bak`、`A_bak.java`、`x.orig`、`x.old`、`build.log`、`x.tmp`、`A - 副本.java`、`A (2).java`；
