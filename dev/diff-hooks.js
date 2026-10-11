@@ -62,6 +62,7 @@ const V1010 = '20261010.1057'; // 1007 导出议题：包装命令、否定归�
 const V1010B = '20261010.1617'; // 1010 反馈、提案材料、提交和多版本驱动
 const V1010C = '20261010.2210'; // IDEA MCP 的自动接入和工具保护
 const V1011 = "20261011.1129"; // 阶段许可、独立审查、自动压缩和推送预览
+const V1011B = '20261011.1553'; // 归档临时查看目录和 Windows 包装路径
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -81,12 +82,12 @@ const stop = (entries, extra, files) => (kit) => { const proj = project(kit, fil
 const prompt = (text, files, entries) => (kit) => { const proj = project(kit, files); const j = base(proj, kit, { hook_event_name: 'UserPromptSubmit', prompt: text }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), entries ? entries(proj) : [H.tr.user(text)]); return { proj, j }; };
 
 // 临时解包与检查结果不落到项目普通目录。
-add('解包：JAR 不能写入项目根', 'guard-commit', cmd('jar xf dependency.jar'), /归档解包[\s\S]*\.vibe\/tmp\//, NEXT);
-add('解包：ZIP 不能写入源码', 'guard-commit', cmd('unzip dependency.jar -d src'), /归档解包/, NEXT);
-add('解包：关闭 kitLock 后仍检查', 'guard-commit', cmd('tar xf app.tar'), /归档解包/, NEXT, { kitLock: false });
-add('解包：条目落盘也用事由目录', 'guard-commit', cmd('unzip -p dependency.jar entry.txt > inspect.txt'), /归档解包/, NEXT);
-add('解包：Start-Process 完整程序路径', 'guard-commit', (kit, proj) => ({ ...cmd("Start-Process -FilePath 'C:\\jdk\\bin\\jar.exe' -ArgumentList 'xf dependency.jar' -WindowStyle Hidden")(kit, proj), tool_name: 'PowerShell' }), /归档解包/, NEXT);
-add('解包：cmd start 带空格的程序路径', 'guard-commit', (kit, proj) => ({ ...cmd('cmd /c start "" "C:\\Program Files\\jdk\\bin\\jar.exe" xf dependency.jar')(kit, proj), tool_name: 'PowerShell' }), /归档解包/, NEXT);
+add('解包：JAR 不能写入项目根', 'guard-commit', cmd('jar xf dependency.jar'), /归档解包[\s\S]*\.vibe\/tmp\//, V1011B);
+add('解包：ZIP 不能写入源码', 'guard-commit', cmd('unzip dependency.jar -d src'), /归档解包/, V1011B);
+add('解包：关闭 kitLock 后仍检查', 'guard-commit', cmd('tar xf app.tar'), /归档解包/, V1011B, { kitLock: false });
+add('解包：条目落盘也用事由目录', 'guard-commit', cmd('unzip -p dependency.jar entry.txt > inspect.txt'), /归档解包/, V1011B);
+add('解包：Start-Process 完整程序路径', 'guard-commit', (kit, proj) => ({ ...cmd("Start-Process -FilePath 'C:\\jdk\\bin\\jar.exe' -ArgumentList 'xf dependency.jar' -WindowStyle Hidden")(kit, proj), tool_name: 'PowerShell' }), /归档解包/, V1011B);
+add('解包：cmd start 带空格的程序路径', 'guard-commit', (kit, proj) => ({ ...cmd('cmd /c start "" "C:\\Program Files\\jdk\\bin\\jar.exe" xf dependency.jar')(kit, proj), tool_name: 'PowerShell' }), /归档解包/, V1011B);
 add('解包：事由目录直接解包放行', 'guard-commit', cmd('unzip dependency.jar -d .vibe/tmp/查看依赖'));
 add('解包：只读列表放行', 'guard-commit', cmd('jar tf dependency.jar'));
 
