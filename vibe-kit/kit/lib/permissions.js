@@ -14,18 +14,19 @@ function allow(j, action, target, toolId) {
   if (!said.ok) return { ok: false, reason: '没有当前用户的明确' + action + '许可' };
   const v = said.voice;
   const names = S.allChanges(j.cwd || process.cwd()).filter((c) => S.mentionsChange(said.text, c.name));
-  if (action === 'archive' && names.length && !names.some((c) => path.resolve(c.dir).toLowerCase() === path.resolve(target).toLowerCase())) return { ok: false, reason: '归档许可属于另一个变更' };
+  if (['archive', 'reviewBudget'].includes(action) && names.length && !names.some((c) => path.resolve(c.dir).toLowerCase() === path.resolve(target).toLowerCase())) return { ok: false, reason: '这次许可属于另一个变更' };
   const scope = scopeOf(j, action, target); const vk = voiceKey(v); const ver = versionOf(j, action, target); const id = action + '|' + scope;
   let result = { ok: false, reason: '许可状态暂时不能写入' };
   S.updateState(k, (st) => {
     if (st.voice !== vk) { st.voice = vk; st.actions = {}; }
     const actions = st.actions || (st.actions = {}); const old = actions[id];
-    if (old && old.consumed) { result = { ok: false, reason: '这次许可已用于成功操作，需要重新确认' }; return; }
+    if (old && old.consumed && !(action === 'reviewBudget' && old.toolId === String(toolId || ''))) { result = { ok: false, reason: '这次许可已用于成功操作，需要重新确认' }; return; }
     if (old && old.version !== ver) { result = { ok: false, reason: '确认后输入发生变化，需要重新确认当前版本' }; return; }
     if (!old && Object.keys(actions).some((n) => n.startsWith(action + '|') && actions[n].consumed) && !/全部|所有|各个|分别|批量/.test(said.text)) { result = { ok: false, reason: '这次许可已经用于另一个目标' }; return; }
     actions[id] = Object.assign(old || {}, { action, scope, version: ver, at: Date.now(), consumed: false });
     if (!old) actions[id].head = W.git(W.rootOf(target || j.cwd), ['rev-parse', 'HEAD']).trim();
     if (toolId) actions[id].toolId = String(toolId);
+    if (action === 'reviewBudget') { actions[id].consumed = true; actions[id].finished = Date.now(); }
     result = { ok: true, key: k, id, version: ver };
   });
   return result;

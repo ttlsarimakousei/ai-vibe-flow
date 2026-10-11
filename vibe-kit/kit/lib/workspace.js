@@ -5,10 +5,22 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
-function git(root, args) { try { return execFileSync('git', ['-C', root].concat(args), { windowsHide: true, encoding: 'utf8', timeout: 5000, maxBuffer: 12 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { return ''; } }
+function readGit(root, args) {
+  const run = () => execFileSync('git', ['-C', root].concat(args), { windowsHide: true, encoding: 'utf8', timeout: 5000, maxBuffer: 12 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  const readonly = /^(rev-parse|status|ls-files|diff)$/.test(args[0]) || args[0] === 'branch' && args[1] === '--show-current' || args[0] === 'config' && args[1] === '--get';
+  return readonly ? require('./invocation').memo('workspace-git|' + path.resolve(root) + '|' + JSON.stringify(args), run) : run();
+}
+function git(root, args) { try { return readGit(root, args); } catch (e) { return ''; } }
 function rootOf(dir) { return git(dir, ['rev-parse', '--show-toplevel']).trim() || path.resolve(dir); }
-function checkedGit(root, args) { return execFileSync('git', ['-C', root].concat(args), { windowsHide: true, encoding: 'utf8', timeout: 5000, maxBuffer: 12 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); }
+function checkedGit(root, args) { return readGit(root, args); }
 function progressText(s) { return String(s).replace(/^([ \t]*[-*][ \t]+)\[[ xX]\]/gm, '$1[ ]').replace(/^\s*(?:进度|已完成|更新时间)[：:].*$/gm, ''); }
+// 先核对真实路径再读内容，目录联接也不能把工作范围扩到项目外。
+function pathStatus(file, root) {
+  const S = require('./session');
+  if (!S.underDir(path.resolve(file), path.resolve(root)) || !S.underDir(S.realish(file), S.realish(root))) return { safe: false, reason: '材料链接或路径位于项目范围外' };
+  try { const stat = fs.lstatSync(file); return stat.isSymbolicLink() ? { safe: false, reason: '符号链接不作为完整审查材料', link: true } : stat.isFile() ? { safe: true, stat } : { safe: false, reason: '材料不是普通文件' }; }
+  catch (e) { return e.code === 'ENOENT' ? { safe: true, missing: true } : { safe: false, reason: '材料不可读' }; }
+}
 function fingerprintOne(dir, kind) {
   const root = rootOf(dir);
   const hasGit = !!git(root, ['rev-parse', '--show-toplevel']).trim();
@@ -29,7 +41,9 @@ function fingerprintOne(dir, kind) {
     if (kind === 'code' && /^openspec\/.*(?:revisions\.md|plan\.md)$/.test(n)) continue;
     if (kind === 'code' && /^openspec\/.*\.md$/.test(n) && !/tasks\.md$/.test(n)) continue;
     try {
-      const f = path.join(root, n); const st = fs.statSync(f); if (!st.isFile()) continue;
+      const f = path.join(root, n); const checked = pathStatus(f, root);
+      if (!checked.safe) { rows.push([n, checked.link ? '链接:' + fs.readlinkSync(f) : '范围外或特殊文件']); continue; }
+      if (checked.missing) { rows.push([n, '缺失']); continue; }
       const progress = kind === 'code' && /(^|\/)tasks\.md$/.test(n);
       if (index.has(n) && !changed.has(n) && !progress) { rows.push([n, index.get(n)]); continue; }
       let b = fs.readFileSync(f);
@@ -51,4 +65,4 @@ function fingerprintRaw(dir, kind) {
   if (!parts.length) return first;
   return { root: first.root, hash: hash(JSON.stringify([first].concat(parts).map((p) => [path.relative(first.root, p.root).replace(/\\/g, '/'), p.hash]))), files: first.files.concat(...parts.map((p) => p.files.map((f) => path.relative(first.root, p.root).replace(/\\/g, '/') + '/' + f))) };
 }
-module.exports = { hash, git, rootOf, fingerprint, progressText };
+module.exports = { hash, git, rootOf, fingerprint, progressText, pathStatus };

@@ -1717,6 +1717,8 @@ function handle(j) {
   try { cdHit = ps ? null : cdCompoundIssue(cmd, j.cwd); } catch (e) { cdHit = null; }
   // 不走拦截编号的几处（串着 cd、关钩子、调路由的接口、全自动下的 push）也数一笔：哪条规矩拦得多，使用情况里要看得到
   const counted = (kind, text) => { try { if (feedback && feedback.countBlock) feedback.countBlock(kind, text, String(j.session_id || '')); } catch (e) { /* 数不了不影响 */ } return blockOut('PreToolUse', text); };
+  const budgetIssue = require('../lib/review-runner').budgetIssue(j);
+  if (budgetIssue) return counted('review-budget', '[vibe-kit 审查预算] ' + budgetIssue);
   const cdBlock = () => {
     if (!cdHit) return null;
     hookLog('guard-commit 拦下串着 cd 的命令：' + cmd.replace(/\s+/g, ' ').slice(0, 100));

@@ -23,20 +23,42 @@ function baseline(j, dirs) {
   });
 }
 function materials(opts, change) {
-  const items = []; const skipped = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
+  const items = [], skipped = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
   const add = (file, text, root) => {
-    if (secretFile(file)) { skipped.push({ file, reason: '敏感配置不进审查材料' }); return; }
     if (items.length >= maxFiles) { skipped.push({ file, reason: '超过本轮文件上限' }); return; }
     if (text.length > 50000) { skipped.push({ file, reason: '单文件材料超过上限，请拆范围' }); return; }
     items.push({ file, root, text: R.material(text) });
   };
+  const load = (file, root, label, allowMissing) => {
+    const skip = (reason) => { skipped.push({ file: label, reason }); return null; };
+    if (secretFile(file)) return skip('敏感配置不进审查材料');
+    const checked = W.pathStatus(file, root);
+    if (!checked.safe) return skip(checked.reason);
+    if (checked.missing) return allowMissing ? { missing: true, text: '' } : skip('材料不可读');
+    if (checked.stat.size > 200000) return skip('单文件材料超过上限，请拆范围');
+    try { const bytes = fs.readFileSync(file); if (bytes.includes(0)) return skip('二进制材料未覆盖'); const text = new (require('util').TextDecoder)('utf8', { fatal: true }).decode(bytes); return { text }; }
+    catch (e) { return skip('材料不可读或不是 UTF-8 文本'); }
+  };
+  const artifacts = () => {
+    const rows = [];
+    for (const f of S.artifactFiles(change.dir)) { const label = path.relative(change.dir, f).replace(/\\/g, '/'); const loaded = load(f, change.dir, label); if (loaded) rows.push({ file: label, text: loaded.text }); }
+    return rows;
+  };
   if (opts.mode === 'proposal') {
     if (!change) throw new Error('提案审查需要有效变更名');
-    for (const f of S.artifactFiles(change.dir)) { try { add(path.relative(change.dir, f), fs.readFileSync(f, 'utf8'), change.dir); } catch (e) { skipped.push({ file: f, reason: '材料不可读' }); } }
-    const issues = require('./proposal-files').changeIssues(S.artifactOf(path.join(change.dir, 'proposal.md')));
+    const rows = artifacts();
+    for (const row of rows) add(row.file, row.text, change.dir);
+    const art = { dir: change.dir, name: change.name, root: W.rootOf(change.dir) };
+    const issues = rows.flatMap((r) => r.file === 'revisions.md' ? [] : require('./proposal-files').issuesIn(r.text, art));
     if (issues.length) throw new Error('提案材料交付检查未通过：' + issues.join('；'));
-    const roots = S.projectRootsOf(change.dir); const references = new Set(S.artifactFiles(change.dir).flatMap((f) => S.pathTokens(fs.readFileSync(f, 'utf8'))));
-    for (const ref of references) for (const root of roots) { const f = path.resolve(root, ref); if (!S.underDir(f, root) || S.underDir(f, change.dir) || secretFile(f) || /[\\/]\.vibe[\\/]/.test(f)) continue; try { if (fs.statSync(f).isFile()) { add(path.relative(opts.cwd, f).replace(/\\/g, '/'), fs.readFileSync(f, 'utf8'), root); break; } } catch (e) { /* 只读提案点名且存在的依据，不自主检索 */ } }
+    const roots = S.projectRootsOf(change.dir); const references = new Set(rows.flatMap((r) => S.pathTokens(r.text)));
+    for (const ref of references) for (const root of roots) {
+      const f = path.resolve(root, ref);
+      if (!S.underDir(f, root) || S.underDir(f, change.dir) || /[\\/]\.vibe[\\/]/.test(f) || !fs.existsSync(f)) continue;
+      const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const loaded = load(f, root, label);
+      if (loaded) add(label, loaded.text, root);
+      break;
+    }
   } else {
     const roots = change ? S.projectRootsOf(change.dir) : [W.rootOf(opts.cwd)];
     const saved = change && S.readState('work-baselines')[S.normKey(change.dir)];
@@ -47,15 +69,16 @@ function materials(opts, change) {
       const files = [...new Set(W.git(root, ['diff', '--name-only', '-z', base]).split('\0').concat(W.git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0')))].filter(Boolean);
       for (const file of files) {
         if (/^(?:\.vibe|openspec)\//.test(file)) continue;
+        const f = path.join(root, file); const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const current = load(f, root, label, true);
+        if (!current) continue; // 读取 Git 差异之前先查链接归属，避免 Git 跟随外部联接。
         const diff = W.git(root, ['diff', '--no-ext-diff', '--no-textconv', '--unified=5', base, '--', file]);
-        let text = diff;
-        try { const current = fs.readFileSync(path.join(root, file), 'utf8'); text = diff ? '基线差异：\n' + diff + '\n当前文件：\n' + current : current; } catch (e) { if (!text) text = '文件已删除'; }
+        let text = diff ? '基线差异：\n' + diff + '\n当前文件：\n' + current.text : current.missing ? '文件已删除' : current.text;
         const oldDirty = saved && saved.repos.find((r) => S.normKey(r.root) === S.normKey(root));
         if (oldDirty && (oldDirty.dirtyFiles || []).includes(file)) text = '说明：该文件在开工前已有改动，不能全部认作本次助手改动。\n' + text;
-        add(path.relative(opts.cwd, path.join(root, file)).replace(/\\/g, '/'), text, root);
+        add(label, text, root);
       }
     }
-    if (change) for (const f of S.artifactFiles(change.dir).filter((f) => !/revisions\.md$/.test(f))) { try { add(path.relative(change.dir, f), fs.readFileSync(f, 'utf8'), change.dir); } catch (e) { skipped.push({ file: f, reason: '需求不可读' }); } }
+    if (change) for (const row of artifacts().filter((r) => !/revisions\.md$/.test(r.file))) add(row.file, row.text, change.dir);
   }
   const batches = []; let batch = [], size = 0;
   for (const item of items) { if (size + item.text.length > 80000 && batch.length) { batches.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
@@ -82,6 +105,21 @@ function ask(url, material, mode, ms, cancelled) {
     req.on('error', (e) => { clear(); reject(e); }); req.end(body);
   });
 }
+function used(job, now) {
+  const prior = Number(job.spentBefore === undefined ? job.spentMs : job.spentBefore) || 0;
+  return Math.max(Number(job.spentMs) || 0, prior + Math.max(0, Math.min(now, Number(job.deadline) || now) - Number(job.started || now)));
+}
+// 模型工具重开预算需要当前真人的一次许可；用户手工执行 CLI 的显式参数仍由用户负责。
+function budgetIssue(j) {
+  const cmd = String(j.tool_input && j.tool_input.command || '');
+  if (!/\breview\.js["']?\s+run\b[\s\S]*--new-budget\b/i.test(cmd)) return '';
+  const parser = require('../hooks/guard-commit'); const ps = j.tool_name === 'PowerShell'; const groups = parser.splitCommand(cmd, ps); const words = parser.words(cmd, ps).map((w) => w.text);
+  const why = '重开审查预算需要当前用户明确同意；取消和失败仍计入已用预算。交代已覆盖和未覆盖范围，不能自动反复使用 --new-budget。';
+  if (groups.length !== 1 || groups[0].length !== 1 || parser.scanRedirects(cmd).list.length || !/^(node|node\.exe)$/i.test(path.basename((words[0] || '').replace(/\\/g, '/'))) || !words[1] || S.normKey(path.resolve(j.cwd, S.expandHome(words[1]))) !== S.normKey(path.join(S.KIT, 'tools/review.js'))) return why;
+  const args = words.slice(2); const val = (k) => { const at = args.indexOf(k); return at < 0 ? '' : S.expandHome(args[at + 1] || ''); }; const cwd = path.resolve(j.cwd, val('--project') || '.'); const change = changeOf(cwd, val('--change'));
+  const allowed = require('./permissions').allow(j, 'reviewBudget', change ? change.dir : W.rootOf(cwd), j.tool_use_id);
+  return allowed.ok ? '' : why + ' ' + allowed.reason;
+}
 async function run(opts, progress) {
   opts = Object.assign({ cwd: process.cwd(), mode: 'code' }, opts); opts.cwd = path.resolve(opts.cwd);
   if (!['proposal', 'code'].includes(opts.mode)) throw new Error('审查模式只能是 proposal 或 code');
@@ -91,9 +129,9 @@ async function run(opts, progress) {
   const before = W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all'); const started = Date.now(); let previous = null;
   const claimed = S.updateState('review-jobs', (o) => { const old = o[key]; if (old && old.status === 'running' && alive(old.pid) && Date.now() < old.deadline) return; previous = old; o[key] = { id, mode: opts.mode, change: opts.change || '', root: opts.cwd, status: 'running', pid: process.pid, started, deadline: started + budget, fingerprint: before.hash, completedBatches: 0 }; });
   if (!claimed || !claimed[key] || claimed[key].id !== id) return { status: 'running', reason: '同一范围已有审查，请查看 status 或 cancel，不重复启动' };
-  const spent = opts.newBudget ? 0 : Number(previous && previous.spentMs) || 0;
+  const spent = opts.newBudget ? 0 : previous && previous.status === 'running' ? used(previous, started) : Number(previous && previous.spentMs) || 0;
   const deadline = started + Math.max(0, budget - spent);
-  S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) o[key].deadline = deadline; });
+  S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { deadline, spentBefore: spent, spentMs: spent }); });
   const cancelled = () => { const job = S.readState('review-jobs')[key]; return !job || job.id !== id || job.status !== 'running'; };
   let result = { id, mode: opts.mode, status: 'failed', issues: [], covered: [], skipped: [] };
   try {
@@ -115,10 +153,10 @@ async function run(opts, progress) {
   result.issues = result.issues.map((x, i) => Object.assign({ id: 'r' + (i + 1) }, x));
   result.fingerprint = before.hash; result.spentMs = spent + Date.now() - started; result.at = Date.now();
   let valid = false;
-  S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id && o[key].status === 'running') { o[key] = Object.assign(o[key], result); valid = true; } });
+  S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) { const terminal = o[key].status; if (terminal !== 'running') { result.status = terminal; result.reason = o[key].reason; } result.spentMs = Math.max(result.spentMs, Number(o[key].spentMs) || 0); o[key] = Object.assign(o[key], result); valid = true; } });
   if (!valid) { result.status = 'cancelled'; result.reason = '迟到结果已忽略'; return result; }
   const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + '.json');
-  try { store.atomicWrite(file, JSON.stringify(result, null, 2) + '\n'); result.file = file; }
+  try { if (!store.atomicWrite(file, result)) throw new Error('结果写入失败'); result.file = file; }
   catch (e) { result.status = 'failed'; result.reason = '审查结果未能保存，不能登记为完成'; S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], result); }); }
   try { const U = require('./usage'); U.bump(result.status === 'timed_out' ? 'review.timeout' : 'review.' + result.status); } catch (e) { /* 计数失败不改变结论 */ }
   if (change && result.status === 'completed') {
@@ -127,19 +165,22 @@ async function run(opts, progress) {
   }
   return result;
 }
-function status(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code'); const r = S.readState('review-jobs')[key]; if (r && r.status === 'running' && (!alive(r.pid) || Date.now() >= r.deadline)) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === r.id) { o[key].status = 'interrupted'; o[key].reason = '执行进程退出或超过截止时间，没有完整结果'; } }); return S.readState('review-jobs')[key]; } return r || { status: 'none' }; }
-function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code'); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
+function status(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code'); const r = S.readState('review-jobs')[key]; if (r && r.status === 'running' && (!alive(r.pid) || Date.now() >= r.deadline)) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === r.id) { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'interrupted'; o[key].reason = '执行进程退出或超过截止时间，没有完整结果'; } }); return S.readState('review-jobs')[key]; } return r || { status: 'none' }; }
+function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code'); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
 function resolve(opts) {
   const change = changeOf(opts.cwd || process.cwd(), opts.change); if (!change) throw new Error('意见处理需要当前变更');
   const r = S.reviewRecord('code', change.dir); if (!r || !r.reportFile) throw new Error('没有可配对的完整审查报告');
   const report = JSON.parse(fs.readFileSync(r.reportFile, 'utf8')); const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
   for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
-  if (decisions.findings.some((x) => x.action === 'fixed') && !require('./evidence').current(opts.cwd || process.cwd()).length) throw new Error('成立问题修复后还没有当前输入的成功复验证据');
+  if (report.id !== r.key || !Array.isArray(report.issues)) throw new Error('审查报告不属于当前完整记录');
+  if (decisions.findings.length !== report.issues.length || new Set(decisions.findings.map((x) => x.id)).size !== report.issues.length || decisions.findings.some((x) => !report.issues.some((i) => i.id === x.id))) throw new Error('处理记录必须恰好对应报告中的意见');
+  if (decisions.findings.some((x) => x.action === 'fixed') && !require('./evidence').commands(opts.cwd || process.cwd()).length) throw new Error('成立问题修复后还没有当前输入的成功复验证据');
   const fingerprint = W.fingerprint(opts.cwd || process.cwd(), 'code').hash;
+  if (!decisions.findings.some((x) => x.action === 'fixed') && fingerprint !== report.fingerprint) throw new Error('输入在审查后变化；仅驳回或零问题记录不能批准新版，需要补审');
   S.updateState('reviewed', (o) => { const rec = o[S.normKey(change.dir)]; if (rec && rec.key === r.key) { rec.resolved = true; rec.resolvedAt = Date.now(); rec.resolvedFingerprint = fingerprint; rec.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) })); } });
   return { status: 'resolved', count: report.issues.length };
 }
 function stateFor(dir, mode) { const c = S.artifactOf(path.join(dir, 'tasks.md')); return status({ cwd: c ? c.root : dir, change: path.basename(dir), mode }); }
 function instruction(name, mode, cfg) { return cfg.reviewExecutor === 'agent' ? '按 /ttls-cross-review 的兼容代理方式审查 ' + name + '，最多等待 ' + cfg.reviewBudgetSeconds + ' 秒，超时取消已知审查任务并交代未覆盖范围' : '执行 review.js run --change ' + name + ' --mode ' + mode + '，总预算 ' + cfg.reviewBudgetSeconds + ' 秒'; }
-module.exports = { run, materials, baseline, status, stateFor, instruction, cancel, resolve, jobKey };
+module.exports = { run, materials, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue };
