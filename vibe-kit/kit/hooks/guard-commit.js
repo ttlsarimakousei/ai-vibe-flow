@@ -17,6 +17,7 @@
  *   6. 装了路由时，不许一把结束所有 node 进程（taskkill /IM node.exe 之类），也不许结束路由自己的进程：路由一停，模型连不上、走 HTTP 的检查全部失效。
  *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（开关 serverGuard）：不重复起、不换端口。
  *   8. 过程文件别落在项目里（开关 vibeTidy）：cp 出来的备份、备份目录、重定向出来的日志这类，放 .vibe/tmp/<事由>/；git add 过程文件也拦。同一个路径只拦一次。
+ *      临时查看 JAR、ZIP、TAR、7z 等归档的直接解包命令检查实际目标目录，目录联接也查；不能靠重复执行落到项目根。只读列表和流式读取放行。
  *   9. 提交时它这个会话里新建的文件还没 git add（git 不会自动带上新文件）：点名拦一次，同样的一批只拦一次。
  *      用临时 index 提交的（GIT_INDEX_FILE=…）看那份 index；找不到它就不查。
  *  10. Bash 里 cd 和别的命令串在一条里（cd 子项目 && mvn …）：Claude Code 会停下来要人确认（跳过权限模式也问），拦下并给出不用 cd 的写法
@@ -34,6 +35,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const archiveExtract = require('../lib/archive-extract');
 const { readConfig, readConfigFor, flowState, setFlow, flowTouch, flowChanges, sessionChanges, userSaid, mentionsChange, sessionHome, allChanges, archivedNames, nestedRepos, blockOut, askOut, changeRoots, readState, writeState, updateState, normKey, KIT, CFG_DIR, realish, isKitPath, isKitSkillScript, expandHome, codeReviewIssue, touchChange, isDeferredTask, syncReviews, syncReviewRounds, reviewLoopIssue, tailEntries, toolCalls, toolResults, hookLog, cli } = require('../lib/session');
 let tidy = null;
 try { tidy = require('../lib/tidy.js'); } catch (e) { /* 老版本没有 */ }
@@ -342,13 +344,22 @@ function innerCommand(ws, head, dir, docs) {
       const pos = rest.filter((w, i) => !w.text.startsWith('-') && !(i > 0 && /^-[A-Za-z]+$/.test(rest[i - 1].text)));
       const prog = file ? file.v : (pos[0] && pos[0].text) || '';
       const args = argl ? argl.v : (pos[1] && pos[1].text) || '';
-      if (prog) return { cmd: [prog].concat(String(args).split(',').map((x) => x.trim()).filter(Boolean)).join(' '), ps: false };
+      const work = named(/^-workingdirectory$/i);
+      if (work && dynamicPath({ raw: work.v })) return null;
+      const program = /\s/.test(prog) ? '"' + prog.replace(/"/g, '\\"') + '"' : prog;
+      if (prog) return { cmd: [program].concat(String(args).split(',').map((x) => x.trim()).filter(Boolean)).join(' '), ps: false, dir: work ? path.resolve(dir, local(work.v)) : dir };
     } else {
       // cmd 的 start [/b /min /wait /d 目录] ["标题"] 命令 …
       let k = 0;
+      let cwd = dir;
       if (rest[k] && /^["']/.test(rest[k].raw)) k++;
-      while (k < rest.length && /^\/\/?[a-z]+$/i.test(rest[k].text)) k += /^\/\/?d$/i.test(rest[k].text) ? 2 : 1;
-      if (k < rest.length) return { cmd: joinWords(rest.slice(k)), ps: false };
+      while (k < rest.length && /^\/\/?[a-z]+$/i.test(rest[k].text)) {
+        if (/^\/\/?d$/i.test(rest[k].text)) {
+          if (!rest[k + 1] || dynamicPath(rest[k + 1])) return null;
+          cwd = path.resolve(cwd, local(rest[k + 1].text)); k += 2;
+        } else k++;
+      }
+      if (k < rest.length) return { cmd: joinWords(rest.slice(k)), ps: false, dir: cwd };
     }
   }
   if (/^(invoke-expression|iex)$/.test(head.name) && rest.length) return { cmd: textOf(rest), ps: true };
@@ -1491,8 +1502,8 @@ function analyze(cmd, ps, st, cfg, depth) {
   // 括号里的 cd 只在括号里管用；pushd / popd 按栈来
   const dirs = [];
   for (const group of splitCommand(s, ps, true)) {
-    if (group.length === 1 && group[0] === OPEN) { dirs.push(st.dir); continue; }
-    if (group.length === 1 && group[0] === CLOSE) { if (dirs.length) st.dir = dirs.pop(); continue; }
+    if (group.length === 1 && group[0] === OPEN) { dirs.push({ dir: st.dir, unknown: st.archiveUnknown }); continue; }
+    if (group.length === 1 && group[0] === CLOSE) { if (dirs.length) { const d = dirs.pop(); st.dir = d.dir; st.archiveUnknown = d.unknown; } continue; }
     const segs = group.map((seg) => { const r = scanRedirects(seg); const ws = words(r.rest, ps); const doc = docOf(ws, docs); return { redirs: r.list, ws, doc: doc === null ? '' : doc }; });
     // for r in a b c：循环变量的取值记下来，后面 git -C "$r" 的目录就算得出来（取值里还有变量的不记）
     if (!ps && segs.length === 1) {
@@ -1508,34 +1519,47 @@ function analyze(cmd, ps, st, cfg, depth) {
     if (cfg.kitLock !== false && !st.block) { let k = ''; try { k = lessonIssue(segs, st.dir, docs); } catch (e) { k = ''; } if (k) setBlock(st, 'kit', k); }
     // 令牌和模型的 key：不看"禁止改套件"那个开关，什么时候都不给读
     if (!st.block) { let k = ''; try { k = keyFileIssue(segs, st.dir, st.hasReader, st.easy); } catch (e) { k = ''; } if (k) setBlock(st, 'kit', k); }
+    const archiveStream = segs.some(x => { const h = headOf(x.ws); return archiveExtract.isArchive(h.name, x.ws.slice(h.i + 1)); });
     for (const x of segs) {
       const ws = x.ws;
       if (!ws.length) continue;
       const head = headOf(ws);
-      if (POPD.test(head.name)) { if (st.pushed.length) st.dir = st.pushed.pop(); continue; }
+      if (POPD.test(head.name)) { if (st.pushed.length) { const d = st.pushed.pop(); st.dir = d.dir; st.archiveUnknown = d.unknown; } continue; }
       if (CD.test(head.name)) {
         const to = cdTarget(ws.slice(head.i + 1));
-        if (PUSHD.test(head.name)) st.pushed.push(st.dir);
+        if (PUSHD.test(head.name)) st.pushed.push({ dir: st.dir, unknown: st.archiveUnknown });
         if (!to) continue;
         // cd -：回上一个目录
-        if (to.back) { const t = st.dir; st.dir = st.prev || st.dir; st.prev = t; continue; }
-        if (!dynamicPath(to)) { st.prev = st.dir; st.dir = path.resolve(st.dir, local(to.text)); continue; }
+        if (to.back) { const t = st.dir, u = st.archiveUnknown; st.dir = st.prev || st.dir; st.archiveUnknown = st.prevUnknown; st.prev = t; st.prevUnknown = u; continue; }
+        if (!dynamicPath(to)) { st.prev = st.dir; st.prevUnknown = st.archiveUnknown; st.dir = path.resolve(st.dir, local(to.text)); if (path.isAbsolute(local(to.text))) st.archiveUnknown = false; continue; }
+        st.prev = st.dir; st.prevUnknown = st.archiveUnknown; st.archiveUnknown = true;
         // 算不出来要去哪、又像是往 ~/.claude 里去：后面的相对路径就没法查了，这种 cd 不放
         if (cfg.kitLock !== false && !st.block && /\.claude|vibe-kit/i.test(String(to.raw))) setBlock(st, 'kit', '[vibe-kit] 这条 cd 要去的目录算不出来（' + to.raw + '），又像是套件在用户目录里的东西。写成确定的路径（~/.claude/… 或者 $HOME/.claude/…），不要用别的变量拼。');
         continue;
       }
       const inner = innerCommand(ws, head, st.dir, docs);
       if (inner && depth < 3) {
-        const outer = st.dir;
+        const outer = st.dir, unknown = st.archiveUnknown;
         if (inner.dir) st.dir = inner.dir;
         analyze(inner.cmd, inner.ps, st, cfg, depth + 1);
-        if (inner.dir) st.dir = outer;
+        if (inner.dir) { st.dir = outer; st.archiveUnknown = unknown; }
         continue;
       }
       // 经过 devserver.js 起的：它自己查重、查端口，这一段里带的启动命令不拦（只免这一段，同一条命令里别的段照查）
       const viaTool = ws.some((w) => /devserver\.js$/i.test(w.text));
       if (!viaTool && cfg.serverGuard !== false && !st.block) { const s = serverStart(ws, head, st.dir); if (s) setBlock(st, 'server', serverMsg(s)); }
       if (cfg.vibeTidy !== false && tidy && !st.block) { const p = processTarget(x, head, st.dir); if (p && tidy.blockOnce(st.j.session_id, p.key)) setBlock(st, 'process', tidy.processMsg(p.show)); }
+      if (cfg.vibeTidy !== false && !st.block && !st.archiveUnknown) {
+        const outputs = archiveStream ? x.redirs.map(r => ({ text: r.target, raw: r.target })) : [];
+        if (archiveStream && WRITE_TO.test(head.name)) {
+          const rest = ws.slice(head.i + 1);
+          const i = rest.findIndex(w => /^-(?:filepath|path|literalpath)$/i.test(w.text));
+          const dest = i >= 0 ? rest[i + 1] : rest.find(w => !w.text.startsWith('-'));
+          if (dest) outputs.push(dest);
+        }
+        const p = archiveExtract.issue(head.name, ws.slice(head.i + 1), st.dir, outputs);
+        if (p) setBlock(st, 'process', p.message, 'extract:' + p.key);
+      }
       if (cfg.vibeTidy !== false && tidy && !st.block) { let k = ''; try { k = keepIssue(x, head, st.dir, st, cfg); } catch (e) { k = ''; } if (k) setBlock(st, 'keep', k); }
       if (cfg.specGate !== false && !st.block) { const t = archiveTarget(ws, head, st.dir); if (t) { const a = archiveIssue(t, st.dir, st.j); if (a) setBlock(st, a.noBypass ? 'archive-ok' : 'archive', a.msg, 'archive:' + a.name.toLowerCase()); } }
       const g0 = parseGit(ws, st.dir);
@@ -1742,7 +1766,7 @@ function handle(j) {
   }
   const publishNotice = '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。';
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
-  if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find)\b/i.test(cmd)) return cdBlock();
+  if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find|jar|tar|gtar|bsdtar|unzip|7z|7za|7zr|7zz|expand-archive)\b/i.test(cmd)) return cdBlock();
   const cwd0 = path.resolve(j.cwd || process.cwd());
   const st = { dir: cwd0, cwd0, pushed: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, secret: '', j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
   // 先按名字挑出进程再结束的写法（Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process）：拆成组之后认不出来，整条看一遍

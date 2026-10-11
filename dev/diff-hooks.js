@@ -80,6 +80,14 @@ const cmd = (command, tool, files) => (kit) => { const proj = project(kit, files
 const stop = (entries, extra, files) => (kit) => { const proj = project(kit, files); const es = entries(proj); const j = base(proj, kit, Object.assign({ hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '做完了' }, extra)); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), es); return { proj, j }; };
 const prompt = (text, files, entries) => (kit) => { const proj = project(kit, files); const j = base(proj, kit, { hook_event_name: 'UserPromptSubmit', prompt: text }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), entries ? entries(proj) : [H.tr.user(text)]); return { proj, j }; };
 
+// 临时解包与检查结果不落到项目普通目录。
+add('解包：JAR 不能写入项目根', 'guard-commit', cmd('jar xf dependency.jar'), /归档解包[\s\S]*\.vibe\/tmp\//, NEXT);
+add('解包：ZIP 不能写入源码', 'guard-commit', cmd('unzip dependency.jar -d src'), /归档解包/, NEXT);
+add('解包：关闭 kitLock 后仍检查', 'guard-commit', cmd('tar xf app.tar'), /归档解包/, NEXT, { kitLock: false });
+add('解包：条目落盘也用事由目录', 'guard-commit', cmd('unzip -p dependency.jar entry.txt > inspect.txt'), /归档解包/, NEXT);
+add('解包：事由目录直接解包放行', 'guard-commit', cmd('unzip dependency.jar -d .vibe/tmp/查看依赖'));
+add('解包：只读列表放行', 'guard-commit', cmd('jar tf dependency.jar'));
+
 // 自动压缩策略不能由模型自己调用技能或写文件来触发交接。
 add('交接：没有用户要求不能调技能', 'guard-ask', kit => {
   const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } }) };
