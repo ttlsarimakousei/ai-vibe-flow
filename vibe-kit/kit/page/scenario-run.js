@@ -34,6 +34,12 @@ function parseArgs(argv) {
   return o;
 }
 const args = parseArgs(process.argv.slice(2));
+if (args.service) {
+  const services = require('../lib/workflow').services(path.resolve(args.project || process.cwd())).filter((s) => s.name === args.service && s.processAlive);
+  if (services.length !== 1) { console.error('服务名没有唯一的有效记录，请先用 devserver 起服务，或明确 --base。'); process.exit(2); }
+  if (args.base && args.base !== services[0].url) { console.error('--base 与服务实际地址不一致，请只选一种。'); process.exit(2); }
+  args.base = services[0].url;
+}
 const USAGE = '用法：node scenario-run.js <scenario.json> [--base 站点地址] [--out 目录] [--headed] [--max 秒数]';
 if (!args._[0]) { console.error(USAGE); process.exit(2); }
 for (const k of ['base', 'out']) if (args[k] === true) { console.error('--' + k + ' 后面要写' + (k === 'base' ? '站点地址，比如 --base http://127.0.0.1:5173' : '目录') + '。' + USAGE); process.exit(2); }

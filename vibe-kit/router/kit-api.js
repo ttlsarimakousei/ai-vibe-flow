@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -53,7 +53,11 @@ function cleanConfig(x, base) {
   const keep = Number(x && x.tmpKeepDays); if (x && x.tmpKeepDays !== undefined && x.tmpKeepDays !== '' && keep >= 0 && keep <= 90) c.tmpKeepDays = Math.round(keep);
   // 多轮审查最多几轮：1 到 5
   const rounds = Number(x && x.reviewMaxRounds); if (rounds >= 1 && rounds <= 5) c.reviewMaxRounds = Math.round(rounds);
+  if (x && ['direct', 'agent'].includes(x.reviewExecutor)) c.reviewExecutor = x.reviewExecutor;
+  const budget = Number(x && x.reviewBudgetSeconds); if (budget >= 10 && budget <= 1800) c.reviewBudgetSeconds = Math.round(budget);
+  const files = Number(x && x.reviewMaxFiles); if (files >= 1 && files <= 60) c.reviewMaxFiles = Math.round(files);
   if (x && ['ask', 'off'].includes(x.handoverAsk)) c.handoverAsk = x.handoverAsk;
+  if (x && ['compact', 'handover'].includes(x.contextStrategy)) c.contextStrategy = x.contextStrategy;
   // 自动提交：task 每完成一件事就提交；change 整个 OpenSpec 变更做完再提交一次；off 用户说了才提交
   if (x && ['task', 'phase', 'change', 'off'].includes(x.autoCommit)) c.autoCommit = x.autoCommit;
   // 不走 OpenSpec 的改动（修 bug、改配置）：ask 改完先问用户、他说了提交才提交；auto 验证过就提交
@@ -286,6 +290,8 @@ function browse(dir, wantFile, ext) {
 
 /** 工作线程里实际执行的那几件事（kit-worker.js 调它） */
 function runOp(op, a) {
+  if (op === 'readiness') { const f = path.join(a.kitDir, 'lib', 'readiness.js'); return require(f).inspect(a.project); }
+  if (op === 'performance') { const S = require(path.join(a.kitDir, 'lib', 'session')); return { reviews: S.readState('review-local-metrics'), hooks: S.readState('hook-stats').byHook || {}, tools: toolUsage(a.kitDir) }; }
   if (op === 'browse') return browse(a.dir, a.file, a.ext);
   if (op === 'drivers') return driversOp(a);
   if (op === 'detect') return detect();
@@ -338,6 +344,8 @@ function inWorker(op, args, what) {
 }
 
 async function handle(method, url, body, kitDir, ctx) {
+  if (method === 'POST' && url === '/api/kit/readiness') { const project = pathStr(body && body.project); if (!project || !path.isAbsolute(project)) throw new Error('填写项目完整路径'); return inWorker('readiness', { kitDir, project }, '核对环境'); }
+  if (method === 'GET' && url === '/api/kit/performance') return inWorker('performance', { kitDir }, '读取本机耗时');
   if (method === 'POST' && url === '/api/kit/browse') return inWorker('browse', { dir: pathStr(body && body.dir), file: !!(body && body.file), ext: body && body.ext === 'jar' ? 'jar' : '' }, '列目录');
   // 数据库驱动：看现在用的、到 Maven 本地仓库里找、登记一个。找和拷文件可能要几十秒，起一个进程去做，不在路由的进程里等
   if (method === 'GET' && url === '/api/kit/drivers') return inWorker('drivers', { kitDir, action: 'status' }, '读驱动的登记表');

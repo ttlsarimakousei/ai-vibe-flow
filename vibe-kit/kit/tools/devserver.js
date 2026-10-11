@@ -315,17 +315,19 @@ const quote = (a) => (/^[\w.\-/:\\=@%+,]+$/.test(a) ? a : '"' + String(a).replac
 async function launch(name, port, command, meta) {
   fs.mkdirSync(runDir, { recursive: true });
   const log = logFile(name);
-  const fd = fs.openSync(log, 'w');
   // 端口交给服务：Spring Boot 认 SERVER_PORT，Vue CLI、Next、CRA 认 PORT。--env 里写的优先
   const env = Object.assign({}, process.env, { PORT: String(port), SERVER_PORT: String(port), VIBE_PORT: String(port) });
+  let backendUrl = '';
+  if (opt('backend')) { const backend = readRec(opt('backend')); if (!backend || !sameProc(backend) || !(await portOpen(backend.port, 300))) throw new Error('指定后端没有有效运行记录，请先用 devserver 起后端'); backendUrl = 'http://127.0.0.1:' + backend.port; Object.assign(env, { VIBE_BACKEND_URL: backendUrl, VITE_BACKEND_URL: backendUrl, BACKEND_URL: backendUrl }); }
   for (const kv of envs) { const i = kv.indexOf('='); if (i > 0) env[kv.slice(0, i)] = kv.slice(i + 1); }
   const cwd = path.resolve(dir, opt('cwd') || '.');
+  const fd = fs.openSync(log, 'w');
   const child = WIN
     ? spawn(process.execPath, [__filename, '__keep'], { detached: true, windowsHide: true, stdio: ['ignore', fd, fd], cwd, env: Object.assign({}, env, { VIBE_DEVSERVER_CMD: command }) })
     : spawn(command, { shell: true, detached: true, stdio: ['ignore', fd, fd], cwd, env });
   child.unref();
   fs.closeSync(fd);
-  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot'), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [] };
+  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot'), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl };
   fs.writeFileSync(recFile(name), JSON.stringify(rec, null, 2));
   return waitUp(rec, Number(opt('wait')) || 180);
 }

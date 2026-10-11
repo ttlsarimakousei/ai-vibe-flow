@@ -254,6 +254,7 @@
 
   <section id="tab-local" class="tab hide">
     <div class="pagehead"><h2>本机环境</h2><p>这台电脑上的 JDK、Maven、Tomcat 在哪。配一次，所有项目都用。</p></div>
+    <div class="card" id="sec-readiness"><h2>项目就绪与本机耗时</h2><p class="hint">只核对来源文件、工具和登记，不运行项目脚本、不主动连库。识别结果不代表构建或测试成功。耗时仅保存在本机。</p><div class="row"><input id="readyProject" placeholder="项目完整路径"><button class="btn" id="readyCheck">核对环境</button><button class="btn" id="performanceCheck">本机耗时</button></div><pre id="readyOutput" style="white-space:pre-wrap"></pre></div>
     <div class="card">
       <div class="row between"><div><h2>开发环境</h2><p class="hint">只存在本机（<span class="mono" id="kitDir"></span>），不进仓库。保存后写进全局约定，Claude 每个会话都看得到。先点"自动探测"；没找到的点"选…"去硬盘上点选。</p></div><button class="btn primary" id="detect">自动探测</button></div>
       <div id="kitMissing" class="banner warn hide">这台电脑还没装 vibe-kit，保存了也不会写进全局约定。</div>
@@ -317,6 +318,10 @@
 
     <div class="card" id="sec-ctx" data-sec="上下文和交接">
       <h2>上下文和交接</h2>
+      <div class="opt">
+        <div><div class="t">连续工作的方式</div><div class="d">默认自动压缩。手动交接必须明确选择记录；一句“继续”不会恢复旧记录。旧交接开关保留，选择交接提醒后生效。</div></div>
+        <div class="ctl"><select id="k_contextStrategy"><option value="compact">自动压缩优先</option><option value="handover">按交接线提醒</option></select></div>
+      </div>
       <p class="hint">这几项改完就自动保存。上限、交接线：开着的会话不用重开，下一条消息就按新值算。</p>
       <div class="opt">
         <div><div class="t">上下文上限</div><div class="d">状态栏进度条的分母，单位 token。填 0：用 Claude Code 自己报的窗口大小。</div></div>
@@ -342,8 +347,8 @@
         <div class="ctl"><select id="k_handoverAsk"><option value="ask">用提问框问我要不要交接</option><option value="off">不问，只提醒；我说交接才交接</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">/clear 之后自动接着干</div><div class="d">开着：你敲 /clear 之后不用说话，新会话自己读交接记录接着干。关着：你说一句"继续"它才接。</div>
-          <details class="more"><summary>细节</summary><ul><li>开着要较新的 Claude Code 才认，老版本上不起作用，所以默认关。</li><li>关着的做法什么版本都行。你说别的事，它不会去接交接记录。</li></ul></details></div>
+        <div><div class="t">旧 autoResume 设置</div><div class="d">保留旧值供迁移核对，不再凭历史交接自动续接。需要阅读旧交接时明确点名，动作许可重新确认。</div>
+          <details class="more"><summary>细节</summary><ul><li>压缩和恢复仅核对当前本机事实。</li><li>一句“继续”不读取历史交接，不恢复旧许可。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoResume"><i></i></label></div>
       </div>
       <div class="row" style="margin-top:6px"><span id="ctxPreview" class="dim"></span><span class="msg" id="ctxMsg"></span></div>
@@ -391,8 +396,8 @@
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoSeePage"><i></i></label></div>
       </div>
       <div class="opt">
-        <div><div class="t">任务全部打勾后审代码</div><div class="d">开着：一个变更的任务全打勾了，让它调审查代理审一遍。每个变更催一次。</div>
-          <details class="more"><summary>细节</summary><ul><li>审查代理是子代理，花额度。</li><li>关掉之后要审就手动 /ttls-cross-review。</li><li>没审过代码的变更照样不让归档，那是"OpenSpec 门槛"管的。</li></ul></details></div>
+        <div><div class="t">实现和测试完成后审代码</div><div class="d">开着：实现和必要测试完成后启动审查，完整结果返回后勾审查任务。用户验收仍等用户确认。</div>
+          <details class="more"><summary>细节</summary><ul><li>独立模型请求花额度，默认有限材料和总预算；原代理是兼容选项。</li><li>关掉之后要审就手动 /ttls-cross-review。</li><li>没审过代码的变更照样不让归档，那是"OpenSpec 门槛"管的。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoCrossReview"><i></i></label></div>
       </div>
       <div class="opt">
@@ -408,6 +413,18 @@
 
     <div class="card" id="sec-spec" data-sec="OpenSpec 门槛">
       <h2>OpenSpec 门槛</h2>
+      <div class="opt">
+        <div><div class="t">审查方式</div><div class="d">默认本机准备材料，经路由审查角色发有限请求。原代理保留为兼容方式，超时和部分结果不能算审完。</div></div>
+        <div class="ctl"><select id="k_reviewExecutor"><option value="direct">限时独立模型审查</option><option value="agent">原审查代理</option></select></div>
+      </div>
+      <div class="opt">
+        <div><div class="t">同一范围审查总预算</div><div class="d">累计模型请求时间，包含后续补审。用完就交代已覆盖和未覆盖范围。</div></div>
+        <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
+      </div>
+      <div class="opt">
+        <div><div class="t">每轮最多审文件数</div><div class="d">超出时列为未覆盖，不把部分审查记成完整结果。</div></div>
+        <div class="ctl"><input type="number" id="k_reviewMaxFiles" min="1" max="60" step="1"></div>
+      </div>
       <p class="hint">提案、任务、归档各有一道门槛。过不去就拦下，提示里写着怎么改。</p>
       <div class="opt">
         <div><div class="t">提案、打勾、归档的门槛</div><div class="d">开着：提案写得含糊不让写，任务没验证不让打勾，代码没审不让归档。</div>
@@ -1022,6 +1039,9 @@
   fBool('statusUsage', '状态栏显示今天的用量'); fBool('pullBeforeWork', '开工前拉代码'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
   fBool('ideaMcp', '自动接上 IDEA');
   fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('autoCommit', 'OpenSpec 的变更，验证过之后提交吗', ['task', 'phase', 'change', 'off']); fSel('plainCommit', '不走 OpenSpec 的改动，验证过之后', ['ask', 'auto']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
+  fSel('contextStrategy', '连续工作的方式', ['compact', 'handover']);
+  fSel('reviewExecutor', '审查方式', ['direct', 'agent']);
+  fNum('reviewBudgetSeconds', '审查总预算', 10, 1800); fNum('reviewMaxFiles', '审查文件上限', 1, 60);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('autoOnboard', '后台自动探索'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);
@@ -1126,6 +1146,8 @@
       say($('localMsg'), added ? '找到 ' + added + ' 项，已经列在上面，核对一下再保存' : '没找到新的。点"添加"，再点"选…"去硬盘上点选', !!added);
     } catch (e) { say($('localMsg'), e.message, false); }
   };
+  $('readyCheck').onclick = async () => { try { const r = await api('POST', '/api/kit/readiness', { project: $('readyProject').value.trim() }); $('readyOutput').textContent = '识别工程：' + (r.identified.join('、') || '普通工程') + '\n缺工具：' + (r.missing.join('、') || '所需工具文件存在') + '\n项目说明：' + (r.projectNotes ? '已找到' : '尚未找到') + '\n驱动：' + (r.drivers.map(d => d.artifact + ' ' + d.version + ' ' + (d.registered ? '文件已登记' : '需补齐或核对')).join('；') || '项目未声明') + '\n' + r.verification + '\nIDEA：' + r.ideaCapabilities.limitations; } catch (e) { $('readyOutput').textContent = e.message; } };
+  $('performanceCheck').onclick = async () => { try { const r = await api('GET', '/api/kit/performance'); const n = r.reviews.n || 0; $('readyOutput').textContent = '本机审查完成 ' + n + ' 次，平均 ' + (n ? Math.round(r.reviews.totalMs / n / 1000) : 0) + ' 秒。\n钩子：' + Object.entries(r.hooks).map(([name,h]) => name + ' ' + h.n + ' 次，出错 ' + (h.errors || 0) + ' 次').join('；') + '\n耗时与诊断明细只留本机，不上报。'; } catch (e) { $('readyOutput').textContent = e.message; } };
   $('saveLocal').onclick = async () => {
     try { const r = await api('POST', '/api/kit/local', readLocal()); say($('localMsg'), r.synced ? '已保存并写进全局约定，新开的会话生效' : '已保存。' + (r.output || ''), r.synced); } catch (e) { say($('localMsg'), e.message, false); }
   };
@@ -1167,13 +1189,14 @@
   async function loadHooks() { try { renderHookStatus(await api('GET', '/api/kit/hooks')); } catch (e) { /* 老版本没有这个接口 */ } }
   async function saveCtx() {
     // 只存这四项里改过的：别的开关在页面上没保存的改动不受影响
-    const r = await saveFields(['handoverPercent', 'contextLimitTokens', 'handoverAsk', 'autoResume', 'autoCompactPercent', 'statusUsage'], $('ctxMsg'), '已保存，下一次状态栏刷新、下一条消息就按新值算');
+    const r = await saveFields(['contextStrategy', 'handoverPercent', 'contextLimitTokens', 'handoverAsk', 'autoResume', 'autoCompactPercent', 'statusUsage'], $('ctxMsg'), '已保存，下一次状态栏刷新、下一条消息就按新值算');
     if (r && r.saved.includes('autoCompactPercent')) say($('ctxMsg'), '已保存。自动压缩线新开的会话生效；开着的会话照上面那条 /autocompact 命令敲一下', true);
     renderBar();
   }
   for (const id of ['k_contextLimitTokens', 'k_handoverPercent', 'k_autoCompactPercent']) { $(id).addEventListener('input', renderCtx); $(id).addEventListener('change', saveCtx); }
   $('k_statusUsage').addEventListener('change', saveCtx);
   $('k_handoverAsk').addEventListener('change', saveCtx);
+  $('k_contextStrategy').addEventListener('change', saveCtx);
   $('k_autoResume').addEventListener('change', saveCtx);
   setInterval(() => { if (!$('tab-kit').classList.contains('hide')) { loadSessions(); loadHooks(); } }, 5000);
 

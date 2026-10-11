@@ -28,6 +28,12 @@ function denied(msg, j) {
   try { require('./feedback').countBlock('guard-commit', '[vibe-kit IDEA MCP] ' + msg, String(j.session_id || '')); } catch (e) { /* 计数不影响检查 */ }
   return S.blockOut('PreToolUse', '[vibe-kit IDEA MCP] ' + msg);
 }
+function isIdea(tool) {
+  const m = /^mcp__(.+)__([a-zA-Z_0-9]+)$/.exec(String(tool || '')); if (!m) return false;
+  const st = S.readState('idea-mcp'); const names = ['jetbrains', ...Object.keys(obj(st.owned) ? st.owned : {}), ...(Array.isArray(st.connections) ? st.connections : []).filter(obj).map(c => c.name)];
+  return /^vibe[-_]idea[-_]\d+$/.test(m[1]) || names.some(n => n === m[1] || String(n).replace(/-/g, '_') === m[1]);
+}
+function capabilities() { return { supported: ['execute_terminal_command', 'get_file_problems', 'get_file_text_by_path', 'replace_text_in_file', 'execute_run_configuration'], connection: require('./idea-mcp').status().status, limitations: '只使用已明确的 projectPath 和现有运行配置；不接管 IDEA 用户自己启动的进程，不执行脚本、数据库入口或运行参数覆盖。索引就绪需工具真实结果核对。' }; }
 function handle(j) {
   const m = /^mcp__(.+)__([a-zA-Z_0-9]+)$/.exec(String(j.tool_name || ''));
   if (!m) return null;
@@ -103,4 +109,4 @@ function handle(j) {
   if (['get_project_modules', 'get_project_dependencies', 'get_repositories', 'git_status', 'get_all_open_file_paths', 'open_file_in_editor', 'list_directory_tree'].includes(name)) return checkRead(cwd) || (file ? checkRead(file) : null);
   return denied('这个 IDEA 工具尚未适配套件检查，请用已有的普通工具完成同一步。', j);
 }
-module.exports = { handle, route };
+module.exports = { handle, route, isIdea, capabilities };
