@@ -542,6 +542,7 @@ function usageOf(j, cfg, entries) {
 }
 const tok = (n) => (n >= 1000000 ? String(Math.round(n / 100000) / 10) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(n));
 function handoverQuestion(j, cfg, entries, wroteHo) {
+  if (cfg.contextStrategy !== 'handover') return '';
   if ((cfg.handoverAsk || 'ask') === 'off' || cfg.autoMode || !j.session_id) return '';
   const u = usageOf(j, cfg, entries);
   if (!u) return '';
@@ -732,6 +733,7 @@ function archivedSpecTodo(j) {
  */
 function autoHandover(j, cfg, entries, wroteHo) {
   const out = { stop: '', quiet: false, line: '' };
+  if (cfg.contextStrategy !== 'handover') return out;
   if (!cfg.autoMode || !j.session_id) return out;
   const u = usageOf(j, cfg, entries);
   if (!u) return out;

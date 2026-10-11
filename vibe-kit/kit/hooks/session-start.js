@@ -2,14 +2,12 @@
 /*
  * SessionStart 钩子：会话一开始（新开、/clear、压缩之后、恢复）就把这几样东西确定性地交给模型，不指望它自己想起来去读：
  *   1. 项目说明 .vibe/project.md —— /ttls-onboard 查到的"怎么编译、怎么快检、怎么启动、什么编码"。只在本机，不进仓库
- *   2. 交接记录 .vibe/handover.md —— 上一个会话用 /ttls-handover 写的，七天内的才带；只在新开和 /clear 时带
+ *   2. 压缩和恢复后核对本机事实；旧交接只由用户明确点名后提示读取，不自动带入
  *   3. 这个目录是不是一层"壳子"（下面套着各个子项目，各是独立的 git 仓库）—— 是的话列出子项目，告诉它在这一层对子项目跑命令怎么写（不 cd：git -C、mvn -f、npm --prefix）；不是壳子也提一句 Bash 里别把 cd 和别的命令串在一条里
  * 本机环境（JDK、Maven 在哪）不在这里：它写在全局约定里，每个会话本来就能看到。
  * 输出用 hookSpecificOutput.additionalContext。任何异常都静默退出。
  *
- * 交接之后自动续上（开关 autoResume，默认关）：刚写好的交接记录（一小时内、还没用过），在 /clear 或重新启动之后，用 initialUserMessage
- * 替用户说第一句话，新会话不用等人开口就接着干。/clear 本身只能用户自己敲，模型和钩子都触发不了。这个字段旧版本不认，所以默认关：
- * 关着时用户说一句"继续"，由 task-anchor 把交接记录接上。
+ * 默认自动压缩优先。旧 autoResume 值保留但不生成自动续接消息；历史记录不恢复动作许可。
  * 顺带两件事：当前目录和各个子项目里已经有 .vibe/ 的，确保它在 .gitignore 里；给模型路由兜底：
  *   Claude Code 指着本机的路由、路由却没在跑（登录后自动启动被公司策略拦了、进程被杀了），
  * 就悄悄在后台把它拉起来，没有窗口。不等它起好——它不到一秒就能起来，而你打完第一句话要好几秒。
@@ -137,29 +135,9 @@ async function handle(j) {
     // 项目里还留着并进套件之前的技能（urai-db-crud、redis）：两个都在，模型会看到两个查库的技能
     try { const old = OB ? OB.oldSkillNotice(cwd) : ''; if (old) out.push(old); } catch (e) { /* 查不了不影响会话开始 */ }
 
-    // 刚写好的交接记录（一小时内、还没接过）：给 Claude Code 一句现成的第一句话（initialUserMessage）。这里只"给"，不标记"已接上"：
-    // 有的版本、有的路径（比如 /clear）不一定真把这句话发出去，标记的事交给用户开口时的钩子（task-anchor）去做，那条路什么版本都通
-    let firstWords = '';
-    let handoverNote = 'handover=none';
-    if (source === 'startup' || source === 'clear') {
-      const handover = findUp(cwd, path.join('.vibe', 'handover.md'), 2);
-      if (handover) {
-        const m = fs.statSync(handover).mtimeMs;
-        const used = readState('handover-consumed');
-        // 过期的交接记录：写完它之后那件事已经做完或归档了（比如全自动模式挂了一夜），不能照它接着做
-        const stale = handoverStale(handover, cwd);
-        const fresh = !stale && Date.now() - m < 60 * 60000 && !(used.file === handover && used.mtime === m);
-        // 替用户说第一句话（initialUserMessage）只有较新的 Claude Code 认；开关 autoResume（配置页"/clear 之后自动接着干"），默认关。
-        // 关着时新会话等用户开口，说"继续"就由 task-anchor 接上（那条路什么版本都通）
-        if (fresh && readConfig().autoResume === true) firstWords = '接着上一个会话的交接记录继续：先读 ' + handover + '，再用 git status、tasks.md 核对一下实际状态，然后按里面的"下一步"接着做。';
-        handoverNote = 'handover=' + handover + ' fresh=' + fresh + (stale ? ' stale=' + stale : '');
-        if (Date.now() - m < 7 * 86400000) {
-          const when = new Date(m).toLocaleString('zh-CN', { hour12: false });
-          if (stale) out.push('上一个会话留了交接记录（' + when + '）：' + handover + '，但它已经过期：写完它之后' + stale + '，不要照它的"下一步"接着做。我要是说"继续"，先看 git log、openspec/changes 和 archive 里现在的状态，告诉我做到哪了，再问我接下来做什么。');
-          else out.push('上一个会话留了交接记录（' + when + '）：' + handover + '。如果我接下来要继续那件事，先读它，再用 git status、tasks.md 核对一下实际状态，然后按里面的"下一步"接着做；我要做别的事就不用管它。');
-        }
-      }
-    }
+    // 自动压缩优先；启动和 clear 不读取或自动提示历史交接。用户明确选择时由 task-anchor 核对。
+    const firstWords = '';
+    const handoverNote = 'handover=manual-only';
     // 大需求的计划（openspec/plan.md）：按实际情况刷新状态列，带上汇总和不在表里的变更；没有计划却有好几个变更的，提醒建一个（三天最多提一次）
     for (const changes of changeRoots(cwd)) {
       const osDir = path.dirname(changes);
@@ -244,6 +222,8 @@ async function handle(j) {
       if (running.length) out.push('以前起的服务还在跑：' + running.join('、') + '。要测就照样用 node "' + path.join(KIT, 'tools', 'devserver.js') + '" start …（它记着这些服务，跑的不是现在的代码会在同一个端口自动重启），用不着了就 stop --all；不要另起一个、不要换端口。');
     } catch (e) { /* 查不了不影响会话开始 */ }
     cleanState(3);
+    if (source === 'clear') { try { require('../lib/work-sessions').clearOwner(process.ppid); } catch (e) { /* 旧状态稍后过期 */ } }
+    try { if (source === 'compact' || source === 'resume') out.push(require('../lib/workflow').brief(cwd, j)); else if (require('../lib/session').looksLikeProject(cwd) || shell) out.push(require('../lib/readiness').brief(cwd)); } catch (e) { hookLog('本机事实摘要未完成，不能把旧记录当当前结果'); }
     hookLog('session-start source=' + source + ' cwd=' + cwd + ' shell=' + shell + ' ' + handoverNote + ' initialUserMessage=' + (firstWords ? 'yes' : 'no'));
     if (out.length || firstWords) {
       const o = { hookEventName: 'SessionStart' };

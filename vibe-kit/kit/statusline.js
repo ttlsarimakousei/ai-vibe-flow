@@ -122,9 +122,9 @@ process.stdin.on('end', () => {
 
   // 警告放第一行最前面：终端窄的时候被截掉的是末尾，最要紧的不能丢
   const gw = used ? nearGatewayLimit(used) : null;
-  if (gw) line1.unshift(C.red + '⚠ 快到网关能接受的请求大小了（上次约 ' + k(gw.limitTokens) + ' 时被拒），现在就 /ttls-handover' + C.reset);
+  if (gw) line1.unshift(C.red + '⚠ 快到网关能接受的请求大小了（上次约 ' + k(gw.limitTokens) + ' 时被拒），现在 /compact；压缩失败再手动交接' + C.reset);
   else if (pct !== null && pct >= 100) line1.unshift(C.red + '⚠ 上下文超过上限了（' + k(used) + '/' + k(size) + '），Claude Code 没自动压缩：敲 /compact 压缩，或者 /ttls-handover 交接' + C.reset);
-  else if (pct !== null && pct >= line) line1.unshift(C.red + '⚠ 上下文 ' + Math.round(pct) + '%，该交接了：/ttls-handover' + C.reset);
+  else if (cfg.contextStrategy === 'handover' && pct !== null && pct >= line) line1.unshift(C.red + '⚠ 上下文 ' + Math.round(pct) + '%，到手动交接线：/ttls-handover' + C.reset);
   // 放松保护的开关被绕开配置页改了（没生效）
   if (cfg._tampered) line1.unshift(C.red + '⚠ 套件开关文件被直接改过，没生效，去配置页核对' + C.reset);
   // 会话开始时比对过套件代码的指纹，对不上（被改过）：一直挂着，直到重新安装
@@ -133,10 +133,9 @@ process.stdin.on('end', () => {
 
   // 第二行：全自动模式开没开。它只在走 OpenSpec 流程的会话里算数，所以把这个会话在不在流程里也写上
   if (cfg.autoMode === true) {
-    const fl = j.session_id ? flowState({ session_id: j.session_id }) : {};
+    const fl = require('./lib/session').flowView({ session_id: j.session_id, cwd });
     // 在流程里又分两段：写提案那一段照常（全自动只管做任务那一段）
-    const over = fl.on && j.session_id ? flowDone({ session_id: j.session_id }) : false;
-    line2.push(C.yellow + '全自动 开' + C.reset + (fl.on && !over ? (fl.stage === 'plan' ? C.dim + '·这个会话在流程里，还在写提案，照常' + C.reset : C.yellow + '·这个会话在流程里，在做任务' + C.reset) : C.dim + (over ? '·这个会话的变更归档了，照常' : '·这个会话不在流程里，照常') + C.reset));
+    line2.push(C.yellow + '全自动 开' + C.reset + (fl.effective ? C.yellow + '·实施，当前生效' + C.reset : C.dim + '·' + fl.phase + '，照常' + (fl.archived ? '，变更已归档' : '') + C.reset) + (fl.waiting ? C.yellow + '·' + fl.waiting + C.reset : ''));
   } else line2.push(C.dim + '全自动 关' + C.reset);
   // Claude Code 会在用到多少时自己压缩（套件写进 settings.json 的 autoCompactWindow；新开的会话才认）
   const at = autoCompactAt(cfg, windowSize);

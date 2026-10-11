@@ -594,7 +594,7 @@ function fill(text) {
   const see = seePageMode();
   let commit = PLAIN_COMMIT_TEXT[plainCommitMode()] + '\n' + AUTO_COMMIT_TEXT[autoCommitMode()];
   if (see === 'off') commit = commit.split('（快检过了，该看的页面看过了）').join('（快检过了）');
-  const auto = c.autoMode ? AUTO_MODE_TEXT.split('{{AUTO_HANDOVER}}').join(AUTO_HANDOVER_TEXT[c.autoHandover === false ? 'off' : 'on']) : '';
+  const auto = c.autoMode ? AUTO_MODE_TEXT.split('{{AUTO_HANDOVER}}').join((c.contextStrategy || 'compact') === 'compact' ? '- 连续工作依靠 Claude Code 自动压缩；不要自动写交接、clear 或凭旧交接继续。用户点名选择手动交接时先核对当前事实，重新确认开工范围。' : AUTO_HANDOVER_TEXT[c.autoHandover === false ? 'off' : 'on']) : '';
   return text.split('{{AUTO_COMMIT}}').join(commit).split('{{SEE_PAGE}}').join(SEE_PAGE_TEXT[see])
     .split('{{SEE_PAGE_SPEC}}').join(SEE_PAGE_SPEC_TEXT[see]).split('{{PAGE_VERIFY}}').join(PAGE_VERIFY_TEXT[see])
     .split('{{COMMIT_RHYTHM}}').join(COMMIT_RHYTHM_TEXT[autoCommitMode()])
