@@ -94,3 +94,9 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 - 2.1.288：**带 `paths` 的规则和子目录的 CLAUDE.md，Write、Edit 建了或改了范围里的文件也会加载**（以前只有 Read）。PreToolUse 钩子匹配失败或者输入没法序列化时不再跳过，直接拦下。
 - 2.1.287：Windows 上 Bash 工具每条命令前少起一个子 shell，快了一些。Opus 4.7 以后和 Fable 在网关上默认 1M 窗口。
 - 2.1.271：`cd` 加 git、两次 cd、子 shell 这类命令在跳过权限模式下的确认框，和 `permissions.blockReadsOutsideWorkingDirectories` 有关。
+
+## PostToolUse 实测，2026-10-11
+
+2.1.120、2.1.259、2.1.289 均用真实 CLI 加假网关验证：成功 Bash 的 PostToolUse 包含 tool_use_id，tool_response 为 stdout、stderr、interrupted 等字段；失败 Bash 走 PostToolUseFailure，顶层带 error。没有 exit_code 时不能仅凭它缺失判失败，失败事件与后台运行标记单独排除。
+
+官方完成钩子的 updatedToolOutput 可替换送入模型的结果，旧 MCP 形式为 updatedMCPToolOutput；替换不撤回文件或外部遥测。IDEA 实际替换支持需按部署的 CLI 与 IDE 核对，不能把当前文档当作旧版实测。来源：[Claude Code 钩子文档](https://code.claude.com/docs/en/hooks)。

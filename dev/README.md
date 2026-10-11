@@ -183,3 +183,17 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 - `kit/hooks/` 里的文件不能随便删。自动更新装完新版之后的自检，跑的是旧版的代码，它按旧版的名单挨个载钩子，少一个就装回旧版。不用了的钩子留一个空壳（`source-hint.js` 就是）。
 - 测全自动模式的行为，先用 `H.inFlow(h, 会话编号, [变更目录])` 把会话记成在 OpenSpec 流程里。不记的话全自动不算数。
 - 在测试进程里直接 `require` 套件的模块，`os.homedir()` 是真实的用户目录。要读写用户目录的（查库的留痕 `~/.db-crud`），走 `H.hook`、`H.node` 起子进程。
+
+## 20261011 专项与兼容性
+
+新增 test-workflow-state、test-workflow-intent、test-workflow-permissions、test-connection-lifecycle、test-diagnostic-redaction、test-review-evidence、test-optimization-runtime、test-optimization-boundaries、test-service-address 和 test-push-preview。分别覆盖锁崩溃、真人许可、取消、退役连接、假秘密诊断、限时和部分审查、缓存隔离、本地恢复、真实服务地址与推送预览。用最新 baseline 参数再跑，必须检出旧版反例。边界测试还检查旧人工任务、目录联接、二进制材料、重复预算、额外恢复文件和普通开关的脱敏；不能仅断言新模块存在。
+
+经验规则的 CLI 端到端保留兼容代理入口，并故意尝试未经用户确认的提交。代码和规则实际生成后，再发送真人提交指令，核对 Git 历史确实改变。默认独立审查执行器由 review-evidence 和 optimization-boundaries 的假网关测试覆盖，不能把兼容代理测试说成默认执行器测试。
+
+`test-proposal-review-state.js` 核对独立提案审查的有效性：需求、设计、验法改变后旧结论失效；任务勾选、实现代码和生成交付摘要不重开需求审查。本轮修复前有三项真实失败，不能仅用新模块存在作反例。
+
+`node dev/build-db-runner.js auto` 在假环境编译 Java 8 目标，源码和 class 一起交付。
+
+`node dev/probes/cc-post-tool.js 2.1.289` 实测完成钩子；2.1.120、2.1.259、2.1.289 都仅连假网关，成功返回 tool_use_id 与 stdout/stderr/interrupted，失败走 PostToolUseFailure，不登记通过。IDEA 输出替换的形状来自官方协议，未在真实 IDE 上注入凭据做破坏性测试。
+
+全回归使用三版 CLI、四份旧基线、--rt auto 和 Windows 窗口监视器。日志放仓库 .vibe/tmp/，全过后再打包、从最新两版压缩包验升级。
