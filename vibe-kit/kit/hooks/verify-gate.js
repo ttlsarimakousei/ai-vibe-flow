@@ -618,11 +618,16 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
   // 这个会话碰过的变更挨个看：头一个还有事可做的，催它往下走。能做的都做完了、只剩留给用户的那个变更，放着，看下一个
   for (const c of mine) {
     const key = normKey(c.dir);
+    const direct = require('../lib/review-runner').stateFor(c.dir, 'code');
+    if (direct.status !== 'none' && direct.status !== 'completed' && direct.status !== 'running') continue; // 失败后交代限制，不能自行无限重启。
+    if (busy && busy(c.dir, 'code')) continue;
     const prev = st[key] || {};
-    const left = c.todo - (c.waiting || 0);
+    const remaining = require('../lib/task-types').automatedLeft(c.dir);
+    const left = remaining.length;
     let msg = '';
-    if (left > 0 && c.done === 0) { if (proposalReviewed(c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + ' 的提案也审过了，不用问我，直接开始 /opsx:apply，一项一项做到全部打勾（每项：做 → 跑验法 → 打勾 → 提交）。' + HAND_TIP; }
-    else if (left > 0) msg = '全自动模式：' + c.name + ' 还有 ' + left + ' 项没做完，不用问我，接着做下一项：' + c.next + '。' + HAND_TIP;
+    if (require('../lib/task-types').readyForReview(c.dir) && !codeReviewed(c.dir)) msg = '全自动模式：实现和必要测试已完成，' + require('../lib/review-runner').instruction(c.name, 'code', cfg) + '。完整结果返回后立即勾代码审查任务，核实并处理意见、复验后勾意见处理任务，用户验收留给用户。';
+    else if (left > 0 && c.done === 0) { if (proposalReviewed(c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + ' 的提案也审过了，不用问我，直接开始 /opsx:apply，一项一项做到能执行的任务全部打勾（做完并验证就勾，提交按档位）。' + HAND_TIP; }
+    else if (left > 0) msg = '全自动模式：' + c.name + ' 还有 ' + left + ' 项没做完，不用问我，接着做下一项：' + remaining[0].text + '。' + HAND_TIP;
     else if (c.done > 0) {
       const loop = readState('review-rounds')['code|' + key];
       const loopOpen = cfg.reviewLoop && loop && !loop.done;
@@ -826,7 +831,9 @@ async function handle(j) {
   } catch (e) { hookLog('verify-gate 自动收审查问题出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（自动收审查问题）', j, e); }
   // 发出去了、还在后台跑的审查：这时候别再催它审一遍（催了它会再开一个）
   const pending = pendingReviewsIn(toolCalls(entries, 0), toolResults(entries), allChanges(cwd), taskNotes(entries));
-  const busy = (dir, mode) => pending.some((p) => p.mode === mode && p.change && normKey(p.change.dir) === normKey(dir));
+  const busy = (dir, mode) => pending.some((p) => p.mode === mode && p.change && normKey(p.change.dir) === normKey(dir)) || require('../lib/review-runner').stateFor(dir, mode).status === 'running';
+  const expired = pending.filter((p) => p.expired);
+  if (expired.length && !j.stop_hook_active) todo.push('兼容审查代理超过总预算：只取消已登记的任务 ' + expired.map((p) => p.id).join('、') + '，交代已覆盖与未覆盖范围。没有完整结论的审查任务保持未勾，不再继续等待或启动替代代理。');
 
   // 这一轮的小状态：每件事每轮最多拦一次；续跑里只看"拦下之后又改了代码"
   const gkey = sid + '-gate';
@@ -839,7 +846,9 @@ async function handle(j) {
   const pageEdits = cfg.autoSeePage ? calls.filter((c) => isSource(c, PAGE) && !notApplicable(projectNotesFor(fileOf(c)), '看页面|页面')) : [];
   const verifyIssue = () => {
     const last = codeNeedingCheck.length ? calls.indexOf(codeNeedingCheck[codeNeedingCheck.length - 1]) : -1;
-    if (last >= 0 && !ranAfter(last, VERIFY_CMD) && !SAID_UNVERIFIED.test(lastSaid)) return '这一轮改了代码（' + names(codeNeedingCheck) + '），最后一次修改之后没有成功跑过验证。按项目说明（.vibe/project.md）里的快检命令验一下，把这一轮改过的文件一起传；确实没法验，就明说"没验证"和原因。';
+    const roots = [...new Set(codeNeedingCheck.map((c) => require('../lib/workspace').rootOf(path.dirname(fileOf(c)))))];
+    const proved = roots.length > 0 && roots.every((r) => require('../lib/evidence').commands(r).length > 0);
+    if (last >= 0 && !proved && !ranAfter(last, VERIFY_CMD) && !SAID_UNVERIFIED.test(lastSaid)) return '这一轮改了代码（' + names(codeNeedingCheck) + '），最后一次修改之后没有成功跑过验证。按项目说明（.vibe/project.md）里的快检命令验一下，把这一轮改过的文件一起传；确实没法验，就明说"没验证"和原因。';
     return '';
   };
   if (!j.stop_hook_active) {
@@ -858,18 +867,21 @@ async function handle(j) {
   // 交叉审查：这一轮亲手把变更的最后一项任务打了勾、代码还没审过的，催一次（只记"催过"和做完的时间，"审过"要看到真的审查）
   if (cfg.autoCrossReview) {
     const edited = calls.filter(isEdit).map(fileOf);
-    const fresh = changes().filter((c) => c.todo === 0 && c.done > 0 && edited.some((f) => under(f, c.dir)) && !codeReviewed(c.dir) && !busy(c.dir, 'code'));
+    const fresh = changes().filter((c) => require('../lib/task-types').readyForReview(c.dir) && c.done > 0 && edited.some((f) => under(f, c.dir)) && !codeReviewed(c.dir) && !busy(c.dir, 'code'));
     const toNudge = [];
     if (fresh.length) updateState('review-nudged', (st) => {
       for (const c of fresh) {
         const k = normKey(c.dir);
         const prev = st[k];
-        if (prev && (!prev.born || Math.abs(prev.born - changeBorn(c.dir)) <= 2000)) continue;
-        st[k] = { at: Date.now(), born: changeBorn(c.dir) };
+        const fingerprint = require('../lib/workspace').fingerprint(c.dir, 'code').hash;
+        const direct = require('../lib/review-runner').stateFor(c.dir, 'code');
+        if (direct.status !== 'none' && direct.status !== 'completed' && direct.status !== 'running') continue;
+        if (prev && prev.fingerprint === fingerprint && (!prev.born || Math.abs(prev.born - changeBorn(c.dir)) <= 2000)) continue;
+        st[k] = { at: Date.now(), born: changeBorn(c.dir), fingerprint };
         toNudge.push(c);
       }
     });
-    if (toNudge.length) todo.push('OpenSpec 变更 ' + toNudge.map((c) => c.name).join('、') + ' 的任务已全部打勾。归档之前按 /ttls-cross-review 的代码模式审一遍：用 Agent 调 ttls-reviewer（run_in_background 传 false，等它的结论），提示第一行写"模式：代码"，写上变更名，前端后端的改动都给它；成立的问题修掉并验证，再交代结果。');
+    if (toNudge.length) todo.push('OpenSpec 变更的实现和必要测试已完成：' + toNudge.map((c) => require('../lib/review-runner').instruction(c.name, 'code', cfg)).join('；') + '。完整结果返回后勾审查任务，成立的问题修掉并复验后勾意见处理任务，再交代结果，用户验收不自动勾。');
   }
 
   // 提交：这一轮自己改成功的文件（.vibe、.claude 里的不算）在 git 里还是没提交的状态。每一轮只提一次

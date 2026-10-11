@@ -935,7 +935,7 @@ function checkTasks(text, isAdded) {
     const body = m[1].trim();
     const n = i + 1;
     if (VAGUE_TASK.test(body.replace(/[\s，,。.：:；;、]/g, ''))) issues.push('第 ' + n + ' 行"' + body.slice(0, 40) + '"太笼统：写清楚改哪个文件、做什么');
-    if (!pathTokens(body).length) issues.push('第 ' + n + ' 行没写改哪个文件（路径或文件名）："' + body.slice(0, 50) + '"');
+    if (!['review', 'review-fix', 'user'].includes(require('./task-types').kind(l)) && !pathTokens(body).length) issues.push('第 ' + n + ' 行没写改哪个文件（路径或文件名）："' + body.slice(0, 50) + '"');
     if (!/(验|验证|验收|检验|核对)\s*[:：]/.test(body)) issues.push('第 ' + n + ' 行没写怎么验（' + verifyHint + '）："' + body.slice(0, 50) + '"');
   });
   return issues;
@@ -1704,6 +1704,8 @@ function reviewsIn(calls, results, changes, notes, archived) {
       const prev = out.filter((r) => r.change && r.mode && normKey(r.change.dir) === normKey(change.dir)).pop();
       if (prev) mode = prev.mode;
       else { const st = readState('review-rounds'); const k = normKey(change.dir); const open = ['proposal', 'code'].filter((m) => st[m + '|' + k] && !st[m + '|' + k].done); if (open.length === 1) mode = open[0]; }
+    const budget = Math.max(10, Number(readConfig().reviewBudgetSeconds) || 300) * 1000;
+    if (c.at && at && at - c.at > budget) return; // 迟到结论不能补成完整审查。
     }
     out.push({ id: c.id, key: c.key || c.id, raw: c.raw || c.id, i: c.i, mode, recheck, change, source: lessonSourceOf(prompt, change, archived), issues, idx, at, pos, text: String(text || '') });
   });
@@ -1720,10 +1722,11 @@ function pendingReviewsIn(calls, results, changes, notes) {
     const r = results.get(c.id);
     if (!r || r.error || !/Async agent launched|working in the background/i.test(r.text)) continue;
     if (notes && notes.has(c.id)) continue;
-    if (r.at && Date.now() - r.at > 30 * 60000) continue;
+    const budget = Math.max(10, Number(readConfig().reviewBudgetSeconds) || 300) * 1000;
     const prompt = String(c.input.prompt || '');
     const change = reviewTargetOf(prompt, changes);
-    out.push({ id: c.id, mode: reviewModeOf(prompt, change), change });
+    const started = c.at || r.at || 0;
+    out.push({ id: c.id, mode: reviewModeOf(prompt, change), change, expired: !!started && Date.now() - started > budget, deadline: started + budget });
   }
   return out;
 }
@@ -1772,7 +1775,7 @@ function syncReviews(entries, cwd) {
     if (!r.mode) { noteUnknownReview(r); continue; }
     const fresh = recordReview(r.mode, r.change.dir, r.issues, r.key, r.at);
     // 使用情况：这次审查从调用到结论花了多久（审查慢的时候看它；两小时以上的不算，多半是会话断过）
-    if (fresh) { try { const t0 = Date.parse(((entries || [])[r.i] || {}).timestamp || '') || 0; const ms = t0 && r.at > t0 ? r.at - t0 : 0; if (ms > 0 && ms < 7200000) require('./usage.js').bump('review.ms', ms); } catch (e) { /* 数不了就算了 */ } }
+    if (fresh) { try { const t0 = Date.parse(((entries || [])[r.i] || {}).timestamp || '') || 0; const ms = t0 && r.at > t0 ? r.at - t0 : 0; if (ms > 0 && ms < 7200000) updateState('review-local-metrics', (s) => { s.n = (s.n || 0) + 1; s.totalMs = (s.totalMs || 0) + ms; s.at = Date.now(); }); } catch (e) { /* 本机耗时记不了不影响审查 */ } }
   }
   return found;
 }
@@ -1858,6 +1861,7 @@ function unreviewedAfter(dir, rec) {
 /**
  * 代码审过了吗：要有一次真的代码审查，而且审查之后没有再做新的代码任务（见 unreviewedAfter）。老版本留下的记录（只有时间）照认。
  */
+    if (['review', 'review-fix', 'user'].includes(require('./task-types').kind(l))) continue;
 function codeReviewed(dir) {
   const r = reviewRecord('code', dir);
   if (!r) return false;
@@ -1871,6 +1875,7 @@ function codeReviewIssue(dir) {
   if (r.legacy) return '';
   const late = unreviewedAfter(dir, r);
   if (!late.length) return '';
+  if (r.fingerprint) return (r.resolvedFingerprint || r.fingerprint) === require('./workspace').fingerprint(dir, 'code').hash;
   const rel = (f) => path.basename(f);
   return '代码审查之后又做了 ' + late.length + ' 项任务，这部分代码没审到：' + late.slice(0, 3).map((x) => '"' + x.task.slice(0, 30) + '"（' + x.files.slice(0, 2).map(rel).join('、') + '）').join('；') + '。再按 /ttls-cross-review 的代码模式审一遍这几项的改动（审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
 }
@@ -1878,6 +1883,7 @@ function codeReviewIssue(dir) {
 // ===================== 多轮审查（开关 reviewLoop） =====================
 // 一轮审查报了问题：改了东西就复审改动点，报"问题 0 条"才算审完；审查意见都不成立、之后只在这个变更的 revisions.md 里记了理由的，算处理完；
 // 轮数用完还有问题：问用户一次（全自动按原则自己定），也算完。状态在 state/review-rounds.json，按"模式|变更目录"计。
+  if (r.fingerprint && !codeReviewed(dir)) return '代码或任务验法在审查后变更，需要针对变更部分复验和补审；仅打勾不会触发重复审查。';
 const underDir = (file, dir) => { const f = normKey(file); const d = normKey(dir); return f === d || f.startsWith(d + '/'); };
 const reviewMax = (cfg) => Math.min(5, Math.max(1, Number(cfg.reviewMaxRounds) || 3));
 /**

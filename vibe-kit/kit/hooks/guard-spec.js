@@ -98,6 +98,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const ticked = tickedLines(oldText, newText);
   const skipped = [];
   if (!ticked.length) return { issues: [], ticked, skipped };
+  const scopeIssue = require('../lib/apply-scope').check(j, art.dir);
+  if (scopeIssue) return { issues: [scopeIssue], ticked, skipped };
   let entries = null;
   const load = () => entries || (entries = j.transcript_path ? tailEntries(j.transcript_path, 6000000).filter((e) => e && !e.isSidechain) : []);
   const done = (issues) => ({ issues, ticked, skipped });
@@ -120,6 +122,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
       if (lo) return done([/。$/.test(lo) ? lo : lo + '；处理完再开工。']);
     }
   }
+  const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
+  if (special.length) return done(special);
   if (!j.transcript_path) return done([]);
   const es = load();
   const calls = toolCalls(es, 0);
@@ -132,6 +136,7 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const scenarioExists = scenarioFinder(roots || [art.root, cwd]);
   const out = [];
   for (const t of ticked) {
+    if (['review', 'review-fix', 'user'].includes(require('../lib/task-types').kind(t))) continue;
     // 验法写的是"同 3.1""同上"：查的是那一项写的验法（议题 #4）
     const own = verifyPartOf(t);
     const rv = resolveVerify(t, newText);
@@ -149,7 +154,7 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
     }
     if (since < 0 && !tokens.length) for (let i = calls.length - 1; i >= 0; i--) if (edited(calls[i]) && isCode(fileOf(calls[i]))) { since = i + 1; by = nameOf(calls[i]); break; }
     const cmds = calls.slice(Math.max(0, since)).filter((c) => { const r = res.get(c.id); return /^(Bash|PowerShell)$/.test(c.name) && r && !r.error; }).map((c) => String(c.input.command || ''));
-    if (plan.test(cmds)) continue;
+    if (plan.test(cmds) || plan.test(require('../lib/evidence').commands(art.root))) continue;
     const when = since > 0 ? '改完 ' + by + ' 之后' : '这段会话记录里';
     hookLog('guard-spec tick blocked task="' + t.slice(0, 40) + '" verify="' + v.slice(0, 40) + '" need="' + plan.need.slice(0, 60) + '" since=' + (since > 0 ? by : '头') + ' okCmds=' + cmds.length + (cmds.length ? ' last=' + cmds[cmds.length - 1].slice(0, 60) : ''));
     // 说清"要看到什么才算"：只说"还没跑过"，模型跑了十几遍也不知道差在哪（问题反馈 F20260928-003）
