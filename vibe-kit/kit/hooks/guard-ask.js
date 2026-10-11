@@ -5,7 +5,7 @@
  *     提问框会一直等人回答，这时 Stop 钩子管不到，全自动挂一夜就停在那里。
  *     不在流程里（另开的窗口做检索、答问题）照常能问：那时候人在。开关每次现读，配置页里一改就生效。
  *   Skill / SlashCommand：模型自己调了 OpenSpec 的技能（用户用大白话让它出提案、接着做）——这个会话从这时起算进了 OpenSpec 流程，
- *     调 propose / explore / new 的算在写提案那一段（plan），调 archive / verify 的算在做任务那一段（apply）。只记一笔，不拦。
+ *     调 propose / explore / new 回到提案阶段；archive / verify 不授予 apply。交接技能需要当前用户明确要求。
  *     调 /opsx:apply 的技能：用户还没说开工（不在流程里，或者还在写提案那一段）就拦下——提案、任务清单要他看过、他说了开工才做
  *     （用户 2026-10-07 定的，规矩见 lib/session.js"流程分两段"）。不能放行。
  */
@@ -45,8 +45,10 @@ function handle(j) {
         }
         if (cfg.autoSwitch && !out) hookLog('全自动模式 这个会话调了 ' + first.slice(0, 40) + (st.on ? '' : '，进了 OpenSpec 流程') + (/^(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i.test(first) ? '' : '：在写提案那一段，照有人在的样子来'));
       }
-      // 模型自己调交接的技能（提问框里选了"现在交接"、全自动到线自己写）：也数进"写交接记录"。用户自己敲 /ttls-handover 的在 task-anchor 里数
-      if (/^(ttls-)?handover$/i.test(first)) { try { require('../lib/usage.js').bump('handover.write'); } catch (e) { /* 数不了就算了 */ } }
+      // 技能和直接写文件共用手动交接判断，不能靠模型自己调用技能获得许可。
+      if (/^(ttls-)?handover$/i.test(first)) {
+        if (!require('../lib/session').canWriteHandover(j)) return blockOut('PreToolUse', '[vibe-kit] 当前用户没有要求交接。连续工作用自动压缩，接着处理当前任务；不要自行写交接或 clear。用户明确说交接或执行 /ttls-handover 后再写。');
+        try { require('../lib/usage.js').bump('handover.write'); } catch (e) { /* 数不了就算了 */ } }
     } catch (e) { out = null; /* 记不了不影响调技能 */ }
     return out;
   }

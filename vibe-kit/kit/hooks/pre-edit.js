@@ -43,6 +43,7 @@ function handle(j) {
   let sig = '';
   let passes = {};
   const cfg = readConfigFor(j);
+  if (/(^|[\\/])\.vibe[\\/]handover\.md$/i.test(f) && !require('../lib/session').canWriteHandover(j, cfg)) return require('../lib/session').blockOut('PreToolUse', '[vibe-kit] 没有当前用户的手动交接要求，不写交接记录。连续工作依靠自动压缩，接着处理当前任务。');
   if (f) { try { const no = require('../lib/apply-scope').check(j, f); if (no) return require('../lib/session').blockOut('PreToolUse', '[vibe-kit 范围] ' + no); } catch (e) { if (feedback) feedback.recordHookError('pre-edit 范围', j, e); } }
   const target = f ? 'file:' + normKey(f) : '';
   const action = String(j.tool_name || '') + '：' + f;

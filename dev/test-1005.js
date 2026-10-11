@@ -264,7 +264,9 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     H.ok('全自动照样算开着：提问框拦下，不会停在那里等人', !!ask && ask.decision === 'block' && /全自动模式/.test(H.reasonOf(ask)), ask);
     for (const p of ['停', '等等，先别提交', '不用了', '别做了', '先停一下，我看看日志', '暂停']) { say('f1', '/opsx:apply add-export'); say('f1', p); H.ok('说"' + p + '"：出了流程', flow('f1').on === false, flow('f1')); }
     say('f1', '继续');
-    H.ok('停了之后说"继续"：接回去', flow('f1').on === true, flow('f1'));
+    H.ok('停了之后说"继续"：不能恢复已撤回的 apply 许可', flow('f1').on === false, flow('f1'));
+    say('f1', '/opsx:apply add-export');
+    H.ok('重新明确 apply 才能恢复实施流程', flow('f1').on === true && flow('f1').stage === 'apply', flow('f1'));
     say('f2', '不要停');
     H.ok('本来就不在流程里的会话说"不要停"：不算进流程', flow('f2').on === false, flow('f2'));
     const r1 = say('f3', '停车场管理加一个导出功能');
@@ -305,12 +307,13 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     const cd = H.hook(h, 'guard-commit', Object.assign({}, base, { tool_name: 'Bash', tool_input: { command: 'cd src && ls -la' } }));
     const kit = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: path.join(h.kit, 'hooks', 'pre-edit.js'), old_string: 'a', new_string: 'b' } }));
     const tok = H.hook(h, 'guard-commit', Object.assign({}, base, { tool_name: 'Bash', tool_input: { command: 'cat ~/.claude/vibe-kit/secrets.json' } }));
-    H.hook(h, 'guard-ask', Object.assign({}, base, { tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } }));
+    const handover = H.transcript(path.join(h.root, 'handover.jsonl'), [H.tr.user('写一份交接文档')]);
+    H.hook(h, 'guard-ask', Object.assign({}, base, { transcript_path: handover, tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } }));
     const n = ((readJson(path.join(h.kit, 'state', 'usage.json')).days || {})[today] || { n: {} }).n;
     const sum = Object.keys(n).filter((k) => /^block\./.test(k)).reduce((a, k) => a + n[k], 0);
     H.ok('串着 cd 的命令、改套件、读令牌：三次都拦下了', blocked(cd) && blocked(kit) && blocked(tok), [cd, kit, tok]);
     H.ok('都数进了"拦下"（以前这三样都是 0）', n['block.cd'] === 1 && n['block.guard-kit'] === 1 && sum === 3, n);
-    H.ok('模型自己调交接的技能：数进"写交接记录"', n['handover.write'] === 1, n);
+    H.ok('用户要求后调用交接技能：数进"写交接记录"', n['handover.write'] === 1, n);
     const stats = readJson(path.join(h.kit, 'state', 'block-stats.json'));
     H.ok('"拦得最多的规矩"里也有', Object.values(stats).some((x) => x && x.hook === 'cd') && Object.values(stats).some((x) => x && x.hook === 'guard-kit'), Object.values(stats).map((x) => x && x.hook));
   }
