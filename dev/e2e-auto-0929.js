@@ -83,6 +83,11 @@ function answer(body, res) {
     if (/\[vibe-kit 收工检查\]/.test(last)) return say(body, res, '复审留到下一个会话做，这个会话先收工。没验证：1.1 的对照场景要先改库。');
     return say(body, res, '做完了。');
   };
+  // 用户对当前成果自测确认后，归档许可在这个新会话重新读取。
+  if (/自测通过，归档 a1/.test(everything)) {
+    if (!ran(/git mv openspec\/changes\/a1 /)) return tool(body, res, 'Bash', { command: 'mkdir -p openspec/changes/archive && git mv openspec/changes/a1 openspec/changes/archive/2026-09-29-a1', description: '按用户确认归档 a1' });
+    return finish();
+  }
   // ---------- 第二个会话：复审（用的是和上一个会话那次审查一样的 id），然后归档 ----------
   if (/接着做：复审/.test(everything)) {
     if (agent && reviews.length === 0) return tool(body, res, agent.name, reviewOf('复审代码'), DUP);
@@ -216,8 +221,11 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   const r2s = rounds();
   H.ok('复审计成了第 2 轮，0 条，审完了', r2s.rounds === 2 && r2s.issues === 0 && r2s.done === true && r2s.seen.length === 2 && r2s.seen.every((k) => k.endsWith(':' + DUP)) && r2s.seen[0] !== r2s.seen[1], r2s);
   const archA = path.join(proj, 'openspec', 'changes', 'archive', '2026-09-29-a1');
-  H.ok('归档没被拦', fs.existsSync(archA) && !seen(r2, /还不能归档/), cmdsOf(r2));
-  H.ok('第二个会话也交了报告，是另一份，里面说了 a1 已归档', reports().length === 2 && /- a1：已归档/.test(fs.readFileSync(reports()[1], 'utf8')), reports().map((f) => f + '\n' + fs.readFileSync(f, 'utf8')).join('\n----\n'));
+  H.ok('复审通过但未自测确认不能归档', !fs.existsSync(archA) && fs.existsSync(a1) && seen(r2, /归档.{0,40}(确认|自测|许可)|用户.{0,30}归档/), cmdsOf(r2));
+  const session2 = JSON.parse(r2.out.trim()).session_id;
+  H.ok('新会话复审不借旧许可恢复全自动或重写报告', !S.readConfigFor({ cwd: proj, session_id: session2 }).autoMode && reports().length === 1 && !/- a1：已归档/.test(fs.readFileSync(reports()[0], 'utf8')), reports());
+  const r3 = await runClaude(port, '自测通过，归档 a1');
+  H.ok('用户确认当前成果后实际归档', r3.code === 0 && fs.existsSync(archA) && !fs.existsSync(a1), r3.out + r3.err);
 
   server.close();
   let left = '';

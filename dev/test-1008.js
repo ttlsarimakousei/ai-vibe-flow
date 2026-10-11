@@ -135,7 +135,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('写提案那一段：提问框能用（全自动不算数）', ask('p1') === null, ask('p1'));
     say('p2', '/opsx:propose add-y');
     H.ok('敲 /opsx:propose：写提案那一段', flow('p2').stage === 'plan', flow('p2'));
-    const r2 = say('p1', '提案看过了，开工');
+    const r2 = say('p1', '提案看过了，开工 add-y');
     H.ok('说了"开工"：做任务那一段', flow('p1').stage === 'apply', flow('p1'));
     H.ok('开工那一句：给我看的 systemMessage 说全自动开着，给模型的提醒也说了', /"systemMessage":"\[vibe-kit\] 开始 apply：全自动模式开着/.test(r2) && /现在开始 apply（做任务）：全自动模式开着/.test(r2), r2);
     H.ok('做任务那一段：提问框拦下', blocked(ask('p1')) && /全自动模式/.test(H.reasonOf(ask('p1'))));
@@ -147,11 +147,11 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('"继续"接回去：还是做任务那一段', flow('p1').on === true && flow('p1').stage === 'apply', flow('p1'));
     say('p1', '提案里 X 不对，改一下');
     H.ok('说的是提案的事：回到写提案那一段，提问框又能用了', flow('p1').stage === 'plan' && ask('p1') === null, flow('p1'));
-    say('p1', '把 1.1 做了');
+    say('p1', '把 add-y 的 1.1 做了');
     H.ok('"把 1.1 做了"：做任务那一段', flow('p1').stage === 'apply', flow('p1'));
     const r4 = say('p3', '/opsx:apply add-y');
     H.ok('敲 /opsx:apply：做任务那一段，告诉我全自动开着', flow('p3').stage === 'apply' && /开始 apply：全自动模式开着/.test(r4), r4);
-    const r5 = say('p4', '接着做 going-z');
+    const r5 = say('p4', '/opsx:apply going-z');
     H.ok('点名接着做一个已经打过勾的变更：做任务那一段，也告诉我', flow('p4').stage === 'apply' && /开始 apply：全自动模式开着/.test(r5), [flow('p4'), r5]);
     say('p5', 'add-y 的提案改一下，去掉导出');
     H.ok('点名一个没开工的变更、说的是提案：写提案那一段', flow('p5').on === true && flow('p5').stage === 'plan', flow('p5'));
@@ -174,7 +174,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     markProposalReviewed(h, path.join(proj, 'openspec', 'changes', 'add-y'));
     const t1 = tick('p2');
     H.ok('写提案那一段打勾：拦下，说我还没说开工', blocked(t1) && /我还没说开工/.test(H.reasonOf(t1)) && !/还没看到它成功跑过/.test(H.reasonOf(t1)), H.reasonOf(t1));
-    say('p2', '开工');
+    say('p2', '开工 add-y');
     H.ok('说了开工再打勾：放行', tick('p2') === null, H.reasonOf(tick('p2')));
     // 做完的功能上发现的问题：先查清原因，改动小直接改，不要起一整条流程
     const r7 = say('p11', '我自测的时候发现两个弹窗的顺序反了，应该只改前端');
@@ -198,8 +198,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('收工时发现它调了 /opsx:apply：记成做任务那一段', flow('p10').on === true && flow('p10').stage === 'apply', flow('p10'));
     // 状态栏
     const sl = (sid) => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
-    H.ok('状态栏：写提案那一段写明"还在写提案，照常"', /全自动 开·这个会话在流程里，还在写提案，照常/.test(sl('p9')), sl('p9'));
-    H.ok('状态栏：做任务那一段写明"在做任务"', /全自动 开·这个会话在流程里，在做任务/.test(sl('p10')), sl('p10'));
+    H.ok('状态栏：写提案那一段写明"还在写提案，照常"', /全自动 开·需求与提案，照常/.test(sl('p9')), sl('p9'));
+    H.ok('状态栏：做任务那一段写明"在做任务"', /全自动 开·实施，当前生效/.test(sl('p10')), sl('p10'));
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
@@ -236,13 +236,13 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('审完了：照旧催提交', !!r3 && /还没提交/.test(H.reasonOf(r3)), H.reasonOf(r3));
     // 开工那一句：先把提案的产物提交一次
     const say = (sid, prompt, cfgPatch) => { if (cfgPatch) H.setConfig(h, cfgPatch); const o = H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
-    H.ok('说了开工：提醒它开工前先把 proposal、specs、design、tasks、revisions 提交一次', /开工前先把这个变更的 proposal、specs、design、tasks、revisions 提交一次/.test(say('v3', '提案看过了，开工 add-x')), say('v3', '开工 add-x'));
+    H.ok('开工不能补提案提交许可', /没有明确提交许可时不在开工节点补提案提交/.test(say('v3', '提案看过了，开工 add-x')));
     H.ok('"我说了才提交"那一档：不提', !/开工前先把/.test(say('v4', '开工 add-x', { autoCommit: 'off' })));
     H.setConfig(h, { autoCommit: 'task' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
     H.ok('规范里写的提交节奏：提案审完单独问，审查修复全部轮次收尾后提交', /提案写完、审完、修完后交代要点，先问我是否提交/.test(md) && /提交不等于同意开工/.test(md) && /不一轮一提交/.test(md), md.slice(0, 200));
-    H.ok('交叉审查的技能也改了说法', /非 OpenSpec 的改动仍先问用户，不审一轮提交一轮/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
+    H.ok('交叉审查的技能也改了说法', /非 OpenSpec 改动、提案提交仍先问用户/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
     // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
     const later = '1.2 做完了，验证过了。打勾攒着等这一阶段提交时一起勾。';
     const r4 = stop('v5', [H.tr.user('接着做 add-x 的 1.2'), editA, H.tr.say(later)], later);
@@ -267,10 +267,10 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.inFlow(h, sid, [chg], true, 'apply');
     const tf = path.join(h.root, 'd.jsonl');
     const sl = () => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
-    H.ok('变更还在：状态栏说在做任务', /在流程里，在做任务/.test(sl()), sl());
+    H.ok('变更还在：状态栏说在做任务', /实施，当前生效/.test(sl()), sl());
     fs.mkdirSync(path.join(proj, 'openspec', 'changes', 'archive'), { recursive: true });
     fs.renameSync(chg, path.join(proj, 'openspec', 'changes', 'archive', '2026-10-07-done-y'));
-    H.ok('变更归档了、收工检查还没跑：状态栏就说归档了，照常', /这个会话的变更归档了，照常/.test(sl()) && !/在做任务/.test(sl()), sl());
+    H.ok('变更归档了、收工检查还没跑：状态栏就说归档了，照常', /普通任务，照常，变更已归档/.test(sl()) && !/在做任务/.test(sl()), sl());
     H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('归档'), H.tr.ran('Bash', { command: 'openspec archive done-y --yes' }, 'ok'), H.tr.say('归档好了')]), stop_hook_active: false, last_assistant_message: '归档好了' });
     const flow = () => readJson(path.join(h.kit, 'state', sid + '-flow.json'));
     H.ok('收工时记成不在流程里', flow().on === false && /归档/.test(flow().why), flow());
@@ -282,7 +282,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const agent = H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || '';
     H.ok('审查者：不编译、不跑测试，最多读 20 个文件', /不编译、不跑测试、不起服务/.test(agent) && /最多读 20 个文件/.test(agent) && !/能跑的就跑/.test(agent), agent.slice(0, 200));
     const skill = H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || '';
-    H.ok('技能：验证结果贴给它，它不自己跑；只核实会出错、有隐患的；写了慢的时候看哪里', /它不自己编译、不跑测试/.test(skill) && /只核实"会出错""有隐患"的/.test(skill) && /## 审查慢的时候看哪里/.test(skill), skill.slice(0, 200));
+    H.ok('技能使用有限独立请求并保留兼容预算', /有限请求/.test(skill) && /兼容/.test(skill) && /取消/.test(skill), skill.slice(0, 200));
     // 审查耗时：一次审查从调用到结论 3 分钟
     const chg2 = path.join(proj, 'openspec', 'changes', 'add-z');
     H.write(path.join(chg2, 'tasks.md'), '- [x] 1.1 改 src/A.java；验：mvn -q compile\n');
@@ -292,18 +292,19 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.hook(h, 'verify-gate', { session_id: 'd2', cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('审一下 add-z 的代码'), call, res, H.tr.say('审完了，0 条')]), stop_hook_active: false, last_assistant_message: '审完了，0 条' });
     const days = readJson(path.join(h.kit, 'state', 'usage.json')).days || {};
     const sum = (k) => Object.values(days).reduce((a, d) => a + Number((d.n || {})[k] || 0), 0);
-    H.ok('使用情况里记了这次审查的耗时（3 分钟）', sum('review.code') === 1 && sum('review.ms') >= 179000 && sum('review.ms') <= 181000, days);
+    const timing = readJson(path.join(h.kit, 'state', 'review-local-metrics.json'));
+    H.ok('审查耗时只记在本机', sum('review.code') === 1 && timing.n === 1 && timing.totalMs >= 179000 && timing.totalMs <= 181000, timing);
     const U = require(path.join(h.kit, 'lib', 'usage.js'));
     const rows = U.render ? '' : '';
     void rows;
     const text = JSON.stringify(Object.values(days));
-    H.ok('（记在当天的 n 里）', /review\.ms/.test(text), text.slice(0, 200));
+    H.ok('匿名次数里没有耗时', !/review\.ms/.test(text), text.slice(0, 200));
   }
 
   // ---------------------------------------------------------------------------------------------
   H.section('交接："不问"只提醒一句，不让它自己写交接记录');
   {
-    const h = H.makeHome('t1008-ho', null, Object.assign({ handoverAsk: 'off', handoverPercent: 70 }, QUIET));
+    const h = H.makeHome('t1008-ho', null, Object.assign({ contextStrategy: 'handover', handoverAsk: 'off', handoverPercent: 70 }, QUIET));
     const proj = H.makeRepo(path.join(h.work, 'crm'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n' });
     const tf = H.transcript(path.join(h.root, 'h.jsonl'), [H.tr.user('开始')]);
     const sid = 'ho1';

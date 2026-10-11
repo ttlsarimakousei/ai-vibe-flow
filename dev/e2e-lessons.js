@@ -73,11 +73,15 @@ function answer(body, res) {
   const ran = (re) => done.some((u) => u.name === shell && re.test(String((u.input || {}).command || '')));
   const last = afterLastAssistant(body);
   const s = scenario;
+  if (s.kind === 'commit') {
+    if (!ran(/git commit/)) return tool(body, res, shell, { command: 'git add src/main/java/com/x/OrderService.java' + (s.includeRule ? ' ".claude/rules/ttls-lessons-java.md"' : '') + ' && git commit -m "fix: 查询前判空' + (s.includeRule ? '并登记经验规则' : '') + '（源自 ' + s.change + ' 1.1）"', description: '按用户确认提交当前成果' });
+    return say(body, res, '当前成果已提交。');
+  }
   if (s.kind === 'read') {
     if (!done.some((u) => u.name === 'Read')) return tool(body, res, 'Read', { file_path: JAVA });
     return say(body, res, '读完了。');
   }
-  // 审查 → 改 → 验 → 提交 → 收工；被催了记经验就记，规则文件更新了就提交
+  // 兼容代理入口：审查、修复和经验照常；故意未经确认尝试提交，必须拦截，后续真人确认再提交。
   if (!done.some((u) => u.name === 'Agent' || u.name === 'Task')) {
     const agent = (body.tools || []).find((t) => t.name === 'Agent' || t.name === 'Task');
     const props = Object.keys(((agent || {}).input_schema || {}).properties || {});
@@ -159,6 +163,9 @@ const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
   const c1 = L.readCandidates(proj);
   H.ok('候选里有一条' + (AUTO ? '，是自动收的，文字是审查者写的"以后怎么避免"' : ''), c1.length === 1 && c1[0].text === RULE_TEXT && c1[0].kind === '边界' && !!c1[0].auto === AUTO, c1);
   H.ok('还没有规则文件', !fs.existsSync(ruleFile));
+  H.ok('修改完成但未确认时没有自行提交', H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '1' && H.git(proj, ['status', '--porcelain', '--', 'src']).out.trim() !== '');
+  const commit1 = await runClaude(port, '提交当前 add-export 的修复', { kind: 'commit', change: 'add-export' });
+  H.ok('真人确认后实际提交第一个修复', commit1.code === 0 && H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '2', commit1.out + commit1.err);
 
   H.section('第二个变更：同样的问题又出现，升成规则并提交');
   const r2 = await runClaude(port, '审一下变更 fix-order 的代码，有问题就改', { kind: 'review', change: 'fix-order' });
@@ -167,10 +174,13 @@ const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
   else H.ok('工具回了"已升成这个项目的规则"', seen(r2, /第 2 次出现，已升成这个项目的规则/));
   H.ok('规则文件写出来了' + (AUTO ? '，标着"自动"' : ''), fs.existsSync(ruleFile) && (H.read(ruleFile) || '').includes('- ' + RULE_TEXT) && /自动=具体/.test(H.read(ruleFile) || '') === AUTO, H.read(ruleFile));
   H.ok('提交规则文件的命令没被拦', commandsIn(r2).some((c) => /git add "\.claude\/rules\/ttls-lessons-java\.md"/.test(c)) && !seen(r2, /会改到经验规则的文件/), commandsIn(r2));
+  H.ok('新成果仍需本次确认，不能借上次许可', H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '2' && H.git(proj, ['status', '--porcelain', '--', 'src']).out.trim() !== '');
+  const commit2 = await runClaude(port, '提交当前 fix-order 的修复和经验规则', { kind: 'commit', change: 'fix-order', includeRule: true });
+  H.ok('真人确认后实际提交修复和规则', commit2.code === 0 && H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '3', commit2.out + commit2.err);
   const log = H.git(proj, ['log', '--oneline', '--name-only', '-3']).out;
-  H.ok('规则文件进了仓库', /docs: 更新经验规则/.test(log) && /\.claude\/rules\/ttls-lessons-java\.md/.test(log), log);
+  H.ok('规则文件进了仓库', /fix: 查询前判空并登记经验规则/.test(log) && /\.claude\/rules\/ttls-lessons-java\.md/.test(log), log);
   H.ok('工作区里规则文件是干净的', H.git(proj, ['status', '--porcelain', '--', '.claude/rules']).out.trim() === '', H.git(proj, ['status', '--porcelain']).out);
-  if (!AUTO) H.ok('没有再被催提交规则文件', !seen(r2, /经验规则文件更新了，还没提交/));
+  if (!AUTO) H.ok('没有再被催提交规则文件', !seen(commit2, /经验规则文件更新了，还没提交/));
 
   H.section('新会话：读到 java 文件时自动带上规则');
   const r3 = await runClaude(port, '读一下 src/main/java/com/x/OrderService.java', { kind: 'read' });

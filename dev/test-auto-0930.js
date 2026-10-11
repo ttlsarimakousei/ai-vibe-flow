@@ -314,7 +314,7 @@ H.section('工具的用量和毛病');
   H.setConfig(h, { dbcrudDaemon: false });
   // 2026-10-01 起没有本机导出了：工具用量、能优化的地方跟着使用情况上报（lib/usage.js），工具报的毛病是问题反馈、跟着问题上报
   const us = require(path.join(h.kit, 'lib', 'usage.js')).summary().text;
-  H.ok('使用情况里有工具用量、能优化的地方', /查库、查 redis 的工具（累计到现在）：[^\n]*ttls-db-crud query 31 次（出错 6）/.test(us) && /从用量里看出来能优化的：[^\n]*查库的命令平均每条/.test(us) && /ttls-redis get 4 次/.test(us), us);
+  H.ok('使用情况只传工具次数，耗时建议留本机', /查库、查 redis 的工具（累计到现在）：[^\n]*ttls-db-crud query 31 次（出错 6）/.test(us) && /ttls-redis get 4 次/.test(us) && !/从用量里看出来能优化的：/.test(us) && T.hints().some((x) => /平均每条/.test(x.what)), us);
   H.ok('工具报的毛病记成了问题反馈', F.listRecords().filter((r) => !F.isNoise(r)).some((r) => /ttls-db-crud 找不到数据库驱动/.test(r.title)), F.listRecords().map((r) => r.title));
 
   // 日志被工具截过（丢掉前一半），截完又长过了上次读到的位置：不能从旧位置接着读，也不能把留下的那一半再数一遍

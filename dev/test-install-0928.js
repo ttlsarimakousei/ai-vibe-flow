@@ -41,7 +41,7 @@ const h = freshHome('inst'); roots.push(h.root);
   H.ok('新开关的默认值', c.lessons === 'on' && c.lessonThreshold === 2 && c.lessonMaxPerGroup === 10 && c.lessonMaxChars === 120 && c.lessonPromote === 'ask' && c.autoMemory === 'off', c);
   const hash = JSON.parse(H.read(path.join(h.kit, 'state', 'kit-hash.json')) || '{}');
   H.ok('代码指纹里有新文件', hash.files && hash.files['lib/lessons.js'] && hash.files['tools/lesson.js'], Object.keys(hash.files || {}));
-  H.ok('审查技能里有"经验"那一节', /审完之后：经验/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
+  H.ok('审查技能仍收集已核实经验', /经验规则复用原来的 lessons 自动收集/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
   H.ok('审查代理会报"以后怎么避免"', /以后怎么避免\*\*：一句话/.test(H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || ''));
   H.ok('审查代理会报类别', /类别\*\*：想当然/.test(H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || ''));
   const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';

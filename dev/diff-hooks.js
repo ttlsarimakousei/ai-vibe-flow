@@ -79,6 +79,12 @@ const cmd = (command, tool, files) => (kit) => { const proj = project(kit, files
 const stop = (entries, extra, files) => (kit) => { const proj = project(kit, files); const es = entries(proj); const j = base(proj, kit, Object.assign({ hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '做完了' }, extra)); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), es); return { proj, j }; };
 const prompt = (text, files, entries) => (kit) => { const proj = project(kit, files); const j = base(proj, kit, { hook_event_name: 'UserPromptSubmit', prompt: text }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), entries ? entries(proj) : [H.tr.user(text)]); return { proj, j }; };
 
+// 自动压缩策略不能由模型自己调用技能或写文件来触发交接。
+add('交接：没有用户要求不能调技能', 'guard-ask', kit => {
+  const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } }) };
+}, /当前用户没有要求交接/, NEXT, { contextStrategy: 'compact' });
+add('交接：没有用户要求不能直接写', 'pre-edit', edit('.vibe/handover.md', 'Write', { content: '# 交接\n' }), /没有当前用户的手动交接要求/, NEXT, { contextStrategy: 'compact' });
+
 // IDEA 工具直接调用和路由调用都要经过原有保护；普通源码查询仍放行。
 const idea = (name, input) => kit => {
   const proj = project(kit);
@@ -100,7 +106,7 @@ add('反馈1007：全自动时用户当场要求 push', 'guard-commit', (kit) =>
   r.j.transcript_path = H.transcript(path.join(path.dirname(r.proj), 'push.jsonl'), [H.tr.user('3.推送远端')]);
   H.inFlow(kit, r.j.session_id, [path.join(r.proj, 'openspec/changes/add-export')]);
   return r;
-}, /放行，没有输出/, V1010, { autoMode: true });
+}, /推送预览[\s\S]*另一条真人确认/, NEXT, { autoMode: true });
 add('反馈1007：env -C 下的相对发布脚本仍确认', 'guard-commit', (kit) => {
   const r = cmd('env -C "<项目>/pkg" node publish.js')(kit);
   H.write(path.join(r.proj, 'pkg/install.js'), '// 测试占位\n');
@@ -152,13 +158,13 @@ for (const c of ['ls -la', 'git status', 'mvn -q -o compile', 'git commit -m "�
   'git push', 'git -C "<项目>" push origin main', 'rm -rf ~/.claude/vibe-kit/hooks', 'cat ~/.claude/vibe-kit/config.json', 'echo x > ~/.claude/settings.json', 'node ~/.claude/vibe-kit/install.js --uninstall',
   'node "$HOME/.claude/vibe-kit/tools/feedback.js" list', 'taskkill //F //IM node.exe', 'pkill node', 'node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name a --port 8080 -- mvn spring-boot:run',
   'curl -s http://127.0.0.1:15730/api/kit -H "x-vibe-router: 1"', 'curl -s http://127.0.0.1:8080/api/orders',
-  'git add src/main/java/com/x/A.java.bak', 'grep -rn disableAllHooks .', 'echo \'{"disableAllHooks":true}\' > .claude/settings.local.json']) add('命令：' + c, 'guard-commit', cmd(c));
+  'git add src/main/java/com/x/A.java.bak', 'grep -rn disableAllHooks .', 'echo \'{"disableAllHooks":true}\' > .claude/settings.local.json']) add('命令：' + c, 'guard-commit', cmd(c), /\bgit\b.*\bpush\b/.test(c) ? /推送预览[\s\S]*另一条真人确认/ : undefined, /\bgit\b.*\bpush\b/.test(c) ? NEXT : undefined);
 add('PowerShell：git commit -m "feat: 新增导出"; if ($?) { git push }', 'guard-commit', cmd('git commit -m "feat: 新增导出"; if ($?) { git push }', 'PowerShell'), /不走 OpenSpec 的改动，提交之前要我点头/, V1008);
 for (const c of ['Remove-Item -Recurse $env:USERPROFILE\\.claude\\vibe-kit', 'Get-Content $env:USERPROFILE\\.claude\\vibe-kit\\config.json', 'Stop-Process -Name node -Force'])
   add('PowerShell：' + c, 'guard-commit', cmd(c, 'PowerShell'));
 // 1008 有意改的：敲 /opsx:apply 开工时告诉用户全自动开没开（systemMessage），给模型的提醒里也有一句
-add('开口：敲 /opsx:apply（开工时说全自动开没开）', 'task-anchor', prompt('/opsx:apply add-export'), /开始 apply：全自动模式关着/, V1008);
-add('开口：说"开工"（点名变更）', 'task-anchor', (kit) => { const r = prompt('提案看过了，开工 add-export', null, () => [H.tr.user('做一个导出功能'), H.tr.say('提案写好了')])(kit); r.j.session_id = 'sess-diff-start'; return r; }, /开始 apply：全自动模式关着/, V1008);
+add('开口：敲 /opsx:apply（开工时说全自动开没开）', 'task-anchor', prompt('/opsx:apply add-export'), /没有明确提交许可时不在开工节点补提案提交[\s\S]*开始 apply：全自动模式关着/, NEXT);
+add('开口：说"开工"（点名变更）', 'task-anchor', (kit) => { const r = prompt('提案看过了，开工 add-export', null, () => [H.tr.user('做一个导出功能'), H.tr.say('提案写好了')])(kit); r.j.session_id = 'sess-diff-start'; return r; }, /没有明确提交许可时不在开工节点补提案提交[\s\S]*开始 apply：全自动模式关着/, NEXT);
 // 这一版有意改的：整仓 add 的提示里说了新建的仓库第一次入仓不拦；过程文件的提示里写明事由是变更名的留到变更归档；
 // 变更没归档之前不让删它的过程文件；目录写在变量里的 git 命令说清是算不出是哪个仓库
 for (const c of ['git add -A', 'git add .']) add('命令：' + c, 'guard-commit', cmd(c), /新建的仓库第一次入仓（还没有任何提交）不拦，可以整仓 add/, V2248);
@@ -219,7 +225,7 @@ add('收工：最后一项打了勾、没审', 'verify-gate', (kit) => {
   const t = path.join(r.proj, 'openspec/changes/add-export/tasks.md');
   fs.writeFileSync(t, fs.readFileSync(t, 'utf8').replace('- [ ] 1.2', '- [x] 1.2'));
   return r;
-});
+}, /实现和必要测试已完成[\s\S]*review\.js run[\s\S]*用户验收不自动勾/, NEXT);
 add('收工：改了产物没记修订', 'verify-gate', stop((p) => [H.tr.user('改设计'), H.tr.ran('Edit', { file_path: path.join(p, 'openspec/changes/add-export/design.md'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.say('做完了')]));
 const review = (issues, mode) => H.tr.ran('Agent', { subagent_type: 'vibe-reviewer', prompt: '模式：' + (mode || '代码') + '\n变更：openspec/changes/add-export/', run_in_background: false }, '审过了。\n\n结论：问题 ' + issues + ' 条（会出错 ' + issues + '，有隐患 0，建议 0）');
 add('收工：审查报 0 条', 'verify-gate', stop(() => [H.tr.user('审一下'), review(0), H.tr.say('审查没问题')]));
@@ -240,16 +246,17 @@ add('开口：开头是"好"字的需求', 'task-anchor', prompt('好友列表�
 add('开口：应一声', 'task-anchor', prompt('好的，谢谢'));
 add('开口：让它停', 'task-anchor', prompt('等等，先别提交'));
 add('提交：提案要单独确认', 'guard-commit', cmd('git commit -m "docs: 提案 add-export"'), /提案提交要单独确认/, V1010B);
-add('开口：合并push提示确定性工具', 'task-anchor', prompt('合并push'), /merge-push\.js[\s\S]*只处理未推送的本地提交|merge-push\.js/, V1010B);
+add('开口：合并push也等预览后的真人确认', 'task-anchor', prompt('合并push'), /推送预览[\s\S]*merge-push\.js[\s\S]*另一条真人确认/, NEXT);
+add('开口：普通push也启动合并预览', 'task-anchor', prompt('push'), /推送预览[\s\S]*merge-push\.js[\s\S]*另一条真人确认/, NEXT);
 add('提交：普通文档修订标题不能免确认', 'guard-commit', cmd('git add README.md && git commit -m "docs: 修订使用说明"'), /不走 OpenSpec 的改动，提交之前要我点头/, V1010B);
 add('提案：不能引用本机临时输入', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Write', { content: '## Why\n参考 .vibe/tmp/reference.json\n' }, { 'openspec/changes/add-export/proposal.md': '## Why\n业务现状\n', '.vibe/tmp/reference.json': '{}' }), /另一台电脑拿不到[\s\S]*assets/, V1010B);
 add('提交：整目录不能遗漏临时输入', 'guard-commit', cmd('git add openspec/changes/add-export && git commit -m "docs: 修订产物"', null, { 'openspec/changes/add-export/proposal.md': '## Why\n参考 .vibe/tmp/reference.json\n', 'openspec/changes/add-export/tasks.md': '- [ ] 1.1 改 src/main/java/A.java；验：mvn -q compile\n' }), /材料不能交付/, V1010B);
 
 // ---------- 会话开始、读文件提醒、提问框 ----------
 // 项目说明不一定是 /onboard 查的了（后台自动探索也会写）：带给模型的那句话里不再说是谁查的
-add('会话开始：普通项目', 'session-start', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'SessionStart', source: 'startup' }) }; }, /Bash 里不要把 cd 和别的命令串在一条里[\s\S]*项目说明（[^）]*project\.md；和实际对不上时以实际为准/, V1505);
+add('会话开始：普通项目', 'session-start', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'SessionStart', source: 'startup' }) }; }, /项目说明[\s\S]*环境就绪[\s\S]*不代表构建或测试通过/, NEXT);
 // 压缩之后按会话的启动目录算（这一版起）：这一项用自己的会话编号，免得拿上一项记下的启动目录当成它的
-add('会话开始：压缩之后', 'session-start', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { session_id: 'sess-diff-compact', hook_event_name: 'SessionStart', source: 'compact' }) }; }, /Bash 里不要把 cd 和别的命令串在一条里[\s\S]*项目说明（[^）]*project\.md；和实际对不上时以实际为准/, V1505);
+add('会话开始：压缩之后', 'session-start', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { session_id: 'sess-diff-compact', hook_event_name: 'SessionStart', source: 'compact' }) }; }, /本机事实[\s\S]*add-export 1\/2[\s\S]*不授予[\s\S]*许可/, NEXT);
 // 新名字的审查代理、新名字的规则文件：这一版认，上一版不认
 add('改经验规则文件（新名字）', 'pre-edit', edit('.claude/rules/ttls-lessons-java.md', 'Write', { content: '- x\n' }), /这是经验规则的文件，不要直接改/, V0930);
 add('会话开始：壳子', 'session-start', (kit) => {
