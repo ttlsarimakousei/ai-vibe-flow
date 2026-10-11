@@ -71,9 +71,9 @@ for (const [label, name, input] of [
   ['坏路由引号', 'execute_tool', { command: 'read_file --file_path "unfinished' }],
   ['路由重复参数', 'execute_tool', { command: 'read_file --file_path "a.js" --file_path "b.js"' }],
 ]) { const r = call(name, input); H.ok(label + '被拦', denied(r), H.reasonOf(r)); }
-H.ok('未经当场授权的 push 要确认', ask(call('execute_terminal_command', { command: 'git push' })));
+H.ok('IDEA 终端的 push 也先检查预览', denied(call('execute_terminal_command', { command: 'git push' })));
 H.transcript(transcript, [H.tr.user('推送')]);
-H.ok('当场授权的 push 放行', call('execute_tool', { command: 'execute_terminal_command --command "git push"' }) === null);
+H.ok('当场说 push 不能跳过 IDEA 终端的预览检查', denied(call('execute_tool', { command: 'execute_terminal_command --command "git push"' })));
 H.transcript(transcript, [H.tr.user('改代码')]);
 H.inFlow(h, 'ide-tools', [], 'apply'); H.setConfig(h, { autoMode: true });
 H.ok('全自动时读令牌仍拦', denied(call('read_file', { file_path: secret })));

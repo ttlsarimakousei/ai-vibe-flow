@@ -13,6 +13,12 @@ function successful(j) {
 function handle(j) {
   try {
     require('../lib/permissions').consume(j, successful(j));
+    if (successful(j)) {
+      const merge = require('../lib/merge-push');
+      merge.consumePreview(j);
+      const preview = merge.recordPreview(j);
+      if (preview) return preview;
+    }
     // 验证证据与 IDEA 完成结果共用此入口；模块升级不同步时保持原工具结果。
     try { require('../lib/evidence').recordTool(j, successful(j)); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') S.hookLog('验证证据记账失败'); }
     if (j.hook_event_name === 'PostToolUse' && require('../lib/idea-tools').isIdea(j.tool_name)) {

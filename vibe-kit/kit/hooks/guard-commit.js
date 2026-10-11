@@ -2,7 +2,7 @@
 /*
  * PreToolUse 钩子（Bash / PowerShell）：看模型要跑的命令。
  *   1. git push 要用户确认：任何写法（git -C x push、cd x && git push、cmd /c、bash -c、powershell -Command 里的）都检查。
- *      最后一句真实用户消息明确要求 push 就算当场授权；取消、问句、后台通知不算。没有授权时普通模式 ask，全自动模式留给用户。
+ *      真实用户说 push 先生成合并预览，另一次确认后按计划执行；取消、问句、后台通知不算。普通模式和全自动都不能跳过。
  *      权限规则 Bash(git push:*) 按前缀匹配，实测 2.1.259 上 git -C sub push 能绕过它；这一道不看任何开关。
  *   2. 提交信息要符合公司规范："类型: 内容"（例：feat: 新增修改页面）。heredoc、here-string、-m"x"、-mx 这些写法都认。
  *   3. 不许把原来就有的改动带进提交：git add -A / --all / . / :/ / -u、git commit -a 一律拦；
@@ -1731,10 +1731,12 @@ function handle(j) {
   // push 不看任何开关，没有当场授权就确认；拆命令没认出来的写法由 pushAnywhere 兜底
   const publishing = publishAnywhere(cmd, j.cwd);
   const mergeApply = /\bmerge-push\.js["']?\s+apply\b/i.test(cmd);
+  let mergeCall = null;
   if (mergeApply) {
-    const voice = require('../lib/session').lastUserVoice(tailEntries(j.transcript_path));
-    const text = voice && (voice.kind === 'answer' ? voice.answers.map((a) => a.a).join('；') : voice.text);
-    if (!/^\s*(?:请|现在|直接)?\s*合并\s*(?:push|推送)\s*[。！!]*$/i.test(text || '')) return counted('auto-push', '[vibe-kit] 合并本地提交并推送要用户明确说“合并push”；普通的推送许可不能用于改写提交。');
+    const merge = require('../lib/merge-push');
+    mergeCall = merge.commandOf(j);
+    const approved = mergeCall && merge.previewAllowed(j, mergeCall.root, mergeCall);
+    if (!approved || !approved.ok) return counted('auto-push', '[vibe-kit 推送预览] ' + (approved ? approved.reason : '执行命令无法核对') + '。先运行 merge-push.js plan --dir <仓库>，列出分组、标题和目标给用户看，等预览后的真人确认再执行；全自动也不能跳过。');
   }
   const publishNotice = '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。';
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
@@ -1748,6 +1750,7 @@ function handle(j) {
   try { if (feedback) { st.sig = feedback.sigOf([j.tool_name || 'Bash', cmd.trim()]); st.passes = feedback.validPasses(cfg, j); } } catch (e) { st.passes = []; }
   analyze(cmd, ps, st, cfg, 0);
   if (st.publishing) st.push = publishNotice;
+  else if (mergeCall) st.push = '[vibe-kit] 按已确认推送计划执行。';
   else if (!st.push && pushAsk) st.push = pushAsk;
   if (st.block) {
     let tail = '';
@@ -1766,7 +1769,13 @@ function handle(j) {
   if (cb) return cb;
   // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告；提交里像有密码的放行，记进报告
   // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
-  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
+  if (st.push && !st.publishing && !mergeCall) {
+    if (cfg.autoMode) {
+      try { if (report) report.note(j, { kind: 'hand', title: '它想执行 git push，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '先给用户推送预览，等用户确认；全自动不能跳过' }); } catch (e) { /* 记不了也拦 */ }
+    }
+    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '推送前先运行 merge-push.js plan --dir <仓库>，把未推送提交的分组、原记录、最终标题和目标给用户看。等另一条真人确认后，用 apply --plan <文件> --confirmed <完整计划编号> --push 执行；没有可合并项也会保持原历史。' + (st.secret ? '\n' + st.secret : ''));
+  }
+  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', mergeCall ? mergeCall.root : repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
   // 当场授权 push 不能顺便跳过同一条命令里提交内容的凭据提醒。
   if (pushApproved && st.secret) return askOut(st.secret);
   if (cfg.autoMode) {

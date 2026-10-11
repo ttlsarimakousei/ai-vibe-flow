@@ -382,7 +382,7 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   H.setConfig(h, { autoMode: false });
   H.transcript(tfile, [H.tr.user('改好了，提交')]);
   const push2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git push' } }));
-  H.ok('有人在：push 弹确认框', push2 && push2.hookSpecificOutput && push2.hookSpecificOutput.permissionDecision === 'ask', push2);
+  H.ok('有人在：push 先要求预览', push2 && push2.decision === 'block' && /推送预览/.test(H.reasonOf(push2)), push2);
   const c2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git add src/main/resources/app.properties && git commit -m "feat: 加配置"' } }));
   H.ok('有人在：提交里像有密码弹确认框', c2 && c2.hookSpecificOutput && c2.hookSpecificOutput.permissionDecision === 'ask', c2);
   H.ok('有人在：提问框照常能用', H.hook(h, 'guard-ask', Object.assign(base('s-man'), { tool_name: 'AskUserQuestion', tool_input: { questions: [] } })) === null);

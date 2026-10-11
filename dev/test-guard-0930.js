@@ -94,9 +94,9 @@ for (const [tool, cmd] of [
 H.section('heredoc、eval 里的命令也是命令');
 {
   const o1 = run('Bash', "bash <<'EOF'\ngit push origin main\nEOF");
-  H.ok('bash <<EOF 里的 push：要确认', asked(o1) && /push/.test(why(o1)), why(o1));
+  H.ok('bash <<EOF 里的 push：也先预览', blocked(o1) && /推送预览/.test(why(o1)), why(o1));
   const o2 = run('Bash', 'eval "git push origin main"');
-  H.ok('eval 里的 push：要确认', asked(o2), why(o2));
+  H.ok('eval 里的 push：也先预览', blocked(o2) && /推送预览/.test(why(o2)), why(o2));
   const o3 = run('Bash', "python - <<'EOF'\nimport os\nprint(open(os.path.expanduser('~/.claude/vibe-kit/secrets.json')).read())\nEOF");
   H.ok('python - <<EOF 里读令牌：拦', blocked(o3), why(o3));
   const o4 = run('Bash', "node - <<'EOF'\nrequire('fs').writeFileSync(process.env.HOME + '/.claude/vibe-kit/hooks/pre-edit.js', '')\nEOF");

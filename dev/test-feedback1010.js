@@ -183,12 +183,13 @@ function jar(file, version) {
     H.ok('计划文件写在被忽略的项目目录', fs.existsSync(saved) && git(['status', '--porcelain']).out.trim() === '');
     H.write(path.join(bare, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n');
     fs.chmodSync(path.join(bare, 'hooks/pre-receive'), 0o755);
-    const rejected = H.run(h, process.execPath, [cli, 'apply', '--dir', repo, '--plan', saved, '--push']);
+    const savedPlan = JSON.parse(fs.readFileSync(saved, 'utf8'));
+    const rejected = H.run(h, process.execPath, [cli, 'apply', '--dir', repo, '--plan', saved, '--confirmed', savedPlan.hash, '--push']);
     let failed = {}; try { failed = JSON.parse(rejected.out); } catch (e) { /* 断言显示输出 */ }
     H.ok('远端拒绝推送时返回备份和本地结果，不强推', rejected.code !== 0 && failed.ok === false && failed.backup && failed.pushed === false && git(['rev-parse', failed.backup]).code === 0, rejected.out + rejected.err);
   }
   H.ok('未经合并授权不能调用改写工具', denied(hook('guard-commit', 'node "' + path.join(h.kit, 'tools/merge-push.js').replace(/\\/g, '/') + '" apply --plan p.json --push', [H.tr.user('推送')])));
-  H.ok('明确合并push允许使用工具', hook('guard-commit', 'node "' + path.join(h.kit, 'tools/merge-push.js').replace(/\\/g, '/') + '" apply --plan p.json --push', [H.tr.user('合并push')]) === null);
+  H.ok('明确合并push也不能跳过预览后的真人确认', denied(hook('guard-commit', 'node "' + path.join(h.kit, 'tools/merge-push.js').replace(/\\/g, '/') + '" apply --plan p.json --push', [H.tr.user('合并push')])));
   H.ok('整个过程没有新窗口', (await watch.stop()).length === 0);
   H.done('1010反馈、驱动和提交');
 })().catch((e) => { console.error(e); H.ok('测试执行没有异常', false); H.done('1010反馈、驱动和提交'); });
