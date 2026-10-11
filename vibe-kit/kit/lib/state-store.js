@@ -53,16 +53,17 @@ function acquire(file, options) {
   } while (Date.now() <= end);
   return null;
 }
-function atomicWrite(file, value) {
+function atomicText(file, value) {
   const tmp = file + '.' + process.pid + '.' + crypto.randomBytes(6).toString('hex') + '.tmp';
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify(value));
+    fs.writeFileSync(tmp, String(value), 'utf8');
     for (let i = 0; i < 6; i++) { try { fs.renameSync(tmp, file); return true; } catch (e) { pause(20); } }
   } catch (e) { /* 磁盘或权限错误由调用方显示降级 */ }
   finally { try { fs.unlinkSync(tmp); } catch (e) { /* 原子替换成功后临时文件已消失 */ } }
   return false;
 }
+function atomicWrite(file, value) { return atomicText(file, JSON.stringify(value)); }
 function read(file) {
   for (let i = 0; i < 3; i++) {
     try { const t = fs.readFileSync(file, 'utf8'); return t.trim() ? JSON.parse(t) : {}; }
@@ -103,4 +104,4 @@ function releaseThread(dir, id) {
   try { for (const f of fs.readdirSync(dir)) if (/\.lock$/.test(f)) { const p = path.join(dir, f); const o = owner(p); if (o && o.pid === process.pid && o.thread === id) release(p, o.token); } }
   catch (e) { /* 清理失败仍显示检查降级 */ }
 }
-module.exports = { acquire, release, read, write, update, atomicWrite, releaseThread };
+module.exports = { acquire, release, read, write, update, atomicWrite, atomicText, releaseThread };

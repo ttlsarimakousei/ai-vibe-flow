@@ -108,7 +108,7 @@ H.section('#2 git -C 的目录写在变量里；新建的仓库第一次入仓')
   H.ok('循环里只加点名的文件：不拦', run('for r in jssslt-app old-svc; do git -C "$r" add pom.xml; done') === null);
   H.ok('用 ls-files 只加没进 git 的文件（议题里的绕法）：不拦', run('git -C "$r" ls-files -o --exclude-standard -z | git -C "$r" add --pathspec-from-file=- --pathspec-file-nul') === null);
   const r6 = run('git -C "$r" push origin main');
-  H.ok('目录在变量里的 push：照样要确认', r6 && r6.hookSpecificOutput && r6.hookSpecificOutput.permissionDecision === 'ask', r6);
+  H.ok('目录在变量里的 push：先预览再确认', r6 && r6.decision === 'block' && /推送前先运行.*plan/.test(H.reasonOf(r6)), r6);
 }
 
 // =============================================================================================
@@ -300,7 +300,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   const s9 = 's-apply-noname';
   prompt(s9, '/opsx:apply');
   const r9 = stop(s9, [H.tr.user('/opsx:apply'), H.tr.ran('Bash', { command: 'openspec status --change "add-ec-expiry-remind" --json' }, '{}'), H.tr.ran('Read', { file_path: path.join(chgB, 'tasks.md') }, 'x'), H.tr.say('看完了')], '看完了');
-  H.ok('/opsx:apply 没带名字：openspec 命令里点了名的变更算它在做的，只读过 tasks.md 的不算', /全自动模式：我已经说了开工，add-ec-expiry-remind /.test(H.reasonOf(r9)) && !/other-window-change/.test(H.reasonOf(r9)) && (flow(s9).changes || []).includes(S.normKey(chgA)) && !(flow(s9).changes || []).includes(S.normKey(chgB)), [H.reasonOf(r9), flow(s9)]);
+  H.ok('多个变更时无名 apply 不创建实施许可', !S.readConfigFor({ cwd: proj, session_id: s9 }).autoMode && !/我已经说了开工/.test(H.reasonOf(r9)), [H.reasonOf(r9), flow(s9)]);
   // 大白话让它出提案：它自己调了 OpenSpec 的技能、建了变更
   const s5 = 's-skill';
   prompt(s5, '看一下这个');
@@ -326,7 +326,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   // 装这一版之前就开着的会话（没有流程记录，之后也没再开过口）：照以前的算法接过来
   const s12 = 's-old-session';
   fs.writeFileSync(path.join(h.kit, 'state', s12 + '-changes.json'), JSON.stringify({ dirs: [S.normKey(chgA)], at: Date.now() }));
-  H.ok('装这一版之前就在做变更的会话：算在流程里，做着的那个变更接着催', (ask(s12) || {}).decision === 'block' && flow(s12).on === true && (flow(s12).changes || []).includes(S.normKey(chgA)), flow(s12));
+  H.ok('旧会话保留变更事实但不恢复 apply 许可', ask(s12) === null && flow(s12).on === true && flow(s12).stage === 'plan' && !S.readConfigFor({ cwd: proj, session_id: s12 }).autoMode, flow(s12));
   H.ok('没动过变更的老会话：不算', ask('s-old-idle') === null && flow('s-old-idle').on === false, flow('s-old-idle'));
   prompt(s12, '继续');
   H.ok('它再开口说"继续"：接着在流程里', flow(s12).on === true, flow(s12));
@@ -341,7 +341,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   const tk = () => ((readJson(path.join(h.kit, 'state', 'tool-flow.json')).byCwd || {})[S.normKey(proj)]) || {};
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python "$HOME/.claude/skills/ttls-db-crud/scripts/db.py" --conn dev exec --sql-file .vibe/tmp/x/a.sql' } });
   H.ok('不在流程里的会话跑查库的工具：条子上写着不算全自动', tk().auto === false && tk().at > 0, tk());
-  prompt(s3, '继续');
+  prompt(s3, '/opsx:apply add-ec-expiry-remind');
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "$HOME/.claude/skills/ttls-redis/scripts/redis.js" --conn dev set k v' } });
   H.ok('在流程里的会话跑：条子上写着算', tk().auto === true, tk());
   H.setConfig(h, { autoMode: false });

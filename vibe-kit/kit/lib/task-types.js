@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 function kind(text) {
   const s = String(text).replace(/^\s*[-*]\s*\[[ xX]\]\s*/, '').replace(/^\s*\d+(?:\.\d+)*[.)、]?\s*/, '').trim();
+  if (require('./session').isDeferredTask(s)) return 'deferred';
   if (/^\[用户验收\]|^(?:用户|人工|手动)(?:自测|验收)/.test(s)) return 'user';
   if (/^\[审查意见处理\]|^(?:处理|核实)(?:代码)?审查意见/.test(s)) return 'review-fix';
   if (/^\[代码审查\]|^(?:完成|执行)?(?:独立)?代码审查/.test(s)) return 'review';
@@ -11,10 +12,10 @@ function kind(text) {
   if (/^\[(?:测试|联合验证)\]/.test(s)) return 'test';
   return 'work';
 }
-function parse(text) { return String(text || '').split(/\r?\n/).filter((l) => /^\s*[-*]\s*\[[ xX]\]/.test(l)).map((l) => ({ text: l, kind: kind(l), done: /^\s*[-*]\s*\[[xX]\]/.test(l) })); }
+function parse(text) { return String(text || '').split(/\r?\n/).filter((l) => /^\s*[-*]\s*\[[ xX]\]/.test(l)).map((l) => ({ text: l.replace(/^\s*[-*]\s*\[[ xX]\]\s*/, '').trim(), kind: kind(l), done: /^\s*[-*]\s*\[[xX]\]/.test(l) })); }
 function tasks(dir) { try { return parse(fs.readFileSync(path.join(dir, 'tasks.md'), 'utf8')); } catch (e) { return []; } }
 function readyForReview(dir) { const all = tasks(dir); const work = all.filter((t) => ['work', 'prepare', 'test'].includes(t.kind)); return work.length > 0 && work.every((t) => t.done); }
-function automatedLeft(dir) { return tasks(dir).filter((t) => !t.done && t.kind !== 'user'); }
+function automatedLeft(dir) { return tasks(dir).filter((t) => !t.done && !['user', 'deferred'].includes(t.kind)); }
 function needs(text) { const kinds = new Set(parse(text).map((t) => t.kind)); return ['test', 'review', 'review-fix', 'user'].filter((k) => !kinds.has(k)); }
 function tickIssue(text, dir, j) {
   const k = kind(text); if (!['review', 'review-fix', 'user'].includes(k)) return null;

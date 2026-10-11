@@ -26,7 +26,7 @@ function deliver(root, name) {
   const files = S.artifactFiles(c.dir).filter((f) => !/revisions\.md$/.test(f)).map((f) => path.relative(c.dir, f).replace(/\\/g, '/'));
   let decisions = ''; try { const x = JSON.parse(read(path.join(c.dir, 'decisions.json'))); if (Array.isArray(x.items)) decisions = x.items.map((d) => '| ' + R.text(d.kind || '待分类') + ' | ' + R.text(d.text || '') .replace(/\|/g, '／') + ' | ' + (d.confirmed === true ? '已确认' : '待用户确认') + ' |').join('\n'); } catch (e) { /* 没有时明确待确认，不虚构已批准 */ }
   const text = '# 提案交付\n\n实施输入均相对于本目录，必要非敏感材料放 assets/ 或 references/ 并纳入 Git。\n\n' + files.map((f) => '- [' + f + '](' + f + ')').join('\n') + '\n\n| 类别 | 内容 | 状态 |\n|---|---|---|\n' + (decisions || '| 需求差异 | 用户要求、现状约束、实现细节、新增业务行为、本次不做逐项列入 decisions.json 或 proposal.md | 待用户核对 |') + '\n\n任务类型缺项：' + (T.needs(read(path.join(c.dir, 'tasks.md'))).join('、') || '没有') + '。提案审查是 apply 前置，用户验收和归档许可分别确认。\n';
-  const file = path.join(c.dir, 'delivery.md'); require('./state-store').atomicWrite(file, text); return { file, files, confirmationRequired: !decisions };
+  const file = path.join(c.dir, 'delivery.md'); if (!require('./state-store').atomicText(file, text)) throw new Error('提案交付说明未能保存'); return { file, files, confirmationRequired: !decisions };
 }
 function commitPlan(root, j) {
   const cfg = S.readConfigFor(j || { cwd: root }); const roots = S.isShell(root) ? S.nestedRepos(root) : [W.rootOf(root)];

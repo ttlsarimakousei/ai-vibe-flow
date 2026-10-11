@@ -94,7 +94,8 @@ H.section('审查轮次：id 重复也不会记到别的变更头上（F20260929
   S.syncReviewRounds(entriesOf(), S.syncReviews(entriesOf(), proj));
   const again = state('review-rounds');
   H.ok('再读一遍不重复计', again['code|' + S.normKey(sec)].rounds === 3 && again['code|' + S.normKey(login)].rounds === 2, again);
-  // 归档做完的那个
+  // 归档只使用本次真人确认，不借审查结论授予许可。
+  fs.appendFileSync(tfile, JSON.stringify(H.tr.user('自测通过，归档 secflow-gate')) + '\n');
   const r = H.hook(h, 'guard-commit', Object.assign(base('s-rounds'), { tool_name: 'Bash', tool_input: { command: 'git mv openspec/changes/secflow-gate openspec/changes/archive/2026-09-29-secflow-gate' } }));
   H.ok('secflow-gate 可以归档', r === null, H.reasonOf(r));
   const r2 = H.hook(h, 'guard-commit', Object.assign(base('s-rounds'), { tool_name: 'Bash', tool_input: { command: 'git mv openspec/changes/login-gate-and-pwd-ui-fix openspec/changes/archive/2026-09-29-login-gate-and-pwd-ui-fix' } }));
@@ -340,7 +341,7 @@ H.section('命令：注释不是命令；没写变更名时说清查的是谁（
   H.ok('行尾的注释也不算', run('git checkout -- src/main/java/A.java # 之前 node ' + K + ' 查过') === null);
   H.ok('PowerShell 的注释也不算', run('# 看过 ' + K + '\ngit checkout -- src/main/java/A.java', 'PowerShell') === null);
   H.ok('注释里写的 git push 不弹确认', run('git status # 之后再 git push') === null);
-  H.ok('真的 push 照样要确认', (run('git status && git push origin main') || {}).hookSpecificOutput && run('git status && git push origin main').hookSpecificOutput.permissionDecision === 'ask');
+  H.ok('真的 push 要先预览再确认', (run('git status && git push origin main') || {}).decision === 'block' && /推送前先运行.*plan/.test(H.reasonOf(run('git status && git push origin main'))));
   H.ok('引号里的 # 不是注释', (() => { const r = run('echo "#x" > "$HOME/.claude/vibe-kit/config.json"'); return r && r.decision === 'block'; })());
   H.ok('真去改套件的照样拦', (() => { const r = run('rm -rf "$HOME/.claude/vibe-kit/hooks"'); return r && r.decision === 'block' && /不许改/.test(H.reasonOf(r)); })());
   H.ok('列出套件的文件再交给 xargs 删：拦', (() => { const r = run('ls "$HOME/.claude/vibe-kit/hooks" | xargs rm -f'); return r && r.decision === 'block'; })());
@@ -363,7 +364,7 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   R.begin({ session_id: sid, cwd: proj });
   H.transcript(tfile, [H.tr.user('全自动做完')]);
   const push = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git -C . push origin main' } }));
-  H.ok('push：不弹确认框，直接拦下让它接着做别的', push && push.decision === 'block' && /push留给用户做|push 留给用户做/.test(H.reasonOf(push).replace(/：/g, '')) && /接着做别的/.test(H.reasonOf(push)), push);
+  H.ok('全自动 push 先预览并等真人确认', push && push.decision === 'block' && /全自动模式/.test(H.reasonOf(push)) && /plan/.test(H.reasonOf(push)) && /等.*确认/.test(H.reasonOf(push)), push);
   const ask = H.hook(h, 'guard-ask', Object.assign(base(sid), { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出的文件名用哪种格式？', header: '文件名', options: [{ label: '带日期', description: 'x' }, { label: '不带日期', description: 'y' }] }] } }));
   H.ok('提问框：拦下，说清接着怎么做', ask && ask.decision === 'block' && /你想问的已经记进全自动报告/.test(H.reasonOf(ask)) && /留给用户/.test(H.reasonOf(ask)), H.reasonOf(ask));
   const kit = H.hook(h, 'pre-edit', Object.assign(base(sid), { tool_name: 'Edit', tool_input: { file_path: path.join(h.kit, 'state', 'review-rounds.json'), old_string: 'a', new_string: 'b' } }));
@@ -473,7 +474,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
   R.note({ session_id: sid, cwd: proj }, { kind: 'ask', title: '导出的文件名用哪种格式？', detail: '带日期 / 不带日期' });
   R.note({ session_id: sid, cwd: proj }, { kind: 'bypass', title: 'OpenSpec 产物的门槛：Edit：' + tasks, detail: '对照场景要先改库，留给用户' });
   const r2 = stop(talk.concat([H.tr.say('3.2 做完了')]), '3.2 做完了');
-  H.ok('只剩留给用户的任务：催审代码，不催做 3.3', /能做的任务都做完了，还没做过代码审查/.test(H.reasonOf(r2)) && !/接着做下一项/.test(H.reasonOf(r2)), H.reasonOf(r2));
+  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /实现和必要测试已完成/.test(H.reasonOf(r2)) && /review.js run/.test(H.reasonOf(r2)) && !/接着做下一项/.test(H.reasonOf(r2)), H.reasonOf(r2));
   // 审完了
   const rv = review('toolu_rep1', '代码', 'miping', 0);
   const r3 = stop(talk.concat(rv, [H.tr.say('审完了，问题 0 条')]), '审完了，问题 0 条');
