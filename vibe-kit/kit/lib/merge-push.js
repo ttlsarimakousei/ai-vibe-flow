@@ -153,15 +153,22 @@ function commandOf(j) {
   const parser = require('../hooks/guard-commit');
   const ps = j.tool_name === 'PowerShell';
   const groups = parser.splitCommand(cmd, ps);
-  if (groups.length !== 1 || groups[0].length !== 1 || parser.scanRedirects(cmd).list.length) return null;
-  const words = parser.words(cmd, ps).map((w) => w.text);
+  if (groups.length !== 1) return null;
+  const redir = parser.scanRedirects(groups[0][0]);
+  if (redir.list.length) return null;
+  const words = parser.words(redir.rest, ps).map((w) => w.text);
   const at = words.findIndex((w) => /(?:^|[\\/])merge-push\.js$/i.test(w));
   if (at !== 1 || !/^(?:node|node\.exe)$/i.test(path.basename(words[0].replace(/\\/g, '/')))) return null;
   const S = require('./session');
   if (norm(path.resolve(j.cwd || process.cwd(), S.expandHome(words[at]))) !== norm(path.join(S.KIT, 'tools/merge-push.js'))) return null;
   const args = words.slice(at + 1);
+  // plan 的输出可以截行查看，但必须仍收到完整 JSON。其它管道不猜执行含义。
+  if (groups[0].length > 1 && (args[0] !== 'plan' || !groups[0].slice(1).every((s) => /^(?:(?:tail|head)(?:\s+(?:-n\s*\d+|-\d+))?|cat|(?:Select-Object|select)\s+-(?:First|Last)\s+\d+|Out-String)$/i.test(s)))) return null;
   const val = (key) => { const n = args.indexOf(key); return n < 0 ? '' : S.expandHome(args[n + 1] || ''); };
   return { action: args[0], root: path.resolve(j.cwd || process.cwd(), val('--dir') || '.'), file: val('--plan'), confirmed: val('--confirmed'), push: args.includes('--push') };
+}
+function previewNotice(reason) {
+  return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: '[vibe-kit 推送预览] 预览未登记：' + reason + '。用不带管道、重定向或串联命令的 merge-push.js plan --dir <仓库> 重跑，完整展示结果后再让用户确认。' }, systemMessage: '[vibe-kit] 推送预览未登记：' + reason + '。' };
 }
 function readPlan(root, file) {
   const base = path.resolve(root, '.vibe/tmp');
@@ -175,12 +182,14 @@ function readPlan(root, file) {
 }
 function recordPreview(j) {
   const call = commandOf(j); const k = receiptKey(j);
-  if (!call || call.action !== 'plan' || !k) return null;
-  let result; try { result = JSON.parse(String(j.tool_response && j.tool_response.stdout || '').trim()); } catch (e) { return null; }
-  if (!result.ok || result.kind !== 'push-preview') return null;
+  if (!k) return null;
+  if (!call) return /\bmerge-push\.js["']?\s+plan\b/i.test(String(j.tool_input && j.tool_input.command || '')) ? previewNotice('命令包含无法核对的管道、重定向或串联操作') : null;
+  if (call.action !== 'plan') return null;
+  let result; try { result = JSON.parse(String(j.tool_response && j.tool_response.stdout || '').trim()); } catch (e) { return previewNotice('工具输出不是完整的预览 JSON，可能被截断或重定向'); }
+  if (!result.ok || result.kind !== 'push-preview') return previewNotice('工具没有返回成功的推送预览');
   const S = require('./session');
   const loaded = readPlan(call.root, result.plan); const p = loaded.plan;
-  if (result.hash !== p.hash || git(p.root, ['rev-parse', 'HEAD']) !== p.head || git(p.root, ['symbolic-ref', '-q', 'HEAD']) !== p.ref) return null;
+  if (result.hash !== p.hash || git(p.root, ['rev-parse', 'HEAD'], { timeout: 3000 }) !== p.head || git(p.root, ['symbolic-ref', '-q', 'HEAD'], { timeout: 3000 }) !== p.ref) return previewNotice('生成后仓库或计划已变化');
   const voice = S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
   S.updateState(k, (s) => { const roots = s.roots || (s.roots = {}); roots[norm(p.root)] = { hash: p.hash, file: loaded.file, voice: voiceId(voice), at: Date.now(), consumed: false }; });
   const before = p.groups.reduce((n, g) => n + g.ids.length, 0);
