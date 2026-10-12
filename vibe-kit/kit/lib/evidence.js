@@ -28,7 +28,8 @@ function actual(j) {
   const response = j.tool_response || {};
   if (response.isRunning || response.is_running || response.background_task_id || response.task_id || response.session_id || /(?:running in (?:the )?background|still running|后台运行|任务已启动)/i.test(JSON.stringify(response))) return null;
   if (!require('./session').VERIFY_CMD.test(command) || /\b(?:echo|printf|write-output|write-host)\s+['"]?(?:测试|Tests|BUILD)/i.test(command)) return null;
-  return { root: W.rootOf(root), command, kind: /scenario-run|playwright|截图|浏览器/.test(command) ? 'page' : 'test' };
+  if (/probe-run\.js/.test(command) && !/PAGE_PROBE\s+\{"ok":true[,}]/.test(String(response.stdout || ''))) return null;
+  return { root: W.rootOf(root), command, kind: /scenario-run|probe-run|playwright|截图|浏览器/.test(command) ? 'page' : 'test' };
 }
 function recordTool(j, ok) {
   const S = require('./session'); const a = actual(j); if (!a || !j.tool_use_id) return null;

@@ -3,7 +3,7 @@
  * Stop 钩子：模型说"做完了"准备收工时，用脚本确定性地检查这一轮有没有漏掉该做的事。漏了就拦一次，把该做的事告诉它。
  * 判断全在本机脚本里做，不花 token：
  *   1. 改了代码，但最后一次修改之后没成功跑过像验证的命令        → 让它跑快检（开关 autoVerify）
- *   2. 改了页面文件，但之后没跑过页面场景                        → 让它按 /ttls-see-page 跑一遍（开关 autoSeePage）
+ *   2. 改了页面文件，但之后没成功跑过场景或探针                        → 让它按 /ttls-see-page 跑一遍（开关 autoSeePage）
  *   3. 这一轮把某个 OpenSpec 变更的最后一项任务打了勾，代码还没审过 → 让它 /ttls-cross-review（开关 autoCrossReview；每个变更催一次）
  *   4. 这一轮改过的文件在 git 里还没提交                          → 让它提交（开关 autoCommit：task / phase / change / off；每一轮只提一次。
  *      phase = 按阶段：tasks.md 里同一个大编号的任务全打勾了才催，做到一半不催，见 phaseDone）。
@@ -858,7 +858,11 @@ async function handle(j) {
     const v = verifyIssue();
     if (v) todo.push(v);
     const lp = pageEdits.length ? calls.indexOf(pageEdits[pageEdits.length - 1]) : -1;
-    if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /ttls-see-page 的做法跑一遍受影响的页面：已有场景文件就直接重跑，没有就写一个最小的；以执行器读到的值和页面结构为准，不必读截图。这次改动确实不影响页面显示，就说明原因。');
+    const probePassed = calls.slice(lp + 1).some((c) => {
+      const text = String((results.get(c.id) || {}).text || '');
+      return /^(Bash|PowerShell)$/.test(c.name) && /probe-run\.js/.test(String(c.input.command || '')) && !failed(c) && /PAGE_PROBE\s+\{"ok":true[,}]/.test(text) && !/Exit code:?\s*[1-9]|running in (?:the )?background|still running|后台运行/i.test(text);
+    });
+    if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !probePassed && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /ttls-see-page 跑受影响的页面；场景做不了的，用 page/probe-run.js 执行 .vibe/tmp/<事由>/ 下的探针，断言通过并返回实际读到的值。失败、超时或只启动不算通过。这次改动确实不影响页面显示，就说明原因。');
     // 它说要攒着打勾：不行，做完一项勾一项（提交才按档位攒）
     if (saidTickLater(lastSaid) && !pending.some((p) => p.mode === 'proposal') && !reviewOpenFor(sid, entries, changes)) todo.push('打勾不攒：每项任务做完、验法跑过就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完并验证过的任务都勾上，再收工。');
   } else if (sameTurn && codeNeedingCheck.length > (gate.codeEditsAtBlock || 0)) {

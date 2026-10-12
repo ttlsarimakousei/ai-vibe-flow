@@ -24,7 +24,9 @@ description: 改了前端页面或后端接口之后、还原原型或设计图�
 ## 写场景的要点
 
 - 需要登录的系统，场景第一段就是登录。账号先看 `.vibe/login.json`，没有再问用户一次，问到就记进去；不要猜。**登录那一步要查返回的内容**（见 `scenario-format.md` 的"接口"一节）：很多系统登录失败也返回 200，只等它返回的话，没登录上场景照样往下走，后面全是 401。
-- 场景文件做不了的操作（格式里没有的步骤）：写一个 Playwright 探针脚本放 `.vibe/tmp/<事由>/`，用套件带的 Playwright（`require(require("os").homedir() + "/.claude/vibe-kit/page/node_modules/playwright")`，Windows 的命令行里没有 HOME 这个环境变量）跑，结果打成文本。它算验过；事由是变更名的留到变更归档（套件自己清），别的验完删掉。上传文件、应答文件选择框、点被盖住的控件，场景文件都能做，不用探针。
+- 场景文件做不了的操作：写探针到 `.vibe/tmp/<事由>/probe.js`，在被测项目目录运行 `node "$HOME/.claude/vibe-kit/page/probe-run.js" .vibe/tmp/<事由>/probe.js`。探针导出 `module.exports = async ({ page, context, assert }) => { /* 操作、读取并 assert 核对 */ return { 实际读到的值 }; };`。执行器提供系统浏览器，默认执行上限 120 秒，结束自动关闭。成功输出 `PAGE_PROBE {"ok":true,…}` 才算验过；断言失败、超时、后台未结束都不算。事由是变更名的留到归档，别的验完删掉。
+- 探针例子：`module.exports = async ({ page, assert }) => { await page.goto('http://127.0.0.1:实际端口/页面'); const text = await page.locator('h1').innerText(); assert.equal(text, '订单'); return { 标题: text }; };`。原有独立脚本改为这个导出函数，复用传入的 page/context，不自行起浏览器。
+- 自测前核对前端代理如何指向自测后端，包含项目上下文路径；统一认证回调和服务端 CORS 若限制固定端口，记录到项目说明。不能通过关闭浏览器安全检查解决服务端拒绝。菜单驱动的标签页要按真实菜单进入，不能假设改 hash 就能打开。
 - 选择器优先用语义写法：`{"role": "button", "name": "保存"}`、`{"label": "用户名"}`、`{"placeholder": "请输入"}`。Element Plus 这类组件库渲染出来的类名和层级不稳定，少用长串 CSS。
 - 加上 `"disableAnimations": true`，弹窗、下拉的过渡动画会让截图截到中间帧。
 - **会产生数据的操作（提交、保存、删除）只做一次**。成功提示一闪就没了，很容易错过，错过了不要重新提交，去读列表里有没有多出那条数据来确认。
