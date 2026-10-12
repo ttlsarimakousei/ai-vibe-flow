@@ -10,7 +10,7 @@
  *
  * 什么算"确认过"：
  *   1. 会话开始时（或者这个会话第一次改那个文件之前）就记在里面的位置；
- *   2. 用户这次会话里亲口说过、在提问框里选过的路径。
+ *   2. 用户这次会话里亲口说过、在提问框里选过的路径（包括“仓库根目录 文件名”和结构化答案，只取选中的答案）。
  * 模型在会话里自己往项目说明里加一条、却没问过用户的，不算：防止它自己给自己批准。
  * 只管新建的文件（改已有的文件不是在选位置），只管文档、SQL、表格这几类；openspec、.vibe、.claude、临时目录、
  * README 之类，源码目录里的 .sql（迁移脚本、测试数据），代码目录（resources、test、public、static、assets、i18n……）里的所有文件，
@@ -255,7 +255,11 @@ function userTexts(entries) {
   const out = [];
   for (const e of entries) if (isUserTurn(e) && !isTaskNote(e)) out.push(textOf(e));
   const res = toolResults(entries);
-  for (const c of toolCalls(entries)) if (c.name === 'AskUserQuestion' && res.has(c.id) && !res.get(c.id).error) out.push(res.get(c.id).text);
+  for (const c of toolCalls(entries)) if (c.name === 'AskUserQuestion' && res.has(c.id) && !res.get(c.id).error) {
+    const pos = res.get(c.id).pos;
+    const voice = require('./session').lastUserVoice(entries.slice(0, pos + 1));
+    if (voice && voice.kind === 'answer' && voice.pos === pos) out.push(...voice.answers.map((a) => a.a).filter((a) => !/^(?:不要|不放|取消|先别|还没|未定)/.test(a.trim())));
+  }
   return out;
 }
 const normText = (s) => String(s || '').replace(/\\/g, '/').replace(/\/+/g, '/').toLowerCase();
@@ -268,6 +272,11 @@ function mentioned(texts, file, roots) {
   for (const r of roots) {
     if (!r) continue;
     const rel = path.relative(r, dir);
+    // #58：根目录下的文件没有相对目录，用户选的“仓库根目录 文件名”也要识别。
+    if (!rel) {
+      const name = escRe(normText(path.basename(file)));
+      if (new RegExp('(?:仓库|项目)?根目录[\\s：:，,`"“]*' + name + '(?=$|[\\s`"”。，,；;])', 'i').test(all)) return true;
+    }
     if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) { cands.add(normText(rel)); cands.add(normText(path.join(rel, path.basename(file)))); }
   }
   for (const c0 of cands) {
