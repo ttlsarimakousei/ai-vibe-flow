@@ -9,7 +9,7 @@
  *      phase = 按阶段：tasks.md 里同一个大编号的任务全打勾了才催，做到一半不催，见 phaseDone）。
  *      不走 OpenSpec 的改动（这个会话没动过任何变更）而且开关 plainCommit = ask：不催它提交，催它交代了用提问框问用户，用户说了提交才提交。
  *      审查过程不进提交（用户 2026-10-07 定的）：还没开工的变更的产物（提案阶段）不催；多轮审查报了问题还没审到 0 条的，先不催
- *   4b. 这个会话里新建、还没进 git 的文件，项目里留下的备份、日志 → 要交的提交，临时的删掉（开关 vibeTidy；同一批只提一次，说做完了再提一次）
+ *   4b. 这个会话里新建、还没进 git 的文件，项目里留下的备份、日志 → 要交的提交，临时的删掉（开关 vibeTidy；过程文件阻塞检查；待用户提交的新文件只提醒）
  *   4c. 说了是套件的问题却没记问题反馈 → 让它记；做完了、这个会话记过套件问题 → 交代里单独列"套件问题"（lib/feedback.js）
  *   4d. 审查报了问题、处理过了，却没记经验 → 让它挑"还会再犯"的记下来；经验规则文件改了没提交 → 让它提交（开关 lessons，lib/lessons.js）
  *   5. OpenSpec 产物：改了没记录、提案里的能力没有规格、设计写了没读过的文件、提案写好没审、变更不在 plan.md 里、
@@ -300,7 +300,7 @@ function lsTracked(root, rels) {
     execFile('git', ['--no-optional-locks', '-C', root, 'ls-files', '-z', '--'].concat(rels.slice(0, 200)), { encoding: 'utf8', timeout: 8000, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => resolve(err ? null : new Set(String(stdout || '').split('\0').filter(Boolean))));
   });
 }
-async function leftoverTodo(j, entries, cfg, lastSaid, changes, start) {
+async function leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices) {
   if (!j.session_id || !tidy) return '';
   const cwd = path.resolve(j.cwd || process.cwd());
   const res = toolResults(entries);
@@ -395,11 +395,11 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start) {
     const midChange = (mode === 'change' || mode === 'phase') && changes().some((c) => c.todo > 0);
     let plain = '';
     try { plain = plainCommitAsk(j, cfg, entries, changes, lastSaid); } catch (e) { plain = ''; }
-    if (mode === 'off' || plain) parts.push('你这个会话里新建、还没进 git 的文件：' + show(newFiles) + '。为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；要交的留着，' + (mode === 'off' ? '等我提交。' : '问我提不提交，我说了再提交。'));
+    if (mode === 'off' || plain) notices.push('本次新文件尚未提交：' + show(newFiles) + '。交付文件保留，' + (mode === 'off' ? '由用户决定何时提交。' : '等用户确认提交；可以正常收工。'));
     else parts.push('你这个会话里新建的这些文件还没进 git：' + show(newFiles) + '（git 不会自动带上新文件）。是这件事要交的，git add 后' + (midChange ? (mode === 'phase' ? '跟着这一阶段一起提交' : '跟着整个变更一起提交') : '提交') + '；是为了测试临时加的（测试页面、调试接口、测试数据），这件事做完了就删掉，别留在项目里；还要接着用的，说一句留着干什么。');
   }
   hookLog('verify-gate leftover ' + (final ? 'final ' : '') + 'new=' + newFiles.length + ' proc=' + procList.length);
-  return (final ? '收尾：这件事做完了，下面这些还留着。' : '') + parts.join('\n');
+  return parts.length ? (final ? '收尾：这件事做完了，下面这些还留着。' : '') + parts.join('\n') : '';
 }
 
 /** 这一轮动过的变更不在 plan.md 里（中途加的新功能最容易漏记）：每个变更提醒一次加一行；不属于这个大需求的不用管 */
@@ -763,6 +763,7 @@ async function handle(j) {
   j = atHome(j);
   const cwd = j.cwd || process.cwd();
   const sid = String(j.session_id || 'unknown');
+  const notices = [];
   // 收工的时候也看一眼要不要检查更新、上报问题（全自动模式下用户好几个小时不开口，只有这里会经过）
   try { require('../lib/updater.js').kick('收工'); } catch (e) { /* 老版本没有，或者甩不出去：不影响收工 */ }
   // 查库、查 redis 的工具自己报的毛病：读进来记成问题反馈（算这个会话的，交代里的"套件问题"会列出来）
@@ -929,7 +930,7 @@ async function handle(j) {
   }
 
   // 新建了、没进 git 的文件（要交的提交，测试用的删掉），项目里留下的过程文件（备份、日志）：同一批只提一次，说"做完了"时再提一次（开关 vibeTidy）
-  if (cfg.vibeTidy !== false) { try { const lo = await leftoverTodo(j, entries, cfg, lastSaid, changes, start); if (lo) todo.push(lo); } catch (e) { hookLog('verify-gate leftover 出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（收尾：新文件和过程文件）', j, e); } }
+  if (cfg.vibeTidy !== false) { try { const lo = await leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices); if (lo) todo.push(lo); } catch (e) { hookLog('verify-gate leftover 出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（收尾：新文件和过程文件）', j, e); } }
 
   // 套件问题：说了是套件的问题却没记；做完了，交代里没列这个会话记下的套件问题
   try { const kt = kitIssueTodo(j, lastSaid); if (kt) todo.push(kt); } catch (e) { if (feedback) feedback.recordHookError('verify-gate（套件问题）', j, e); }
@@ -988,7 +989,7 @@ async function handle(j) {
   // 验证的事都没落下，再看要不要问一句交接（两件事不挤在一起说）
   const ask = handoverQuestion(j, cfg, entries, wroteHo);
   if (ask) return blockOut('Stop', ask);
-  return null;
+  return notices.length ? { systemMessage: '[vibe-kit 提醒] ' + notices.join('\n') } : null;
 }
 
 module.exports = { handle, phaseDone, lastCommitAt };
