@@ -193,7 +193,7 @@ function recordPreview(j) {
   const voice = S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
   S.updateState(k, (s) => { const roots = s.roots || (s.roots = {}); roots[norm(p.root)] = { hash: p.hash, file: loaded.file, voice: voiceId(voice), at: Date.now(), consumed: false }; });
   const before = p.groups.reduce((n, g) => n + g.ids.length, 0);
-  return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: '[vibe-kit 推送预览] ' + before + ' 条提交拟保留为 ' + p.groups.length + ' 条。把工具输出中的每组原提交、最终标题、分支与远端完整给用户看，等待另一条真人确认。确认后才 apply --plan <文件> --confirmed ' + p.hash + ' --push；不能把第一次 push 指令当作合并计划确认。' }, systemMessage: '[vibe-kit] 已生成推送预览 ' + p.hash.slice(0, 8) + '：' + before + ' 条提交拟保留为 ' + p.groups.length + ' 条，分支 ' + p.ref.slice(11) + '，远端 ' + p.remote + '。等待你看过并确认。' };
+  return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: '[vibe-kit 推送预览] ' + before + ' 条提交拟保留为 ' + p.groups.length + ' 条。把工具输出中的每组原提交、最终标题、分支与远端完整给用户看，等待另一条真人确认（回复“确认推送”或在提问框选择“照计划推送”均可）。确认后才 apply --plan <文件> --confirmed ' + p.hash + ' --push；不能把第一次 push 指令当作合并计划确认。' }, systemMessage: '[vibe-kit] 已生成推送预览 ' + p.hash.slice(0, 8) + '：' + before + ' 条提交拟保留为 ' + p.groups.length + ' 条，分支 ' + p.ref.slice(11) + '，远端 ' + p.remote + '。等待你看过并确认。' };
 }
 function previewAllowed(j, root, call) {
   try {
@@ -201,7 +201,7 @@ function previewAllowed(j, root, call) {
     const saved = k && (S.readState(k).roots || {})[norm(root)];
     if (!saved || saved.consumed || Date.now() - saved.at > 1800000) return { ok: false, reason: '还没有当前会话的有效推送预览' };
     const said = S.userSaid(S.tailEntries(j.transcript_path, 3000000), 'push');
-    if (!said.ok || voiceId(said.voice) === saved.voice) return { ok: false, reason: '预览后还没有另一条真人推送确认' };
+    if (!said.ok || voiceId(said.voice) === saved.voice) return { ok: false, reason: '预览后还没有另一条真人推送确认；用户可以回复“确认推送”，或在提问框选择“照计划推送”' };
     const loaded = readPlan(root, saved.file); const p = loaded.plan;
     const current = state(root, false, { headerOnly: true, deadline: Date.now() + 8000 });
     if (p.hash !== saved.hash || p.head !== current.head || p.base !== current.base || p.ref !== current.ref || p.remote !== current.remote || p.merge !== current.merge || p.targetHash !== current.targetHash) return { ok: false, reason: '仓库或推送目标已变化，需要重新预览并确认' };
