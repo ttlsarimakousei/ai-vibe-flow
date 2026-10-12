@@ -55,6 +55,10 @@ node dev/pack.js
 | `test-1007.js` | 1007 这一批：让它出文档、生成文件不算流程里的活（全自动不作数）；公共配置里被 dev 盖掉的库不算开发库；devserver `--port auto` 自动挑端口（范围、避开、同一个服务同一个端口、`{port}` 和环境变量）；自动提交的"按阶段"那一档。第一个参数是端口 |
 | `test-1008.js` | 1008 这一批：归档要用户自测过、说了才做；不走 OpenSpec 的提交要用户点头（开关 plainCommit）；流程分写提案 / 做任务两段，全自动只管做任务那一段，模型自己调 /opsx:apply、提案阶段打勾都拦；开工时告诉用户全自动开没开（systemMessage）；审查过程不进提交；做完的功能上的问题改动小直接改；交接的"不问"只提醒 |
 | `test-feedback1010.js` | 1010 整批反馈：真实确认格式、取消、apply 状态、后台 task-id/输出文件/SendMessage、中文目录归属、多版本驱动和项目选择、各档全自动提交、提案收工提交确认、合并push 的临时裸仓库与拒绝推送。参数 [auto或none] [旧套件目录]；旧版应失败，新测试不碰真实远端 |
+| `test-feedback1012-push.js` | 1012 推送反馈：预览管道、确认选项、限时核对、伴随文档分组；可给旧版目录检出反例 |
+| `test-feedback1012-workflow.js` | 1012 流程反馈：只读计划、产出位置、待提交文件、探针证据和兼容审查诊断；可给旧版目录 |
+| `test-feedback1012-page.js` | 1012 页面探针：系统浏览器读值、断言、同步与异步超时、目录链接边界；可给旧版目录 |
+| `test-feedback1012-db.js` | 1012 数据库诊断：只模拟错误，不连接真实业务库；参数 [auto或none] [旧套件目录] |
 | `probes/` | 探测，不是回归测试：真的 Claude Code 加假网关，看某个版本在一件事上是怎么做的，输出给人看。`cc-compact.js`（到多少自动压缩）、`cc-automode.js`（没配权限模式进不进自带的自动模式、分类请求长什么样）、`cc-statusline.js`（交互界面里状态栏照不照常，用 winpty 抓屏）、`cc-http-hooks.js`（钩子走 HTTP 照不照常）、`cc-system-message.js`（用户开口的钩子用 JSON 输出时 systemMessage 显不显示、给模型的提醒送不送到）。见下面"换 Claude Code 版本之前" |
 | `test-page-0929.js` | 看页面的场景：同一步里写断言、上传、应答文件选择框、点被盖住的控件。用本机的 Edge 无头跑 |
 | `test-devserver-0929.js` | 起服务的工具：最后一行是结果，停的时候进程清干净 |
@@ -201,3 +205,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 `test-usage-identity.js` 用假电脑名和假 GitLab 检查持久随机标识、改名、不同安装及旧议题迁移。假 GitLab 支持正常标题和正文更新；不会改真实 GitLab。旧版有六项反例失败。
 
 `test-archive-extract.js [旧套件目录]` 检查 JAR、ZIP、WAR、TAR、7z、Python 命令行、PowerShell 与 IDEA 终端的解包目录，以及条目和目录列表经重定向或管道落盘。覆盖只读放行、旧 JDK 兼容路径、事由目录、上级目录逃出、目录联接、包装命令的实际工作目录、Windows 完整程序路径、重复执行、关闭 kitLock 和全自动；同时确认包装命令仍保留单个 `&` 后的令牌检查和推送确认。未知路径放行，不执行待测命令。旧版应检出漏拦，假项目用完清理。
+
+## 20261012 反馈专项
+
+`test-feedback1012-push.js [旧套件目录]` 核对临时裸仓库的预览管道、真人选项、取消、固定数量且限时的 Git 查询、伴随文档归组和归档边界。`test-feedback1012-workflow.js [旧套件目录]` 核对只读计划、产出位置、待提交交付文件、探针结果和兼容审查诊断。`test-feedback1012-page.js [旧套件目录]` 用系统无头浏览器实际验证探针读值、失败、异步和同步超时、路径限制。`test-feedback1012-db.js [auto或none] [旧套件目录]` 用模拟错误检查数据库诊断，不连接真实库。四套已加入全回归；与 20261011.1553 对照须检出反例。
