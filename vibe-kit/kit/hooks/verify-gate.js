@@ -956,7 +956,7 @@ async function handle(j) {
     if (touched.size) todo.push(...planUnlistedTodo(touched));
     try { todo.push(...archivedSpecTodo(j)); } catch (e) { hookLog('verify-gate 查归档后的主规格出错（不拦）：' + ((e && e.message) || e)); }
   }
-  // 大需求的计划（openspec/plan.md）：归档、打勾之后状态列跟着变
+  // 大需求的计划（openspec/plan.md）：归档、打勾之后计算最新汇总，不自动写回跟踪文件
   try { planSummary(cwd); } catch (e) { /* 没有计划就算了 */ }
   // 归档了的变更，它的过程文件（.vibe/tmp、.vibe/out 里变更名开头的目录）现在清掉：归档之前不让模型自己删（guard-commit 的 keepIssue），归档之后也不用它动手。
   // 归档之后又动过的不清（归档后接着修问题，事由还写这个变更名的）

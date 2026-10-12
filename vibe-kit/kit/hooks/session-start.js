@@ -138,7 +138,7 @@ async function handle(j) {
     // 自动压缩优先；启动和 clear 不读取或自动提示历史交接。用户明确选择时由 task-anchor 核对。
     const firstWords = '';
     const handoverNote = 'handover=manual-only';
-    // 大需求的计划（openspec/plan.md）：按实际情况刷新状态列，带上汇总和不在表里的变更；没有计划却有好几个变更的，提醒建一个（三天最多提一次）
+    // 大需求的计划（openspec/plan.md）：按实际情况计算状态，仅读汇总和不在表里的变更；没有计划却有好几个变更的，提醒建一个（三天最多提一次）
     for (const changes of changeRoots(cwd)) {
       const osDir = path.dirname(changes);
       const s = refreshPlan(osDir);

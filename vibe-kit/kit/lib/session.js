@@ -1432,7 +1432,7 @@ function readPlan(openspecDir) {
   }
   return { file, eol, lines, rows };
 }
-/** 一个变更现在的状态：未开始 / 提案中 / 已提案 0/n / 进行中 x/n / 已完成 n/n，待归档 / 已归档 日期 */
+/** 计划展示任务进度与审查门槛；任务全勾不等于获准归档。 */
 function planStatusOf(name, changesDir) {
   const dir = path.join(changesDir, name);
   try {
@@ -1440,7 +1440,11 @@ function planStatusOf(name, changesDir) {
     const done = (t.match(/^\s*[-*]\s*\[[xX]\]/gm) || []).length;
     const todo = (t.match(/^\s*[-*]\s*\[ \]/gm) || []).length;
     if (done + todo === 0) return '提案中';
-    if (todo === 0) return '已完成 ' + done + '/' + done + '，待归档';
+    if (todo === 0) {
+      const cfg = readConfig();
+      const pending = codeReviewIssue(dir) || (cfg.reviewLoop && reviewLoopIssue('code', dir, cfg));
+      return '已完成 ' + done + '/' + done + (pending ? '，待审查或处理意见' : '，待用户验收并确认归档');
+    }
     return (done ? '进行中 ' : '已提案 ') + done + '/' + (done + todo);
   } catch (e) { /* 没有 tasks.md */ }
   if (fs.existsSync(dir)) return '提案中';
@@ -1450,8 +1454,8 @@ function planStatusOf(name, changesDir) {
   } catch (e) { /* 没有 archive */ }
   return '未开始';
 }
-/** 按实际情况刷新 plan.md 的状态列，变了就写回。返回汇总，没有 plan.md 返回 null */
-function refreshPlan(openspecDir) {
+/** 计算计划最新状态；钩子只读，plan.js 显式传 write 才写回并随本次工作提交。 */
+function refreshPlan(openspecDir, write) {
   const p = readPlan(openspecDir);
   if (!p || !p.rows.length) return null;
   const changesDir = path.join(openspecDir, 'changes');
@@ -1463,7 +1467,7 @@ function refreshPlan(openspecDir) {
     else if (!next) next = r.name;
     if (s !== r.status) { r.cells[r.cols.status] = s; p.lines[r.line] = '| ' + r.cells.join(' | ') + ' |'; changed = true; }
   }
-  if (changed) { try { fs.writeFileSync(p.file, p.lines.join(p.eol)); } catch (e) { /* 写不了就只汇总 */ } }
+  if (changed && write) { try { fs.writeFileSync(p.file, p.lines.join(p.eol)); } catch (e) { /* 写不了就只汇总 */ } }
   return { file: p.file, total: p.rows.length, archived, active, next, changed };
 }
 function planSummary(dir) {
@@ -1500,7 +1504,7 @@ function planInit(openspecDir, days) {
   for (const n of changeNames(changesDir)) if (!rows.includes(n)) rows.push(n);
   const lines = ['# 计划：<大需求的名字>', '', '<一两句话：这个大需求要做什么，PRD 在哪。>', '', '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(rows.map((n) => '| <模块> | ' + n + ' | | |'), ['']);
   fs.writeFileSync(file, lines.join('\n'));
-  refreshPlan(openspecDir);
+  refreshPlan(openspecDir, true);
   return { file, created: true, rows };
 }
 /** 有 plan.md 时：进行中却不在表里的变更（中途加的新功能最容易漏记）。没有 plan.md 返回 null */
