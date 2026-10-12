@@ -63,6 +63,7 @@ const V1010B = '20261010.1617'; // 1010 反馈、提案材料、提交和多版�
 const V1010C = '20261010.2210'; // IDEA MCP 的自动接入和工具保护
 const V1011 = "20261011.1129"; // 阶段许可、独立审查、自动压缩和推送预览
 const V1011B = '20261011.1553'; // 归档临时查看目录和 Windows 包装路径
+const V1012 = '20261013.0058'; // 1012 反馈：页面探针、产出位置、待提交文件和推送预览
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -230,7 +231,7 @@ add('收工：改了、验了、没提交', 'verify-gate', (kit) => {
   fs.appendFileSync(A(r.proj), '// 改过\n');
   return r;
 });
-add('收工：改了页面没看', 'verify-gate', stop((p) => [H.tr.user('改页面'), H.tr.ran('Edit', { file_path: path.join(p, 'web/src/views/Order.vue'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.say('做完了')]), /probe-run\.js[\s\S]*断言通过/, NEXT);
+add('收工：改了页面没看', 'verify-gate', stop((p) => [H.tr.user('改页面'), H.tr.ran('Edit', { file_path: path.join(p, 'web/src/views/Order.vue'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.say('做完了')]), /probe-run\.js[\s\S]*断言通过/, V1012);
 add('收工：说了没验证', 'verify-gate', stop((p) => [H.tr.user('改一下'), H.tr.ran('Edit', { file_path: A(p), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.say('改好了，没验证：本机没有 JDK')], { last_assistant_message: '改好了，没验证：本机没有 JDK' }));
 add('收工：最后一项打了勾、没审', 'verify-gate', (kit) => {
   const r = stop((p) => [H.tr.user('做完 1.2'), H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'BUILD SUCCESS'), H.tr.ran('Edit', { file_path: path.join(p, 'openspec/changes/add-export/tasks.md'), old_string: '- [ ] 1.2', new_string: '- [x] 1.2' }, 'ok'), H.tr.say('做完了')])(kit);
@@ -282,10 +283,10 @@ add('读到 sql 文件（提示规则去掉了）', 'source-hint', (kit) => { co
 add('读到 java 文件', 'source-hint', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: { file_path: A(proj) }, tool_response: {} }) }; });
 add('提问框', 'guard-ask', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [] } }) }; });
 
-// 1012：行为与提示的有意变更，打包时 NEXT 由既有版本规则替换。
-add('1012：根目录产出选项', 'guard-output', (kit) => { const proj=project(kit); const j=base(proj,kit,{tool_name:'Write',tool_input:{file_path:path.join(proj,'工时.csv'),content:'工时'}}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'root-answer.jsonl'),[H.tr.user('生成表格'),H.tr.ran('AskUserQuestion',{},'Your questions have been answered: "产出放哪？"="仓库根目录 工时.csv"')]); return {proj,j}; }, /放行，没有输出/, NEXT);
-add('1012：交付新文件可以等用户提交', 'verify-gate', (kit) => { const proj=project(kit); const file=path.join(proj,'交付.xls'); H.write(file,'交付'); const j=base(proj,kit,{hook_event_name:'Stop',last_assistant_message:'交付完成，保留文件等待用户提交。'}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'deliver.jsonl'),[H.tr.user('生成交付表格'),H.tr.ran('Write',{file_path:file,content:'交付'})]);return {proj,j};}, /新文件尚未提交/, NEXT, {autoCommit:'off',autoVerify:false,autoSeePage:false,autoCrossReview:false,specGate:false,lessons:'off',vibeTidy:true});
-add('1012：截断推送预览当场提示', 'after-tool', (kit) => {const proj=project(kit);return {proj,j:base(proj,kit,{hook_event_name:'PostToolUse',tool_name:'Bash',tool_input:{command:'node "'+path.join(kit.kit,'tools/merge-push.js').replace(/\\/g,'/')+'" plan --dir "'+proj.replace(/\\/g,'/')+'" | tail -5'},tool_response:{stdout:'截断内容',exit_code:0}})};}, /预览未登记/, NEXT);
+// 1012：行为与提示的有意变更，从 V1012 起生效。
+add('1012：根目录产出选项', 'guard-output', (kit) => { const proj=project(kit); const j=base(proj,kit,{tool_name:'Write',tool_input:{file_path:path.join(proj,'工时.csv'),content:'工时'}}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'root-answer.jsonl'),[H.tr.user('生成表格'),H.tr.ran('AskUserQuestion',{},'Your questions have been answered: "产出放哪？"="仓库根目录 工时.csv"')]); return {proj,j}; }, /放行，没有输出/, V1012);
+add('1012：交付新文件可以等用户提交', 'verify-gate', (kit) => { const proj=project(kit); const file=path.join(proj,'交付.xls'); H.write(file,'交付'); const j=base(proj,kit,{hook_event_name:'Stop',last_assistant_message:'交付完成，保留文件等待用户提交。'}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'deliver.jsonl'),[H.tr.user('生成交付表格'),H.tr.ran('Write',{file_path:file,content:'交付'})]);return {proj,j};}, /新文件尚未提交/, V1012, {autoCommit:'off',autoVerify:false,autoSeePage:false,autoCrossReview:false,specGate:false,lessons:'off',vibeTidy:true});
+add('1012：截断推送预览当场提示', 'after-tool', (kit) => {const proj=project(kit);return {proj,j:base(proj,kit,{hook_event_name:'PostToolUse',tool_name:'Bash',tool_input:{command:'node "'+path.join(kit.kit,'tools/merge-push.js').replace(/\\/g,'/')+'" plan --dir "'+proj.replace(/\\/g,'/')+'" | tail -5'},tool_response:{stdout:'截断内容',exit_code:0}})};}, /预览未登记/, V1012);
 
 let same = 0;
 let changed = 0;
