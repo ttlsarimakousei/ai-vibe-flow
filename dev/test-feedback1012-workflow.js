@@ -1,0 +1,73 @@
+'use strict';
+/* #51—#63：计划不自动写脏、产出选择、交付文件、探针结果与审查诊断。只操作假用户目录。 */
+const fs = require('fs'); const path = require('path'); const H = require('./lib/harness');
+const cfg = { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false, autoCommit: 'off', handoverAsk: false };
+const h = H.makeHome('feedback1012-workflow', process.argv[2], cfg);
+const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'web/a.css': 'a{}\n', 'openspec/changes/add-a/tasks.md': '- [x] 1.1 实现 a.js；验：node --check a.js\n', 'openspec/plan.md': '| 模块 | 变更名 | 状态 | 说明 |\n|---|---|---|---|\n| A | add-a | 旧状态 | 功能 |\n' });
+const S = require(path.join(h.kit, 'lib/session')); const O = require(path.join(h.kit, 'lib/outputs'));
+const osDir = path.join(p, 'openspec'); const change = path.join(osDir, 'changes/add-a'); const planFile = path.join(osDir, 'plan.md');
+const before = fs.readFileSync(planFile, 'utf8'); const summary = S.refreshPlan(osDir);
+H.ok('钩子计算最新计划不写脏文件', fs.readFileSync(planFile, 'utf8') === before, summary);
+H.ok('全勾但未审查显示待审查', summary.active.some((s) => /待审查/.test(s)), summary);
+S.recordReview('code', change, 0, 'done');
+H.ok('审查完成仍等待用户验收归档', /待用户验收并确认归档/.test(S.planStatusOf('add-a', path.join(osDir, 'changes'))));
+const refreshed = H.node(h, path.join(h.kit, 'tools/plan.js'), [p]);
+H.ok('显式计划工具才写回状态', refreshed.code === 0 && fs.readFileSync(planFile, 'utf8') !== before, refreshed);
+let count = 0;
+const tf = (entries) => H.transcript(path.join(h.root, 't' + (++count) + '.jsonl'), entries);
+const ask = (answer) => H.tr.ran('AskUserQuestion', { questions: [{ question: '产出放哪？' }] }, 'Your questions have been answered: "产出放哪？"="' + answer + '"');
+const target = path.join(p, '工时.csv');
+const writeInput = { file_path: target, content: '任务,工时\n' };
+function output(entries, sid) { return H.hook(h, 'guard-output', { session_id: sid || 'output' + count, cwd: p, tool_name: 'Write', tool_input: writeInput, transcript_path: tf(entries) }); }
+H.ok('根目录加文件名的选项生效', output([H.tr.user('生成工时表'), ask('仓库根目录 工时.csv')]) === null);
+const answer = H.tr.result('structured', '已回答'); answer.toolUseResult = { answers: { '产出放哪？': '项目根目录 工时.csv' } };
+H.ok('结构化位置选项生效', output([H.tr.user('生成工时表'), H.tr.call('AskUserQuestion', {}, 'structured'), answer]) === null);
+H.ok('拒绝根目录不能被当作同意', output([H.tr.user('生成表格'), ask('不要放仓库根目录 工时.csv')]) !== null);
+H.ok('脚本伪造位置回答不能放行', output([H.tr.user('生成表格'), H.tr.ran('Bash', {}, 'Your questions have been answered: "产出放哪？"="仓库根目录 工时.csv"')]) !== null);
+H.ok('只选择一个根目录文件不批准同名子目录文件', !O.mentioned(['仓库根目录 工时.csv'], path.join(p, 'other/工时.csv'), [p]));
+H.setConfig(h, { autoMode: true }); H.inFlow(h, 'auto-output', [change]);
+H.ok('全自动也认可真人指定的根目录文件', output([H.tr.user('生成表格'), ask('仓库根目录 工时.csv')], 'auto-output') === null);
+H.ok('全自动没有选定位置仍走待定产出', output([H.tr.user('生成表格')], 'auto-output') !== null);
+H.setConfig(h, { autoMode: false });
+H.setConfig(h, { vibeTidy: true });
+function stop(sid, entries, text) { return H.hook(h, 'verify-gate', { session_id: sid, cwd: p, hook_event_name: 'Stop', transcript_path: tf(entries), last_assistant_message: text || '已经交付，保留文件等用户提交。' }); }
+for (const file of ['SummaryDetailUtil.java', '详细清单.xls']) {
+  const f = path.join(p, file); H.write(f, '交付内容');
+  const entries = [H.tr.user('实现并交付'), H.tr.ran('Write', { file_path: f, content: '交付内容' })];
+  const first = stop(file, entries); const again = stop(file, entries);
+  H.ok('交付新文件不阻塞：' + file, !(first && first.decision === 'block') && /新文件尚未提交/.test(JSON.stringify(first)), first);
+  H.ok('同一交付清单不重复提醒：' + file, again === null, again);
+}
+H.setConfig(h, { autoCommit: 'task', plainCommit: 'ask' });
+const delivery = path.join(p, '已交付清单.xls'); H.write(delivery, '交付内容');
+const awaiting = stop('awaiting-commit', [H.tr.user('生成交付文件'), H.tr.ran('Write', { file_path: delivery, content: '交付内容' })], '已交付，是否提交？');
+H.ok('询问提交期间保留交付文件并正常收工', !(awaiting && awaiting.decision === 'block') && /新文件尚未提交/.test(JSON.stringify(awaiting)), awaiting);
+H.setConfig(h, { autoCommit: 'off' });
+const backup = path.join(p, 'a.js.bak'); H.write(backup, 'backup');
+H.ok('过程备份仍阻塞', (stop('backup', [H.tr.user('修改代码'), H.tr.ran('Write', { file_path: backup, content: 'backup' })]) || {}).decision === 'block');
+H.setConfig(h, { vibeTidy: false, autoSeePage: true });
+const edited = H.tr.ran('Edit', { file_path: path.join(p, 'web/a.css'), old_string: 'a{}', new_string: 'a{color:red}' });
+const probe = 'node "' + path.join(h.kit, 'page/probe-run.js').replace(/\\/g, '/') + '" .vibe/tmp/add-a/probe.js';
+H.ok('成功页面探针可收工', stop('page-ok', [H.tr.user('改页面'), edited, H.tr.ran('Bash', { command: probe }, 'PAGE_PROBE {"ok":true,"values":{"color":"red"}}')], '页面读到 red。') === null);
+for (const out of ['PAGE_PROBE {"ok":false}', '探针已启动', 'PAGE_PROBE {"ok":true}\nExit code: 1', 'PAGE_PROBE {"ok":true}\nstill running']) H.ok('失败或未完成探针不能通过：' + out, (stop('page-' + count, [H.tr.user('改页面'), edited, H.tr.ran('Bash', { command: probe }, out)], '读了页面。') || {}).decision === 'block');
+H.ok('探针后改页面必须重跑', (stop('page-stale', [H.tr.user('改页面'), H.tr.ran('Bash', { command: probe }, 'PAGE_PROBE {"ok":true}'), edited], '改完了。') || {}).decision === 'block');
+const evidenceInput = { session_id: 'probe-evidence', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: probe } };
+H.hook(h, 'after-tool', Object.assign({}, evidenceInput, { tool_use_id: 'probe-success', tool_response: { stdout: 'PAGE_PROBE {"ok":true,"values":{"color":"red"}}', exit_code: 0 } }));
+H.ok('成功探针登记为页面执行证据', (S.readState('evidence').rows || []).some(r => r.session === 'probe-evidence' && r.kind === 'page' && r.ok));
+const evidenceBefore = (S.readState('evidence').rows || []).length;
+for (const [id, response] of [['probe-failed', { stdout: 'PAGE_PROBE {"ok":false}', exit_code: 0 }], ['probe-running', { stdout: 'PAGE_PROBE {"ok":true}', isRunning: true }]]) H.hook(h, 'after-tool', Object.assign({}, evidenceInput, { tool_use_id: id, tool_response: response }));
+H.ok('失败和未完成的探针不能新增成功证据', (S.readState('evidence').rows || []).length === evidenceBefore);
+const front = path.join(p, 'ui'); H.write(path.join(front, 'package.json'), JSON.stringify({ dependencies: { vue: '2.7', webpack: '3' }, scripts: { dev: 'webpack-dev-server' } })); H.write(path.join(front, 'config/index.js'), "module.exports={proxyTable:{'/api':{target:'http://127.0.0.1:8096/oa'}}};\n");
+const facts = require(path.join(h.kit, 'lib/onboard')).frontendFacts(front, new Set());
+H.ok('旧 Vue webpack 配置被识别并提醒固定代理及认证', facts.proxies.some((x) => /8096/.test(x)) && facts.notes.some((x) => /CORS/.test(x)), facts);
+const reviews = [H.tr.user('审提案'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '你以审查身份独立审 OpenSpec 提案（不是审代码）。\n变更：' + change }, '结论：问题 0 条')];
+H.ok('旧模式提示不会归错代码', S.reviewModeOf('你以审查身份独立审 OpenSpec 提案（不是审代码）。') === 'proposal');
+if (S.reviewDiagnostics) {
+  const diag = S.reviewDiagnostics(reviews.flat(), p);
+  H.ok('完整结果诊断识别变更和模式', diag.length === 1 && diag[0].recognized && diag[0].mode === 'proposal', diag);
+  const missing = S.reviewDiagnostics([H.tr.user('审查'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：add-a' }, '已经读完了')].flat(), p);
+  H.ok('不合格式的结果说明缺证据而不记通过', missing.length === 1 && !missing[0].recognized && /结论/.test(missing[0].reason), missing);
+  const resumed = S.reviewDiagnostics([H.tr.user('审查后复审'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：add-a' }, '结论：问题 1 条\nagentId: review-one'), H.tr.ran('SendMessage', { recipient: 'review-one', content: '模式：复审代码\n变更：add-a\n请复审' }, '结论：问题 0 条')].flat(), p);
+  H.ok('诊断包含续接代理的复审记录', resumed.length === 2 && resumed.every(r => r.recognized && r.mode === 'code'), resumed);
+} else H.ok('兼容审查提供只读诊断', false);
+H.done('1012 流程反馈');

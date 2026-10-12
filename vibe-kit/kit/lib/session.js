@@ -1810,6 +1810,23 @@ function noteUnknownReview(r) {
     hookLog('审查记账 认不出审的是提案还是代码，没记：变更 ' + r.change.name + '，报了 ' + r.issues + ' 条（审查提示第一行要写"模式：提案 / 代码 / 复审提案 / 复审代码"）');
   } catch (e) { /* 记不了不影响 */ }
 }
+/** 只读核对兼容代理的记账；不输出提示词、审查原文或文件内容，也不把缺失证据补成通过。 */
+function reviewDiagnostics(entries, cwd) {
+  const calls = toolCalls(entries, 0);
+  const results = toolResults(entries);
+  const changes = allChanges(cwd);
+  const notes = taskNotes(entries);
+  const found = reviewsIn(calls, results, changes, notes);
+  const pending = pendingReviewsIn(calls, results, changes, notes);
+  return reviewCalls(calls, results).map((c) => {
+    const r = found.find((x) => x.id === c.id);
+    const p = pending.find((x) => x.id === c.id);
+    const change = r && r.change || reviewTargetOf(String(c.input.prompt || ''), changes);
+    const mode = r && r.mode || reviewModeOf(String(c.input.prompt || ''), change);
+    let reason = !change ? '没有识别到当前项目中的变更' : !mode ? '无法识别提案或代码模式' : r ? '已识别完整结论' : p ? (p.expired ? '已超过审查预算，不能登记通过' : '结果尚未送达，检查原任务，不要重复开审查') : '未识别完整结论，或结果失败、迟到；核对原任务的结论格式和送达记录';
+    return { call: c.id, change: change ? change.name : '', mode: mode || '', recognized: !!(r && change && mode), reason };
+  });
+}
 /** 提案审过了吗 */
 function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir))); }
 /**
@@ -2262,7 +2279,7 @@ function convUpdateNotice(j) {
 module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
-  changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewRecord, recordReview, proposalReviewed, codeReviewed,
+  changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,
   codeReviewIssue, unreviewedAfter, touchChange, syncTicks, taskCodeFiles, projectRootsOf, isDeferredTask, TASK_DEFER, uniquifyToolIds,
   underDir, reviewMax, syncReviewRounds, reviewExhaustedText, reviewLoopIssue, sessionChanges, handoverReadIn, handoverWrittenIn, normTicks,
   taskNotes, isTaskNote, isTaskNotePrompt,
