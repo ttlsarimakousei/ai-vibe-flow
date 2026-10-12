@@ -295,7 +295,8 @@ function frontendFacts(dir, tracked) {
   let port = '';
   let portFrom = '';
   const proxies = [];
-  for (const n of ['vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'vue.config.js', 'webpack.config.js', '.env.development', '.env']) {
+  const fixedProxyFiles = [];
+  for (const n of ['vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'vue.config.js', 'webpack.config.js', 'config/index.js', '.env.development', '.env']) {
     const f = path.join(dir, n);
     const t = readText(f);
     if (!t) continue;
@@ -305,14 +306,18 @@ function frontendFacts(dir, tracked) {
     if (!port) { const m = /^\.env/.test(n) ? /^\s*(?:VITE_PORT|VUE_APP_PORT|PORT)\s*=\s*(\d+)/m.exec(t) : /\bport\s*:\s*(\d{2,5})\b/.exec(code); if (m) { port = m[1]; portFrom = n; } }
     const re = /target\s*:\s*['"`](https?:\/\/[^'"`]+)['"`]/g;
     let m;
-    while ((m = re.exec(code))) if (!proxies.includes(m[1])) proxies.push(m[1]);
+    while ((m = re.exec(code))) {
+      if (!proxies.includes(m[1])) proxies.push(m[1]);
+      if (!fixedProxyFiles.includes(n)) fixedProxyFiles.push(n);
+    }
   }
   if (!port) port = deps.vite ? '5173' : deps['@vue/cli-service'] ? '8080' : (deps['react-scripts'] || deps.next || deps.nuxt) ? '3000' : '';
   const notes = [];
+  if (fixedProxyFiles.length) notes.push('代理配置有写死的 target（' + fixedProxyFiles.join('、') + '）：换自测后端端口不会自动跟随。核对代理如何读取 VIBE_BACKEND_URL，保留原默认值；统一认证、回调地址或服务端 CORS 可能限制前端端口，不能靠浏览器设置绕过');
   if (!exists(path.join(dir, 'node_modules'))) notes.push('前端的 node_modules 不在，要先 npm install 才跑得起来');
   const ts = readJson(path.join(dir, 'tsconfig.json'));
   if (isObj(ts) && Array.isArray(ts.files) && !ts.files.length && Array.isArray(ts.references)) notes.push('tsconfig.json 是 files 为空加 references 的写法：类型检查要写成 vue-tsc --noEmit -p tsconfig.app.json，不然一个文件都不查');
-  return { fw, bundler, dev, build: scripts.build ? 'build' : '', typeCheck: scripts['type-check'] ? 'type-check' : '', lint: scripts.lint ? 'lint' : '', eslint: !!deps.eslint, port, portFrom, proxies: proxies.slice(0, 3), notes, name: pkg.name || '' };
+  return { fw, bundler, dev, build: scripts.build ? 'build' : '', typeCheck: scripts['type-check'] ? 'type-check' : '', lint: scripts.lint ? 'lint' : '', eslint: !!deps.eslint, port, portFrom, proxies: proxies.slice(0, 3), fixedProxyFiles, notes, name: pkg.name || '' };
 }
 function encodingFacts(root) {
   const EXT = /\.(java|js|jsx|ts|tsx|vue|xml|properties|jsp|html?|css|scss|less|sql|ya?ml|json|md|py|bat|ps1)$/i;

@@ -321,6 +321,10 @@ async function launch(name, port, command, meta) {
   if (opt('backend')) { const backend = readRec(opt('backend')); if (!backend || !sameProc(backend) || !(await portOpen(backend.port, 300))) throw new Error('指定后端没有有效运行记录，请先用 devserver 起后端'); backendUrl = 'http://127.0.0.1:' + backend.port; Object.assign(env, { VIBE_BACKEND_URL: backendUrl, VITE_BACKEND_URL: backendUrl, BACKEND_URL: backendUrl }); }
   for (const kv of envs) { const i = kv.indexOf('='); if (i > 0) env[kv.slice(0, i)] = kv.slice(i + 1); }
   const cwd = path.resolve(dir, opt('cwd') || '.');
+  if (opt('backend')) {
+    const front = require('../lib/onboard').frontendFacts(cwd, new Set());
+    if (front && front.fixedProxyFiles && front.fixedProxyFiles.length) console.error('提醒：前端代理有写死的 target，--backend 只传环境变量。先核对代理是否读取 VIBE_BACKEND_URL（有上下文路径的要保留路径），再验证请求确实到达自测后端；统一认证/CORS 的固定端口另记进项目说明。');
+  }
   const fd = fs.openSync(log, 'w');
   const child = WIN
     ? spawn(process.execPath, [__filename, '__keep'], { detached: true, windowsHide: true, stdio: ['ignore', fd, fd], cwd, env: Object.assign({}, env, { VIBE_DEVSERVER_CMD: command }) })
