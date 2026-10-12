@@ -363,6 +363,8 @@ def die(result, conn=None):
     print("失败（%s）：%s" % (code, result.get("error", "")), file=sys.stderr)
     if result.get("sql_state"):
         print("SQLSTATE %s，厂商错误码 %s" % (result["sql_state"], result.get("vendor_code")), file=sys.stderr)
+    if str(result.get("sql_state") or "") == "42S22" or (conn and conn.get("dialect") == "oracle" and str(result.get("vendor_code")) == "904"):
+        print("先用 columns --fresh 重新读取 涉及的表或视图，核对 schema、真实字段、别名作用域及双引号大小写；用最小只读查询确认。不要重复盲试原 SQL。上报仍只含错误码和次数，原语句及结构在本机核对。", file=sys.stderr)
     if conn is not None:
         _connect_hint(conn, result)
     return EXIT_FAILED

@@ -53,6 +53,7 @@ const REPORT_MAX = 20;
 // 不算出错的：被工具自己的规矩拦下（全自动模式下的写操作、禁止名单里的表）
 const SKIP_ERR = /^BLOCKED/;
 const ERR_NOTE = [
+  [/^SQL_ERROR:42S22(?::|$)/, '列或标识符相关错误：在本机查看完整错误，用 columns --fresh 重新读取 涉及的表或视图，核对 schema、字段、别名和引号；不要凭计数认定套件有错，也不要重复盲试 SQL。神通的具体含义仍以对应版本的错误详情为准。'],
   [/^SQL_ERROR:08/, 'SQLSTATE 08 类是连接异常，先核对服务是否可达、驱动版本和连接配置。只有错误码，不能判断是 SQL 写法的问题。'],
   [/^SQL_ERROR:22/, 'SQLSTATE 22 类是数据异常，检查值、类型和转换规则。厂商数字码需要对应数据库版本的文档；仅凭计数不能定位语句。'],
   [/^SQL_ERROR:40/, 'SQLSTATE 40 类与事务回滚有关，检查并发冲突、隔离级别和事务状态。不要直接改 SQL 或自动重试写操作。'],
@@ -85,7 +86,9 @@ function reportErrors(now, every) {
   for (const x of list) {
     const db = x.dialect ? (DIALECT_NAME[x.dialect] || x.dialect) : '';
     const cmds = Object.keys(x.cmds || {}).sort((a, b) => x.cmds[b] - x.cmds[a]).map((c) => c + ' ' + x.cmds[c] + ' 次').join('、');
-    const what = (ERR_NOTE.find((p) => p[0].test(x.code)) || [null, '工具报的错。'])[1];
+    const what = x.dialect === 'oracle' && /^SQL_ERROR:[^:]*:904$/.test(x.code)
+      ? 'Oracle 904 是无效标识符。先在本机用 columns --fresh 读取 涉及的表或视图，核对 schema、字段拼写、别名作用域和带引号的大小写；仅凭计数无法定位语句或认定套件有错。'
+      : (ERR_NOTE.find((p) => p[0].test(x.code)) || [null, '工具报的错。'])[1];
     const times = '最近 ' + hours + ' 小时出了 ' + x.n + ' 次（' + cmds + '）';
     try {
       const rec = fb.record({
