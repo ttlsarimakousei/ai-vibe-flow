@@ -23,34 +23,43 @@ function git(root, args, opt) {
   if (r.status !== 0) throw new Error('git ' + args[0] + ' 没有成功，操作已停止；核对仓库和远端后重试。');
   return opt && opt.raw ? r.stdout : r.stdout.trim();
 }
-function state(root, fetch) {
-  root = git(root, ['rev-parse', '--show-toplevel']);
-  if (git(root, ['status', '--porcelain', '-uall'])) throw new Error('工作区或暂存区还有改动，先完成提交，不自动 stash。');
-  const ref = git(root, ['symbolic-ref', '-q', 'HEAD']);
+function state(root, fetch, options) {
+  // 完成/执行钩子只核对不可变提交的端点；完整分组在 CLI 执行前再次计算。
+  // 2026-10-12 #64：不能在 25 秒的 HTTP 钩子里对每条提交起四次 Git。
+  const deadline = options && options.deadline;
+  const run = (dir, args) => {
+    const left = deadline ? deadline - Date.now() : 30000;
+    if (left <= 0) throw new Error('推送预览的本机核对超时，稍后重试同一计划。');
+    return git(dir, args, { timeout: Math.min(30000, left) });
+  };
+  root = run(root, ['rev-parse', '--show-toplevel']);
+  if (run(root, ['status', '--porcelain', '-uall'])) throw new Error('工作区或暂存区还有改动，先完成提交，不自动 stash。');
+  const ref = run(root, ['symbolic-ref', '-q', 'HEAD']);
   if (!ref.startsWith('refs/heads/')) throw new Error('当前没有本地分支。');
-  const dir = git(root, ['rev-parse', '--absolute-git-dir']);
+  const dir = run(root, ['rev-parse', '--absolute-git-dir']);
   for (const n of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'index.lock']) if (fs.existsSync(path.join(dir, n))) throw new Error('仓库还有合并、变基或锁，先处理完。');
   const branch = ref.slice(11);
-  const remote = git(root, ['config', '--get', 'branch.' + branch + '.remote']);
-  const merge = git(root, ['config', '--get', 'branch.' + branch + '.merge']);
+  const remote = run(root, ['config', '--get', 'branch.' + branch + '.remote']);
+  const merge = run(root, ['config', '--get', 'branch.' + branch + '.merge']);
   if (remote === '.' || !merge.startsWith('refs/heads/')) throw new Error('需要一个真实远端上的跟踪分支，不能猜推到哪里。');
-  const fetchUrls = git(root, ['remote', 'get-url', '--all', remote]).split('\n');
-  const pushUrls = git(root, ['remote', 'get-url', '--push', '--all', remote]).split('\n');
+  const fetchUrls = run(root, ['remote', 'get-url', '--all', remote]).split('\n');
+  const pushUrls = run(root, ['remote', 'get-url', '--push', '--all', remote]).split('\n');
   if (fetchUrls.length !== 1 || pushUrls.length !== 1 || fetchUrls[0] !== pushUrls[0]) throw new Error('远端的拉取和推送地址不同或有多个地址，先人工确认目标，不改历史。');
-  const upstream = git(root, ['rev-parse', '--symbolic-full-name', '@{upstream}']);
-  if (fetch) git(root, ['fetch', '--no-tags', remote, merge]);
+  const upstream = run(root, ['rev-parse', '--symbolic-full-name', '@{upstream}']);
+  if (fetch) run(root, ['fetch', '--no-tags', remote, merge]);
   // FETCH_HEAD 是此次取到的目标，不依赖用户的 remote.fetch 是否包含这个分支。
-  const base = git(root, ['rev-parse', fetch ? 'FETCH_HEAD' : upstream]);
-  const head = git(root, ['rev-parse', 'HEAD']);
-  const common = git(root, ['merge-base', head, base]);
+  const base = run(root, ['rev-parse', fetch ? 'FETCH_HEAD' : upstream]);
+  const head = run(root, ['rev-parse', 'HEAD']);
+  const common = run(root, ['merge-base', head, base]);
   if (common !== base) throw new Error('远端已经前进或发生分叉，先正常合并代码，不能合并 push。');
-  const ids = git(root, ['rev-list', '--reverse', base + '..' + head]).split('\n').filter(Boolean);
+  if (options && options.headerOnly) return { root, ref, remote, merge, upstream, base, head, dir, targetHash: sha([fetchUrls, pushUrls]) };
+  const ids = run(root, ['rev-list', '--reverse', base + '..' + head]).split('\n').filter(Boolean);
   if (ids.length > 200) throw new Error('本地未推送提交超过 200 条，先人工整理范围。');
   const commits = ids.map((id) => {
-    const raw = git(root, ['cat-file', '-p', id]);
-    const protectedHistory = (raw.match(/^parent /gm) || []).length !== 1 || /^gpgsig /m.test(raw) || !!git(root, ['tag', '--points-at', id]);
-    const fields = git(root, ['show', '-s', '--format=%T%x00%an%x00%ae%x00%aI%x00%s', id]).split('\x00');
-    const files = git(root, ['diff-tree', '--no-commit-id', '--no-renames', '-r', '--name-only', '-z', id]).split('\x00').filter(Boolean);
+    const raw = run(root, ['cat-file', '-p', id]);
+    const protectedHistory = (raw.match(/^parent /gm) || []).length !== 1 || /^gpgsig /m.test(raw) || !!run(root, ['tag', '--points-at', id]);
+    const fields = run(root, ['show', '-s', '--format=%T%x00%an%x00%ae%x00%aI%x00%s', id]).split('\x00');
+    const files = run(root, ['diff-tree', '--no-commit-id', '--no-renames', '-r', '--name-only', '-z', id]).split('\x00').filter(Boolean);
     return { id, tree: fields[0], author: fields[1], email: fields[2], date: fields[3], title: fields[4], message: raw.slice(raw.indexOf('\n\n') + 2), files, protectedHistory };
   });
   return { root, ref, remote, merge, upstream, base, head, dir, commits, targetHash: sha([fetchUrls, pushUrls]) };
@@ -185,8 +194,8 @@ function previewAllowed(j, root, call) {
     const said = S.userSaid(S.tailEntries(j.transcript_path, 3000000), 'push');
     if (!said.ok || voiceId(said.voice) === saved.voice) return { ok: false, reason: '预览后还没有另一条真人推送确认' };
     const loaded = readPlan(root, saved.file); const p = loaded.plan;
-    const current = state(root, false);
-    if (p.hash !== saved.hash || p.head !== current.head || p.base !== current.base || p.ref !== current.ref || p.remote !== current.remote || p.merge !== current.merge || p.targetHash !== current.targetHash || JSON.stringify(p.groups) !== JSON.stringify(groupsOf(current.commits))) return { ok: false, reason: '仓库或推送目标已变化，需要重新预览并确认' };
+    const current = state(root, false, { headerOnly: true, deadline: Date.now() + 8000 });
+    if (p.hash !== saved.hash || p.head !== current.head || p.base !== current.base || p.ref !== current.ref || p.remote !== current.remote || p.merge !== current.merge || p.targetHash !== current.targetHash) return { ok: false, reason: '仓库或推送目标已变化，需要重新预览并确认' };
     if (call && (path.resolve(root, call.file || '') !== loaded.file || call.confirmed !== p.hash || !call.push)) return { ok: false, reason: '执行命令没有绑定已确认计划，请用相同计划和完整 --confirmed 编号及 --push' };
     if (!call) return { ok: false, reason: '须用 merge-push.js apply 绑定计划执行；没有可合并项时也会保持原历史并正常推送' };
     return { ok: true, file: loaded.file, hash: p.hash };
