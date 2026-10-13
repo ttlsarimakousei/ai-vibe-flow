@@ -8,13 +8,17 @@ function planHash(dir) {
   for (const f of S.artifactFiles(dir).filter((f) => !/revisions\.md$/.test(f))) { try { const t = fs.readFileSync(f, 'utf8'); rows.push([path.relative(dir, f), W.hash(/tasks\.md$/.test(f) ? W.progressText(t) : t)]); } catch (e) { rows.push([f, '缺失']); } }
   return W.hash(JSON.stringify(rows));
 }
-function grant(j, text) {
+function grant(j, text, context) {
   const S = require('./session'); const all = S.allChanges(j.cwd || process.cwd()); const named = all.filter((c) => S.mentionsChange(text, c.name));
-  const targets = named.length ? named : all.length === 1 ? all : [];
+  const asked = all.filter((c) => S.mentionsChange(context || '', c.name));
+  const touched = all.filter((c) => S.flowChanges(j).includes(S.normKey(c.dir)));
+  const targets = named.length ? named : asked.length === 1 ? asked : all.length === 1 ? all : touched.length === 1 ? touched : [];
   if (!targets.length) return { ok: false, reason: all.length ? '有多个变更，请明确 apply 哪个变更' : '没有当前变更，按普通任务沟通' };
   const scope = { at: Date.now(), dirs: {}, roots: [] };
   for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
-  S.updateState(j.session_id + '-flow', (s) => { s.applyScope = scope; s.waiting = ''; });
+  const voice = j.transcript_path && S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
+  const saved = S.updateState(j.session_id + '-flow', (s) => { s.applyScope = scope; s.waiting = ''; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: Date.now() }; if (voice) s.applyVoice = W.hash(JSON.stringify([voice.kind, voice.at, voice.pos, voice.text])); });
+  if (!saved) return { ok: false, reason: '开工范围暂时不能保存，请重试' };
   try { require('./review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 审查缺基线时明确降级 */ }
   return { ok: true, targets: targets.map((c) => c.name) };
 }
@@ -31,4 +35,18 @@ function check(j, target) {
   if (!a && !(st.applyScope.roots || []).some((r) => file === r || file.startsWith(r + '/'))) return '目标项目不在当前 apply 许可里，不能借用另一个项目的全自动状态';
   return '';
 }
-module.exports = { grant, valid, check, planHash };
+// 修订产物时退出失效的实施范围；源码与任务打勾仍必须有新版开工许可。
+function prepareEdit(j, target) {
+  const S = require('./session'); const st = S.flowState(j); const a = S.artifactOf(target);
+  if (!a || !st.on || st.stage !== 'apply' || !st.applyScope) return;
+  const input = j.tool_input || {}; let ticking = false;
+  if (a.kind === 'tasks') {
+    let old = ''; try { old = fs.readFileSync(target, 'utf8'); } catch (e) { /* 新产物 */ }
+    const next = input.content !== undefined ? String(input.content) : input.edits ? input.edits.reduce((s, e) => s.replace(String(e.old_string || ''), String(e.new_string || '')), old) : old.replace(String(input.old_string || ''), String(input.new_string || ''));
+    ticking = S.tickedLines(old, next).length > 0;
+  }
+  if (ticking || valid(j).ok && st.applyScope.dirs[S.normKey(a.dir)]) return;
+  S.updateState(j.session_id + '-flow', (s) => { s.stage = 'plan'; s.why = '修订提案，旧开工范围失效'; delete s.applyScope; });
+  S.hookLog('范围回到提案阶段：' + a.name);
+}
+module.exports = { grant, valid, check, planHash, prepareEdit };

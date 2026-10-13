@@ -119,6 +119,7 @@ const ASKED_COMMIT = /(提交|commit)[^。！!\n]{0,16}[吗么？?]|要不要提
  * 返回 ''（按自动提交的档位来：全自动、这个会话动过变更、开关是直接提交、用户已经说了提交）、'asked'（它最后那句已经在问）、'ask'（要它去问）
  */
 function plainCommitAsk(j, cfg, entries, changes, lastSaid) {
+  if (require('../lib/session').commitDeclined(j, entries)) return 'declined';
   if ((cfg.plainCommit || 'ask') !== 'ask' || cfg.autoMode) return '';
   try { const fl = flowState(j); if (fl.on && fl.stage === 'apply') return ''; } catch (e) { /* 认不出就当没动过变更 */ }
   if (userSaid(entries, 'commit').ok) return '';
@@ -899,7 +900,7 @@ async function handle(j) {
     const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && proposalReviewed(a.dir); });
     const pkey = sid + '-plancommit';
     const planOnce = turnId ? readState(pkey).turnId !== turnId : !j.stop_hook_active;
-    if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !pending.some((p) => p.mode === 'proposal') && !userSaid(entries, 'commit').ok && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
+    if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !pending.some((p) => p.mode === 'proposal') && !userSaid(entries, 'commit').ok && !require('../lib/session').commitDeclined(j, entries) && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
       const dirtyPlan = await uncommitted(plans, true);
       if (dirtyPlan.length) {
         writeState(pkey, { turnId, at: Date.now() });
@@ -925,7 +926,7 @@ async function handle(j) {
         const unit = mode === 'phase' ? '一个阶段（tasks.md 里同一个大编号的任务）一次提交，信息写这一组做了什么' : mode === 'change' ? '整个变更一次提交' : '一项任务一次提交';
         const how = '先自己把 diff 过一遍（有没有调试代码、误改、漏改），然后进到对应的仓库（git -C <目录>），只 git add 你这一轮改的和新建的文件（新建的 git 不会自动带上；不用 -A、.、-u，也不用 commit -a），' + unit + '，信息按"类型: 内容"写（例：feat: 新增修改页面）；只提交不 push';
         const plain = plainCommitAsk(j, cfg, entries, changes, lastSaid);
-        if (plain === 'asked') { /* 它最后那句已经在问我提不提交：等我答 */ }
+        if (plain === 'asked' || plain === 'declined') { /* 已提问或用户决定暂不提交，不反复催同一份改动 */ }
         else if (plain === 'ask') todo.push('这一轮改过的文件还没提交：' + where + '。不走 OpenSpec 的改动，提交之前要我点头：先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说提交了再提交，只提交不 push。');
         else if (todo.length) todo.push('验证过了就接着提交，不用等我说：' + how + '。验证没过、还没做完的先不提交。');
         else todo.push('这一轮改过的文件还没提交：' + where + '。已经做完并且验证过的，现在提交：' + how + '。还没做完、验证没过的先不提交，说明原因就行。');

@@ -32,7 +32,7 @@ function explicit(text, action) {
   if (action === 'push' && /(?:^|[，,。；;\n])\s*(?:请|帮我|现在|直接|可以|同意|确认|及时)*\s*提交\s*(?:并|和|后|然后|再)\s*(?:push\b|推送)(?!\s*(?:策略|机制|规则|功能|问题))/i.test(s)) return true;
   if (action === 'push' && /^(?:(?:请|现在|确认|同意|可以)\s*)*(?:合并\s*(?:push|推送)|(?:按(?:照)?|照)(?:这个|刚才的|上面的)?计划\s*(?:合并\s*)?(?:push|推送))[\s。！!]*$/i.test(s)) return true;
   // 常见收尾："改好了，提交"；"自测没问题，归档吧"；带前置修改的明确执行指令。
-  const then = new RegExp('(?:然后|之后|以后|再|后)\\s*' + op + '(?!\\s*' + NOUN + ')', 'i');
+  const then = new RegExp('(?:然后|之后|以后|再|后|并且|并|和)\\s*' + op + '(?!\\s*' + NOUN + ')', 'i');
   if (then.test(s) && !/(?:解释|讲解|举例|讨论|听说|他说|你说|之前说|之前会)/.test(s)) return true;
   if (action === 'apply') {
     if (/\bapply\b.*(?:功能|流程|命令|机制|时候|阶段|怎么|是否)|(?:提案|需求|规格|设计|任务清单|验法).*(?:修改|调整|改一下|不对|讨论)/i.test(s)) return false;

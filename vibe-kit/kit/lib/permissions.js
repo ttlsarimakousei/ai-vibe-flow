@@ -13,7 +13,7 @@ function allow(j, action, target, toolId) {
   const entries = entriesOf(j); const said = S.userSaid(entries, action);
   if (!said.ok) return { ok: false, reason: '没有当前用户的明确' + action + '许可' };
   const v = said.voice;
-  const names = S.allChanges(j.cwd || process.cwd()).filter((c) => S.mentionsChange(said.text, c.name));
+  const names = S.allChanges(j.cwd || process.cwd()).filter((c) => S.mentionsChange(said.targetText || said.text, c.name));
   if (['archive', 'reviewBudget'].includes(action) && names.length && !names.some((c) => path.resolve(c.dir).toLowerCase() === path.resolve(target).toLowerCase())) return { ok: false, reason: '这次许可属于另一个变更' };
   const scope = scopeOf(j, action, target); const vk = voiceKey(v); const ver = versionOf(j, action, target); const id = action + '|' + scope;
   let result = { ok: false, reason: '许可状态暂时不能写入' };

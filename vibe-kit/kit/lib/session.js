@@ -237,11 +237,21 @@ function userSaid(entries, topic) {
   const v = lastUserVoice(entries);
   if (!g || !v) return { ok: false, voice: v, text: '' };
   if (v.kind === 'answer') {
-    const hit = v.answers.some((x) => intent.explicit(x.a, topic) || (g.yes.test(x.q) && !intent.denied(x.a, topic) && YES_SHORT.test(x.a.trim())));
-    return { ok: hit, voice: v, text: v.answers.map((x) => x.a).join('；') };
+    const matching = v.answers.filter((x) => intent.explicit(x.a, topic) || ((topic === 'push' ? /推送|\bpush\b/i.test(x.q) : g.yes.test(x.q)) && !intent.denied(x.a, topic) && (YES_SHORT.test(x.a.trim()) || topic === 'push' && /^推[。！!\s]*$/.test(x.a))));
+    return { ok: matching.length > 0, voice: v, text: v.answers.map((x) => x.a).join('；'), targetText: matching.map((x) => x.q + '\n' + x.a).join('\n') };
   }
   if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || v.command.replace(/^\//, '').toLowerCase() === topic, voice: v, text: v.text };
   return { ok: intent.explicit(v.text, topic), voice: v, text: v.text };
+}
+/** 用户选择本次不提交后，同一份改动可正常收工；后来新增改动再按现有规则确认。 */
+function commitDeclined(j, entries) {
+  const v = lastUserVoice(entries); if (!v || !j.session_id) return false;
+  const text = v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text;
+  if (!/(?:先不|先别|不要|不用|暂不|取消)提交|^(?:不提交|提交我自己来)[\s。！!]*$/.test(text) || /[？?]/.test(text)) return false;
+  const W = require('./workspace'); const voice = W.hash(JSON.stringify([v.kind, v.at, v.pos, v.text])); const fingerprint = W.fingerprint(j.cwd, 'all').hash;
+  let same = false;
+  updateState(j.session_id + '-commit-declined', (s) => { if (s.voice !== voice) { s.voice = voice; s.fingerprint = fingerprint; } same = s.fingerprint === fingerprint; });
+  return same;
 }
 /** 自动压缩策略只允许明确手动交接；旧策略只在有效全自动实施且用户开着自动交接时自动写。 */
 function canWriteHandover(j, cfg) {
@@ -256,8 +266,12 @@ function confirmApply(j) {
   const v = lastUserVoice(tailEntries(j.transcript_path, 3000000));
   const text = v && (v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text);
   if (!text || !applyIntent(text)) return false;
-  if (!require('./apply-scope').grant(j, text).ok) return false;
+  const voice = crypto.createHash('sha256').update(JSON.stringify([v.kind, v.at, v.pos, v.text])).digest('hex');
+  if (st.applyVoice === voice) return false; // 同一次开工答案不能在提案修订后重新授权。
+  const context = v.kind === 'answer' ? v.answers.filter((a) => applyIntent(a.a)).map((a) => a.q).join('\n') : '';
+  if (!require('./apply-scope').grant(j, text, context).ok) return false;
   setFlow(j, true, '用户确认开工', 'apply');
+  updateState(flowKey(j), (s) => { s.applyVoice = voice; });
   return true;
 }
 /**
@@ -2276,7 +2290,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,
