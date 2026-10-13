@@ -211,3 +211,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 ## 20261012 反馈专项
 
 `test-feedback1012-push.js [旧套件目录]` 核对临时裸仓库的预览管道、真人选项、取消、固定数量且限时的 Git 查询、伴随文档归组和归档边界。`test-feedback1012-workflow.js [旧套件目录]` 核对只读计划、产出位置、待提交交付文件、探针结果和兼容审查诊断。`test-feedback1012-page.js [旧套件目录]` 用系统无头浏览器实际验证探针读值、失败、异步和同步超时、路径限制。`test-feedback1012-db.js [auto或none] [旧套件目录]` 用模拟错误检查数据库诊断，不连接真实库。四套已加入全回归；与 20261011.1553 对照须检出反例。
+
+## 20261013 反馈专项
+
+六套 `test-feedback1013-workflow/review/push/diagnostics/feedback/decisions.js [旧套件目录]` 分别检查多变更和复合答案、分片及模拟回包、空远端和单笔推送、钩子预算和只读诊断、重现信息与额度、真人跳过和接受问题。旧版用 `dev/baseline/20261013.0058/vibe-kit`，应检出反例；正常测试全部使用假用户、模拟回复与临时裸仓库。本批不连接真实模型、数据库或 GitLab。完整回归仍按既有三版 CLI、运行环境和窗口监视器执行。

@@ -18,7 +18,7 @@ node "$HOME/.claude/vibe-kit/tools/review.js" status --change <变更名> --mode
 node "$HOME/.claude/vibe-kit/tools/review.js" cancel --change <变更名> --mode code --project <项目>
 ```
 
-执行器自行读产物、基线差异及未跟踪新文件，经本机路由的 sonnet 角色发送材料。不给自己的结论，不让审查者自行搜索、编译或跑测试。总预算默认 300 秒，每批显示覆盖和剩余秒数，整个运行累计计算。超过材料限额明确列为 partial，不默默截掉后算完成。
+执行器自行读核心产物、基线差异及未跟踪新文件，经本机路由的 sonnet 角色发送材料。目录说明和 revisions 中历史路径不进当前材料；大文件分片，全部片段成功才算覆盖。不给自己的结论，不让审查者自行搜索、编译或跑测试。总预算默认 300 秒，每批显示尝试、回复、覆盖和剩余秒数，整个运行累计计算。超过文件上限或单文件 4MB 明确列为 partial，不默默截掉后算完成。
 
 - completed：取得完整结果，核对所有发现；代码审查任务立即勾，发现问题也可以勾审查。
 - partial、timed_out、cancelled、failed、interrupted、stale：交代已覆盖、未覆盖和原因，审查任务不勾，不自动无限重启；需要新预算由用户明确决定，再使用 --new-budget。
@@ -30,7 +30,7 @@ node "$HOME/.claude/vibe-kit/tools/review.js" cancel --change <变更名> --mode
 
 文件、需求或验法变了，旧结果失效；只有复选框进度变动不失效。默认不使用子代理；兼容开关选 agent 时只用现有 ttls-reviewer，第一行“模式：提案/代码/复审提案/复审代码”，第二行“变更：裸名”。最多读取配置的文件数，不运行测试、不递归开代理；到预算只取消已登记的审查任务，保留部分结果并收工。兼容代理的终止仍由主会话调用取消工具，套件不会杀 Claude 主进程。
 
-已经有结论但闸门说没审过时，先诊断再决定是否补审。默认独立审查用 `review.js status --project <项目> --change <变更> --mode proposal|code`；兼容代理用 `review.js diagnose --project <项目> --transcript <当前会话记录>`，核对变更、模式、结果是否到达及预算。诊断只输出识别状态，不会替缺失或不完整的证据记通过；不要因为没记账就连续重跑相同审查。
+已经有结论但闸门说没审过时，先诊断再决定是否补审。默认独立审查用 `review.js status --project <项目> --change <变更> --mode proposal|code`，失败阶段和脱敏片段在结果 JSON；兼容代理用 `review.js diagnose --project <项目> --transcript <当前会话记录>`，核对变更、模式、结果是否到达及预算。有可核对的完整结果再用相同参数执行 sync 补登记；缺失、失败、迟到或不完整的证据不记通过。套件阶段与推送回执用 `tools/diagnose.js flow|push --session <当前会话编号>`，钩子耗时用 `diagnose.js hooks`；不用 node -e 调内部模块。
 
 ## 处理结果
 
@@ -40,7 +40,9 @@ node "$HOME/.claude/vibe-kit/tools/review.js" cancel --change <变更名> --mode
 
 逐条核实实际错误与隐患：成立的修复并复验；不成立写可核对理由；拿不准涉及业务范围时等用户决定。把记录写进变更 revisions.md，不生成每轮纯审查提交。
 
-direct 的意见处理可写本机 JSON：{"findings":[{"id":"r1","action":"fixed 或 rejected","reason":"具体证据与复验结果"}]}，用 review.js resolve --project <项目> --change <名字> --decisions <文件> 登记。成立问题需要当前输入的成功验证。没有问题且代码未变化可直接勾意见处理。兼容代理把处理与复审结论写 revisions.md，完整零问题复审后再勾。
+意见处理可写本机 JSON：{"findings":[{"id":"r1","action":"fixed 或 rejected","reason":"具体证据与复验结果"}]}，用 review.js resolve --project <项目> --change <名字> --decisions <文件> 登记。成立问题需要当前输入的成功验证。没有问题且代码未变化可直接勾意见处理。兼容代理按结论的问题顺序使用 r1、r2 等编号，逐条核对并记 revisions.md，也可用 resolve。用户明确接受成立问题时使用 accepted，理由写明用户决定；工具执行前检查当前真人许可，不能由模型自己接受风险。
+
+用户明确选择不审或不再复审时，交代当前覆盖与未解决问题，在 revisions.md 记录决定，再执行 `review.js waive --project <项目> --change <变更> --mode proposal|code --reason "用户决定与已完成验证"`。结果为 waived，代码模式在审查任务上标明用户跳过，不报成审查通过。该记录只对当前输入有效；新代码、需求或验法不能借旧决定。没有用户决定时继续既有审查流程；全自动也不能自行 waive。
 
 每条意见精确对应一个处理项。零问题或仅驳回意见不能批准后来修改的代码；重新审查后重新核实当前报告，不能继承上一轮处理许可。
 
