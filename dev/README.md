@@ -215,3 +215,5 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 ## 20261013 反馈专项
 
 六套 `test-feedback1013-workflow/review/push/diagnostics/feedback/decisions.js [旧套件目录]` 分别检查多变更和复合答案、分片及模拟回包、空远端和单笔推送、钩子预算和只读诊断、重现信息与额度、真人跳过和接受问题。旧版用 `dev/baseline/20261013.0058/vibe-kit`，应检出反例；正常测试全部使用假用户、模拟回复与临时裸仓库。本批不连接真实模型、数据库或 GitLab。完整回归仍按既有三版 CLI、运行环境和窗口监视器执行。
+
+下午清单新增 `test-feedback1013-states.js` 和 `test-feedback1013-context.js`：状态名与未定事项逐词区分；探索清单、显式材料、补充材料变化、实际请求和空材料不发请求。`test-feedback1013-review.js` 增加 JSON 凭据字段与转义引号。三套均可传 `dev/baseline/20261013.1453/vibe-kit` 检查旧版反例，新测试仍在假用户、临时仓库和回环假路由运行。

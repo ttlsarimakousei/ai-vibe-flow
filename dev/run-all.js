@@ -40,7 +40,7 @@ suites.unshift(['内网反馈 1010、提交和多版本驱动', 'test-feedback10
 suites.unshift(['提案材料和相似入口', 'test-proposal-files.js', []]);
 suites.unshift(['1012 推送反馈', 'test-feedback1012-push.js', []], ['1012 流程反馈', 'test-feedback1012-workflow.js', []], ['1012 页面探针', 'test-feedback1012-page.js', []]);
 suites.unshift(['1012 数据库诊断', 'test-feedback1012-db.js', [rt || 'none']]);
-suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'decisions'].map((name) => ['1013 反馈 ' + name, 'test-feedback1013-' + name + '.js', []]));
+suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'decisions', 'states', 'context'].map((name) => ['1013 反馈 ' + name, 'test-feedback1013-' + name + '.js', []]));
 suites.unshift(['提案审查结果有效性', 'test-proposal-review-state.js', []]);
 if (old) suites.push(['旧版复现', 'check-old-repro.js', [old]]);
 if (old0929) suites.push(['旧版复现 0929', 'check-old-repro-0929.js', [old0929]]);
