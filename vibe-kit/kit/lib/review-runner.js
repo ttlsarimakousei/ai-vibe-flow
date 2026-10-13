@@ -71,7 +71,7 @@ function materials(opts, change) {
     try {
       const bytes = fs.readFileSync(file); if (bytes.includes(0)) return skip('二进制材料未覆盖');
       const text = new (require('util').TextDecoder)('utf8', { fatal: true }).decode(bytes);
-      if (opts.mode === 'proposal' && !S.artifactOf(file)) inputs.set(S.normKey(file), { file: path.resolve(file), root: path.resolve(root), hash: W.hash(bytes) });
+      if (opts.mode === 'proposal' && change && /^(?:assets|references)[\\/]/.test(path.relative(change.dir, file))) inputs.set(S.normKey(file), { file: path.resolve(file), root: path.resolve(root), hash: W.hash(bytes) });
       return { text };
     }
     catch (e) { return skip('材料不可读或不是 UTF-8 文本'); }
@@ -136,7 +136,7 @@ function materials(opts, change) {
   if (batch.length) batches.push(batch);
   return { items, skipped, batches, contextOnly, inputs: [...inputs.values()] };
 }
-/** 补充材料变化后提案结论失效；只核对原来实际读取的有限文件，不沿探索清单扩散。 */
+/** 随提案交付的补充材料变化后结论失效；实施源码的变化留给代码审查，不重开需求审查。 */
 function inputsCurrent(inputs) {
   if (!Array.isArray(inputs)) return true; // 升级前的审查记录继续按原产物指纹核对。
   return inputs.every(input => {
