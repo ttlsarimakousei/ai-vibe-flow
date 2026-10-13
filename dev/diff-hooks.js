@@ -146,6 +146,8 @@ add('改 GBK 文件', 'pre-edit', (kit) => {
 });
 add('没探索就写提案', 'pre-edit', edit('openspec/changes/new-one/proposal.md', 'Write', { content: '## Why\n\n要做。\n\n## What Changes\n\n- 加功能\n' }));
 add('提案里有"待定"', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Edit', { old_string: '- 加导出接口', new_string: '- 加导出接口\n- 权限怎么控制待定' }));
+add('1013 下午：状态枚举不是占位词', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Edit', { old_string: '- 加导出接口', new_string: '- 确认状态（待确认 / 已确认 / 退回）\n- `SUBMITTED`（待确认）\n- 操作 **查看 / 开始确认（仅待确认）**' }), /放行，没有输出/, NEXT);
+add('1013 下午：状态名不放过同一行的未定验法', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Edit', { old_string: '- 加导出接口', new_string: '- `SUBMITTED`（待确认）；接口验法待确认' }));
 add('任务太笼统、没写验法', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 完善\n- [ ] 1.4 改 src/main/java/com/x/B.java\n- [ ] 1.2' }));
 add('规格缺场景', 'pre-edit', edit('openspec/changes/add-export/specs/export/spec.md', 'Write', { content: '## ADDED Requirements\n\n### Requirement: 导出\n\n系统应当能导出。\n' }));
 add('规格写得对', 'pre-edit', edit('openspec/changes/add-export/specs/export/spec.md', 'Write', { content: '## ADDED Requirements\n\n### Requirement: 导出\n\n系统应当能导出。\n\n#### Scenario: 正常导出\n\n- WHEN 选中 3 条点导出\n- THEN 下载的文件里有 3 行\n' }));

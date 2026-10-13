@@ -755,7 +755,7 @@ function ensureVibeIgnored(p) {
 /**
  * 含糊词：出现在产物里就是"留到以后再说"。按整句短语认，不按单字（"之后再次打开"不算）。
  * 同一行里已经写了默认怎么做的（决策项）不算；引号里的不算（那是在引用这个词，或者是业务上的状态名）。
- * "待确认""待确定""待补充"常常是业务状态名：前面是"变为 / 改为 / 状态为"、后面跟"状态 / 的客户"这类的，也不算。
+ * "待确认""待确定""待补充"也可能是业务状态名：只认当前词的状态枚举、代码映射和操作条件，不放过同一行其它未定事项。
  */
 const HEDGE_WORDS = ['待定', '待商榷', '待讨论', '待完善', '后续完善', '后续补充', '后续再说', '后续再定', '后续再议', '后续再补', '后续再看', '后面再说', '后面再定', '后面再补', '后面再看', '以后再说', '以后再定', '以后再补', '以后再做', '以后再看', '之后再说', '之后再定', '之后再补', '之后再做', '之后再看', '开发阶段再', '开发阶段确定', '开发阶段补充', '开发阶段完善', '开发时再', '实现时再', '编码时再', '视情况', '看情况', '暂不考虑', '暂不确定', '暂不处理', '另行讨论', '另行确定', '另行处理', '细节略', 'tbd', 'tbc', 'to be determined', 'to be decided', 'to be defined', 'decide later', 'figure out later'];
 const HEDGE_SOFT = ['待确定', '待确认', '待补充'];
@@ -774,6 +774,25 @@ function quotedAt(line, i) {
 }
 const SOFT_BEFORE = /(变为|改为|置为|设为|变成|改成|转为|状态为|状态是|状态：|状态:)\s*$/;
 const SOFT_AFTER = /^\s*(状态|态|的(客户|订单|数据|记录|单据|申请|用户|资料|列表))/;
+/** 当前词是否是明确的状态值；不能因为一行有“状态”就放过整行。 */
+function stateValueAt(line, i, word) {
+  const before = line.slice(0, i), after = line.slice(i + word.length);
+  if (SOFT_BEFORE.test(before) || SOFT_AFTER.test(after)) return true;
+  // 状态（待确认 / 已确认 / 退回）：必须是枚举中的独立项，不能是“待确认后再补验法”。
+  const open = Math.max(before.lastIndexOf('（'), before.lastIndexOf('('));
+  if (open >= 0 && /状态\s*$/.test(before.slice(0, open))) {
+    const end = after.search(/[）)]/);
+    if (end >= 0) {
+      const values = (before.slice(open + 1) + word + after.slice(0, end)).split(/\s*[/、,，]\s*/);
+      if (values.length > 1 && values.every(v => /^[\w\u4e00-\u9fff]{1,16}$/.test(v.trim())) && /(?:^|[/、,，])\s*$/.test(before.slice(open + 1)) && /^\s*(?:[/、,，]|$)/.test(after.slice(0, end))) return true;
+    }
+  }
+  // SUBMITTED 的中文标签，或 Markdown 枚举表的一格。
+  if (/`[A-Z][A-Z0-9_]*`\s*[（(]\s*$/.test(before) && /^\s*[）)]/.test(after)) return true;
+  if (/\|\s*`?[A-Z][A-Z0-9_]*`?\s*\|\s*$/.test(before) && /^\s*\|/.test(after)) return true;
+  // “开始确认（仅待确认）”明确限定操作适用状态。
+  return /(?:操作|按钮|查看|确认|审批|提交|编辑|退回)[^，。；;（）()]{0,32}[（(]\s*仅\s*$/.test(before) && /^\s*[）)]/.test(after);
+}
 function hedgeHit(line) {
   const low = line.toLowerCase();
   for (const w of HEDGE_WORDS) {
@@ -781,7 +800,7 @@ function hedgeHit(line) {
   }
   for (const w of HEDGE_SOFT) {
     for (let i = low.indexOf(w); i >= 0; i = low.indexOf(w, i + 1)) {
-      if (quotedAt(line, i) || SOFT_BEFORE.test(line.slice(Math.max(0, i - 6), i)) || SOFT_AFTER.test(line.slice(i + w.length))) continue;
+      if (quotedAt(line, i) || stateValueAt(line, i, w)) continue;
       return w;
     }
   }
