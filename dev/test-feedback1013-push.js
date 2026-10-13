@@ -15,9 +15,15 @@ const first = H.node(h, cli, ['plan', '--dir', p]); let preview; try { preview =
 H.ok('没有 upstream 的空远端可预览', first.code === 0 && preview.before === 1, first);
 if (preview.plan) {
   const original = git(['rev-parse', 'HEAD']).out.trim();
-  const after = H.hook(h, 'after-tool', { cwd: p, session_id: 'push', transcript_path: tf([H.tr.user('推送')]), hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'node ' + q(cli) + ' plan --dir ' + q(p) }, tool_response: { stdout: first.out, exit_code: 0 } });
+  const voice = H.tr.user('推送');
+  const after = H.hook(h, 'after-tool', { cwd: p, session_id: 'push', transcript_path: tf([voice]), hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'node ' + q(cli) + ' plan --dir ' + q(p) }, tool_response: { stdout: first.out, exit_code: 0 } });
   H.ok('首次预览登记回执', /已生成推送预览/.test(JSON.stringify(after)), after);
   const apply = 'node ' + q(cli) + ' apply --dir ' + q(p) + ' --plan ' + q(preview.plan) + ' --confirmed ' + preview.hash + ' --push 2>&1 | tail -5';
+  H.ok('原推送消息位置变化不能充当第二次确认', guard(apply, [H.tr.say('之前的记录'), voice]) !== null);
+  const S = require(path.join(h.kit, 'lib/session'));
+  S.updateState('push-push-preview', (s) => { for (const r of Object.values(s.roots || {})) delete r.voiceSchema; });
+  H.ok('升级旧预览要重新生成', guard(apply, [H.tr.user('确认推送')]) !== null);
+  S.updateState('push-push-preview', (s) => { for (const r of Object.values(s.roots || {})) r.voiceSchema = 2; });
   H.ok('apply 完整只读管道不再误判命令', guard(apply, [H.tr.user('确认推送')]) === null, guard(apply, [H.tr.user('确认推送')]));
   const pushed = H.node(h, cli, ['apply', '--dir', p, '--plan', preview.plan, '--confirmed', preview.hash, '--push']);
   H.ok('首次应用成功推到临时空远端', pushed.code === 0 && JSON.parse(pushed.out).pushed, pushed);

@@ -161,7 +161,7 @@ function apply(p, push) {
   return { ok: true, before: s.commits.length, after: p.groups.length, head, backup, pushed: !!push };
 }
 // 完成钩子才登记预览；第一次说 push 只是启动检测，不能借同一句话立即改历史。
-function voiceId(v) { return sha(v ? [v.kind, v.at, v.pos, v.text] : null); }
+function voiceId(v) { return require('./session').voiceKey(v); }
 function receiptKey(j) { return j.session_id && j.session_id !== 'unknown' ? String(j.session_id) + '-push-preview' : ''; }
 function norm(root) { return path.resolve(root).replace(/\\/g, '/').toLowerCase(); }
 function commandOf(j) {
@@ -207,7 +207,7 @@ function recordPreview(j) {
   const loaded = readPlan(call.root, result.plan); const p = loaded.plan;
   if (result.hash !== p.hash || git(p.root, ['rev-parse', 'HEAD'], { timeout: 3000 }) !== p.head || git(p.root, ['symbolic-ref', '-q', 'HEAD'], { timeout: 3000 }) !== p.ref) return previewNotice('生成后仓库或计划已变化');
   const voice = S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
-  S.updateState(k, (s) => { const roots = s.roots || (s.roots = {}); roots[norm(p.root)] = { hash: p.hash, file: loaded.file, voice: voiceId(voice), at: Date.now(), consumed: false }; });
+  S.updateState(k, (s) => { const roots = s.roots || (s.roots = {}); roots[norm(p.root)] = { hash: p.hash, file: loaded.file, voice: voiceId(voice), voiceSchema: 2, at: Date.now(), consumed: false }; });
   const before = p.groups.reduce((n, g) => n + g.ids.length, 0);
   return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: '[vibe-kit 推送预览] ' + before + ' 条提交拟保留为 ' + p.groups.length + ' 条。把工具输出中的每组原提交、最终标题、分支与远端完整给用户看，等待另一条真人确认（回复“确认推送”或在提问框选择“照计划推送”均可）。确认后才 apply --plan <文件> --confirmed ' + p.hash + ' --push；不能把第一次 push 指令当作合并计划确认。' }, systemMessage: '[vibe-kit] 已生成推送预览 ' + p.hash.slice(0, 8) + '：' + before + ' 条提交拟保留为 ' + p.groups.length + ' 条，分支 ' + p.ref.slice(11) + '，远端 ' + p.remote + '。等待你看过并确认。' };
 }
@@ -216,6 +216,7 @@ function previewAllowed(j, root, call) {
     const S = require('./session'); const k = receiptKey(j);
     const saved = k && (S.readState(k).roots || {})[norm(root)];
     if (!saved || saved.consumed || Date.now() - saved.at > 1800000) return { ok: false, reason: '还没有当前会话的有效推送预览' };
+    if (saved.voiceSchema !== 2) return { ok: false, reason: '旧版预览没有稳定的确认记录，请重新生成预览并确认' };
     const said = S.userSaid(S.tailEntries(j.transcript_path, 3000000), 'push');
     if (!said.ok || voiceId(said.voice) === saved.voice) return { ok: false, reason: '预览后还没有另一条真人推送确认；用户可以回复“确认推送”，或在提问框选择“照计划推送”' };
     const loaded = readPlan(root, saved.file); const p = loaded.plan;

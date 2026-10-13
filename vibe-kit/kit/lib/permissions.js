@@ -3,7 +3,15 @@
 const path = require('path');
 const W = require('./workspace');
 function keyOf(j) { return j && j.session_id && j.session_id !== 'unknown' ? j.session_id + '-permissions' : ''; }
-function voiceKey(v) { return W.hash(JSON.stringify([v.kind, v.at, v.pos, v.text])); }
+// 升级时保留旧许可的消费记录，不能因标识算法变化把旧答案当新确认。
+function syncVoice(st, v) {
+  const vk = require('./session').voiceKey(v);
+  const oldKey = W.hash(JSON.stringify([v.kind, v.at, v.pos, v.text]));
+  const latest = Math.max(0, ...Object.values(st.actions || {}).map((a) => a.at || 0));
+  const legacySame = st.voice && st.voiceSchema !== 2 && (st.voice === oldKey || !v.at || !latest || v.at <= latest);
+  if (st.voice !== vk && !legacySame) st.actions = {};
+  st.voice = vk; st.voiceSchema = 2;
+}
 function scopeOf(j, action, target) { return path.resolve(target || j.cwd || process.cwd()).replace(/\\/g, '/').toLowerCase(); }
 function versionOf(j, action, target) { return W.fingerprint(action === 'archive' || action === 'accept' ? W.rootOf(target) : target || j.cwd, action === 'archive' || action === 'accept' ? 'code' : 'all').hash; }
 function entriesOf(j) { const S = require('./session'); return j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : []; }
@@ -17,10 +25,10 @@ function allow(j, action, target, toolId) {
   const names = selected.length ? selected : all.filter((c) => S.mentionsChange(said.targetText || said.text, c.name));
   if (['archive', 'reviewBudget', 'reviewSkip', 'reviewAccept'].includes(action) && !selected.length && names.length > 1 && !/全部|所有|各个|分别|批量/.test(said.text)) return { ok: false, reason: '提问有多个变更，请明确这次许可的目标' };
   if (['archive', 'reviewBudget', 'reviewSkip', 'reviewAccept'].includes(action) && names.length && !names.some((c) => path.resolve(c.dir).toLowerCase() === path.resolve(target).toLowerCase())) return { ok: false, reason: '这次许可属于另一个变更' };
-  const scope = scopeOf(j, action, target); const vk = voiceKey(v); const ver = versionOf(j, action, target); const id = action + '|' + scope;
+  const scope = scopeOf(j, action, target); const ver = versionOf(j, action, target); const id = action + '|' + scope;
   let result = { ok: false, reason: '许可状态暂时不能写入' };
   S.updateState(k, (st) => {
-    if (st.voice !== vk) { st.voice = vk; st.actions = {}; }
+    syncVoice(st, v);
     const actions = st.actions || (st.actions = {}); const old = actions[id];
     if (old && old.consumed && !(action === 'reviewBudget' && old.toolId === String(toolId || ''))) { result = { ok: false, reason: '这次许可已用于成功操作，需要重新确认' }; return; }
     if (old && old.version !== ver) { result = { ok: false, reason: '确认后输入发生变化，需要重新确认当前版本' }; return; }
@@ -36,7 +44,7 @@ function allow(j, action, target, toolId) {
 function capture(j) {
   const S = require('./session'); const k = keyOf(j); if (!k) return;
   const entries = entriesOf(j); const v = S.lastUserVoice(entries); if (!v) return;
-  S.updateState(k, (s) => { const vk = voiceKey(v); if (s.voice !== vk) { s.voice = vk; s.actions = {}; } });
+  S.updateState(k, (s) => { syncVoice(s, v); });
   for (const action of ['commit', 'push']) if (S.userSaid(entries, action).ok) allow(j, action, W.rootOf(j.cwd));
   for (const action of ['archive', 'accept']) if (S.userSaid(entries, action).ok) for (const c of S.allChanges(j.cwd)) if (S.mentionsChange(v.text, c.name) || S.allChanges(j.cwd).length === 1) allow(j, action, c.dir);
 }

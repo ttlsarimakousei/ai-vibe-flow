@@ -628,7 +628,7 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
     const left = remaining.length;
     let msg = '';
     if (require('../lib/task-types').readyForReview(c.dir) && !require('../lib/session').reviewAllowed('code', c.dir)) msg = '全自动模式：实现和必要测试已完成，' + require('../lib/review-runner').instruction(c.name, 'code', cfg) + '。完整结果返回后立即勾代码审查任务，核实并处理意见、复验后勾意见处理任务，用户验收留给用户。';
-    else if (left > 0 && c.done === 0) { if (require('../lib/session').reviewAllowed('proposal', c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + ' 的提案审查已处理，不用问我，直接开始 /opsx:apply，一项一项做到能执行的任务全部打勾（做完并验证就勾，提交按档位）。' + HAND_TIP; }
+    else if (left > 0 && c.done === 0) { if (require('../lib/session').reviewAllowed('proposal', c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + (proposalReviewed(c.dir) ? ' 的提案也审过了' : ' 已按你的决定跳过提案审查') + '，不用问我，直接开始 /opsx:apply，一项一项做到能执行的任务全部打勾（做完并验证就勾，提交按档位）。' + HAND_TIP; }
     else if (left > 0) msg = '全自动模式：' + c.name + ' 还有 ' + left + ' 项没做完，不用问我，接着做下一项：' + remaining[0].text + '。' + HAND_TIP;
     else if (c.done > 0) {
       const loop = readState('review-rounds')['code|' + key];

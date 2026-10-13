@@ -176,7 +176,7 @@ function answersOf(text) {
   while ((m = re.exec(String(text || '')))) out.push({ q: m[1], a: m[2] });
   return out;
 }
-/** 用户最后一次开口：{ kind: prompt | answer | command, text, at, pos }；没有返回 null */
+/** 用户最后一次开口：{ kind: prompt | answer | command, text, id, at, pos }；位置只用于查记录，不能标识许可。 */
 function lastUserVoice(entries) {
   const list = Array.isArray(entries) ? entries : [];
   for (let i = list.length - 1; i >= 0; i--) {
@@ -203,7 +203,7 @@ function lastUserVoice(entries) {
           if (fromAsk) {
             const answers = answersOf(t);
             if (!answers.length && structured) for (const [q, a] of Object.entries(structured)) if (typeof a === 'string') answers.push({ q, a });
-            if (answers.length) return { kind: 'answer', text: t, answers, at, pos: i };
+            if (answers.length) return { kind: 'answer', text: t, answers, id: String(e.uuid || b.tool_use_id || ''), at, pos: i };
           }
         }
       }
@@ -213,14 +213,16 @@ function lastUserVoice(entries) {
     const raw = textOf(e);
     if (/\[Request interrupted by user/.test(raw)) continue;
     const cmd = raw.match(/<command-name>\s*\/?([^<\s]+)\s*<\/command-name>/);
-    if (cmd) { const a = raw.match(/<command-args>([\s\S]*?)<\/command-args>/); return { kind: 'command', command: cmd[1], text: '/' + cmd[1] + (a && a[1].trim() ? ' ' + a[1].trim() : ''), at, pos: i }; }
+    if (cmd) { const a = raw.match(/<command-args>([\s\S]*?)<\/command-args>/); return { kind: 'command', command: cmd[1], text: '/' + cmd[1] + (a && a[1].trim() ? ' ' + a[1].trim() : ''), id: String(e.uuid || ''), at, pos: i }; }
     if (/^\s*</.test(raw)) continue;
     const text = raw.split('\n').filter((l) => !/^\s*\[vibe-kit/.test(l)).join('\n').trim();
     if (!text) continue;
-    return { kind: 'prompt', text, at, pos: i };
+    return { kind: 'prompt', text, id: String(e.uuid || ''), at, pos: i };
   }
   return null;
 }
+/** 截取尾部或前面增加记录时，同一真人消息仍是同一次许可。缺少 UUID 的旧记录退回时间与正文。 */
+function voiceKey(v) { return crypto.createHash('sha256').update(JSON.stringify(v ? [v.kind, v.id || v.at, v.text] : null)).digest('hex'); }
 const YES_SHORT = /^(可以|好|是|行|同意|确认|没问题|对|嗯|ok|okay|yes|y)(的|吧|了|啊|呀)?[\s。！!]*$/i;
 const NO_BEFORE = '(先别|别|不要|不用|不能|不准|不必|无需|先不|暂不|暂时不|不急着|不着急|等等再|晚点再|过会再|还不能|还不要|不可以|不让|没法)[^，,。！!？?\n]{0,6}';
 const SAID = {
@@ -250,9 +252,13 @@ function commitDeclined(j, entries) {
   const v = lastUserVoice(entries); if (!v || !j.session_id) return false;
   const text = v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text;
   if (!/(?:先不|先别|不要|不用|暂不|取消)提交|^(?:不提交|提交我自己来)[\s。！!]*$/.test(text) || /[？?]/.test(text)) return false;
-  const W = require('./workspace'); const voice = W.hash(JSON.stringify([v.kind, v.at, v.pos, v.text])); const fingerprint = W.fingerprint(j.cwd, 'all').hash;
+  const W = require('./workspace'); const voice = voiceKey(v); const fingerprint = W.fingerprint(j.cwd, 'all').hash;
   let same = false;
-  updateState(j.session_id + '-commit-declined', (s) => { if (s.voice !== voice) { s.voice = voice; s.fingerprint = fingerprint; } same = s.fingerprint === fingerprint; });
+  updateState(j.session_id + '-commit-declined', (s) => {
+    const legacySame = s.voice && s.voiceSchema !== 2 && (!v.at || !s.at || v.at <= s.at);
+    if (s.voice !== voice && !legacySame) { s.fingerprint = fingerprint; s.at = Date.now(); }
+    s.voice = voice; s.voiceSchema = 2; same = s.fingerprint === fingerprint;
+  });
   return same;
 }
 /** 自动压缩策略只允许明确手动交接；旧策略只在有效全自动实施且用户开着自动交接时自动写。 */
@@ -268,12 +274,13 @@ function confirmApply(j) {
   const v = lastUserVoice(tailEntries(j.transcript_path, 3000000));
   const text = v && (v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text);
   if (!text || !applyIntent(text)) return false;
-  const voice = crypto.createHash('sha256').update(JSON.stringify([v.kind, v.at, v.pos, v.text])).digest('hex');
+  const voice = voiceKey(v);
   if (st.applyVoice === voice) return false; // 同一次开工答案不能在提案修订后重新授权。
+  const grantedAt = st.lastApplyAt || st.applySource && st.applySource.at || st.applyScope && st.applyScope.at || 0;
+  if (st.applyVoice && st.applyVoiceSchema !== 2 && (!v.at || !grantedAt || v.at <= grantedAt)) return false;
   const context = v.kind === 'answer' ? v.answers.filter((a) => applyIntent(a.a)).map((a) => a.q).join('\n') : '';
   if (!require('./apply-scope').grant(j, text, context).ok) return false;
   setFlow(j, true, '用户确认开工', 'apply');
-  updateState(flowKey(j), (s) => { s.applyVoice = voice; });
   return true;
 }
 /**
@@ -2298,7 +2305,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, voiceKey, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,

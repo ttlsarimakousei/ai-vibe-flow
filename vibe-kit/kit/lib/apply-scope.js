@@ -18,7 +18,7 @@ function grant(j, text, context) {
   const scope = { at: Date.now(), dirs: {}, roots: [] };
   for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
   const voice = j.transcript_path && S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
-  const saved = S.updateState(j.session_id + '-flow', (s) => { s.applyScope = scope; s.waiting = ''; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: Date.now() }; if (voice) s.applyVoice = W.hash(JSON.stringify([voice.kind, voice.at, voice.pos, voice.text])); });
+  const saved = S.updateState(j.session_id + '-flow', (s) => { s.applyScope = scope; s.waiting = ''; s.lastApplyAt = scope.at; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: scope.at }; if (voice) { s.applyVoice = S.voiceKey(voice); s.applyVoiceSchema = 2; } });
   if (!saved) return { ok: false, reason: '开工范围暂时不能保存，请重试' };
   try { require('./review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 审查缺基线时明确降级 */ }
   return { ok: true, targets: targets.map((c) => c.name) };
