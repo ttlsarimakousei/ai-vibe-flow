@@ -14,6 +14,7 @@ function handle(j) {
   try {
     require('../lib/permissions').consume(j, successful(j));
     if (successful(j)) {
+      if (/^(Agent|Task|SendMessage|TaskOutput|TaskResult)$/.test(j.tool_name)) require('../lib/review-runner').syncAgent(j);
       const merge = require('../lib/merge-push');
       merge.consumePreview(j);
       const preview = merge.recordPreview(j);

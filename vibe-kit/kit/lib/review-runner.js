@@ -1,5 +1,5 @@
 'use strict';
-/* 独立审查执行器：主会话准备确定材料，经本机路由审查角色发有限请求。无工具、无自主检索；总预算、覆盖和取消决定是否记为完成。 */
+/* 独立审查执行器：有限材料分片，经本机路由独立请求；分别记录发送、回复、解析与覆盖。错误诊断脱敏后仅存本机，不将部分结果记为完整审查。 */
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -23,11 +23,19 @@ function baseline(j, dirs) {
   });
 }
 function materials(opts, change) {
-  const items = [], skipped = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
-  const add = (file, text, root) => {
-    if (items.length >= maxFiles) { skipped.push({ file, reason: '超过本轮文件上限' }); return; }
-    if (text.length > 50000) { skipped.push({ file, reason: '单文件材料超过上限，请拆范围' }); return; }
-    items.push({ file, root, text: R.material(text) });
+  const items = [], skipped = [], files = new Set(); const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
+  const add = (file, text, root, source) => {
+    if (files.has(file)) return;
+    if (files.size >= maxFiles) { skipped.push({ file, reason: '超过本轮文件上限；在配置页提高审查文件上限（最多 60），或明确拆成独立变更后审查' }); return; }
+    files.add(file);
+    const chunks = []; let chunk = '', line = 1, start = 1;
+    for (const row of String(text).split(/(?<=\n)/)) {
+      if (chunk && chunk.length + row.length > 40000) { chunks.push({ text: chunk, startLine: start }); chunk = ''; start = line; }
+      for (let i = 0; i < row.length; i += 40000) { if (i) { chunks.push({ text: chunk, startLine: start }); chunk = ''; start = line; } chunk += row.slice(i, i + 40000); }
+      line += (row.match(/\n/g) || []).length;
+    }
+    if (chunk || !chunks.length) chunks.push({ text: chunk, startLine: start });
+    chunks.forEach((c, i) => items.push({ file, root, source: source || path.resolve(root, file), text: R.material(c.text), startLine: c.startLine, part: i + 1, parts: chunks.length }));
   };
   const load = (file, root, label, allowMissing) => {
     const skip = (reason) => { skipped.push({ file: label, reason }); return null; };
@@ -35,13 +43,13 @@ function materials(opts, change) {
     const checked = W.pathStatus(file, root);
     if (!checked.safe) return skip(checked.reason);
     if (checked.missing) return allowMissing ? { missing: true, text: '' } : skip('材料不可读');
-    if (checked.stat.size > 200000) return skip('单文件材料超过上限，请拆范围');
+    if (checked.stat.size > 4 * 1024 * 1024) return skip('单文件超过 4MB；按职责拆文件或准备明确范围的独立变更，不能截断后算完整覆盖');
     try { const bytes = fs.readFileSync(file); if (bytes.includes(0)) return skip('二进制材料未覆盖'); const text = new (require('util').TextDecoder)('utf8', { fatal: true }).decode(bytes); return { text }; }
     catch (e) { return skip('材料不可读或不是 UTF-8 文本'); }
   };
   const artifacts = () => {
     const rows = [];
-    for (const f of S.artifactFiles(change.dir)) { const label = path.relative(change.dir, f).replace(/\\/g, '/'); const loaded = load(f, change.dir, label); if (loaded) rows.push({ file: label, text: loaded.text }); }
+    for (const f of S.artifactFiles(change.dir).filter((f) => !/revisions\.md$/.test(f))) { const label = path.relative(change.dir, f).replace(/\\/g, '/'); const loaded = load(f, change.dir, label); if (loaded) rows.push({ file: label, text: loaded.text }); }
     return rows;
   };
   if (opts.mode === 'proposal') {
@@ -55,8 +63,9 @@ function materials(opts, change) {
     for (const ref of references) for (const root of roots) {
       const f = path.resolve(root, ref);
       if (!S.underDir(f, root) || S.underDir(f, change.dir) || /[\\/]\.vibe[\\/]/.test(f) || !fs.existsSync(f)) continue;
+      if (fs.lstatSync(f).isDirectory() && S.underDir(S.realish(f), S.realish(root))) break; // 目录只是范围说明，不是待审文件。
       const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const loaded = load(f, root, label);
-      if (loaded) add(label, loaded.text, root);
+      if (loaded) add(label, loaded.text, root, f);
       break;
     }
   } else {
@@ -75,7 +84,7 @@ function materials(opts, change) {
         let text = diff ? '基线差异：\n' + diff + '\n当前文件：\n' + current.text : current.missing ? '文件已删除' : current.text;
         const oldDirty = saved && saved.repos.find((r) => S.normKey(r.root) === S.normKey(root));
         if (oldDirty && (oldDirty.dirtyFiles || []).includes(file)) text = '说明：该文件在开工前已有改动，不能全部认作本次助手改动。\n' + text;
-        add(label, text, root);
+        add(label, text, root, f);
       }
     }
     if (change) for (const row of artifacts().filter((r) => !/revisions\.md$/.test(r.file))) add(row.file, row.text, change.dir);
@@ -90,13 +99,30 @@ function routerUrl() {
   try { const settings = JSON.parse(fs.readFileSync(path.join(S.KIT, '..', 'settings.json'), 'utf8')); for (const groups of Object.values(settings.hooks || {})) for (const g of groups) for (const h of g.hooks || []) if (h.type === 'http' && /^http:\/\/(127\.0\.0\.1|localhost):\d+\/vibe-kit\/hook\//.test(h.url)) return new URL('/v1/messages', h.url).href; } catch (e) { /* 尚无 HTTP 钩子 */ }
   return 'http://127.0.0.1:15730/v1/messages';
 }
-function ask(url, material, mode, ms, cancelled) {
+function parseReply(text, material) {
+  const fail = (stage, reason, raw) => { const e = new Error(reason + '，未记为完成'); e.diagnostic = { stage, excerpt: R.clip(R.material(raw), 1500) }; throw e; };
+  let reply; try { reply = JSON.parse(text); } catch (e) { fail('router-json', '本机路由回复不是有效 JSON', text); }
+  if (!reply || !Array.isArray(reply.content)) fail('router-content', '本机路由回复缺少 content 文本', text);
+  const body = reply.content.filter((x) => x && x.type === 'text').map((x) => x.text || '').join('\n').trim().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  if (!body) fail('model-empty', '未收到审查者正文', text);
+  let result; try { result = JSON.parse(body); } catch (e) { fail('model-json', '审查者正文不是有效 JSON', body); }
+  if (!result || !Array.isArray(result.issues) || result.issues.length > 100 || result.issues.some((x) => !x || typeof x.file !== 'string' || typeof x.problem !== 'string' || typeof x.evidence !== 'string')) fail('issue-structure', '审查问题缺少 file、problem 或 evidence', body);
+  const norm = (v) => String(v).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+  const issues = [], skipped = [];
+  for (const x of result.issues) {
+    const name = norm(x.file); const matches = [...new Set(material.filter((m) => norm(m.file) === name || norm(m.source || path.resolve(m.root, m.file)) === name).map((m) => m.file))];
+    if (matches.length !== 1) { skipped.push({ file: R.clip(x.file, 200), reason: '审查意见路径不属于本批材料，意见未采纳；本轮只算部分结果' }); continue; }
+    issues.push(Object.assign({}, x, { file: matches[0] }));
+  }
+  return { issues: R.tree(issues), skipped, summary: R.clip(result.summary || '', 1500) };
+}
+function ask(url, material, mode, ms, cancelled, received) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: 5000, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。', messages: [{ role: 'user', content: '模式：' + mode + '\n本批材料：\n' + JSON.stringify(material) }] });
     const req = http.request(url, { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
       let text = ''; res.setEncoding('utf8');
       res.on('data', (b) => { text += b; if (text.length > 300000) req.destroy(new Error('审查回复过大')); });
-      res.on('end', () => { clear(); if (res.statusCode !== 200) return reject(new Error('本机路由返回 ' + res.statusCode + '：' + R.clip(text, 300))); try { const reply = JSON.parse(text); const resultText = (reply.content || []).filter((x) => x.type === 'text').map((x) => x.text).join('\n').replace(/^```(?:json)?\s*|\s*```$/g, ''); const result = JSON.parse(resultText); if (!Array.isArray(result.issues) || result.issues.length > 100 || result.issues.some((x) => !x || typeof x.problem !== 'string' || typeof x.evidence !== 'string' || !material.some((m) => m.file === x.file))) throw new Error('结果缺少可核对的问题结构'); resolve(R.tree(result)); } catch (e) { reject(new Error('审查结果格式无法识别，未记为完成')); } });
+      res.on('end', () => { clear(); if (received) received(); if (res.statusCode !== 200) return reject(new Error('本机路由返回 ' + res.statusCode + '：' + R.clip(text, 300))); try { resolve(parseReply(text, material)); } catch (e) { reject(e); } });
       res.on('error', (e) => { clear(); reject(e); });
     });
     const timer = setTimeout(() => req.destroy(new Error('审查总预算用完')), Math.max(1, ms));
@@ -133,23 +159,28 @@ async function run(opts, progress) {
   const deadline = started + Math.max(0, budget - spent);
   S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { deadline, spentBefore: spent, spentMs: spent }); });
   const cancelled = () => { const job = S.readState('review-jobs')[key]; return !job || job.id !== id || job.status !== 'running'; };
-  let result = { id, mode: opts.mode, status: 'failed', issues: [], covered: [], skipped: [] };
+  let result = { id, mode: opts.mode, status: 'failed', issues: [], covered: [], skipped: [], attemptedBatches: 0, receivedBatches: 0, completedBatches: 0, attemptedFiles: [], diagnostics: [] };
   try {
     if (deadline <= started) throw new Error('累计审查预算已用完；交代现有结果和未覆盖范围，用户可明确用 --new-budget 开启新预算');
     const material = materials(opts, change); result.skipped = material.skipped;
     if (!material.batches.length) throw new Error('没有可审查材料或开工基线缺失');
+    const left = new Map(); for (const item of material.items) left.set(item.file, (left.get(item.file) || 0) + 1);
+    result.totalBatches = material.batches.length;
     for (let i = 0; i < material.batches.length; i++) {
       if (cancelled()) throw new Error('审查已取消');
-      if (progress) progress('审查 ' + (i + 1) + '/' + material.batches.length + ' 批，已覆盖 ' + result.covered.length + ' 个文件，剩余预算 ' + Math.max(0, Math.round((deadline - Date.now()) / 1000)) + ' 秒');
-      const reply = await ask(routerUrl(), material.batches[i], opts.mode, deadline - Date.now(), cancelled);
-      result.issues.push(...reply.issues); result.covered.push(...material.batches[i].map((x) => x.file));
+      const batch = material.batches[i]; result.attemptedBatches++; result.attemptedFiles = [...new Set(result.attemptedFiles.concat(batch.map((x) => x.file)))];
+      S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { attemptedBatches: result.attemptedBatches, attemptedFiles: result.attemptedFiles, totalBatches: result.totalBatches }); });
+      if (progress) progress('审查 ' + (i + 1) + '/' + material.batches.length + ' 批，本批 ' + new Set(batch.map((x) => x.file)).size + ' 个文件/' + batch.length + ' 个片段，已尝试 ' + result.attemptedFiles.length + ' 个文件，已覆盖 ' + result.covered.length + ' 个文件，剩余预算 ' + Math.max(0, Math.round((deadline - Date.now()) / 1000)) + ' 秒');
+      const reply = await ask(routerUrl(), batch, opts.mode, deadline - Date.now(), cancelled, () => result.receivedBatches++);
+      result.issues.push(...reply.issues); result.skipped.push(...reply.skipped); result.completedBatches++;
+      for (const item of batch) { left.set(item.file, left.get(item.file) - 1); if (!left.get(item.file)) result.covered.push(item.file); }
       S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id && o[key].status === 'running') { o[key].completedBatches = i + 1; o[key].covered = result.covered.length; } });
     }
     if (cancelled()) throw new Error('审查已取消或结果已迟到');
     if (W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all').hash !== before.hash) { result.status = 'stale'; result.reason = '审查期间输入变更，本轮结果不能批准新版'; }
     else if (result.skipped.length) { result.status = 'partial'; result.reason = '还有未覆盖材料，不能记为完整审查'; }
     else result.status = 'completed';
-  } catch (e) { result.reason = R.clip(e.message, 500); result.status = /取消|迟到|替换/.test(result.reason) ? 'cancelled' : /预算/.test(result.reason) ? 'timed_out' : 'failed'; }
+  } catch (e) { if (e.diagnostic) result.diagnostics.push(e.diagnostic); result.reason = R.clip(e.message, 500); result.status = /取消|迟到|替换/.test(result.reason) ? 'cancelled' : /预算/.test(result.reason) ? 'timed_out' : 'failed'; }
   result.issues = result.issues.map((x, i) => Object.assign({ id: 'r' + (i + 1) }, x));
   result.fingerprint = before.hash; result.spentMs = spent + Date.now() - started; result.at = Date.now();
   let valid = false;
@@ -182,5 +213,16 @@ function resolve(opts) {
   return { status: 'resolved', count: report.issues.length };
 }
 function stateFor(dir, mode) { const c = S.artifactOf(path.join(dir, 'tasks.md')); return status({ cwd: c ? c.root : dir, change: path.basename(dir), mode }); }
+// 成功的真实代理工具结果先记账，不等待 Stop；没有启动或结论的证据仍不补记。
+function syncAgent(j) {
+  const entries = j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : [];
+  const id = j.tool_use_id; const calls = S.toolCalls(entries, 0);
+  const response = j.tool_response || {};
+  const body = typeof response === 'string' ? response : response.content !== undefined ? response.content : response.stdout || response.result || response.text || '';
+  const text = typeof body === 'string' ? body : Array.isArray(body) ? body.filter((x) => x && x.type === 'text').map((x) => x.text).join('\n') : '';
+  if (id && !calls.some((c) => c.id === id) && /^(Agent|Task)$/.test(j.tool_name) && /(ttls|vibe)-reviewer/.test(String(j.tool_input && j.tool_input.subagent_type || ''))) entries.push({ type: 'assistant', uuid: 'after-review-' + id, timestamp: new Date(Date.now() - Math.max(0, Number(j.duration_ms) || 0)).toISOString(), message: { content: [{ type: 'tool_use', name: j.tool_name, id, input: j.tool_input }] } });
+  if (id && text && !S.toolResults(entries).has(id)) entries.push({ type: 'user', timestamp: new Date().toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: id, content: text }] } });
+  return S.syncReviews(entries.slice(), j.cwd);
+}
 function instruction(name, mode, cfg) { return cfg.reviewExecutor === 'agent' ? '按 /ttls-cross-review 的兼容代理方式审查 ' + name + '，最多等待 ' + cfg.reviewBudgetSeconds + ' 秒，超时取消已知审查任务并交代未覆盖范围' : '执行 review.js run --change ' + name + ' --mode ' + mode + '，总预算 ' + cfg.reviewBudgetSeconds + ' 秒'; }
-module.exports = { run, materials, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue };
+module.exports = { run, materials, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent };

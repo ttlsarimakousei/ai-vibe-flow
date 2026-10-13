@@ -47,7 +47,7 @@ const H = require('./lib/harness');
     H.ok('没有自主工具或重试请求', calls <= 7, calls);
     H.setConfig(h, { reviewMaxFiles: 20 }); H.write(path.join(d, 'proposal.md'), '需求'.repeat(30000));
     const tooLong = R.materials(opts, S.allChanges(p).find((c) => c.name === 'add-x'));
-    H.ok('过长需求材料列为未覆盖', tooLong.skipped.some((x) => x.file === 'proposal.md'));
+    H.ok('大需求材料分片完整送审', tooLong.items.filter((x) => x.file === 'proposal.md').length > 1 && !tooLong.skipped.some((x) => x.file === 'proposal.md'));
     H.ok('审查材料不删除鉴权代码逻辑', require(path.join(h.kit, 'lib/redact')).material('token = validate(input); password = "FAKE_REVIEW_PASSWORD"').includes('token = validate(input)') && !require(path.join(h.kit, 'lib/redact')).material('password = "FAKE_REVIEW_PASSWORD"').includes('FAKE_REVIEW_PASSWORD'));
   } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
   H.done('审查和证据');

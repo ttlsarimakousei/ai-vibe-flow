@@ -1675,7 +1675,7 @@ function archivedSince(dir) {
   return out;
 }
 // 结论取最后一个：复审的时候审查者会引上一轮的结论（"上一轮结论：问题 3 条"），这一轮的在最后
-const reviewIssues = (text) => { let n = null; for (const m of String(text || '').matchAll(/结论\s*[:：]\s*问题\s*(\d+)\s*条/g)) n = Number(m[1]); return n; };
+const reviewIssues = (text) => { let n = null; for (const m of String(text || '').matchAll(/结论\s*[:：]\s*问题\s*(\d+)\s*条/g)) n = Number(m[1]); const last = String(text || '').trim().split(/\r?\n/).pop() || ''; const bare = last.match(/^\s*(?:\*\*)?问题\s*(\d+)\s*条(?:\*\*)?[。\s]*$/); return bare ? Number(bare[1]) : n; };
 // 审查代理改名之前叫 vibe-reviewer：会话记录里的旧调用照样算
 const isReviewCall = (c) => /^(Agent|Task)$/.test(c.name) && /(ttls|vibe)-reviewer/.test(String(c.input.subagent_type || ''));
 /** 复审续同一个代理时，只认前面真正启动过的审查代理，不把任意消息当审查。 */
@@ -1728,7 +1728,7 @@ function reviewsIn(calls, results, changes, notes, archived) {
     let pos = r ? r.pos : -1;
     let text = r ? r.text : '';
     const n = c._note || (notes && notes.get(c.id));
-    if (issues === null && n && n.status === 'completed') { issues = reviewIssues(n.text); at = n.at; pos = n.pos; text = n.text; }
+    if (n && n.status === 'completed') { issues = reviewIssues(n.text); at = n.at; pos = n.pos; text = n.text; }
     if (issues === null) return;
     const budget = Math.max(10, Number(readConfig().reviewBudgetSeconds) || 300) * 1000;
     if (c.at && at && at - c.at > budget) return; // 迟到结论不能补成完整审查。
@@ -1810,6 +1810,7 @@ function syncReviews(entries, cwd) {
     // 认不出审的是提案还是代码：不记到任何一边（记错了比不记更糟），流水账里留一句，每次审查只留一次
     if (!r.mode) { noteUnknownReview(r); continue; }
     const fresh = recordReview(r.mode, r.change.dir, r.issues, r.key, r.at);
+    if (fresh) updateState(r.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const rec = o[normKey(r.change.dir)]; if (rec && rec.key === r.key) { rec.executor = 'agent'; if (r.mode === 'proposal') rec.proposalHash = require('./apply-scope').planHash(r.change.dir); } });
     // 使用情况：这次审查从调用到结论花了多久（审查慢的时候看它；两小时以上的不算，多半是会话断过）
     if (fresh) { try { const t0 = Date.parse(((entries || [])[r.i] || {}).timestamp || '') || 0; const ms = t0 && r.at > t0 ? r.at - t0 : 0; if (ms > 0 && ms < 7200000) updateState('review-local-metrics', (s) => { s.n = (s.n || 0) + 1; s.totalMs = (s.totalMs || 0) + ms; s.at = Date.now(); }); } catch (e) { /* 本机耗时记不了不影响审查 */ } }
   }
