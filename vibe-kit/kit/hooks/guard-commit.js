@@ -1457,7 +1457,7 @@ function consentIssue(g, st, cfg, docs) {
     const V = require('./verify-gate');
     const since = V.lastCommitAt(repoRoot(g.dir) || g.dir);
     const reviewReady = rounds.some((x) => x.key.startsWith('code|') && current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && (x.rec.done || (!cfg.reviewLoop && x.fixed)) && x.rec.at > since);
-    if (cfg.autoCommit === 'change' && current.some((c) => !require('../lib/session').codeReviewed(c.dir) || require('../lib/session').listChanges(st.cwd0).some((x) => normKey(x.dir) === normKey(c.dir) && x.todo > 0))) return '[vibe-kit] 整个变更提交：任务做完并审完代码后再提交。';
+    if (cfg.autoCommit === 'change' && current.some((c) => !require('../lib/session').reviewAllowed('code', c.dir) || require('../lib/session').listChanges(st.cwd0).some((x) => normKey(x.dir) === normKey(c.dir) && x.todo > 0))) return '[vibe-kit] 整个变更提交：任务做完并处理代码审查后再提交。';
     if (cfg.autoCommit === 'phase') {
       const active = require('../lib/session').listChanges(st.cwd0).filter((c) => current.some((x) => normKey(x.dir) === normKey(c.dir)));
       if (!reviewReady && active.length && !active.some((c) => V.phaseDone(c, since))) return '[vibe-kit] 按阶段提交：当前阶段还没全部完成并验证，不要提前提交；每项任务做完仍立即打勾。';
@@ -1512,6 +1512,8 @@ function hasReaderIn(cmd, ps, depth) {
 }
 function analyze(cmd, ps, st, cfg, depth) {
   require('../lib/invocation').phase('分析执行命令');
+  const decision = require('../lib/review-runner').decisionIssue(Object.assign({}, st.j, { cwd: st.dir, tool_input: { command: cmd } }));
+  if (decision) { setBlock(st, 'review-decision', '[vibe-kit 审查决定] ' + decision); return; }
   // 包装命令换过目录后，相对发布脚本也要按内层的目录检查。
   if (publishAnywhere(cmd, st.dir)) st.publishing = true;
   const { s, docs } = preprocess(cmd, ps);
@@ -1761,6 +1763,8 @@ function handle(j) {
   const counted = (kind, text) => { try { if (feedback && feedback.countBlock) feedback.countBlock(kind, text, String(j.session_id || '')); } catch (e) { /* 数不了不影响 */ } return blockOut('PreToolUse', text); };
   const budgetIssue = require('../lib/review-runner').budgetIssue(j);
   if (budgetIssue) return counted('review-budget', '[vibe-kit 审查预算] ' + budgetIssue);
+  const decisionIssue = require('../lib/review-runner').decisionIssue(j);
+  if (decisionIssue) return counted('review-decision', '[vibe-kit 审查决定] ' + decisionIssue);
   const cdBlock = () => {
     if (!cdHit) return null;
     hookLog('guard-commit 拦下串着 cd 的命令：' + cmd.replace(/\s+/g, ' ').slice(0, 100));
@@ -1818,7 +1822,7 @@ function handle(j) {
     if (cfg.autoMode) {
       try { if (report) report.note(j, { kind: 'hand', title: '它想执行 git push，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '先给用户推送预览，等用户确认；全自动不能跳过' }); } catch (e) { /* 记不了也拦 */ }
     }
-    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '多笔提交或目标无法核对时，先运行 merge-push.js plan --dir <仓库>，给用户看分组、原记录、标题和目标，确认后用 apply --plan <文件> --confirmed <完整计划编号> --push。仅一笔且目标明确的普通推送可使用已有真人推送许可。此检查不能用放行额度代替推送确认。' + (st.secret ? '\n' + st.secret : ''));
+    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '多笔提交或目标无法核对时，推送前先运行 merge-push.js plan --dir <仓库>，给用户看分组、原记录、标题和目标，确认后用 apply --plan <文件> --confirmed <完整计划编号> --push。仅一笔且目标明确的普通推送可使用已有真人推送许可。此检查不能用放行额度代替推送确认。' + (st.secret ? '\n' + st.secret : ''));
   }
   const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', mergeCall ? mergeCall.root : simplePush ? repoRoot(st.pushes[0].dir) || st.pushes[0].dir : repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
   // 当场授权 push 不能顺便跳过同一条命令里提交内容的凭据提醒。

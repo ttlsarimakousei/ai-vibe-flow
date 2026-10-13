@@ -106,7 +106,7 @@ function changeView(c, since, revs) {
   // 多轮审查开着、上一轮报了问题还没复审的：不能说"审过了"
   let loop = null;
   try { if (readConfig().reviewLoop) { const x = readState('review-rounds')['code|' + normKey(c.dir)]; if (x && !x.done) loop = x; } } catch (e) { loop = null; }
-  if (c.done === 0 && c.todo > 0) state.push(proposalReviewed(c.dir) ? '提案审过，还没开工' : '提案还没审');
+  if (c.done === 0 && c.todo > 0) state.push(require('./review-runner').waived(c.dir, 'proposal') ? '用户明确跳过提案审查，还没开工' : proposalReviewed(c.dir) ? '提案审过，还没开工' : '提案还没审');
   else if (loop) state.push('代码审了 ' + loop.rounds + ' 轮，上一轮报了 ' + (loop.issues || 0) + ' 条，还没复审');
   else if (c.todo === 0) state.push(issue ? '代码还没审完' : '代码审过，等用户自测后归档');
   else if (reviewRecord('code', c.dir)) state.push('代码审过一次');

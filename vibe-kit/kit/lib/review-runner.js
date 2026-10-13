@@ -146,6 +146,39 @@ function budgetIssue(j) {
   const allowed = require('./permissions').allow(j, 'reviewBudget', change ? change.dir : W.rootOf(cwd), j.tool_use_id);
   return allowed.ok ? '' : why + ' ' + allowed.reason;
 }
+// 模型执行跳过或接受问题时核对真人决定；手工 CLI 仍由执行者负责。
+function decisionIssue(j) {
+  const parser = require('../hooks/guard-commit'); const ps = j.tool_name === 'PowerShell';
+  for (const group of parser.splitCommand(String(j.tool_input && j.tool_input.command || ''), ps)) for (const segment of group) {
+    const ws = parser.words(parser.scanRedirects(segment).rest, ps).map((w) => w.text);
+    if (ws.length < 3 || !/^node(?:\.exe)?$/i.test(path.basename(ws[0].replace(/\\/g, '/'))) || S.normKey(path.resolve(j.cwd, S.expandHome(ws[1]))) !== S.normKey(path.join(S.KIT, 'tools/review.js'))) continue;
+    const val = (k) => { const i = ws.indexOf(k); return i < 0 ? '' : S.expandHome(ws[i + 1] || ''); }; const cwd = path.resolve(j.cwd, val('--project') || '.'); const change = changeOf(cwd, val('--change'));
+    let action = ws[2] === 'waive' ? 'reviewSkip' : '';
+    if (ws[2] === 'resolve') { try { const d = JSON.parse(fs.readFileSync(path.resolve(j.cwd, val('--decisions')), 'utf8')); if ((d.findings || []).some((x) => x.action === 'accepted')) action = 'reviewAccept'; } catch (e) { return '意见处理文件无法核对，先检查 --decisions 文件'; } }
+    if (!action) continue;
+    if (!change) return '用户决定必须绑定有效变更，不能对无目标的审查跳过或接受问题';
+    const allowed = require('./permissions').allow(j, action, change.dir, j.tool_use_id);
+    if (!allowed.ok) return '需要当前用户明确决定' + (action === 'reviewSkip' ? '跳过这次审查' : '接受这次审查中的问题') + '：' + allowed.reason;
+  }
+  return '';
+}
+function waived(dir, mode) {
+  const rec = S.readState('review-waivers')[mode + '|' + S.normKey(dir)];
+  return !!(rec && rec.born === S.changeBorn(dir) && rec.fingerprint === (mode === 'proposal' ? require('./apply-scope').planHash(dir) : W.fingerprint(dir, 'code').hash));
+}
+function waive(opts) {
+  const change = changeOf(opts.cwd || process.cwd(), opts.change); if (!change || !['proposal', 'code'].includes(opts.mode)) throw new Error('跳过审查要明确有效变更和模式');
+  const reason = R.clip(String(opts.reason || '').replace(/\r?\n/g, ' '), 500); if (reason.length < 10) throw new Error('写明用户决定跳过审查的原因，至少十个字');
+  if (opts.mode === 'code') {
+    const file = path.join(change.dir, 'tasks.md'); const text = fs.readFileSync(file, 'utf8');
+    const next = text.split('\n').map((line) => ['review', 'review-fix'].includes(require('./task-types').kind(line)) ? line.replace(/\[[ xX]\]/, '[x]').replace(/（用户决定跳过审查：[^）]*）/g, '') + '（用户决定跳过审查：' + reason + '）' : line).join('\n');
+    if (next !== text && !store.atomicText(file, next)) throw new Error('跳过记录无法写入任务清单，未登记');
+  }
+  const rec = { status: 'waived', mode: opts.mode, change: change.name, born: S.changeBorn(change.dir), reason, at: Date.now(), fingerprint: opts.mode === 'proposal' ? require('./apply-scope').planHash(change.dir) : W.fingerprint(opts.cwd, 'code').hash };
+  const saved = S.updateState('review-waivers', (o) => { o[opts.mode + '|' + S.normKey(change.dir)] = rec; }); if (!saved) throw new Error('用户跳过记录未能保存');
+  S.updateState('review-jobs', (o) => { const k = jobKey(opts.cwd, opts.change, opts.mode); o[k] = Object.assign({}, o[k], rec); });
+  return rec;
+}
 async function run(opts, progress) {
   opts = Object.assign({ cwd: process.cwd(), mode: 'code' }, opts); opts.cwd = path.resolve(opts.cwd);
   if (!['proposal', 'code'].includes(opts.mode)) throw new Error('审查模式只能是 proposal 或 code');
@@ -200,10 +233,10 @@ function status(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.chang
 function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code'); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
 function resolve(opts) {
   const change = changeOf(opts.cwd || process.cwd(), opts.change); if (!change) throw new Error('意见处理需要当前变更');
-  const r = S.reviewRecord('code', change.dir); if (!r || !r.reportFile) throw new Error('没有可配对的完整审查报告');
-  const report = JSON.parse(fs.readFileSync(r.reportFile, 'utf8')); const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
+  const r = S.reviewRecord('code', change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
+  const report = r.reportFile ? JSON.parse(fs.readFileSync(r.reportFile, 'utf8')) : { id: r.key, fingerprint: r.fingerprint || W.fingerprint(opts.cwd, 'code').hash, issues: Array.from({ length: Number(r.issues) || 0 }, (_, i) => ({ id: 'r' + (i + 1) })) }; const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
-  for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
+  for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected', 'accepted'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
   if (report.id !== r.key || !Array.isArray(report.issues)) throw new Error('审查报告不属于当前完整记录');
   if (decisions.findings.length !== report.issues.length || new Set(decisions.findings.map((x) => x.id)).size !== report.issues.length || decisions.findings.some((x) => !report.issues.some((i) => i.id === x.id))) throw new Error('处理记录必须恰好对应报告中的意见');
   if (decisions.findings.some((x) => x.action === 'fixed') && !require('./evidence').commands(opts.cwd || process.cwd()).length) throw new Error('成立问题修复后还没有当前输入的成功复验证据');
@@ -225,4 +258,4 @@ function syncAgent(j) {
   return S.syncReviews(entries.slice(), j.cwd);
 }
 function instruction(name, mode, cfg) { return cfg.reviewExecutor === 'agent' ? '按 /ttls-cross-review 的兼容代理方式审查 ' + name + '，最多等待 ' + cfg.reviewBudgetSeconds + ' 秒，超时取消已知审查任务并交代未覆盖范围' : '执行 review.js run --change ' + name + ' --mode ' + mode + '，总预算 ' + cfg.reviewBudgetSeconds + ' 秒'; }
-module.exports = { run, materials, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent };
+module.exports = { run, materials, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent, waived, waive, decisionIssue };

@@ -10,6 +10,8 @@ const TOPIC = {
   apply: '(?:apply\\b|开工|开干|开搞|开始(?:做|实现|开发|执行|写代码)|(?:按(?:照)?|照|依)(?:提案|任务|清单|方案)(?:做|实现|开发)|做吧|干吧|实现吧|执行吧)',
   commit: '(?:提交|commit\\b)', archive: '(?:归档|archive\\b)', push: '(?:推送|push\\b|推到远端)',
   reviewBudget: '(?:(?:重新开启|重开|重置|新开|再开|开启新的)[^，,。；;!?？\\n]{0,20}审查预算|重新审查)',
+  reviewSkip: '(?:跳过(?:提案|代码|跨模型)?(?:复审|审查)|不(?:做|再做)?(?:提案|代码|跨模型)?(?:复审|审查)|不审了)',
+  reviewAccept: '(?:接受(?:这条|该条|成立的)?(?:审查)?(?:问题|风险|意见)|(?:这条|该条)(?:审查意见)?不改)',
   handover: '(?:交接(?!记录|文档|说明)|handover\\b|(?:写|生成|更新|整理)(?:一份|个)?\\s*交接(?:记录|文档|说明))',
   accept: '(?:自测(?:通过|没问题|满意|好了)|验收(?:通过|没问题|满意))',
 };
@@ -28,6 +30,7 @@ function explicit(text, action) {
   if (!s || !op || denied(s, action)) return false;
   const direct = new RegExp('(?:^|[，,。；;\\n])\\s*(?:\\d+[.、]\\s*)?' + PREFIX + op + '(?!\\s*' + NOUN + ')', 'i');
   if (direct.test(s)) return true;
+  if (action === 'reviewSkip' && new RegExp('(?:^|[，,。；;\\n])\\s*(?:这次|本次|我决定|决定)?\\s*' + op + '(?!\\s*' + NOUN + ')', 'i').test(s)) return true;
   if (action !== 'apply' && new RegExp('^(?:请)?(?:把|将)[^，,。；;！!?？\\n]{1,48}' + op + '(?:吧|一下|一次)?[\\s。！!]*$', 'i').test(s)) return true;
   if (action === 'push' && /(?:^|[，,。；;\n])\s*(?:请|帮我|现在|直接|可以|同意|确认|及时)*\s*提交\s*(?:并|和|后|然后|再)\s*(?:push\b|推送)(?!\s*(?:策略|机制|规则|功能|问题))/i.test(s)) return true;
   if (action === 'push' && /^(?:(?:请|现在|确认|同意|可以)\s*)*(?:合并\s*(?:push|推送)|(?:按(?:照)?|照)(?:这个|刚才的|上面的)?计划\s*(?:合并\s*)?(?:push|推送))[\s。！!]*$/i.test(s)) return true;

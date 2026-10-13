@@ -224,6 +224,8 @@ function lastUserVoice(entries) {
 const YES_SHORT = /^(可以|好|是|行|同意|确认|没问题|对|嗯|ok|okay|yes|y)(的|吧|了|啊|呀)?[\s。！!]*$/i;
 const NO_BEFORE = '(先别|别|不要|不用|不能|不准|不必|无需|先不|暂不|暂时不|不急着|不着急|等等再|晚点再|过会再|还不能|还不要|不可以|不让|没法)[^，,。！!？?\n]{0,6}';
 const SAID = {
+  reviewSkip: { yes: /审查|复审/, command: /^$/ },
+  reviewAccept: { yes: /审查|风险|意见/, command: /^$/ },
   reviewBudget: { yes: /审查预算|重新审查/, command: /^$/ },
   handover: { yes: /交接|handover/i, command: /^(ttls-)?handover$/i },
   accept: { yes: /自测|验收/, command: /^$/ },
@@ -237,7 +239,7 @@ function userSaid(entries, topic) {
   const v = lastUserVoice(entries);
   if (!g || !v) return { ok: false, voice: v, text: '' };
   if (v.kind === 'answer') {
-    const matching = v.answers.filter((x) => intent.explicit(x.a, topic) || ((topic === 'push' ? /推送|\bpush\b/i.test(x.q) : g.yes.test(x.q)) && !intent.denied(x.a, topic) && (YES_SHORT.test(x.a.trim()) || topic === 'push' && /^推[。！!\s]*$/.test(x.a))));
+    const matching = v.answers.filter((x) => intent.explicit(x.a, topic) || ((topic === 'push' ? /推送|\bpush\b/i.test(x.q) : g.yes.test(x.q)) && !intent.denied(x.a, topic) && (YES_SHORT.test(x.a.trim()) || topic === 'push' && /^推[。！!\s]*$/.test(x.a) || topic === 'reviewAccept' && /^不改[。！!\s]*$/.test(x.a))));
     return { ok: matching.length > 0, voice: v, text: v.answers.map((x) => x.a).join('；'), targetText: matching.map((x) => x.q + '\n' + x.a).join('\n') };
   }
   if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || v.command.replace(/^\//, '').toLowerCase() === topic, voice: v, text: v.text };
@@ -689,7 +691,7 @@ function hookLog(line) {
   } catch (e) { /* 记不了就算了 */ }
 }
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|work-baselines|review-local-metrics|work-sessions|readiness)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness)\.json$|^hooks\.log/;
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
 function cleanState(days) {
@@ -1845,6 +1847,8 @@ function reviewDiagnostics(entries, cwd) {
 }
 /** 提案审过了吗 */
 function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir))); }
+/** 流程能否继续：完整审查或当前输入的真人跳过记录；展示仍区分审过和跳过。 */
+function reviewAllowed(kind, dir) { return (kind === 'proposal' ? proposalReviewed(dir) : codeReviewed(dir)) || require('./review-runner').waived(dir, kind); }
 /**
  * 每项任务是什么时候打的勾（state/task-ticks.json，按变更目录记）。"代码审过了吗"要用：审查之后才打勾的任务，它的代码审到了没有。
  * 每次调用拿 tasks.md 对一遍：打了勾、还没记时间的，记成现在——头一回见到这个变更的记成 0（不知道什么时候打的，当作早就打了）；
@@ -1926,6 +1930,7 @@ function codeReviewed(dir) {
 }
 /** 归档、催审查时说的话：没审过，还是审过之后又做了任务。审过了返回空串 */
 function codeReviewIssue(dir) {
+  if (require('./review-runner').waived(dir, 'code')) return '';
   const r = reviewRecord('code', dir);
   if (!r) return '还没做过代码审查（/ttls-cross-review 的代码模式，前端后端都在内；审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
   if (r.fingerprint && !codeReviewed(dir)) return '代码或任务验法在审查后变更，需要针对变更部分复验和补审；仅打勾不会触发重复审查。';
@@ -2019,6 +2024,7 @@ function reviewExhaustedText(rec, kind, cfg, changeName) {
  * 没开多轮审查、审完了返回空串；轮数已经用完的，这一次就按"问用户 / 全自动自己定"说，并记成审完（问过了再来就放行）
  */
 function reviewLoopIssue(kind, dir, cfg) {
+  if (require('./review-runner').waived(dir, kind)) return '';
   if (!cfg.reviewLoop) return '';
   const k = kind + '|' + normKey(dir);
   const rec = readState('review-rounds')[k];
@@ -2296,7 +2302,7 @@ module.exports = { DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,
-  codeReviewIssue, unreviewedAfter, touchChange, syncTicks, taskCodeFiles, projectRootsOf, isDeferredTask, TASK_DEFER, uniquifyToolIds,
+  reviewAllowed, codeReviewIssue, unreviewedAfter, touchChange, syncTicks, taskCodeFiles, projectRootsOf, isDeferredTask, TASK_DEFER, uniquifyToolIds,
   underDir, reviewMax, syncReviewRounds, reviewExhaustedText, reviewLoopIssue, sessionChanges, handoverReadIn, handoverWrittenIn, normTicks,
   taskNotes, isTaskNote, isTaskNotePrompt,
   CFG_DIR, realish, protectedKitPaths, expandHome, isKitPath, isKitSkillScript, isClaudeSettingsFile,

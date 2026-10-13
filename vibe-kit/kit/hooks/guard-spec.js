@@ -104,13 +104,13 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const load = () => entries || (entries = j.transcript_path ? tailEntries(j.transcript_path, 6000000).filter((e) => e && !e.isSidechain) : []);
   const done = (issues) => ({ issues, ticked, skipped });
   if (!/^\s*[-*]\s*\[[xX]\]/m.test(oldText)) {
-    let ok = proposalReviewed(art.dir);
+    let ok = require('../lib/session').reviewAllowed('proposal', art.dir);
     let waiting = false;
     if (!ok && j.transcript_path) {
       // 状态里还没记上：去会话记录里找。后台跑的审查（2.1.259 起 Agent 默认在后台）结论在后来的通知里，收工检查还没来得及记
       const es = load();
       syncReviews(es, j.cwd || art.root);
-      ok = proposalReviewed(art.dir);
+      ok = require('../lib/session').reviewAllowed('proposal', art.dir);
       if (!ok) waiting = pendingReviewsIn(toolCalls(es, 0), toolResults(es), allChanges(j.cwd || art.root), taskNotes(es)).some((p) => p.mode === 'proposal' && p.change && normKey(p.change.dir) === normKey(art.dir));
     }
     if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没送回来。等审查结果的通知到了（到了会自动接着一轮），按结论改完、在 revisions.md 记录，再开工打勾；不要再开一个审查。']);

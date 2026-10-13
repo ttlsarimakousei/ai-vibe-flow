@@ -443,7 +443,7 @@ function proposalReviewTodo(touched, busy) {
   const out = [];
   for (const [key, a] of touched) {
     const dir = a.dir;
-    if (proposalReviewed(dir) || (busy && busy(dir, 'proposal'))) continue;
+    if (require('../lib/session').reviewAllowed('proposal', dir) || (busy && busy(dir, 'proposal'))) continue;
     const has = (n) => fs.existsSync(path.join(dir, n));
     let specs = false;
     try { specs = fs.readdirSync(path.join(dir, 'specs')).length > 0; } catch (e) { /* 无 */ }
@@ -627,8 +627,8 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
     const remaining = require('../lib/task-types').automatedLeft(c.dir);
     const left = remaining.length;
     let msg = '';
-    if (require('../lib/task-types').readyForReview(c.dir) && !codeReviewed(c.dir)) msg = '全自动模式：实现和必要测试已完成，' + require('../lib/review-runner').instruction(c.name, 'code', cfg) + '。完整结果返回后立即勾代码审查任务，核实并处理意见、复验后勾意见处理任务，用户验收留给用户。';
-    else if (left > 0 && c.done === 0) { if (proposalReviewed(c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + ' 的提案也审过了，不用问我，直接开始 /opsx:apply，一项一项做到能执行的任务全部打勾（做完并验证就勾，提交按档位）。' + HAND_TIP; }
+    if (require('../lib/task-types').readyForReview(c.dir) && !require('../lib/session').reviewAllowed('code', c.dir)) msg = '全自动模式：实现和必要测试已完成，' + require('../lib/review-runner').instruction(c.name, 'code', cfg) + '。完整结果返回后立即勾代码审查任务，核实并处理意见、复验后勾意见处理任务，用户验收留给用户。';
+    else if (left > 0 && c.done === 0) { if (require('../lib/session').reviewAllowed('proposal', c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + ' 的提案审查已处理，不用问我，直接开始 /opsx:apply，一项一项做到能执行的任务全部打勾（做完并验证就勾，提交按档位）。' + HAND_TIP; }
     else if (left > 0) msg = '全自动模式：' + c.name + ' 还有 ' + left + ' 项没做完，不用问我，接着做下一项：' + remaining[0].text + '。' + HAND_TIP;
     else if (c.done > 0) {
       const loop = readState('review-rounds')['code|' + key];
@@ -875,7 +875,7 @@ async function handle(j) {
   // 交叉审查：这一轮亲手把变更的最后一项任务打了勾、代码还没审过的，催一次（只记"催过"和做完的时间，"审过"要看到真的审查）
   if (cfg.autoCrossReview) {
     const edited = calls.filter(isEdit).map(fileOf);
-    const fresh = changes().filter((c) => require('../lib/task-types').readyForReview(c.dir) && c.done > 0 && edited.some((f) => under(f, c.dir)) && !codeReviewed(c.dir) && !busy(c.dir, 'code'));
+    const fresh = changes().filter((c) => require('../lib/task-types').readyForReview(c.dir) && c.done > 0 && edited.some((f) => under(f, c.dir)) && !require('../lib/session').reviewAllowed('code', c.dir) && !busy(c.dir, 'code'));
     const toNudge = [];
     if (fresh.length) updateState('review-nudged', (st) => {
       for (const c of fresh) {
@@ -897,7 +897,7 @@ async function handle(j) {
   const mode = commitMode(cfg);
   if (mode !== 'off' && j.session_id !== undefined) {
     // 提案是可单独交付的一件事。审完后问是否提交，不把确认拖到 apply。
-    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && proposalReviewed(a.dir); });
+    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && require('../lib/session').reviewAllowed('proposal', a.dir); });
     const pkey = sid + '-plancommit';
     const planOnce = turnId ? readState(pkey).turnId !== turnId : !j.stop_hook_active;
     if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !pending.some((p) => p.mode === 'proposal') && !userSaid(entries, 'commit').ok && !require('../lib/session').commitDeclined(j, entries) && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
