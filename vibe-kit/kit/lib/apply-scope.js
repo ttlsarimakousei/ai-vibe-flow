@@ -11,6 +11,7 @@ function planHash(dir) {
 function grant(j, text, context) {
   const S = require('./session'); const all = S.allChanges(j.cwd || process.cwd()); const named = all.filter((c) => S.mentionsChange(text, c.name));
   const asked = all.filter((c) => S.mentionsChange(context || '', c.name));
+  if (!named.length && asked.length > 1) return { ok: false, reason: '提问涉及多个变更，请在答案里明确选择开工目标' };
   const touched = all.filter((c) => S.flowChanges(j).includes(S.normKey(c.dir)));
   const targets = named.length ? named : asked.length === 1 ? asked : all.length === 1 ? all : touched.length === 1 ? touched : [];
   if (!targets.length) return { ok: false, reason: all.length ? '有多个变更，请明确 apply 哪个变更' : '没有当前变更，按普通任务沟通' };
@@ -28,7 +29,9 @@ function valid(j) {
   return { ok: true };
 }
 function check(j, target) {
-  const S = require('./session'); const st = S.flowState(j); if (!st.on || st.stage !== 'apply' || !st.applyScope) return '';
+  const S = require('./session'); const st = S.flowState(j);
+  if (st.on && st.stage === 'plan' && st.waiting === 'scope' && !S.artifactOf(target)) return '提案已修订，业务代码要重新明确开工；可以继续修改提案和修订记录';
+  if (!st.on || st.stage !== 'apply' || !st.applyScope) return '';
   const v = valid(j); if (!v.ok) return v.reason;
   const file = S.normKey(target); const a = S.artifactOf(target);
   if (a && !st.applyScope.dirs[S.normKey(a.dir)]) return '这个变更不在当前 apply 许可里，先沟通范围并单独开工';
@@ -46,7 +49,7 @@ function prepareEdit(j, target) {
     ticking = S.tickedLines(old, next).length > 0;
   }
   if (ticking || valid(j).ok && st.applyScope.dirs[S.normKey(a.dir)]) return;
-  S.updateState(j.session_id + '-flow', (s) => { s.stage = 'plan'; s.why = '修订提案，旧开工范围失效'; delete s.applyScope; });
+  S.updateState(j.session_id + '-flow', (s) => { s.stage = 'plan'; s.waiting = 'scope'; s.why = '修订提案，旧开工范围失效'; delete s.applyScope; });
   S.hookLog('范围回到提案阶段：' + a.name);
 }
 module.exports = { grant, valid, check, planHash, prepareEdit };

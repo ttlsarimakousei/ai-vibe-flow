@@ -19,6 +19,8 @@ j.session_id = 'context'; S.setFlow(j, true, '提案', 'plan'); S.flowTouch(j, d
 H.ok('无参数 apply 可绑定唯一当前变更', A.grant(j, '/opsx:apply').ok);
 j.session_id = 'ambiguous'; S.setFlow(j, true, '提案', 'plan');
 H.ok('没有当前目标时多个变更仍不猜', !A.grant(j, '/opsx:apply').ok);
+S.flowTouch(j, d);
+H.ok('问题给出多个目标时不借唯一旧目标', !A.grant(j, '开工', 'add-a 或 add-b 能否开工？').ok);
 const composite = [H.tr.user('都测试完了，归档吧'), ask('add-a 开工，勾 6.1 并归档？', '开工，勾 6.1 并归档')];
 H.ok('复合答案保留归档许可', S.userSaid(composite.flat(), 'archive').ok);
 H.ok('复合答案可明确绑定提问目标', /add-a/.test(S.userSaid(composite.flat(), 'archive').targetText || ''));
@@ -32,6 +34,7 @@ H.ok('失效范围仍禁止业务代码', !!A.check(j, path.join(p, 'a.js')));
 const revision = { ...j, tool_name: 'Edit', tool_input: { file_path: path.join(d, 'revisions.md'), old_string: '', new_string: '修订依据' } };
 if (A.prepareEdit) A.prepareEdit(revision, revision.tool_input.file_path);
 H.ok('范围失效时允许回到提案补修订', A.check(j, revision.tool_input.file_path) === '' && S.flowState(j).stage === 'plan' && !S.flowState(j).applyScope);
+H.ok('回到提案修订仍不允许业务代码', !!A.check(j, path.join(p, 'a.js')));
 S.setFlow(j, true, '重新开工', 'apply'); A.grant(j, '开工 add-a'); H.write(path.join(d, 'proposal.md'), '再调整范围\n');
 const tick = { ...j, tool_input: { old_string: '[ ]', new_string: '[x]' } };
 if (A.prepareEdit) A.prepareEdit(tick, path.join(d, 'tasks.md'));
