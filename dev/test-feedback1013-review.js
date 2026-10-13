@@ -6,6 +6,13 @@ const H = require('./lib/harness');
   const h = H.makeHome('feedback1013-review', process.argv[2]);
   const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'openspec/changes/add-a/tasks.md': '- [ ] 1.1 修改 a.js；验：node --check a.js\n', 'openspec/changes/add-a/proposal.md': '参考 src/area、src/large.js\n' });
   const d = path.join(p, 'openspec/changes/add-a'); const S = require(path.join(h.kit, 'lib/session')); const R = require(path.join(h.kit, 'lib/review-runner'));
+  const redact = require(path.join(h.kit, 'lib/redact'));
+  for (const field of ['password', 'passwd', 'pwd', 'secret', 'token', 'api_key', 'authorization']) {
+    const source = JSON.stringify({ [field]: 'FAKE_QUOTED_"_SECRET', input_tokens: 42 });
+    const masked = redact.material(source);
+    H.ok('JSON 字面凭据脱敏含转义引号：' + field, !masked.includes('FAKE_QUOTED') && !masked.includes('_SECRET') && masked.includes('"input_tokens":42'), masked);
+  }
+  H.ok('审查鉴权逻辑原样保留', redact.material('token = validate(input); authorization = getAuth(req);') === 'token = validate(input); authorization = getAuth(req);');
   const large = ('const value=1;\n').repeat(12000); H.write(path.join(p, 'src/large.js'), large); H.write(path.join(p, 'src/area/b.js'), 'let b=1;');
   H.write(path.join(d, 'revisions.md'), '过去参考 src/historical.js\n'); H.write(path.join(p, 'src/historical.js'), '旧代码');
   H.write(path.join(d, 'proposal.md'), '参考 src/area、src/large.js、src/boundary.js\n');

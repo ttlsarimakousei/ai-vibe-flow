@@ -12,9 +12,9 @@ function text(value, secrets) {
     .replace(/\b(sk|ak|ghp|glpat)([-_])[A-Za-z0-9]{12,}\b/g, '$1$2***')
     .replace(/(\b(?:JSESSIONID|SESSION|SESSIONID|sid)=)[^;\s&]+/gi, '$1***');
 }
-// 审查材料只遮字面值，不把 token = validate(input) 这类待审逻辑当口令删除。
+// 审查材料只遮字面值；支持 JSON 字段与字符串内的转义引号，保留 token = validate(input) 等待审逻辑。
 function material(value) {
-  return String(value).replace(/((?:password|passwd|secret|token|api[-_]?key|authorization)\s*[:=]\s*)(["'])([^"'\r\n]*)\2/gi, '$1$2***$2')
+  return String(value).replace(/(\b(?:password|passwd|pwd|secret|token|api[-_]?key|authorization)\b["']?\s*[:=]\s*)(["'])((?:\\[^\r\n]|(?!\2)[^\\\r\n])*)\2/gi, '$1$2***$2')
     .replace(/\b(sk|ak|ghp|glpat)([-_])[A-Za-z0-9]{12,}\b/g, '$1$2***')
     .replace(/(\/\/[^:/\s@]+:)[^@\s/]+@/g, '$1***@');
 }
