@@ -13,6 +13,7 @@ const H = require('./lib/harness');
     H.ok('JSON 字面凭据脱敏含转义引号：' + field, !masked.includes('FAKE_QUOTED') && !masked.includes('_SECRET') && masked.includes('"input_tokens":42'), masked);
   }
   H.ok('审查鉴权逻辑原样保留', redact.material('token = validate(input); authorization = getAuth(req);') === 'token = validate(input); authorization = getAuth(req);');
+  for (const field of ['dbPassword', 'accessToken', 'clientSecret']) H.ok('保留复合凭据字段的脱敏：' + field, !redact.material(field + ' = "FAKE_COMPOSITE_VALUE"').includes('FAKE_COMPOSITE_VALUE'));
   const large = ('const value=1;\n').repeat(12000); H.write(path.join(p, 'src/large.js'), large); H.write(path.join(p, 'src/area/b.js'), 'let b=1;');
   H.write(path.join(d, 'revisions.md'), '过去参考 src/historical.js\n'); H.write(path.join(p, 'src/historical.js'), '旧代码');
   H.write(path.join(d, 'proposal.md'), '参考 src/area、src/large.js、src/boundary.js\n');
