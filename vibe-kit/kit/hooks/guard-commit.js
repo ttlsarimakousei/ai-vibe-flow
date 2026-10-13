@@ -796,6 +796,7 @@ function keyFileIssue(segs, dir, hasReader, easy) {
     // 只是列一下、算个路径：别的命令不去读它就没事。cd、pwd、test-path 这些不往后传东西的，怎么都没事
     if (LISTING.has(h.name) && (!hasReader || !PASSING.has(h.name))) continue;
     for (const w of x.ws.slice(h.i + 1)) {
+      if (h.name === 'cmd' && /^\/?[ck]$/i.test(w.text)) continue; // cmd 的 /C、/K 是开关，不能按 Git Bash 盘符路径解释。
       for (const c of pathCandidates(w)) {
         const why = secretTouch(c, dir, h.name, rec);
         if (why) return '[vibe-kit] 这条命令会读到令牌或者模型的 key（' + why + '）' + NO;
@@ -1584,7 +1585,7 @@ function analyze(cmd, ps, st, cfg, depth) {
       let gits = [g0];
       if (g0.dyn) { const ex = expandLoopVars(ws, st.loops); const list = ex ? ex.map((w2) => parseGit(w2, st.dir)).filter(Boolean) : []; if (list.length && !list.some((x) => x.dyn)) gits = list; }
       for (const g of gits) {
-      if (g.sub === 'push') { st.push = st.push || '[vibe-kit] 这是 git push' + (g.dyn ? '' : '（' + path.basename(repoRoot(g.dir) || g.dir) + '）') + '，推到远端要你确认。'; continue; }
+      if (g.sub === 'push') { st.pushes.push(g); st.push = st.push || '[vibe-kit] 这是 git push' + (g.dyn ? '' : '（' + path.basename(repoRoot(g.dir) || g.dir) + '）') + '，推到远端要你确认。'; continue; }
       // 同一条命令里前面 git add 过的文件，提交时算已经加进去了
       if (g.sub === 'add' && !g.dyn) {
         for (const a of g.args) {
@@ -1772,7 +1773,7 @@ function handle(j) {
   }
   // push 不看任何开关，没有当场授权就确认；拆命令没认出来的写法由 pushAnywhere 兜底
   const publishing = publishAnywhere(cmd, j.cwd);
-  const mergeApply = /\bmerge-push\.js["']?\s+apply\b/i.test(cmd);
+  const mergeApply = require('../lib/merge-push').isApplyCommand(j);
   let mergeCall = null;
   if (mergeApply) {
     const merge = require('../lib/merge-push');
@@ -1784,7 +1785,7 @@ function handle(j) {
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
   if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find|jar|tar|gtar|bsdtar|unzip|7z|7za|7zr|7zz|expand-archive)\b/i.test(cmd)) return cdBlock();
   const cwd0 = path.resolve(j.cwd || process.cwd());
-  const st = { dir: cwd0, cwd0, pushed: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, secret: '', j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
+  const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, secret: '', j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
   // 先按名字挑出进程再结束的写法（Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process）：拆成组之后认不出来，整条看一遍
   if (!st.block) { const k = killAnywhere(cmd, ps); if (k) setBlock(st, 'kill', k); }
   // 兜底放行：这个会话里申请过、还能用的通行证
@@ -1811,13 +1812,14 @@ function handle(j) {
   if (cb) return cb;
   // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告；提交里像有密码的放行，记进报告
   // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
-  if (st.push && !st.publishing && !mergeCall) {
+  const simplePush = st.pushes.length === 1 && require('../lib/merge-push').simpleAllowed(j, st.pushes[0]);
+  if (st.push && !st.publishing && !mergeCall && !simplePush) {
     if (cfg.autoMode) {
       try { if (report) report.note(j, { kind: 'hand', title: '它想执行 git push，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '先给用户推送预览，等用户确认；全自动不能跳过' }); } catch (e) { /* 记不了也拦 */ }
     }
-    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '推送前先运行 merge-push.js plan --dir <仓库>，把未推送提交的分组、原记录、最终标题和目标给用户看。等另一条真人确认后，用 apply --plan <文件> --confirmed <完整计划编号> --push 执行；没有可合并项也会保持原历史。' + (st.secret ? '\n' + st.secret : ''));
+    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '多笔提交或目标无法核对时，先运行 merge-push.js plan --dir <仓库>，给用户看分组、原记录、标题和目标，确认后用 apply --plan <文件> --confirmed <完整计划编号> --push。仅一笔且目标明确的普通推送可使用已有真人推送许可。此检查不能用放行额度代替推送确认。' + (st.secret ? '\n' + st.secret : ''));
   }
-  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', mergeCall ? mergeCall.root : repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
+  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', mergeCall ? mergeCall.root : simplePush ? repoRoot(st.pushes[0].dir) || st.pushes[0].dir : repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
   // 当场授权 push 不能顺便跳过同一条命令里提交内容的凭据提醒。
   if (pushApproved && st.secret) return askOut(st.secret);
   if (cfg.autoMode) {

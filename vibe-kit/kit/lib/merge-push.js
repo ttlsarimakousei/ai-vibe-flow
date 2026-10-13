@@ -3,7 +3,7 @@
  * 合并 push：只整理当前分支尚未推送的线性提交。同一事件要有同一个 OpenSpec 来源或事件标记，
  * 点名的文档修订可带伴随文档和计划表，不凭标题相似程度猜。交错事件只有改动文件完全不相交才调到一起，否则保持原顺序。
  * 所有重建先在独立 index 里完成，最终 tree 必须和原 HEAD 完全一样；备份 ref 后才原子换分支。
- * 不改工作区，不改远端历史，不 force push。普通 push 也先预览，另一次真人确认才执行。
+ * 不改工作区，不改远端历史，不 force push。需要整理历史时先预览再确认；单笔普通推送仍必须有真人许可。
  * 计划过期、工作区不干净、远端前进都停；含 merge、签名或版本标签时保留整段历史，只预览普通推送。
  */
 const fs = require('fs');
@@ -20,6 +20,7 @@ function gitEnv() {
 }
 function git(root, args, opt) {
   const r = spawnSync('git', ['-C', root].concat(args), Object.assign({ env: gitEnv(), windowsHide: true, encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024 }, opt || {}));
+  if (opt && opt.optional && (r.status === 1 || r.status === 128)) return '';
   if (r.status !== 0) throw new Error('git ' + args[0] + ' 没有成功，操作已停止；核对仓库和远端后重试。');
   return opt && opt.raw ? r.stdout : r.stdout.trim();
 }
@@ -27,10 +28,10 @@ function state(root, fetch, options) {
   // 完成/执行钩子只核对不可变提交的端点；完整分组在 CLI 执行前再次计算。
   // 2026-10-12 #64：不能在 25 秒的 HTTP 钩子里对每条提交起四次 Git。
   const deadline = options && options.deadline;
-  const run = (dir, args) => {
+  const run = (dir, args, optional) => {
     const left = deadline ? deadline - Date.now() : 30000;
     if (left <= 0) throw new Error('推送预览的本机核对超时，稍后重试同一计划。');
-    return git(dir, args, { timeout: Math.min(30000, left) });
+    return git(dir, args, { timeout: Math.min(30000, left), optional: !!optional });
   };
   root = run(root, ['rev-parse', '--show-toplevel']);
   if (run(root, ['status', '--porcelain', '-uall'])) throw new Error('工作区或暂存区还有改动，先完成提交，不自动 stash。');
@@ -39,27 +40,34 @@ function state(root, fetch, options) {
   const dir = run(root, ['rev-parse', '--absolute-git-dir']);
   for (const n of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'index.lock']) if (fs.existsSync(path.join(dir, n))) throw new Error('仓库还有合并、变基或锁，先处理完。');
   const branch = ref.slice(11);
-  const remote = run(root, ['config', '--get', 'branch.' + branch + '.remote']);
-  const merge = run(root, ['config', '--get', 'branch.' + branch + '.merge']);
+  const configured = run(root, ['config', '--get', 'branch.' + branch + '.remote'], true);
+  const remotes = run(root, ['remote']).split('\n').filter(Boolean);
+  const remote = configured || (remotes.length === 1 ? remotes[0] : '');
+  const merge = run(root, ['config', '--get', 'branch.' + branch + '.merge'], true) || 'refs/heads/' + branch;
+  if (!remote) throw new Error('没有唯一的推送远端，请先明确 branch.' + branch + '.remote 和 merge。');
   if (remote === '.' || !merge.startsWith('refs/heads/')) throw new Error('需要一个真实远端上的跟踪分支，不能猜推到哪里。');
   const fetchUrls = run(root, ['remote', 'get-url', '--all', remote]).split('\n');
   const pushUrls = run(root, ['remote', 'get-url', '--push', '--all', remote]).split('\n');
   if (fetchUrls.length !== 1 || pushUrls.length !== 1 || fetchUrls[0] !== pushUrls[0]) throw new Error('远端的拉取和推送地址不同或有多个地址，先人工确认目标，不改历史。');
-  const upstream = run(root, ['rev-parse', '--symbolic-full-name', '@{upstream}']);
-  if (fetch) run(root, ['fetch', '--no-tags', remote, merge]);
+  const upstream = 'refs/remotes/' + remote + '/' + merge.slice(11);
+  let base = run(root, ['rev-parse', '--verify', upstream], true);
+  if (fetch) {
+    const heads = run(root, ['ls-remote', '--heads', remote, merge]);
+    if (!heads) base = '';
+    else { run(root, ['fetch', '--no-tags', remote, merge]); base = run(root, ['rev-parse', 'FETCH_HEAD']); }
+  }
   // FETCH_HEAD 是此次取到的目标，不依赖用户的 remote.fetch 是否包含这个分支。
-  const base = run(root, ['rev-parse', fetch ? 'FETCH_HEAD' : upstream]);
   const head = run(root, ['rev-parse', 'HEAD']);
-  const common = run(root, ['merge-base', head, base]);
-  if (common !== base) throw new Error('远端已经前进或发生分叉，先正常合并代码，不能合并 push。');
+  const common = base ? run(root, ['merge-base', head, base]) : '';
+  if (base && common !== base) throw new Error('远端已经前进或发生分叉，先正常合并代码，不能合并 push。');
   if (options && options.headerOnly) return { root, ref, remote, merge, upstream, base, head, dir, targetHash: sha([fetchUrls, pushUrls]) };
-  const ids = run(root, ['rev-list', '--reverse', base + '..' + head]).split('\n').filter(Boolean);
+  const ids = run(root, ['rev-list', '--reverse', base ? base + '..' + head : head]).split('\n').filter(Boolean);
   if (ids.length > 200) throw new Error('本地未推送提交超过 200 条，先人工整理范围。');
   const commits = ids.map((id) => {
     const raw = run(root, ['cat-file', '-p', id]);
     const protectedHistory = (raw.match(/^parent /gm) || []).length !== 1 || /^gpgsig /m.test(raw) || !!run(root, ['tag', '--points-at', id]);
     const fields = run(root, ['show', '-s', '--format=%T%x00%an%x00%ae%x00%aI%x00%s', id]).split('\x00');
-    const files = run(root, ['diff-tree', '--no-commit-id', '--no-renames', '-r', '--name-only', '-z', id]).split('\x00').filter(Boolean);
+    const files = run(root, ['diff-tree', '--root', '--no-commit-id', '--no-renames', '-r', '--name-only', '-z', id]).split('\x00').filter(Boolean);
     return { id, tree: fields[0], author: fields[1], email: fields[2], date: fields[3], title: fields[4], message: raw.slice(raw.indexOf('\n\n') + 2), files, protectedHistory };
   });
   return { root, ref, remote, merge, upstream, base, head, dir, commits, targetHash: sha([fetchUrls, pushUrls]) };
@@ -146,7 +154,7 @@ function apply(p, push) {
     }
   }
   if (push) {
-    try { git(s.root, ['push', s.remote, head + ':' + s.merge]); }
+    try { git(s.root, ['push', '--set-upstream', s.remote, s.ref + ':' + s.merge]); }
     catch (e) { return { ok: false, before: s.commits.length, after: p.groups.length, head, backup, pushed: false, msg: '推送失败；本地整理结果和旧提交备份仍保留。先核对远端，重试普通 push，不强推。' }; }
   }
   return { ok: true, before: s.commits.length, after: p.groups.length, head, backup, pushed: !!push };
@@ -170,7 +178,7 @@ function commandOf(j) {
   if (norm(path.resolve(j.cwd || process.cwd(), S.expandHome(words[at]))) !== norm(path.join(S.KIT, 'tools/merge-push.js'))) return null;
   const args = words.slice(at + 1);
   // plan 的输出可以截行查看，但必须仍收到完整 JSON。其它管道不猜执行含义。
-  if (groups[0].length > 1 && (args[0] !== 'plan' || !groups[0].slice(1).every((s) => /^(?:(?:tail|head)(?:\s+(?:-n\s*\d+|-\d+))?|cat|(?:Select-Object|select)\s+-(?:First|Last)\s+\d+|Out-String)$/i.test(s)))) return null;
+  if (groups[0].length > 1 && (!['plan', 'apply'].includes(args[0]) || !groups[0].slice(1).every((s) => /^(?:(?:tail|head)(?:\s+(?:-n\s*\d+|-\d+))?|cat|(?:Select-Object|select)\s+-(?:First|Last)\s+\d+|Out-String)$/i.test(s)))) return null;
   const val = (key) => { const n = args.indexOf(key); return n < 0 ? '' : S.expandHome(args[n + 1] || ''); };
   return { action: args[0], root: path.resolve(j.cwd || process.cwd(), val('--dir') || '.'), file: val('--plan'), confirmed: val('--confirmed'), push: args.includes('--push') };
 }
@@ -213,9 +221,24 @@ function previewAllowed(j, root, call) {
     const current = state(root, false, { headerOnly: true, deadline: Date.now() + 8000 });
     if (p.hash !== saved.hash || p.head !== current.head || p.base !== current.base || p.ref !== current.ref || p.remote !== current.remote || p.merge !== current.merge || p.targetHash !== current.targetHash) return { ok: false, reason: '仓库或推送目标已变化，需要重新预览并确认' };
     if (call && (path.resolve(root, call.file || '') !== loaded.file || call.confirmed !== p.hash || !call.push)) return { ok: false, reason: '执行命令没有绑定已确认计划，请用相同计划和完整 --confirmed 编号及 --push' };
-    if (!call) return { ok: false, reason: '须用 merge-push.js apply 绑定计划执行；没有可合并项时也会保持原历史并正常推送' };
+    if (!call && p.groups.some((g) => g.ids.length > 1)) return { ok: false, reason: '计划会整理本地历史，须用 merge-push.js apply 绑定计划执行' };
     return { ok: true, file: loaded.file, hash: p.hash };
-  } catch (e) { return { ok: false, reason: '推送预览无法核对，请重新生成计划' }; }
+  } catch (e) { return { ok: false, reason: '推送预览无法核对：' + require('./redact').clip(e.message, 250) }; }
+}
+// 只认真正执行的脚本参数；反馈正文和提交信息里引用 apply 不触发执行检查。
+function isApplyCommand(j) {
+  const S = require('./session'), parser = require('../hooks/guard-commit');
+  return parser.splitCommand(String(j.tool_input && j.tool_input.command || ''), j.tool_name === 'PowerShell').some((g) => g.some((seg) => { const ws = parser.words(parser.scanRedirects(seg).rest, j.tool_name === 'PowerShell'); return ws.some((w, i) => i > 0 && /(?:^|[\\/])merge-push\.js$/i.test(w.text) && ws[i + 1] && ws[i + 1].text === 'apply' && norm(path.resolve(j.cwd, S.expandHome(w.text))) === norm(path.join(S.KIT, 'tools/merge-push.js'))); }));
+}
+function simpleAllowed(j, g) {
+  try {
+    if (!require('./session').userSaid(require('./session').tailEntries(j.transcript_path, 3000000), 'push').ok || g.dyn) return false;
+    const args = g.args.map((a) => a.text); if (args.some((a) => a.startsWith('-') && !['-u', '--set-upstream'].includes(a))) return false;
+    const s = state(g.dir, false, { headerOnly: true, deadline: Date.now() + 8000 }); const pos = args.filter((a) => !a.startsWith('-'));
+    if (pos.length > 2 || pos[0] && pos[0] !== s.remote || pos[1] && ![s.ref, s.ref.slice(11), 'HEAD', s.ref + ':' + s.merge, s.ref.slice(11) + ':' + s.merge.slice(11)].includes(pos[1])) return false;
+    const count = Number(git(s.root, ['rev-list', '--count', s.base ? s.base + '..' + s.head : s.head], { timeout: 2000 }));
+    return Number.isInteger(count) && count <= 1 || previewAllowed(j, s.root, null).ok;
+  } catch (e) { return false; }
 }
 function consumePreview(j) {
   const k = receiptKey(j); if (!k) return;
@@ -225,4 +248,4 @@ function consumePreview(j) {
   const root = call ? call.root : require('./workspace').rootOf(j.cwd || process.cwd());
   require('./session').updateState(k, (s) => { const v = (s.roots || {})[norm(root)]; if (v) { v.consumed = true; v.finished = Date.now(); } });
 }
-module.exports = { plan, apply, eventOf, groupsOf, commandOf, recordPreview, previewAllowed, consumePreview };
+module.exports = { plan, apply, eventOf, groupsOf, commandOf, recordPreview, previewAllowed, consumePreview, isApplyCommand, simpleAllowed };

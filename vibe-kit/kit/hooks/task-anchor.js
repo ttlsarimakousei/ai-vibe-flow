@@ -460,7 +460,7 @@ async function handle(j) {
   }
   if (th) lines.push(th);
   if (!note && intent.explicit(j.prompt, 'push')) {
-    lines.push('[vibe-kit 推送预览] 用户说 push 时也先检测未推送提交：逐个仓库运行 node "' + path.join(KIT, 'tools', 'merge-push.js') + '" plan --dir <仓库>，把每组原提交、拟合并标题、提交数、分支和远端给用户看，等另一条真人确认后才 apply --dir <仓库> --plan <计划文件> --confirmed <完整计划编号> --push。已经有本会话有效预览并获确认就执行它，不反复生成新计划。只合并有同一来源标记或同一变更路径的事件；无依据及含 merge、签名、标签的历史保留。不 force、不带工作区未提交改动；失败不能换 reset/rebase 硬做。');
+    lines.push('[vibe-kit 推送预览] 用户说 push 后，目标明确且仅一笔未推送提交的普通推送可以直接执行，钩子会核对当前真人许可；其它情况逐个仓库运行 node "' + path.join(KIT, 'tools', 'merge-push.js') + '" plan --dir <仓库>，给用户看原提交、标题、分支和远端，等另一条真人确认后 apply --plan <计划文件> --confirmed <完整计划编号> --push。已有有效预览并获确认就执行，不反复生成。首次空远端会预览全部本地提交并保持原历史。只整理同一事件，不 force，不带未提交改动；失败不换 reset/rebase 硬做。');
   }
   const oh = note || anchored.overLine ? '' : outputHint(j, cfg);
   if (oh) lines.push(oh);
