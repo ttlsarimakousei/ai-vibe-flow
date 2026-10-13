@@ -1,5 +1,5 @@
 'use strict';
-/* 独立审查执行器：有限材料分片，经本机路由独立请求；分别记录发送、回复、解析与覆盖。错误诊断脱敏后仅存本机，不将部分结果记为完整审查。 */
+/* 独立审查执行器：有限材料分片，经本机路由独立请求；探索清单保留在设计正文，不自动展开源码。分别记录发送、回复、解析与覆盖，诊断脱敏后仅存本机。 */
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -22,8 +22,31 @@ function baseline(j, dirs) {
     }
   });
 }
+/** 设计现状中的路径只是探索依据；明确写“审查材料：”才额外读取，其它章节沿用当前引用。 */
+function proposalReferences(rows) {
+  const references = new Set(), context = new Set(), required = new Set();
+  for (const row of rows) {
+    let contextDepth = 0;
+    for (const line of row.text.split(/\r?\n/)) {
+      const heading = line.match(/^\s*(#{1,6})\s+(.+)/);
+      if (heading && row.file === 'design.md') {
+        if (contextDepth && heading[1].length <= contextDepth) contextDepth = 0;
+        if (/^(?:Context\b|现状|背景)/i.test(heading[2])) contextDepth = heading[1].length;
+      }
+      const explicit = line.match(/(?:^|\s|[-*])审查材料\s*[:：]\s*(.*)/);
+      const selected = explicit ? S.pathTokens(explicit[1]) : [];
+      for (const ref of selected) required.add(ref);
+      for (const ref of S.pathTokens(line)) {
+        // 随提案交付的材料始终检查，不因写在 Context 而漏读。
+        if (contextDepth && !selected.includes(ref) && !/^(?:\.\/)?(?:assets|references)\//.test(ref) && !/^openspec\/changes\/[^/]+\/(?:assets|references)\//.test(ref)) context.add(ref);
+        else references.add(ref);
+      }
+    }
+  }
+  return { references, required, contextOnly: [...context].filter(ref => !references.has(ref)) };
+}
 function materials(opts, change) {
-  const items = [], skipped = [], files = new Set(); const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
+  const items = [], skipped = [], files = new Set(), inputs = new Map(); let contextOnly = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
   const add = (file, text, root, source) => {
     if (files.has(file)) return;
     if (files.size >= maxFiles) { skipped.push({ file, reason: '超过本轮文件上限；在配置页提高审查文件上限（最多 60），或明确拆成独立变更后审查' }); return; }
@@ -45,7 +68,12 @@ function materials(opts, change) {
     if (!checked.safe) return skip(checked.reason);
     if (checked.missing) return allowMissing ? { missing: true, text: '' } : skip('材料不可读');
     if (checked.stat.size > 4 * 1024 * 1024) return skip('单文件超过 4MB；按职责拆文件或准备明确范围的独立变更，不能截断后算完整覆盖');
-    try { const bytes = fs.readFileSync(file); if (bytes.includes(0)) return skip('二进制材料未覆盖'); const text = new (require('util').TextDecoder)('utf8', { fatal: true }).decode(bytes); return { text }; }
+    try {
+      const bytes = fs.readFileSync(file); if (bytes.includes(0)) return skip('二进制材料未覆盖');
+      const text = new (require('util').TextDecoder)('utf8', { fatal: true }).decode(bytes);
+      if (opts.mode === 'proposal' && !S.artifactOf(file)) inputs.set(S.normKey(file), { file: path.resolve(file), root: path.resolve(root), hash: W.hash(bytes) });
+      return { text };
+    }
     catch (e) { return skip('材料不可读或不是 UTF-8 文本'); }
   };
   const artifacts = () => {
@@ -60,14 +88,27 @@ function materials(opts, change) {
     const art = { dir: change.dir, name: change.name, root: W.rootOf(change.dir) };
     const issues = rows.flatMap((r) => r.file === 'revisions.md' ? [] : require('./proposal-files').issuesIn(r.text, art));
     if (issues.length) throw new Error('提案材料交付检查未通过：' + issues.join('；'));
-    const roots = S.projectRootsOf(change.dir); const references = new Set(rows.flatMap((r) => S.pathTokens(r.text)));
-    for (const ref of references) for (const root of roots) {
-      const f = path.resolve(root, ref);
-      if (!S.underDir(f, root) || S.underDir(f, change.dir) || /[\\/]\.vibe[\\/]/.test(f) || !fs.existsSync(f)) continue;
-      if (fs.lstatSync(f).isDirectory() && S.underDir(S.realish(f), S.realish(root))) break; // 目录只是范围说明，不是待审文件。
-      const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const loaded = load(f, root, label);
-      if (loaded) add(label, loaded.text, root, f);
-      break;
+    const roots = S.projectRootsOf(change.dir); const refs = proposalReferences(rows); contextOnly = refs.contextOnly;
+    for (const ref of refs.references) {
+      const local = ref.replace(/^\.\//, '');
+      if (/^(?:assets|references)\//.test(local) || local.startsWith('openspec/changes/' + change.name + '/')) {
+        const f = path.resolve(/^(?:assets|references)\//.test(local) ? change.dir : art.root, local);
+        const label = path.relative(change.dir, f).replace(/\\/g, '/');
+        if (S.artifactOf(f) && !/^(?:assets|references)\//.test(label)) continue;
+        const loaded = load(f, change.dir, label); if (loaded) add(label, loaded.text, change.dir, f);
+        continue;
+      }
+      let found = false;
+      for (const root of roots) {
+        const f = path.resolve(root, ref);
+        if (!S.underDir(f, root) || S.underDir(f, change.dir) || /[\\/]\.vibe[\\/]/.test(f) || !fs.existsSync(f)) continue;
+        found = true;
+        if (!refs.required.has(ref) && fs.lstatSync(f).isDirectory() && S.underDir(S.realish(f), S.realish(root))) break; // 普通目录引用只是范围说明。
+        const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const loaded = load(f, root, label);
+        if (loaded) add(label, loaded.text, root, f);
+        break;
+      }
+      if (!found && refs.required.has(ref)) skipped.push({ file: ref, reason: '明确指定的审查材料不存在或不在项目范围内；核对路径后再审' });
     }
   } else {
     const roots = change ? S.projectRootsOf(change.dir) : [W.rootOf(opts.cwd)];
@@ -93,7 +134,18 @@ function materials(opts, change) {
   const batches = []; let batch = [], size = 0;
   for (const item of items) { if (size + item.text.length > 80000 && batch.length) { batches.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
   if (batch.length) batches.push(batch);
-  return { items, skipped, batches };
+  return { items, skipped, batches, contextOnly, inputs: [...inputs.values()] };
+}
+/** 补充材料变化后提案结论失效；只核对原来实际读取的有限文件，不沿探索清单扩散。 */
+function inputsCurrent(inputs) {
+  if (!Array.isArray(inputs)) return true; // 升级前的审查记录继续按原产物指纹核对。
+  return inputs.every(input => {
+    require('./invocation').phase('核对提案审查材料');
+    try {
+      const checked = W.pathStatus(input.file, input.root);
+      return checked.safe && !checked.missing && checked.stat.size <= 4 * 1024 * 1024 && W.hash(fs.readFileSync(input.file)) === input.hash;
+    } catch (e) { return false; } // 材料不可读不能把旧结论当有效。
+  });
 }
 function routerUrl() {
   if (process.env.VIBE_KIT_REVIEW_PORT) return 'http://127.0.0.1:' + Number(process.env.VIBE_KIT_REVIEW_PORT) + '/v1/messages';
@@ -196,7 +248,7 @@ async function run(opts, progress) {
   let result = { id, mode: opts.mode, status: 'failed', issues: [], covered: [], skipped: [], attemptedBatches: 0, receivedBatches: 0, completedBatches: 0, attemptedFiles: [], diagnostics: [] };
   try {
     if (deadline <= started) throw new Error('累计审查预算已用完；交代现有结果和未覆盖范围，用户可明确用 --new-budget 开启新预算');
-    const material = materials(opts, change); result.skipped = material.skipped;
+    const material = materials(opts, change); result.skipped = material.skipped; result.contextOnly = material.contextOnly; result.materialInputs = material.inputs;
     if (!material.batches.length) throw new Error('没有可审查材料或开工基线缺失');
     const left = new Map(); for (const item of material.items) left.set(item.file, (left.get(item.file) || 0) + 1);
     result.totalBatches = material.batches.length;
@@ -226,7 +278,7 @@ async function run(opts, progress) {
   try { const U = require('./usage'); U.bump(result.status === 'timed_out' ? 'review.timeout' : 'review.' + result.status); } catch (e) { /* 计数失败不改变结论 */ }
   if (change && result.status === 'completed') {
     S.recordReview(opts.mode, change.dir, result.issues.length, id, Date.now());
-    S.updateState(opts.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (opts.mode === 'code') r.fingerprint = before.hash; else r.proposalHash = require('./apply-scope').planHash(change.dir); r.reportFile = file; r.executor = 'direct'; r.covered = result.covered; } });
+    S.updateState(opts.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (opts.mode === 'code') r.fingerprint = before.hash; else { r.proposalHash = require('./apply-scope').planHash(change.dir); r.materialInputs = result.materialInputs; } r.reportFile = file; r.executor = 'direct'; r.covered = result.covered; } });
   }
   return result;
 }
@@ -259,4 +311,4 @@ function syncAgent(j) {
   return S.syncReviews(entries.slice(), j.cwd);
 }
 function instruction(name, mode, cfg) { return cfg.reviewExecutor === 'agent' ? '按 /ttls-cross-review 的兼容代理方式审查 ' + name + '，最多等待 ' + cfg.reviewBudgetSeconds + ' 秒，超时取消已知审查任务并交代未覆盖范围' : '执行 review.js run --change ' + name + ' --mode ' + mode + '，总预算 ' + cfg.reviewBudgetSeconds + ' 秒'; }
-module.exports = { run, materials, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent, waived, waive, decisionIssue };
+module.exports = { run, materials, inputsCurrent, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent, waived, waive, decisionIssue };

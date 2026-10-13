@@ -1819,7 +1819,7 @@ function recordReview(kind, dir, issues, reviewKey, at) {
     const prev = o[key] && typeof o[key] === 'object' ? o[key] : {};
     if (prev.done && prev.born === born && ((reviewKey && prev.key === reviewKey) || (prev.at && when < prev.at))) return o;
     o[key] = Object.assign({}, prev, { done: true, at: when, born, issues, key: reviewKey });
-    for (const field of ['id', 'resolved', 'resolvedAt', 'resolvedFingerprint', 'decisions', 'fingerprint', 'proposalHash', 'reportFile', 'executor', 'covered', 'partial']) delete o[key][field];
+    for (const field of ['id', 'resolved', 'resolvedAt', 'resolvedFingerprint', 'decisions', 'fingerprint', 'proposalHash', 'materialInputs', 'reportFile', 'executor', 'covered', 'partial']) delete o[key][field];
     fresh = true;
     return o;
   });
@@ -1872,7 +1872,7 @@ function reviewDiagnostics(entries, cwd) {
   });
 }
 /** 提案审过了吗 */
-function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir))); }
+function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir)) && require('./review-runner').inputsCurrent(r.materialInputs)); }
 /** 流程能否继续：完整审查或当前输入的真人跳过记录；展示仍区分审过和跳过。 */
 function reviewAllowed(kind, dir) { return (kind === 'proposal' ? proposalReviewed(dir) : codeReviewed(dir)) || require('./review-runner').waived(dir, kind); }
 /**
