@@ -29,13 +29,14 @@ function materials(opts, change) {
     if (files.size >= maxFiles) { skipped.push({ file, reason: '超过本轮文件上限；在配置页提高审查文件上限（最多 60），或明确拆成独立变更后审查' }); return; }
     files.add(file);
     const chunks = []; let chunk = '', line = 1, start = 1;
-    for (const row of String(text).split(/(?<=\n)/)) {
+    // 先遮整份文本再切片，避免凭据字面值跨片后漏掉模式匹配。
+    for (const row of R.material(text).split(/(?<=\n)/)) {
       if (chunk && chunk.length + row.length > 40000) { chunks.push({ text: chunk, startLine: start }); chunk = ''; start = line; }
       for (let i = 0; i < row.length; i += 40000) { if (i) { chunks.push({ text: chunk, startLine: start }); chunk = ''; start = line; } chunk += row.slice(i, i + 40000); }
       line += (row.match(/\n/g) || []).length;
     }
     if (chunk || !chunks.length) chunks.push({ text: chunk, startLine: start });
-    chunks.forEach((c, i) => items.push({ file, root, source: source || path.resolve(root, file), text: R.material(c.text), startLine: c.startLine, part: i + 1, parts: chunks.length }));
+    chunks.forEach((c, i) => items.push({ file, root, source: source || path.resolve(root, file), text: c.text, startLine: c.startLine, part: i + 1, parts: chunks.length }));
   };
   const load = (file, root, label, allowMissing) => {
     const skip = (reason) => { skipped.push({ file: label, reason }); return null; };
