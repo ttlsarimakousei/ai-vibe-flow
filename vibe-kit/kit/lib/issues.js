@@ -60,7 +60,7 @@ function titleOf(r) {
 /** 议题的正文：开头一张表（版本、模型、电脑、项目……），下面是记录原文，最后一行是签名（搜重复靠它） */
 function describe(r) {
   const m = r.meta;
-  const rows = [['类型', m['类型']], ['涉及', m['涉及']], ['来源', m['来源']], ['放行', m['放行']], ['套件版本', m['套件版本']], ['Claude Code', m['Claude Code']], ['模型', m['模型']], ['电脑', m['电脑']], ['项目', m['项目']], ['第一次出现', m['时间']], ['到现在几次', m['次数']], ['本机编号', m.id]].filter((x) => x[1] !== undefined && String(x[1]).trim());
+  const rows = [['类型', m['类型']], ['涉及', m['涉及']], ['来源', m['来源']], ['放行', m['放行']], ['套件版本', m['套件版本']], ['Claude Code', m['Claude Code']], ['模型', m['模型']], ['电脑', m['电脑']], ['项目', m['项目']], ['第一次出现', m['时间']], ['最近发生', m['更新']], ['最近套件版本', m['最近套件版本']], ['最近Claude Code', m['最近Claude Code']], ['最近模型', m['最近模型']], ['最近项目', m['最近项目']], ['到现在几次', m['次数']], ['本机编号', m.id]].filter((x) => x[1] !== undefined && String(x[1]).trim());
   const body = String(r.text || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/^#\s+.*\r?\n?/, '').trim();
   return '| 项 | 内容 |\n|---|---|\n' + rows.map((x) => '| ' + x[0] + ' | ' + cell(x[1]) + ' |').join('\n') + '\n\n' + clip(body, 60000) + '\n\n---\n由 vibe-kit 自动上报。' + MARK + sigOf(r) + '\n';
 }

@@ -23,7 +23,7 @@
  *     kitBypass = ask（默认）   弹 Claude Code 的确认框，用户点同意才放行
  *     kitBypass = auto          直接放行
  *     kitBypass = off           不许申请（全自动模式下也不许）
- *   有人在的时候：通行证只用一次；每个会话最多申请 5 次，同一类检查最多 3 次。
+ *   有人在、配置为确认时：通行证只用一次；每个会话最多 5 个不同问题、同类最多 3 个。自行放行和全自动最多 60 个不同问题；同一检查、目标与理由重试不重复扣额度。
  *   全自动模式（用户不在）：不弹框、不等用户，哪一类都直接放行，每次用都记进全自动报告；一张通行证 30 分钟内可以用多次
  *   （连着给几项任务打勾，不用每项申请一次）；每个会话最多 60 次，防它转圈。
  *   通行证按"同一个文件 / 同一件事"认，不按"一模一样的操作"认：申请之后中间改过一次验法，再打勾时内容变了，
@@ -51,6 +51,7 @@ const BYPASSABLE = {
 const MAX_PER_SESSION = 5;
 const MAX_PER_KIND = 3;
 const AUTO_MAX_PER_SESSION = 60;
+const quotaKey = (p) => p.hook + '|' + (p.target || p.sig) + '|' + ruleOf(p.reason || '');
 const PASS_MS = 30 * 60000;
 const BLOCK_KEEP_MS = 2 * 3600000;
 const KEEP_RECORDS = 1000;
@@ -192,9 +193,13 @@ function record(r) {
     const old = listRecords().find((x) => x.meta['签名'] === r.sig && String(x.meta['时间'] || '') >= since);
     if (old) {
       const count = Number(old.meta['次数'] || 1) + 1;
-      let t = setMeta(old.text, { '次数': count, '更新': stamp(now) });
+      const info = transcriptInfo(r.transcript);
+      let t = setMeta(old.text, { '次数': count, '更新': stamp(now), '最近套件版本': kitVersion(), '最近Claude Code': info.claudeCode || '（不知道）', '最近模型': info.model || '（不知道）', '最近项目': cwd || '（不知道）', '最近电脑': os.hostname() });
       if (!/\n## 又出现了\n/.test(t)) t = t.replace(/\s*$/, '\n\n## 又出现了\n');
-      t = t.replace(/\s*$/, '\n- ' + stamp(now) + '　项目 ' + (cwd || '？') + '　会话 ' + sid.slice(0, 8) + (r.note ? '　' + clip(redact(r.note), 200).replace(/\r?\n/g, ' ') : '') + '\n');
+      const split = t.split('\n## 又出现了\n');
+      const notes = (split[1] || '').trim().split(/\r?\n/).filter(Boolean).slice(-19);
+      notes.push('- ' + stamp(now) + '　版本 ' + kitVersion() + '　项目 ' + (cwd || '？') + '　会话 ' + sid.slice(0, 8) + (r.note ? '　' + clip(redact(r.note), 4000).replace(/\r?\n/g, ' ') : ''));
+      t = split[0] + '\n## 又出现了\n' + notes.join('\n') + '\n';
       fs.writeFileSync(old.file, t);
       markDirty();
       return { id: old.meta.id, file: old.file, repeated: true, count };
@@ -410,14 +415,15 @@ function requestBypass(blockId, why, extra) {
   // 全自动模式、没说是套件判断错了：条件现在满足不了，先过。不是套件的问题，不记成问题，只进全自动报告
   if (cfg.autoMode && cfg.kitBypass !== 'off' && !x.bug) {
     const mine = (readState('bypass').passes || []).filter((p) => p && p.sid === b.sid && p.id !== b.id);
-    if (mine.length >= AUTO_MAX_PER_SESSION) return { ok: false, msg: '这个会话申请放行已经 ' + AUTO_MAX_PER_SESSION + ' 次了，不再放行。这一步不做，写进最后的交代，接着做别的。' };
+    const used = new Set(mine.map(quotaKey));
+    if (used.size >= AUTO_MAX_PER_SESSION && !used.has(quotaKey(b))) return { ok: false, msg: '这个会话申请放行已经 ' + AUTO_MAX_PER_SESSION + ' 个不同问题了，不再放行。这一步不做，写进最后的交代，接着做别的。' };
     updateState('bypass', (o) => {
       const list = (Array.isArray(o.passes) ? o.passes : []).filter((p) => p && Date.now() - (p.at || 0) < 7 * 86400000 && !(p.id === b.id && p.hook === b.hook));
       list.push({ id: b.id, hook: b.hook, sig: b.sig, target: b.target || '', sid: b.sid, fid: '', why: w, auto: true, multi: true, at: Date.now(), expires: Date.now() + PASS_MS, used: false, action: b.action, reason: clip(b.reason, 600), cwd: b.cwd });
       return { passes: list.slice(-300) };
     });
     hookLog('申请放行 ' + b.hook + ' ' + b.id + '，全自动模式，不问用户，不记成问题');
-    return { ok: true, fid: '', msg: '放行申请登记好了（30 分钟内，对同一个文件、同一件事的这道检查有效）。现在再做一次那一步，会直接放行，并记进全自动报告。' };
+    return { ok: true, fid: '', msg: '放行申请登记好了（30 分钟内，对同一个文件、同一件事的这道检查有效）。本会话还可申请 ' + Math.max(0, AUTO_MAX_PER_SESSION - used.size - (used.has(quotaKey(b)) ? 0 : 1)) + ' 个不同问题。现在再做一次那一步，会直接放行，并记进全自动报告。' };
   }
   const base = {
     kind: '误拦', hook: b.hook, source: '申请放行', title: x.title || '被"' + k.label + '"拦下，AI 认为拦错了', what: x.what || '拦下时的原话见"附：拦下时的原话"。',
@@ -429,10 +435,13 @@ function requestBypass(blockId, why, extra) {
     const r = record(Object.assign(base, { did: '想申请放行，配置里关掉了放行，没放', bypass: '配置里关了，没放' }));
     return { ok: false, fid: r.id, msg: '已记下问题 ' + r.id + '。配置里关掉了申请放行：' + (cfg.autoMode ? '这一步不做，写进最后的交代，接着做别的不依赖它的事。' : '停下来，把卡在哪、为什么认为是套件的问题告诉用户，等用户定。') };
   }
-  const max = cfg.autoMode ? AUTO_MAX_PER_SESSION : MAX_PER_SESSION;
-  if (passes.length >= max || (!cfg.autoMode && passes.filter((p) => p.hook === b.hook).length >= MAX_PER_KIND)) {
+  const automatic = cfg.autoMode || cfg.kitBypass === 'auto';
+  const used = new Set(passes.map(quotaKey)); const repeated = used.has(quotaKey(b));
+  const sameKind = new Set(passes.filter((p) => p.hook === b.hook).map(quotaKey)).size;
+  const max = automatic ? AUTO_MAX_PER_SESSION : MAX_PER_SESSION;
+  if (!repeated && (used.size >= max || (!automatic && sameKind >= MAX_PER_KIND))) {
     const r = record(Object.assign(base, { did: '想申请放行，这个会话申请的次数到上限了，没放', bypass: '次数到上限，没放' }));
-    return { ok: false, fid: r.id, msg: '已记下问题 ' + r.id + '。这个会话申请放行的次数到上限了' + (cfg.autoMode ? '（' + max + ' 次）：这一步不做，写进最后的交代，接着做别的。' : '（一共 ' + MAX_PER_SESSION + ' 次、同一类检查 ' + MAX_PER_KIND + ' 次）：停下来，把情况告诉用户。') };
+    return { ok: false, fid: r.id, msg: '已记下问题 ' + r.id + '。这个会话申请放行的不同问题到上限了' + (automatic ? '（' + max + ' 个）：这一步不做，写进最后的交代，接着做别的。' : '（一共 ' + MAX_PER_SESSION + ' 个、同一类检查 ' + MAX_PER_KIND + ' 个）：停下来，把情况告诉用户。') };
   }
   const auto = cfg.kitBypass === 'auto' || !!cfg.autoMode;
   const r = record(Object.assign(base, { did: auto ? '申请放行，没问用户就放行了' : '申请放行，再做那一步时弹框问用户', bypass: auto ? '已申请（不问用户）' : '已申请（要用户确认）' }));
@@ -442,7 +451,7 @@ function requestBypass(blockId, why, extra) {
     return { passes: list.slice(-300) };
   });
   hookLog('申请放行 ' + b.hook + ' ' + b.id + '（' + r.id + '）' + (auto ? '，不问用户' : '，要用户确认'));
-  return { ok: true, fid: r.id, msg: '已记下问题 ' + r.id + (r.repeated ? '（以前记过同样的，次数 +1）' : '') + '，放行申请登记好了（30 分钟内，对同一个文件、同一件事的这道检查有效' + (cfg.autoMode ? '' : '，只用一次') + '）。现在再做一次那一步：' + (auto ? '会直接放行' + (cfg.autoMode ? '，并记进全自动报告。' : '。') : '会弹确认框，等用户点同意。') };
+  return { ok: true, fid: r.id, msg: '已记下问题 ' + r.id + (r.repeated ? '（以前记过同样的，次数 +1）' : '') + '，放行申请登记好了（30 分钟内，对同一个文件、同一件事的这道检查有效' + (cfg.autoMode ? '' : '，只用一次') + '）。本会话还可申请 ' + Math.max(0, max - used.size - (repeated ? 0 : 1)) + ' 个不同问题；同一目标和理由重试不重复扣额度。现在再做一次那一步：' + (auto ? '会直接放行' + (cfg.autoMode ? '，并记进全自动报告。' : '。') : '会弹确认框，等用户点同意。') };
 }
 /** 配置页上改了放松保护的开关：记一笔（state/config-audit.json，留最近 50 条），配置页上能看到。不算套件的问题 */
 function audit(title, detail) {
