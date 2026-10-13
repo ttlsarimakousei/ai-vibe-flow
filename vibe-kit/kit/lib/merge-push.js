@@ -19,6 +19,7 @@ function gitEnv() {
   return env;
 }
 function git(root, args, opt) {
+  const I = require('./invocation'); I.phase('推送 Git ' + args[0]); opt = Object.assign({}, opt, { timeout: I.remaining(opt && opt.timeout || 30000) });
   const r = spawnSync('git', ['-C', root].concat(args), Object.assign({ env: gitEnv(), windowsHide: true, encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024 }, opt || {}));
   if (opt && opt.optional && (r.status === 1 || r.status === 128)) return '';
   if (r.status !== 0) throw new Error('git ' + args[0] + ' 没有成功，操作已停止；核对仓库和远端后重试。');

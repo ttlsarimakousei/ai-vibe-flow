@@ -19,7 +19,7 @@ if (parentPort) {
   parentPort.on('message', (m) => {
     const id = m && m.id;
     Promise.resolve()
-      .then(() => require('./invocation').run(() => load(String(m.name)).handle(m.input || {})))
+      .then(() => require('./invocation').run(() => load(String(m.name)).handle(m.input || {}), { budgetMs: 12000, onPhase: (phase, ms) => parentPort.postMessage({ id, progress: true, phase, ms }) }))
       .then((out) => parentPort.postMessage({ id, ok: true, out: out == null ? null : out }))
       .catch((e) => {
         // 出错当放行（路由那边回空），记进问题反馈：用户和模型都看不到，只有那里有

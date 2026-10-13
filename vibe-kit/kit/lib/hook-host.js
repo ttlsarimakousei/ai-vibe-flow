@@ -74,8 +74,11 @@ function createHost(opts) {
     w.on('message', (m) => {
       const c = x.inflight.get(m && m.id);
       if (!c) return;
+      if (m.progress) { c.phase = String(m.phase || '').slice(0, 80); c.phaseMs = Number(m.ms) || 0; return; }
       x.inflight.delete(m.id);
       clearTimeout(c.timer);
+      m.phase = c.phase || '载入钩子';
+      m.phaseMs = c.phaseMs || 0;
       c.resolve(m);
       if (x.retired && !x.inflight.size) end(x);
     });
@@ -114,6 +117,7 @@ function createHost(opts) {
     const h = stats.byHook[name] = stats.byHook[name] || { n: 0, at: 0, ms: 0, blocked: 0, errors: 0 };
     // ms 是最近这一次的耗时（配置页上显示的）；算平均用 total / timed（timed 是从开始累计耗时起的次数）
     h.n++; h.at = now; h.ms = ms; h.total = (h.total || 0) + ms; h.timed = (h.timed || 0) + 1;
+    if (m.phase) { h.lastPhase = m.phase; h.phaseMs = m.phaseMs || 0; }
     if (!m.ok) {
       h.errors++; h.errorAt = now; h.lastError = String(m.error || '').slice(0, 300);
       if (!lastErrLog[name] || now - lastErrLog[name] > 60000) { lastErrLog[name] = now; log('钩子 ' + name + ' 出错（这次当放行）：' + String(m.error || '').split('\n')[0]); }
@@ -139,11 +143,12 @@ function createHost(opts) {
       const id = ++seq;
       const timer = setTimeout(() => {
         if (!x.inflight.has(id)) return;
+        const phase = x.inflight.get(id).phase || '排队或载入钩子';
         x.inflight.delete(id);
-        resolve({ ok: false, error: '25 秒没有结果' });
+        resolve({ ok: false, error: '25 秒没有结果；最后阶段：' + phase });
         log('钩子 ' + name + ' 25 秒没有结果，这次当放行；结束这个工作线程');
         // 卡住当放行，用户和模型都看不到：记进问题反馈（每次现读，装了新版不用重启路由）
-        try { const f = path.join(kitDir, 'lib', 'feedback.js'); delete require.cache[require.resolve(f)]; require(f).recordHookError(name, input, new Error('HTTP 方式下 25 秒没有结果，这次当放行（钩子可能卡在读很大的会话记录、慢磁盘或网络盘上）')); } catch (e) { /* 记不了就算了 */ }
+        try { const f = path.join(kitDir, 'lib', 'feedback.js'); delete require.cache[require.resolve(f)]; require(f).recordHookError(name, input, new Error('HTTP 方式下 25 秒没有结果，这次当放行；最后阶段：' + phase)); } catch (e) { /* 记不了就算了 */ }
         broken(x, '前面的钩子卡住了');
       }, CALL_TIMEOUT_MS);
       x.inflight.set(id, { resolve, timer });

@@ -1511,6 +1511,7 @@ function hasReaderIn(cmd, ps, depth) {
   return false;
 }
 function analyze(cmd, ps, st, cfg, depth) {
+  require('../lib/invocation').phase('分析执行命令');
   // 包装命令换过目录后，相对发布脚本也要按内层的目录检查。
   if (publishAnywhere(cmd, st.dir)) st.publishing = true;
   const { s, docs } = preprocess(cmd, ps);

@@ -397,7 +397,7 @@ function cli(handle) {
   process.stdin.on('end', () => {
     let j = {};
     try { j = JSON.parse(raw || '{}'); } catch (e) { process.exit(0); }
-    Promise.resolve().then(() => require('./invocation').run(() => handle(j))).then((out) => {
+    Promise.resolve().then(() => require('./invocation').run(() => handle(j), { budgetMs: 12000 })).then((out) => {
       if (out == null || out === '') return;
       const text = typeof out === 'string' ? out : JSON.stringify(out);
       try { fs.writeSync(1, text); } catch (e) { process.stdout.write(text); }
@@ -564,6 +564,7 @@ function tailEntries(file, maxBytes) {
   return require('./invocation').memo('transcript|' + file + '|' + (maxBytes || 400000), () => tailEntriesRaw(file, maxBytes));
 }
 function tailEntriesRaw(file, maxBytes) {
+  require('./invocation').phase('读取会话记录');
   try {
     const st = fs.statSync(file);
     const size = Math.min(st.size, maxBytes || 400000);

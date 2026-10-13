@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
 function readGit(root, args) {
-  const run = () => execFileSync('git', ['-C', root].concat(args), { windowsHide: true, encoding: 'utf8', timeout: 5000, maxBuffer: 12 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  const run = () => { const I = require('./invocation'); I.phase('Git ' + args[0]); return execFileSync('git', ['-C', root].concat(args), { windowsHide: true, encoding: 'utf8', timeout: I.remaining(5000), maxBuffer: 12 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); };
   const readonly = /^(rev-parse|status|ls-files|diff)$/.test(args[0]) || args[0] === 'branch' && args[1] === '--show-current' || args[0] === 'config' && args[1] === '--get';
   return readonly ? require('./invocation').memo('workspace-git|' + path.resolve(root) + '|' + JSON.stringify(args), run) : run();
 }
@@ -38,6 +38,7 @@ function fingerprintOne(dir, kind) {
   const selected = [...new Set(names)].filter((n) => n && !/(^|\/)(\.vibe|router-data|node_modules|target|build|dist|out)(\/|$)|(^|\/)(secrets\.json|\.env(?:\.[^/]*)?)$/i.test(n)).sort();
   const rows = [];
   for (const n of selected) {
+    require('./invocation').phase('核对文件指纹');
     if (kind === 'code' && /^openspec\/.*(?:revisions\.md|plan\.md)$/.test(n)) continue;
     if (kind === 'code' && /^openspec\/.*\.md$/.test(n) && !/tasks\.md$/.test(n)) continue;
     try {

@@ -238,6 +238,9 @@ function errorSig(hook, msg, stack) {
 }
 /** 钩子抛了异常：出错时那道检查按放行处理，用户和模型都看不到，记一条 */
 function recordHookError(hook, j, err) {
+  return require('./invocation').run(() => recordHookErrorRaw(hook, j, err), { budgetMs: 3000 });
+}
+function recordHookErrorRaw(hook, j, err) {
   try {
     const msg = String((err && err.message) || err || '（没有错误信息）');
     const stack = String((err && err.stack) || msg).split('\n').slice(0, 8).join('\n');

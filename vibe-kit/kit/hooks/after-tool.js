@@ -12,6 +12,7 @@ function successful(j) {
 }
 function handle(j) {
   try {
+    require('../lib/invocation').phase('登记操作许可');
     require('../lib/permissions').consume(j, successful(j));
     if (successful(j)) {
       if (/^(Agent|Task|SendMessage|TaskOutput|TaskResult)$/.test(j.tool_name)) require('../lib/review-runner').syncAgent(j);
@@ -21,7 +22,7 @@ function handle(j) {
       if (preview) return preview;
     }
     // 验证证据与 IDEA 完成结果共用此入口；模块升级不同步时保持原工具结果。
-    try { require('../lib/evidence').recordTool(j, successful(j)); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') S.hookLog('验证证据记账失败'); }
+    try { require('../lib/invocation').phase('登记验证证据'); require('../lib/evidence').recordTool(j, successful(j)); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 验证证据', j, e); }
     if (j.hook_event_name === 'PostToolUse' && require('../lib/idea-tools').isIdea(j.tool_name)) {
       const safe = require('../lib/redact').tree(j.tool_response);
       if (JSON.stringify(safe) !== JSON.stringify(j.tool_response)) return { hookSpecificOutput: { hookEventName: 'PostToolUse', updatedToolOutput: safe, updatedMCPToolOutput: safe } };
