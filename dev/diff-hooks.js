@@ -65,6 +65,7 @@ const V1011 = "20261011.1129"; // 阶段许可、独立审查、自动压缩和�
 const V1011B = '20261011.1553'; // 归档临时查看目录和 Windows 包装路径
 const V1012 = '20261013.0058'; // 1012 反馈：页面探针、产出位置、待提交文件和推送预览
 const V1013 = '20261013.1453'; // 1013 非数据库反馈修复
+const V1013B = '20261013.2358'; // 1013 下午清单：业务状态名
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -146,7 +147,7 @@ add('改 GBK 文件', 'pre-edit', (kit) => {
 });
 add('没探索就写提案', 'pre-edit', edit('openspec/changes/new-one/proposal.md', 'Write', { content: '## Why\n\n要做。\n\n## What Changes\n\n- 加功能\n' }));
 add('提案里有"待定"', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Edit', { old_string: '- 加导出接口', new_string: '- 加导出接口\n- 权限怎么控制待定' }));
-add('1013 下午：状态枚举不是占位词', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Edit', { old_string: '- 加导出接口', new_string: '- 确认状态（待确认 / 已确认 / 退回）\n- `SUBMITTED`（待确认）\n- 操作 **查看 / 开始确认（仅待确认）**' }), /放行，没有输出/, NEXT);
+add('1013 下午：状态枚举不是占位词', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Edit', { old_string: '- 加导出接口', new_string: '- 确认状态（待确认 / 已确认 / 退回）\n- `SUBMITTED`（待确认）\n- 操作 **查看 / 开始确认（仅待确认）**' }), /放行，没有输出/, V1013B);
 add('1013 下午：状态名不放过同一行的未定验法', 'pre-edit', edit('openspec/changes/add-export/proposal.md', 'Edit', { old_string: '- 加导出接口', new_string: '- `SUBMITTED`（待确认）；接口验法待确认' }));
 add('任务太笼统、没写验法', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 完善\n- [ ] 1.4 改 src/main/java/com/x/B.java\n- [ ] 1.2' }));
 add('规格缺场景', 'pre-edit', edit('openspec/changes/add-export/specs/export/spec.md', 'Write', { content: '## ADDED Requirements\n\n### Requirement: 导出\n\n系统应当能导出。\n' }));
