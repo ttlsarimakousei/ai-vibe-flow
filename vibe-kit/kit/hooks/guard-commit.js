@@ -1424,7 +1424,7 @@ function onlyMetadata(g, st) {
   const root = repoRoot(g.dir) || g.dir;
   const rk = normKey(root);
   const added = [...st.added].filter((a) => a === rk || a.startsWith(rk + '/'));
-  const kitFile = (a) => /\/\.claude\/rules\/[^/]*lessons-[^/]*\.md$/i.test(a) || /\/openspec\//i.test(a);
+  const kitFile = (a) => /\/\.claude\/rules\/(?:[^/]*lessons-[^/]*|learned-rules)\.md$/i.test(a) || /\/openspec\//i.test(a);
   try {
     const staged = execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { windowsHide: true, encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\x00').filter(Boolean).map((f) => normKey(path.resolve(root, f)));
     const files = added.concat(staged);
@@ -1440,7 +1440,9 @@ function consentIssue(g, st, cfg, docs) {
   if (permit.reason && !permit.ok) return '[vibe-kit] ' + permit.reason + '。交代当前改动后重新确认是否提交。';
   const approved = permit.ok;
   const fl = flowState(j);
-  if (!approved && ((msg !== null && /^docs: 提案/.test(msg)) || (fl.on && fl.stage === 'plan'))) return '[vibe-kit] 提案提交要单独确认：先交代提案和审查结果，问用户是否提交；开工许可不能代替提交许可。';
+  const staged = execFileSync('git', ['-C', repoRoot(g.dir) || g.dir, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000 }).split('\0').filter(Boolean);
+  const proposalCommit = staged.some(f => /^openspec\/changes\/(?!archive\/)[^/]+\/(?:proposal\.md|design\.md|tasks\.md|specs\/)/.test(f));
+  if (!approved && proposalCommit && fl.stage !== 'apply') return '[vibe-kit] 提案提交要单独确认：先交代定稿内容，问用户是否提交；开工许可不能代替提交许可。';
   if (cfg.autoMode && !approved) {
     if (cfg.autoCommit === 'off') return '[vibe-kit] 自动提交选了"我说了才提交"，全自动模式也不改变这个选择。';
     const current = allChanges(st.cwd0).filter((c) => flowChanges(j).some((d) => normKey(d) === normKey(c.dir)));
