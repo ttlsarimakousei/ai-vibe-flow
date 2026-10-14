@@ -252,19 +252,31 @@ async function run(opts, progress) {
     if (!material.batches.length) throw new Error('没有可审查材料或开工基线缺失');
     const left = new Map(); for (const item of material.items) left.set(item.file, (left.get(item.file) || 0) + 1);
     result.totalBatches = material.batches.length;
+    result.batching = '每片最多 40000 字符，每批最多 80000 字符；文件上限限制候选材料，批数不消耗额外审查轮数';
     for (let i = 0; i < material.batches.length; i++) {
       if (cancelled()) throw new Error('审查已取消');
+      if (Date.now() >= deadline) {
+        for (const pending of material.batches.slice(i)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：本次审查时间预算用完' });
+        throw new Error('审查时间预算用完');
+      }
       const batch = material.batches[i]; result.attemptedBatches++; result.attemptedFiles = [...new Set(result.attemptedFiles.concat(batch.map((x) => x.file)))];
       S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { attemptedBatches: result.attemptedBatches, attemptedFiles: result.attemptedFiles, totalBatches: result.totalBatches }); });
       if (progress) progress('审查 ' + (i + 1) + '/' + material.batches.length + ' 批，本批 ' + new Set(batch.map((x) => x.file)).size + ' 个文件/' + batch.length + ' 个片段，已尝试 ' + result.attemptedFiles.length + ' 个文件，已覆盖 ' + result.covered.length + ' 个文件，剩余预算 ' + Math.max(0, Math.round((deadline - Date.now()) / 1000)) + ' 秒');
-      const reply = await ask(routerUrl(), batch, opts.mode, deadline - Date.now(), cancelled, () => result.receivedBatches++);
+      let reply;
+      try { reply = await ask(routerUrl(), batch, opts.mode, deadline - Date.now(), cancelled, () => result.receivedBatches++); }
+      catch (e) {
+        if (e.diagnostic) result.diagnostics.push(Object.assign({ batch: i + 1 }, e.diagnostic));
+        for (const item of batch) result.skipped.push({ file: item.file, part: item.part, reason: '本批失败：' + R.clip(e.message, 300) });
+        if (cancelled()) throw e;
+        continue;
+      }
       result.issues.push(...reply.issues); result.skipped.push(...reply.skipped); result.completedBatches++;
       for (const item of batch) { left.set(item.file, left.get(item.file) - 1); if (!left.get(item.file)) result.covered.push(item.file); }
-      S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id && o[key].status === 'running') { o[key].completedBatches = i + 1; o[key].covered = result.covered.length; } });
+      S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id && o[key].status === 'running') { o[key].completedBatches = result.completedBatches; o[key].covered = result.covered.length; } });
     }
     if (cancelled()) throw new Error('审查已取消或结果已迟到');
     if (W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all').hash !== before.hash) { result.status = 'stale'; result.reason = '审查期间输入变更，本轮结果不能批准新版'; }
-    else if (result.skipped.length) { result.status = 'partial'; result.reason = '还有未覆盖材料，不能记为完整审查'; }
+    else if (result.skipped.length) { result.status = result.completedBatches ? 'partial' : 'failed'; result.reason = '还有失败或未覆盖材料，不能记为完整审查'; }
     else result.status = 'completed';
   } catch (e) { if (e.diagnostic) result.diagnostics.push(e.diagnostic); result.reason = R.clip(e.message, 500); result.status = /取消|迟到|替换/.test(result.reason) ? 'cancelled' : /预算/.test(result.reason) ? 'timed_out' : 'failed'; }
   result.issues = result.issues.map((x, i) => Object.assign({ id: 'r' + (i + 1) }, x));
