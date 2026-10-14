@@ -235,7 +235,9 @@ function kitIssueTodo(j, lastSaid) {
   const key = j.session_id + '-kitissues';
   if (readState(key).sig === sig) return '';
   writeState(key, { sig, at: Date.now() });
-  return '收尾：这个会话记下了 ' + recs.length + ' 条套件问题（' + recs.slice(0, 6).map((r) => r.meta.id + ' ' + r.title).join('；') + (recs.length > 6 ? ' 等' : '') + '）。交代里单独列一节"套件问题"，逐条写：现象、影响了什么、怎么处理的（等我 / 申请放行 / 换了做法）、编号。';
+  let port = 15730;
+  try { port = require('../router/service').portOf(); } catch (e) { /* 未安装路由时使用默认页面地址 */ }
+  return '收尾只写：套件问题 ' + recs.length + ' 条，[查看详情](http://127.0.0.1:' + port + '/ui#sec-issues)。不要逐条列套件诊断；真正影响本次交付的限制写在对应交付项。';
 }
 
 /*
