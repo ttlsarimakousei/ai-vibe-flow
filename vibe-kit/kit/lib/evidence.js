@@ -23,6 +23,8 @@ function actual(j) {
   }
   if (!/^(Bash|PowerShell)$/.test(name) || !root) return null;
   const command = String(input.command || '');
+  // 查库、缓存工具属于查询和运维，不是项目测试；不为这些命令额外遍历整个仓库。
+  if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis|urai-db-crud|redis)[\\/]/i.test(command)) return null;
   // 切目录或从另一个工程运行的命令不猜覆盖范围；IDEA 的明确 projectPath 已在上面处理。
   if (/\b(?:cd|pushd|Set-Location)\b|\bgit\s+-C\b|\b(?:npm|pnpm|yarn)\s+(?:--prefix|--dir|-C)\b|\b(?:mvn|gradle)\s+(?:-f|--file|-p|--project-dir)\b/i.test(command)) return null;
   const response = j.tool_response || {};
