@@ -415,7 +415,7 @@ async function handle(j) {
   // 中间插了一句问话再说"继续"也不拉（cont）：做到一半不换底下的代码。同一个仓库 2 小时里只拉一次（lib/pull.js）
   let pulled = '';
   if (!note && on && !cont && cfg.pullBeforeWork !== false && (!prevOn || FLOW_SLASH.test(said) || FLOW_TAG.test(said) || resumed || looksLikeRequirement(said))) {
-    try { const r = await require('../lib/pull.js').beforeWork(j, cfg); if (r && r.text) pulled = r.text; } catch (e) { /* 拉不了不影响对话 */ }
+    try { const r = await require('../lib/invocation').external(() => require('../lib/pull.js').beforeWork(j, cfg)); if (r && r.text) pulled = r.text; } catch (e) { /* 拉不了不影响对话 */ }
   }
   if (note && j.transcript_path) { try { syncReviews(tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 记不了不影响对话 */ } }
   // 用户自己在发新指令（斜杠命令）：不提打断和进度

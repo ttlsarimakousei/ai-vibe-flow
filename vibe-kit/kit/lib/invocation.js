@@ -7,4 +7,11 @@ function remaining(max) { const s = scope.getStore(); if (!s || !s.deadline) ret
 function phase(name) { const s = scope.getStore(); if (!s) return; remaining(12000); if (s.phase === name) return; s.phase = name; if (s.onPhase) s.onPhase(name, Date.now() - s.started); }
 function memo(key, fn) { const s = scope.getStore(); if (!s) return fn(); if (!s.values.has(key)) s.values.set(key, fn()); return s.values.get(key); }
 function object(input, key, fn) { const s = scope.getStore(); if (!s || !input || typeof input !== 'object') return fn(); let m = s.objects.get(input); if (!m) { m = new Map(); s.objects.set(input, m); } if (!m.has(key)) m.set(key, fn()); return m.get(key); }
-module.exports = { run, memo, object, remaining, phase };
+// 前置网络操作自带超时；它等待的时间不占后续本机检查预算。
+async function external(fn) {
+  const s = scope.getStore(); if (!s) return fn();
+  const started = Date.now();
+  try { return await scope.run(Object.assign({}, s, { deadline: 0 }), fn); }
+  finally { if (s.deadline) s.deadline += Date.now() - started; }
+}
+module.exports = { run, memo, object, remaining, phase, external };
