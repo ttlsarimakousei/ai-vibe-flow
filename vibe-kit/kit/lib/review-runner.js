@@ -254,7 +254,7 @@ async function run(opts, progress) {
     result.totalBatches = material.batches.length;
     result.batching = '每片最多 40000 字符，每批最多 80000 字符；文件上限限制候选材料，批数不消耗额外审查轮数';
     for (let i = 0; i < material.batches.length; i++) {
-      if (cancelled()) throw new Error('审查已取消');
+      if (cancelled()) { for (const pending of material.batches.slice(i)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：审查已取消' }); throw new Error('审查已取消'); }
       if (Date.now() >= deadline) {
         for (const pending of material.batches.slice(i)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：本次审查时间预算用完' });
         throw new Error('审查时间预算用完');
@@ -267,7 +267,8 @@ async function run(opts, progress) {
       catch (e) {
         if (e.diagnostic) result.diagnostics.push(Object.assign({ batch: i + 1 }, e.diagnostic));
         for (const item of batch) result.skipped.push({ file: item.file, part: item.part, reason: '本批失败：' + R.clip(e.message, 300) });
-        if (cancelled()) throw e;
+        if (cancelled()) { for (const pending of material.batches.slice(i + 1)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：审查已取消' }); throw e; }
+        if (Date.now() >= deadline || /预算/.test(e.message)) { for (const pending of material.batches.slice(i + 1)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：本次审查时间预算用完' }); throw new Error('审查时间预算用完：' + e.message); }
         continue;
       }
       result.issues.push(...reply.issues); result.skipped.push(...reply.skipped); result.completedBatches++;
