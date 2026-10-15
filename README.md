@@ -5,6 +5,7 @@
 - 用的人怎么装、怎么用：[vibe-kit/README.md](vibe-kit/README.md)
 - 每一版改了什么：[vibe-kit/更新说明.md](vibe-kit/更新说明.md)
 - 来改这个仓库的人和 AI：先读 [AGENTS.md](AGENTS.md)，再读 [CONTRIBUTING.md](CONTRIBUTING.md)
+- 接续本轮尚未完成的重构：[2026-10-15 开发交接](docs/handoff-20261015.md)，包含最终讨论结论、当前进度和剩余工作。
 
 ## 这个仓库里有什么
 
