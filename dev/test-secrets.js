@@ -129,7 +129,7 @@ H.section('关掉了"禁止 Claude 自己改套件"：令牌照样不给读');
   H.ok('PowerShell 调 .NET 读：拦', secretBlock(run('PowerShell', '[System.IO.File]::ReadAllText("' + KW + '\\secrets.json")')));
   H.ok('node -e 读：拦', secretBlock(run('Bash', 'node -e "console.log(require(\'fs\').readFileSync(\'' + K + '/secrets.json\', \'utf8\'))"')));
   H.ok('读开关、列目录：放行', !blocked(run('Bash', 'cat ' + K + '/config.json')) && !blocked(run('Bash', 'ls ' + K)));
-  H.ok('不相干的命令：放行', run('Bash', 'mvn -q test') === null);
+  H.ok('不相干的命令不触发令牌或发布保护', !/令牌|发布要你确认/.test(H.reasonOf(run('Bash', 'mvn -q test'))));
   H.setConfig(h, { kitLock: true });
 }
 

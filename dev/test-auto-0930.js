@@ -80,7 +80,7 @@ H.section('第二个变更里又出现：自动变成规则');
   H.ok('读到 Java 文件才带上（paths）', /^---\npaths:\n {2}- "\*\*\/\*\.java"\n---/.test(H.read(ruleFile) || ''), H.read(ruleFile));
   H.ok('候选里没有它了', !cands().some((c) => c.state === 'candidate' && /导出接口/.test(c.text)), cands());
   H.ok('记着规则文件要提交', L.uncommitted(proj).some((x) => x.rel === '.claude/rules/ttls-lessons-java.md'), L.uncommitted(proj));
-  H.ok('收工检查没有因为这个拦（开关是"我说了才提交"）', r === null, H.reasonOf(r));
+  H.ok('关闭自动提交仍提醒，但不指令自动提交', /经验规则文件更新了/.test(H.reasonOf(r)) && /Ask/.test(H.reasonOf(r)));
 }
 
 H.section('已经是规则了还被审出来：记"没管住"');

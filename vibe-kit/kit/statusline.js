@@ -131,12 +131,11 @@ process.stdin.on('end', () => {
   const drift = readState('kit-drift');
   if (Array.isArray(drift.list) && drift.list.length) line1.unshift(C.red + '⚠ 套件代码被改过（' + drift.list.length + ' 个文件），重新安装能恢复' + C.reset);
 
-  // 第二行：全自动模式开没开。它只在走 OpenSpec 流程的会话里算数，所以把这个会话在不在流程里也写上
-  if (cfg.autoMode === true) {
-    const fl = require('./lib/session').flowView({ session_id: j.session_id, cwd });
-    // 在流程里又分两段：写提案那一段照常（全自动只管做任务那一段）
-    line2.push(C.yellow + '全自动 开' + C.reset + (fl.effective ? C.yellow + '·实施，当前生效' + C.reset : C.dim + '·' + fl.phase + '，照常' + (fl.archived ? '，变更已归档' : '') + C.reset) + (fl.waiting ? C.yellow + '·' + fl.waiting + C.reset : ''));
-  } else line2.push(C.dim + '全自动 关' + C.reset);
+  // 两个开关与当前生效阶段分开显示。
+  const fl = require('./lib/session').flowView({ session_id: j.session_id, cwd });
+  line2.push(C.dim + '需求自动 ' + (cfg.autoRequirements ? '开' : '关') + ' · Apply 自动 ' + (cfg.autoApply ? '开' : '关') + C.reset);
+  if (fl.effective) line2.push(C.yellow + fl.phase + '，当前生效' + C.reset);
+  else if (fl.waiting) line2.push(C.yellow + fl.waiting + C.reset);
   // Claude Code 会在用到多少时自己压缩（套件写进 settings.json 的 autoCompactWindow；新开的会话才认）
   const at = autoCompactAt(cfg, windowSize);
   if (at) line2.push(C.dim + '到 ' + k(at) + ' 自动压缩' + C.reset);

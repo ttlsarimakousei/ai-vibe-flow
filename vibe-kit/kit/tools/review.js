@@ -2,7 +2,7 @@
 /* 限时审查与兼容记账入口。sync 仅登记会话中可核对的完整结果，诊断不输出提示词或审查正文；不调用 Claude CLI 或自主子代理。 */
 const R = require('../lib/review-runner');
 const args = process.argv.slice(2); const val = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
-const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), mode: val('--mode') || 'code', base: val('--base'), budgetSeconds: val('--budget'), newBudget: args.includes('--new-budget'), decisions: val('--decisions'), reason: val('--reason') };
+const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), mode: val('--mode') || 'code', point: val('--point'), base: val('--base'), budgetSeconds: val('--budget'), newBudget: args.includes('--new-budget'), decisions: val('--decisions'), reason: val('--reason') };
 (async () => {
   const cmd = args[0] || 'status'; let r;
   if (cmd === 'run') r = await R.run(opts, (s) => process.stderr.write(s + '\n'));

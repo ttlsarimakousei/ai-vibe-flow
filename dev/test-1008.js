@@ -33,7 +33,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
       'openspec/changes/done-x/tasks.md': '- [x] 1.1 改 src/main/java/A.java；验：mvn -q compile\n- [x] 1.2 改 src/main/java/A.java；验：mvn -q compile\n',
       'openspec/changes/half-z/tasks.md': '- [x] 1.1 改 src/main/java/A.java；验：mvn -q compile\n- [ ] 1.2 改 src/main/java/A.java；验：mvn -q compile\n' });
     const doneX = path.join(proj, 'openspec', 'changes', 'done-x');
-    markCodeReviewed(h, doneX);
+    markCodeReviewed(h, doneX); H.reviewPoints(h, doneX);
     const tf = path.join(h.root, 'a.jsonl');
     const arch = (sid, entries, cmd) => H.hook(h, 'guard-commit', { session_id: sid, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: cmd || 'openspec archive done-x --yes' }, transcript_path: H.transcript(tf, entries) });
     const r1 = arch('s1', [H.tr.user('做完了吗'), H.tr.say('做完了，代码也审过了')]);
@@ -106,9 +106,9 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.write(A, 'class A { int x; }\n');
     const stop = (sid, entries, said) => H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, entries), stop_hook_active: false, last_assistant_message: said });
     const s1 = stop('c4', [H.tr.user('修一下 A 的空指针'), editA(), H.tr.say('修好了')], '修好了');
-    H.ok('收工：改了文件没提交，催它交代了用提问框问我，不是催它提交', blocked(s1) && /提交之前要我点头/.test(H.reasonOf(s1)) && /用提问框问我提不提交/.test(H.reasonOf(s1)) && !/现在提交/.test(H.reasonOf(s1)), H.reasonOf(s1));
+    H.ok('收工：改了文件没提交，催它交代了用提问框问我，不是催它提交', blocked(s1) && /提醒用户提交/.test(H.reasonOf(s1)) && /Ask/.test(H.reasonOf(s1)) && !/现在提交/.test(H.reasonOf(s1)));
     const s2 = stop('c5', [H.tr.user('修一下 A 的空指针'), editA(), H.tr.say('修好了，改了 A.java 的判空。提交吗？')], '修好了，改了 A.java 的判空。提交吗？');
-    H.ok('它最后那句已经在问我提不提交：放行', s2 === null, H.reasonOf(s2));
+    H.ok('已经询问提交，不重复催提交；审查自测独立 Ask', !/本轮改动尚未提交|现在提交/.test(H.reasonOf(s2)));
     const s3 = stop('c6', [H.tr.user('修一下 A 的空指针'), editA(), answered('改好了，提交吗？', '提交'), H.tr.say('好的')], '好的');
     H.ok('我在提问框里选了提交、它却没提交就收工：照旧催它现在提交', blocked(s3) && /现在提交/.test(H.reasonOf(s3)), H.reasonOf(s3));
     const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
@@ -131,14 +131,14 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const skill = (sid, name) => H.hook(h, 'guard-ask', { session_id: sid, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: name } });
     const r1 = say('p1', '做一个导出订单的功能');
     H.ok('提了需求：在流程里，写提案那一段', flow('p1').on === true && flow('p1').stage === 'plan', flow('p1'));
-    H.ok('需求提醒照有人在的说法，加一句全自动只管 apply 之后', /我确认了范围再 \/opsx:propose/.test(r1) && /全自动模式只管 apply 之后/.test(r1) && !/不用等我确认/.test(r1), r1);
+    H.ok('需求提醒区分两自动阶段', /先探索/.test(r1) && /需求自动与 Apply 自动分别生效/.test(r1));
     H.ok('写提案那一段：提问框能用（全自动不算数）', ask('p1') === null, ask('p1'));
     say('p2', '/opsx:propose add-y');
     H.ok('敲 /opsx:propose：写提案那一段', flow('p2').stage === 'plan', flow('p2'));
     const r2 = say('p1', '提案看过了，开工 add-y');
     H.ok('说了"开工"：做任务那一段', flow('p1').stage === 'apply', flow('p1'));
     H.ok('开工那一句：给我看的 systemMessage 说全自动开着，给模型的提醒也说了', /"systemMessage":"\[vibe-kit\] 开始 apply：全自动模式开着/.test(r2) && /现在开始 apply（做任务）：全自动模式开着/.test(r2), r2);
-    H.ok('做任务那一段：提问框拦下', blocked(ask('p1')) && /全自动模式/.test(H.reasonOf(ask('p1'))));
+    H.ok('自动实施也允许提问', ask('p1') === null);
     const r3 = say('p1', '继续');
     H.ok('说"继续"：还在做任务那一段，不再说一遍开工', flow('p1').stage === 'apply' && !/开始 apply/.test(r3), [flow('p1'), r3]);
     say('p1', '这个字段为什么这么写？');
@@ -163,7 +163,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { autoMode: true });
     // 模型自己调 /opsx:apply 的技能：没说开工就拦
     const k1 = skill('p2', 'opsx:apply');
-    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问能不能开工', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框问我能不能开工/.test(H.reasonOf(k1)), H.reasonOf(k1));
+    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问能不能开工', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框提供/.test(H.reasonOf(k1)), H.reasonOf(k1));
     H.ok('不在流程里的会话调 /opsx:apply：也拦', blocked(skill('p8', 'opsx:apply')));
     H.ok('做任务那一段调 /opsx:apply：放行', skill('p3', 'opsx:apply') === null);
     H.ok('做任务那一段它去调 /opsx:propose（下一个变更）：回到写提案那一段', skill('p3', 'opsx:propose') === null && flow('p3').stage === 'plan', flow('p3'));
@@ -178,7 +178,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('说了开工再打勾：放行', tick('p2') === null, H.reasonOf(tick('p2')));
     // 做完的功能上发现的问题：先查清原因，改动小直接改，不要起一整条流程
     const r7 = say('p11', '我自测的时候发现两个弹窗的顺序反了，应该只改前端');
-    H.ok('自测发现的问题（变更还没归档）：提醒先查清原因、改动小直接改、简单审一下，不当成需求', /这像是在做完的功能上发现的问题（变更还没归档）/.test(r7) && /三个文件以内/.test(r7) && /简单审一下/.test(r7) && !/这像一条需求/.test(r7), r7);
+    H.ok('自测发现的问题（变更还没归档）：提醒先查清原因、改动小直接改、简单审一下，不当成需求', /这像是在做完的功能上发现的问题（变更还没归档）/.test(r7) && /三个文件以内/.test(r7) && /人工模式审查和自测前先 Ask/.test(r7) && !/这像一条需求/.test(r7), r7);
     const tfBug = H.transcript(path.join(h.root, 'b.jsonl'), [H.tr.user('我自测的时候发现两个弹窗的顺序反了，应该只改前端'), H.tr.ran('Read', { file_path: path.join(proj, 'src', 'A.java') }, 'class A {}')]);
     const propose = (tfile) => H.hook(h, 'pre-edit', { session_id: 'p11', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec', 'changes', 'fix-popup', 'proposal.md'), content: '## Why\n\n弹窗顺序反了。\n' }, transcript_path: tfile });
     const b1 = propose(tfBug);
@@ -193,22 +193,22 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     // 收工检查里的兜底：这一轮它自己调了技能
     const stop = (sid, entries, said) => H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(path.join(h.root, 's.jsonl'), entries), stop_hook_active: false, last_assistant_message: said });
     stop('p9', [H.tr.user('出个提案'), H.tr.ran('Skill', { skill: 'opsx:propose' }, 'ok'), H.tr.say('提案写好了')], '提案写好了');
-    H.ok('收工时发现它调了 /opsx:propose：记成写提案那一段', flow('p9').on === true && flow('p9').stage === 'plan', flow('p9'));
+    H.ok('收工不从历史技能调用补造阶段', !flow('p9').on);
     stop('p10', [H.tr.user('做吧'), H.tr.ran('Skill', { skill: 'opsx:apply' }, 'ok'), H.tr.say('做完了')], '做完了');
-    H.ok('收工时发现它调了 /opsx:apply：记成做任务那一段', flow('p10').on === true && flow('p10').stage === 'apply', flow('p10'));
+    H.ok('历史 apply 调用不补造开工许可', !flow('p10').on);
     // 状态栏
     const sl = (sid) => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
-    H.ok('状态栏：写提案那一段写明"还在写提案，照常"', /全自动 开·需求与提案，照常/.test(sl('p9')), sl('p9'));
-    H.ok('状态栏：做任务那一段写明"在做任务"', /全自动 开·实施，当前生效/.test(sl('p10')), sl('p10'));
+    H.ok('状态栏分开显示两开关，不猜历史阶段', /需求自动 关 · Apply 自动 开/.test(sl('p2')) && !/实施，当前生效/.test(sl('p9')));
+    H.ok('状态栏显示当前实施阶段实际生效', /Apply 自动 开/.test(sl('p1')) && /实施，当前生效/.test(sl('p1')));
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-    H.ok('全自动那一节：只管做任务那一段，不归档', gen.code === 0 && /这一节只管做 OpenSpec 变更的任务那一段/.test(md) && /不归档：归档要我自测过、说了才做/.test(md) && /> 全自动模式开着：做 OpenSpec 变更的任务的时候/.test(md) && !/探索 → 提案 → 审提案 → apply/.test(md), md.slice(0, 300));
-    H.ok('提交那一节：不走 OpenSpec 的改动先问我；OpenSpec 的变更按档位', /不走 OpenSpec 的改动（修 bug、改配置、改文案）：改完、验证过/.test(md) && /用提问框问我提不提交/.test(md) && /OpenSpec 的变更：一项任务（最小的一件事）完成了就直接提交/.test(md), md.slice(0, 300));
-    H.ok('OpenSpec 规范：提案给我看、说了开工才 apply；我没说归档不让归档', /我说开工才 apply/.test(md) && /我没说归档的也不让/.test(md), md.slice(0, 300));
+    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /两套独立自动模式/.test(md) && /归档和 push/.test(md));
+    H.ok('提交那一节：不走 OpenSpec 的改动先问我；OpenSpec 的变更按档位', /普通修改完成后可以提醒提交/.test(md) && /先用 Ask 问我/.test(md) && /每项任务完成后按具体任务提交/.test(md));
+    H.ok('约定说明双自动条件外先 Ask，归档由用户决定', /其他情况用 Ask 给出 apply 选项/.test(md) && /归档.*用户/.test(md));
     H.setConfig(h, { plainCommit: 'auto' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
-    H.ok('开关选"直接提交"时约定也跟着改', /不走 OpenSpec 的改动（修 bug、改配置、改文案）：做完、验证过[^\n]*就直接提交，不用等我说/.test(H.read(path.join(h.cfg, 'CLAUDE.md')) || ''));
+    H.ok('开关选"直接提交"时约定也跟着改', /普通修改允许自动提交/.test(H.read(path.join(h.cfg, 'CLAUDE.md')) || ''));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -241,8 +241,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { autoCommit: 'task' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-    H.ok('规范里写的提交节奏：提案审完单独问，审查修复全部轮次收尾后提交', /提案写完、审完、修完后交代要点，先问我是否提交/.test(md) && /提交不等于同意开工/.test(md) && /不一轮一提交/.test(md), md.slice(0, 200));
-    H.ok('交叉审查的技能也改了说法', /非 OpenSpec 改动、提案提交仍先问用户/.test(H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || ''));
+    H.ok('提交节奏说明文档定稿一次与人工提醒', /定稿后一起提交一次/.test(md) && /人工阶段可提醒提交/.test(md));
+    H.ok('交叉审查的技能也改了说法', /人工/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))) && /Ask/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))));
     // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
     const later = '1.2 做完了，验证过了。打勾攒着等这一阶段提交时一起勾。';
     const r4 = stop('v5', [H.tr.user('接着做 add-x 的 1.2'), editA, H.tr.say(later)], later);

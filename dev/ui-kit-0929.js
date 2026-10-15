@@ -26,7 +26,7 @@ const F = require(path.join(h.kit, 'lib', 'feedback.js'));
 // 几条记录：一条真的问题、两条不算问题的（老版本留下的）、一条放行、几次拦截、一次开关改动
 F.record({ kind: '误拦', hook: 'guard-spec', source: '模型反馈', title: '验法跑过了打勾还是被拦', what: 'x', why: 'y', sig: 'ui-real' });
 F.record({ kind: '卡住', hook: 'guard-spec', source: '钩子自动记录', title: '同一个会话里被"x"拿同一条理由拦了 3 次', what: '旧记录', sig: 'ui-stuck' });
-F.record({ kind: '开关变更', hook: '配置页', source: '钩子自动记录', title: '配置页打开了全自动模式', what: '旧记录', sig: '' });
+F.record({ kind: '开关变更', hook: '配置页', source: '钩子自动记录', title: '配置页打开了Apply 自动模式', what: '旧记录', sig: '' });
 fs.writeFileSync(path.join(h.kit, 'state', 'bypass.json'), JSON.stringify({ passes: [{ id: 'AB12', hook: 'guard-spec', sig: 's', target: 'file:x', sid: 's1', fid: '', why: '对照场景要先改库，留给用户；javac 已通过', auto: true, multi: true, at: Date.now() - 60000, expires: Date.now() + 1000000, used: true, uses: 2, action: 'Edit：D:/p/openspec/changes/a/tasks.md' }] }));
 fs.writeFileSync(path.join(h.kit, 'state', 'block-stats.json'), JSON.stringify({ 'guard-spec|abc': { hook: 'guard-spec', rule: 'r', count: 7, sessions: ['a', 'b'], at: Date.now() - 5000, example: '[vibe-kit 提案检查] tasks.md（变更 x）现在还不能改：' } }));
 
@@ -59,14 +59,14 @@ const call = (method, url, body) => new Promise((resolve) => {
   const sv = await call('POST', '/api/kit/config', { kitBypass: 'auto' });
   H.ok('保存开关', sv.status === 200 && sv.json.config.kitBypass === 'auto', sv.text);
   H.ok('改开关不再记成问题', fs.readdirSync(path.join(h.kit, 'feedback')).filter((n) => /^F\d{8}/.test(n)).length === n0);
-  await call('POST', '/api/kit/config', { autoMode: true });
+  await call('POST', '/api/kit/config', { autoApply: true });
   const seal = JSON.parse(fs.readFileSync(path.join(h.kit, 'state', 'config-seal.json'), 'utf8'));
-  H.ok('封条里记了全自动模式', seal.autoMode === true && seal.kitBypass === 'auto', seal);
+  H.ok('封条里记了Apply 自动模式', seal.autoApply === true && seal.kitBypass === 'auto', seal);
   const fb = (await call('GET', '/api/kit/feedback')).json;
   H.ok('问题列表里只有套件的问题', fb && fb.records.length === 1 && /验法跑过了/.test(fb.records[0].title), fb && fb.records);
   H.ok('每条标着上报了没有（上报关着）；不再给清空用的全部记录', fb.records[0].upload === 'off' && fb.all === undefined, fb.records);
-  H.ok('带上了放行记录、拦得最多的规矩、开关改动', fb.passes.length === 1 && fb.passes[0].uses === 2 && fb.stats.length === 1 && fb.stats[0].count === 7 && fb.stats[0].sessions === 2 && fb.audit.length === 2 && /全自动模式/.test(fb.audit[0].title), fb);
-  await call('POST', '/api/kit/config', { autoMode: false, kitBypass: 'ask' });
+  H.ok('带上了放行记录、拦得最多的规矩、开关改动', fb.passes.length === 1 && fb.passes[0].uses === 2 && fb.stats.length === 1 && fb.stats[0].count === 7 && fb.stats[0].sessions === 2 && fb.audit.length === 2 && /Apply 自动模式/.test(fb.audit[0].title), fb);
+  await call('POST', '/api/kit/config', { autoApply: false, kitBypass: 'ask' });
 
   H.section('页面');
   let launch = null;
@@ -95,7 +95,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     await page.click('nav button[data-tab="kit"]');
     await page.waitForFunction(() => document.getElementById('k_handoverPercent').value !== '');
     const secs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());
-    H.ok('套件开关页：八节（经验规则单开一页，问题反馈挪到了"更新和上报"）', secs.join('|') === '上下文和交接|状态栏|自动探索|收工检查|OpenSpec 门槛|全自动模式|拉代码和提交|保护', secs);
+    H.ok('套件开关页：八节（经验规则单开一页，问题反馈挪到了"更新和上报"）', secs.join('|') === '上下文和交接|状态栏|自动探索|全局：过程文件|全局：审查与产物|需求自动模式|Apply 自动模式|拉代码和提交|保护', secs);
     H.ok('新的几项：自动压缩线、状态栏的用量、开工前拉代码', (await page.inputValue('#k_autoCompactPercent')) === '90' && (await page.locator('#k_statusUsage').isChecked()) && (await page.locator('#k_pullBeforeWork').isChecked()) && /用到 900k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 933000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
     H.ok('页面上没有提示规则、清点技能的东西了', (await page.locator('#sec-hints, #sec-skills, #hints, #skillsReport, #addHint, #checkSkills').count()) === 0);
     H.ok('保存条一开始不出来', !(await page.locator('#savebar').getAttribute('class')).includes(' on'));
@@ -107,37 +107,37 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('细节默认折着', (await page.locator('#tab-kit details.more[open]').count()) === 0 && (await page.locator('#tab-kit details.more').count()) >= 12);
     await page.locator('#sec-auto details.more summary').first().click();
     const autoMore = await page.locator('#sec-auto details.more').first().innerText();
-    H.ok('点开细节看得到全自动模式的九条：什么时候算数、只管自己做的变更、改库留备份都说了', (await page.locator('#sec-auto details.more li').count()) === 9 && /什么时候算数/.test(autoMore) && /只管自己做的变更/.test(autoMore) && /改库/.test(autoMore) && /留给你/.test(autoMore) && /七节/.test(autoMore), autoMore);
-    H.ok('全自动模式那一节说了只在走 OpenSpec 流程时算数', /只在走 OpenSpec 流程时算数/.test(await page.locator('#sec-auto').innerText()), await page.locator('#sec-auto .hint').first().innerText());
+    H.ok('自测细节说明无法执行时如实报告', !/1\.x/.test(autoMore) && /验不了/.test(autoMore), autoMore);
+    H.ok('两阶段各有独立开关和上限', (await page.locator('#k_autoRequirements, #k_requirementsReviewMaxRounds, #k_autoApply, #k_applyReviewMaxRounds').count()) === 4);
     await shot('2-kit');
     await page.evaluate(() => window.scrollTo(0, 0));
     await shot('2b-kit-view', true);
     // 改两个开关：保存条冒出来，写着改了哪两项
     const before = (await call('GET', '/api/kit')).json.config;
-    await page.locator('#k_autoMode').setChecked(true, { force: true });
-    await page.fill('#k_reviewMaxRounds', '4');
+    await page.locator('#k_autoApply').setChecked(true, { force: true });
+    await page.fill('#k_applyReviewMaxRounds', '4');
     await page.waitForSelector('#savebar.on');
     const what = await page.locator('#barWhat').innerText();
-    H.ok('改了两项：保存条冒出来，写着是哪两项', /^2 项改动还没保存/.test(what) && /全自动模式/.test(what) && /最多审几轮/.test(what), what);
+    H.ok('改了两项：保存条冒出来，写着是哪两项', /^2 项改动还没保存/.test(what) && /Apply 自动模式/.test(what) && /Apply 每组审查上限/.test(what), what);
     await shot('3-savebar');
     await page.locator('#sec-auto').scrollIntoViewIfNeeded();
     await shot('3b-savebar-view', true);
     await page.click('#barDrop');
     await page.waitForFunction(() => !document.getElementById('savebar').className.includes(' on'));
-    H.ok('放弃：两项都恢复原样', (await page.locator('#k_autoMode').isChecked()) === !!before.autoMode && (await page.inputValue('#k_reviewMaxRounds')) === String(before.reviewMaxRounds));
-    await page.locator('#k_autoMode').setChecked(true, { force: true });
+    H.ok('放弃：两项都恢复原样', (await page.locator('#k_autoApply').isChecked()) === !!before.autoApply && (await page.inputValue('#k_applyReviewMaxRounds')) === String(before.applyReviewMaxRounds));
+    await page.locator('#k_autoApply').setChecked(true, { force: true });
     await page.waitForSelector('#savebar.on');
     await page.click('#barSave');
     await page.waitForSelector('#barMsg.ok');
     const after = (await call('GET', '/api/kit')).json.config;
-    H.ok('保存：全自动模式存下了，别的开关没动', after.autoMode === true && Object.keys(before).filter((k) => k !== 'autoMode' && JSON.stringify(before[k]) !== JSON.stringify(after[k])).length === 0, [before, after]);
-    H.ok('保存条说存了哪一项', /已保存，立即生效：全自动模式/.test(await page.locator('#barMsg').innerText()), await page.locator('#barMsg').innerText());
+    H.ok('保存：Apply 自动模式存下了，别的开关没动', after.autoApply === true && Object.keys(before).filter((k) => !['autoApply', 'autoMode'].includes(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k])).length === 0, [before, after]);
+    H.ok('保存条说存了哪一项', /已保存，立即生效：Apply 自动模式/.test(await page.locator('#barMsg').innerText()), await page.locator('#barMsg').innerText());
     // 填错了不保存
-    await page.fill('#k_reviewMaxRounds', '9');
+    await page.fill('#k_applyReviewMaxRounds', '21');
     await page.waitForSelector('#barSave:not(.hide)');
     await page.click('#barSave');
     await page.waitForSelector('#barMsg.bad');
-    H.ok('填错了：说清哪一项、什么都没存', /最多审几轮：要在 1 到 5 之间/.test(await page.locator('#barMsg').innerText()) && (await call('GET', '/api/kit')).json.config.reviewMaxRounds === before.reviewMaxRounds, await page.locator('#barMsg').innerText());
+    H.ok('填错了：说清哪一项、什么都没存', /Apply 每组审查上限：要在 1 到 20 之间/.test(await page.locator('#barMsg').innerText()) && (await call('GET', '/api/kit')).json.config.applyReviewMaxRounds === before.applyReviewMaxRounds, await page.locator('#barMsg').innerText());
     await page.click('#barDrop');
     // 上下文那一节改完自动保存
     await page.fill('#k_handoverPercent', '65');
@@ -152,7 +152,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('自动压缩线改完自动保存，说了开着的会话怎么马上生效', (await call('GET', '/api/kit')).json.config.autoCompactPercent === 80 && /\/autocompact/.test(await page.locator('#ctxMsg').innerText()), await page.locator('#ctxMsg').innerText());
     // 保护那一节：最近的开关改动
     const audit = await page.locator('#auditList').innerText();
-    H.ok('保护那一节列着最近的开关改动', /打开了全自动模式/.test(audit) && /让它自己放行/.test(audit), audit);
+    H.ok('保护那一节列着最近的开关改动', /打开了Apply 自动模式/.test(audit) && /让它自己放行/.test(audit), audit);
     await shot('4-kit-bottom');
     // 经验规则单开一页
     await page.click('nav button[data-tab="lessons"]');
@@ -201,7 +201,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     await shot('9-dark');
     H.ok('整个过程页面没有报错', errors.length === 0, errors);
   }
-  await call('POST', '/api/kit/config', { autoMode: false });
+  await call('POST', '/api/kit/config', { autoApply: false });
   await stopAll();
   await H.sleep(600);
   const wins = await watch.stop();

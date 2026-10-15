@@ -608,9 +608,9 @@ function archiveIssue(t, dir, j) {
     waiting = open.filter((l) => isDeferredTask(l)).length;
     if (open.length) issues.push('还有 ' + open.length + ' 项任务没打勾' + (waiting ? '（其中 ' + waiting + ' 项是留给用户做的）' : ''));
   } catch (e) { /* 没有 tasks.md 就不管任务 */ }
-  const cr = codeReviewIssue(chDir);
+  const cr = cfg.autoMode ? codeReviewIssue(chDir) : '';
   if (cr) issues.push(cr);
-  else if (cfg.reviewLoop) {
+  else if (cfg.autoMode && cfg.reviewLoop) {
     // 审查之后只在 revisions.md 记了理由（意见都不成立）的算处理完；轮数用完的这次按"问用户 / 全自动自己定"说
     try { syncReviewRounds(es, found); } catch (e) { /* 计不了就按已有的记录判断 */ }
     const lo = reviewLoopIssue('code', chDir, cfg);
@@ -1442,6 +1442,9 @@ function consentIssue(g, st, cfg, docs) {
   const fl = flowState(j);
   const staged = execFileSync('git', ['-C', repoRoot(g.dir) || g.dir, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000 }).split('\0').filter(Boolean);
   const proposalCommit = staged.some(f => /^openspec\/changes\/(?!archive\/)[^/]+\/(?:proposal\.md|design\.md|tasks\.md|specs\/)/.test(f));
+  const planRoots = allChanges(st.cwd0).filter(c => flowChanges(j).includes(normKey(c.dir)) && require('../lib/flow-policy').points(c.dir, 'proposal').length === 4 && require('../lib/flow-policy').allPassed(c.dir, 'proposal')).map(c => normKey(c.dir) + '/');
+  const automaticPlan = cfg.autoMode && fl.stage === 'plan' && staged.length && staged.every(f => planRoots.some(d => normKey(path.resolve(repoRoot(g.dir) || g.dir, f)).startsWith(d)));
+  if (automaticPlan) return '';
   if (!approved && proposalCommit && fl.stage !== 'apply') return '[vibe-kit] 提案提交要单独确认：先交代定稿内容，问用户是否提交；开工许可不能代替提交许可。';
   if (cfg.autoMode && !approved) {
     if (cfg.autoCommit === 'off') return '[vibe-kit] 自动提交选了"我说了才提交"，全自动模式也不改变这个选择。';
@@ -1452,7 +1455,7 @@ function consentIssue(g, st, cfg, docs) {
     if (original.size) { const staged = execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000 }).split('\0').filter(Boolean); const mixed = staged.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
     const rounds = syncReviewRounds(es, syncReviews(es, st.cwd0));
     const rr = readState('review-rounds');
-    const open = (cfg.reviewLoop && current.some((c) => ['proposal', 'code'].some((k) => rr[k + '|' + normKey(c.dir)] && !rr[k + '|' + normKey(c.dir)].done))) || rounds.some((x) => current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && !x.rec.done && (cfg.reviewLoop || (x.rec.pendingFix && !x.fixed)));
+    const open = current.some(c => require('../lib/flow-policy').points(c.dir, 'code').some(p => { const r = require('../lib/flow-policy').record(c.dir, p); return r.rounds && !require('../lib/flow-policy').settled(c.dir, p); })) || current.some(c => { const r = readState('review-rounds')['code|' + normKey(c.dir)]; return r && r.pendingFix && !r.done; });
     if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
     const pending = require('../lib/session').pendingReviewsIn(toolCalls(es, 0), toolResults(es), current, require('../lib/session').taskNotes(es));
     if (pending.length) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
@@ -1747,7 +1750,11 @@ function noteToolFlow(j, cfg) {
 
 function handle(j) {
   // IDEA 的终端、工具路由也走现有检查；其它 MCP 不受这个适配影响。
-  if (/^mcp__/.test(String(j.tool_name || ''))) return require('../lib/idea-tools').handle(j);
+  if (/^mcp__/.test(String(j.tool_name || ''))) {
+    const out = require('../lib/idea-tools').handle(j); if (out) return out;
+    const issue = require('../lib/flow-policy').actionIssue(j);
+    return issue ? blockOut('PreToolUse', '[vibe-kit] ' + issue) : null;
+  }
   const cmd = String((j.tool_input && j.tool_input.command) || '');
   if (!cmd.trim()) return null;
   let cfg = readConfigFor(j);
@@ -1817,6 +1824,8 @@ function handle(j) {
   }
   const cb = cdBlock();
   if (cb) return cb;
+  const actionIssue = require('../lib/flow-policy').actionIssue(j);
+  if (actionIssue) return counted('manual-action', '[vibe-kit] ' + actionIssue);
   // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告；提交里像有密码的放行，记进报告
   // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
   const simplePush = st.pushes.length === 1 && require('../lib/merge-push').simpleAllowed(j, st.pushes[0]);

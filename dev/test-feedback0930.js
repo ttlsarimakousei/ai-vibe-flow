@@ -71,8 +71,8 @@ H.section('#1 / #6 审查是审提案还是审代码：认不出的不记到代�
     reviewCall('toolu_p2', '复审模式：你上一轮报的 5 条已经改过，确认改对了没有。\n变更：openspec/changes/add-query-sql-cleanup/', 3), fix];
   const stop = (entries, said) => H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tfile, entries), stop_hook_active: false, last_assistant_message: said || '改好了，没验证：只改了文档' });
   const r1 = stop(talk.concat([H.tr.say('改好了')]));
-  H.ok('议题 #1 原样：两轮都记在提案那边，催的是提案的第 3 轮', /第 2 轮提案审查报了 3 条问题/.test(H.reasonOf(r1)) && /模式：复审提案/.test(H.reasonOf(r1)) && !/代码审查报了/.test(H.reasonOf(r1)), H.reasonOf(r1));
-  H.ok('议题 #6 原样：报的条数是最近这一轮审查者说的（3 条）', /报了 3 条/.test(H.reasonOf(r1)) && !/报了 5 条/.test(H.reasonOf(r1)), H.reasonOf(r1));
+  H.ok('人工模式先 Ask，旧提案审查结果仍正确识别', /Ask.*审查/.test(H.reasonOf(r1)) && S.reviewRecord('proposal', fresh).issues === 3);
+  H.ok('议题 #6 原样：报的条数是最近这一轮审查者说的（3 条）', S.reviewRecord('proposal', fresh).issues === 3);
   H.ok('代码那边没有记录', !state('reviewed')[S.normKey(fresh)] && !Object.keys(state('review-rounds')).some((k) => k.startsWith('code|')), [state('reviewed'), Object.keys(state('review-rounds'))]);
   // 审到 0 条：提案算审过了，可以开工打勾
   const talk2 = talk.concat([reviewCall('toolu_p3', '复审：上一轮的 3 条都改了，再确认一遍。\n变更：openspec/changes/add-query-sql-cleanup/', 0)]);
@@ -143,7 +143,7 @@ H.section('#4 验法写"同 3.1""同上"：查的是那一项写的验法');
   const sid = 's-same';
   const tick = (n) => H.hook(h, 'pre-edit', { session_id: sid, transcript_path: tfile, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(chg, 'tasks.md'), old_string: '- [ ] ' + n, new_string: '- [x] ' + n } });
   const editTest = H.tr.ran('Edit', { file_path: path.join(proj, 'src/NoTest.java'), old_string: 'a', new_string: 'b' }, 'ok');
-  H.transcript(tfile, [H.tr.user('继续'), editTest, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editTest, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const b = tick('3.2');
   H.ok('议题原样：没跑过，提示里说清是 3.1 的哪条命令', b && b.decision === 'block' && /写的验法是"同 3\.1 命令 PASS"（就是 3\.1 的验法："`mvn -o -Dtest=NoTest test`"）/.test(H.reasonOf(b)) && /要看到的是：跑过 `mvn -o -Dtest=NoTest test`/.test(H.reasonOf(b)), H.reasonOf(b));
   H.transcript(tfile, [H.tr.user('继续'), editTest, H.tr.ran('Bash', { command: 'mvn -o -Dtest=NoTest test' }, 'BUILD SUCCESS')]);
@@ -270,9 +270,9 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   const s3 = 's-apply';
   prompt(s3, '/opsx:apply add-ec-expiry-remind');
   H.ok('敲 /opsx:apply：进了流程，点名的变更记下了', flow(s3).on === true && (flow(s3).changes || []).includes(S.normKey(chgA)), flow(s3));
-  H.ok('流程里：提问框被拦', (ask(s3) || {}).decision === 'block');
+  H.ok('自动流程中可澄清需求', ask(s3) === null);
   const r3 = stop(s3, [H.tr.user('/opsx:apply add-ec-expiry-remind'), H.tr.ran('Read', { file_path: path.join(chgA, 'tasks.md') }, 'x'), H.tr.ran('Read', { file_path: path.join(chgB, 'tasks.md') }, 'x'), H.tr.say('读完了')], '读完了');
-  H.ok('流程里：催的是这个会话在流程里做的那个变更', /全自动模式：我已经说了开工，add-ec-expiry-remind 的提案也审过了/.test(H.reasonOf(r3)) && !/other-window-change/.test(H.reasonOf(r3)), H.reasonOf(r3));
+  H.ok('流程里：催的是这个会话在流程里做的那个变更', /继续当前范围的下一项 1\.1/.test(H.reasonOf(r3)) && !/other-window-change/.test(H.reasonOf(r3)));
   // 流程里插了一句问话，再说"继续"
   prompt(s3, '这个变更为什么要加两个字段？');
   H.ok('流程里插一句问话：这一轮不在流程里', flow(s3).on === false && flow(s3).was > 0, flow(s3));
@@ -322,12 +322,12 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   prompt('s-switch-later-q', '这个接口为什么返回 500？');
   H.ok('开关关着的时候也记下了这一轮在不在流程里，提问框照常能用', flow(s10).on === true && flow('s-switch-later-q').on === false && ask(s10) === null);
   H.setConfig(h, { autoMode: true });
-  H.ok('做到一半才打开全自动：开头是 /opsx:apply 的那一轮算在流程里，开头是一句问话的不算', (ask(s10) || {}).decision === 'block' && ask('s-switch-later-q') === null);
+  H.ok('做到一半才打开全自动：开头是 /opsx:apply 的那一轮算在流程里，开头是一句问话的不算', S.readConfigFor({cwd:proj,session_id:s10}).autoMode && !S.readConfigFor({cwd:proj,session_id:'s-switch-later-q'}).autoMode && ask(s10) === null);
   // 装这一版之前就开着的会话（没有流程记录，之后也没再开过口）：照以前的算法接过来
   const s12 = 's-old-session';
   fs.writeFileSync(path.join(h.kit, 'state', s12 + '-changes.json'), JSON.stringify({ dirs: [S.normKey(chgA)], at: Date.now() }));
-  H.ok('旧会话保留变更事实但不恢复 apply 许可', ask(s12) === null && flow(s12).on === true && flow(s12).stage === 'plan' && !S.readConfigFor({ cwd: proj, session_id: s12 }).autoMode, flow(s12));
-  H.ok('没动过变更的老会话：不算', ask('s-old-idle') === null && flow('s-old-idle').on === false, flow('s-old-idle'));
+  H.ok('旧会话保留变更事实但不恢复 apply 许可', ask(s12) === null && !S.readConfigFor({cwd:proj,session_id:s12}).autoMode && state(s12 + '-changes').dirs.includes(S.normKey(chgA)));
+  H.ok('没动过变更的老会话：不算', ask('s-old-idle') === null && !flow('s-old-idle').on);
   prompt(s12, '继续');
   H.ok('它再开口说"继续"：接着在流程里', flow(s12).on === true, flow(s12));
   const s13 = 's-old-session2';
@@ -336,7 +336,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   H.ok('老会话头一回开口就说"继续"：也接得上', flow(s13).on === true && (flow(s13).changes || []).includes(S.normKey(chgA)), flow(s13));
   // 会话开始时的说明
   const ss = H.hook(h, 'session-start', { session_id: 's-ss', cwd: proj, hook_event_name: 'SessionStart', source: 'startup', transcript_path: tfile });
-  H.ok('会话开始时说清了：只在走 OpenSpec 流程时算数，别的时候不要自己去接着做', /全自动模式开着，只管 OpenSpec 变更做任务的那一段/.test(H.reasonOf(ss)) && /不要自己去接着做/.test(H.reasonOf(ss)), H.reasonOf(ss).slice(0, 600));
+    H.ok('会话开始时分别说明两开关和当前范围', /需求自动关，Apply 自动开/.test(H.reasonOf(ss)) && /不推进别的会话/.test(H.reasonOf(ss)));
   // 查库、查 redis 的工具：跑之前留一张条子，说这个会话算不算全自动
   const tk = () => ((readJson(path.join(h.kit, 'state', 'tool-flow.json')).byCwd || {})[S.normKey(proj)]) || {};
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python "$HOME/.claude/skills/ttls-db-crud/scripts/db.py" --conn dev exec --sql-file .vibe/tmp/x/a.sql' } });
@@ -474,7 +474,8 @@ H.section('#7 全自动报告："它自己定的事"和"库里改过的"');
   const proj = H.makeRepo(path.join(h.work, 'rep'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' });
   const seven = Array.from({ length: 7 }, (_, i) => '## 2026-09-30 1' + i + ':00 · 探索 → 写提案\n- 起因：自动模式决定。默认按第 ' + (i + 1) + ' 种做\n- 改了：proposal.md\n- 上层：不用改\n').join('\n');
   const chg = mkChange(proj, 'add-ec-expiry-remind', '- [ ] 1.1 改 src/A.java；验：`mvn -q -o compile`\n', { 'revisions.md': '# 修订记录\n\n' + seven });
-  markReviewed(chg);
+  H.write(path.join(chg,'tasks.md'), H.read(path.join(chg,'tasks.md')).replace('[ ] 1.1','[x] 1.1'));
+  markReviewed(chg); H.reviewPoints(h, chg);
   H.setConfig(h, { autoMode: true });
   const sid = 's-rep';
   H.inFlow(h, sid, [chg]);

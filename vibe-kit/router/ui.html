@@ -313,7 +313,7 @@
   </section>
 
   <section id="tab-kit" class="tab hide">
-    <div class="pagehead"><h2>套件开关</h2><p>检查都是本机脚本做的，不花额度。改了开关，页面底部会出现保存条。</p></div>
+    <div class="pagehead"><h2>套件开关</h2><p>规则检查由本机脚本执行，独立审查会请求模型。改了开关，页面底部会出现保存条。</p></div>
     <p class="msg" id="kitMsg" style="margin:0 0 12px"></p>
 
     <div class="card" id="sec-ctx" data-sec="上下文和交接">
@@ -358,7 +358,7 @@
 
     <div class="card" id="sec-status" data-sec="状态栏">
       <h2>状态栏</h2>
-      <p class="hint">Claude Code 底下的状态栏最多三行。第一行：警告、模型、目录和分支、上下文、进行中的变更。第二行：全自动开没开（开着时写明这个会话在不在流程里）、用到多少自动压缩、放松了的保护、经验待确认、更新。第三行是下面这一项。没有新消息时每 30 秒刷新一次。</p>
+      <p class="hint">Claude Code 底下的状态栏最多三行。第一行：警告、模型、目录和分支、上下文、进行中的变更。第二行：需求和 Apply 自动是否生效、用到多少自动压缩、放松了的保护、经验待确认、更新。第三行是下面这一项。没有新消息时每 30 秒刷新一次。</p>
       <div class="opt">
         <div><div class="t">显示今天的用量</div><div class="d">开着：第三行显示今天经过路由的请求次数、token，和用得最多的三个模型各自的次数、token。次数到公司提醒线的 75% 变黄，到了变红。改完自动保存，下一次刷新就变。</div></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_statusUsage"><i></i></label></div>
@@ -382,24 +382,12 @@
       </div>
     </div>
 
-    <div class="card" id="sec-stop" data-sec="收工检查">
-      <h2>收工检查</h2>
-      <p class="hint">Claude 说"做完了"的时候查一遍。漏了事就拦一次，告诉它补什么。</p>
-      <div class="opt">
-        <div><div class="t">改了代码要验证</div><div class="d">开着：最后一次改代码之后没跑过验证命令，让它先验。</div>
-          <details class="more"><summary>细节</summary><ul><li>验不了的，它说明"没验证"和原因就放行。</li><li>项目说明里标了"快检：不适用"的项目不查。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoVerify"><i></i></label></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">改了页面要看页面</div><div class="d">开着：改了 .vue、.html、.css 这类文件却没跑过页面场景，让它用 /ttls-see-page 看一遍。</div>
-          <details class="more"><summary>细节</summary><ul><li>/ttls-see-page 会自己起服务，用无头浏览器照步骤操作，不开窗口。</li><li>改动不影响显示的，它说明原因就放行。</li><li>关掉之后，约定改成"页面不用自己去看，我让你看时再看"，任务的验法写"人工看页面"。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoSeePage"><i></i></label></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">实现和测试完成后审代码</div><div class="d">开着：实现和必要测试完成后启动审查，完整结果返回后勾审查任务。用户验收仍等用户确认。</div>
-          <details class="more"><summary>细节</summary><ul><li>独立模型请求花额度，默认有限材料和总预算；原代理是兼容选项。</li><li>关掉之后要审就手动 /ttls-cross-review。</li><li>没审过代码的变更照样不让归档，那是"OpenSpec 门槛"管的。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoCrossReview"><i></i></label></div>
-      </div>
+    <div class="card" id="sec-stop" data-sec="全局：过程文件">
+      <h2>全局：过程文件</h2>
+      <p class="hint">这些规则独立于自动模式，保护项目目录和临时材料。</p>
+
+
+
       <div class="opt">
         <div><div class="t">过程文件放 .vibe/tmp</div><div class="d">开着：备份、日志、临时脚本不许落在项目里，要放 <span class="mono">.vibe/tmp/&lt;事由&gt;/</span>。收工时点名它新建了还没提交的文件。</div>
           <details class="more"><summary>细节</summary><ul><li>拦的是：往项目里写 .bak、.orig、.log、"xx - 副本"，建 backup、bak 这类目录，以及 git add 这些文件。</li><li>拦错了，它原样再做一次就放行。</li><li>.vibe 里只放项目说明、交接记录、账号、快检的中间文件、看页面的场景和结果、全自动报告。</li><li>变更没归档之前，它的临时目录（<span class="mono">.vibe/tmp/&lt;变更名&gt;/</span>）不让它删，也不自动清。归档之后套件自己清掉。</li><li>别的临时目录那件事做完就删；超过下面天数没动的，会话开始时自动清。</li></ul></details></div>
@@ -411,14 +399,14 @@
       </div>
     </div>
 
-    <div class="card" id="sec-spec" data-sec="OpenSpec 门槛">
-      <h2>OpenSpec 门槛</h2>
+    <div class="card" id="sec-spec" data-sec="全局：审查与产物">
+      <h2>全局：审查与产物</h2>
       <div class="opt">
-        <div><div class="t">审查方式</div><div class="d">默认本机准备材料，经路由审查角色发有限请求。原代理保留为兼容方式，超时和部分结果不能算审完。</div></div>
+        <div><div class="t">审查方式</div><div class="d">自动逐点审查固定使用有限请求；本选项控制人工整套审查的兼容方式。超时和部分结果不能算审完。</div></div>
         <div class="ctl"><select id="k_reviewExecutor"><option value="direct">限时独立模型审查</option><option value="agent">原审查代理</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">同一范围审查总预算</div><div class="d">累计模型请求时间，包含后续补审。用完就交代已覆盖和未覆盖范围。</div></div>
+        <div><div class="t">每次审查的时间预算</div><div class="d">一个审查点的一轮最多用这么多时间；材料分批共用本轮预算。文件、批次和审查轮数分开计算。</div></div>
         <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
       </div>
       <div class="opt">
@@ -427,26 +415,19 @@
       </div>
       <p class="hint">提案、任务、归档各有一道门槛。过不去就拦下，提示里写着怎么改。</p>
       <div class="opt">
-        <div><div class="t">提案、打勾、归档的门槛</div><div class="d">开着：提案写得含糊不让写，任务没验证不让打勾，代码没审不让归档。</div>
+        <div><div class="t">提案、打勾、归档的门槛</div><div class="d">检查产物格式、探索依据和任务验收描述。审查与自测是否自动执行由所属阶段决定。</div>
           <details class="more"><summary>细节</summary><ul>
             <li><b>写提案</b>：没在项目里读过代码不让写。不许写"待定、后续完善、视情况"，拿不准的写成决策项。设计里提到的文件要真的存在。</li>
             <li><b>写任务</b>：每项要写改哪个文件、怎么验。</li>
-            <li><b>打勾</b>：这项任务的验法，要在改完它的代码之后跑过。验法里写了"本次不做（原因）"的那一部分不查。提案没审过不让开工。</li>
+            <li><b>打勾</b>：自动 Apply 要在改完代码后跑过本项验法。人工自测先 Ask，用户放弃不阻止完成任务。验法里写了"本次不做（原因）"的那一部分不查。需求自动时逐产物审修，人工审查由你决定。</li>
             <li><b>改产物</b>：要在 revisions.md 记原因。</li>
-            <li><b>归档</b>：任务没全打勾、代码没审过不让归档。归档之后主规格里没有这个变更的需求会提醒。</li>
+            <li><b>归档</b>：任务必须完成；自动阶段还要完成审修。归档之后主规格里没有这个变更的需求会提醒。</li>
             <li>只查这次新加、改过的行，老内容不追究。</li>
           </ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_specGate"><i></i></label></div>
       </div>
-      <div class="opt">
-        <div><div class="t">多轮审查</div><div class="d">开着：审查报了问题、改了之后，再审改动点，直到它报"问题 0 条"。关着：提案、代码各审一轮。</div>
-          <details class="more"><summary>细节</summary><ul><li>审查意见核实下来都不成立的，在 revisions.md 记下理由就算审完。</li><li>轮数用完还有问题：有人在就问你。全自动模式下它选影响面最小的方案，记进 revisions.md。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_reviewLoop"><i></i></label></div>
-      </div>
-      <div class="opt sub">
-        <div><div class="t">最多审几轮</div><div class="d">1 到 5。</div></div>
-        <div class="ctl"><input type="number" id="k_reviewMaxRounds" min="1" max="5" step="1"><span class="dim">轮</span></div>
-      </div>
+
+
       <div class="opt">
         <div><div class="t">代码之外的产出先定位置</div><div class="d">开着：新建 DDL、说明文档、报告这类文件，放哪要是你定过的。没定过就拦下，让它先问你。</div>
           <details class="more"><summary>细节</summary><ul><li>你定了，它记进项目说明的"产出位置"，以后同类的不再问。</li><li>全自动模式下不问，先放 <span class="mono">.vibe/pending/</span>，写进报告等你定。</li><li>openspec、.vibe、README、源码目录里的迁移脚本不管。</li></ul></details></div>
@@ -459,23 +440,31 @@
       </div>
     </div>
 
-    <div class="card" id="sec-auto" data-sec="全自动模式">
-      <h2>全自动模式</h2>
-      <p class="hint">你开会、下班的时候用。只在走 OpenSpec 流程时算数，而且只管做任务那一段：你说了开工，它不问你、不等你，任务做完、代码审过停下等你自测，收工时给你一份报告。探索、提案那一段和别的时候照常。</p>
-      <div class="opt danger">
-        <div><div class="t">全自动模式</div><div class="d">开着、又在做变更的任务：提问框用不了；被检查拦下它自己申请放行；做完审过停下等你自测，不归档。打开之后不用重开会话。</div>
-          <details class="more"><summary>细节</summary><ul>
-            <li><b>什么时候算数</b>：做任务那一段——你敲了 /opsx:apply，说了"开工""把 1.1 做了"，让它接着做某个已经打过勾的变更，或者接着上一轮说"继续"。探索、提案、审提案那一段（你提需求、敲 /opsx:propose、改提案）它照常问你：提案审过了停下给你看，你说开工才做。你问问题、让它检索、跑别的技能，这一轮也不算：做完你交代的事就收工，不会自己去接着做工作区里没做完的变更。做到一半才打开这个开关的，照那一轮开头你说的话算。</li>
-            <li><b>只管自己做的变更</b>：收工时只催这个窗口在流程里动手做过的变更。另一个窗口正在做的，它不碰。</li>
-            <li><b>不问</b>：它想用提问框问的问题会被拦下，记进报告。缺信息它先去查，查不到选影响面最小的做法。</li>
-            <li><b>放行</b>：被带拦截编号的检查拦下、照提示改不了的，它写明原因申请放行，不用你点。每次放行都记进报告。</li>
-            <li><b>改库</b>：不拦，条件是留得下备份。改、删留改前快照和还原脚本；新增记下表和主键，还原脚本是按主键删；建表、加列记下对应的 DROP。报告的"库里改过的"一节逐条列着，带还原的命令。备份不了的（没有 WHERE、没有主键、删表、清空……）查库的工具不执行，留给你。</li>
-            <li><b>留给你</b>：查库的工具不肯执行的改库操作、改 redis 里的数据、改公共配置、动 git 历史、push、要账号密码，这些它不做也不等。它在任务后面标上"留给用户"，接着做别的。</li>
-            <li><b>照样拦</b>：改套件、读令牌、结束路由进程、整仓 add、改非 UTF-8 的文件。这几样不能放行。</li>
-            <li><b>报告</b>：放在项目的 <span class="mono">.vibe/reports/</span> 里，也写进它最后一条消息。七节：做了什么、留给你做的、库里改过的、自己定的事、没验证的、放行的检查、套件问题。</li>
-            <li>下面"被检查拦住时"选了"不许放行"，全自动模式下也不放行。</li>
-          </ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoMode"><i></i></label></div>
+    <div class="card" id="sec-requirements" data-sec="需求自动模式">
+      <h2>需求自动模式</h2>
+      <p class="hint">先有描述、探索代码、沟通业务疑问。条件具备后，逐个完成提案、规格、设计和任务，审修当前产物后再写下一个。同一套文档定稿提交一次。</p>
+      <div class="opt"><div><div class="t">自动完善需求</div><div class="d">本次安装和升级默认关闭。开启后仍先明确范围、业务规则和验收标准；有疑问就问你。</div></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_autoRequirements"><i></i></label></div></div>
+      <div class="opt"><div><div class="t">每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_requirementsReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
+      <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档不限制 250 行，必要时画图。两种自动都开时定稿提交后自动 apply；只要求写需求时不会自行开工。</p>
+    </div>
+    <div class="card" id="sec-auto" data-sec="Apply 自动模式">
+      <h2>Apply 自动模式</h2>
+      <p class="hint">只执行已明确的变更范围。整组 1.x 做完后先审查、核验、修改和复验，再做下一组。关闭时，审查、自测和复验都先用 Ask 问你；放弃就继续，不记待办。</p>
+      <div class="opt"><div><div class="t">自动完成 Apply</div><div class="d">本次安装和升级默认关闭。可以提醒提交；只有本模式生效时，下面的自动提交档位才执行。归档与 push 仍需确认。</div></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_autoApply"><i></i></label></div></div>
+      <div class="opt"><div><div class="t">每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_applyReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
+      <div class="opt">
+        <div><div class="t">自动自测</div><div class="d">Apply 自动生效时，按已准备的验收用例自测；人工模式先 Ask。</div>
+          <details class="more"><summary>细节</summary><ul><li>验不了的，它说明"没验证"和原因就放行。</li><li>项目说明里标了"快检：不适用"的项目不查。</li></ul></details></div>
+        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoVerify"><i></i></label></div>
+      </div>
+      <div class="opt">
+        <div><div class="t">自动验证页面</div><div class="d">开着：改了 .vue、.html、.css 这类文件却没跑过页面场景，让它用 /ttls-see-page 看一遍。</div>
+          <details class="more"><summary>细节</summary><ul><li>/ttls-see-page 会自己起服务，用无头浏览器照步骤操作，不开窗口。</li><li>改动不影响显示的，它说明原因就放行。</li><li>关掉之后，约定改成"页面不用自己去看，我让你看时再看"，任务的验法写"人工看页面"。</li></ul></details></div>
+        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoSeePage"><i></i></label></div>
+      </div>
+      <div class="opt">
+        <div><div class="t">自动提交档位</div><div class="d">只 add 它这一轮改的和新建的文件。你工作区里原来就有的改动不会被带上。"一个阶段"是 tasks.md 里同一个大编号的任务（1.x、2.x）：每项太碎、整个变更太大时选它。</div></div>
+        <div class="ctl"><select id="k_autoCommit"><option value="task">每完成一件事提交一次</option><option value="phase">一个阶段做完提交一次（tasks.md 里同一个大编号的任务）</option><option value="change">一个变更整个做完才提交</option><option value="off">不自动提交，我说了才提交</option></select></div>
       </div>
       <div class="opt sub">
         <div><div class="t">到交接线先写交接记录</div><div class="d">开着：到了交接线，先写一份交接记录再接着做，会话断了能接上。关着：不写，靠 Claude Code 自己的压缩。</div></div>
@@ -498,10 +487,7 @@
           </ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_pullBeforeWork"><i></i></label></div>
       </div>
-      <div class="opt">
-        <div><div class="t">OpenSpec 的变更，验证过之后提交吗</div><div class="d">只 add 它这一轮改的和新建的文件。你工作区里原来就有的改动不会被带上。"一个阶段"是 tasks.md 里同一个大编号的任务（1.x、2.x）：每项太碎、整个变更太大时选它。</div></div>
-        <div class="ctl"><select id="k_autoCommit"><option value="task">每完成一件事提交一次</option><option value="phase">一个阶段做完提交一次（tasks.md 里同一个大编号的任务）</option><option value="change">一个变更整个做完才提交</option><option value="off">不自动提交，我说了才提交</option></select></div>
-      </div>
+
       <div class="opt">
         <div><div class="t">不走 OpenSpec 的改动，验证过之后</div><div class="d">修 bug、改配置、改文案这类不用提案的活。选"先问我"：它交代改了什么、怎么验的，用提问框问你，你说提交了才提交；没点头就 git commit 会被拦下。</div></div>
         <div class="ctl"><select id="k_plainCommit"><option value="ask">先问我，我说提交了才提交</option><option value="auto">直接提交，不用问</option></select></div>
@@ -738,6 +724,17 @@
     if (b.dataset.tab === 'lessons') loadLessons();
     if (b.dataset.tab === 'remote') loadFeedback();
   });
+
+  function openAnchor() {
+    const target = document.getElementById(location.hash.slice(1));
+    const section = target && target.closest('section.tab');
+    if (!section) return;
+    const button = document.querySelector('nav button[data-tab="' + section.id.slice(4) + '"]');
+    if (button) button.click();
+    requestAnimationFrame(() => target.scrollIntoView());
+  }
+  window.addEventListener('hashchange', openAnchor);
+  window.addEventListener('load', openAnchor);
 
   // ---------- 模型页 ----------
   function renderProviders() {
@@ -1031,10 +1028,10 @@
     if (n < min || n > max) return { error: label + '：要在 ' + min + ' 到 ' + max + ' 之间' + (zeroOk ? '，或者填 0' : '') };
     return n;
   }, set: (v) => { $('k_' + key).value = v === undefined || v === null ? '' : v; } }; };
-  fBool('autoVerify', '改了代码要验证'); fBool('autoSeePage', '改了页面要看页面'); fBool('autoCrossReview', '任务全部打勾后审代码'); fBool('specGate', '提案、打勾、归档的门槛');
-  fBool('outputGate', '代码之外的产出先定位置'); fBool('serverGuard', '起服务走 devserver'); fBool('vibeTidy', '过程文件放 .vibe/tmp'); fBool('reviewLoop', '多轮审查');
-  fBool('autoMode', '全自动模式'); fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查'); fBool('autoResume', '/clear 之后自动接着干');
-  fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('reviewMaxRounds', '最多审几轮', 1, 5);
+  fBool('autoVerify', '改了代码要验证'); fBool('autoSeePage', '改了页面要看页面'); fBool('specGate', '提案、打勾、归档的门槛');
+  fBool('outputGate', '代码之外的产出先定位置'); fBool('serverGuard', '起服务走 devserver'); fBool('vibeTidy', '过程文件放 .vibe/tmp');
+  fBool('autoRequirements', '需求自动模式'); fBool('autoApply', 'Apply 自动模式'); fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查'); fBool('autoResume', '/clear 之后自动接着干');
+  fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('requirementsReviewMaxRounds', '需求每点审查上限', 1, 20); fNum('applyReviewMaxRounds', 'Apply 每组审查上限', 1, 20);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fBool('pullBeforeWork', '开工前拉代码'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
   fBool('ideaMcp', '自动接上 IDEA');

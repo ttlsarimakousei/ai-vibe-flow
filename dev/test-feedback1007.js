@@ -18,7 +18,7 @@ const denied = (o) => !!(o && (o.decision === 'block' || o.hookSpecificOutput &&
   const slash = (s) => s.replace(/\\/g, '/');
   const transcript = (entries) => H.transcript(path.join(h.root, 't.jsonl'), entries);
   let serial = 0;
-  const command = (cmd, entries, sid) => H.hook(h, 'guard-commit', { session_id: sid || 'c' + (++serial), cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: cmd }, transcript_path: transcript(entries || [H.tr.user('查一下')]) });
+  const command = (cmd, entries, sid) => H.hook(h, 'guard-commit', { session_id: sid || 'c' + (++serial), cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: cmd }, transcript_path: transcript(entries || [H.tr.user('测试')]) });
 
   H.section('#12：env 换目录只管这条命令，保护照旧查');
   const page = slash(path.join(h.kit, 'page', 'scenario-run.js'));

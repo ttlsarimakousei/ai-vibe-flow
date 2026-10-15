@@ -303,7 +303,10 @@ function build(j, cfg, mine) {
   if (!commits.length) L.push('没有。');
   for (const c of commits) { L.push('- ' + c.repo); for (const l of c.list) L.push('  - ' + l); }
   L.push('');
-  sec('套件问题', kit, '没有。');
+  let issuePort = 15730;
+  try { issuePort = require('../router/service').portOf(); } catch (e) { /* 无路由时保留默认详情地址 */ }
+  const kitSummary = '套件问题 ' + kit.length + ' 条，[查看详情](http://127.0.0.1:' + issuePort + '/ui#sec-issues)。';
+  sec('套件问题', kit.length ? [kitSummary] : [], '没有。');
   const text = L.join('\n');
 
   const dir = path.join(cwd, '.vibe', 'reports');
@@ -324,7 +327,7 @@ function build(j, cfg, mine) {
   const top = (title, list, n) => (list.length ? title + ' ' + list.length + ' 件：' + list.slice(0, n).map((x) => clip(x, 90)).join('；') + (list.length > n ? ' 等' : '') + '。' : '');
   const brief = [
     (archived.length ? '归档了 ' + archived.map((a) => a.name).join('、') + '。' : '') + changes.map((c) => c.name + ' ' + c.line + (c.open.length ? '，还没做 ' + c.open.length + ' 项' : '') + '。').join(''),
-    top(TITLES.hand, hand, 4), top(TITLES.db, db, 6), top(TITLES.ask, asks, 3), top(TITLES.unverified, unverified, 3), top(TITLES.bypass, bypass, 3), top(TITLES.secret, secrets, 2), top(TITLES.decision, decisions, 3), top('套件问题', kit, 3),
+    top(TITLES.hand, hand, 4), top(TITLES.db, db, 6), top(TITLES.ask, asks, 3), top(TITLES.unverified, unverified, 3), top(TITLES.bypass, bypass, 3), top(TITLES.secret, secrets, 2), top(TITLES.decision, decisions, 3), kit.length ? kitSummary : '',
   ].filter(Boolean).join('\n');
   return { file: written ? file : '', text, brief, counts, empty, itemCount: st.items.length };
 }

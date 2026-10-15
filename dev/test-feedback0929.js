@@ -202,29 +202,29 @@ const javac = H.tr.ran('Bash', { command: '"/c/Program Files/Java/jdk1.8.0_201/b
 const scen = (name) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/vibe-kit/page/scenario-run.js" .vibe/scenarios/' + name + '.json --base http://127.0.0.1:8388' }, 'RESULT {"ok":true}');
 {
   // 反馈原样：验法都跑过了，之后改过一次 tasks.md（提交前改了一句验法），再打勾
-  H.transcript(tfile, [H.tr.user('继续'), editA, javac, scen('gate_oldpwdentry_reject'), editTasks]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editA, javac, scen('gate_oldpwdentry_reject'), editTasks]);
   const r = tickOf('1.3');
   H.ok('反馈原样：验证之后改过 tasks.md，照样能打勾', r === null, H.reasonOf(r));
   H.ok('打勾的时间记上了', (state('task-ticks')[S.normKey(chg3)] || { tasks: {} }).tasks['id:1.3'] > 0, state('task-ticks'));
   // 连着打两项：验一次，打 1.3，再打 2.1
-  H.transcript(tfile, [H.tr.user('继续'), editA, editB, javac, scen('gate_oldpwdentry_reject'), scen('weakpwd_export'), H.tr.ran('Edit', { file_path: tasks3, old_string: '- [ ] 1.3', new_string: '- [x] 1.3' }, 'ok')]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editA, editB, javac, scen('gate_oldpwdentry_reject'), scen('weakpwd_export'), H.tr.ran('Edit', { file_path: tasks3, old_string: '- [ ] 1.3', new_string: '- [x] 1.3' }, 'ok')]);
   const r2 = tickOf('2.1');
   H.ok('反馈原样：刚打完上一项的勾，接着打下一项', r2 === null, H.reasonOf(r2));
   // 验证之后又改了这项任务的代码：要重新验
-  H.transcript(tfile, [H.tr.user('继续'), javac, scen('weakpwd_export'), editB]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), javac, scen('weakpwd_export'), editB]);
   const r3 = tickOf('2.1');
   H.ok('验证之后又改了这项任务的代码：拦', r3 && r3.decision === 'block' && /改完 B\.java 之后还没看到它成功跑过/.test(H.reasonOf(r3)), H.reasonOf(r3));
   H.ok('提示里说了验不了的部分怎么写', /本次不做（原因）/.test(H.reasonOf(r3)), H.reasonOf(r3));
   // 改的是别的任务的文件：不影响这一项
-  H.transcript(tfile, [H.tr.user('继续'), editB, scen('weakpwd_export'), editA]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editB, scen('weakpwd_export'), editA]);
   const r4 = tickOf('2.1');
   H.ok('之后改的是别的任务的文件：不影响', r4 === null, H.reasonOf(r4));
   // 命令失败不算
-  H.transcript(tfile, [H.tr.user('继续'), editB, H.tr.ran('Bash', { command: 'node x/scenario-run.js .vibe/scenarios/weakpwd_export.json' }, 'RESULT {"ok":false}', true)]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editB, H.tr.ran('Bash', { command: 'node x/scenario-run.js .vibe/scenarios/weakpwd_export.json' }, 'RESULT {"ok":false}', true)]);
   const r5 = tickOf('2.1');
   H.ok('验证命令失败了：拦', r5 && r5.decision === 'block', H.reasonOf(r5));
   // 什么都没跑
-  H.transcript(tfile, [H.tr.user('继续'), editB, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editB, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const r6 = tickOf('2.1');
   H.ok('什么验证都没跑：拦', r6 && r6.decision === 'block' && /拦截编号/.test(H.reasonOf(r6)), H.reasonOf(r6));
 }
@@ -295,13 +295,13 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   // 有人在的时候：还是弹框、只用一次
   H.setConfig(h, { autoMode: false, kitBypass: 'ask' });
   const sid2 = 's-ask';
-  H.transcript(tfile, [H.tr.user('继续'), editA, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editA, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   fs.writeFileSync(path.join(other, 'tasks.md'), '- [ ] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/main/java/A.java；验：`mvn -q -o compile`\n');
   const q1 = edit(path.join(other, 'tasks.md'), '- [ ] 1.1', '- [x] 1.1', sid2);
   H.ok('有人在：提示还是原来那句', q1 && /确信是套件拦错了、任务因此走不下去，才按约定申请放行/.test(H.reasonOf(q1)), H.reasonOf(q1));
   const bq = bypass(blockId(q1), 'mvn -q -o compile 刚跑过并且成功了，钩子说没跑过，查了会话记录确实有这条命令');
   H.ok('有人在：申请放行会弹确认框', bq.code === 0 && /会弹确认框/.test(bq.out), bq.out);
-  H.transcript(tfile, [H.tr.user('继续'), editA, ranBypass(blockId(q1), bq.out)]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editA, ranBypass(blockId(q1), bq.out)]);
   const q2 = edit(path.join(other, 'tasks.md'), '- [ ] 1.1', '- [x] 1.1', sid2);
   H.ok('有人在：再做时弹确认框', q2 && q2.hookSpecificOutput && q2.hookSpecificOutput.permissionDecision === 'ask', q2);
   const q3 = edit(path.join(other, 'tasks.md'), '- [ ] 1.2', '- [x] 1.2', sid2);
@@ -313,7 +313,7 @@ H.section('不是问题的不记成问题（F20260929-007、F20260928-006 / -008
 {
   const n0 = records().length;
   dropState('block-stats');
-  H.transcript(tfile, [H.tr.user('继续'), editB, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
+  H.transcript(tfile, [H.tr.user('继续，测试'), editB, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const other = path.join(changes, 'other-change', 'tasks.md');
   for (let i = 0; i < 4; i++) edit(other, '- [ ] 1.2', '- [x] 1.2', 's-stuck');
   H.ok('反馈原样：同一条理由拦了 4 次，不记成问题', records().length === n0, records());
@@ -366,13 +366,13 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   const push = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git -C . push origin main' } }));
   H.ok('全自动 push 先预览并等真人确认', push && push.decision === 'block' && /全自动模式/.test(H.reasonOf(push)) && /plan/.test(H.reasonOf(push)) && /等.*确认/.test(H.reasonOf(push)), push);
   const ask = H.hook(h, 'guard-ask', Object.assign(base(sid), { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出的文件名用哪种格式？', header: '文件名', options: [{ label: '带日期', description: 'x' }, { label: '不带日期', description: 'y' }] }] } }));
-  H.ok('提问框：拦下，说清接着怎么做', ask && ask.decision === 'block' && /你想问的已经记进全自动报告/.test(H.reasonOf(ask)) && /留给用户/.test(H.reasonOf(ask)), H.reasonOf(ask));
+  H.ok('自动阶段允许澄清业务问题', ask === null);
   const kit = H.hook(h, 'pre-edit', Object.assign(base(sid), { tool_name: 'Edit', tool_input: { file_path: path.join(h.kit, 'state', 'review-rounds.json'), old_string: 'a', new_string: 'b' } }));
   H.ok('改套件的文件：照样拦，但不让它停下等人', kit && kit.decision === 'block' && /不许改/.test(H.reasonOf(kit)) && /不要停下等我/.test(H.reasonOf(kit)) && !/拦截编号/.test(H.reasonOf(kit)), H.reasonOf(kit));
   const all = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git add -A && git commit -m "feat: x"' } }));
   H.ok('整仓 add：照样拦，不给编号，不让它等人', all && all.decision === 'block' && /不要停下等我/.test(H.reasonOf(all)) && !/拦截编号/.test(H.reasonOf(all)), H.reasonOf(all));
   const items = R.stateOf({ session_id: sid }).items;
-  H.ok('报告里记了：想 push、想问的问题和选项、没让改的文件、没让跑的命令', items.some((x) => x.kind === 'hand' && /git push/.test(x.title)) && items.some((x) => x.kind === 'ask' && /文件名用哪种格式/.test(x.title) && x.detail === '带日期 / 不带日期') && items.some((x) => x.kind === 'hand' && /review-rounds\.json/.test(x.title)) && items.some((x) => x.kind === 'hand' && /git add -A/.test(x.title)), items);
+  H.ok('报告里记了：想 push、想问的问题和选项、没让改的文件、没让跑的命令', items.some((x) => x.kind === 'hand' && /git push/.test(x.title)) && !items.some(x => x.kind === 'ask') && items.some((x) => x.kind === 'hand' && /review-rounds\.json/.test(x.title)) && items.some((x) => x.kind === 'hand' && /git add -A/.test(x.title)), items);
   // 提交里像有密码：不弹框，放行，记进报告
   H.write(path.join(proj, 'src/main/resources/app.properties'), 'db.password=Abc12345xyz\n');
   H.transcript(tfile, [H.tr.user('改好了，提交')]);
@@ -394,12 +394,12 @@ H.section('开关只认配置页改的：全自动模式也算');
 {
   const cfgFile = path.join(h.kit, 'config.json');
   H.setConfig(h, { autoMode: false, kitBypass: 'ask' });
-  fs.writeFileSync(cfgFile, JSON.stringify(Object.assign(readJson(cfgFile), { autoMode: true })));
+  fs.writeFileSync(cfgFile, JSON.stringify(Object.assign(readJson(cfgFile), { autoApply: true })));
   const c = H.node(h, '-e', ['const c = require(' + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + ').readConfig(); console.log(JSON.stringify({ a: c.autoMode, t: c._tampered || [] }))']);
-  H.ok('绕开配置页把全自动模式打开：不认', /"a":false/.test(c.out) && /autoMode/.test(c.out), c.out + c.err);
+  H.ok('绕开配置页把全自动模式打开：不认', /"a":false/.test(c.out) && /autoApply/.test(c.out), c.out + c.err);
   // 老版本的封条里没有这一项：认文件里的
   const seal = path.join(h.kit, 'state', 'config-seal.json');
-  const s = readJson(seal); delete s.autoMode; fs.writeFileSync(seal, JSON.stringify(s));
+  const s = readJson(seal); delete s.autoMode; delete s.autoApply; fs.writeFileSync(seal, JSON.stringify(s));
   const c2 = H.node(h, '-e', ['const c = require(' + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + ').readConfig(); console.log(JSON.stringify({ a: c.autoMode, t: c._tampered || [] }))']);
   H.ok('老版本的封条里没有这一项：以前打开过的照旧', /"a":true/.test(c2.out) && /"t":\[\]/.test(c2.out), c2.out + c2.err);
   H.setConfig(h, { autoMode: false });
@@ -466,16 +466,17 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
   const talk = [H.tr.user('全自动把 miping 做完'), H.tr.ran('Read', { file_path: tasks }, 'x')];
   // 还有能做的任务：催它接着做，说的是能做的那一项，不是留给用户的那一项
   const r1 = stop(talk.concat([H.tr.say('3.1 做完了')]), '3.1 做完了');
-  H.ok('还有能做的：催下一项，是 3.2', /全自动模式：miping 还有 1 项没做完/.test(H.reasonOf(r1)) && /接着做下一项：3\.2/.test(H.reasonOf(r1)), H.reasonOf(r1));
-  H.ok('提示里说了要用户动手的事怎么标', /（留给用户：原因）/.test(H.reasonOf(r1)), H.reasonOf(r1));
+  H.ok('还有能做的：催下一项，是 3.2', /继续当前范围的下一项 3\.2/.test(H.reasonOf(r1)));
+  H.ok('业务疑问先问，套件执行安排只记本机', /业务疑问先 Ask/.test(H.reasonOf(r1)) && /只记本机/.test(H.reasonOf(r1)));
   // 3.2 做完了（验法里有一部分本次不做），只剩留给用户的 3.3
   fs.writeFileSync(tasks, fs.readFileSync(tasks, 'utf8').replace('- [ ] 3.2', '- [x] 3.2').replace('对照场景 `checklist_role_compare.json`', '对照场景 `checklist_role_compare.json` 本次不做（要先执行 3.3 备号）'));
   R.note({ session_id: sid, cwd: proj }, { kind: 'unverified', title: '任务（miping）3.2 审核接口角色', detail: '验法里写了不做：对照场景 checklist_role_compare.json 本次不做（要先执行 3.3 备号）' });
   R.note({ session_id: sid, cwd: proj }, { kind: 'ask', title: '导出的文件名用哪种格式？', detail: '带日期 / 不带日期' });
   R.note({ session_id: sid, cwd: proj }, { kind: 'bypass', title: 'OpenSpec 产物的门槛：Edit：' + tasks, detail: '对照场景要先改库，留给用户' });
   const r2 = stop(talk.concat([H.tr.say('3.2 做完了')]), '3.2 做完了');
-  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /实现和必要测试已完成/.test(H.reasonOf(r2)) && /review.js run/.test(H.reasonOf(r2)) && !/接着做下一项/.test(H.reasonOf(r2)), H.reasonOf(r2));
+  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /审查点 group-3/.test(H.reasonOf(r2)) && /review.js run/.test(H.reasonOf(r2)) && !/下一项 3\.3/.test(H.reasonOf(r2)));
   // 审完了
+  H.reviewPoints(h, chg);
   const rv = review('toolu_rep1', '代码', 'miping', 0);
   const r3 = stop(talk.concat(rv, [H.tr.say('审完了，问题 0 条')]), '审完了，问题 0 条');
   H.ok('反馈原样：审过了、只剩留给用户的，不催归档，交报告', /^\[vibe-kit 全自动报告\]/.test(H.reasonOf(r3)) && !/直接 \/opsx:archive/.test(H.reasonOf(r3)), H.reasonOf(r3));

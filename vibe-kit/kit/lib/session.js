@@ -9,7 +9,7 @@ const intent = require('./intent');
 const { execFileSync } = require('child_process');
 
 const KIT = path.join(__dirname, '..');
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 /**
  * 套件开关（~/.claude/vibe-kit/config.json），可以在路由的配置页里改，也可以手改。
  * 三个"放松保护"的（kitLock 关掉、kitBypass 改成 auto、autoMode 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
@@ -21,16 +21,20 @@ function readConfig() {
   let raw = {};
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); raw = JSON.parse(t) || {}; } catch (e) { raw = {}; }
   const c = Object.assign({}, DEFAULT_CONFIG, raw);
+  c.autoApply = Object.prototype.hasOwnProperty.call(raw, 'autoApply') ? raw.autoApply === true : raw.autoMode === true;
+  c.autoMode = c.autoApply;
   const loose = [];
   if (c.kitLock === false) loose.push('kitLock');
   if (c.kitBypass === 'auto') loose.push('kitBypass');
   if (c.autoMode === true) loose.push('autoMode');
+  for (const k of ['autoRequirements', 'autoApply']) if (c[k]) loose.push(k);
   if (loose.length) {
     const seal = readState('config-seal');
-    const bad = loose.filter((k) => (k === 'autoMode' ? seal.autoMode === false : seal[k] !== c[k]));
+    const bad = loose.filter((k) => (['autoMode', 'autoRequirements', 'autoApply'].includes(k) ? seal[k] === false : seal[k] !== c[k]));
     if (bad.includes('kitLock')) c.kitLock = true;
     if (bad.includes('kitBypass')) c.kitBypass = 'ask';
-    if (bad.includes('autoMode')) c.autoMode = false;
+    if (bad.includes('autoMode') || bad.includes('autoApply')) { c.autoMode = false; c.autoApply = false; }
+    if (bad.includes('autoRequirements')) c.autoRequirements = false;
     if (bad.length) c._tampered = bad;
   }
   return c;
@@ -40,7 +44,7 @@ function sealConfig(kitDir, cfg) {
   try {
     const d = path.join(kitDir || KIT, 'state');
     fs.mkdirSync(d, { recursive: true });
-    fs.writeFileSync(path.join(d, 'config-seal.json'), JSON.stringify({ kitLock: cfg.kitLock !== false, kitBypass: ['ask', 'auto', 'off'].includes(cfg.kitBypass) ? cfg.kitBypass : 'ask', autoMode: cfg.autoMode === true, at: Date.now() }));
+    fs.writeFileSync(path.join(d, 'config-seal.json'), JSON.stringify({ kitLock: cfg.kitLock !== false, kitBypass: ['ask', 'auto', 'off'].includes(cfg.kitBypass) ? cfg.kitBypass : 'ask', autoMode: cfg.autoApply === true, autoApply: cfg.autoApply === true, autoRequirements: cfg.autoRequirements === true, at: Date.now() }));
   } catch (e) { /* 记不了就按安全的值算 */ }
 }
 // ===================== 全自动模式只在走 OpenSpec 流程时算开着 =====================
@@ -158,7 +162,7 @@ function handoverStage(cwd) {
  */
 const BUG_REPORT = /(测试|自测|验收|用户|客户|现场|联调|试了|点了|跑了|看了)[^。！？\n]{0,12}(发现|反馈|报|说|看到)|bug|缺陷|报错|有问题|出问题|反了|没生效|不显示|显示不|不出来|没反应|点不了|打不开|进不去|不能用|用不了|失效|异常|乱码|错位|闪退|卡住了/i;
 const WANTS_PROPOSAL = /提案|变更|propose|opsx:|走流程|走 ?openspec/i;
-const SMALL_FIX_TEXT = '先查清原因，改动小（三个文件以内、不改接口和表结构、不改需求）就直接改、验证过，按 /ttls-cross-review 的代码模式只给改动点简单审一下，再交代，不要新开变更；改的是没归档的变更做出来的东西，在它的 revisions.md 记一条（起因：用户要求）。改动大、要改需求或规格、接口、表结构的，先告诉我要改什么、为什么，我说走提案再 /opsx:propose。';
+const SMALL_FIX_TEXT = '先查清原因，改动小（三个文件以内、不改接口和表结构、不改需求）就直接改；人工模式审查和自测前先 Ask，放弃直接继续，不记录未审查或未测试；按用户选择完成后交代，不要新开变更；改的是没归档的变更做出来的东西，在它的 revisions.md 记一条（起因：用户要求）。改动大、要改需求或规格、接口、表结构的，先告诉我要改什么、为什么，我说走提案再 /opsx:propose。';
 
 // ===================== 用户最后说的那句话：归档、提交要他点头 =====================
 /*
@@ -228,6 +232,8 @@ const NO_BEFORE = '(先别|别|不要|不用|不能|不准|不必|无需|先不|
 const SAID = {
   reviewSkip: { yes: /审查|复审/, command: /^$/ },
   reviewAccept: { yes: /审查|风险|意见/, command: /^$/ },
+  review: { yes: /审查|审核|复审/, command: /^(?:ttls-)?cross-review$/i },
+  test: { yes: /自测|测试|验证|复验|看页面|编译|构建|快检/, command: /^(?:ttls-)?see-page$/i },
   reviewBudget: { yes: /审查预算|重新审查/, command: /^$/ },
   handover: { yes: /交接|handover/i, command: /^(ttls-)?handover$/i },
   accept: { yes: /自测|验收/, command: /^$/ },
@@ -341,12 +347,10 @@ function flowAdopt(j) {
 }
 /** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */
 function readConfigFor(j) {
-  const c = readConfig();
-  c.autoSwitch = c.autoMode === true;
-  if (!c.autoSwitch) return c;
-  let st = flowState(j);
-  if (st.at === undefined) st = flowAdopt(j);
-  if (!flowView(j).effective) c.autoMode = false;
+  const c = readConfig(); c.autoSwitch = c.autoApply || c.autoRequirements;
+  const view = flowView(j); c.autoMode = !!view.effective;
+  c.reviewLoop = c.autoMode;
+  c.reviewMaxRounds = view.phase === '需求与提案' ? c.requirementsReviewMaxRounds : c.applyReviewMaxRounds;
   return c;
 }
 /** 展示和执行共用结果，需求改变、等待验收或归档后不能显示为自动实施。 */
@@ -354,9 +358,9 @@ function flowView(j) {
   const cfg = readConfig(); const st = flowState(j); const over = st.on && flowDone(j);
   const scope = st.on && st.stage === 'apply' ? require('./apply-scope').valid(j) : { ok: true };
   const typed = require('./task-types'); const dirs = flowChanges(j).filter((d) => fs.existsSync(d));
-  const userWait = dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0) && dirs.some((d) => typed.tasks(d).some((t) => t.kind === 'user' && !t.done));
+  const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code')) && dirs.some((d) => typed.tasks(d).some((t) => t.kind === 'user' && !t.done));
   const waiting = st.waiting || (!scope.ok ? '范围变化，等用户确认' : userWait ? '等用户自测验收' : '');
-  return { switchOn: cfg.autoMode === true, effective: cfg.autoMode === true && st.on === true && st.stage === 'apply' && !over && !waiting, phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over };
+  return { switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!((st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && st.planReady) && st.on === true && !over && !waiting), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over };
 }
 
 /**
@@ -698,7 +702,7 @@ function hookLog(line) {
   } catch (e) { /* 记不了就算了 */ }
 }
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-points|workflow-v2-migration|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness)\.json$|^hooks\.log/;
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
 function cleanState(days) {
@@ -1485,7 +1489,7 @@ function planStatusOf(name, changesDir) {
     if (done + todo === 0) return '提案中';
     if (todo === 0) {
       const cfg = readConfig();
-      const pending = codeReviewIssue(dir) || (cfg.reviewLoop && reviewLoopIssue('code', dir, cfg));
+      const pending = cfg.autoApply && (codeReviewIssue(dir) || (cfg.reviewLoop && reviewLoopIssue('code', dir, cfg)));
       return '已完成 ' + done + '/' + done + (pending ? '，待审查或处理意见' : '，待用户验收并确认归档');
     }
     return (done ? '进行中 ' : '已提案 ') + done + '/' + (done + todo);
@@ -1874,7 +1878,7 @@ function reviewDiagnostics(entries, cwd) {
 /** 提案审过了吗 */
 function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir)) && require('./review-runner').inputsCurrent(r.materialInputs)); }
 /** 流程能否继续：完整审查或当前输入的真人跳过记录；展示仍区分审过和跳过。 */
-function reviewAllowed(kind, dir) { return (kind === 'proposal' ? proposalReviewed(dir) : codeReviewed(dir)) || require('./review-runner').waived(dir, kind); }
+function reviewAllowed(kind, dir) { return require('./flow-policy').allPassed(dir, kind) || (kind === 'proposal' ? proposalReviewed(dir) : codeReviewed(dir)); }
 /**
  * 每项任务是什么时候打的勾（state/task-ticks.json，按变更目录记）。"代码审过了吗"要用：审查之后才打勾的任务，它的代码审到了没有。
  * 每次调用拿 tasks.md 对一遍：打了勾、还没记时间的，记成现在——头一回见到这个变更的记成 0（不知道什么时候打的，当作早就打了）；
@@ -1956,7 +1960,7 @@ function codeReviewed(dir) {
 }
 /** 归档、催审查时说的话：没审过，还是审过之后又做了任务。审过了返回空串 */
 function codeReviewIssue(dir) {
-  if (require('./review-runner').waived(dir, 'code')) return '';
+  if (require('./flow-policy').allPassed(dir, 'code')) return '';
   const r = reviewRecord('code', dir);
   if (!r) return '还没做过代码审查（/ttls-cross-review 的代码模式，前端后端都在内；审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
   if (r.fingerprint && !codeReviewed(dir)) return '代码或任务验法在审查后变更，需要针对变更部分复验和补审；仅打勾不会触发重复审查。';
@@ -1971,7 +1975,7 @@ function codeReviewIssue(dir) {
 // 一轮审查报了问题：改了东西就复审改动点，报"问题 0 条"才算审完；审查意见都不成立、之后只在这个变更的 revisions.md 里记了理由的，算处理完；
 // 轮数用完还有问题：问用户一次（全自动按原则自己定），也算完。状态在 state/review-rounds.json，按"模式|变更目录"计。
 const underDir = (file, dir) => { const f = normKey(file); const d = normKey(dir); return f === d || f.startsWith(d + '/'); };
-const reviewMax = (cfg) => Math.min(5, Math.max(1, Number(cfg.reviewMaxRounds) || 3));
+const reviewMax = (cfg) => Math.min(20, Math.max(1, Number(cfg.reviewMaxRounds) || 3));
 /**
  * 把这份会话记录里做完的审查计进轮数（每次审查只计一次），再看每个还没审完的，这次审查之后改了什么。
  * reviews 是 syncReviews 的返回（pos 是结论在 entries 里的位置）。只看这份会话记录里出现过的审查：别的项目、别的会话的不管。
@@ -2041,23 +2045,21 @@ function syncReviewRounds(entries, reviews) {
 function reviewExhaustedText(rec, kind, cfg, changeName) {
   const name = kind === 'proposal' ? '提案' : '代码';
   const who = '变更 ' + (changeName || rec.name || '') + ' 的' + name + '已经审了 ' + rec.rounds + ' 轮，仍有问题。';
-  return cfg.autoMode
-    ? who + '全自动模式：不问我，按约定里"全自动模式"一节的原则自己定——优先选影响面最小的方案，宁可少做一个边角功能也不能破坏现有功能；不用 hack 绕过验证；定了的方案验证过再提交；结论和理由写进 revisions.md（起因：自动模式决定），最后的交代里单独列"等你回来定的事"。'
-    : who + '现在停下来问我：先用一两句话说清剩下的问题是什么，然后调用 AskUserQuestion，问题"' + name + '审了 ' + rec.rounds + ' 轮还有问题，怎么办？"，header "审查"，选项：1. 再修再审一轮  2. 就这样，剩下的问题记进 revisions.md 先提交  3. 我自己来看。不要自己决定。';
+  return who + '停止自动循环，展示剩余问题，用 Ask 让用户选择继续审修、逐条处理或放弃。次数用完不代表通过；用户主动要求继续审查时执行。放弃不新增未审查或未测试记录。';
 }
 /**
  * 打勾（开工）、归档之前：这个变更的多轮审查审完了吗。先调 syncReviewRounds 把会话记录里的审查计上。
  * 没开多轮审查、审完了返回空串；轮数已经用完的，这一次就按"问用户 / 全自动自己定"说，并记成审完（问过了再来就放行）
  */
 function reviewLoopIssue(kind, dir, cfg) {
-  if (require('./review-runner').waived(dir, kind)) return '';
+  if (require('./flow-policy').allPassed(dir, kind)) return '';
   if (!cfg.reviewLoop) return '';
   const k = kind + '|' + normKey(dir);
   const rec = readState('review-rounds')[k];
   if (!rec || rec.done) return '';
   if (rec.born && changeBorn(dir) && Math.abs(rec.born - changeBorn(dir)) > 2000) return '';
   if (rec.rounds >= reviewMax(cfg)) {
-    updateState('review-rounds', (st) => { if (st[k]) { st[k].done = true; st[k].exhausted = true; } });
+    updateState('review-rounds', (st) => { if (st[k]) st[k].exhausted = true; });
     try { require('./usage.js').bump('review.exhausted'); } catch (e) { /* 数不了就算了 */ }
     return reviewExhaustedText(rec, kind, cfg, path.basename(dir));
   }

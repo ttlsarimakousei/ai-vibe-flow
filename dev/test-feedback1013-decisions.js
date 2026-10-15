@@ -13,10 +13,10 @@ H.ok('真正跳过决定可执行', guard(command, '这次跳过代码审查，�
 H.ok('取消跳过仍拦截', guard(command, '不要跳过代码审查') !== null);
 H.ok('包装命令也不能借无许可跳过', guard('cmd /c ' + command, '继续') !== null);
 const result = H.node(h, cli, ['waive', '--project', p, '--change', 'add-a', '--mode', 'code', '--reason', '用户已经实测并明确决定本轮跳过代码审查']);
-H.ok('显式跳过保存独立状态', result.code === 0 && JSON.parse(result.out).status === 'waived', result);
+H.ok('人工放弃直接结束', result.code === 0 && JSON.parse(result.out).status === 'dismissed', result);
 H.ok('跳过不伪造审查通过', !S.codeReviewed(d) && !S.reviewRecord('code', d));
-H.ok('任务明确标注用户决定', H.read(path.join(d, 'tasks.md')).includes('用户决定跳过审查'));
-H.ok('当前输入允许归档检查继续', S.codeReviewIssue(d) === '');
+H.ok('放弃不往团队任务追加记录', !H.read(path.join(d, 'tasks.md')).includes('用户决定跳过审查'));
+H.ok('放弃不算代码审查通过', S.codeReviewIssue(d) !== '');
 H.ok('跳过状态跨会话保留', S.GLOBAL_STATE.test('review-waivers.json'));
 H.write(path.join(p, 'a.js'), 'let a=2;\n');
 H.ok('新代码使旧跳过记录失效', S.codeReviewIssue(d) !== '');

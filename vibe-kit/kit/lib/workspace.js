@@ -66,4 +66,4 @@ function fingerprintRaw(dir, kind) {
   if (!parts.length) return first;
   return { root: first.root, hash: hash(JSON.stringify([first].concat(parts).map((p) => [path.relative(first.root, p.root).replace(/\\/g, '/'), p.hash]))), files: first.files.concat(...parts.map((p) => p.files.map((f) => path.relative(first.root, p.root).replace(/\\/g, '/') + '/' + f))) };
 }
-module.exports = { hash, git, rootOf, fingerprint, progressText, pathStatus };
+module.exports = { hash, git, checkedGit, rootOf, fingerprint, progressText, pathStatus };

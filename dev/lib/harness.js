@@ -74,14 +74,18 @@ function makeHome(name, from, config) {
   fs.mkdirSync(path.join(kit, 'state'), { recursive: true });
   fs.writeFileSync(path.join(kit, 'config.json'), JSON.stringify(Object.assign({ hookTransport: 'command', autoUpdate: 'off', issueUpload: 'off' }, config || {}), null, 2));
   // 封条：测试里要关禁改、开自动放行时才认
-  fs.writeFileSync(path.join(kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: !(config && config.kitLock === false), kitBypass: (config && config.kitBypass) || 'ask', autoMode: !!(config && config.autoMode === true), at: Date.now() }));
+  fs.writeFileSync(path.join(kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: !(config && config.kitLock === false), kitBypass: (config && config.kitBypass) || 'ask', autoMode: !!(config && (config.autoApply === true || config.autoMode === true)), autoApply: !!(config && (config.autoApply === true || config.autoMode === true)), autoRequirements: !!(config && config.autoRequirements === true), at: Date.now() }));
   return { root, home, cfg, kit, work: path.join(root, 'work') };
 }
 function setConfig(h, patch) {
   const f = path.join(h.kit, 'config.json');
+  // 旧用例的 autoMode 是 Apply 开关别名；显式的新字段优先，避免关不掉上一轮开关。
+  patch = Object.assign({}, patch);
+  if (Object.hasOwn(patch, 'autoMode') && !Object.hasOwn(patch, 'autoApply')) patch.autoApply = patch.autoMode;
   const c = Object.assign(JSON.parse(fs.readFileSync(f, 'utf8')), patch);
+  c.autoMode = c.autoApply === true;
   fs.writeFileSync(f, JSON.stringify(c, null, 2));
-  fs.writeFileSync(path.join(h.kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass || 'ask', autoMode: c.autoMode === true, at: Date.now() }));
+  fs.writeFileSync(path.join(h.kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass || 'ask', autoMode: c.autoApply === true || c.autoMode === true, autoApply: c.autoApply === true || c.autoMode === true, autoRequirements: c.autoRequirements === true, at: Date.now() }));
 }
 function envFor(h, extra) {
   const env = {};
@@ -326,4 +330,11 @@ function inFlow(h, sid, changes, on, stage) {
   write(f, JSON.stringify({ on: on !== false, why: '测试', at: Date.now(), was: Date.now(), changes: (changes || []).map(norm), stage: stage || 'apply' }));
 }
 
-module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, makePackage, runtime, inFlow, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done };
+/** 报告和提交用例的前提：模拟当前每个审查点已经取得完整零问题结果。 */
+function reviewPoints(h, dir, mode) {
+  const file = path.join(h.kit, 'lib/flow-policy.js'); if (!fs.existsSync(file)) return;
+  const p = require(file);
+  for (const point of p.points(dir, mode || 'code')) p.noteResult(dir, point, { id: 'fixture-' + point, status: 'completed', issues: [] }, p.fingerprint(dir, point));
+}
+
+module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, makePackage, runtime, inFlow, reviewPoints, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done };

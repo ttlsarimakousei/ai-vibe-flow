@@ -1,24 +1,7 @@
 'use strict';
-/*
- * Stop 钩子：模型说"做完了"准备收工时，用脚本确定性地检查这一轮有没有漏掉该做的事。漏了就拦一次，把该做的事告诉它。
- * 判断全在本机脚本里做，不花 token：
- *   1. 改了代码，但最后一次修改之后没成功跑过像验证的命令        → 让它跑快检（开关 autoVerify）
- *   2. 改了页面文件，但之后没成功跑过场景或探针                        → 让它按 /ttls-see-page 跑一遍（开关 autoSeePage）
- *   3. 这一轮把某个 OpenSpec 变更的最后一项任务打了勾，代码还没审过 → 让它 /ttls-cross-review（开关 autoCrossReview；每个变更催一次）
- *   4. 这一轮改过的文件在 git 里还没提交                          → 让它提交（开关 autoCommit：task / phase / change / off；每一轮只提一次。
- *      phase = 按阶段：tasks.md 里同一个大编号的任务全打勾了才催，做到一半不催，见 phaseDone）。
- *      不走 OpenSpec 的改动（这个会话没动过任何变更）而且开关 plainCommit = ask：不催它提交，催它交代了用提问框问用户，用户说了提交才提交。
- *      审查过程不进提交（用户 2026-10-07 定的）：还没开工的变更的产物（提案阶段）不催；多轮审查报了问题还没审到 0 条的，先不催
- *   4b. 这个会话里新建、还没进 git 的文件，项目里留下的备份、日志 → 要交的提交，临时的删掉（开关 vibeTidy；过程文件阻塞检查；待用户提交的新文件只提醒）
- *   4c. 说了是套件的问题却没记问题反馈 → 让它记；做完了、这个会话记过套件问题 → 交代里单独列"套件问题"（lib/feedback.js）
- *   4d. 审查报了问题、处理过了，却没记经验 → 让它挑"还会再犯"的记下来；经验规则文件改了没提交 → 让它提交（开关 lessons，lib/lessons.js）
- *   5. OpenSpec 产物：改了没记录、提案里的能力没有规格、设计写了没读过的文件、提案写好没审、变更不在 plan.md 里、
- *      归档之后主规格（openspec/specs/）里没有这个变更的需求（开关 specGate）
- *   6. 多轮审查（开关 reviewLoop）、全自动模式催进度和收工时的报告（开关 autoMode，lib/report.js）、到交接线问一句（handoverAsk）
- * 审查记录只认"真审了"：这一轮（包括被拦之后的续跑）里的 ttls-reviewer 调用，有结果、不是报错、带"结论：问题 N 条"的才记，
- *   模式看提示第一行"模式：提案 / 代码 / 复审…"，变更看提示里点名的。催过和审过分开记。
- * 只算改成功了的修改、成功跑完的命令。每件事每一轮最多拦一次；被拦之后的续跑里只再查一件事：拦下之后又改了代码却没验证。
- * 项目说明（被改文件所在项目的 .vibe/project.md）里标了"快检：不适用""看页面：不适用"的，不催。
+/* Stop：检查交付材料、当前验证证据、逐点审修、提交和报告。
+ * 自动阶段按整组推进；人工阶段审查、自测先 Ask。提示去重，放弃不产生待办。
+ * 本机脚本只核对实际事实，失败、未覆盖和达到次数上限不记通过。
  */
 const fs = require('fs');
 const path = require('path');
@@ -281,8 +264,7 @@ function lessonTodo(j, cfg, entries, reviews, lastSaid) {
 }
 function lessonCommitTodo(j, cfg, turnId, changes) {
   if (!lessons || !j.session_id || lessons.settings(cfg).mode === 'off') return '';
-  const mode = commitMode(cfg);
-  if (mode === 'off') return '';
+  const mode = cfg.autoMode ? commitMode(cfg) : 'task';
   if (mode === 'change' && changes().some((c) => c.todo > 0)) return '';
   const list = lessons.uncommitted(j.cwd || process.cwd());
   if (!list.length) return '';
@@ -293,7 +275,9 @@ function lessonCommitTodo(j, cfg, turnId, changes) {
   const times = st.commitSig === sig ? (st.commitTimes || 0) : 0;
   if (times >= 2) return '';
   writeState(key, Object.assign({}, st, { commitTurn: turnId || 'x', commitSig: sig, commitTimes: times + 1, at: Date.now() }));
-  return '经验规则文件更新了，还没提交：' + list.map((x) => path.basename(x.repo) + ' 的 ' + x.rel).join('、') + '。规则跟着仓库走，同事的 Claude 才看得到：进到对应的仓库（git -C <目录>），只 git add 这个文件，提交信息写"docs: 更新经验规则"，和代码的修复分开提交。';
+  const where = list.map((x) => path.basename(x.repo) + ' 的 ' + x.rel).join('、');
+  if (!cfg.autoMode || mode === 'off') return '经验规则文件更新了，还没提交：' + where + '。提醒用户提交，用 Ask 给出提交或暂不提交选项；提醒不代表自动提交许可。';
+  return '经验规则文件更新了，还没提交：' + where + '。规则跟着仓库走，同事的 Claude 才看得到：进到对应的仓库（git -C <目录>），只 git add 这个文件，提交信息写"docs: 更新经验规则"，和代码的修复分开提交。';
 }
 
 /** 这些文件里 git 跟踪着的（相对 root 的路径，正斜杠）。查不了 git 的返回 null */
@@ -441,31 +425,6 @@ function designGroundingTodo(calls, isEdit, fileOf, snapFiles, allCalls) {
   return out;
 }
 /** 提案写好（proposal、specs、tasks 齐了）、还没开工、还没审过：催它按提案模式审一遍，每个变更最多催两轮。审查还在后台跑的（busy）不催 */
-function proposalReviewTodo(touched, busy) {
-  const out = [];
-  for (const [key, a] of touched) {
-    const dir = a.dir;
-    if (require('../lib/session').reviewAllowed('proposal', dir) || (busy && busy(dir, 'proposal'))) continue;
-    const has = (n) => fs.existsSync(path.join(dir, n));
-    let specs = false;
-    try { specs = fs.readdirSync(path.join(dir, 'specs')).length > 0; } catch (e) { /* 无 */ }
-    if (!(has('proposal.md') && has('tasks.md') && specs)) continue;
-    try { if (/^\s*[-*]\s*\[[xX]\]/m.test(fs.readFileSync(path.join(dir, 'tasks.md'), 'utf8'))) continue; } catch (e) { continue; }
-    if (!has('design.md')) { out.push('变更 ' + a.name + ' 缺 design.md。我们的规矩：每个提案都要有设计，Context 一节列出探索时读过的文件、表、接口，Decisions 写为什么这么做。补上再审。'); continue; }
-    let asked = 0;
-    updateState('reviewed-proposal', (st) => { const prev = st[key] && typeof st[key] === 'object' ? st[key] : {}; asked = prev.asked || 0; if (asked < 2) st[key] = Object.assign({}, prev, { asked: asked + 1, at: Date.now(), born: changeBorn(dir) }); });
-    if (asked >= 2) continue;
-    out.push('变更 ' + a.name + ' 的提案写好了。apply 之前先按 /ttls-cross-review 的提案模式审一遍：用 Agent 调 ttls-reviewer（run_in_background 传 false，等它的结论），提示第一行写"模式：提案"，第二行写变更目录 ' + dir + '，让它读 proposal、specs、design、tasks 和它们提到的代码，专挑想当然的、没说清的、场景漏的、任务不可验证或太大的、上下文对不齐的。成立的改掉并在 revisions.md 记录，再交代结果。');
-  }
-  return out;
-}
-/**
- * 链路要对齐，改了要有记录。需求 → 规格 → 设计 → 任务 → 代码是一条链：后面一环发现问题改了产物，上面的每一环都要看一遍要不要跟着改，并在 revisions.md 记下。
- * 什么算"修订"：用户开口时记过指纹的产物现在内容变了（打勾不算）；同一轮里写了后面的产物又回头改前面的。有修订、修订记录却没跟上，拦一次（每轮一次）。
- * 修订记录跟上了没有：这一轮用工具改过 revisions.md，或者它的内容和记指纹时不一样了（用命令追加的、会话记录里已经看不到的那次编辑也算）。
- * 对上了就把指纹换成现在的、记下对账的时间：全自动模式一轮能跑几个小时，之后的收工检查不再拿对过账的旧编辑说事——
- * 以前只在会话记录末尾那一段里找"改过 revisions.md"，几小时前记过的找不到，就说"这一轮改了 tasks.md 没记录"（问题反馈 F20260929-001）
- */
 function revisionTodo(j, calls, isEdit, fileOf, turnId) {
   const skey = String(j.session_id || 'unknown') + '-artifacts';
   const snap = readState(skey);
@@ -509,12 +468,12 @@ function revisionTodo(j, calls, isEdit, fileOf, turnId) {
   const names = [...new Set(list.map((r) => r.art.rel))].join('、');
   hookLog('verify-gate revision ' + list[0].art.name + ' ' + names);
   return '这一轮改了 OpenSpec 变更 ' + list[0].art.name + ' 的 ' + names + '（' + list[0].why + '），但没有记录。改产物要做两件事：\n'
-    + '1. 往上对齐：改了 tasks 就看 design、specs、proposal 要不要跟着改；改了 design 就看 specs、proposal；改了 specs 就看 proposal。颗粒度要一致，不改的要说得出理由。\n'
+    + '1. 同步全部受影响链路：proposal、specs、design、tasks、代码、验收用例和流程图；修改处添加简短批注，写明修订原因和关联项。未受影响内容无需重写。\n'
     + '2. 在 ' + list[0].art.dir + '/revisions.md 末尾追加一条（没有就新建）：\n'
     + '## <日期 时间> · <在哪一步发现的，比如：apply 做 2.3 时>\n'
     + '- 起因：主观 / 客观 / 用户要求 / 需求变化 / 审查 / 自动模式决定 之一，加一句具体的（比如：客观，order 表没有 status 字段，设计里假设有）\n'
     + '- 改了：<文件>：<改了什么>\n'
-    + '- 上层：<哪些跟着改了；哪些不用改，原因>\n'
+    + '- 影响：<上下游哪些跟着改了、关联用例；哪些不用改，原因；不写套件钩子、命令、预算或失败诊断>\n'
     + '记完再收工。';
 }
 /** 提案里列的能力都要有对应的规格文件（提案写完、tasks 也有了之后才查） */
@@ -588,7 +547,7 @@ function reviewLoopTodo(j, cfg, entries, reviews, turnId) {
     const name = kind === 'proposal' ? '提案' : '代码';
     if (rec.rounds >= max) {
       out.push(reviewExhaustedText(rec, kind, cfg, change.name));
-      mark.push([key, { done: true, exhausted: true }]);
+      mark.push([key, { done: false, exhausted: true }]);
       try { require('../lib/usage.js').bump('review.exhausted'); } catch (e) { /* 数不了就算了 */ }
       continue;
     }
@@ -606,48 +565,16 @@ function reviewLoopTodo(j, cfg, entries, reviews, turnId) {
  *   审过了 → 不催（归档要用户自测过、说了才做，用户 2026-10-07 定的；收工报告里写明等他自测）。只在做任务那一段（stage = apply）算全自动。
  * 它已经明说卡住、要人定的不催。循环保护：同一轮里再次收工，只有有进展（打勾数增加）才再催，没进展就放行。快到网关上限也不催。
  */
-const HAND_TIP = '改库照查库技能的两步走，不用等我确认（它留改前快照和还原脚本、记下新增的主键）。要我动手的事（查库的工具说备份不了的改库操作、改 redis、要账号密码、push）不做也不等：在那项任务后面加上"（留给用户：原因）"，不打勾，接着做不依赖它的。';
 function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
-  if (!cfg.autoMode) return [];
-  if (saidStuck(lastSaid)) return [];
-  const used = lastUsageTokens(entries);
-  if (used && nearGatewayLimit(used)) return [];
-  // 只催这个会话在流程里动手做过的变更：只是读过它的 tasks.md、话里提到过名字的不催
-  // （另开一个窗口做检索，收工时不能自己去接着做别的窗口正在做的变更）
-  const flow = flowChanges(j);
-  const mine = sessionChanges(j.session_id, entries, changes).filter((c) => flow.includes(normKey(c.dir)));
-  if (!mine.length) return [];
-  const skey = String(j.session_id || 'unknown') + '-auto';
-  const st = readState(skey);
-  // 这个会话碰过的变更挨个看：头一个还有事可做的，催它往下走。能做的都做完了、只剩留给用户的那个变更，放着，看下一个
-  for (const c of mine) {
-    const direct = require('../lib/review-runner').stateFor(c.dir, 'code');
-    if (direct.status !== 'none' && direct.status !== 'completed' && direct.status !== 'running') continue; // 失败后交代限制，不能自行无限重启。
-    if (busy && busy(c.dir, 'code')) continue;
-    const key = normKey(c.dir);
-    const prev = st[key] || {};
+  if (!cfg.autoMode || saidStuck(lastSaid)) return [];
+  const flow = flowChanges(j); const policy = require('../lib/flow-policy');
+  for (const c of sessionChanges(j.session_id, entries, changes).filter(c => flow.includes(normKey(c.dir)))) {
+    if (busy && busy(c.dir, 'code') || policy.pending(c.dir, 'code')) continue;
     const remaining = require('../lib/task-types').automatedLeft(c.dir);
-    const left = remaining.length;
-    let msg = '';
-    if (require('../lib/task-types').readyForReview(c.dir) && !require('../lib/session').reviewAllowed('code', c.dir)) msg = '全自动模式：实现和必要测试已完成，' + require('../lib/review-runner').instruction(c.name, 'code', cfg) + '。完整结果返回后立即勾代码审查任务，核实并处理意见、复验后勾意见处理任务，用户验收留给用户。';
-    else if (left > 0 && c.done === 0) { if (require('../lib/session').reviewAllowed('proposal', c.dir)) msg = '全自动模式：我已经说了开工，' + c.name + (proposalReviewed(c.dir) ? ' 的提案也审过了' : ' 已按你的决定跳过提案审查') + '，不用问我，直接开始 /opsx:apply，一项一项做到能执行的任务全部打勾（做完并验证就勾，提交按档位）。' + HAND_TIP; }
-    else if (left > 0) msg = '全自动模式：' + c.name + ' 还有 ' + left + ' 项没做完，不用问我，接着做下一项：' + remaining[0].text + '。' + HAND_TIP;
-    else if (c.done > 0) {
-      const loop = readState('review-rounds')['code|' + key];
-      const loopOpen = cfg.reviewLoop && loop && !loop.done;
-      const cr = codeReviewIssue(c.dir);
-      // 代码审查还在后台跑：等它的结论（通知到了会接着一轮），不催
-      if (busy && busy(c.dir, 'code')) msg = '';
-      else if (cr) msg = '全自动模式：' + c.name + ' 能做的任务都做完了，' + cr + '。成立的问题修掉并验证。';
-      else if (loopOpen) msg = '全自动模式：' + c.name + ' 的代码审查报了 ' + (loop.issues || 0) + ' 条问题还没处理：成立的改掉并验证（改完收工检查会催复审），不成立的在 revisions.md 逐条记下理由（起因：审查）。';
-      // 任务全部完成、代码审过了：不归档，归档要用户自测过、说了才做。什么都不催，收工时报告里写明等他自测
-    }
-    if (!msg) continue;
-    // 循环保护：同一轮里再次收工，只有有进展（打勾数增加）才再催，没进展就看下一个变更
-    if (j.stop_hook_active && !(prev.turnId === turnId && c.done > prev.doneAtNudge)) continue;
-    st[key] = { doneAtNudge: c.done, turnId, at: Date.now() };
-    writeState(skey, st);
-    return [msg];
+    if (!remaining.length) continue;
+    const signature = remaining.map(t => t.text).join('\n') + policy.groups(c.dir).map(g => g.id + ':' + g.done).join('|');
+    let fresh = false; updateState(j.session_id + '-auto', o => { const k = normKey(c.dir); if (o[k] !== signature) { o[k] = signature; fresh = true; } });
+    if (fresh) return ['Apply 自动模式：继续当前范围的下一项 ' + remaining[0].text + '。整组 1.x 做完先审修再进入下一组；业务疑问先 Ask，服务起停、测试执行和诊断只记本机。'];
   }
   return [];
 }
@@ -679,7 +606,7 @@ function autoReport(j, cfg, entries, lastSaid, changes) {
     + '4. 自己定的事（没问就定了的，各写一句理由）\n'
     + '5. 没验证的（哪一项、为什么没验）\n'
     + '6. 放行的检查（哪道检查、理由）\n'
-    + '7. 套件问题（编号和一句话）\n'
+    + '7. 套件问题（只写数量和可点的详情链接）\n'
     + '写完就收工，不要再做别的。';
 }
 /**
@@ -776,24 +703,10 @@ async function handle(j) {
   const calls = toolCalls(entries, start);
   const results = toolResults(entries.slice(start));
   const failed = (c) => { const r = results.get(c.id); return !!(r && r.error); };
-  // 全自动模式只在走 OpenSpec 流程时算开着。用户开口时定过一次（task-anchor）；这一轮里它自己调了 OpenSpec 的技能的，
-  // 调的那一刻也记了（guard-ask）。这里兜底再看一遍这一轮的调用：那两处没经过（钩子走的是老的登记）也认得出
-  if (cfg.autoSwitch && !cfg.autoMode) {
-    const skills = calls.filter((c) => /^(Skill|SlashCommand)$/.test(c.name) && !failed(c) && FLOW_SKILL.test(String(c.input.skill || c.input.command || c.input.name || '')));
-    const last = skills[skills.length - 1];
-    if (last) {
-      // 调的是 apply / archive：在做任务那一段，全自动算数；调的是 propose / explore：在写提案那一段，照有人在的样子来（用户 2026-10-07 定的）
-      const nm = String(last.input.skill || last.input.command || last.input.name || '').trim().replace(/^\//, '');
-      const stage = /^(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i.test(nm) ? 'apply' : 'plan';
-      setFlow(j, true, '调了 OpenSpec 的技能', stage);
-      if (stage === 'apply') { cfg.autoMode = true; hookLog('全自动模式 这个会话进了 OpenSpec 流程：这一轮调了 OpenSpec 的技能（做任务那一段）'); }
-      else hookLog('全自动模式 这个会话这一轮调了 OpenSpec 的技能，在写提案那一段，照有人在的样子来');
-    }
-  }
   // 在流程里动手做过的变更：收工时只催这几个往下走。算动手的：写过它的产物、打过勾；openspec 命令、技能的参数里点了它的名
   // （/opsx:apply 没带名字，它照 OpenSpec 的步骤先跑 openspec status --change <名字>）。只是读过它的 tasks.md 不算：那可能是别的窗口在做的。
   // 写提案那一段也记（那时 autoMode 是 false）：用户说了开工之后，收工时才知道催哪个
-  if (cfg.autoSwitch && flowState(j).on) {
+  if (flowState(j).on) {
     try {
       const named = [];
       for (const c of calls) {
@@ -848,8 +761,9 @@ async function handle(j) {
   const sameTurn = turnId ? gate.turnId === turnId : !!j.stop_hook_active;
   let specChecked = sameTurn ? !!gate.specChecked : false;
   const codeEdits = calls.filter((c) => isSource(c, CODE));
-  const codeNeedingCheck = (cfg.autoVerify ? codeEdits.filter((c) => !notApplicable(projectNotesFor(fileOf(c)), '快检|验证')) : []);
-  const pageEdits = cfg.autoSeePage ? calls.filter((c) => isSource(c, PAGE) && !notApplicable(projectNotesFor(fileOf(c)), '看页面|页面')) : [];
+  const checking = cfg.autoMode || require('../lib/flow-policy').explicit(j, 'test');
+  const codeNeedingCheck = (checking && cfg.autoVerify ? codeEdits.filter((c) => !notApplicable(projectNotesFor(fileOf(c)), '快检|验证')) : []);
+  const pageEdits = checking && cfg.autoSeePage ? calls.filter((c) => isSource(c, PAGE) && !notApplicable(projectNotesFor(fileOf(c)), '看页面|页面')) : [];
   const verifyIssue = () => {
     const last = codeNeedingCheck.length ? calls.indexOf(codeNeedingCheck[codeNeedingCheck.length - 1]) : -1;
     const roots = [...new Set(codeNeedingCheck.map((c) => require('../lib/workspace').rootOf(path.dirname(fileOf(c)))))];
@@ -874,39 +788,28 @@ async function handle(j) {
     if (v) todo.push('拦下之后你又改了代码。' + v);
   }
 
-  // 交叉审查：这一轮亲手把变更的最后一项任务打了勾、代码还没审过的，催一次（只记"催过"和做完的时间，"审过"要看到真的审查）
-  if (cfg.autoCrossReview) {
-    const edited = calls.filter(isEdit).map(fileOf);
-    const fresh = changes().filter((c) => require('../lib/task-types').readyForReview(c.dir) && c.done > 0 && edited.some((f) => under(f, c.dir)) && !require('../lib/session').reviewAllowed('code', c.dir) && !busy(c.dir, 'code'));
-    const toNudge = [];
-    if (fresh.length) updateState('review-nudged', (st) => {
-      for (const c of fresh) {
-        const k = normKey(c.dir);
-        const prev = st[k];
-        const fingerprint = require('../lib/workspace').fingerprint(c.dir, 'code').hash;
-        const direct = require('../lib/review-runner').stateFor(c.dir, 'code');
-        if (direct.status !== 'none' && direct.status !== 'completed' && direct.status !== 'running') continue;
-        if (prev && prev.fingerprint === fingerprint && (!prev.born || Math.abs(prev.born - changeBorn(c.dir)) <= 2000)) continue;
-        st[k] = { at: Date.now(), born: changeBorn(c.dir), fingerprint };
-        toNudge.push(c);
-      }
-    });
-    if (toNudge.length) todo.push('OpenSpec 变更的实现和必要测试已完成：' + toNudge.map((c) => require('../lib/review-runner').instruction(c.name, 'code', cfg)).join('；') + '。完整结果返回后勾审查任务，成立的问题修掉并复验后勾意见处理任务，再交代结果，用户验收不自动勾。');
+  const policy = require('../lib/flow-policy');
+  const touchedDirs = calls.filter(isEdit).map(fileOf).map(f => artifactOf(f)).filter(Boolean).map(a => a.dir);
+  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0));
+  if (policy.automaticApply(j)) { Object.assign(cfg, readConfigFor(j)); todo.push('两阶段自动开启且文档已审修并提交，执行 /opsx:apply；完成整组任务后先审查、自测、修复复验，再进入下一组。'); }
+  if (cfg.autoMode && flowState(j).stage === 'plan') {
+    for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {
+      if (policy.points(c.dir, 'proposal').length === 4 && policy.allPassed(c.dir, 'proposal')) { const msg = policy.planNext(j, c); if (msg) todo.push(msg); }
+    }
   }
-
   // 提交：这一轮自己改成功的文件（.vibe、.claude 里的不算）在 git 里还是没提交的状态。每一轮只提一次
   // 不走 OpenSpec 的改动、开关选了"先问我"：不催它提交，催它交代了问我（它这一轮已经在问的不再说）
-  const mode = commitMode(cfg);
-  if (mode !== 'off' && j.session_id !== undefined) {
+  const mode = cfg.autoMode ? commitMode(cfg) : 'task';
+  if (j.session_id !== undefined) {
     // 提案是可单独交付的一件事。审完后问是否提交，不把确认拖到 apply。
-    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && require('../lib/session').reviewAllowed('proposal', a.dir); });
+    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && (!cfg.autoMode || require('../lib/session').reviewAllowed('proposal', a.dir)); });
     const pkey = sid + '-plancommit';
     const planOnce = turnId ? readState(pkey).turnId !== turnId : !j.stop_hook_active;
     if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !pending.some((p) => p.mode === 'proposal') && !userSaid(entries, 'commit').ok && !require('../lib/session').commitDeclined(j, entries) && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
       const dirtyPlan = await uncommitted(plans, true);
       if (dirtyPlan.length) {
         writeState(pkey, { turnId, at: Date.now() });
-        todo.push('提案已经写完并审过：交代提案要点和审查结果，问我是否提交这些产物（选项"提交提案"和"还要改"）。我同意后单独提交 docs: 提案 <变更名>；提交不等于开工，不要自己执行 apply。');
+        todo.push('提案产物已修改：交代定稿内容和实际执行的检查结果，用 Ask 问是否提交这些产物（选项"提交定稿"和"继续修改"）。同意后整套文档提交一次 docs: 提案 <变更名>；提交不等于开工，随后 Ask 提供 apply 选项。');
       }
     }
     // 提案产物只走上面的确认提交，不混进 apply 的任务提交。
@@ -929,6 +832,7 @@ async function handle(j) {
         const how = '先自己把 diff 过一遍（有没有调试代码、误改、漏改），然后进到对应的仓库（git -C <目录>），只 git add 你这一轮改的和新建的文件（新建的 git 不会自动带上；不用 -A、.、-u，也不用 commit -a），' + unit + '，信息按"类型: 内容"写（例：feat: 新增修改页面）；只提交不 push';
         const plain = plainCommitAsk(j, cfg, entries, changes, lastSaid);
         if (plain === 'asked' || plain === 'declined') { /* 已提问或用户决定暂不提交，不反复催同一份改动 */ }
+        else if ((mode === 'off' || !cfg.autoMode && cfg.plainCommit !== 'auto') && !userSaid(entries, 'commit').ok) todo.push('本轮改动尚未提交：' + where + '。可以提醒用户提交，用 Ask 提供提交或继续修改选项；不能把提醒当自动提交。');
         else if (plain === 'ask') todo.push('这一轮改过的文件还没提交：' + where + '。不走 OpenSpec 的改动，提交之前要我点头：先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说提交了再提交，只提交不 push。');
         else if (todo.length) todo.push('验证过了就接着提交，不用等我说：' + how + '。验证没过、还没做完的先不提交。');
         else todo.push('这一轮改过的文件还没提交：' + where + '。已经做完并且验证过的，现在提交：' + how + '。还没做完、验证没过的先不提交，说明原因就行。');
@@ -958,7 +862,7 @@ async function handle(j) {
       todo.push(...capabilityTodo(touched));
       const snapFiles = (readState(sid + '-artifacts').files) || {};
       todo.push(...designGroundingTodo(calls, isEdit, fileOf, snapFiles, toolCalls(entries, 0)));
-      if (!j.stop_hook_active) todo.push(...proposalReviewTodo(touched, busy));
+      // 逐产物审查在统一策略中调度，不再等整套文档齐全。
       if (todo.length > before) specChecked = true;
     }
     if (touched.size) todo.push(...planUnlistedTodo(touched));
@@ -977,9 +881,9 @@ async function handle(j) {
   // 记下这个会话碰过的变更：开口时的进度行、全自动推进只认这些（会话记录很长时，早先碰过的不在末尾那一段里）
   if (calls.some((c) => /openspec/i.test(fileOf(c) + ' ' + String(c.input.command || '')))) { try { sessionChanges(j.session_id, entries, changes()); } catch (e) { /* 记不了不影响收工 */ } }
   // 多轮审查
-  todo.push(...reviewLoopTodo(j, cfg, entries, reviews, turnId));
+  // 逐点审查循环由 flow-policy 计数。
   // 全自动模式：别的事都了了，看流程走到哪一步，催它往下走
-  if (!todo.length) todo.push(...autoModeTodo(j, cfg, entries, lastSaid, turnId, changes(), busy));
+  if (!todo.length) if (cfg.autoMode && flowState(j).stage === 'apply' && !allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir))).some(c => require('../lib/flow-policy').pending(c.dir, 'code'))) todo.push(...autoModeTodo(j, cfg, entries, lastSaid, turnId, changes(), busy));
   // 全自动模式过了交接线：还有活要干，先写一份交接记录
   if (todo.length && ah.line) { todo.push(ah.line); ah.mark(); }
 

@@ -151,7 +151,7 @@ H.section('规则文件改了没提交：收工时催一次');
   H.ok('同一轮不催第二次', !r2 || !/经验规则文件更新了/.test(H.reasonOf(r2)), r2);
   H.setConfig(h, { autoCommit: 'off' });
   const r3 = stop('s-commit-off', [H.tr.user('记一下经验'), H.tr.say('好了')]);
-  H.ok('"我说了才提交"：不催', !r3 || !/经验规则文件更新了/.test(H.reasonOf(r3)), r3);
+  H.ok('关闭自动提交仍可提醒，用 Ask 决定', /经验规则文件更新了/.test(H.reasonOf(r3)) && /Ask/.test(H.reasonOf(r3)));
   H.setConfig(h, { autoCommit: 'task' });
   H.git(A, ['add', '.claude/rules/ttls-lessons-java.md', '.gitignore']);
   const c = H.git(A, ['commit', '-q', '-m', 'docs: 更新经验规则']);

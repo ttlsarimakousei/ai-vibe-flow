@@ -100,17 +100,17 @@ H.section('打勾：跑过验法里写明的脚本就能打（F001 / F002 / F003
     '- [ ] 5.2 端到端验证场景文件：新建 .vibe/scenarios/secadmin.json；验：`node .vibe/e2e52.js`（接口层场景全 PASS，E2E52_PASS）', ''].join('\n');
   H.write(tasks, t0);
   const tick = (from, to) => H.hook(h, 'guard-spec', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: tasks, old_string: from, new_string: to } }));
-  H.transcript(tfile, [H.tr.user('继续做 secadmin-log-split'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
+  H.transcript(tfile, [H.tr.user('继续做 secadmin-log-split，测试'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const r0 = tick('- [ ] 4.2', '- [x] 4.2');
   H.ok('没跑过验法：拦', r0 && r0.decision === 'block', r0);
   H.ok('拦的时候说清要看到什么', /要看到的是：跑过 `node \.vibe\/run42\.js`/.test(H.reasonOf(r0)), H.reasonOf(r0));
-  H.transcript(tfile, [H.tr.user('继续做 secadmin-log-split'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'),
+  H.transcript(tfile, [H.tr.user('继续做 secadmin-log-split，测试'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'),
     H.tr.ran('Bash', { command: 'node .vibe/mkstate.js && node .vibe/run42.js' }, 'RESULT ok\nRESULT ok'), H.tr.ran('Bash', { command: 'node .vibe/e2e52.js && node .vibe/kbtry.js revert' }, 'E2E52_PASS')]);
   const r1 = tick('- [ ] 4.2', '- [x] 4.2');
   H.ok('跑过 run42.js：4.2 能打勾', r1 === null, H.reasonOf(r1));
   const r2 = tick('- [ ] 5.2', '- [x] 5.2');
   H.ok('跑过 e2e52.js：5.2 能打勾', r2 === null, H.reasonOf(r2));
-  H.transcript(tfile, [H.tr.user('继续'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'node .vibe/run42.js' }, 'RESULT fail', true)]);
+  H.transcript(tfile, [H.tr.user('测试'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'node .vibe/run42.js' }, 'RESULT fail', true)]);
   const r3 = tick('- [ ] 4.2', '- [x] 4.2');
   H.ok('跑了但失败的不算', r3 && r3.decision === 'block', r3);
 }

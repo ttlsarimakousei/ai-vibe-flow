@@ -3,7 +3,7 @@
  * PreToolUse 钩子（改文件时，由 pre-edit 调用）：OpenSpec 产物的门槛。
  * 提案、规格、设计、任务写得含糊，模型到了写代码的时候只能猜；猜出来的东西藏在代码里，比写在文档里更难发现。
  * 所以在它把产物写进 openspec/changes/<名字>/ 的那一刻就检查，不过就拦回去改：
- *   所有产物：不许"待定、后续完善、开发阶段再、视情况、TBD"这类话，拿不准的写成决策项（同一行写明"默认按…做"）；模板的占位注释不能留着；不超过 250 行（只在越写越长时拦）
+ *   所有产物：不许"待定、后续完善、开发阶段再、视情况、TBD"这类话，拿不准的写成决策项（同一行写明"默认按…做"）；模板的占位注释不能留着；复杂需求和设计允许长文，必要时用图说明
  *   proposal.md 第一次写：这个会话里得探索过项目（读过代码、搜过），而且探索和提案不在同一轮——先把现状给用户看。
  *             用户自己敲 /opsx:propose、全自动模式、交接之后的新会话（这个会话读过一天内的交接记录）不要求分轮
  *   tasks.md：每项任务写清改哪个文件（路径，而且找得到，新建的写明"新建"）、怎么验（"验：…"）；不许"联调、完善、收尾"这种任务
@@ -29,7 +29,6 @@ const GUIDE = {
   proposal: '提案的写法：What Changes 逐条可核对；Capabilities 里每个能力都要有对应的 specs/<能力>/spec.md；Impact 列出会动到的文件、表、接口；本次不做的写成"本次不做：X（原因）"。',
 };
 const HEDGE_GUIDE = '不许写"以后再说"。拿不准的写成决策项：未定什么、默认按哪种做、理由（同一行写明"默认按…做"就算）；我不接受会改。本次不做的写成"本次不做：X（原因）"。';
-const MAX_LINES = 250;
 // 验法中的材料由 proposal-files 检查可交付性，不能依赖本机临时脚本。
 const beforeVerify = (line) => String(line || '').split(/(?:验|验证|验收|检验|核对)\s*[:：]/)[0];
 
@@ -103,7 +102,7 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   let entries = null;
   const load = () => entries || (entries = j.transcript_path ? tailEntries(j.transcript_path, 6000000).filter((e) => e && !e.isSidechain) : []);
   const done = (issues) => ({ issues, ticked, skipped });
-  if (!/^\s*[-*]\s*\[[xX]\]/m.test(oldText)) {
+  if (cfg.autoMode && !/^\s*[-*]\s*\[[xX]\]/m.test(oldText)) {
     let ok = require('../lib/session').reviewAllowed('proposal', art.dir);
     let waiting = false;
     if (!ok && j.transcript_path) {
@@ -115,16 +114,16 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
     }
     if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没送回来。等审查结果的通知到了（到了会自动接着一轮），按结论改完、在 revisions.md 记录，再开工打勾；不要再开一个审查。']);
     if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先按 /ttls-cross-review 的提案模式审一遍：审查提示第一行写"模式：提案"，第二行写"变更：' + art.name + '"。成立的问题改掉并在 revisions.md 记录，再开工。']);
-    if (cfg.reviewLoop) {
-      // 会话记录里刚做完的审查（后台审查的结论刚送到、收工检查还没来得及计）、审查之后只在 revisions.md 记了理由的，先计上
-      if (j.transcript_path) { const es = load(); syncReviewRounds(es, syncReviews(es, j.cwd || art.root)); }
-      const lo = reviewLoopIssue('proposal', art.dir, cfg);
-      if (lo) return done([/。$/.test(lo) ? lo : lo + '；处理完再开工。']);
-    }
   }
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);
-  if (!j.transcript_path) return done([]);
+  if ((!cfg.autoMode && !require('../lib/flow-policy').explicit(j, 'test')) || !j.transcript_path) return done([]);
+  const policy = require('../lib/flow-policy');
+  for (const t of cfg.autoMode ? ticked : []) {
+    const m = t.match(/^(\d+)\./); if (!m) continue;
+    const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done || !policy.settled(art.dir, g.id));
+    if (prior) return done(['先完成上一整组任务及审修：' + prior.id + '。' + (prior.done ? policy.instruction(art.dir, prior.id, cfg) : '当前组尚未完成。')]);
+  }
   const es = load();
   const calls = toolCalls(es, 0);
   const res = toolResults(es);
@@ -214,13 +213,15 @@ function handle(j, opts) {
   const format = [];   // 写法上的问题：附上写法说明
   format.push(...require('../lib/proposal-files').issuesIn(newText, art, isAdded));
   const flow = [];     // 流程上的问题（没验证、没审、没探索）：只说这件事
+  if (cfg.autoMode && !existed && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
+    const policy = require('../lib/flow-policy'); const point = art.kind === 'spec' ? 'specs' : art.kind; const order = ['proposal', 'specs', 'design', 'tasks'];
+    const prior = policy.points(art.dir, 'proposal').filter(p => order.indexOf(p) < order.indexOf(point)).find(p => !policy.settled(art.dir, p));
+    if (prior) flow.push(policy.instruction(art.dir, prior, cfg) + '，完成后再生成下一产物。');
+  }
   const hedges = findHedges(newText, isAdded);
   for (const h of hedges) format.push('第 ' + h.line + ' 行有"' + h.word + '"：' + h.text);
   const left = leftoverPlaceholders(newText, isAdded);
   if (left.length) format.push('第 ' + left.slice(0, 5).join('、') + ' 行还留着模板的占位注释（<!-- … -->），要么填上要么删掉');
-  const lineCount = newText.split('\n').length;
-  const oldCount = existed ? oldText.split('\n').length : 0;
-  if (lineCount > MAX_LINES && lineCount > oldCount) format.push('这个文件 ' + lineCount + ' 行，超过 ' + MAX_LINES + ' 行：拆细，一个模块一个提案，不要把整份材料塞进一个变更');
   // 这个变更里声明过要新建的文件（别的产物里、这次要写的内容里说过"新建 x"）：别处再提到不用每行都写"新建"
   const isDeclared = (art.kind === 'tasks' || art.kind === 'design') ? declaredNew(art.dir, newText) : null;
   if (art.kind === 'tasks') {

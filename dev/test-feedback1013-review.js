@@ -38,7 +38,7 @@ const H = require('./lib/harness');
     for (shape of ['outer', 'body']) {
       const result = await R.run({ cwd: p, change: 'add-a', mode: 'proposal', newBudget: true });
       H.ok('解析阶段可分辨：' + shape, result.diagnostics && result.diagnostics[0].stage === (shape === 'outer' ? 'router-json' : 'model-json'), result);
-      H.ok('已收到回复和已覆盖分开：' + shape, result.attemptedBatches === 1 && result.receivedBatches === 1 && result.covered.length === 0);
+      H.ok('已收到回复和已覆盖分开：' + shape, result.attemptedBatches === result.totalBatches && result.receivedBatches === result.totalBatches && result.covered.length === 0);
       H.ok('本机诊断不含假秘密：' + shape, !JSON.stringify(result).includes('FAKE_REVIEW_SECRET'));
     }
     shape = 'file'; const partial = await R.run({ cwd: p, change: 'add-a', mode: 'proposal', newBudget: true });

@@ -56,6 +56,7 @@ for (const c of claudes) suites.push(['端到端（0930）' + path.basename(path
 suites.unshift(['IDEA MCP 自动接入', 'test-idea-mcp.js', claudes.flatMap(c => ['--claude', c])]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
 
+suites.unshift(['1014 非数据库反馈', 'test-feedback1014.js', []], ['1014 两阶段工作流', 'test-workflow1014.js', []]);
 const rows = [];
 suites.unshift(['使用情况匿名标识', 'test-usage-identity.js', []]);
 suites.unshift(['归档解包的临时目录', 'test-archive-extract.js', []]);

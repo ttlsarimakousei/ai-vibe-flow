@@ -261,7 +261,7 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     H.ok('（敲了 /opsx:apply：在流程里）', flow('f1').on === true, flow('f1'));
     for (const p of ['不要停，把剩下的做完', '不用问我，按你的判断做完', '别等我，做完就归档', '别停']) { say('f1', p); H.ok('在流程里说"' + p + '"：还在流程里', flow('f1').on === true, flow('f1')); }
     const ask = H.hook(h, 'guard-ask', { session_id: 'f1', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '接着做哪个？', options: [{ label: 'A' }, { label: 'B' }] }] } });
-    H.ok('全自动照样算开着：提问框拦下，不会停在那里等人', !!ask && ask.decision === 'block' && /全自动模式/.test(H.reasonOf(ask)), ask);
+  H.ok('自动阶段允许提问澄清', ask === null);
     for (const p of ['停', '等等，先别提交', '不用了', '别做了', '先停一下，我看看日志', '暂停']) { say('f1', '/opsx:apply add-export'); say('f1', p); H.ok('说"' + p + '"：出了流程', flow('f1').on === false, flow('f1')); }
     say('f1', '继续');
     H.ok('停了之后说"继续"：不能恢复已撤回的 apply 许可', flow('f1').on === false, flow('f1'));

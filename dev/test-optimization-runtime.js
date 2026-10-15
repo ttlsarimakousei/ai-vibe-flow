@@ -9,7 +9,7 @@ const fs = require('fs'); const path = require('path'); const H = require('./lib
   const S = require(mod('session')); const W = require(mod('workflow')); const C = require(mod('invocation')); const ready = require(mod('readiness')); const B = require(mod('local-backup')); const Sessions = require(mod('work-sessions'));
   H.ok('就绪区分识别与实际验证', ready.inspect(p).identified.includes('Maven') && /未实际执行/.test(ready.inspect(p).verification));
   const first = ready.inspect(p); H.write(path.join(p, 'pom.xml'), '<project><version>2</version></project>'); H.ok('配置变化使就绪缓存失效', first.fingerprint !== ready.inspect(p).fingerprint);
-  H.ok('任务模板含测试、审查、处理与用户验收', /\[联合验证\]/.test(W.taskTemplate()) && /\[代码审查\]/.test(W.taskTemplate()) && /\[审查意见处理\]/.test(W.taskTemplate()) && /\[用户验收\]/.test(W.taskTemplate()));
+  H.ok('任务模板只列交付内容和验收标准', !/\[联合验证\]|\[代码审查\]|\[审查意见处理\]|\[用户验收\]/.test(W.taskTemplate()) && /验：/.test(W.taskTemplate()));
   H.ok('普通任务提交计划明确先确认', /普通任务/.test(W.commitPlan(p).confirmation) && !W.commitPlan(p).effectiveAuto);
   H.write(path.join(p, '.vibe/run/backend.json'), JSON.stringify({ name: 'backend', pid: process.pid, port: 36781 }));
   H.ok('自测使用实际登记地址', W.selfTest(p).services.some((s) => s.url === 'http://127.0.0.1:36781' && s.owner === 'devserver'));
@@ -20,6 +20,7 @@ const fs = require('fs'); const path = require('path'); const H = require('./lib
   H.ok('同一变更第二会话提示冲突', Sessions.touch({ cwd: p, session_id: 'two' }).includes('one'));
   S.setFlow({ session_id: 'one' }, false, '取消'); Sessions.touch({ cwd: p, session_id: 'one' }); H.ok('取消后撤销占用', !S.readState('work-sessions').one);
   H.setConfig(h, { autoMode: true }); H.write(path.join(dir, 'tasks.md'), H.read(path.join(dir, 'tasks.md')).replace('[ ] 2.1', '[x] 2.1'));
+  H.reviewPoints(h, dir);
   H.ok('只剩用户验收时执行和展示都暂停全自动', !S.readConfigFor({ cwd: p, session_id: 'two' }).autoMode && /用户自测/.test(S.flowView({ cwd: p, session_id: 'two' }).waiting), { flow: S.flowState({ session_id: 'two' }), view: S.flowView({ cwd: p, session_id: 'two' }), tasks: require(mod('task-types')).tasks(dir) });
   H.write(path.join(dir, 'proposal.md'), '## Why\n修复已确认问题。\n参考 [样例](assets/sample.txt)\n'); H.write(path.join(dir, 'assets/sample.txt'), '非敏感样例\n');
   const delivered = W.deliver(p, 'add-x'); H.ok('提案交付只用相对链接且没有假批准', /待用户核对/.test(H.read(delivered.file)) && !H.read(delivered.file).includes(h.root));

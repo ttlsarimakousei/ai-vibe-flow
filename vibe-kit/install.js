@@ -374,7 +374,7 @@ function mergeSettings(s, remove, hooksOnly) {
   const fast = (name) => (transport === 'http' ? { type: 'http', url: 'http://127.0.0.1:' + port + '/vibe-kit/hook/' + name } : hook(name + '.js'));
   const OURS = {
     // 改文件的三个检查（套件文件不许改、编码保护、OpenSpec 门槛）合成一个入口 pre-edit：一次编辑只起一个进程（或只发一次请求）
-    PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand', hooks: [fast('guard-ask')] },
+    PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand|Agent|Task', hooks: [fast('guard-ask')] },
       // 搜文件内容：范围里有放令牌、放模型 key 的地方就拦（权限规则管不到"对着上级目录搜"）
       { matcher: 'Grep', hooks: [fast('guard-read')] }],
     // 读文件时提醒（提示规则）2026-09-30 去掉了，不再登记；这一项留着空的，是为了把以前登记过的摘掉
@@ -383,7 +383,7 @@ function mergeSettings(s, remove, hooksOnly) {
     // 开工前拉代码在这个钩子里：连远端最多 15 秒，合并做到一半又不能被结束（会留下 index.lock 和改了一半的工作区），所以写明等 300 秒
     UserPromptSubmit: [{ hooks: [Object.assign(hook('task-anchor.js'), { timeout: 300 })] }],
     SessionStart: [{ hooks: [hook('session-start.js')] }],
-    PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|mcp__.*', hooks: [fast('after-tool')] }],
+    PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|Agent|Task|TaskOutput|TaskResult|mcp__.*', hooks: [fast('after-tool')] }],
     PostToolUseFailure: [{ matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('after-tool')] }],
     Stop: [{ hooks: [fast('verify-gate')] }],
   };
@@ -518,90 +518,45 @@ function localSection() {
  * 不走 OpenSpec 的改动（修 bug、改配置、改文案）一句，OpenSpec 的变更一句；用户 2026-10-07 定的：不走 OpenSpec 的改完先问他，他说了提交才提交
  */
 const PLAIN_COMMIT_TEXT = {
-  ask: '- 不走 OpenSpec 的改动（修 bug、改配置、改文案）：改完、验证过、diff 过了一遍，不要直接提交：交代改了什么、怎么验的，用提问框问我提不提交，我说了再提交；说还要改就改完再问。',
-  auto: '- 不走 OpenSpec 的改动（修 bug、改配置、改文案）：做完、验证过（快检过了，该看的页面看过了）、diff 过了一遍，就直接提交，不用等我说。',
+  ask: '- 普通修改完成后可以提醒提交，先用 Ask 问我；我已明确要求提交时直接执行。',
+  auto: '- 普通修改允许自动提交；人工模式中的审查、自测仍先 Ask，不能把提交设置当成审查或测试许可。',
 };
 const AUTO_COMMIT_TEXT = {
-  task: '- OpenSpec 的变更：一项任务（最小的一件事）完成了就直接提交，不用等我说。"完成"的标准有两条：验证过（快检过了，该看的页面看过了）；提交前自己把这一项的 diff 过了一遍（git diff -- <这一项改的文件>：有没有调试代码、误改、漏改、和这项任务无关的改动）。做了一半的、验证没过的不要提交。',
-  phase: '- OpenSpec 的变更按阶段提交：tasks.md 里同一个大编号的任务（1.x、2.x……）全部完成、验证过，就把这一组的改动提交一次，信息写这一组做了什么（例：feat: 订单导出的数据层）；一组做到一半不提交（打勾不攒：每项任务做完、验法跑过就勾，不等提交一起勾）。做了一半的、验证没过的不要提交。',
-  change: '- OpenSpec 的变更：全部任务做完、交叉审查过之后提交一次，中途不提交（打勾照旧做完一项勾一项）。做了一半的、验证没过的不要提交。',
-  off: '- OpenSpec 的变更：我让你提交时才提交。',
+  task: '- 仅 Apply 自动执行期间，每项任务完成后按具体任务提交；该组审查修复收尾后再单独提交修复。',
+  phase: '- 仅 Apply 自动执行期间，同一组 1.x 完成并审修、自测后提交一次。',
+  change: '- 仅 Apply 自动执行期间，整个变更完成并审修、自测后提交一次。',
+  off: '- 不自动提交，可以提醒提交；用户要求提交时执行。',
 };
-/** 约定里"页面用 /ttls-see-page 看一眼"那一句，跟着"改了页面文件没看页面 → 拦一次"的开关走（config.json 的 autoSeePage）。关掉 = 不自动起服务看页面，用户让看时再看 */
-const SEE_PAGE_TEXT = {
-  on: '，页面用 /ttls-see-page 看一眼',
-  off: '。页面的改动不用自己起服务去看，我让你看的时候再用 /ttls-see-page；没看就明说没验证',
-};
-/** OpenSpec 规范里讲页面验证的两处，也跟着"看页面"开关走 */
-const SEE_PAGE_SPEC_TEXT = {
-  on: '规格里的"当……则……"场景，凡是能在页面上看到结果的，用 /ttls-see-page 照着跑一遍；结果在接口返回里的，写成接口场景（request + expectJson）跑。',
-  off: '页面上的结果不用自己起服务去看：页面任务的验法写"验：人工看页面"，做完交代时说明页面没看、等我看。结果在接口返回里的，写成 /ttls-see-page 的接口场景（request + expectJson，不开浏览器）跑。',
-};
-const PAGE_VERIFY_TEXT = { on: '<命令或 /ttls-see-page 场景>', off: '<命令>（页面上的写"人工看页面"）' };
-/** OpenSpec 规范里的"提交节奏"，跟着自动提交开关走（和提交规范那一节说的一致） */
-// 提案审完单独问提交，提交许可与开工许可分开；代码审查全部轮次收尾后一起提交修复。
-const PROPOSAL_COMMIT = '提案写完、审完、修完后交代要点，先问我是否提交；我同意后把 proposal、specs、design、tasks、revisions 一起提交一次 `docs: 提案 <名字>`。提交不等于同意开工，开工另等我说 apply；';
-const REVIEW_COMMIT = '审代码审出的问题：全部轮次审完、修完验证过再提交一次（fix），不一轮一提交；';
-const COMMIT_RHYTHM_TEXT = {
-  task: PROPOSAL_COMMIT + 'apply 每完成一项任务提交一次（代码和打勾的 tasks.md 不在一个仓库时各提各的）；apply 中途改了产物：改过的产物和 revisions.md 一起 `docs: 修订 <名字>：<一句话原因>`；' + REVIEW_COMMIT + '归档连同 plan.md `docs: 归档 <名字>`。',
-  phase: PROPOSAL_COMMIT + '写 tasks.md 时把任务按阶段分组（大编号一组：数据层、接口、页面……，一组三五项）；apply 按阶段提交：一组的任务全部打勾时提交一次（代码和打勾的 tasks.md 不在一个仓库时各提各的），一组做到一半不提交（打勾不攒，做完一项勾一项）；apply 中途改了产物：改过的产物和 revisions.md 一起 `docs: 修订 <名字>：<一句话原因>`；' + REVIEW_COMMIT + '归档连同 plan.md `docs: 归档 <名字>`。',
-  change: PROPOSAL_COMMIT + 'apply 中途不提交（打勾照旧做完一项勾一项），全部任务做完、代码审完（全部轮次）、修完之后，代码和打勾的 tasks.md 各在自己的仓库提交一次；归档连同 plan.md `docs: 归档 <名字>`。',
-  off: '我让你提交时才提交（提案、代码、修订、归档都一样），提交信息照这个写：`docs: 提案 <名字>`、`docs: 修订 <名字>：<一句话原因>`、`docs: 归档 <名字>`。',
-};
+const SEE_PAGE_TEXT = { on: '，页面按已准备的验收场景验证', off: '；页面只在用户要求时验证' };
+const SEE_PAGE_SPEC_TEXT = { on: '自动阶段按验收用例验证接口和页面；人工阶段先 Ask，用户放弃后继续，不记待办。', off: '页面由用户决定是否验证；人工阶段的接口自测也先 Ask。' };
+const PAGE_VERIFY_TEXT = { on: '<命令或验收场景及预期>', off: '<命令或人工验收步骤及预期>' };
+const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例逐步完善，定稿后一起提交一次 docs: 提案 <名字>；需求自动满足条件时自动提交，人工时提醒用户。两阶段均自动且用户未限定只写需求时，定稿提交后自动 apply；其他情况用 Ask 给出 apply 选项。';
+const COMMIT_RHYTHM_TEXT = Object.fromEntries(Object.entries(AUTO_COMMIT_TEXT).map(([k,v]) => [k, PROPOSAL_COMMIT + v + ' 人工阶段可提醒提交，已明确要求就执行；归档、验收节点单独保留，push 需要用户确认。']));
 function kitConfig() {
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t) || {}; } catch (e) { return {}; }
 }
 function autoCommitMode() { const m = kitConfig().autoCommit; return AUTO_COMMIT_TEXT[m] ? m : 'task'; }
 function plainCommitMode() { return kitConfig().plainCommit === 'auto' ? 'auto' : 'ask'; }
 function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'; }
-/** OpenSpec 规范里"审几轮"那一句，跟着"多轮审查"的开关走（reviewLoop / reviewMaxRounds）；全自动模式下轮数用完自己定 */
+// 两阶段各有独立的审查上限；每个产物、每个整组任务分别计数。
 function reviewModeText() {
   const c = kitConfig();
-  if (!c.reviewLoop) return '每种各审一轮，审过就不再跑；审出的问题逐条核实，成立的改掉并验证，不成立的在 revisions.md 记一句为什么。';
-  const n = Math.min(5, Math.max(1, Number(c.reviewMaxRounds) || 3));
-  return '多轮审查开着：每一轮审出问题并改了之后，再让 ttls-reviewer 审改动点（只给它上一轮的问题清单和这次改过的文件），直到它报"结论：问题 0 条"，最多 ' + n + ' 轮；问题核实下来全都不成立的，在 revisions.md 逐条记下理由就算处理完。' + n + ' 轮之后仍有问题，' + (c.autoMode ? '按"全自动模式"一节的原则自己定。' : '停下来用提问框问我怎么办，不要自己定。');
+  return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 3) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 3) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工每次审查、自测或复验先 Ask；用户主动要求审查不受自动上限限制。';
 }
-/** 全自动模式（autoMode）开着时，OpenSpec 规范末尾多出的一节 */
-const AUTO_MODE_TEXT = [
-  '### 全自动模式（已开）',
-  '',
-  '这一节只管做 OpenSpec 变更的任务那一段：我敲了 /opsx:apply、说了开工（"开工""把 1.1 做了"）、让你在当前会话有效范围内继续已开工的变更。旧交接不授予开工许可。这时我不在，这一节和前面的约定、技能里的说法有出入的，以这一节为准：前面凡是写"问我""用提问框问""停下来告诉我""让我来定""等我"的地方，都照下面的做。',
-  '',
-  '探索、提案、审提案、改提案这一段我在，这一节不作数：照前面的约定来——探索完把现状给我看、我确认了再提案；提案审过了停下给我看（改哪些地方、新加的操作和接口、任务清单；我原话里没提过、你自己加的单独列出来），我说开工、或者我自己敲 /opsx:apply，才开始做任务。别的时候（我问问题、让你检索、跑别的技能）我也在，做完我交代的那件事就收工。工作区里有没做完的变更，不是你自己去接着做、去开工的理由。',
-  '',
-  '- 不问我，不等我。提问框用不了（会被拦下，你想问的会记进报告）。缺信息：能查的查（代码、库、接口、日志、文档）；查不到的选影响面最小的做法，记进 revisions.md（起因：自动模式决定）。',
-  '- 开工后一路做完：apply（每项任务：做 → 跑验法 → 立即打勾；提交照前面的档位，不能用全自动覆盖“我说了才提交”）→ 审代码 → 修掉成立的问题并验证 → 收工交报告。审查修复全部轮次收尾后一起提交，不逐轮提交。收工钩子每一步会催你往下走。不归档：归档要我自测过、说了才做，交代里写清怎么自测（起服务的命令、要看的页面、要调的接口）。',
-  '- 改库不用等我确认：照 /ttls-db-crud 的两步走，第一步看清影响面，没问题就带确认串执行。它只做留得下备份的（改、删留改前快照和还原脚本，新增记下表和主键，建表、加列记下对应的 DROP），执行完把它打印的留痕目录写进交代；它说备份不了、不执行的（没有 WHERE、没有主键、删表、清空……），不要绕，留给我。',
-  '- 要我动手的事不做，也不等：查库的工具不肯执行的改库操作、改 redis 里的数据、改公共配置、动 git 历史、push、要账号密码、钩子说要我定的非 UTF-8 文件。在那项任务后面加上"（留给用户：原因）"，不打勾，接着做不依赖它的任务。一个变更只剩这种任务时就收工（下一个变更的提案要我看过才开工）。',
-  '- 验证：能验的都要验。验法里有现在验不了的部分（要我先动手、要我看页面）：把那一部分写成"……本次不做（原因）"，能验的照样跑，跑过了再打勾。/ttls-see-page 的场景文件做不了的操作，写一个探针脚本放 .vibe/tmp/<变更名>/ 里跑，它算验过。',
-  '- 过程文件（.vibe/tmp、.vibe/out 里的脚本、草稿、结果）在流程走完之前都留着，不要删：变更归档之后套件自己清。',
-  '- 被检查拦下：照提示能改的先改。改不了、条件现在满足不了的，照提示末尾的命令申请放行，再做一次那一步，不用等我；确信是套件判断错了，命令末尾加 --bug。提示里没带拦截编号的（改套件、读令牌、结束路由进程、非 UTF-8 文件、整仓 add）不能放行：这一步不做，换个做法，或者留给我。',
-  '- 同一个问题换了三种办法还不通：这一项先放下，接着做别的，写进最后的交代。',
-  '- 多轮审查用完轮数仍有问题：选影响面最小的方案，宁可少做一个边角功能也不能破坏现有功能；不用 hack 绕过验证、不注释掉测试、不放宽校验；定了的方案验证过再提交；结论和理由记进 revisions.md。',
-  '- 不要自己开新的变更、不要顺手做需求之外的事；这个变更的任务做完了，不要自己去写下一个变更的提案，收工等我。',
-  '- 代码之外的产出（DDL 脚本、说明文档、分析报告）：项目说明的"产出位置"里有的照着放；没有的先放 .vibe/pending/。',
-  '{{AUTO_HANDOVER}}',
-  '- 收工时套件会给你这一轮的报告（放行了什么、你想问没问成的、留给我做的、库里改过的、没验证的），照它写最后的交代，分七节：做了什么、留给你做的、库里改过的、自己定的事、没验证的、放行的检查、套件问题。',
-].join('\n');
-/** 全自动模式里"到交接线怎么办"那一句，跟着"全自动模式下到交接线自动写交接记录"的开关走（autoHandover） */
-const AUTO_HANDOVER_TEXT = {
-  on: '- 上下文到交接线：先 /ttls-handover 写交接记录，写完接着做手头的事，不要收工、不要停下等我；快到网关上限才停下。',
-  off: '- 上下文到交接线：不用写交接记录，接着做（靠 Claude Code 自己的压缩）；快到网关上限才停下。',
-};
-/** 全自动模式开着时，约定最前面的一句：后面哪些话不作数 */
-const AUTO_TOP_TEXT = '> 全自动模式开着：做 OpenSpec 变更的任务的时候（我敲了 /opsx:apply、说了开工、让你接着做某个已经开工的变更）我不在，下面凡是写"问我""用提问框问""停下来告诉我""让我来定""等我"的地方，都照最后"全自动模式（已开）"一节做。探索、提案这一段和别的时候我在，照常来。';
+const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动逐产物审修；Apply 按已授权范围逐整组任务审修、自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
+const AUTO_TOP_TEXT = '> 需求和 Apply 是两套独立自动模式；以本轮提醒的生效阶段为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
 /** 约定和规范里的占位符换成按开关生成的文字 */
 function fill(text) {
   const c = kitConfig();
   const see = seePageMode();
   let commit = PLAIN_COMMIT_TEXT[plainCommitMode()] + '\n' + AUTO_COMMIT_TEXT[autoCommitMode()];
   if (see === 'off') commit = commit.split('（快检过了，该看的页面看过了）').join('（快检过了）');
-  const auto = c.autoMode ? AUTO_MODE_TEXT.split('{{AUTO_HANDOVER}}').join((c.contextStrategy || 'compact') === 'compact' ? '- 连续工作依靠 Claude Code 自动压缩；不要自动写交接、clear 或凭旧交接继续。用户点名选择手动交接时先核对当前事实，重新确认开工范围。' : AUTO_HANDOVER_TEXT[c.autoHandover === false ? 'off' : 'on']) : '';
+  const auto = c.autoRequirements || c.autoApply ? AUTO_MODE_TEXT : '';
   return text.split('{{AUTO_COMMIT}}').join(commit).split('{{SEE_PAGE}}').join(SEE_PAGE_TEXT[see])
     .split('{{SEE_PAGE_SPEC}}').join(SEE_PAGE_SPEC_TEXT[see]).split('{{PAGE_VERIFY}}').join(PAGE_VERIFY_TEXT[see])
     .split('{{COMMIT_RHYTHM}}').join(COMMIT_RHYTHM_TEXT[autoCommitMode()])
     .split('{{REVIEW_MODE}}').join(reviewModeText()).split('{{AUTO_MODE}}').join(auto)
-    .split('{{AUTO_TOP}}').join(c.autoMode ? AUTO_TOP_TEXT : '').replace(/\n{3,}/g, '\n\n').trim();
+    .split('{{AUTO_TOP}}').join(AUTO_TOP_TEXT).replace(/\n{3,}/g, '\n\n').trim();
 }
 function buildBlock() {
   const base = fill(fs.readFileSync(path.join(KIT, 'CLAUDE.md'), 'utf8').trim());
@@ -818,6 +773,19 @@ if (mode === 'install') {
       const cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^﻿/, ''));
       if (cur && typeof cur === 'object' && cur.maintainerHosts !== undefined) { delete cur.maintainerHosts; fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2) + '\n'); }
     } catch (e) { /* 读不懂就不动：配置页保存一次也会去掉 */ }
+  }
+  // 2026-10-14 一次性迁移：本次新装和旧版升级都关闭两阶段自动；后续同步保留用户选择。
+  const migrationFile = path.join(KIT, 'state', 'workflow-v2-migration.json');
+  if (!fs.existsSync(migrationFile)) {
+    const cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^\uFEFF/, ''));
+    Object.assign(cur, { autoMode: false, autoRequirements: false, autoApply: false });
+    fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2) + '\n');
+    const sealFile = path.join(KIT, 'state', 'config-seal.json');
+    let oldSeal = {}; try { oldSeal = JSON.parse(fs.readFileSync(sealFile, 'utf8')); } catch (e) { /* 没有旧封条时保护项采用安全默认值 */ }
+    fs.mkdirSync(path.dirname(sealFile), { recursive: true });
+    fs.writeFileSync(sealFile, JSON.stringify(Object.assign({ kitLock: true, kitBypass: 'ask' }, oldSeal, { autoMode: false, autoApply: false, autoRequirements: false, at: Date.now() })));
+    fs.writeFileSync(migrationFile, JSON.stringify({ at: Date.now() }));
+    console.log('  [OK] 两阶段自动模式已关闭，任务进度保留；需要时在配置页重新开启');
   }
   // 问题上报从什么时候算起：头一回装上带问题上报的版本的这一刻，以前攒下的不传（20260929 起去掉了存量推送）。
   // 不在这里记的话要等第一次上报时才记，装好之后、第一次上报之前记的问题会被当成"以前攒下的"，永远传不上去

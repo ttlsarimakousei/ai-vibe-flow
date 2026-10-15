@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, outputGate: true, vibeTidy: true, tmpKeepDays: 7, serverGuard: true, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', autoCommit: 'task', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, pullBeforeWork: true, usageReport: 'on', ccAutoMode: 'off', plainCommit: 'ask', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -46,12 +46,14 @@ function cleanConfig(x, base) {
   // 提示规则 2026-09-30 去掉了：文件里以前存的那一项不再写回去
   delete c.hints;
   // autoOnboard 后台自动探索；lessonAuto 审查报的问题自动收；dbcrudDaemon 查库的后台执行器
-  for (const k of ['autoVerify', 'autoSeePage', 'autoCrossReview', 'commitCheck', 'specGate', 'outputGate', 'vibeTidy', 'serverGuard', 'autoResume', 'reviewLoop', 'autoMode', 'autoHandover', 'kitLock', 'autoOnboard', 'lessonAuto', 'dbcrudDaemon']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
+  for (const k of ['autoVerify', 'autoSeePage', 'autoCrossReview', 'commitCheck', 'specGate', 'outputGate', 'vibeTidy', 'serverGuard', 'autoResume', 'reviewLoop', 'autoMode', 'autoRequirements', 'autoApply', 'autoHandover', 'kitLock', 'autoOnboard', 'lessonAuto', 'dbcrudDaemon']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
   // 后台执行器多久没人用就退出：1 到 60 分钟
   const idle = Number(x && x.dbcrudDaemonIdleMinutes); if (idle >= 1 && idle <= 60) c.dbcrudDaemonIdleMinutes = Math.round(idle);
   // .vibe/tmp 下的临时目录多少天没动就自动清掉：0 = 不自动清，最多 90 天
   const keep = Number(x && x.tmpKeepDays); if (x && x.tmpKeepDays !== undefined && x.tmpKeepDays !== '' && keep >= 0 && keep <= 90) c.tmpKeepDays = Math.round(keep);
   // 多轮审查最多几轮：1 到 5
+  for (const k of ['requirementsReviewMaxRounds', 'applyReviewMaxRounds']) { const n = Number(x && x[k]); if (n >= 1 && n <= 20) c[k] = Math.round(n); }
+  c.autoMode = c.autoApply;
   const rounds = Number(x && x.reviewMaxRounds); if (rounds >= 1 && rounds <= 5) c.reviewMaxRounds = Math.round(rounds);
   if (x && ['direct', 'agent'].includes(x.reviewExecutor)) c.reviewExecutor = x.reviewExecutor;
   const budget = Number(x && x.reviewBudgetSeconds); if (budget >= 10 && budget <= 1800) c.reviewBudgetSeconds = Math.round(budget);
@@ -374,7 +376,7 @@ async function handle(method, url, body, kitDir, ctx) {
     const tampered = [];
     if (config.kitLock === false && seal.kitLock !== false) tampered.push('关掉"禁止 Claude 自己改套件"');
     if (config.kitBypass === 'auto' && seal.kitBypass !== 'auto') tampered.push('兜底放行"让它自己放行"');
-    if (config.autoMode === true && seal.autoMode === false) tampered.push('打开"全自动模式"');
+    for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (config[k] === true && seal[k] === false) tampered.push('打开“' + label + '”');
     return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, ideaMcp: ideaStatus(kitDir) };
   }
   if (method === 'POST' && url === '/api/kit/idea/check') return { ideaMcp: await runKit(kitDir, ['idea-check'], 30000) };
@@ -390,7 +392,7 @@ async function handle(method, url, body, kitDir, ctx) {
     const c = cleanConfig(Object.assign({}, cur, inc), cur);
     writeJson(configFile, c);
     // 封条：三个放松保护的开关（关掉禁改、自动放行、全自动模式）只认这里和安装器改的，钩子拿它对照（见套件 lib/session.js 的 readConfig）
-    try { fs.mkdirSync(path.join(kitDir, 'state'), { recursive: true }); fs.writeFileSync(path.join(kitDir, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass, autoMode: c.autoMode === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
+    try { fs.mkdirSync(path.join(kitDir, 'state'), { recursive: true }); fs.writeFileSync(path.join(kitDir, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass, autoMode: c.autoApply === true, autoApply: c.autoApply === true, autoRequirements: c.autoRequirements === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
     auditLog(kitDir, cur, c);
     const r = await sync(kitDir);
     return { ok: true, synced: r.ok, output: r.output, config: c, ideaMcp: ideaStatus(kitDir) };
@@ -557,8 +559,7 @@ function auditLog(kitDir, before, after) {
   if (before.kitLock !== false && after.kitLock === false) changed.push('关掉了"禁止 Claude 自己改套件"');
   if (before.kitLock === false && after.kitLock !== false) changed.push('打开了"禁止 Claude 自己改套件"');
   if (before.kitBypass !== after.kitBypass) changed.push('被拦住时的放行改成了"' + ({ ask: '问我', auto: '让它自己放行', off: '不许放行' }[after.kitBypass] || after.kitBypass) + '"');
-  if (!before.autoMode && after.autoMode) changed.push('打开了全自动模式');
-  if (before.autoMode && !after.autoMode) changed.push('关掉了全自动模式');
+  for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (before[k] !== after[k]) changed.push((after[k] ? '打开了' : '关掉了') + label);
   if (!changed.length) return;
   try {
     const fb = loadFeedback(kitDir);

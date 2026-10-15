@@ -8,7 +8,7 @@ const S = require(path.join(h.kit, 'lib/session')); const O = require(path.join(
 const osDir = path.join(p, 'openspec'); const change = path.join(osDir, 'changes/add-a'); const planFile = path.join(osDir, 'plan.md');
 const before = fs.readFileSync(planFile, 'utf8'); const summary = S.refreshPlan(osDir);
 H.ok('钩子计算最新计划不写脏文件', fs.readFileSync(planFile, 'utf8') === before, summary);
-H.ok('全勾但未审查显示待审查', summary.active.some((s) => /待审查/.test(s)), summary);
+H.ok('人工模式不记未审查状态', summary.active.every((s) => !/待审查/.test(s)), summary);
 S.recordReview('code', change, 0, 'done');
 H.ok('审查完成仍等待用户验收归档', /待用户验收并确认归档/.test(S.planStatusOf('add-a', path.join(osDir, 'changes'))));
 const refreshed = H.node(h, path.join(h.kit, 'tools/plan.js'), [p]);
@@ -33,7 +33,7 @@ H.setConfig(h, { vibeTidy: true });
 function stop(sid, entries, text) { return H.hook(h, 'verify-gate', { session_id: sid, cwd: p, hook_event_name: 'Stop', transcript_path: tf(entries), last_assistant_message: text || '已经交付，保留文件等用户提交。' }); }
 for (const file of ['SummaryDetailUtil.java', '详细清单.xls']) {
   const f = path.join(p, file); H.write(f, '交付内容');
-  const entries = [H.tr.user('实现并交付'), H.tr.ran('Write', { file_path: f, content: '交付内容' })];
+  const entries = [H.tr.user('实现并交付，测试'), H.tr.ran('Write', { file_path: f, content: '交付内容' })];
   const first = stop(file, entries); const again = stop(file, entries);
   H.ok('交付新文件不阻塞：' + file, !(first && first.decision === 'block') && /新文件尚未提交/.test(JSON.stringify(first)), first);
   H.ok('同一交付清单不重复提醒：' + file, again === null, again);
@@ -48,9 +48,9 @@ H.ok('过程备份仍阻塞', (stop('backup', [H.tr.user('修改代码'), H.tr.r
 H.setConfig(h, { vibeTidy: false, autoSeePage: true });
 const edited = H.tr.ran('Edit', { file_path: path.join(p, 'web/a.css'), old_string: 'a{}', new_string: 'a{color:red}' });
 const probe = 'node "' + path.join(h.kit, 'page/probe-run.js').replace(/\\/g, '/') + '" .vibe/tmp/add-a/probe.js';
-H.ok('成功页面探针可收工', stop('page-ok', [H.tr.user('改页面'), edited, H.tr.ran('Bash', { command: probe }, 'PAGE_PROBE {"ok":true,"values":{"color":"red"}}')], '页面读到 red。') === null);
-for (const out of ['PAGE_PROBE {"ok":false}', '探针已启动', 'PAGE_PROBE {"ok":true}\nExit code: 1', 'PAGE_PROBE {"ok":true}\nstill running']) H.ok('失败或未完成探针不能通过：' + out, (stop('page-' + count, [H.tr.user('改页面'), edited, H.tr.ran('Bash', { command: probe }, out)], '读了页面。') || {}).decision === 'block');
-H.ok('探针后改页面必须重跑', (stop('page-stale', [H.tr.user('改页面'), H.tr.ran('Bash', { command: probe }, 'PAGE_PROBE {"ok":true}'), edited], '改完了。') || {}).decision === 'block');
+H.ok('成功页面探针可收工', stop('page-ok', [H.tr.user('改页面并测试'), edited, H.tr.ran('Bash', { command: probe }, 'PAGE_PROBE {"ok":true,"values":{"color":"red"}}')], '页面读到 red。') === null);
+for (const out of ['PAGE_PROBE {"ok":false}', '探针已启动', 'PAGE_PROBE {"ok":true}\nExit code: 1', 'PAGE_PROBE {"ok":true}\nstill running']) H.ok('失败或未完成探针不能通过：' + out, (stop('page-' + count, [H.tr.user('改页面并测试'), edited, H.tr.ran('Bash', { command: probe }, out)], '读了页面。') || {}).decision === 'block');
+H.ok('探针后改页面必须重跑', (stop('page-stale', [H.tr.user('改页面并测试'), H.tr.ran('Bash', { command: probe }, 'PAGE_PROBE {"ok":true}'), edited], '改完了。') || {}).decision === 'block');
 const evidenceInput = { session_id: 'probe-evidence', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: probe } };
 H.hook(h, 'after-tool', Object.assign({}, evidenceInput, { tool_use_id: 'probe-success', tool_response: { stdout: 'PAGE_PROBE {"ok":true,"values":{"color":"red"}}', exit_code: 0 } }));
 H.ok('成功探针登记为页面执行证据', (S.readState('evidence').rows || []).some(r => r.session === 'probe-evidence' && r.kind === 'page' && r.ok));

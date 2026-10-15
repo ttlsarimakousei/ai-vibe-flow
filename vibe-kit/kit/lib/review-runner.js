@@ -11,7 +11,7 @@ const store = require('./state-store');
 const secretFile = (f) => /(^|[\\/])(secrets\.json|router-data|\.env(?:\.[^/]*)?|db-crud\.ini|redis\.json|login\.json)([\\/]|$)/i.test(f);
 function alive(pid) { try { process.kill(Number(pid), 0); return true; } catch (e) { return false; } }
 function changeOf(cwd, name) { return name ? S.allChanges(cwd).find((c) => c.name.toLowerCase() === String(name).toLowerCase()) : null; }
-function jobKey(cwd, name, mode) { const c = changeOf(cwd, name); return W.hash((c ? S.normKey(c.dir) : W.rootOf(cwd).toLowerCase()) + '|' + mode).slice(0, 24); }
+function jobKey(cwd, name, mode, point) { const c = changeOf(cwd, name); return W.hash((c ? S.normKey(c.dir) : W.rootOf(cwd).toLowerCase()) + '|' + mode + (point ? '|' + point : '')).slice(0, 24); }
 function baseline(j, dirs) {
   const cwd = j.cwd || process.cwd();
   S.updateState('work-baselines', (o) => {
@@ -83,7 +83,7 @@ function materials(opts, change) {
   };
   if (opts.mode === 'proposal') {
     if (!change) throw new Error('提案审查需要有效变更名');
-    const rows = artifacts();
+    const rows = artifacts().filter(r => !opts.point || require('./flow-policy').pointFiles(change.dir, opts.point).some(f => S.normKey(f) === S.normKey(path.resolve(change.dir, r.file))));
     for (const row of rows) add(row.file, row.text, change.dir);
     const art = { dir: change.dir, name: change.name, root: W.rootOf(change.dir) };
     const issues = rows.flatMap((r) => r.file === 'revisions.md' ? [] : require('./proposal-files').issuesIn(r.text, art));
@@ -120,7 +120,9 @@ function materials(opts, change) {
       const files = [...new Set(W.git(root, ['diff', '--name-only', '-z', base]).split('\0').concat(W.git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0')))].filter(Boolean);
       for (const file of files) {
         if (/^(?:\.vibe|openspec)\//.test(file)) continue;
-        const f = path.join(root, file); const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const current = load(f, root, label, true);
+        const f = path.join(root, file);
+        if (opts.point && change) { const selected = require('./flow-policy').pointFiles(change.dir, opts.point); if (selected.length && !selected.some(p => S.normKey(p) === S.normKey(f))) continue; }
+        const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const current = load(f, root, label, true);
         if (!current) continue; // 读取 Git 差异之前先查链接归属，避免 Git 跟随外部联接。
         const diff = W.git(root, ['diff', '--no-ext-diff', '--no-textconv', '--unified=5', base, '--', file]);
         let text = diff ? '基线差异：\n' + diff + '\n当前文件：\n' + current.text : current.missing ? '文件已删除' : current.text;
@@ -220,28 +222,23 @@ function waived(dir, mode) {
   return !!(rec && rec.born === S.changeBorn(dir) && rec.fingerprint === (mode === 'proposal' ? require('./apply-scope').planHash(dir) : W.fingerprint(dir, 'code').hash));
 }
 function waive(opts) {
-  const change = changeOf(opts.cwd || process.cwd(), opts.change); if (!change || !['proposal', 'code'].includes(opts.mode)) throw new Error('跳过审查要明确有效变更和模式');
-  const reason = R.clip(String(opts.reason || '').replace(/\r?\n/g, ' '), 500); if (reason.length < 10) throw new Error('写明用户决定跳过审查的原因，至少十个字');
-  if (opts.mode === 'code') {
-    const file = path.join(change.dir, 'tasks.md'); const text = fs.readFileSync(file, 'utf8');
-    const next = text.split('\n').map((line) => ['review', 'review-fix'].includes(require('./task-types').kind(line)) ? line.replace(/\[[ xX]\]/, '[x]').replace(/（用户决定跳过审查：[^）]*）/g, '') + '（用户决定跳过审查：' + reason + '）' : line).join('\n');
-    if (next !== text && !store.atomicText(file, next)) throw new Error('跳过记录无法写入任务清单，未登记');
-  }
-  const rec = { status: 'waived', mode: opts.mode, change: change.name, born: S.changeBorn(change.dir), reason, at: Date.now(), fingerprint: opts.mode === 'proposal' ? require('./apply-scope').planHash(change.dir) : W.fingerprint(opts.cwd, 'code').hash };
-  const saved = S.updateState('review-waivers', (o) => { o[opts.mode + '|' + S.normKey(change.dir)] = rec; }); if (!saved) throw new Error('用户跳过记录未能保存');
-  S.updateState('review-jobs', (o) => { const k = jobKey(opts.cwd, opts.change, opts.mode); o[k] = Object.assign({}, o[k], rec); });
-  return rec;
+  // 放弃不是通过，不改团队产物，也不登记未审查待办。
+  return { status: 'dismissed' };
 }
 async function run(opts, progress) {
   opts = Object.assign({ cwd: process.cwd(), mode: 'code' }, opts); opts.cwd = path.resolve(opts.cwd);
   if (!['proposal', 'code'].includes(opts.mode)) throw new Error('审查模式只能是 proposal 或 code');
   const change = changeOf(opts.cwd, opts.change); if (opts.change && !change) throw new Error('没找到当前变更');
-  const key = jobKey(opts.cwd, opts.change, opts.mode); const id = crypto.randomBytes(12).toString('hex'); const cfg = S.readConfig();
+  const key = jobKey(opts.cwd, opts.change, opts.mode, opts.point); const id = crypto.randomBytes(12).toString('hex'); const cfg = S.readConfig();
+  const policy = require('./flow-policy');
+  if (opts.point && (!change || !policy.points(change.dir, opts.mode).includes(opts.point))) throw new Error('审查点不存在或该任务组尚未完成');
+  const pointHash = opts.point ? policy.fingerprint(change.dir, opts.point) : '';
   const budget = Math.min(1800, Math.max(10, Number(opts.budgetSeconds || cfg.reviewBudgetSeconds) || 300)) * 1000;
   const before = W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all'); const started = Date.now(); let previous = null;
   const claimed = S.updateState('review-jobs', (o) => { const old = o[key]; if (old && old.status === 'running' && alive(old.pid) && Date.now() < old.deadline) return; previous = old; o[key] = { id, mode: opts.mode, change: opts.change || '', root: opts.cwd, status: 'running', pid: process.pid, started, deadline: started + budget, fingerprint: before.hash, completedBatches: 0 }; });
   if (!claimed || !claimed[key] || claimed[key].id !== id) return { status: 'running', reason: '同一范围已有审查，请查看 status 或 cancel，不重复启动' };
-  const spent = opts.newBudget ? 0 : previous && previous.status === 'running' ? used(previous, started) : Number(previous && previous.spentMs) || 0;
+  if (change && opts.point) policy.begin(change.dir, opts.point, id, pointHash);
+  const spent = opts.newBudget || opts.point ? 0 : previous && previous.status === 'running' ? used(previous, started) : Number(previous && previous.spentMs) || 0;
   const deadline = started + Math.max(0, budget - spent);
   S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { deadline, spentBefore: spent, spentMs: spent }); });
   const cancelled = () => { const job = S.readState('review-jobs')[key]; return !job || job.id !== id || job.status !== 'running'; };
@@ -276,7 +273,7 @@ async function run(opts, progress) {
       S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id && o[key].status === 'running') { o[key].completedBatches = result.completedBatches; o[key].covered = result.covered.length; } });
     }
     if (cancelled()) throw new Error('审查已取消或结果已迟到');
-    if (W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all').hash !== before.hash) { result.status = 'stale'; result.reason = '审查期间输入变更，本轮结果不能批准新版'; }
+    if ((opts.point ? policy.fingerprint(change.dir, opts.point) !== pointHash : W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all').hash !== before.hash) || !inputsCurrent(result.materialInputs)) { result.status = 'stale'; result.reason = '审查期间输入变更，本轮结果不能批准新版'; }
     else if (result.skipped.length) { result.status = result.completedBatches ? 'partial' : 'failed'; result.reason = '还有失败或未覆盖材料，不能记为完整审查'; }
     else result.status = 'completed';
   } catch (e) { if (e.diagnostic) result.diagnostics.push(e.diagnostic); result.reason = R.clip(e.message, 500); result.status = /取消|迟到|替换/.test(result.reason) ? 'cancelled' : /预算/.test(result.reason) ? 'timed_out' : 'failed'; }
@@ -285,29 +282,39 @@ async function run(opts, progress) {
   let valid = false;
   S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) { const terminal = o[key].status; if (terminal !== 'running') { result.status = terminal; result.reason = o[key].reason; } result.spentMs = Math.max(result.spentMs, Number(o[key].spentMs) || 0); o[key] = Object.assign(o[key], result); valid = true; } });
   if (!valid) { result.status = 'cancelled'; result.reason = '迟到结果已忽略'; return result; }
-  const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + '.json');
+  const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + (opts.point ? '-' + opts.point : '') + '.json');
   try { if (!store.atomicWrite(file, result)) throw new Error('结果写入失败'); result.file = file; }
   catch (e) { result.status = 'failed'; result.reason = '审查结果未能保存，不能登记为完成'; S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], result); }); }
   try { const U = require('./usage'); U.bump(result.status === 'timed_out' ? 'review.timeout' : 'review.' + result.status); } catch (e) { /* 计数失败不改变结论 */ }
-  if (change && result.status === 'completed') {
+  if (change && opts.point) policy.noteResult(change.dir, opts.point, result, pointHash);
+  if (change && result.status === 'completed' && (!opts.point || policy.allPassed(change.dir, opts.mode))) {
     S.recordReview(opts.mode, change.dir, result.issues.length, id, Date.now());
     S.updateState(opts.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (opts.mode === 'code') r.fingerprint = before.hash; else { r.proposalHash = require('./apply-scope').planHash(change.dir); r.materialInputs = result.materialInputs; } r.reportFile = file; r.executor = 'direct'; r.covered = result.covered; } });
   }
   return result;
 }
-function status(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code'); const r = S.readState('review-jobs')[key]; if (r && r.status === 'running' && (!alive(r.pid) || Date.now() >= r.deadline)) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === r.id) { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'interrupted'; o[key].reason = '执行进程退出或超过截止时间，没有完整结果'; } }); return S.readState('review-jobs')[key]; } return r || { status: 'none' }; }
-function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code'); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
+function status(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point); const r = S.readState('review-jobs')[key]; if (r && r.status === 'running' && (!alive(r.pid) || Date.now() >= r.deadline)) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === r.id) { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'interrupted'; o[key].reason = '执行进程退出或超过截止时间，没有完整结果'; } }); return S.readState('review-jobs')[key]; } return r || { status: 'none' }; }
+function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
 function resolve(opts) {
   const change = changeOf(opts.cwd || process.cwd(), opts.change); if (!change) throw new Error('意见处理需要当前变更');
-  const r = S.reviewRecord('code', change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
+  const policy = require('./flow-policy');
+  const pointRec = opts.point && policy.record(change.dir, opts.point);
+  const r = pointRec ? Object.assign({}, pointRec, { reportFile: pointRec.report }) : S.reviewRecord('code', change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
   const report = r.reportFile ? JSON.parse(fs.readFileSync(r.reportFile, 'utf8')) : { id: r.key, fingerprint: r.fingerprint || W.fingerprint(opts.cwd, 'code').hash, issues: Array.from({ length: Number(r.issues) || 0 }, (_, i) => ({ id: 'r' + (i + 1) })) }; const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
   for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected', 'accepted'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
   if (report.id !== r.key || !Array.isArray(report.issues)) throw new Error('审查报告不属于当前完整记录');
   if (decisions.findings.length !== report.issues.length || new Set(decisions.findings.map((x) => x.id)).size !== report.issues.length || decisions.findings.some((x) => !report.issues.some((i) => i.id === x.id))) throw new Error('处理记录必须恰好对应报告中的意见');
   if (decisions.findings.some((x) => x.action === 'fixed') && !require('./evidence').commands(opts.cwd || process.cwd()).length) throw new Error('成立问题修复后还没有当前输入的成功复验证据');
-  const fingerprint = W.fingerprint(opts.cwd || process.cwd(), 'code').hash;
-  if (!decisions.findings.some((x) => x.action === 'fixed') && fingerprint !== report.fingerprint) throw new Error('输入在审查后变化；仅驳回或零问题记录不能批准新版，需要补审');
+  const fingerprint = W.fingerprint(opts.cwd || process.cwd(), opts.mode === 'proposal' ? 'all' : 'code').hash;
+  if (!opts.point && !decisions.findings.some((x) => x.action === 'fixed') && fingerprint !== report.fingerprint) throw new Error('输入在审查后变化；仅驳回或零问题记录不能批准新版，需要补审');
+  if (opts.point) {
+    const changed = pointRec.fingerprint !== policy.fingerprint(change.dir, opts.point);
+    const fixed = decisions.findings.some(x => x.action === 'fixed');
+    if (!fixed && changed) throw new Error('当前审查点输入已变化，先重新审查');
+    S.updateState('review-points', o => { const rec = o[S.normKey(change.dir) + '|' + opts.point]; if (rec && rec.key === r.key) { rec.decisions = decisions.findings; rec.status = fixed ? 'needs_review' : 'resolved'; rec.resolvedFingerprint = policy.fingerprint(change.dir, opts.point); } });
+    return { status: fixed ? 'needs_review' : 'resolved', count: report.issues.length };
+  }
   S.updateState('reviewed', (o) => { const rec = o[S.normKey(change.dir)]; if (rec && rec.key === r.key) { rec.resolved = true; rec.resolvedAt = Date.now(); rec.resolvedFingerprint = fingerprint; rec.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) })); } });
   return { status: 'resolved', count: report.issues.length };
 }

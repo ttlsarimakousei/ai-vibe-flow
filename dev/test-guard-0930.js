@@ -20,6 +20,7 @@ if (!fs.existsSync(path.join(h.kit, 'router', 'router.js'))) fs.writeFileSync(pa
 const K = h.kit.replace(/\\/g, '/');
 const KW = h.kit;
 const CFG = h.cfg.replace(/\\/g, '/');
+H.transcript(path.join(h.root, 'none.jsonl'), [H.tr.user('编译并测试')]);
 const run = (tool, command, cwd) => H.hook(h, 'guard-commit', { session_id: 's-g', cwd: cwd || proj, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: { command }, transcript_path: path.join(h.root, 'none.jsonl') });
 const blocked = (o) => !!o && (o.decision === 'block' || (o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'deny'));
 const asked = (o) => !!o && !!o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'ask';
@@ -150,7 +151,7 @@ for (const [tool, cmd, cwd] of [
 H.section('子 shell 里的 cd、popd、cd - 不带出括号');
 {
   H.write(path.join(proj, 'frontend', 'src', 'New.vue'), '<template/>\n');
-  const tf = H.transcript(path.join(h.root, 'w.jsonl'), [H.tr.user('做')].concat(H.tr.ran('Write', { file_path: path.join(proj, 'frontend', 'src', 'New.vue'), content: 'x' }, 'ok')));
+  const tf = H.transcript(path.join(h.root, 'w.jsonl'), [H.tr.user('编译并测试')].concat(H.tr.ran('Write', { file_path: path.join(proj, 'frontend', 'src', 'New.vue'), content: 'x' }, 'ok')));
   const withTf = (tool, command) => H.hook(h, 'guard-commit', { session_id: 's-cd', cwd: proj, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: { command }, transcript_path: tf });
   // Bash 里串着 cd 的现在一律拦（见最后一节），这里看的是拦的理由：不能是"新文件没 add"（那说明目录算错了）
   const notAdd = (o) => cdOnly(o) && !/没有 git add|还没 git add|没 add/.test(why(o));

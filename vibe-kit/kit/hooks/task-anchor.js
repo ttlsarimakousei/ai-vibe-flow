@@ -125,8 +125,8 @@ function decideFlow(j, cfg, note, resumed) {
 function applyNotice(cfg) {
   const auto = !!(cfg.autoSwitch && cfg.autoMode);
   return {
-    user: '[vibe-kit] 开始 apply：全自动模式' + (auto ? '开着。这个会话从现在起不问你、不等你；任务全部完成、代码审过就停下等你自测，不归档。' : '关着，照常问你。'),
-    model: '现在开始 apply（做任务）：全自动模式' + (auto ? '开着，我不在——照约定"全自动模式（已开）"一节做，不问我、不等我；任务全部完成、代码审过就收工交报告，不归档，等我自测。' : '关着，我在——拿不准的问我；任务全部完成、代码审过了停下，交代怎么自测，等我说归档。')
+    user: '[vibe-kit] 开始 apply：全自动模式' + (auto ? '开着。每整组任务完成后自动审修、自测；有业务疑问仍会问你。' : '关着。审查、自测和复验先 Ask。'),
+    model: '现在开始 apply（做任务）：全自动模式' + (auto ? '开着，按当前范围逐整组任务审修、自测；业务疑问先 Ask。交付验收用例与实际结果，归档仍等用户决定。' : '关着，审查、自测、复验先 Ask，放弃后直接继续，不记录未审查或未测试。')
       + '提案提交许可和 apply 开工许可分别判断；没有明确提交许可时不在开工节点补提案提交。',
   };
 }
@@ -134,8 +134,8 @@ function requirementHint(j, cfg) {
   const p = String(j.prompt || '').trim();
   if (!looksLikeRequirement(p)) return '';
   // 全自动只管 apply 之后：提需求、探索、写提案这一段用户在，照有人在的说法（这时 cfg.autoMode 本来就是 false）
-  return '这像一条需求。要走提案的（新功能、改行为、改接口、改表结构）先探索再提案：用 /opsx:explore 的方式在项目里读会碰到的代码、表结构（有查库的技能就用它）、接口、配置，把现状写下来（读了什么、发现什么、和需求对不上的地方、还不知道什么）给我看，我确认了范围再 /opsx:propose；不要凭印象直接写提案或改代码。不用提案的小改动直接改。'
-    + (cfg && cfg.autoSwitch ? '全自动模式只管 apply 之后：提案审过了停下给我看（改哪些、新加的操作和接口、任务清单，我没提过的单独列），我说开工再开始做任务。' : '');
+  return '这像一条需求。要走提案的（新功能、改行为、改接口、改表结构）先探索再提案：用 /opsx:explore 的方式在项目里读会碰到的代码、表结构（有查库的技能就用它）、接口、配置，把现状写下来（读了什么、发现什么、和需求对不上的地方、还不知道什么）给我看，明确范围后按当前需求自动条件逐产物生成；不要凭印象直接写提案或改代码。不用提案的小改动直接改。'
+    + (cfg && cfg.autoSwitch ? '先探索并明确需求；需求自动与 Apply 自动分别生效。只有两者都开且整套文档定稿提交后才自动 apply，其余情况用 Ask 提供 apply 选项。' : '');
 }
 
 /**
@@ -319,7 +319,7 @@ function anchorLines(j, cfg, note) {
         let s = '进行中的 OpenSpec 变更：' + c.name + '，任务 ' + c.done + '/' + c.total + (c.next ? '，下一项：' + c.next : '');
         if (mine.length > 1) s += '（另有 ' + (mine.length - 1) + ' 个没做完：' + mine.slice(1, 4).map((x) => x.name).join('、') + '）';
         // 还没开工的变更，提案没审过：每条消息带一句，直到审了
-        if (cfg.specGate !== false && c.done === 0 && !require('../lib/session').reviewAllowed('proposal', c.dir)) s += '。这个提案还没审过：apply 之前先按 /ttls-cross-review 的提案模式审一遍（审查提示第一行写"模式：提案"，写上变更名）';
+        if (cfg.autoMode && cfg.specGate !== false && c.done === 0 && !require('../lib/session').reviewAllowed('proposal', c.dir)) s += '。这个提案还没审过：apply 之前先按 /ttls-cross-review 的提案模式审一遍（审查提示第一行写"模式：提案"，写上变更名）';
         lines.push(s);
       }
     }
@@ -382,7 +382,7 @@ async function handle(j) {
   const resumed = !!ho;
   // 全自动模式只在走 OpenSpec 流程时算开着：这句话算不算，在这里定。不算的话下面都照有人在的样子来。
   // 开关关着也定、也记：这一轮做到一半才在配置页打开全自动的，别的钩子照这一轮开头定的算
-  cfg.autoSwitch = cfg.autoMode === true;
+  cfg.autoSwitch = cfg.autoApply || cfg.autoRequirements;
   // 上一轮在不在流程里（装这一版之前就开着的会话先照以前的算法接过来，和 decideFlow 里一样）：数"进流程"、定要不要拉代码用
   let prevOn = false;
   try { let st = flowState(j); if (st.at === undefined && cfg.autoSwitch) st = flowAdopt(j); prevOn = !!st.on; } catch (e) { prevOn = false; }
@@ -400,6 +400,7 @@ async function handle(j) {
     try { const named = allChanges(j.cwd).filter((c) => mentionsChange(j.prompt, c.name)); const targets = named.length ? named : allChanges(j.cwd); if (targets.length === 1 || named.length) require('../lib/review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 基线未知时审查明确要求 --base */ }
   }
   const said = String(j.prompt || '').trim();
+  if (!note && planIntent(said)) { require('../lib/session').updateState(String(j.session_id) + '-flow', s => { s.planReady = false; s.waiting = ''; s.explorationAt = Date.now(); }); cfg.autoMode = false; }
   // 使用情况：开口、进流程、接着交接记录做、写交接记录各几次（只数次数）
   if (!note) {
     try {
@@ -422,6 +423,7 @@ async function handle(j) {
   const slash = /^\s*\//.test(String(j.prompt || ''));
   const anchored = slash ? [] : anchorLines(j, cfg, note);
   const lines = [...anchored];
+  if (!note && on && stage === 'plan' && cfg.autoRequirements && !flowState(j).planReady) lines.push('需求自动已开启，但先探索并沟通目标、范围、验收与疑问；条件明确后把 description、scope、acceptance、unresolved（未解问题数组）、onlyPlan 写入本机 .vibe/tmp/<事由>/评估.json，再运行 workflow.js qualify --session ' + j.session_id + ' --transcript <当前会话记录> --assessment <评估文件>。有疑问必须 Ask，不能因为开关开启而猜需求。');
   if (!note) { try { const conflicts = require('../lib/work-sessions').touch(j); if (conflicts.length) lines.push('同一变更还有活跃实施会话：' + conflicts.join('、') + '。先核对各自负责的文件，避免覆盖；检索照常。共享工作区未被隔离。'); } catch (e) { /* 冲突记录失败不阻断工作 */ } }
   if (pulled) lines.push(pulled);
   // 放松保护的开关被绕开配置页改了：没按它来，告诉它；每个会话记一次问题反馈

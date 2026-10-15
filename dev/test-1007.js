@@ -135,7 +135,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   // ---------------------------------------------------------------------------------------------
   H.section('按阶段提交：tasks.md 里同一个大编号的任务全打勾了才催提交');
   {
-    const ph = H.makeHome('t1007-phase', null, { autoCommit: 'phase', autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false });
+    const ph = H.makeHome('t1007-phase', null, { autoApply: true, autoCommit: 'phase', autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false });
     const pp = H.makeRepo(path.join(ph.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/main/java/A.java': 'class A {}\n', 'src/main/java/B.java': 'class B {}\n', 'openspec/changes/add-x/tasks.md': ['- [ ] 1.1 改 src/main/java/A.java；验：mvn -q compile', '- [ ] 1.2 改 src/main/java/B.java；验：mvn -q compile', '- [ ] 2.1 改 src/main/java/A.java；验：mvn -q compile', ''].join('\n') });
     const chg = path.join(pp, 'openspec', 'changes', 'add-x');
     const tasks = path.join(chg, 'tasks.md');
@@ -155,6 +155,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('1.x 还没做完（1.2 没打勾）：改了文件也不催提交', !/还没提交/.test(H.reasonOf(r1)), H.reasonOf(r1));
     const e2 = edit('src/main/java/B.java', 'class B { int b; }\n');
     const t12 = tick('1.2');
+    H.reviewPoints(ph, chg);
     const r2 = stop([H.tr.user('做 1.2'), e1, t11, e2, t12, H.tr.say('1.2 做完了')]);
     H.ok('1.x 全打勾了：催提交，说的是"一个阶段一次提交"', !!r2 && r2.decision === 'block' && /还没提交/.test(H.reasonOf(r2)) && /一个阶段（tasks\.md 里同一个大编号的任务）一次提交/.test(H.reasonOf(r2)), H.reasonOf(r2));
     H.git(pp, ['add', 'src/main/java/A.java', 'src/main/java/B.java', 'openspec/changes/add-x/tasks.md']);
@@ -164,6 +165,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     await H.sleep(1200);
     const e3 = edit('src/main/java/A.java', 'class A { int a; int c; }\n');
     const t21 = tick('2.1');
+    H.reviewPoints(ph, chg);
     const r4 = stop([H.tr.user('做 2.1'), e3, t21, H.tr.say('2.1 做完了')]);
     H.ok('2.x 做完了（这个阶段只有一项）：催提交', !!r4 && r4.decision === 'block' && /还没提交/.test(H.reasonOf(r4)), H.reasonOf(r4));
     // 对照：每项任务提交（默认）时，改了 A.java 没提交就催
@@ -174,11 +176,11 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('开关存得进去', api.cleanConfig({ autoCommit: 'phase' }).autoCommit === 'phase' && /value="phase"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
     const gen = H.node(ph, path.join(ph.kit, 'install.js'), ['--sync'], { cwd: ph.root, timeout: 60000 });
     const md2 = H.read(path.join(ph.cfg, 'CLAUDE.md')) || '';
-    H.ok('约定里写的是每项任务提交（开关改回 task 之后重新生成）', gen.code === 0 && /一项任务（最小的一件事）完成了就直接提交/.test(md2), md2.slice(0, 200));
+    H.ok('约定里写的是每项任务提交（开关改回 task 之后重新生成）', gen.code === 0 && /每项任务完成后按具体任务提交/.test(md2), md2.slice(0, 200));
     H.setConfig(ph, { autoCommit: 'phase' });
     H.node(ph, path.join(ph.kit, 'install.js'), ['--sync'], { cwd: ph.root, timeout: 60000 });
     const md3 = H.read(path.join(ph.cfg, 'CLAUDE.md')) || '';
-    H.ok('开关是按阶段时，约定和提交节奏都写按阶段', /OpenSpec 的变更按阶段提交/.test(md3) && /apply 按阶段提交：一组的任务全部打勾时提交一次/.test(md3), md3.slice(0, 200));
+    H.ok('开关是按阶段时，约定和提交节奏都写按阶段', /同一组 1\.x 完成并审修、自测后提交一次/.test(md3), md3.slice(0, 200));
   }
 
   const wins = await watch.stop();

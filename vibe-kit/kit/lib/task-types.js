@@ -16,7 +16,7 @@ function parse(text) { return String(text || '').split(/\r?\n/).filter((l) => /^
 function tasks(dir) { try { return parse(fs.readFileSync(path.join(dir, 'tasks.md'), 'utf8')); } catch (e) { return []; } }
 function readyForReview(dir) { const all = tasks(dir); const work = all.filter((t) => ['work', 'prepare', 'test'].includes(t.kind)); return work.length > 0 && work.every((t) => t.done); }
 function automatedLeft(dir) { return tasks(dir).filter((t) => !t.done && !['user', 'deferred'].includes(t.kind)); }
-function needs(text) { const kinds = new Set(parse(text).map((t) => t.kind)); return ['test', 'review', 'review-fix', 'user'].filter((k) => !kinds.has(k)); }
+function needs(text) { return []; }
 function tickIssue(text, dir, j) {
   const k = kind(text); if (!['review', 'review-fix', 'user'].includes(k)) return null;
   const S = require('./session'); const r = S.reviewRecord('code', dir);
