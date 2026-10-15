@@ -46,7 +46,7 @@ const groups = M.groupsOf([
   c('2', 'docs: 更新计划状态 add-a', ['openspec/plan.md']),
   c('3', 'docs: 修订 add-a：修订任务', ['openspec/changes/add-a/tasks.md']),
 ]);
-H.ok('点名修订可带需求文档和计划状态归组', groups.length === 1 && groups[0].ids.length === 3, groups);
+H.ok('只有变更名没有任务或修复编号时保留各提交', groups.length === 3 && groups.every(g => g.ids.length === 1), groups);
 H.ok('分组提供保留或合并原因', groups.every((g) => g.reason), groups);
 H.ok('多变更提交不猜占比', M.eventOf(c('4', 'docs: 修订 add-a', ['openspec/changes/add-a/tasks.md', 'openspec/changes/add-b/tasks.md'])) === 'single:4');
 H.ok('混入代码但无来源标记仍不猜', M.eventOf(c('5', 'docs: 修订 add-a', ['openspec/changes/add-a/tasks.md', 'src/A.java'])) === 'single:5');

@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 合并 push：只整理当前分支尚未推送的线性提交。同一事件要有同一个 OpenSpec 来源或事件标记，
+ * 合并 push：只整理当前分支尚未推送的线性提交。同组必须有相同的变更名和任务号，或同一独立修复标记，
  * 点名的文档修订可带伴随文档和计划表，不凭标题相似程度猜。交错事件只有改动文件完全不相交才调到一起，否则保持原顺序。
  * 所有重建先在独立 index 里完成，最终 tree 必须和原 HEAD 完全一样；备份 ref 后才原子换分支。
  * 不改工作区，不改远端历史，不 force push。需要整理历史时先预览再确认；单笔普通推送仍必须有真人许可。
@@ -73,16 +73,12 @@ function state(root, fetch, options) {
   });
   return { root, ref, remote, merge, upstream, base, head, dir, commits, targetHash: sha([fetchUrls, pushUrls]) };
 }
-function eventOf(c, knownNames) {
-  const explicit = /(?:（源自 |\(源自 |(?:^|\s)事件[:：]\s*)([^\s（）()]+)/.exec(c.title);
-  if (explicit) return 'event:' + explicit[1];
-  const names = new Set();
-  for (const f of c.files) { const m = /^openspec\/changes\/(?:archive\/\d{4}-\d{2}-\d{2}-)?([^/]+)\//.exec(f); if (m) names.add(m[1]); }
-  if (names.size === 1 && c.files.every((f) => f.startsWith('openspec/changes/'))) return 'event:' + [...names][0];
-  // #67：标题明确点名的修订可带需求文档、计划表；混入实现代码或多个变更仍不猜。
-  const named = /^docs: (?:修订|更新计划状态)\s+([^\s：:，,（）()]+)(?=$|[\s：:，,（(])/.exec(c.title);
-  if (named && c.files.length && c.files.every((f) => f === 'openspec/plan.md' || f.startsWith('docs/') || f.startsWith('openspec/changes/')) &&
-      ((names.size === 1 && names.has(named[1])) || (names.size === 0 && knownNames && knownNames.has(named[1]) && c.files.every((f) => f === 'openspec/plan.md')))) return 'event:' + named[1];
+function eventOf(c) {
+  // 任务号不能丢；只有明确的独立修复编号才能合并没有任务来源的提交。
+  const task = /[（(]源自\s+([^\s（）()]+)\s+(\d+(?:\.\d+)+)[）)]/.exec(c.title);
+  if (task) return 'task:' + task[1] + ':' + task[2];
+  const fix = /(?:^|\s)事件[:：]\s*([^\s（）()]+)/.exec(c.title);
+  if (fix) return 'event:' + fix[1];
   return 'single:' + c.id;
 }
 function groupsOf(commits) {
@@ -94,12 +90,12 @@ function groupsOf(commits) {
     const event = eventOf(c, knownNames);
     let target = null;
     // 提案和归档保留独立节点，不和实现、审查混成一条。
-    const boundary = /^docs: (提案|归档|同步规格)/.test(c.title);
-    let reason = boundary ? '提案、归档和同步规格保留独立节点' : event.startsWith('single:') ? '缺少唯一的变更归属；跨目录提交可在标题注明“事件：变更名”' : '同事件没有其它可合并提交';
+    const boundary = /^docs: (提案|需求定稿|文档定稿|验收|归档|同步规格)/.test(c.title);
+    let reason = boundary ? '文档定稿、验收、归档和同步规格保留独立节点' : event.startsWith('single:') ? '缺少具体任务或独立修复编号，保留原提交' : '同事件没有其它可合并提交';
     if (!boundary && !event.startsWith('single:')) {
       for (let i = out.length - 1; i >= 0; i--) {
         const g = out[i];
-        if (g.event === event && g.boundary) { reason = '与前面的同事件提交隔着提案或归档节点'; break; }
+        if (g.boundary) { reason = '隔着文档定稿、验收或归档节点'; break; }
         if (g.event !== event) continue;
         const moving = new Set(c.files);
         if (out.slice(i + 1).some((x) => x.commits.some((v) => v.files.some((f) => moving.has(f))))) { reason = '中间其它事件修改了相同文件，保持原顺序'; break; }
@@ -111,7 +107,7 @@ function groupsOf(commits) {
   }
   return out.map((g) => {
     const first = g.commits.find((c) => !/审查|复审|review/.test(c.title)) || g.commits[0];
-    return { event: g.event, ids: g.commits.map((c) => c.id), title: first.title, titles: g.commits.map((c) => c.title), reason: g.commits.length > 1 ? '同一变更，合并后文件内容保持一致' : g.reason };
+    return { event: g.event, ids: g.commits.map((c) => c.id), title: first.title, titles: g.commits.map((c) => c.title), reason: g.commits.length > 1 ? '同一具体任务或独立修复，合并后文件内容保持一致' : g.reason };
   });
 }
 function plan(root, fetch) {
