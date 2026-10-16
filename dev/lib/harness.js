@@ -22,7 +22,22 @@ const REAL = [path.join(REAL_HOME, '.claude', 'settings.json'), path.join(REAL_H
   path.join(REAL_HOME, '.claude', 'skills', 'urai-db-crud', 'SKILL.md'), path.join(REAL_HOME, '.claude', 'skills', 'urai-db-crud', 'scripts', 'db.py'), path.join(REAL_HOME, '.claude', 'skills', 'redis', 'SKILL.md')];
 // ~/.db-crud：db-crud 的留痕和后台执行器的状态放在这里（2026-09-29 手工试的时候在真实目录下建出来过）
 const REAL_ABSENT = [path.join(REAL_HOME, '.claude', 'rules'), path.join(REAL_HOME, '.claude', 'vibe-kit'), path.join(REAL_HOME, '.db-crud')];
-const sha = (f) => { try { return crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex'); } catch (e) { return '(没有)'; } };
+// 真实的 ~/.claude.json 正在用的 Claude Code 自己也会写：开新会话、建 worktree 时登记项目（2026-10-17 回归时并行开了几个会话，两套端到端误报）。
+// 所以它不比整个文件，只比测试可能写进去的：临时目录（vkt- 开头）下的项目、MCP 登记。MCP 登记只比哈希（里面可能有令牌，不能打印）。碰上写到一半读坏了就多读几次
+const REAL_CLAUDE_JSON = path.join(REAL_HOME, '.claude.json');
+function claudeJsonView(f) {
+  for (let i = 0; i < 5; i++) {
+    let text;
+    try { text = fs.readFileSync(f, 'utf8'); } catch (e) { return '(没有)'; }
+    try {
+      const j = JSON.parse(text);
+      const mcp = crypto.createHash('sha1').update(JSON.stringify(j.mcpServers || null)).digest('hex');
+      return JSON.stringify({ MCP登记: mcp, 临时目录的项目: Object.keys(j.projects || {}).filter((p) => /(^|[\\/])vkt-/i.test(p)).sort() });
+    } catch (e) { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200); } catch (x) { break; } }
+  }
+  return '(读不了)';
+}
+const sha = (f) => { if (f === REAL_CLAUDE_JSON) return claudeJsonView(f); try { return crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex'); } catch (e) { return '(没有)'; } };
 const realBefore = REAL.map(sha);
 const absentBefore = REAL_ABSENT.map((p) => fs.existsSync(p));
 
@@ -312,7 +327,7 @@ function done(title) {
   ok('没有留下还在跑的进程', left.length === 0, left);
   if (left.length) { for (const p of left) killTree(p.pid); for (const r of keep) { try { fs.rmSync(r, { recursive: true, force: true }); } catch (e) { /* 留给下次 */ } } }
   const realAfter = REAL.map(sha);
-  REAL.forEach((f, i) => ok('真实用户目录没被碰：' + f, realBefore[i] === realAfter[i]));
+  REAL.forEach((f, i) => ok('真实用户目录没被碰：' + f, realBefore[i] === realAfter[i], f === REAL_CLAUDE_JSON ? '之前 ' + realBefore[i] + '，之后 ' + realAfter[i] : undefined));
   REAL_ABSENT.forEach((p, i) => ok('真实用户目录里没多出：' + p, fs.existsSync(p) === absentBefore[i]));
   console.log((fail ? '[X] ' : '[OK] ') + (title || path.basename(process.argv[1])) + '：通过 ' + pass + ' 项' + (fail ? '，失败 ' + fail + ' 项：' + failed.join('；') : ''));
   process.exit(fail ? 1 : 0);

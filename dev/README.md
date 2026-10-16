@@ -185,7 +185,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 
 ## 几条规矩
 
-- 不碰真实的用户目录。套件拷到临时目录里的假用户目录再跑，结尾核对真实的 `settings.json`、`CLAUDE.md` 没变。
+- 不碰真实的用户目录。套件拷到临时目录里的假用户目录再跑，结尾核对真实的 `settings.json`、`CLAUDE.md` 没变。真实的 `~/.claude.json` 只核对测试会写进去的部分（临时目录 `vkt-*` 下的项目、MCP 登记）：正在用的 Claude Code 开新会话、建 worktree 时自己会写这个文件，比整个文件会误报（2026-10-17 回归时开了几个并行会话，两套端到端因此报错）。
 - 不碰真实的"启动"文件夹。子进程的 `APPDATA`、`LOCALAPPDATA`、`VIBE_KIT_STARTUP_DIR` 都指假目录，结尾核对真实"启动"文件夹里的 `vibe-kit-router.vbs` 没变。2026-09-28 出过事：测试把路由装上了，自启动脚本写进了真的"启动"文件夹。
 - 不留进程。结尾查命令行里带着这次测试的临时目录名、还在跑的 node、git、ssh，有就算失败并结束掉。
 - 手工试一条命令也要指假的用户目录。2026-09-29 手工跑了一次查库的自检，在真实的用户目录下建出了 `~/.db-crud`。用 `lib/harness.js` 的 `H.run`，或者自己把 `HOME`、`USERPROFILE`、`CLAUDE_CONFIG_DIR` 指到临时目录。
