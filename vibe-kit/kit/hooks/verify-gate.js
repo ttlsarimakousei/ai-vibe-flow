@@ -797,7 +797,8 @@ async function handle(j) {
 
   const policy = require('../lib/flow-policy');
   const touchedDirs = calls.filter(isEdit).map(fileOf).map(f => artifactOf(f)).filter(Boolean).map(a => a.dir);
-  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0));
+  // 页面文件（.vue、.html、.css 等）也是代码：人工模式同样问一次是否审查、自测
+  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE))));
   if (policy.automaticApply(j)) { Object.assign(cfg, readConfigFor(j)); todo.push('两阶段自动开启且文档已审修并提交，执行 /opsx:apply；完成整组任务后先审查、自测、修复复验，再进入下一组。'); }
   if (cfg.autoMode && flowState(j).stage === 'plan') {
     for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {
