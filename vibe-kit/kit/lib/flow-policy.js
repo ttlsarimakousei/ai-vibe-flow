@@ -98,19 +98,31 @@ function once(j, id, signature, text) {
   let fresh = false; S.updateState(j.session_id + '-workflow-prompts', o => { if (o[id] !== signature) { o[id] = signature; fresh = true; } });
   return fresh ? text : '';
 }
-function stop(j, touched, codeChanged) {
+// 人工模式的提示每个用户要求最多问一次（用户 2026-10-16 定的）：同一个要求里后面又改了也不再问，只把记下的内容跟到最新；
+// 用户提新要求时，内容比上次记下的又变了才再问。turn 是这一轮用户消息的编号，取不到时只按内容判断。
+function askOnce(j, id, signature, turn, text) {
+  if (!j.session_id) return text;
+  let fresh = false;
+  S.updateState(j.session_id + '-workflow-prompts', o => {
+    const prev = typeof o[id] === 'string' ? { sig: o[id], turn: '' } : o[id] || null;
+    if (turn && prev && prev.turn === turn) { prev.sig = signature; o[id] = prev; return; }
+    if (!prev || prev.sig !== signature) { o[id] = { sig: signature, turn: turn || '' }; fresh = true; }
+  });
+  return fresh ? text : '';
+}
+function stop(j, touched, codeChanged, turn) {
   const cfg = S.readConfigFor(j); const out = [];
   const dirs = [...new Set([...touched, ...S.flowChanges(j)].filter(d => fs.existsSync(d)))];
   for (const dir of dirs) {
     const mode = S.flowStage(j) === 'apply' ? 'code' : 'proposal'; const point = cfg.autoMode ? pending(dir, mode) : points(dir, mode).slice().reverse().find(p => !settled(dir, p));
     if (!point) continue;
     if (!cfg.autoMode) {
-      const msg = once(j, key(dir, point), fingerprint(dir, point), '当前 ' + path.basename(dir) + ' 的 ' + point + ' 已完成。用 Ask 问是否审查' + (mode === 'code' ? '、是否按验收用例自测' : '') + '，用户已明确要求的直接执行。选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。');
+      const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, '当前 ' + path.basename(dir) + ' 的 ' + point + ' 已完成。用 Ask 问是否审查' + (mode === 'code' ? '、是否按验收用例自测' : '') + '，用户已明确要求的直接执行。选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。');
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
   }
   if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test')) {
-    const msg = once(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, '本次代码已修改。用 Ask 询问是否审查、是否按验收用例自测；放弃后直接继续，不记待办、不反复提醒。'); if (msg) out.push(msg);
+    const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, '本次代码已修改。用 Ask 询问是否审查、是否按验收用例自测；放弃后直接继续，不记待办、不反复提醒。'); if (msg) out.push(msg);
   }
   return out;
 }

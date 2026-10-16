@@ -92,6 +92,14 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     cfg({ autoApply: false, autoRequirements: false });
     const first = P.stop(j, [d], true), second = P.stop(j, [d], true);
     H.ok('人工只提示一次，放弃不被同输入反复催', first.some(x => /Ask/.test(x)) && second.length === 0);
+    // 2026-10-16：每个用户要求最多问一次；新要求只有内容又变了才再问
+    const jr = { cwd: p, session_id: 'per-request', transcript_path: tf([H.tr.user('改一下 a.js')]) };
+    const asks = (turn) => P.stop(jr, [], true, turn).some(x => /本次代码已修改/.test(x));
+    H.write(path.join(p, 'a.js'), 'let a=11;\n'); const r1 = asks('turn-1');
+    H.write(path.join(p, 'a.js'), 'let a=12;\n'); const r2 = asks('turn-1');
+    const r3 = asks('turn-2');
+    H.write(path.join(p, 'a.js'), 'let a=13;\n'); const r4 = asks('turn-2');
+    H.ok('同一要求里再改不再问，新要求没改动不问，有新改动再问一次', r1 && !r2 && !r3 && r4, [r1, r2, r3, r4]);
     // 真实执行器与本机假路由：一次 run 的多个批次只计一次独立点。
     let calls = 0; const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; res.end(JSON.stringify({ content: [{ type: 'text', text: '{"issues":[],"summary":"完成"}' }] })); }); });
     await new Promise(r => server.listen(0, '127.0.0.1', r)); const prev = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
