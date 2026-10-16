@@ -467,14 +467,14 @@
         <div class="ctl"><select id="k_autoCommit"><option value="task">每完成一件事提交一次</option><option value="phase">一个阶段做完提交一次（tasks.md 里同一个大编号的任务）</option><option value="change">一个变更整个做完才提交</option><option value="off">不自动提交，我说了才提交</option></select></div>
       </div>
       <div class="opt sub">
-        <div><div class="t">到交接线先写交接记录</div><div class="d">开着：到了交接线，先写一份交接记录再接着做，会话断了能接上。关着：不写，靠 Claude Code 自己的压缩。</div></div>
+        <div><div class="t">到交接线先写交接记录</div><div class="d">只在“连续工作的方式”选了按交接线提醒、而且 Apply 自动正在生效时起作用：到了交接线先写一份交接记录再接着做。关着：不写。默认的自动压缩方式下这一项不起作用。</div></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoHandover"><i></i></label></div>
       </div>
     </div>
 
     <div class="card" id="sec-commit" data-sec="拉代码和提交">
       <h2>拉代码和提交</h2>
-      <p class="hint">开工前拉一次代码；只提交，从不 push。push 一律要你自己确认；全自动模式下直接拦下，留给你。不走 OpenSpec 的改动，提交前先问你。</p>
+      <p class="hint">开工前拉一次代码；只提交，不自己 push。push 要你当场明确说：只有一笔、目标明确时直接推，多笔先给你看合并预览、再确认一次；自动模式也一样。不走 OpenSpec 的改动，提交前先问你。</p>
       <div class="opt">
         <div><div class="t">开工前拉代码</div><div class="d">开着：你提了需求、敲了 /opsx:… 命令、接着交接记录做的那一句话，先把会话所在的仓库（壳子里加上子项目）拉到最新，再开始分析、写代码。同一个仓库 2 小时里只拉一次。</div>
           <details class="more"><summary>细节</summary><ul>
