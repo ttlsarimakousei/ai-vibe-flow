@@ -156,6 +156,20 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const later = stop([H.tr.user('页面在哪看？'), H.tr.say('在订单页')], '在订单页');
     H.ok('验收等待中再问一句不重复交报告、不覆盖交代', !/全自动报告/.test(H.reasonOf(later)) && /c 做完，等你按用例自测/.test(H.read(report) || ''), H.reasonOf(later));
   }
+  // 自动模式审查点到上限：没有用户要求就停下；用户明确要求再审时不被上限拒绝（2026-10-14 决定，10-16 补测试）
+  {
+    const h5 = H.makeHome('workflow1014-limit', process.argv[2], { autoApply: true, autoMode: true, applyReviewMaxRounds: 2, autoCommit: 'off', lessons: 'off', autoOnboard: false, pullBeforeWork: false, outputGate: false, vibeTidy: false });
+    const p5 = H.makeRepo(path.join(h5.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'openspec/changes/c/proposal.md': '# 目标\n订单查询。\n', 'openspec/changes/c/tasks.md': '## 1. 实现\n- [x] 1.1 修改 a.js；验：node --check a.js\n' });
+    const c5 = path.join(p5, 'openspec/changes/c'); const sid = 'limit';
+    H.inFlow(h5, sid, [c5]);
+    const P5 = require(path.join(h5.kit, 'lib/flow-policy'));
+    for (const id of ['r1', 'r2']) P5.noteResult(c5, 'group-1', { id, status: 'completed', issues: [{ id: 'r1' }] }, P5.fingerprint(c5, 'group-1'));
+    const run = (said, id) => H.hook(h5, 'guard-commit', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command: 'node "' + path.join(h5.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --change c --mode code --point group-1' }, transcript_path: H.transcript(path.join(h5.root, 'l.jsonl'), [H.tr.user(said)]) });
+    const limited = run('继续', 'toolu_limit_1');
+    H.ok('自动审查到上限后没有用户要求就停下', /已达到自动审查上限/.test(H.reasonOf(limited)), H.reasonOf(limited));
+    const asked = run('再审查一次', 'toolu_limit_2');
+    H.ok('用户主动要求再审时不被自动上限拒绝', asked === null, H.reasonOf(asked));
+  }
   // 人工模式归档不要求审查，提示照实说审过没有（2026-10-16 用户定的）
   {
     const h3 = H.makeHome('workflow1014-archive', process.argv[2], { autoCommit: 'off', lessons: 'off', autoOnboard: false, pullBeforeWork: false, outputGate: false, vibeTidy: false });
