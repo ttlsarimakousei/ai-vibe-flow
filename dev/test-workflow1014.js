@@ -90,6 +90,14 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     await new Promise(r => server.listen(0, '127.0.0.1', r)); const prev = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
     try { const rounds = P.record(d, 'proposal').rounds; const r = await R.run({ cwd: p, change: 'add-a', mode: 'proposal', point: 'proposal' }); H.ok('审查执行器登记当前点与独立报告', r.status === 'completed' && calls > 0 && P.record(d, 'proposal').rounds === rounds + 1 && /proposal-proposal.json$/.test(r.file)); }
     finally { if (prev === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = prev; server.closeAllConnections(); await new Promise(r => server.close(r)); }
+    // 部分覆盖的审查没有审完全部材料：只驳回其中的意见，不能把这个点登记成已处理。
+    const partialFile = path.join(p, '.vibe/reviews/add-a/code-group-1-partial.json');
+    H.write(partialFile, JSON.stringify({ id: 'partial-1', issues: [{ id: 'r1', text: '空列表没有处理' }] }));
+    P.noteResult(d, 'group-1', { id: 'partial-1', status: 'partial', issues: [{ id: 'r1' }], file: partialFile }, P.fingerprint(d, 'group-1'));
+    const decisions = path.join(h.root, 'decisions.json');
+    H.write(decisions, JSON.stringify({ findings: [{ id: 'r1', action: 'rejected', reason: '需求已确认空列表由调用方处理' }] }));
+    let resolveError = ''; try { R.resolve({ cwd: p, change: 'add-a', mode: 'code', point: 'group-1', decisions }); } catch (e) { resolveError = e.message; }
+    H.ok('部分覆盖的审查点不能借意见处理登记为通过', /没有完整完成/.test(resolveError) && !P.settled(d, 'group-1'), resolveError);
   }
   // 旧 autoMode=true 的安装迁移；显式的低保护封条不能在迁移中意外放松。
   cfg({ autoMode: true, autoApply: true, autoRequirements: true });

@@ -299,6 +299,8 @@ function resolve(opts) {
   const change = changeOf(opts.cwd || process.cwd(), opts.change); if (!change) throw new Error('意见处理需要当前变更');
   const policy = require('./flow-policy');
   const pointRec = opts.point && policy.record(change.dir, opts.point);
+  // 失败、部分覆盖、超时、取消的结果没有审完全部材料，处理其中的意见也不能把这个点记成已处理。
+  if (pointRec && pointRec.status !== 'completed') throw new Error('审查点 ' + opts.point + ' 没有完整完成的审查结果（当前：' + (pointRec.status || '未审查') + '），不能登记处理；先重新审查这个点');
   const r = pointRec ? Object.assign({}, pointRec, { reportFile: pointRec.report }) : S.reviewRecord('code', change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
   const report = r.reportFile ? JSON.parse(fs.readFileSync(r.reportFile, 'utf8')) : { id: r.key, fingerprint: r.fingerprint || W.fingerprint(opts.cwd, 'code').hash, issues: Array.from({ length: Number(r.issues) || 0 }, (_, i) => ({ id: 'r' + (i + 1) })) }; const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
