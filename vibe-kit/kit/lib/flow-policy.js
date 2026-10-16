@@ -108,21 +108,24 @@ function askOnce(j, id, signature, turn, text) {
     if (turn && prev && prev.turn === turn) { prev.sig = signature; o[id] = prev; return; }
     if (!prev || prev.sig !== signature) { o[id] = { sig: signature, turn: turn || '' }; fresh = true; }
   });
-  return fresh ? text : '';
+  return fresh ? (typeof text === 'function' ? text() : text) : '';
 }
-function stop(j, touched, codeChanged, turn) {
+// quickPending：改了代码、最后一次修改之后还没跑过快检（verify-gate 算）。这时一起问要不要跑快检，不强制（用户 2026-10-16 定的）
+const QUICK_ASK = '跑快检（项目说明里的快检命令，编译级；这个命令本身要跑测试的，问的时候说明）、';
+function stop(j, touched, codeChanged, turn, quickPending) {
+  const quick = () => typeof quickPending === 'function' && quickPending() ? QUICK_ASK : '';
   const cfg = S.readConfigFor(j); const out = [];
   const dirs = [...new Set([...touched, ...S.flowChanges(j)].filter(d => fs.existsSync(d)))];
   for (const dir of dirs) {
     const mode = S.flowStage(j) === 'apply' ? 'code' : 'proposal'; const point = cfg.autoMode ? pending(dir, mode) : points(dir, mode).slice().reverse().find(p => !settled(dir, p));
     if (!point) continue;
     if (!cfg.autoMode) {
-      const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, '当前 ' + path.basename(dir) + ' 的 ' + point + ' 已完成。用 Ask 问是否审查' + (mode === 'code' ? '、是否按验收用例自测' : '') + '，用户已明确要求的直接执行。选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。');
+      const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => '当前 ' + path.basename(dir) + ' 的 ' + point + ' 已完成。用 Ask 问是否' + (mode === 'code' ? quick() + '审查、是否按验收用例自测' : '审查') + '，用户已明确要求的直接执行。选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。');
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
   }
   if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test')) {
-    const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, '本次代码已修改。用 Ask 询问是否审查、是否按验收用例自测；放弃后直接继续，不记待办、不反复提醒。'); if (msg) out.push(msg);
+    const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用 Ask 询问是否' + q + '审查、是否按验收用例自测；放弃后直接继续，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
   }
   return out;
 }

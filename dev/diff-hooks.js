@@ -305,9 +305,9 @@ add('1013：空远端单笔允许明确推送', 'guard-commit', (kit) => { const
 // 人工提示按"会话 + 输入指纹"只发一次，共用 sess-diff 会让结果取决于前面跑过哪些用例：这几个收工用例各用自己的会话。
 const ownSession = (c, sid) => { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = sid; return r; }; };
 for (const c of cases) {
-  if (c.name === '收工：改了代码没验证') { ownSession(c, 'sess-diff-verify'); c.expect = /本次代码已修改。用 Ask 询问是否审查、是否按验收用例自测/; c.since = NEXT; }
+  if (c.name === '收工：改了代码没验证') { ownSession(c, 'sess-diff-verify'); c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用 Ask 询问是否跑快检[\s\S]*审查、是否按验收用例自测/; c.since = NEXT; }
   if (c.name === '收工：改了、验了、没提交') { ownSession(c, 'sess-diff-commit'); c.expect = /本轮改动尚未提交[\s\S]*用 Ask 提供提交或继续修改选项/; c.since = NEXT; }
-  if (c.name === '收工：改了页面没看') { ownSession(c, 'sess-diff-page'); c.expect = /^(?![\s\S]*probe-run)[\s\S]*用 Ask 询问是否审查/; c.since = NEXT; }
+  if (c.name === '收工：改了页面没看') { ownSession(c, 'sess-diff-page'); c.expect = /^(?![\s\S]*probe-run)[\s\S]*用 Ask 询问是否跑快检[\s\S]*审查/; c.since = NEXT; }
   if (c.name === '1012：交付新文件可以等用户提交') ownSession(c, 'sess-diff-deliver');
   if (c.name === '打勾：没跑过验法') { c.expect = /放行，没有输出/; c.since = NEXT; }
   if (c.name === '命令：归档没做完的变更') { c.expect = /还不能归档：还有 1 项任务没打勾/; c.since = NEXT; }

@@ -797,8 +797,16 @@ async function handle(j) {
 
   const policy = require('../lib/flow-policy');
   const touchedDirs = calls.filter(isEdit).map(fileOf).map(f => artifactOf(f)).filter(Boolean).map(a => a.dir);
+  // 人工模式：改了代码、最后一次修改之后还没跑过快检，问审查、自测时一起问要不要跑快检；不强制，也不做开关（用户 2026-10-16 定的）。
+  // 只在真要发提示时才算（查证据要读 git），项目说明写了"快检：不适用"的文件不算
+  const quickPending = () => {
+    const edits = calls.filter((c) => (isSource(c, CODE) || isSource(c, PAGE)) && !notApplicable(projectNotesFor(fileOf(c)), '快检|验证'));
+    if (!edits.length || SAID_UNVERIFIED.test(lastSaid) || ranAfter(calls.indexOf(edits[edits.length - 1]), VERIFY_CMD)) return false;
+    const roots = [...new Set(edits.map((c) => require('../lib/workspace').rootOf(path.dirname(fileOf(c)))))];
+    return !roots.every((r) => require('../lib/evidence').commands(r).length > 0);
+  };
   // 页面文件（.vue、.html、.css 等）也是代码：人工模式同样问一次是否审查、自测
-  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId));
+  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId, quickPending));
   if (policy.automaticApply(j)) { Object.assign(cfg, readConfigFor(j)); todo.push('两阶段自动开启且文档已审修并提交，执行 /opsx:apply；完成整组任务后先审查、自测、修复复验，再进入下一组。'); }
   if (cfg.autoMode && flowState(j).stage === 'plan') {
     for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {

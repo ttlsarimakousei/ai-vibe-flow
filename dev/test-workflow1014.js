@@ -171,5 +171,21 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const reviewed = archive();
     H.ok('审过了照实说审过了', /代码也审过了/.test(reviewed), reviewed);
   }
+  // 人工模式改了代码还没跑快检：问审查、自测时一起问要不要跑快检，不强制、不做开关（2026-10-16 用户定的）
+  {
+    const h4 = H.makeHome('workflow1014-quick', process.argv[2], { autoCommit: 'off', lessons: 'off', autoOnboard: false, pullBeforeWork: false, outputGate: false, vibeTidy: false });
+    const p4 = H.makeRepo(path.join(h4.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n' });
+    const f4 = path.join(h4.root, 'q.jsonl');
+    const stop = (sid, entries) => H.reasonOf(H.hook(h4, 'verify-gate', { session_id: sid, cwd: p4, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '改好了', transcript_path: H.transcript(f4, entries) }));
+    H.write(path.join(p4, 'a.js'), 'let a=2;\n');
+    const edit = H.tr.ran('Edit', { file_path: path.join(p4, 'a.js'), old_string: '1', new_string: '2' }, 'ok');
+    const user = H.tr.user('把 a 改成 2');
+    const noQuick = stop('quick-1', [user, edit, H.tr.say('改好了')]);
+    H.ok('没跑快检：问审查、自测时一起问要不要跑快检', /还没跑过快检/.test(noQuick) && /是否跑快检/.test(noQuick), noQuick);
+    H.ok('没跑快检也不强制补跑', !/没有成功跑过验证/.test(noQuick), noQuick);
+    H.ok('同一要求里不重复问快检', !/跑快检/.test(stop('quick-1', [user, edit, H.tr.say('改好了')])));
+    const ran = stop('quick-2', [H.tr.user('把 a 改成 2'), edit, H.tr.ran('Bash', { command: 'node --check a.js' }, 'ok'), H.tr.say('改好了')]);
+    H.ok('跑过快检就只问审查和自测', /本次代码已修改/.test(ran) && !/跑快检/.test(ran), ran);
+  }
   H.done('1014 两阶段工作流');
 })().catch(e => { console.error(e); H.ok('测试正常执行', false); H.done('1014 两阶段工作流'); });
