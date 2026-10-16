@@ -126,7 +126,7 @@ if (!fs.existsSync(zip)) fail('没压出来：' + zip);
 // 5. 解压出来核对：一个不多、一个不少，内容逐字节相同
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'vkz-'));
 try {
-  execFileSync(path.join(SYS32, 'tar.exe'), ['-xf', zip, '-C', out], { stdio: 'inherit', windowsHide: true, timeout: 600000 });
+  require('./lib/unzip').extract(zip, out);
   const got = walk(path.join(out, 'vibe-kit'), '', []).sort();
   const want = all.slice().sort();
   const missing = want.filter((f) => !got.includes(f));

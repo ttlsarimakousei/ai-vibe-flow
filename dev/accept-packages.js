@@ -11,14 +11,12 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFileSync } = require('child_process');
 const H = require('./lib/harness');
 
 const ZIP1 = path.resolve(process.argv[2] || '');
 const ZIP2 = path.resolve(process.argv[3] || '');
 const PORT = Number(process.argv[4]) || 18751;
 if (!fs.existsSync(ZIP1) || !fs.existsSync(ZIP2)) { console.log('用法：node dev/accept-packages.js <第一个 zip> <第二个 zip> [端口]'); process.exit(2); }
-const SYS32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
 const sha = (f) => crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex');
 function filesOf(dir, rel, out) {
   for (const e of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
@@ -32,7 +30,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
 const json = (t) => { try { return JSON.parse(String(t).trim().split(/\r?\n/).filter(Boolean).pop()); } catch (e) { return null; } };
 function unzip(zip, name) {
   const out = H.tempDir(name);
-  execFileSync(path.join(SYS32, 'tar.exe'), ['-xf', zip, '-C', out], { stdio: 'ignore', windowsHide: true, timeout: 600000 });
+  require('./lib/unzip').extract(zip, out);
   return path.join(out, 'vibe-kit');
 }
 
