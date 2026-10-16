@@ -13,7 +13,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync, execFileSync } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 const args = process.argv.slice(2);
 const all = (f) => args.map((a, i) => (a === f ? args[i + 1] : null)).filter(Boolean);
@@ -63,15 +63,55 @@ suites.unshift(['归档解包的临时目录', 'test-archive-extract.js', []]);
 suites.unshift(['推送预览和合并确认', 'test-push-preview.js', []]);
 suites.unshift(['服务实际地址', 'test-service-address.js', []]);
 for (const [name, file] of [['状态并发和恢复', 'test-workflow-state.js'], ['用户意图与许可', 'test-workflow-intent.js'], ['许可与上下文', 'test-workflow-permissions.js'], ['连接生命周期', 'test-connection-lifecycle.js'], ['诊断脱敏', 'test-diagnostic-redaction.js'], ['审查和执行证据', 'test-review-evidence.js'], ['运行流程优化', 'test-optimization-runtime.js'], ['优化边界', 'test-optimization-boundaries.js']]) suites.unshift([name, file, []]);
-for (const [name, file, a] of suites) {
-  const t0 = Date.now();
-  const r = spawnSync(process.execPath, [path.join(__dirname, file)].concat(a), { encoding: 'utf8', windowsHide: true, timeout: 1200000 });
-  const out = String(r.stdout || '') + String(r.stderr || '');
-  const last = out.trim().split(/\r?\n/).filter((l) => /^\[(OK|X)\]/.test(l)).pop() || '(没有汇总行)';
+// --only a.js,b.js：只跑这几套（日常专项用；发版必须全量，不带它）
+const only = all('--only').flatMap((s) => s.split(',')).map((s) => path.basename(s.trim())).filter(Boolean);
+if (only.length) { for (let i = suites.length - 1; i >= 0; i--) if (!only.includes(suites[i][1])) suites.splice(i, 1); console.log('只跑：' + suites.map((s) => s[0]).join('、')); }
+// 每套的完整输出存到 .vibe/tmp/run-all-<时间>/，失败时打印每个失败项和它下面的说明（以前只打印前 30 行，常常只看到原因的第一行）
+const pad2 = (n) => String(n).padStart(2, '0');
+const now = new Date();
+const LOGS = path.join(__dirname, '..', '.vibe', 'tmp', 'run-all-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) + '-' + pad2(now.getHours()) + pad2(now.getMinutes()));
+fs.mkdirSync(LOGS, { recursive: true });
+function runSuite(name, file, a) {
+  return new Promise((resolve) => {
+    const t0 = Date.now(); let out = ''; let done = false;
+    const p = spawn(process.execPath, [path.join(__dirname, file)].concat(a), { windowsHide: true });
+    p.stdout.on('data', (d) => { out += d; }); p.stderr.on('data', (d) => { out += d; });
+    const timer = setTimeout(() => { out += '\n（超过 20 分钟，结束这一套）'; try { p.kill(); } catch (e) { /* 已经退了 */ } }, 1200000);
+    const finish = (code) => { if (done) return; done = true; clearTimeout(timer); resolve({ name, file, code, out, sec: Math.round((Date.now() - t0) / 1000) }); };
+    p.on('close', finish); p.on('error', (e) => { out += String(e); finish(-1); });
+  });
+}
+function report(r, index) {
+  const log = path.join(LOGS, pad2(index + 1) + '-' + path.basename(r.file, '.js') + '.log');
+  try { fs.writeFileSync(log, r.out); } catch (e) { /* 存不了日志不影响结果 */ }
+  const last = r.out.trim().split(/\r?\n/).filter((l) => /^\[(OK|X)\]/.test(l)).pop() || '(没有汇总行)';
   const m = last.match(/通过 (\d+) 项(?:，失败 (\d+) 项)?/);
-  rows.push({ name, ok: r.status === 0, pass: m ? Number(m[1]) : 0, fail: m ? Number(m[2] || 0) : 0, sec: Math.round((Date.now() - t0) / 1000), out });
-  console.log((r.status === 0 ? '[OK] ' : '[X]  ') + name.padEnd(20) + ' 通过 ' + (m ? m[1] : '?') + (m && m[2] ? '，失败 ' + m[2] : '') + '（' + rows[rows.length - 1].sec + ' 秒）');
-  if (r.status !== 0) console.log(out.split(/\r?\n/).filter((l) => /\[X\]|^\s{6}/.test(l)).slice(0, 30).join('\n'));
+  rows.push({ name: r.name, ok: r.code === 0, pass: m ? Number(m[1]) : 0, fail: m ? Number(m[2] || 0) : 0, sec: r.sec, out: r.out });
+  console.log((r.code === 0 ? '[OK] ' : '[X]  ') + r.name.padEnd(20) + ' 通过 ' + (m ? m[1] : '?') + (m && m[2] ? '，失败 ' + m[2] : '') + '（' + r.sec + ' 秒）');
+  if (r.code === 0) return;
+  const lines = r.out.split(/\r?\n/); const shown = [];
+  for (let i = 0; i < lines.length && shown.length < 200; i++) {
+    if (!/^\s+\[X\]|测试脚本出错|端到端脚本出错/.test(lines[i])) continue;
+    shown.push(lines[i]);
+    for (let k = i + 1; k < lines.length && k <= i + 20 && /^\s{4,}/.test(lines[k]) && !/^\s+\[(OK|X)\]/.test(lines[k]); k++) shown.push(lines[k]);
+  }
+  console.log((shown.length ? shown : lines.slice(-20)).join('\n'));
+  console.log('      完整输出：' + log);
+}
+(async () => {
+// 新旧钩子对比各用自己的临时目录、不占端口，几份一起跑；别的套件一个一个跑（机器忙时有的测试会因时序出问题）
+let index = 0;
+for (let i = 0; i < suites.length; i++) {
+  const [name, file, a] = suites[i];
+  if (file === 'diff-hooks.js') {
+    const group = suites.slice(i).filter((s) => s[1] === 'diff-hooks.js');
+    const results = await Promise.all(group.map((s) => runSuite(s[0], s[1], s[2])));
+    for (const r of results) report(r, index++);
+    suites.splice(i, suites.length - i, ...suites.slice(i).filter((s) => s[1] !== 'diff-hooks.js'));
+    i--;
+    continue;
+  }
+  report(await runSuite(name, file, a), index++);
 }
 const after = windows();
 const newWin = after.filter((w) => !before.includes(w));
@@ -80,4 +120,6 @@ console.log('');
 console.log('合计：' + rows.length + ' 套，通过 ' + rows.reduce((n, r) => n + r.pass, 0) + ' 项，失败 ' + rows.reduce((n, r) => n + r.fail, 0) + ' 项');
 console.log('桌面上多出来的窗口：' + (newWin.length ? newWin.join('、') : '没有'));
 console.log('临时目录里留下的测试目录：' + (left.length ? left.join('、') : '没有'));
+console.log('每套的完整输出：' + LOGS);
 process.exit(rows.every((r) => r.ok) && !newWin.length && !left.length ? 0 : 1);
+})();
