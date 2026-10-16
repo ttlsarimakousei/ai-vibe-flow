@@ -626,11 +626,14 @@ function archiveIssue(t, dir, j) {
     const permit = said.ok && !wrong ? require('../lib/permissions').allow(j, 'archive', chDir, j.tool_use_id) : { ok: false };
     if (permit.ok) return null;
     const why = wrong ? '我说的是归档 ' + others.join('、') + '，不是它' : permit.reason || '我还没自测、还没说归档';
-    return { name, noBypass: true, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 的任务都打了勾、代码也审过了，但' + why + '。归档要我自测过、我说了才做：先交代做了什么、怎么自测（起服务的命令、要看的页面、要调的接口、要执行的脚本），然后' + (cfg.autoMode ? '收工交报告，写进"留给你做的"：等我自测过说归档。不要再试归档。' : '用提问框问我自测过了没有、能不能归档（选项写"归档"和"还要改"）。我说还要改什么，改完再问；我说归档了再归档。') };
+    // 人工模式归档不要求审查（用户 2026-10-16 定的），审过没有照实说
+    const reviewed = cfg.autoMode || !codeReviewIssue(chDir) ? '、代码也审过了' : '，代码没有做过完整审查（人工模式审不审由我决定）';
+    return { name, noBypass: true, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 的任务都打了勾' + reviewed + '，但' + why + '。归档要我自测过、我说了才做：先交代做了什么、怎么自测（起服务的命令、要看的页面、要调的接口、要执行的脚本），然后' + (cfg.autoMode ? '收工交报告，写进"留给你做的"：等我自测过说归档。不要再试归档。' : '用提问框问我自测过了没有、能不能归档（选项写"归档"和"还要改"）。我说还要改什么，改完再问；我说归档了再归档。') };
   }
   const tail = !cfg.autoMode ? '确实要放弃这个变更，告诉我，我来删。'
     : waiting ? '留给用户做的任务还没做，这个变更先不归档：写进最后的交代，接着做别的。' : '';
-  return { name, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 还不能归档：' + issues.map((s) => s.replace(/。$/, '')).join('；') + '。顺序是：任务全部打勾 → /ttls-cross-review 审代码 → 修掉成立的问题并验证 → 再归档。' + tail };
+  const order = cfg.autoMode ? '任务全部打勾 → /ttls-cross-review 审代码 → 修掉成立的问题并验证 → 再归档' : '任务全部打勾 → 要不要审查、自测由我决定 → 我说归档再归档';
+  return { name, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 还不能归档：' + issues.map((s) => s.replace(/。$/, '')).join('；') + '。顺序是：' + order + '。' + tail };
 }
 
 // ---------- 禁止改套件 ----------

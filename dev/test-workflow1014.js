@@ -156,5 +156,20 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const later = stop([H.tr.user('页面在哪看？'), H.tr.say('在订单页')], '在订单页');
     H.ok('验收等待中再问一句不重复交报告、不覆盖交代', !/全自动报告/.test(H.reasonOf(later)) && /c 做完，等你按用例自测/.test(H.read(report) || ''), H.reasonOf(later));
   }
+  // 人工模式归档不要求审查，提示照实说审过没有（2026-10-16 用户定的）
+  {
+    const h3 = H.makeHome('workflow1014-archive', process.argv[2], { autoCommit: 'off', lessons: 'off', autoOnboard: false, pullBeforeWork: false, outputGate: false, vibeTidy: false });
+    const p3 = H.makeRepo(path.join(h3.work, 'p'), { 'a.js': 'let a=1;\n', 'openspec/changes/c/proposal.md': '# 目标\n订单查询。\n', 'openspec/changes/c/tasks.md': '## 1. 实现\n- [x] 1.1 修改 a.js；验：node --check a.js\n- [ ] 1.2 修改 a.js；验：node --check a.js\n' });
+    const c3 = path.join(p3, 'openspec/changes/c');
+    const archive = () => H.reasonOf(H.hook(h3, 'guard-commit', { session_id: 'archive', cwd: p3, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'openspec archive c --yes' }, transcript_path: H.transcript(path.join(h3.root, 'a.jsonl'), [H.tr.user('看看能不能归档')]) }));
+    const open = archive();
+    H.ok('人工模式归档拦截不把审查写成必经步骤', /还有 1 项任务没打勾/.test(open) && /由我决定/.test(open) && !/审代码/.test(open), open);
+    H.write(path.join(c3, 'tasks.md'), H.read(path.join(c3, 'tasks.md')).replace('- [ ] 1.2', '- [x] 1.2'));
+    const done = archive();
+    H.ok('人工模式没审过不说代码也审过了', /代码没有做过完整审查/.test(done) && !/代码也审过了/.test(done), done);
+    H.reviewPoints(h3, c3);
+    const reviewed = archive();
+    H.ok('审过了照实说审过了', /代码也审过了/.test(reviewed), reviewed);
+  }
   H.done('1014 两阶段工作流');
 })().catch(e => { console.error(e); H.ok('测试正常执行', false); H.done('1014 两阶段工作流'); });
