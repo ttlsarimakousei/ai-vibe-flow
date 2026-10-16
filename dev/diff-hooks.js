@@ -310,6 +310,8 @@ for (const c of cases) {
   if (c.name === '收工：改了页面没看') { ownSession(c, 'sess-diff-page'); c.expect = /^(?![\s\S]*probe-run)[\s\S]*用 Ask 询问是否跑快检[\s\S]*审查/; c.since = NEXT; }
   if (c.name === '1012：交付新文件可以等用户提交') ownSession(c, 'sess-diff-deliver');
   if (c.name === '打勾：没跑过验法') { c.expect = /放行，没有输出/; c.since = NEXT; }
+  // 2026-10-16：起服务、看页面算自测，人工模式先 Ask；env -C 包一层的场景脚本以前漏判，现在和不包时一样
+  if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测/; c.since = NEXT; }
   if (c.name === '命令：归档没做完的变更') { c.expect = /还不能归档：还有 1 项任务没打勾/; c.since = NEXT; }
   if (c.name === '收工：最后一项打了勾、没审') { c.expect = /group-1 已完成。用 Ask 问是否审查、是否按验收用例自测/; c.since = NEXT; }
   if (c.name === '开口：提需求') { c.expect = /明确范围后按当前需求自动条件逐产物生成/; c.since = NEXT; }
