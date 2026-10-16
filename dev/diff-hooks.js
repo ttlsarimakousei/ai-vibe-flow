@@ -66,6 +66,7 @@ const V1011B = '20261011.1553'; // 归档临时查看目录和 Windows 包装路
 const V1012 = '20261013.0058'; // 1012 反馈：页面探针、产出位置、待提交文件和推送预览
 const V1013 = '20261013.1453'; // 1013 非数据库反馈修复
 const V1013B = '20261013.2358'; // 1013 下午清单：业务状态名
+const V1017 = '20261017.0243'; // 两阶段自动、逐点审查、人工模式先问（10-14 至 10-16 决定）
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -305,19 +306,19 @@ add('1013：空远端单笔允许明确推送', 'guard-commit', (kit) => { const
 // 人工提示按"会话 + 输入指纹"只发一次，共用 sess-diff 会让结果取决于前面跑过哪些用例：这几个收工用例各用自己的会话。
 const ownSession = (c, sid) => { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = sid; return r; }; };
 for (const c of cases) {
-  if (c.name === '收工：改了代码没验证') { ownSession(c, 'sess-diff-verify'); c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用 Ask 询问是否跑快检[\s\S]*审查、是否按验收用例自测/; c.since = NEXT; }
-  if (c.name === '收工：改了、验了、没提交') { ownSession(c, 'sess-diff-commit'); c.expect = /本轮改动尚未提交[\s\S]*用 Ask 提供提交或继续修改选项/; c.since = NEXT; }
-  if (c.name === '收工：改了页面没看') { ownSession(c, 'sess-diff-page'); c.expect = /^(?![\s\S]*probe-run)[\s\S]*用 Ask 询问是否跑快检[\s\S]*审查/; c.since = NEXT; }
+  if (c.name === '收工：改了代码没验证') { ownSession(c, 'sess-diff-verify'); c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用 Ask 询问是否跑快检[\s\S]*审查、是否按验收用例自测/; c.since = V1017; }
+  if (c.name === '收工：改了、验了、没提交') { ownSession(c, 'sess-diff-commit'); c.expect = /本轮改动尚未提交[\s\S]*用 Ask 提供提交或继续修改选项/; c.since = V1017; }
+  if (c.name === '收工：改了页面没看') { ownSession(c, 'sess-diff-page'); c.expect = /^(?![\s\S]*probe-run)[\s\S]*用 Ask 询问是否跑快检[\s\S]*审查/; c.since = V1017; }
   if (c.name === '1012：交付新文件可以等用户提交') ownSession(c, 'sess-diff-deliver');
-  if (c.name === '打勾：没跑过验法') { c.expect = /放行，没有输出/; c.since = NEXT; }
+  if (c.name === '打勾：没跑过验法') { c.expect = /放行，没有输出/; c.since = V1017; }
   // 2026-10-16：起服务、看页面算自测，人工模式先 Ask；env -C 包一层的场景脚本以前漏判，现在和不包时一样
-  if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测/; c.since = NEXT; }
-  if (c.name === '命令：归档没做完的变更') { c.expect = /还不能归档：还有 1 项任务没打勾/; c.since = NEXT; }
-  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /group-1 已完成。用 Ask 问是否审查、是否按验收用例自测/; c.since = NEXT; }
-  if (c.name === '开口：提需求') { c.expect = /明确范围后按当前需求自动条件逐产物生成/; c.since = NEXT; }
-  if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）', '开口：说测试发现问题', '开口："不用"的需求', '开口：开头是"不用"的需求', '开口：开头是"好"字的需求'].includes(c.name)) c.since = NEXT;
+  if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测/; c.since = V1017; }
+  if (c.name === '命令：归档没做完的变更') { c.expect = /还不能归档：还有 1 项任务没打勾/; c.since = V1017; }
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /group-1 已完成。用 Ask 问是否审查、是否按验收用例自测/; c.since = V1017; }
+  if (c.name === '开口：提需求') { c.expect = /明确范围后按当前需求自动条件逐产物生成/; c.since = V1017; }
+  if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）', '开口：说测试发现问题', '开口："不用"的需求', '开口：开头是"不用"的需求', '开口：开头是"好"字的需求'].includes(c.name)) c.since = V1017;
   // #112 起按暂存的产物认提案提交：真实的提案提交会暂存产物，只看提交信息的输入已不现实。
-  if (c.name === '提交：提案要单独确认') { const build = c.build; c.build = (kit) => { const r = build(kit); const f = path.join(r.proj, 'openspec/changes/add-export/proposal.md'); fs.appendFileSync(f, '\n- 导出格式为 xlsx\n'); H.git(r.proj, ['add', 'openspec/changes/add-export/proposal.md']); return r; }; c.since = NEXT; }
+  if (c.name === '提交：提案要单独确认') { const build = c.build; c.build = (kit) => { const r = build(kit); const f = path.join(r.proj, 'openspec/changes/add-export/proposal.md'); fs.appendFileSync(f, '\n- 导出格式为 xlsx\n'); H.git(r.proj, ['add', 'openspec/changes/add-export/proposal.md']); return r; }; c.since = V1017; }
 }
 
 let same = 0;
