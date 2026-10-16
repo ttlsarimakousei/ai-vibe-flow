@@ -109,6 +109,13 @@ npm install --prefix "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120" @ant
 
 程序在 `<那个目录>\node_modules\@anthropic-ai\claude-code\bin\claude.exe`。一个版本两百多 MB。这台电脑上装着 2.1.120、2.1.259 和 2.1.289，以后还要用，不删。
 
+新版 npm（12 起）装完有两个坑，2026-10-16 在另一台电脑上遇到：
+
+- npm 默认不跑包自带的安装脚本，`bin\claude.exe` 只是一个 500 字节的占位文件。装完跑一次 `node <那个目录>\node_modules\@anthropic-ai\claude-code\install.cjs`，它把平台包里的真程序复制过来。这个脚本只做复制，读过再跑。
+- 真程序在可选依赖 `@anthropic-ai/claude-code-win32-x64` 里。网络断一下 npm 就悄悄跳过它，不报错。装完看 `node_modules\@anthropic-ai\` 下有没有这个目录、`claude.exe --version` 能不能出版本号，没有就重装那一个版本。
+
+`%LOCALAPPDATA%\Programs` 原来不存在的电脑，在 Claude 桌面版的会话里新建它会被藏起来（见下面"查库的运行环境"）。可以先装在别处（比如 `C:\WorkSpace\vibe-tools\claude-code\<版本>`），`--claude` 直接给那个路径；再由人在自己的 PowerShell 里复制到推荐位置。
+
 上一版的套件直接用 `dev/baseline/` 里留的那份：
 
 ```bash
@@ -165,6 +172,10 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 - 往 `AppData\Local`、`AppData\Roaming` 下面新建的顶层目录，实际落在应用自己的私有目录里，别的程序看不到。放在已经有的目录下面（`AppData\Local\Programs\…`）才是真的。装完用资源管理器看一眼在不在。
 
 达梦、神通、Oracle、金仓、MySQL 的真库这里测不了，见 `docs/ttls-db-crud/验证记录.md`。
+
+便携版目录的做法（2026-10-16）：python.org 在 NuGet 上的 `python` 包，解开后 `tools` 目录就是完整的 Python，放成 `<目录>\python`；Temurin 17 的 zip 解开放成 `<目录>\jdk`；H2 的 jar 放成 `<目录>\h2.jar`。下载后按官方给的校验值核对（NuGet 的 packageHash、Adoptium 接口的 checksum、Maven 中央仓库的 .sha1）。
+
+打包自查和验收解压安装包用 Windows PowerShell 自带的 Expand-Archive（`dev/lib/unzip.js`），不用 tar.exe：tar.exe 按系统代码页转文件名，英文系统上中文文件名转不过去就报错退出。
 
 改了 `DbRunner.java` 要重新编译，命令在 `docs/ttls-db-crud/维护须知.md`。
 
