@@ -15,6 +15,8 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   H.ok('人工审查先 Ask', /人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', review))));
   H.ok('明确自测要求直接执行', !/人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', { transcript_path: tf([H.tr.user('运行测试')]) }))));
   H.ok('明确主动审查不拒绝', !/人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('审核一下')]) })))));
+  H.ok('说"审一下"就是明确要求审查', !/人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('审一下变更 add-a 的代码，有问题就改')]) })))));
+  H.ok('问"要不要审一下"不算要求', /人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('要不要审一下？')]) })))));
   H.ok('引号内构建文字不误当自测', runHook('guard-commit', { tool_input: { command: 'echo "npm test"' } }) === null);
   // 2026-10-16：编译、文件检查是快检，人工模式直接跑；运行配置会起程序或跑测试，仍先 Ask
   H.ok('IDEA 文件检查是快检，人工模式直接跑', runHook('guard-commit', { tool_name: 'mcp__ide__get_file_problems', tool_input: { filePath: 'a.js', projectPath: p } }) === null);
