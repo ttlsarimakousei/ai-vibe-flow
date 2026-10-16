@@ -23,7 +23,7 @@
 5. [dev/README.md](dev/README.md)：测试怎么跑、测试的规矩。
 6. 动到相关的地方时再看：[docs/claude-code-facts.md](docs/claude-code-facts.md)（实测过的 Claude Code 行为）、[docs/decisions.md](docs/decisions.md)（为什么是现在这样，哪些是用户定的不能改回去）、[docs/glossary.md](docs/glossary.md)（"壳子""放行""交接线"这些词）。
 
-用户怎么用套件，看 [vibe-kit/README.md](vibe-kit/README.md)。它是写给用的人看的，也是行为的说明书：改了行为，它要跟着改。
+用户怎么用套件，看 [vibe-kit/README.md](vibe-kit/README.md) 和它链接的 `vibe-kit/手册/` 附录。它们是写给用的人看的，也是行为的说明书：改了行为，它们要跟着改。同一件事只在一处写：README 只放短说明，细节放对应的附录。
 
 ## 仓库地图
 
@@ -38,7 +38,7 @@
 | `vibe-kit/kit/statusline.js` | 状态栏 |
 | `vibe-kit/router/` | 模型路由 `router.js`、后台管理 `service.js`、配置页 `ui.html` 和它的后端 `kit-api.js` |
 | `vibe-kit/claude/` | 装进 `~/.claude` 的给模型看的东西：全局约定模板 `CLAUDE.md`、规范 `rules/`、技能 `skills/`、审查代理 `agents/` |
-| `vibe-kit/README.md`、`vibe-kit/更新说明.md` | 用户手册、版本说明。会打进安装包 |
+| `vibe-kit/README.md`、`vibe-kit/手册/`、`vibe-kit/更新说明.md` | 用户手册（README 是短手册，`手册/` 下是一件事一份的附录）、版本说明。会打进安装包；`手册/` 新加的文件要加进 `dev/pack.js` 的必备清单 |
 | `dev/` | 测试（`test-*.js`、`ui-*.js`、`e2e-*.js`）、`run-all.js`、`pack.js`、`accept-packages.js`、`diff-hooks.js`、测试支架 `lib/`、旧版基线 `baseline/` |
 | `docs/` | 协作文档；`docs/history/` 是早期的方案和审查报告，只读 |
 | `browser-probe/`、`coop-probe/` | 早期的体检包，冻结，不改 |
@@ -91,7 +91,7 @@
 
 | 改了什么 | 要改哪些 |
 |---|---|
-| 用户看得见的行为、开关、配置页 | `vibe-kit/README.md`、`vibe-kit/更新说明.md` 最上面那一节 |
+| 用户看得见的行为、开关、配置页 | `vibe-kit/README.md` 或 `vibe-kit/手册/` 里对应的附录、`vibe-kit/更新说明.md` 最上面那一节 |
 | 测试、打包的做法 | `dev/README.md` |
 | 架构、状态文件、新模块 | `docs/architecture.md` |
 | 用户定下的规矩、重要取舍 | `docs/decisions.md` |

@@ -25,7 +25,7 @@ git config --global core.longpaths true
 3. 写测试：加进现有的测试文件，或者新建一个 `dev/test-<批次或主题>.js`，加进 `dev/run-all.js`。写完拿上一版的套件跑一遍，确认新测试在旧版上会失败。
 4. 改了拦截的说法、钩子的输出：`dev/diff-hooks.js` 里加"有意改的"用例，`since` 写 `NEXT`。
 5. 跑相关的测试，再跑 `node dev/run-all.js`。发版前跑全量（见 [release.md](release.md)）。
-6. 改文档：`vibe-kit/README.md`、`vibe-kit/更新说明.md`（最上面那一节，版本号写 `@@VER@@`）、`dev/README.md`、`docs/` 里对应的那篇。
+6. 改文档：`vibe-kit/README.md` 或 `vibe-kit/手册/` 里对应的附录、`vibe-kit/更新说明.md`（最上面那一节，版本号写 `@@VER@@`）、`dev/README.md`、`docs/` 里对应的那篇。
 7. 提交：`类型: 内容`，只 add 这次改的文件。
 
 ## 手工试一个脚本
