@@ -120,7 +120,9 @@ function stop(j, touched, codeChanged, turn, quickPending) {
     const mode = S.flowStage(j) === 'apply' ? 'code' : 'proposal'; const point = cfg.autoMode ? pending(dir, mode) : points(dir, mode).slice().reverse().find(p => !settled(dir, p));
     if (!point) continue;
     if (!cfg.autoMode) {
-      const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => '当前 ' + path.basename(dir) + ' 的 ' + point + ' 已完成。用 Ask 问是否' + (mode === 'code' ? quick() + '审查、是否按验收用例自测' : '审查') + '，用户已明确要求的直接执行。选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。');
+      // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
+      const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).replace(/\\/g, '/');
+      const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '') + ' 的 ' + point + ' 已完成。用 Ask 问是否' + (mode === 'code' ? quick() + '审查、是否按验收用例自测' : '审查') + '，用户已明确要求的直接执行。选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。');
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
   }

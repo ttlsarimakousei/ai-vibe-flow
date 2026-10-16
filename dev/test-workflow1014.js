@@ -123,6 +123,12 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
       H.ok('编译和静态检查不算自测', quick.every(c => !P.testCommand(c, false)), quick.filter(c => P.testCommand(c, false)));
       H.ok('跑测试、起服务、看页面算自测', self.every(c => P.testCommand(c, false)), self.filter(c => !P.testCommand(c, false)));
     } else H.ok('自测命令不因目录名带 test 误判', false);
+    // 壳子里的子项目可能有同名变更：人工提示带上变更所在项目的相对路径；会话就在这个项目里时只写变更名
+    H.write(path.join(p, 'openspec/changes/add-b/proposal.md'), '# 目标\n订单分页。\n');
+    const db = path.join(p, 'openspec/changes/add-b');
+    const outer = P.stop({ cwd: h.work, session_id: 'label-outer', transcript_path: tf([H.tr.user('写需求')]) }, [db], false, 'turn-label');
+    const inner = P.stop({ cwd: p, session_id: 'label-inner', transcript_path: tf([H.tr.user('写需求')]) }, [db], false, 'turn-label');
+    H.ok('人工提示带上变更所在的项目', outer.some(x => /当前 add-b（p） 的 proposal/.test(x)) && inner.some(x => /当前 add-b 的 proposal/.test(x)), [outer, inner]);
   }
   // 旧 autoMode=true 的安装迁移；显式的低保护封条不能在迁移中意外放松。
   cfg({ autoMode: true, autoApply: true, autoRequirements: true });
