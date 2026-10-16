@@ -177,6 +177,9 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.ok('自动审查到上限后没有用户要求就停下', /已达到自动审查上限/.test(H.reasonOf(limited)), H.reasonOf(limited));
     const asked = run('再审查一次', 'toolu_limit_2');
     H.ok('用户主动要求再审时不被自动上限拒绝', asked === null, H.reasonOf(asked));
+    // 2026-10-14 起自动模式可以用提问框问业务疑问，不再拦下记进报告（端到端用 -p 跑没人回答，放在这里测）
+    const ask = H.hook(h5, 'guard-ask', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出的文件名用哪种格式？', header: '文件名', multiSelect: false, options: [{ label: '带日期', description: '文件名带日期' }, { label: '不带日期', description: '固定文件名' }] }] }, transcript_path: H.transcript(path.join(h5.root, 'ask.jsonl'), [H.tr.user('继续')]) });
+    H.ok('自动模式生效时提问框照常可用', !(ask && (ask.decision === 'block' || ask.hookSpecificOutput && ask.hookSpecificOutput.permissionDecision === 'deny')), ask);
   }
   // 人工模式归档不要求审查，提示照实说审过没有（2026-10-16 用户定的）
   {
