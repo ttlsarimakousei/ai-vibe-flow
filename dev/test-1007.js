@@ -170,8 +170,13 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('2.x 做完了（这个阶段只有一项）：催提交', !!r4 && r4.decision === 'block' && /还没提交/.test(H.reasonOf(r4)), H.reasonOf(r4));
     // 对照：每项任务提交（默认）时，改了 A.java 没提交就催
     H.setConfig(ph, { autoCommit: 'task' });
-    const r5 = stop([H.tr.user('再改一下'), edit('src/main/java/A.java', 'class A { int a; int c; int d; }\n'), H.tr.say('改好了')]);
-    H.ok('对照：每项任务提交时，改了就催，说的是"一项任务一次提交"', !!r5 && /还没提交/.test(H.reasonOf(r5)) && /一项任务一次提交/.test(H.reasonOf(r5)), H.reasonOf(r5));
+    const again = [H.tr.user('再改一下'), edit('src/main/java/A.java', 'class A { int a; int c; int d; }\n'), H.tr.say('改好了')];
+    // A.java 审过之后又改了：旧审查结论失效，先复审 1.x，不能为了提交跳过审查（1014 起）
+    const r5 = stop(again);
+    H.ok('审过的文件又改了：先复审该组，不先催提交', !!r5 && /审查点 group-1/.test(H.reasonOf(r5)) && !/还没提交|接着提交/.test(H.reasonOf(r5)), H.reasonOf(r5));
+    H.reviewPoints(ph, chg);
+    const r6 = stop(again);
+    H.ok('对照：每项任务提交时，改了就催，说的是"一项任务一次提交"', !!r6 && /还没提交/.test(H.reasonOf(r6)) && /一项任务一次提交/.test(H.reasonOf(r6)), H.reasonOf(r6));
     const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
     H.ok('开关存得进去', api.cleanConfig({ autoCommit: 'phase' }).autoCommit === 'phase' && /value="phase"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
     const gen = H.node(ph, path.join(ph.kit, 'install.js'), ['--sync'], { cwd: ph.root, timeout: 60000 });

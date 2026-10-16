@@ -91,8 +91,10 @@ const commitMode = (cfg) => (['task', 'phase', 'change', 'off'].includes(cfg.aut
 /** 这个会话碰过的变更里，有没有审查还没审完的（多轮审查报了问题、还没复审到"问题 0 条"）：有就先不催提交，审查过程不进提交 */
 function reviewOpenFor(sid, entries, changes) {
   try {
-    const rr = readState('review-rounds');
-    return sessionChanges(sid, entries, changes()).some((c) => ['code', 'proposal'].some((k) => { const x = rr[k + '|' + normKey(c.dir)]; return !!(x && !x.done); }));
+    const rr = readState('review-rounds'); const policy = require('../lib/flow-policy');
+    // 和 guard-commit 的提交检查同一口径：逐点审查审过、之后输入又变了还没复审完，也算没收尾
+    return sessionChanges(sid, entries, changes()).some((c) => ['code', 'proposal'].some((k) => { const x = rr[k + '|' + normKey(c.dir)]; return !!(x && !x.done); })
+      || policy.points(c.dir, 'code').some((p) => policy.record(c.dir, p).rounds && !policy.settled(c.dir, p)));
   } catch (e) { return false; }
 }
 // 它最后那句已经在问要不要提交
