@@ -22,6 +22,8 @@ node dev/run-all.js
 node dev/run-all.js --old dev/baseline/20261005.0302/vibe-kit --old dev/baseline/20261001.0303/vibe-kit --claude <claude.exe> --claude <另一个版本的 claude.exe> --rt auto
 ```
 
+日常只想跑某几套：`--only test-workflow1014.js,test-workflow-intent.js`（文件名，逗号隔开，可以和别的参数一起用）。发版必须全量，不带它。几份新旧钩子对比同时跑（各用自己的临时目录、不占端口），别的套件一个一个跑：机器忙时有的测试会因时序出问题。每套的完整输出存在 `.vibe/tmp/run-all-<年月日-时分>/`，失败时汇总里打印每个失败项和它下面的说明。
+
 `--old` 可以给几个，新旧对比每个都比一遍。有意改过的地方每一项记着是哪一版改的：拿来比的上一版比它老，两版应该不一样；上一版已经带着这个改动，两版应该一样。
 
 `diff-hooks.js` 的假项目使用 harness 默认的系统临时目录，不把 `TEMP`、`TMP` 覆盖成仓库的 `.vibe/tmp`；否则整个假项目会被识别为过程目录，解包、备份和页面检查的测试前提失效。它只把归档命令作为钩子输入，不执行解包，日志仍放 `.vibe/tmp/<事由>/`。
