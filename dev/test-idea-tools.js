@@ -28,11 +28,15 @@ for (const [name, input] of [
   ['execute_tool', { command: 'execute_terminal_command --command "git status"' }],
   ['replace_text_in_file', { pathInProject: 'a.js', oldText: '1', newText: '2' }],
   ['rename_refactoring', { pathInProject: 'a.js', symbolName: 'a', newName: 'b' }],
-  ['reformat_file', { path: 'a.js' }], ['build_project', { filesToRebuild: ['a.js'] }],
-  ['lint_files', { files: ['a.js'] }], ['get_run_configurations', { filePath: 'a.js' }],
-  ['execute_run_configuration', { configurationName: 'app' }],
+  ['reformat_file', { path: 'a.js' }], ['get_run_configurations', { filePath: 'a.js' }],
   ['xdebug_set_breakpoint', { filePath: 'a.js', line: 1 }], ['xdebug_get_stack', { sessionId: 'test' }],
 ]) H.ok('普通操作通过：' + name, call(name, input) === null);
+// 编译、检查、运行配置属于自测：人工模式先 Ask（2026-10-14 用户定的），用户明确要求后照常通过；execute_tool 转发也一样。
+const selfTests = [['build_project', { filesToRebuild: ['a.js'] }], ['lint_files', { files: ['a.js'] }], ['execute_run_configuration', { configurationName: 'app' }], ['execute_tool', { command: 'build_project' }]];
+for (const [name, input] of selfTests) H.ok('人工模式自测先 Ask：' + name + (input.command ? ' ' + input.command : ''), denied(call(name, input)) && /人工模式/.test(H.reasonOf(call(name, input))));
+H.transcript(transcript, [H.tr.user('运行测试')]);
+for (const [name, input] of selfTests) H.ok('明确要求自测后通过：' + name + (input.command ? ' ' + input.command : ''), call(name, input) === null);
+H.transcript(transcript, [H.tr.user('改代码')]);
 
 for (const [label, name, input] of [
   ['直接读令牌', 'read_file', { file_path: secret }],

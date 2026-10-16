@@ -115,7 +115,10 @@ function stop(j, touched, codeChanged) {
   return out;
 }
 function actionIssue(j) {
-  const cfg = S.readConfigFor(j); const inp = j.tool_input || {}; const name = String(j.tool_name || ''); const cmd = String(inp.command || '');
+  const cfg = S.readConfigFor(j); let inp = j.tool_input || {}; let name = String(j.tool_name || '');
+  // IDEA 的 execute_tool 按路由里的实际工具判断：转发的编译、检查同样要人工许可。
+  if (/^mcp__.+__execute_tool$/.test(name)) { const r = require('./idea-tools').route(inp.command); if (r) { name = name.replace(/execute_tool$/, r.name); inp = r.input; } }
+  const cmd = String(inp.command || '');
   const review = /^(Agent|Task)$/.test(name) && /(?:ttls|vibe)-reviewer/.test(inp.subagent_type || '') || /review\.js["']?\s+run\b/.test(cmd) || name === 'Skill' && /cross-review/.test(inp.skill || '');
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
   const test = !review && (shellTest || /get_file_problems|execute_run_configuration|build_project|lint_files/.test(name) || name === 'Skill' && /see-page/.test(inp.skill || ''));
