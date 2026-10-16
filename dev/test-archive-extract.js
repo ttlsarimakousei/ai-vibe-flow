@@ -106,7 +106,8 @@ for (const [label, command, tool, cwd] of [
   ['普通构建不当作解包', 'mvn dependency:unpack'],
   ['Python ZIP 安全目标', 'python -m zipfile -e app.jar .vibe/tmp/1011-查包'],
   ['Python ZIP 只列目录', 'python -m zipfile -l app.jar'],
-  ['Python 普通模块不干预', 'python -m unittest'],
+  // 2026-10-16 起跑单元测试算自测，人工模式先 Ask；这里要的是"不是解包、也不是自测"的普通模块
+  ['Python 普通模块不干预', 'python -m json.tool package.json'],
   ['条目输出到事由目录', 'unzip -p app.jar entry.txt > .vibe/tmp/1011-查包/inspect.txt'],
   ['目录列表 tee 到事由目录', 'jar tf app.jar | tee .vibe/tmp/1011-查包/listing.txt'],
   ['无落盘的空输出设备', 'jar tf app.jar > /dev/null'],
