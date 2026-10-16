@@ -311,8 +311,6 @@ for (const c of cases) {
   if (c.name === '1012：交付新文件可以等用户提交') ownSession(c, 'sess-diff-deliver');
   if (c.name === '打勾：没跑过验法') { c.expect = /放行，没有输出/; c.since = NEXT; }
   if (c.name === '命令：归档没做完的变更') { c.expect = /还不能归档：还有 1 项任务没打勾/; c.since = NEXT; }
-  // 编译、快检在人工模式下按自测处理，先 Ask。是否把编译算作自测，交接文档里列为待主人确认。
-  if (c.name === '命令：mvn -q -o compile') { c.expect = /人工模式：先用 Ask 询问是否自测/; c.since = NEXT; }
   if (c.name === '收工：最后一项打了勾、没审') { c.expect = /group-1 已完成。用 Ask 问是否审查、是否按验收用例自测/; c.since = NEXT; }
   if (c.name === '开口：提需求') { c.expect = /明确范围后按当前需求自动条件逐产物生成/; c.since = NEXT; }
   if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）', '开口：说测试发现问题', '开口："不用"的需求', '开口：开头是"不用"的需求', '开口：开头是"好"字的需求'].includes(c.name)) c.since = NEXT;

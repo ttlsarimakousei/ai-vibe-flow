@@ -31,8 +31,10 @@ for (const [name, input] of [
   ['reformat_file', { path: 'a.js' }], ['get_run_configurations', { filePath: 'a.js' }],
   ['xdebug_set_breakpoint', { filePath: 'a.js', line: 1 }], ['xdebug_get_stack', { sessionId: 'test' }],
 ]) H.ok('普通操作通过：' + name, call(name, input) === null);
-// 编译、检查、运行配置属于自测：人工模式先 Ask（2026-10-14 用户定的），用户明确要求后照常通过；execute_tool 转发也一样。
-const selfTests = [['build_project', { filesToRebuild: ['a.js'] }], ['lint_files', { files: ['a.js'] }], ['execute_run_configuration', { configurationName: 'app' }], ['execute_tool', { command: 'build_project' }]];
+// 编译、文件检查、lint 是快检，人工模式直接跑（2026-10-16 用户定的）；execute_tool 转发也一样。
+for (const [name, input] of [['build_project', { filesToRebuild: ['a.js'] }], ['lint_files', { files: ['a.js'] }], ['get_file_problems', { filePath: 'a.js' }], ['execute_tool', { command: 'build_project' }]]) H.ok('快检人工模式直接跑：' + name + (input.command ? ' ' + input.command : ''), call(name, input) === null);
+// 运行配置会起程序或跑测试，算自测：人工模式先 Ask（2026-10-14 用户定的），用户明确要求后照常通过；execute_tool 转发也一样。
+const selfTests = [['execute_run_configuration', { configurationName: 'app' }], ['execute_tool', { command: 'execute_run_configuration --configurationName "app"' }]];
 for (const [name, input] of selfTests) H.ok('人工模式自测先 Ask：' + name + (input.command ? ' ' + input.command : ''), denied(call(name, input)) && /人工模式/.test(H.reasonOf(call(name, input))));
 H.transcript(transcript, [H.tr.user('运行测试')]);
 for (const [name, input] of selfTests) H.ok('明确要求自测后通过：' + name + (input.command ? ' ' + input.command : ''), call(name, input) === null);

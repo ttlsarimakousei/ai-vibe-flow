@@ -233,7 +233,7 @@ const SAID = {
   reviewSkip: { yes: /审查|复审/, command: /^$/ },
   reviewAccept: { yes: /审查|风险|意见/, command: /^$/ },
   review: { yes: /审查|审核|复审/, command: /^(?:ttls-)?cross-review$/i },
-  test: { yes: /自测|测试|验证|复验|看页面|编译|构建|快检/, command: /^(?:ttls-)?see-page$/i },
+  test: { yes: /自测|测试|验证|复验|看页面|编译|构建|快检|起服务|启动(?:服务|项目|应用)|跑起来/, command: /^(?:ttls-)?see-page$/i },
   reviewBudget: { yes: /审查预算|重新审查/, command: /^$/ },
   handover: { yes: /交接|handover/i, command: /^(ttls-)?handover$/i },
   accept: { yes: /自测|验收/, command: /^$/ },

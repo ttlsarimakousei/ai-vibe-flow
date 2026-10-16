@@ -121,7 +121,8 @@ function actionIssue(j) {
   const cmd = String(inp.command || '');
   const review = /^(Agent|Task)$/.test(name) && /(?:ttls|vibe)-reviewer/.test(inp.subagent_type || '') || /review\.js["']?\s+run\b/.test(cmd) || name === 'Skill' && /cross-review/.test(inp.skill || '');
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
-  const test = !review && (shellTest || /get_file_problems|execute_run_configuration|build_project|lint_files/.test(name) || name === 'Skill' && /see-page/.test(inp.skill || ''));
+  // IDEA 的编译、文件检查、lint 是快检，直接跑；运行配置会起程序或跑测试，算自测。
+  const test = !review && (shellTest || /execute_run_configuration/.test(name) || name === 'Skill' && /see-page/.test(inp.skill || ''));
   if (!review && !test) return '';
   if (cfg.autoMode) {
     if (review) {
@@ -145,23 +146,72 @@ function actionIssue(j) {
   }
   return '人工模式：先用 Ask 询问是否' + (review ? '审查' : '自测或复验') + '及范围，得到用户明确要求后执行。用户放弃就继续，不记录未审查、未测试或待办。';
 }
+// 人工模式要先 Ask 的"自测"：跑测试、起服务、看页面。编译、类型检查、静态检查算写代码的一部分，直接跑（用户 2026-10-16 定的）。
 function testCommand(cmd, ps) {
   const G = require('../hooks/guard-commit');
-  return G.splitCommand(G.preprocess(cmd, ps).s, ps).flat().some(seg => {
-    const ws = G.words(seg, ps).map(w => w.text); const exe = path.basename(ws[0] || '').replace(/\.exe$/i, '').toLowerCase();
-    if (!/^(?:npm|pnpm|yarn|npx|mvnw?|gradlew?|javac|pytest|jest|vitest|playwright|node|python3?|py)$/.test(exe)) return false;
-    const args = ws.slice(1);
-    if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis)/.test(args.join(' '))) return false;
-    if (!S.VERIFY_CMD.test(cmd)) return false;
-    if (/^(?:pytest|jest|vitest|javac)$/.test(exe)) return true;
-    // 带路径的参数只看文件名，目录只认 test、tests、__tests__、spec：test-package/publish.js 不是自测。
-    // --prefix、--cwd、-C、-f 这类开关后面跟的是目录或文件，不当成子命令。
-    const dirFlag = /^(?:--prefix|--cwd|--dir|--file|--project|-C|-f|-p)$/;
-    const values = args.filter((a, i) => !(i > 0 && dirFlag.test(args[i - 1])) && !/^--(?:prefix|cwd|dir|file|project)=/.test(a));
-    const plain = values.filter(a => !/[\\/]/.test(a)).join(' ');
-    const paths = args.filter(a => /[\\/]/.test(a)).map(a => a.replace(/^--\w+=/, '').replace(/[\\/]+$/, '').split(/[\\/]+/));
-    return /(?:\b(?:test|verify|check|build|compile)\b|(?:test|check|scenario|probe)[-_][^\s]*\.(?:js|py)|--check)/i.test(plain)
-      || paths.some(parts => parts.slice(0, -1).some(d => /^(?:tests?|__tests__|spec)$/i.test(d)) || /\.(?:[cm]?js|ts|py)$/i.test(parts[parts.length - 1]) && /(?:^|[-_.])(?:tests?|spec|check|scenario|probe)(?:[-_.]|$)/i.test(parts[parts.length - 1].replace(/\.(?:[cm]?js|ts|py)$/i, '')));
-  });
+  return G.splitCommand(G.preprocess(cmd, ps).s, ps).flat().some(seg => selfTestWords(G.words(seg, ps).map(w => w.text)));
+}
+const SCRIPT_EXT = /\.(?:[cm]?js|ts|py)$/i;
+// 脚本只看文件名，目录只认 test、tests、__tests__、spec：test-package/publish.js 不是自测
+function testScript(file) {
+  const parts = String(file).replace(/[\\/]+$/, '').split(/[\\/]+/); const name = parts[parts.length - 1];
+  return parts.slice(0, -1).some(d => /^(?:tests?|__tests__|spec)$/i.test(d)) || SCRIPT_EXT.test(name) && /(?:^|[-_.])(?:tests?|spec|scenario|probe)(?:[-_.]|$)/i.test(name.replace(SCRIPT_EXT, ''));
+}
+function selfTestWords(words) {
+  const base = w => path.basename(String(w || '')).replace(/\.(?:exe|cmd|bat)$/i, '').toLowerCase();
+  let ws = words.slice();
+  // 前面的环境变量赋值、env / cross-env 包一层的，看里面真正跑的命令
+  for (let k = 0; ;) {
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(ws[k] || '')) { k++; continue; }
+    if (/^(?:env|cross-env)$/.test(base(ws[k]))) { k++; while (/^-/.test(ws[k] || '')) { if (/^(?:-C|--chdir|-u|--unset)$/.test(ws[k])) k++; k++; } continue; }
+    ws = ws.slice(k); break;
+  }
+  let exe = base(ws[0]); let args = ws.slice(1);
+  if (/^(?:npx|pnpx)$/.test(exe)) { args = args.filter(a => !/^(?:-y|--yes|--no-install)$/.test(a)); exe = base(args[0]); args = args.slice(1); }
+  if (/^(?:pytest|jest|vitest|mocha|ava|karma|cypress)$/.test(exe)) return true;
+  if (exe === 'playwright') return args.includes('test');
+  // 后面跟目录、文件、模块名的开关，它的取值不当子命令
+  const plainOf = (valued) => { const out = []; for (let i = 0; i < args.length; i++) { if (valued.test(args[i])) { i++; continue; } if (!/^-/.test(args[i])) out.push(args[i].toLowerCase()); } return out; };
+  if (/^(?:npm|pnpm|yarn)$/.test(exe)) {
+    const w = plainOf(/^(?:--prefix|--cwd|--dir|-C|--filter|-F|--workspace|-w)$/); const sub = w[0] || '';
+    const script = /^(?:run|run-script|rum|urn)$/.test(sub) ? w[1] || '' : sub;
+    return /^(?:t|tst|test)$/.test(sub) || /^(?:test|e2e|cypress|playwright)(?:[:_-].*)?$/.test(script) || /^(?:dev|start|serve|preview)(?:[:_-].*)?$/.test(script);
+  }
+  if (/^mvnw?$/.test(exe)) {
+    const goals = plainOf(/^(?:-f|--file|-pl|--projects|-s|--settings|-gs|--global-settings|-rf|--resume-from|-T|--threads|-t|--toolchains|-l|--log-file|-P|--activate-profiles|-D|--define)$/);
+    const skip = args.some(a => /^-D(?:skipTests|maven\.test\.skip)(?:=true)?$/i.test(a));
+    return goals.some(g => /^[\w.-]+:(?:run|start)$/.test(g)) || !skip && goals.some(g => /^(?:test|integration-test|verify|package|install|deploy)$/.test(g) || /:(?:test|integration-test)$/.test(g));
+  }
+  if (/^gradlew?$/.test(exe)) {
+    const excluded = args.filter((a, i) => i > 0 && /^(?:-x|--exclude-task)$/.test(args[i - 1])).map(a => a.toLowerCase().split(':').pop());
+    const tasks = plainOf(/^(?:-x|--exclude-task|-p|--project-dir|-b|--build-file|-c|--settings-file|-g|--gradle-user-home|-I|--init-script)$/).map(t => t.split(':').pop());
+    const skipTest = excluded.includes('test');
+    return tasks.some(t => /^(?:test|check|build)$/.test(t) ? !skipTest : /^(?:integrationtest|connectedcheck|bootrun|run|apprun)$/.test(t));
+  }
+  if (exe === 'node') {
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '--test') return true;
+      if (/^(?:-e|--eval|-p|--print|-c|--check)$/.test(a)) return false;
+      if (/^(?:-r|--require|--import|--loader|--experimental-loader)$/.test(a)) { i++; continue; }
+      if (/^-/.test(a)) continue;
+      if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis)[\\/]/i.test(a)) return false;
+      if (base(a) === 'devserver.js') return String(args[i + 1] || '').toLowerCase() === 'start';
+      return testScript(a);
+    }
+    return false;
+  }
+  if (/^(?:python3?|py)$/.test(exe)) {
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '-m') return /^(?:pytest|unittest|nose2?|tox)$/i.test(args[i + 1] || '');
+      if (a === '-c') return false;
+      if (/^-/.test(a)) continue;
+      if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis)[\\/]/i.test(a)) return false;
+      return testScript(a) || base(a) === 'manage.py' && String(args[i + 1] || '').toLowerCase() === 'test';
+    }
+    return false;
+  }
+  return false;
 }
 module.exports = { groups, points, pointFiles, fingerprint, record, passed, settled, pending, allPassed, limit, begin, noteResult, qualify, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };

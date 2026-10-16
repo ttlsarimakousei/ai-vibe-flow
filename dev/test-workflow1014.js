@@ -16,7 +16,14 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   H.ok('明确自测要求直接执行', !/人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', { transcript_path: tf([H.tr.user('运行测试')]) }))));
   H.ok('明确主动审查不拒绝', !/人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('审核一下')]) })))));
   H.ok('引号内构建文字不误当自测', runHook('guard-commit', { tool_input: { command: 'echo "npm test"' } }) === null);
-  H.ok('IDEA 文件自检人工先 Ask', /人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', { tool_name: 'mcp__ide__get_file_problems', tool_input: { filePath: 'a.js', projectPath: p } }))));
+  // 2026-10-16：编译、文件检查是快检，人工模式直接跑；运行配置会起程序或跑测试，仍先 Ask
+  H.ok('IDEA 文件检查是快检，人工模式直接跑', runHook('guard-commit', { tool_name: 'mcp__ide__get_file_problems', tool_input: { filePath: 'a.js', projectPath: p } }) === null);
+  H.ok('IDEA 运行配置人工先 Ask', /人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', { tool_name: 'mcp__ide__execute_run_configuration', tool_input: { configurationName: 'app', projectPath: p } }))));
+  const kitTool = (t) => 'node "' + path.join(h.kit, 'tools', t).replace(/\\/g, '/') + '"';
+  H.ok('起服务人工先 Ask', /人工模式.*Ask/.test(H.reasonOf(runHook('guard-commit', { tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } }))));
+  H.ok('用户说把服务起起来就直接起', runHook('guard-commit', { transcript_path: tf([H.tr.user('把服务起起来')]), tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } }) === null);
+  H.ok('查服务状态不算自测', runHook('guard-commit', { tool_input: { command: kitTool('devserver.js') + ' list' } }) === null);
+  H.ok('编译人工模式直接跑', runHook('guard-commit', { tool_input: { command: 'mvn -q -o compile' } }) === null);
   const beforeTasks = H.read(path.join(d, 'tasks.md'));
   const waiver = R.waive({ cwd: p, change: 'add-a', mode: 'code', reason: '用户已经明确决定这次不再审查' });
   H.ok('放弃不写任务或未审查状态', waiver.status === 'dismissed' && H.read(path.join(d, 'tasks.md')) === beforeTasks && !Object.keys(S.readState('review-waivers')).length && !S.reviewAllowed('code', d));
@@ -100,8 +107,13 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.ok('部分覆盖的审查点不能借意见处理登记为通过', /没有完整完成/.test(resolveError) && !P.settled(d, 'group-1'), resolveError);
     // 自测命令按脚本名和子命令判断，项目目录名里带 test 不算。
     if (P.testCommand) {
-      const tc = [['node "C:/w/test-package/publish.js"', false, false], ['npm --prefix test-package install', false, false], ['node dev/test-1001.js', false, true], ['node C:\\w\\tests\\run.js', true, true], ['npm --prefix test-package run build', false, true], ['node --check src/A.js', false, true]];
+      const tc = [['node "C:/w/test-package/publish.js"', false, false], ['npm --prefix test-package install', false, false], ['node dev/test-1001.js', false, true], ['node C:\\w\\tests\\run.js', true, true]];
       H.ok('自测命令不因目录名带 test 误判', tc.every(([c, ps, want]) => P.testCommand(c, ps) === want), tc.map(([c, ps]) => c + '=' + P.testCommand(c, ps)));
+      // 2026-10-16：编译、类型检查、静态检查是快检；跑测试、起服务、看页面才算自测
+      const quick = ['mvn -q -o compile', 'mvn -q package -DskipTests', 'gradle build -x test', 'npm --prefix test-package run build', 'npm run lint', 'node --check src/A.js', 'npx tsc --noEmit', 'javac -d out A.java', 'python -m py_compile a.py'];
+      const self = ['mvn package', 'mvn -q test', './gradlew build', 'npm test', 'npm run test:unit', 'npx vitest run', 'cross-env CI=1 jest', 'pnpm dev', 'mvn spring-boot:run', 'python -m pytest', 'python manage.py test', 'node --test', 'node "C:/k/tools/devserver.js" start --name a -- node a.js', 'node "C:/k/page/scenario-run.js" a.json'];
+      H.ok('编译和静态检查不算自测', quick.every(c => !P.testCommand(c, false)), quick.filter(c => P.testCommand(c, false)));
+      H.ok('跑测试、起服务、看页面算自测', self.every(c => P.testCommand(c, false)), self.filter(c => !P.testCommand(c, false)));
     } else H.ok('自测命令不因目录名带 test 误判', false);
   }
   // 旧 autoMode=true 的安装迁移；显式的低保护封条不能在迁移中意外放松。
