@@ -174,7 +174,9 @@ function parseReply(text, material) {
 function ask(url, material, mode, ms, cancelled, received) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: 5000, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。', messages: [{ role: 'user', content: '模式：' + mode + '\n本批材料：\n' + JSON.stringify(material) }] });
-    const req = http.request(url, { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
+    // 每批都新开连接（agent: false）：Node 默认复用空闲连接，路由那头空闲几秒就关了它，或者两批之间路由重启过，
+    // 复用到断掉的连接就报 ECONNRESET，这一批白白算失败（2026-10-16 机器忙时测试里遇到）。本机连接，新开几乎不花时间
+    const req = http.request(url, { method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
       let text = ''; res.setEncoding('utf8');
       res.on('data', (b) => { text += b; if (text.length > 300000) req.destroy(new Error('审查回复过大')); });
       res.on('end', () => { clear(); if (received) received(); if (res.statusCode !== 200) return reject(new Error('本机路由返回 ' + res.statusCode + '：' + R.clip(text, 300))); try { resolve(parseReply(text, material)); } catch (e) { reject(e); } });
