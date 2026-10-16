@@ -110,7 +110,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const s2 = stop('c5', [H.tr.user('修一下 A 的空指针'), editA(), H.tr.say('修好了，改了 A.java 的判空。提交吗？')], '修好了，改了 A.java 的判空。提交吗？');
     H.ok('已经询问提交，不重复催提交；审查自测独立 Ask', !/本轮改动尚未提交|现在提交/.test(H.reasonOf(s2)));
     const s3 = stop('c6', [H.tr.user('修一下 A 的空指针'), editA(), answered('改好了，提交吗？', '提交'), H.tr.say('好的')], '好的');
-    H.ok('我在提问框里选了提交、它却没提交就收工：照旧催它现在提交', blocked(s3) && /现在提交/.test(H.reasonOf(s3)), H.reasonOf(s3));
+    // 1014 起人工模式改了代码还会先问一次审查、自测；提交那句在前面有别的待办时写作"接着提交"
+    H.ok('我在提问框里选了提交、它却没提交就收工：照旧催它现在提交', blocked(s3) && /现在提交|接着提交，不用等我说/.test(H.reasonOf(s3)), H.reasonOf(s3));
     const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
     H.ok('开关存得进去、配置页上有', api.cleanConfig({ plainCommit: 'auto' }).plainCommit === 'auto' && api.cleanConfig({ plainCommit: 'x' }).plainCommit === 'ask' && /id="k_plainCommit"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
     const sorted = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
@@ -203,7 +204,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /两套独立自动模式/.test(md) && /归档和 push/.test(md));
+    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /两套独立自动模式/.test(md) && /git push[^。\n]*归档[^。\n]*按对应规则确认/.test(md));
     H.ok('提交那一节：不走 OpenSpec 的改动先问我；OpenSpec 的变更按档位', /普通修改完成后可以提醒提交/.test(md) && /先用 Ask 问我/.test(md) && /每项任务完成后按具体任务提交/.test(md));
     H.ok('约定说明双自动条件外先 Ask，归档由用户决定', /其他情况用 Ask 给出 apply 选项/.test(md) && /归档.*用户/.test(md));
     H.setConfig(h, { plainCommit: 'auto' });
@@ -233,7 +234,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('审查没审完（报了问题、还没复审到 0 条）：改了代码不催提交', !/还没提交/.test(H.reasonOf(r2)), H.reasonOf(r2));
     rounds(true);
     const r3 = stop('v2', [H.tr.user('把 add-x 审出来的问题改了'), editA, H.tr.say('改好了')], '改好了');
-    H.ok('审完了：照旧催提交', !!r3 && /还没提交/.test(H.reasonOf(r3)), H.reasonOf(r3));
+    H.ok('审完了：照旧催提交', !!r3 && /还没提交|尚未提交/.test(H.reasonOf(r3)), H.reasonOf(r3));
     // 开工那一句：先把提案的产物提交一次
     const say = (sid, prompt, cfgPatch) => { if (cfgPatch) H.setConfig(h, cfgPatch); const o = H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
     H.ok('开工不能补提案提交许可', /没有明确提交许可时不在开工节点补提案提交/.test(say('v3', '提案看过了，开工 add-x')));
@@ -250,11 +251,12 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const fine = '1.2 做完了，勾也打上了，不攒着打勾。';
     const r5 = stop('v6', [H.tr.user('接着做'), H.tr.say(fine)], fine);
     H.ok('说的是"不攒着打勾"：不拦', !/打勾不攒/.test(H.reasonOf(r5)), H.reasonOf(r5));
-    H.ok('OpenSpec 规范写明做完一项勾一项、打勾不攒', /做完一项勾一项，不攒到提交时一起勾/.test(md), md.slice(0, 200));
+    // 1014 起规范压缩成一句"做完就打勾，提交按档位"；说要攒着打勾时由收工检查当场拦（上面 r4）
+    H.ok('OpenSpec 规范写明做完一项勾一项、打勾不攒', /实现任务做完就打勾，提交按档位/.test(md), md.slice(0, 200));
     H.setConfig(h, { autoCommit: 'phase' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const mdp = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-    H.ok('按阶段提交那一档的约定写明打勾不攒', /打勾不攒：每项任务做完、验法跑过就勾/.test(mdp) && /一组做到一半不提交（打勾不攒，做完一项勾一项）/.test(mdp), mdp.slice(0, 200));
+    H.ok('按阶段提交那一档的约定写明打勾不攒', /实现任务做完就打勾，提交按档位/.test(mdp) && /同一组 1\.x 完成并审修、自测后提交一次/.test(mdp), mdp.slice(0, 200));
   }
 
   // ---------------------------------------------------------------------------------------------

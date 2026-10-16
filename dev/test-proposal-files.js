@@ -61,7 +61,8 @@ const denied = r => !!r && (r.decision === 'block' || r.hookSpecificOutput && r.
   if (fs.existsSync(merge)) {
     const M = require(merge);
     const c = (id, title, files) => ({ id, title, files: files || [id + '.js'] });
-    H.ok('中文事件标记能识别', M.eventOf(c('a', 'fix: 修复查询（源自 查询改造 1.1）')) === 'event:查询改造' && M.eventOf(c('b', 'fix: 修复 事件: 查询改造')) === 'event:查询改造');
+    // 2026-10-14 起按具体任务归组：中文变更名带任务号认成任务，独立修复的"事件："认成事件。
+    H.ok('中文事件标记能识别', M.eventOf(c('a', 'fix: 修复查询（源自 查询改造 1.1）')) === 'task:查询改造:1.1' && M.eventOf(c('b', 'fix: 修复 事件: 查询改造')) === 'event:查询改造');
     const groups = M.groupsOf([c('a', 'feat: 实现（源自 add-a 1.1）'), c('b', 'docs: 归档 add-a', ['openspec/changes/archive/2026-10-10-add-a/tasks.md']), c('c', 'fix: 后续修复（源自 add-a 1.1）')]);
     H.ok('归档是边界，后续修复不会被搬到归档前', JSON.stringify(groups.map(g => g.ids)) === '[["a"],["b"],["c"]]', groups);
   }

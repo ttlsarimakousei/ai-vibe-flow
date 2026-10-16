@@ -301,6 +301,25 @@ add('1013：失效范围允许补修订记录', 'pre-edit', (kit) => { const pro
 add('1013：跳过审查需要真人决定', 'guard-commit', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "' + path.join(kit.kit, 'tools/review.js').replace(/\\/g, '/') + '" waive --project "' + proj.replace(/\\/g, '/') + '" --change add-export --mode code --reason "跳过本次审查并登记原因"' } }) }; }, /审查决定[\s\S]*用户/, V1013);
 add('1013：空远端单笔允许明确推送', 'guard-commit', (kit) => { const proj = project(kit); const bare = path.join(path.dirname(proj), 'remote.git'); H.run(kit, 'git', ['init', '--bare', bare]); H.git(proj, ['remote', 'add', 'origin', bare]); const branch = H.git(proj, ['branch', '--show-current']).out.trim(); const j = base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git push -u origin ' + branch } }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 'push.jsonl'), [H.tr.user('推送')]); return { proj, j }; }, /放行，没有输出/, V1013);
 
+// 1014：两阶段自动模式。默认配置下是人工模式：审查、自测、复验先 Ask，不再强催验证、看页面、打勾前跑验法（用户 2026-10-14 定的）。
+// 人工提示按"会话 + 输入指纹"只发一次，共用 sess-diff 会让结果取决于前面跑过哪些用例：这几个收工用例各用自己的会话。
+const ownSession = (c, sid) => { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = sid; return r; }; };
+for (const c of cases) {
+  if (c.name === '收工：改了代码没验证') { ownSession(c, 'sess-diff-verify'); c.expect = /本次代码已修改。用 Ask 询问是否审查、是否按验收用例自测/; c.since = NEXT; }
+  if (c.name === '收工：改了、验了、没提交') { ownSession(c, 'sess-diff-commit'); c.expect = /本轮改动尚未提交[\s\S]*用 Ask 提供提交或继续修改选项/; c.since = NEXT; }
+  if (c.name === '收工：改了页面没看') { ownSession(c, 'sess-diff-page'); c.expect = /^(?![\s\S]*probe-run)[\s\S]*用 Ask 询问是否审查/; c.since = NEXT; }
+  if (c.name === '1012：交付新文件可以等用户提交') ownSession(c, 'sess-diff-deliver');
+  if (c.name === '打勾：没跑过验法') { c.expect = /放行，没有输出/; c.since = NEXT; }
+  if (c.name === '命令：归档没做完的变更') { c.expect = /还不能归档：还有 1 项任务没打勾/; c.since = NEXT; }
+  // 编译、快检在人工模式下按自测处理，先 Ask。是否把编译算作自测，交接文档里列为待主人确认。
+  if (c.name === '命令：mvn -q -o compile') { c.expect = /人工模式：先用 Ask 询问是否自测/; c.since = NEXT; }
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /group-1 已完成。用 Ask 问是否审查、是否按验收用例自测/; c.since = NEXT; }
+  if (c.name === '开口：提需求') { c.expect = /明确范围后按当前需求自动条件逐产物生成/; c.since = NEXT; }
+  if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）', '开口：说测试发现问题', '开口："不用"的需求', '开口：开头是"不用"的需求', '开口：开头是"好"字的需求'].includes(c.name)) c.since = NEXT;
+  // #112 起按暂存的产物认提案提交：真实的提案提交会暂存产物，只看提交信息的输入已不现实。
+  if (c.name === '提交：提案要单独确认') { const build = c.build; c.build = (kit) => { const r = build(kit); const f = path.join(r.proj, 'openspec/changes/add-export/proposal.md'); fs.appendFileSync(f, '\n- 导出格式为 xlsx\n'); H.git(r.proj, ['add', 'openspec/changes/add-export/proposal.md']); return r; }; c.since = NEXT; }
+}
+
 let same = 0;
 let changed = 0;
 for (const c of cases) {

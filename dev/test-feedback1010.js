@@ -69,7 +69,10 @@ function jar(file, version) {
   H.setConfig(h, { reviewLoop: false });
   H.ok('单轮审查的成立问题没处理也不提交', denied(hook('guard-commit', 'git commit -m "fix: 审查修复"', reviewing, 'auto-off')));
   const fixed = reviewing.concat(H.tr.ran('Edit', { file_path: path.join(proj, 'src/A.js'), old_string: '1', new_string: '2' }), H.tr.ran('Bash', { command: 'node --check src/A.js' }));
-  H.ok('单轮审查修完验证后不用被强迫继续复审', hook('guard-commit', 'git commit -m "fix: 审查修复"', fixed, 'auto-off') === null);
+  // 2026-10-14 起 Apply 自动固定审修复验，reviewLoop 不能再关成单轮：修完先复审，复审到 0 条就收尾提交，不再被催着继续审。
+  H.ok('自动模式修完没复审仍不提交', denied(hook('guard-commit', 'git commit -m "fix: 审查修复"', fixed, 'auto-off')));
+  const rechecked = fixed.concat(H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：复审代码\n变更：add-a' }, '结论：问题 0 条'));
+  H.ok('单轮审查修完验证后不用被强迫继续复审', hook('guard-commit', 'git commit -m "fix: 审查修复"', rechecked, 'auto-off') === null);
   H.write(tasks, openTasks);
   H.setConfig(h, { autoMode: false, autoCommit: 'task' });
   H.inFlow(h, 'old-flow', [dir], false, 'apply');
@@ -80,7 +83,7 @@ function jar(file, version) {
   H.inFlow(h, 'ask-plan', [pd], true, 'plan');
   H.run(h, process.execPath, ['-e', 'require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ').recordReview("proposal",' + JSON.stringify(pd) + ',0,"test-plan",Date.now());']);
   const planStop = H.hook(h, 'verify-gate', { session_id: 'ask-plan', cwd: proj, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '提案写好了', transcript_path: tf([H.tr.user('写提案'), H.tr.ran('Write', { file_path: path.join(pd, 'proposal.md'), content: '## Why\n\n解决问题。\n' }), H.tr.say('提案写好了')]) });
-  H.ok('提案审完收工就询问提交，不拖到 apply', /提案已经写完并审过/.test(H.reasonOf(planStop)) && /提交不等于开工/.test(H.reasonOf(planStop)), H.reasonOf(planStop));
+  H.ok('提案审完收工就询问提交，不拖到 apply', /提案产物已修改[^\n]*用 Ask 问是否提交这些产物/.test(H.reasonOf(planStop)) && /提交不等于开工/.test(H.reasonOf(planStop)), H.reasonOf(planStop));
   H.section('后台审查的 task-id 和续同一个代理');
   const entries = [H.tr.user('审一下'), H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：提案\n变更：add-a' }, 'review-a'), H.tr.result('review-a', 'Async agent launched successfully. agentId: abc123'), H.tr.user('<task-notification><task-id>abc123</task-id><status>completed</status><result>第一轮：结论：问题 2 条</result></task-notification>'), H.tr.user('<task-notification><task-id>abc123</task-id><status>completed</status><result>复审：结论：问题 0 条</result></task-notification>')];
   const code = 'const S=require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ');const e=S.tailEntries(' + JSON.stringify(tf(entries)) + ');const r=S.syncReviews(e,' + JSON.stringify(proj) + ');S.syncReviewRounds(e,r);console.log(JSON.stringify({r:r.map(x=>x.issues),state:S.readState("review-rounds"),review:S.proposalReviewed(' + JSON.stringify(dir) + ')}));';
