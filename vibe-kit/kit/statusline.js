@@ -135,6 +135,8 @@ process.stdin.on('end', () => {
   const fl = require('./lib/session').flowView({ session_id: j.session_id, cwd });
   line2.push(C.dim + '需求自动 ' + (cfg.autoRequirements ? '开' : '关') + ' · Apply 自动 ' + (cfg.autoApply ? '开' : '关') + C.reset);
   if (fl.effective) line2.push(C.yellow + fl.phase + '，当前生效' + C.reset);
+  // 这个会话做的变更都归档了：明说照常，不再像在做任务（用户 2026-10-07 反馈）
+  else if (fl.archived) line2.push(C.dim + fl.phase + '，照常，变更已归档' + C.reset);
   else if (fl.waiting) line2.push(C.yellow + fl.waiting + C.reset);
   // Claude Code 会在用到多少时自己压缩（套件写进 settings.json 的 autoCompactWindow；新开的会话才认）
   const at = autoCompactAt(cfg, windowSize);
