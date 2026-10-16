@@ -584,8 +584,13 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
  * 交过之后的收工：把它最后说的话接到报告后面
  */
 function autoReport(j, cfg, entries, lastSaid, changes) {
-  if (!cfg.autoMode || !report || !j.session_id) return '';
+  if (!report || !j.session_id) return '';
+  // 做完最后一组、只剩用户验收时自动已不生效，这一轮自动做的事仍要交一次报告。
+  // 只交给本会话真跑过的自动轮次（有 round），交过之后用户再说话不重复交，也不覆盖已接上的交代。
+  const closing = !cfg.autoMode && require('../lib/session').flowView(j).awaitingUser;
+  if (!cfg.autoMode && !closing) return '';
   const st = report.stateOf(j);
+  if (closing && (!st.round || st.delivered)) { if (st.delivered && !st.finalAt) report.saveFinal(j, lastSaid); return ''; }
   const fresh = st.items.length > st.deliveredCount;
   if (st.delivered && (!fresh || st.times >= 3)) { report.saveFinal(j, lastSaid); return ''; }
   let mine = [];

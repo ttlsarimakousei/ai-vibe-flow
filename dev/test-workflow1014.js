@@ -114,5 +114,27 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const freshS = require(path.join(h.kit, 'lib/session')); migrated.autoApply = true; H.write(path.join(h.kit, 'config.json'), JSON.stringify(migrated)); freshS.sealConfig(h.kit, migrated);
   H.node(h, installer, ['--no-router', '--no-open'], { timeout: 180000 });
   H.ok('后续再次安装不覆盖用户重新开启的选择', JSON.parse(H.read(path.join(h.kit, 'config.json'))).autoApply === true);
+  // Apply 自动做完、审查点都过、只剩用户验收：自动不再生效，这一轮的报告仍交一次；之后用户再问不重复交，也不覆盖交代。
+  {
+    const h2 = H.makeHome('workflow1014-report', process.argv[2], { autoApply: true, autoMode: true, autoCommit: 'off', lessons: 'off', autoOnboard: false, pullBeforeWork: false, outputGate: false, vibeTidy: false, autoVerify: false, autoSeePage: false });
+    const p2 = H.makeRepo(path.join(h2.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'openspec/changes/c/proposal.md': '# 目标\n订单查询。\n', 'openspec/changes/c/tasks.md': '## 1. 实现\n- [x] 1.1 修改 a.js；验：node --check a.js\n## 2. 验收\n- [ ] 2.1 [用户验收] 用户按验收用例自测查询\n' });
+    const c2 = path.join(p2, 'openspec/changes/c'); const sid = 'report-close';
+    H.inFlow(h2, sid, [c2]); H.reviewPoints(h2, c2);
+    const Rp = require(path.join(h2.kit, 'lib/report'));
+    const tfile = path.join(h2.root, 'r.jsonl');
+    const stop = (entries, said, active) => H.hook(h2, 'verify-gate', { session_id: sid, cwd: p2, hook_event_name: 'Stop', transcript_path: H.transcript(tfile, entries), stop_hook_active: !!active, last_assistant_message: said });
+    const turn = [H.tr.user('全自动把 c 做完'), H.tr.ran('Read', { file_path: path.join(c2, 'tasks.md') }, 'x')];
+    H.ok('没有本会话的自动轮次不补交报告', !/全自动报告/.test(H.reasonOf(stop(turn.concat(H.tr.say('看过了')), '看过了'))));
+    Rp.begin({ session_id: sid, cwd: p2 });
+    Rp.note({ session_id: sid, cwd: p2 }, { kind: 'unverified', title: '任务（c）1.1', detail: '页面没看' });
+    const closing = stop(turn.concat(H.tr.say('做完了')), '做完了');
+    H.ok('只剩用户验收时仍交这一轮的全自动报告', /^\[vibe-kit 全自动报告\]/.test(H.reasonOf(closing)) && /没验证的 1 件/.test(H.reasonOf(closing)), H.reasonOf(closing));
+    const report = (H.reasonOf(closing).match(/报告在 (.+?\.md)/) || [])[1] || '';
+    const final = '## 做了什么\nc 做完，等你按用例自测。';
+    H.ok('交代完放行并接进报告', stop(turn.concat(H.tr.say(final)), final, true) === null && !!report && /## AI 最后的交代\n\n## 做了什么/.test(H.read(report) || ''));
+    H.hook(h2, 'task-anchor', { session_id: sid, cwd: p2, hook_event_name: 'UserPromptSubmit', transcript_path: tfile, prompt: '页面在哪看？' });
+    const later = stop([H.tr.user('页面在哪看？'), H.tr.say('在订单页')], '在订单页');
+    H.ok('验收等待中再问一句不重复交报告、不覆盖交代', !/全自动报告/.test(H.reasonOf(later)) && /c 做完，等你按用例自测/.test(H.read(report) || ''), H.reasonOf(later));
+  }
   H.done('1014 两阶段工作流');
 })().catch(e => { console.error(e); H.ok('测试正常执行', false); H.done('1014 两阶段工作流'); });

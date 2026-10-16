@@ -360,7 +360,8 @@ function flowView(j) {
   const typed = require('./task-types'); const dirs = flowChanges(j).filter((d) => fs.existsSync(d));
   const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code')) && dirs.some((d) => typed.tasks(d).some((t) => t.kind === 'user' && !t.done));
   const waiting = st.waiting || (!scope.ok ? '范围变化，等用户确认' : userWait ? '等用户自测验收' : '');
-  return { switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!((st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && st.planReady) && st.on === true && !over && !waiting), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over };
+  // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。自动不再生效，但收工还要交这一轮的报告。
+  return { switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!((st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && st.planReady) && st.on === true && !over && !waiting), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
 }
 
 /**
