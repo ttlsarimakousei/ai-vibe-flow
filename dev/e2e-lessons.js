@@ -174,9 +174,13 @@ const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
   else H.ok('工具回了"已升成这个项目的规则"', seen(r2, /第 2 次出现，已升成这个项目的规则/));
   H.ok('规则文件写出来了' + (AUTO ? '，标着"自动"' : ''), fs.existsSync(ruleFile) && (H.read(ruleFile) || '').includes('- ' + RULE_TEXT) && /自动=具体/.test(H.read(ruleFile) || '') === AUTO, H.read(ruleFile));
   H.ok('提交规则文件的命令没被拦', commandsIn(r2).some((c) => /git add "\.claude\/rules\/ttls-lessons-java\.md"/.test(c)) && !seen(r2, /会改到经验规则的文件/), commandsIn(r2));
-  H.ok('新成果仍需本次确认，不能借上次许可', H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '2' && H.git(proj, ['status', '--porcelain', '--', 'src']).out.trim() !== '');
+  // #112（2026-10-14 起）：只提交套件催着提交的经验规则文件，不再被当成提案提交拦下（10-07 定的"经验规则的文件不问"）；
+  // 修复代码仍要这一次的真人确认，不能借上一个变更的许可
+  const head2 = H.git(proj, ['show', '--name-only', '--format=%s', 'HEAD']).out.trim().split(/\r?\n/).filter(Boolean);
+  H.ok('只提交了规则文件', H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '3' && head2[0] === 'docs: 更新经验规则' && head2.slice(1).join() === '.claude/rules/ttls-lessons-java.md', head2);
+  H.ok('新成果仍需本次确认，不能借上次许可', H.git(proj, ['status', '--porcelain', '--', 'src']).out.trim() !== '');
   const commit2 = await runClaude(port, '提交当前 fix-order 的修复和经验规则', { kind: 'commit', change: 'fix-order', includeRule: true });
-  H.ok('真人确认后实际提交修复和规则', commit2.code === 0 && H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '3', commit2.out + commit2.err);
+  H.ok('真人确认后实际提交修复和规则', commit2.code === 0 && H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '4' && H.git(proj, ['status', '--porcelain', '--', 'src']).out.trim() === '', commit2.out + commit2.err);
   const log = H.git(proj, ['log', '--oneline', '--name-only', '-3']).out;
   H.ok('规则文件进了仓库', /fix: 查询前判空并登记经验规则/.test(log) && /\.claude\/rules\/ttls-lessons-java\.md/.test(log), log);
   H.ok('工作区里规则文件是干净的', H.git(proj, ['status', '--porcelain', '--', '.claude/rules']).out.trim() === '', H.git(proj, ['status', '--porcelain']).out);
