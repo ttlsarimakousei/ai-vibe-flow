@@ -147,9 +147,18 @@ function testCommand(cmd, ps) {
   return G.splitCommand(G.preprocess(cmd, ps).s, ps).flat().some(seg => {
     const ws = G.words(seg, ps).map(w => w.text); const exe = path.basename(ws[0] || '').replace(/\.exe$/i, '').toLowerCase();
     if (!/^(?:npm|pnpm|yarn|npx|mvnw?|gradlew?|javac|pytest|jest|vitest|playwright|node|python3?|py)$/.test(exe)) return false;
-    const args = ws.slice(1).join(' ');
-    if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis)/.test(args)) return false;
-    return S.VERIFY_CMD.test(cmd) && (/^(?:pytest|jest|vitest|javac)$/.test(exe) || /(?:\b(?:test|verify|check|build|compile)\b|(?:test|check|scenario|probe)[-_][^\s]*\.(?:js|py)|--check)/i.test(args));
+    const args = ws.slice(1);
+    if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis)/.test(args.join(' '))) return false;
+    if (!S.VERIFY_CMD.test(cmd)) return false;
+    if (/^(?:pytest|jest|vitest|javac)$/.test(exe)) return true;
+    // 带路径的参数只看文件名，目录只认 test、tests、__tests__、spec：test-package/publish.js 不是自测。
+    // --prefix、--cwd、-C、-f 这类开关后面跟的是目录或文件，不当成子命令。
+    const dirFlag = /^(?:--prefix|--cwd|--dir|--file|--project|-C|-f|-p)$/;
+    const values = args.filter((a, i) => !(i > 0 && dirFlag.test(args[i - 1])) && !/^--(?:prefix|cwd|dir|file|project)=/.test(a));
+    const plain = values.filter(a => !/[\\/]/.test(a)).join(' ');
+    const paths = args.filter(a => /[\\/]/.test(a)).map(a => a.replace(/^--\w+=/, '').replace(/[\\/]+$/, '').split(/[\\/]+/));
+    return /(?:\b(?:test|verify|check|build|compile)\b|(?:test|check|scenario|probe)[-_][^\s]*\.(?:js|py)|--check)/i.test(plain)
+      || paths.some(parts => parts.slice(0, -1).some(d => /^(?:tests?|__tests__|spec)$/i.test(d)) || /\.(?:[cm]?js|ts|py)$/i.test(parts[parts.length - 1]) && /(?:^|[-_.])(?:tests?|spec|check|scenario|probe)(?:[-_.]|$)/i.test(parts[parts.length - 1].replace(/\.(?:[cm]?js|ts|py)$/i, '')));
   });
 }
-module.exports = { groups, points, pointFiles, fingerprint, record, passed, settled, pending, allPassed, limit, begin, noteResult, qualify, automaticApply, planNext, instruction, stop, actionIssue, explicit };
+module.exports = { groups, points, pointFiles, fingerprint, record, passed, settled, pending, allPassed, limit, begin, noteResult, qualify, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };

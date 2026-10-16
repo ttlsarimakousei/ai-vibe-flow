@@ -98,6 +98,11 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.write(decisions, JSON.stringify({ findings: [{ id: 'r1', action: 'rejected', reason: '需求已确认空列表由调用方处理' }] }));
     let resolveError = ''; try { R.resolve({ cwd: p, change: 'add-a', mode: 'code', point: 'group-1', decisions }); } catch (e) { resolveError = e.message; }
     H.ok('部分覆盖的审查点不能借意见处理登记为通过', /没有完整完成/.test(resolveError) && !P.settled(d, 'group-1'), resolveError);
+    // 自测命令按脚本名和子命令判断，项目目录名里带 test 不算。
+    if (P.testCommand) {
+      const tc = [['node "C:/w/test-package/publish.js"', false, false], ['npm --prefix test-package install', false, false], ['node dev/test-1001.js', false, true], ['node C:\\w\\tests\\run.js', true, true], ['npm --prefix test-package run build', false, true], ['node --check src/A.js', false, true]];
+      H.ok('自测命令不因目录名带 test 误判', tc.every(([c, ps, want]) => P.testCommand(c, ps) === want), tc.map(([c, ps]) => c + '=' + P.testCommand(c, ps)));
+    } else H.ok('自测命令不因目录名带 test 误判', false);
   }
   // 旧 autoMode=true 的安装迁移；显式的低保护封条不能在迁移中意外放松。
   cfg({ autoMode: true, autoApply: true, autoRequirements: true });
