@@ -16,7 +16,7 @@
  *   全自动模式开着时，这句话算不算在走 OpenSpec 流程、在流程的哪一段（写提案 plan / 做任务 apply），在这里定（decideFlow）：
  *   不在流程里、或者还在写提案那一段，这一轮照有人在的样子来（全自动只管 apply 之后，用户 2026-10-07 定的）。
  *   这句话开工了（敲了 /opsx:apply、说了"开工""把 1.1 做了"）：告诉用户这次全自动开没开（systemMessage，不进模型的上下文，不打断干活）。
- *   这句话让会话进了流程（要开始分析需求、写代码了）：先拉一次代码（lib/pull.js，开关 pullBeforeWork）。
+ *   开工前不自动拉代码（2026-10-17 起，用户自己拉）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -154,7 +154,7 @@ function looksLikeOutputRequest(p) {
   return (OUTPUT_NOUN.test(p) && OUTPUT_VERB.test(p)) || NEW_FILE.test(p);
 }
 function outputHint(j, cfg) {
-  if (!cfg || cfg.outputGate === false) return '';
+  if (!cfg) return '';
   const p = String(j.prompt || '').trim();
   if (!p || p.length > 3000 || !((OUTPUT_NOUN.test(p) && OUTPUT_VERB.test(p)) || NEW_FILE.test(p))) return '';
   if (cfg.autoMode) return '这次要是会产出代码之外的文件（DDL 脚本、说明文档、分析报告、表格……）：项目说明的"产出位置"里有的照着放；没有的先放 .vibe/pending/，最后交代时列进"等你回来定的事"，不要自己挑地方。';
@@ -412,12 +412,7 @@ async function handle(j) {
       if (/^\s*\/(ttls-)?handover(\s|$)/i.test(said)) U.bump('handover.write');
     } catch (e) { /* 数不了不影响对话 */ }
   }
-  // 写代码之前先拉代码：这句话让会话进了流程（提了需求、敲了 /opsx:…、接着交接记录做）才拉；已经在流程里说"继续"不拉，
-  // 中间插了一句问话再说"继续"也不拉（cont）：做到一半不换底下的代码。同一个仓库 2 小时里只拉一次（lib/pull.js）
-  let pulled = '';
-  if (!note && on && !cont && cfg.pullBeforeWork !== false && (!prevOn || FLOW_SLASH.test(said) || FLOW_TAG.test(said) || resumed || looksLikeRequirement(said))) {
-    try { const r = await require('../lib/invocation').external(() => require('../lib/pull.js').beforeWork(j, cfg)); if (r && r.text) pulled = r.text; } catch (e) { /* 拉不了不影响对话 */ }
-  }
+  // 开工前不再自动拉代码（用户 2026-10-17 定的：交给用户自己拉）
   if (note && j.transcript_path) { try { syncReviews(tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 记不了不影响对话 */ } }
   // 用户自己在发新指令（斜杠命令）：不提打断和进度
   const slash = /^\s*\//.test(String(j.prompt || ''));
@@ -425,7 +420,6 @@ async function handle(j) {
   const lines = [...anchored];
   if (!note && on && stage === 'plan' && cfg.autoRequirements && !flowState(j).planReady) lines.push('需求自动已开启，但先探索并沟通目标、范围、验收与疑问；条件明确后把 description、scope、acceptance、unresolved（未解问题数组）、onlyPlan 写入本机 .vibe/tmp/<事由>/评估.json，再运行 workflow.js qualify --session ' + j.session_id + ' --transcript <当前会话记录> --assessment <评估文件>。有疑问必须 Ask，不能因为开关开启而猜需求。');
   if (!note) { try { const conflicts = require('../lib/work-sessions').touch(j); if (conflicts.length) lines.push('同一变更还有活跃实施会话：' + conflicts.join('、') + '。先核对各自负责的文件，避免覆盖；检索照常。共享工作区未被隔离。'); } catch (e) { /* 冲突记录失败不阻断工作 */ } }
-  if (pulled) lines.push(pulled);
   // 放松保护的开关被绕开配置页改了：没按它来，告诉它；每个会话记一次问题反馈
   if (cfg._tampered) {
     lines.unshift('套件开关文件被程序直接改过（' + cfg._tampered.join('、') + '），没按它来：这几项只认用户在配置页里改的。');

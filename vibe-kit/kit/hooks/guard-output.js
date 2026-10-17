@@ -5,7 +5,7 @@
  *   普通模式：先用提问框问用户放哪，定了记进项目说明，再写；
  *   全自动模式：用户不在，不问也不自己挑，先放到 .vibe/pending/，最后交代时列进"等你回来定的事"
  *   （项目里现成的同类目录——同一目录里已经有两个以上同类文件——直接用）。
- * 判断细节见 lib/outputs.js。开关 outputGate（配置页"代码之外的产出先定好放哪"），默认开。
+ * 判断细节见 lib/outputs.js。固定检查，不做开关（用户 2026-10-17 定的；以前的开关 outputGate 不再认）。
  */
 const path = require('path');
 const { readConfig, readConfigFor, blockOut, hookLog, cli } = require('../lib/session');
@@ -13,7 +13,7 @@ const { outputCheck } = require('../lib/outputs');
 
 function handle(j) {
   const cfg = readConfigFor(j);
-  if (cfg.outputGate === false) return null;
+  // 固定检查，不做开关（用户 2026-10-17 定的：代码之外的产出放哪，默认就要问用户）
   const r = outputCheck(j, cfg);
   if (!r) return null;
   const show = (p) => { const rel = path.relative(r.cwd, p); return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : p; };

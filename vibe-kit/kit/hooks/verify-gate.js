@@ -855,7 +855,7 @@ async function handle(j) {
   }
 
   // 新建了、没进 git 的文件（要交的提交，测试用的删掉），项目里留下的过程文件（备份、日志）：同一批只提一次，说"做完了"时再提一次（开关 vibeTidy）
-  if (cfg.vibeTidy !== false) { try { const lo = await leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices); if (lo) todo.push(lo); } catch (e) { hookLog('verify-gate leftover 出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（收尾：新文件和过程文件）', j, e); } }
+  { try { const lo = await leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices); if (lo) todo.push(lo); } catch (e) { hookLog('verify-gate leftover 出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（收尾：新文件和过程文件）', j, e); } }
 
   // 套件问题：说了是套件的问题却没记；做完了，交代里没列这个会话记下的套件问题
   try { const kt = kitIssueTodo(j, lastSaid); if (kt) todo.push(kt); } catch (e) { if (feedback) feedback.recordHookError('verify-gate（套件问题）', j, e); }
@@ -886,7 +886,7 @@ async function handle(j) {
   try { planSummary(cwd); } catch (e) { /* 没有计划就算了 */ }
   // 归档了的变更，它的过程文件（.vibe/tmp、.vibe/out 里变更名开头的目录）现在清掉：归档之前不让模型自己删（guard-commit 的 keepIssue），归档之后也不用它动手。
   // 归档之后又动过的不清（归档后接着修问题，事由还写这个变更名的）
-  if (cfg.vibeTidy !== false && tidy && tidy.changeOwner) {
+  if (tidy && tidy.changeOwner) {
     try {
       const gone = tidy.cleanTmp([cwd].concat(nestedRepos(cwd)), 0, archivedNames(cwd), allChanges(cwd).map((c) => c.name), archivedSince(cwd));
       if (gone.length) hookLog('verify-gate 归档了的变更的过程文件清掉了：' + gone.map((g) => g.dir).join(' | '));

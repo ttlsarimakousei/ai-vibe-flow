@@ -177,7 +177,7 @@ async function handle(j) {
     // .vibe 里堆着的零散旧文件提醒一次（七天一次）
     try {
       const cfg = readConfig();
-      if (cfg.vibeTidy !== false) {
+      { // 过程文件的整理固定开（2026-10-17 起不再认开关 vibeTidy）
         const tidy = require('../lib/tidy.js');
         const roots = [cwd].concat(repos);
         const archivedNames = [];

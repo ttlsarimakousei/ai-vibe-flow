@@ -15,19 +15,19 @@
  *      自动模式下用户不在就先不提交、记进报告；自动——做完一件完整的事（新勾完任务、审查修复收尾、需求文档定稿）才提交。不能放行。
  *   5. 禁止改套件（开关 kitLock）：命令动到套件的文件、直接调路由的 /api、命令里出现 disableAllHooks，都拦。
  *   6. 装了路由时，不许一把结束所有 node 进程（taskkill /IM node.exe 之类），也不许结束路由自己的进程：路由一停，模型连不上、走 HTTP 的检查全部失效。
- *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（开关 serverGuard）：不重复起、不换端口。
- *   8. 过程文件别落在项目里（开关 vibeTidy）：cp 出来的备份、备份目录、重定向出来的日志这类，放 .vibe/tmp/<事由>/；git add 过程文件也拦。同一个路径只拦一次。
+ *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（固定，不做开关）：同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000。
+ *   8. 过程文件别落在项目里（固定，不做开关）：cp 出来的备份、备份目录、重定向出来的日志这类，放 .vibe/tmp/<事由>/；git add 过程文件也拦。同一个路径只拦一次。
  *      临时查看 JAR、ZIP、TAR、7z 等归档的直接解包命令检查实际目标目录，目录联接也查；不能靠重复执行落到项目根。只读列表和流式读取放行。
  *   9. 提交时它这个会话里新建的文件还没 git add（git 不会自动带上新文件）：点名拦一次，同样的一批只拦一次。
  *      用临时 index 提交的（GIT_INDEX_FILE=…）看那份 index；找不到它就不查。
  *  10. Bash 里 cd 和别的命令串在一条里（cd 子项目 && mvn …）：Claude Code 会停下来要人确认（跳过权限模式也问），拦下并给出不用 cd 的写法
  *      （git -C、mvn -f、npm --prefix、devserver.js --cwd、路径写全）。单独一条 cd 不拦。不看开关。
- *  11. 变更没归档之前，它的过程文件先留着（开关 vibeTidy）：rm .vibe/tmp/<变更名>/ 这类拦下；全自动模式、在流程里，
+ *  11. 变更没归档之前，它的过程文件先留着（固定，不做开关）：rm .vibe/tmp/<变更名>/ 这类拦下；全自动模式、在流程里，
  *      .vibe/tmp、.vibe/out 里的都先不删。归档之后套件自己清。
  * 兜底放行（lib/feedback.js）：起服务、过程文件、归档门槛、提交信息格式、新文件没 add 这几类拦下时带〔拦截编号〕，
  *   申请过放行的跳过这一类（按"同一件事"认：归档认变更名，别的认这一类检查）；结束进程、改套件、整仓 add / commit -a / gitlink 不放行。
- * 全自动模式（用户不在）：push、发布不弹确认框（没人点，会一直挂着），直接拦下、记进全自动报告，让它接着做别的；
- *   提交里像有密码的不弹框，提交放行，记进报告（push 之前用户会看到）。
+ * 全自动模式（用户不在）：push、发布不弹确认框（没人点，会一直挂着），直接拦下、记进全自动报告，让它接着做别的。
+ * 提交时不再查"像密码的内容"（用户 2026-10-17 定的）；套件自己的令牌文件（secrets.json、router-data）不许提交，那道保护在别处，照留。
  * 命令先按 Bash 或 PowerShell 各自的引号和转义规则拆开：heredoc、here-string 的正文是数据，不当命令拆；注释（# 到行尾）去掉；续行先合并；
  * 按没加引号的 && || ; 换行 分成几组，每组再按 | 分段；cd、Push-Location 会跟着算当前目录。
  * 读不出来的（提交信息在变量里、路径藏在变量里）放行：误拦比漏拦更糟。
@@ -1086,7 +1086,7 @@ function killAnywhere(cmd, ps) {
 /*
  * 模型起服务自测，常常忘了之前起过、或者上次没关，再起时端口被占，就换个端口又起一个——前端代理、配置里写的还是原来的端口，
  * 测的就不是它改的那一份。所以直接起开发服务器的命令一律拦下，让它走 tools/devserver.js：那里记着起过什么、跑的是不是现在的代码，
- * 端口被占时查清是谁，不会再起一个、也不会换端口。开关 serverGuard。
+ * 端口被占时查清是谁，不会再起一个。固定检查，不做开关（用户 2026-10-17 定的）。
  */
 const RUN_SCRIPT = /^(dev|serve|start|preview|server)(:[\w-]+)?$/i;
 const SERVER_TOOL = /\b(vite|vue-cli-service\s+serve|webpack(-dev-server|\s+serve)|next\s+(dev|start)|nuxt|react-scripts\s+start|http-server|live-server|nodemon|ng\s+serve|umi\s+dev|max\s+dev|node\s+\S*server\S*|express|koa)\b/i;
@@ -1133,7 +1133,7 @@ const serverMsg = (what) => '[vibe-kit 起服务] 起服务自测用 devserver.j
   + '  node "' + path.join(KIT, 'tools', 'devserver.js').split(path.sep).join('/') + '" start --name <名字> --port auto --avoid <项目说明里记的端口> -- <你原来的命令>\n'
   + '端口由它在 30000 到 39999 里挑，离项目配置的端口远（用户自己在 IDE 里按配置的端口起的不会撞上）；Spring Boot、Vue CLI、Next、CRA 认环境变量 SERVER_PORT / PORT，命令不用改；Vite、webpack-dev-server 不认，命令写 npm run dev -- --port {port}（{port} 会换成挑到的端口）。起来之后它会说用的是哪个端口，看页面、调接口都用那个。前端开发服务器会热更新的加 --hot；要设环境变量用 --env K=V；服务要在子目录里起的，start 后面加 --cwd <子目录>，不要先 cd。它起好（端口通了）才返回，日志在 .vibe/run/<名字>.log。测完：node "' + path.join(KIT, 'tools', 'devserver.js').split(path.sep).join('/') + '" stop --all';
 
-// ---------- 过程文件别落在项目里（开关 vibeTidy） ----------
+// ---------- 过程文件别落在项目里（固定，不做开关） ----------
 /*
  * cp A.java A.java.bak、cp -r src src_bak、cp A.java backup/、mvn compile > build.log、… | tee build.log、Copy-Item x x.bak 这类命令会在项目里留下过程文件。
  * 目标是过程文件、或者在过程目录里（怎么认见 lib/tidy.js），又在项目里、不在 .vibe 里，就拦下让它放 .vibe/tmp/<事由>/。
@@ -1164,7 +1164,7 @@ function processTarget(x, head, dir) {
   return null;
 }
 
-// ---------- 变更没归档之前，它的过程文件先留着（开关 vibeTidy） ----------
+// ---------- 变更没归档之前，它的过程文件先留着（固定，不做开关） ----------
 /*
  * 用户 2026-09-30 定的：全自动跑着的时候看到它一路在 rm .vibe 下面的过程文件。流程全部结束之前不要删：
  *   OpenSpec 流程里的过程文件（.vibe/tmp/<变更名>/ 里的脚本、草稿、数据，.vibe/out/ 里以变更名开头的结果）等变更归档之后再删——
@@ -1334,87 +1334,6 @@ function newFilesIssue(g, st) {
     + '- 确实要先留着、不放进这次提交：原样再执行一次这条提交命令就行。';
 }
 
-// ---------- 提交前看有没有把密码、key 带进去（开关 commitCheck） ----------
-/*
- * 只看这次提交新加的行：已经暂存的改动（git diff --cached），加上这条命令里 git add 的文件（和 HEAD 比；新文件看全文）。
- * 原来就在仓库里的不算。命中常见的密码、key、私钥、带密码的连接串，就弹确认框让用户看一眼（点同意照常提交）。
- * 占位写法（${DB_PASSWORD}、<password>、****、xxx、changeme）不算。
- */
-const SECRET_RULES = [
-  { re: /(?:^|[\s"'{,(])([\w.-]*(?:passw(?:or)?d|pwd|secret|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|auth[-_]?token|access[-_]?token)[\w.-]*)["']?\s*[:=]\s*["']?([^\s"',;}]{3,})/i, what: '密码 / key' },
-  { re: /jdbc:[^\s"']*[?&;]password=([^&;\s"']{3,})/i, what: '带密码的连接串' },
-  { re: /(?:jdbc:[a-z]+:|[a-z][\w+.-]*:)\/\/[^\s:/@"']+:([^@\s/"']{3,})@/i, what: '带密码的连接地址' },
-  { re: /jdbc:oracle:thin:[\w.$-]+\/([^@\s"']{3,})@/i, what: '带密码的 Oracle 连接串' },
-  { re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----()/, what: '私钥' },
-  { re: /\b(AKIA[0-9A-Z]{16})\b|\b((?:sk|ghp|glpat)[-_][A-Za-z0-9]{16,})\b/, what: 'key' },
-  { re: /(?:密码|口令|秘钥|密钥)\s*[:：=]\s*(\S{4,})/, what: '密码' },
-];
-const PLACEHOLDER = /^(\$\{.*|\$\w+|%\w+%?|<[^>]*>?|\{\{.*|@\w+@?|\*+|x+|\.+|changeme|change_me|password|passwd|your[-_]?\w*|null|none|true|false|todo|test|123456?)$/i;
-function secretHits(file, lines) {
-  const hits = [];
-  for (const { n, text } of lines) {
-    if (text.length > 2000) continue;
-    for (const r of SECRET_RULES) {
-      const m = text.match(r.re);
-      if (!m) continue;
-      const val = String(m[m.length - 1] || m[1] || '').replace(/^["']|["']$/g, '');
-      if (r.what !== '私钥' && (!val || PLACEHOLDER.test(val))) continue;
-      hits.push({ file, n, what: r.what, show: text.trim().replace(val || '\u0000', val ? val.slice(0, 2) + '***' : '').slice(0, 120) });
-      break;
-    }
-  }
-  return hits;
-}
-function secretIssue(g, st) {
-  const root = repoRoot(g.dir);
-  if (!root) return '';
-  // 用临时 index 提交的：暂存了什么看那份 index；找不到它就只看这条命令里 git add 的文件（真实 index 里暂存的不是这次要提交的）
-  const env = indexEnv(st, root, g.dir);
-  const git = (args, max) => { try { return execFileSync('git', ['--no-optional-locks', '-C', root, '-c', 'core.quotepath=false'].concat(args), { encoding: 'utf8', timeout: 8000, windowsHide: true, maxBuffer: max || 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'], env: env || process.env }); } catch (e) { return ''; } };
-  // diff 里新加的行：按文件分，带行号
-  const fromDiff = (text) => {
-    const out = new Map();
-    let file = ''; let ln = 0;
-    for (const l of String(text).split('\n')) {
-      if (l.startsWith('+++ ')) { file = l.slice(4).replace(/^b\//, '').trim(); continue; }
-      const h = l.match(/^@@ -\d+(?:,\d+)? \+(\d+)/);
-      if (h) { ln = Number(h[1]); continue; }
-      if (!file || file === '/dev/null') continue;
-      if (l.startsWith('+')) { if (!out.has(file)) out.set(file, []); out.get(file).push({ n: ln, text: l.slice(1) }); ln++; }
-      else if (!l.startsWith('-')) ln++;
-    }
-    return out;
-  };
-  const all = env === null ? new Map() : fromDiff(git(['diff', '--cached', '-U0', '--no-color', '--no-ext-diff']));
-  // 这条命令里 git add 的（还没暂存）：改过的和 HEAD 比，新文件读全文
-  const rootKey = normKey(root);
-  const added = [...st.added].filter((a) => a === rootKey || a.startsWith(rootKey + '/')).map((a) => path.relative(root, a).split(path.sep).join('/') || '.');
-  if (added.length) {
-    const status = git(['status', '--porcelain', '-uall', '--'].concat(added.slice(0, 50)));
-    for (const line of status.split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      const rel = line.slice(3).replace(/^"|"$/g, '').split(' -> ').pop();
-      if (all.has(rel)) continue;
-      if (line.startsWith('??')) {
-        try {
-          const f = path.join(root, rel);
-          if (fs.statSync(f).size > 1024 * 1024) continue;
-          const t = fs.readFileSync(f, 'utf8');
-          if (t.includes('\u0000')) continue;
-          all.set(rel, t.split(/\r?\n/).map((text, i) => ({ n: i + 1, text })));
-        } catch (e) { /* 读不了 */ }
-      } else {
-        for (const [f, ls] of fromDiff(git(['diff', 'HEAD', '-U0', '--no-color', '--no-ext-diff', '--', rel]))) all.set(f, ls);
-      }
-      if (all.size > 200) break;
-    }
-  }
-  const hits = [];
-  for (const [f, ls] of all) { hits.push(...secretHits(f, ls)); if (hits.length >= 8) break; }
-  if (!hits.length) return '';
-  return '[vibe-kit 提交检查] 这次提交里新加的内容像是密码或 key：\n' + hits.slice(0, 8).map((h) => '- ' + h.file + ' 第 ' + h.n + ' 行（' + h.what + '）：' + h.show).join('\n')
-    + '\n确认是可以进仓库的（测试环境、示例值）就点同意；不该提交的点拒绝，改成占位符（比如 ${DB_PASSWORD}）或者放进不进仓库的配置里。';
-}
 
 // ---------- 提交方式：关 / 询问 / 自动（用户 2026-10-17 定的，人工和自动都用，替代 autoCommit 档位和 plainCommit） ----------
 /*
@@ -1588,9 +1507,9 @@ function analyze(cmd, ps, st, cfg, depth) {
       }
       // 经过 devserver.js 起的：它自己查重、查端口，这一段里带的启动命令不拦（只免这一段，同一条命令里别的段照查）
       const viaTool = ws.some((w) => /devserver\.js$/i.test(w.text));
-      if (!viaTool && cfg.serverGuard !== false && !st.block) { const s = serverStart(ws, head, st.dir); if (s) setBlock(st, 'server', serverMsg(s)); }
-      if (cfg.vibeTidy !== false && tidy && !st.block) { const p = processTarget(x, head, st.dir); if (p && tidy.blockOnce(st.j.session_id, p.key)) setBlock(st, 'process', tidy.processMsg(p.show)); }
-      if (cfg.vibeTidy !== false && !st.block && !st.archiveUnknown) {
+      if (!viaTool && !st.block) { const s = serverStart(ws, head, st.dir); if (s) setBlock(st, 'server', serverMsg(s)); }
+      if (tidy && !st.block) { const p = processTarget(x, head, st.dir); if (p && tidy.blockOnce(st.j.session_id, p.key)) setBlock(st, 'process', tidy.processMsg(p.show)); }
+      if (!st.block && !st.archiveUnknown) {
         const outputs = archiveStream ? x.redirs.map(r => ({ text: r.target, raw: r.target })) : [];
         if (archiveStream && WRITE_TO.test(head.name)) {
           const rest = ws.slice(head.i + 1);
@@ -1601,7 +1520,7 @@ function analyze(cmd, ps, st, cfg, depth) {
         const p = archiveExtract.issue(head.name, ws.slice(head.i + 1), st.dir, outputs);
         if (p) setBlock(st, 'process', p.message, 'extract:' + p.key);
       }
-      if (cfg.vibeTidy !== false && tidy && !st.block) { let k = ''; try { k = keepIssue(x, head, st.dir, st, cfg); } catch (e) { k = ''; } if (k) setBlock(st, 'keep', k); }
+      if (tidy && !st.block) { let k = ''; try { k = keepIssue(x, head, st.dir, st, cfg); } catch (e) { k = ''; } if (k) setBlock(st, 'keep', k); }
       if (cfg.specGate !== false && !st.block) { const t = archiveTarget(ws, head, st.dir); if (t) { const a = archiveIssue(t, st.dir, st.j); if (a) setBlock(st, a.noBypass ? 'archive-ok' : 'archive', a.msg, 'archive:' + a.name.toLowerCase()); } }
       const g0 = parseGit(ws, st.dir);
       if (!g0) continue;
@@ -1617,7 +1536,7 @@ function analyze(cmd, ps, st, cfg, depth) {
           const abs = path.resolve(g.dir, local(a.text));
           st.added.add(normKey(abs));
           // 过程文件不提交。文件已经不在了的是在记删除，不管；. 和 :/ 这种整仓 add 由下面的提交检查拦
-          if (cfg.vibeTidy === false || !tidy || st.block || !fs.existsSync(abs) || /^(\.|\.\/|:\/?)$/.test(a.text)) continue;
+          if (!tidy || st.block || !fs.existsSync(abs) || /^(\.|\.\/|:\/?)$/.test(a.text)) continue;
           let isDir = /[\\/]$/.test(a.text);
           try { isDir = isDir || fs.statSync(abs).isDirectory(); } catch (e) { /* 不存在 */ }
           const p = tidy.processPath(abs, st.dir, isDir);
@@ -1660,7 +1579,6 @@ function analyze(cmd, ps, st, cfg, depth) {
       if (g.dyn) continue;
       if (g.sub === 'commit' && cfg.commitCheck && !st.block && !commitAll(g.args)) { const n = newFilesIssue(g, st); if (n) setBlock(st, 'new-files', n); }
       // 提交前看有没有把密码、key 带进去：要用户确认，不拦
-      if (g.sub === 'commit' && cfg.commitCheck && !st.block && !st.secretChecked) { st.secretChecked = true; const s = secretIssue(g, st); if (s) st.secret = s; }
       }
     }
   }
@@ -1816,7 +1734,7 @@ function handle(j) {
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
   if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find|jar|tar|gtar|bsdtar|unzip|7z|7za|7zr|7zz|expand-archive)\b/i.test(cmd)) return cdBlock();
   const cwd0 = path.resolve(j.cwd || process.cwd());
-  const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, secret: '', j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
+  const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
   // 先按名字挑出进程再结束的写法（Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process）：拆成组之后认不出来，整条看一遍
   if (!st.block) { const k = killAnywhere(cmd, ps); if (k) setBlock(st, 'kill', k); }
   // 兜底放行：这个会话里申请过、还能用的通行证
@@ -1850,22 +1768,19 @@ function handle(j) {
     if (cfg.autoMode) {
       try { if (report) report.note(j, { kind: 'hand', title: '它想执行 git push，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '先给用户推送预览，等用户确认；全自动不能跳过' }); } catch (e) { /* 记不了也拦 */ }
     }
-    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '多笔提交或目标无法核对时，推送前先运行 merge-push.js plan --dir <仓库>，给用户看分组、原记录、标题和目标，确认后用 apply --plan <文件> --confirmed <完整计划编号> --push。仅一笔且目标明确的普通推送可使用已有真人推送许可。此检查不能用放行额度代替推送确认。' + (st.secret ? '\n' + st.secret : ''));
+    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '多笔提交或目标无法核对时，推送前先运行 merge-push.js plan --dir <仓库>，给用户看分组、原记录、标题和目标，确认后用 apply --plan <文件> --confirmed <完整计划编号> --push。仅一笔且目标明确的普通推送可使用已有真人推送许可。此检查不能用放行额度代替推送确认。');
   }
   const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', mergeCall ? mergeCall.root : simplePush ? repoRoot(st.pushes[0].dir) || st.pushes[0].dir : repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
-  // 当场授权 push 不能顺便跳过同一条命令里提交内容的凭据提醒。
-  if (pushApproved && st.secret) return askOut(st.secret);
   if (cfg.autoMode) {
     if (st.push && !pushApproved) {
       hookLog('guard-commit 全自动模式不 push：' + cmd.slice(0, 80));
       try { if (report) report.note(j, { kind: 'hand', title: '它想' + (/发布/.test(st.push) ? '发布安装包' : '执行 git push') + '，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '推到远端要你自己来' }); } catch (e) { /* 记不了不影响 */ }
       return counted('auto-push', '[vibe-kit] 全自动模式：' + (/发布/.test(st.push) ? '发布' : 'push') + '留给用户做，已经记进全自动报告。不要再试，也不要等：提交留在本地，接着做别的；最后的交代里说一句哪些提交还没推。');
     }
-    if (st.secret) { try { if (report) report.note(j, { kind: 'secret', title: '提交放行了，里面像是有密码或 key', detail: st.secret.replace(/\[vibe-kit 提交检查\]\s*/, '').split('\n').slice(0, 6).join('；') }); } catch (e) { /* 记不了不影响 */ } hookLog('guard-commit 全自动模式：提交里像有密码，放行并记进报告'); }
     if (st.used.length) return feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);
     return null;
   }
-  const ask = [pushApproved ? '' : st.push, st.secret].filter(Boolean).join('\n');
+  const ask = pushApproved ? '' : st.push;
   if (st.used.length) {
     const out = feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);
     // 放行申请和 push 确认一起问

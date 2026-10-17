@@ -46,7 +46,7 @@ function cleanConfig(x, base) {
   // 提示规则 2026-09-30 去掉了：文件里以前存的那一项不再写回去
   delete c.hints;
   // autoOnboard 后台自动探索；lessonAuto 审查报的问题自动收；dbcrudDaemon 查库的后台执行器
-  for (const k of ['autoVerify', 'autoSeePage', 'autoCrossReview', 'commitCheck', 'specGate', 'outputGate', 'vibeTidy', 'serverGuard', 'autoResume', 'reviewLoop', 'autoMode', 'autoRequirements', 'autoApply', 'autoHandover', 'kitLock', 'autoOnboard', 'lessonAuto', 'dbcrudDaemon']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
+  for (const k of ['autoVerify', 'autoSeePage', 'autoCrossReview', 'commitCheck', 'specGate', 'autoResume', 'reviewLoop', 'autoMode', 'autoRequirements', 'autoApply', 'autoHandover', 'kitLock', 'autoOnboard', 'lessonAuto', 'dbcrudDaemon']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
   // 后台执行器多久没人用就退出：1 到 60 分钟
   const idle = Number(x && x.dbcrudDaemonIdleMinutes); if (idle >= 1 && idle <= 60) c.dbcrudDaemonIdleMinutes = Math.round(idle);
   // .vibe/tmp 下的临时目录多少天没动就自动清掉：0 = 不自动清，最多 90 天
@@ -96,7 +96,7 @@ function cleanConfig(x, base) {
   // 自动压缩线：用到上下文上限的百分之多少时 Claude Code 自己压缩（写进 settings.json 的 autoCompactWindow）。0 = 不管，照 Claude Code 自己的；别的在 50 到 95 之间
   const acp = Number(x && x.autoCompactPercent); if (x && x.autoCompactPercent !== undefined && x.autoCompactPercent !== '' && (acp === 0 || (acp >= 50 && acp <= 95))) c.autoCompactPercent = Math.round(acp);
   // 状态栏第三行显示今天的请求次数和 token；开工前先拉代码
-  for (const k of ['statusUsage', 'pullBeforeWork', 'ideaMcp']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
+  for (const k of ['statusUsage', 'ideaMcp']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
   // 使用情况上报：每天一条，只有次数和名字（见套件 lib/usage.js）
   if (x && ['on', 'off'].includes(x.usageReport)) c.usageReport = x.usageReport;
   // Claude Code 自带的自动模式（auto mode）：off = 套件把它关掉（settings.json 的 permissions.disableAutoMode），on = 不管它
