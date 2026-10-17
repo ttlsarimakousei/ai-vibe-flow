@@ -51,8 +51,10 @@ function cleanConfig(x, base) {
   const idle = Number(x && x.dbcrudDaemonIdleMinutes); if (idle >= 1 && idle <= 60) c.dbcrudDaemonIdleMinutes = Math.round(idle);
   // .vibe/tmp 下的临时目录多少天没动就自动清掉：0 = 不自动清，最多 90 天
   const keep = Number(x && x.tmpKeepDays); if (x && x.tmpKeepDays !== undefined && x.tmpKeepDays !== '' && keep >= 0 && keep <= 90) c.tmpKeepDays = Math.round(keep);
-  // 多轮审查最多几轮：1 到 5
+  // 需求、Apply 每个审查点最多几轮：1 到 20
   for (const k of ['requirementsReviewMaxRounds', 'applyReviewMaxRounds']) { const n = Number(x && x[k]); if (n >= 1 && n <= 20) c[k] = Math.round(n); }
+  // 只有旧名 autoMode、没有 autoApply 时按 autoMode 算，和钩子的 readConfig 同一条规则（2026-10-17 审核建议 19：原来钩子按开着、配置页显示关着）
+  if (x && !Object.prototype.hasOwnProperty.call(x, 'autoApply') && typeof x.autoMode === 'boolean') c.autoApply = x.autoMode;
   c.autoMode = c.autoApply;
   const rounds = Number(x && x.reviewMaxRounds); if (rounds >= 1 && rounds <= 5) c.reviewMaxRounds = Math.round(rounds);
   if (x && ['direct', 'agent'].includes(x.reviewExecutor)) c.reviewExecutor = x.reviewExecutor;
