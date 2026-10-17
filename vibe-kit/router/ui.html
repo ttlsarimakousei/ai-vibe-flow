@@ -480,9 +480,6 @@
     <div class="card" id="sec-stop" data-sec="全局：过程文件">
       <h2>全局：过程文件</h2>
       <p class="hint">这些规则独立于自动模式，保护项目目录和临时材料。</p>
-
-
-
       <div class="opt">
         <div><div class="t">临时目录留几天</div><div class="d">.vibe/tmp 下的目录这么多天没动就清掉。0 是不清。</div></div>
         <div class="ctl"><input type="number" id="k_tmpKeepDays" min="0" max="90" step="1"><span class="dim">天</span></div>
@@ -492,7 +489,7 @@
     <div class="card" id="sec-spec" data-sec="全局：审查与产物">
       <h2>全局：审查与产物</h2>
       <div class="opt">
-        <div><div class="t">审查方式</div><div class="d">限时独立模型审查：把要审的文件分批发给"模型"页角色分配里 sonnet 那一条指向的模型，不要求和主会话是不同的模型；它挂了按换模型的顺序换，只剩一个模型能用也照样审。自动逐点审查固定用这种；本选项只管人工整套审查。超时和部分结果不能算审完。</div></div>
+        <div><div class="t">审查方式</div><div class="d">人工整套审查用哪种方式。限时独立模型审查：分批发给"模型"页 sonnet 那一条指向的模型，挂了按换模型的顺序换。自动逐点审查固定用这种。超时、只审了一部分不算审完。</div></div>
         <div class="ctl"><select id="k_reviewExecutor"><option value="direct">限时独立模型审查</option><option value="agent">原审查代理</option></select></div>
       </div>
       <div class="opt">
@@ -553,7 +550,7 @@
       <p class="hint">开工前拉一次代码；只提交，不自己 push。push 要你当场明确说：只有一笔、目标明确时直接推，多笔先给你看合并预览、再确认一次；自动模式也一样。不走 OpenSpec 的改动，提交前先问你。</p>
 
       <div class="opt">
-        <div><div class="t">提交方式</div><div class="d">人工和自动模式都用，不走 OpenSpec 的改动也按它。到了提交时机（做完一件完整的事）：<b>询问</b>就交代改了什么、怎么验的，用提问框问你"提交 / 还要改"；<b>自动</b>就直接提交；<b>关</b>就什么都不做，你说"提交"它才提交。</div>
+        <div><div class="t">提交方式</div><div class="d">人工、自动都用。做完一件完整的事时：<b>询问</b>交代改了什么、怎么验的，问你"提交 / 还要改"；<b>自动</b>直接提交；<b>关</b>不问也不提交，你说"提交"才提交。</div>
           <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>Apply 自动时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
         <div class="ctl"><select id="k_commitMode"><option value="ask">询问：到了时机问我</option><option value="auto">自动：到了时机直接提交</option><option value="off">关：不问也不提交，我说了才提交</option></select></div>
       </div>
@@ -578,7 +575,7 @@
         <div class="ctl"><select id="k_kitBypass"><option value="ask">要我点同意</option><option value="auto">它自己放行</option><option value="off">不许放行</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">检查在哪里跑</div><div class="d">套件的检查（钩子）在哪里执行。在路由里跑：每次几十毫秒，路由停了就检查不了。用命令跑：每次单独起进程，零点几秒，不依赖路由。推荐"自动"：路由在就在路由里跑，不在就退回命令，一般不用动。</div>
+        <div><div class="t">检查在哪里跑</div><div class="d">套件的检查（钩子）在哪里执行。路由里跑每次几十毫秒，路由停了就查不了；用命令跑每次零点几秒，不依赖路由。"自动"：路由在用路由，不在退回命令。</div>
           <details class="more"><summary>细节</summary><ul><li>管的是五个检查：改文件、跑命令、提问框和调技能、搜文件内容、收工检查。会话开始、你发消息时的两个一直用命令。</li><li>在路由里跑时，路由没在跑这几个检查会被跳过。所以你每次发消息会自检一次：收不到就把路由拉起来，还不行就自动切回命令方式。</li></ul></details>
           <div class="d" id="hookStatus" style="margin-top:4px"></div></div>
         <div class="ctl"><select id="k_hookTransport"><option value="auto">自动：装了路由就在路由里跑</option><option value="http">在路由里跑</option><option value="command">用命令跑</option></select></div>
