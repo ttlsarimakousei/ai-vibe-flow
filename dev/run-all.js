@@ -9,6 +9,7 @@
  *                                                 （%LOCALAPPDATA%\Programs\Python、…\Eclipse Adoptium、~/.m2，见 dev/README.md）；
  *                                                 也可以给一个放着便携版的目录（里面有 python/python.exe、jdk/bin/java.exe、h2.jar）
  * 结尾查三件事：真实用户目录没被碰（各个测试自己查）、临时目录清干净了、桌面上没有多出窗口。
+ * 2026-10-18 起分几路同时跑（--lanes，默认 3；--lanes 1 退回一个接一个），怎么排见下面"怎么排"。结尾打印每一段的用时。
  */
 const fs = require('fs');
 const os = require('os');
@@ -50,10 +51,11 @@ if (oldNames) suites.push(['改名和并进来的技能', 'test-ttls.js', [oldNa
 if (rt) suites.push(['查库（H2）', 'test-dbcrud.js', [rt]]);
 for (const d of olds) suites.push(['新旧钩子对比 ' + (verOf(d) || path.basename(d)), 'diff-hooks.js', [d]]);
 for (const c of claudes) for (const m of ['auto', 'manual']) suites.push(['端到端（经验，' + (m === 'auto' ? '自动收' : '自己记') + '）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-lessons.js', [c, path.basename(path.resolve(c, '../../../../..')), m]]);
-for (const c of claudes) suites.push(['端到端（更新、令牌）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-update.js', [c, path.basename(path.resolve(c, '../../../../..')), '18748']]);
+// 端到端几个版本同时跑：假 GitLab、假 redis 的端口每个版本错开 100（以前都传同一个，同时跑会抢端口，2026-10-18 实测）
+claudes.forEach((c, i) => suites.push(['端到端（更新、令牌）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-update.js', [c, path.basename(path.resolve(c, '../../../../..')), String(18748 + 100 * i)]]));
 for (const c of claudes) suites.push(['端到端（全自动）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-auto-0929.js', [c, path.basename(path.resolve(c, '../../../../..'))]]);
 // 不给 --rt 的话查库那几项不测（第三个参数给一个不存在的目录）
-for (const c of claudes) suites.push(['端到端（0930）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-0930.js', [c, path.basename(path.resolve(c, '../../../../..')), rt || path.join(__dirname, '没有运行环境'), '18765']]);
+claudes.forEach((c, i) => suites.push(['端到端（0930）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-0930.js', [c, path.basename(path.resolve(c, '../../../../..')), rt || path.join(__dirname, '没有运行环境'), String(18765 + 100 * i)]]));
 
 suites.unshift(['IDEA MCP 自动接入', 'test-idea-mcp.js', claudes.flatMap(c => ['--claude', c])]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
@@ -100,21 +102,44 @@ function report(r, index) {
   console.log((shown.length ? shown : lines.slice(-20)).join('\n'));
   console.log('      完整输出：' + log);
 }
+// ---------- 怎么排（2026-10-18 起；实测数据见 docs/release-timing.md） ----------
+//   1. 一般的套分几路同时跑（--lanes，默认 3：8 核机器上 3 套同时跑快 2.6 倍、整机 CPU 最高 94%，再多也快不了）。
+//      上一轮跑得久的排前面（记在 .vibe/tmp/run-all-times.json），免得最后剩一套长的单独拖着
+//   2. 怕机器忙的（SOLO：同时跑时会因时序出问题的，多跑几轮试出来的）等前面的都跑完，一个一个单独跑。临时加几套用 --solo a.js,b.js
+//   3. 新旧钩子对比：各用自己的临时目录、不占端口，几份一起跑（和以前一样）
+//   4. 端到端：每个 Claude Code 版本一路，几个版本同时跑（--e2e-lanes，默认和版本数一样；假 GitLab、假 redis 的端口每个版本错开）；同一个版本里一个接一个
+//   --lanes 1：和以前一样，除了钩子对比，全部按列表顺序一个接一个（怀疑失败是同时跑引起的时候用）
+const LANES = Math.max(1, Number(all('--lanes')[0]) || 3);
+const E2E_LANES = Math.max(1, Number(all('--e2e-lanes')[0]) || (LANES === 1 ? 1 : claudes.length || 1));
+const SOLO = new Set([].concat(all('--solo').flatMap((s) => s.split(',')).map((s) => path.basename(s.trim())).filter(Boolean)));
+const TIMES_FILE = path.join(__dirname, '..', '.vibe', 'tmp', 'run-all-times.json');
+let lastTimes = {}; try { lastTimes = JSON.parse(fs.readFileSync(TIMES_FILE, 'utf8')) || {}; } catch (e) { lastTimes = {}; }
+const times = Object.assign({}, lastTimes);
+const fmt = (s) => (s >= 60 ? Math.floor(s / 60) + ' 分 ' + Math.round(s % 60) + ' 秒' : Math.round(s) + ' 秒');
+const jobs = suites.map((s, i) => ({ name: s[0], file: s[1], args: s[2], index: i }));
+const isE2E = (j) => /^e2e-/.test(j.file);
+const isDiff = (j) => j.file === 'diff-hooks.js';
+const normal = jobs.filter((j) => !isE2E(j) && !isDiff(j) && !(LANES > 1 && SOLO.has(j.file)));
+const solo = jobs.filter((j) => !isE2E(j) && !isDiff(j) && LANES > 1 && SOLO.has(j.file));
+const diffs = jobs.filter(isDiff);
+const e2e = jobs.filter(isE2E);
+const phaseTimes = [];
+async function phase(label, fn) { const t = Date.now(); await fn(); phaseTimes.push(label + ' ' + fmt((Date.now() - t) / 1000)); }
+async function runJob(j) { const r = await runSuite(j.name, j.file, j.args); report(r, j.index); times[j.name] = r.sec; }
+/** n 路同时跑：每路做完一套就去拿下一套 */
+async function pool(list, n) { const q = list.slice(); await Promise.all(Array.from({ length: Math.min(n, q.length) }, async () => { while (q.length) await runJob(q.shift()); })); }
 (async () => {
-// 新旧钩子对比各用自己的临时目录、不占端口，几份一起跑；别的套件一个一个跑（机器忙时有的测试会因时序出问题）
-let index = 0;
-for (let i = 0; i < suites.length; i++) {
-  const [name, file, a] = suites[i];
-  if (file === 'diff-hooks.js') {
-    const group = suites.slice(i).filter((s) => s[1] === 'diff-hooks.js');
-    const results = await Promise.all(group.map((s) => runSuite(s[0], s[1], s[2])));
-    for (const r of results) report(r, index++);
-    suites.splice(i, suites.length - i, ...suites.slice(i).filter((s) => s[1] !== 'diff-hooks.js'));
-    i--;
-    continue;
-  }
-  report(await runSuite(name, file, a), index++);
+const t0 = Date.now();
+if (normal.length) await phase('一般的套 ' + Math.min(LANES, normal.length) + ' 路', () => pool(LANES > 1 ? normal.slice().sort((a, b) => (lastTimes[b.name] || 0) - (lastTimes[a.name] || 0)) : normal, LANES));
+if (solo.length) await phase('怕机器忙的单独跑', () => pool(solo, 1));
+if (diffs.length) await phase('新旧钩子对比 ' + diffs.length + ' 份一起', () => pool(diffs, diffs.length));
+if (e2e.length) {
+  // 按 Claude Code 版本分组（第一个参数是 claude.exe），一组一路
+  const groups = []; for (const j of e2e) { let g = groups.find((x) => x.exe === j.args[0]); if (!g) groups.push(g = { exe: j.args[0], list: [] }); g.list.push(j); }
+  const n = Math.min(E2E_LANES, groups.length);
+  await phase('端到端 ' + n + ' 路', async () => { const q = groups.slice(); await Promise.all(Array.from({ length: n }, async () => { while (q.length) { const g = q.shift(); for (const j of g.list) await runJob(j); } })); });
 }
+try { fs.writeFileSync(TIMES_FILE, JSON.stringify(times, null, 1)); } catch (e) { /* 记不了，下次按列表顺序排 */ }
 const after = windows();
 const newWin = after.filter((w) => !before.includes(w));
 const left = temps();
@@ -122,6 +147,7 @@ console.log('');
 console.log('合计：' + rows.length + ' 套，通过 ' + rows.reduce((n, r) => n + r.pass, 0) + ' 项，失败 ' + rows.reduce((n, r) => n + r.fail, 0) + ' 项');
 console.log('桌面上多出来的窗口：' + (newWin.length ? newWin.join('、') : '没有'));
 console.log('临时目录里留下的测试目录：' + (left.length ? left.join('、') : '没有'));
+console.log('用时：' + fmt((Date.now() - t0) / 1000) + '（' + phaseTimes.join('；') + '）');
 console.log('每套的完整输出：' + LOGS);
 process.exit(rows.every((r) => r.ok) && !newWin.length && !left.length ? 0 : 1);
 })();
