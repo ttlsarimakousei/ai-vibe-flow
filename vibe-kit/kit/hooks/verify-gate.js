@@ -845,7 +845,10 @@ async function handle(j) {
         const where = dirty.map((d) => path.basename(d.root) + '（' + d.count + ' 个文件）').join('、');
         const how = '先自己把 diff 过一遍（有没有调试代码、误改、漏改），然后进到对应的仓库（git -C <目录>），只 git add 你这一轮改的和新建的文件（新建的 git 不会自动带上；不用 -A、.、-u，也不用 commit -a），一件事一次提交，信息按"类型: 内容"写（例：feat: 新增修改页面）；只提交不 push';
         const plain = plainCommitAsk(j, cfg, entries, changes, lastSaid);
-        if (mode === 'ask') {
+        // 用户说了先不提交：哪一档都不再催同一份改动。询问档里用户已经说了提交：照自动那样催它现在提交
+        const saidCommit = mode === 'ask' && userSaid(entries, 'commit').ok;
+        if (plain === 'declined') { /* 用户决定暂不提交 */ }
+        else if (mode === 'ask' && !saidCommit) {
           if (cfg.autoMode) { try { if (report) report.note(j, { kind: 'hand', title: '改动还没提交：' + where, detail: '提交方式是"询问"，你不在，等你回来说提交' }); } catch (e) { /* 记不了不影响 */ } }
           else if (plain === 'ask') todo.push('这一轮改过的文件还没提交：' + where + '。做完了一件完整的事（一项任务、一处修复）：先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说提交了再提交，只提交不 push。还没做完的先不问。');
         } else if (todo.length) todo.push('做完一件完整的事、验证过了就接着提交，不用等我说：' + how + '。验证没过、还没做完的先不提交。');
