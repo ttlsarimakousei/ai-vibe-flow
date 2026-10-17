@@ -576,7 +576,14 @@ function auditLog(kitDir, before, after) {
 function ideaStatus(kitDir) {
   const f = path.join(kitDir, 'lib', 'idea-mcp.js');
   if (!fs.existsSync(f)) return { status: 'unchecked', connections: [] };
-  try { delete require.cache[require.resolve(f)]; return require(f).status(path.dirname(kitDir)); } catch (e) { return { status: 'check-error', connections: [] }; }
+  try {
+    delete require.cache[require.resolve(f)];
+    const m = require(f);
+    const st = m.status(path.dirname(kitDir));
+    // brave mode 开没开：开着才用 IDEA 的运行配置起服务（lib/idea-run.js）。老版本没有 configs 的不报
+    if (typeof m.configs === 'function') { const c = m.configs(path.dirname(kitDir)).filter((x) => x.enabled).sort((a, b) => (b.at || 0) - (a.at || 0))[0]; st.brave = !!(c && c.brave); }
+    return st;
+  } catch (e) { return { status: 'check-error', connections: [] }; }
 }
 /** 查库、查 redis 的工具用得怎么样：{ stats, hints }。老版本没有的返回空的 */
 function toolUsage(kitDir) {

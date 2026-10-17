@@ -249,7 +249,7 @@
       <ul class="g-list">
         <li><b>过程文件放 .vibe/tmp</b>：备份（.bak、.orig、"xx - 副本"、backup 目录）、日志、临时脚本不许落在项目里，也不许 git add；放 .vibe/tmp/&lt;事由&gt;/。变更没归档前它的过程文件留着，归档之后套件清掉；多少天没动就清，在"套件开关"里设。</li>
         <li><b>代码之外的产出先问位置</b>：新建 DDL、说明文档、报告这类文件，放哪要你定过；没定过就拦下让它先问你，定了记进项目说明的"产出位置"，以后同类不再问。自动模式下你不在，先放 .vibe/pending/，报告里列出来等你定。</li>
-        <li><b>起服务走 devserver</b>：直接敲 mvn spring-boot:run、npm run dev 会被拦下，要经过套件的 devserver.js。同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000，不和你在 IDE 里跑着的冲突。</li>
+        <li><b>起服务走 devserver</b>：直接敲 mvn spring-boot:run、npm run dev 会被拦下，要经过套件的 devserver.js。同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000，不和你在 IDE 里跑着的冲突。IDEA 连着、开了 brave mode 时，用你在 IDEA 里配好的运行配置起（调试方式），改过代码下次起会在 IDEA 里重启；你点 Run 起着的，代码改过就结束它重起。</li>
         <li><b>推送、发内网要你亲口说</b>：git push、把安装包发到内网 GitLab，都要你当场明确说；同意推送不代表同意发内网。自动模式也不能代替。</li>
         <li><b>令牌和口令模型读不到</b>：GitLab 令牌、模型的 key、数据库和 redis 的口令，模型读不到、不进命令行、不进日志，也不许提交。</li>
         <li><b>需求文档一份一份写</b>：上一份审完（人工是你看过、说了写下一份）才写下一份。</li>
@@ -368,9 +368,9 @@
     </div>
     <div class="card" id="sec-idea">
       <div class="row between"><h2>IDEA MCP</h2><button class="btn" id="ideaCheck">重新检测</button></div>
-      <div class="opt"><div><b>自动接上 IDEA</b><p>安装、更新时检查；会话触发后台检查，五分钟内不重复。只接本机已开启的 IDEA MCP，保留你已有的配置。</p></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_ideaMcp"><i></i></label></div></div>
-      <p class="hint">IDEA 2025.2 或更新版本：在设置的 Tools / MCP Server 开启并应用。登记后重新打开 Claude Code，用 /mcp 查看。这里不会下载 IDEA、改变 IDE 的授权选项。</p>
-      <p id="ideaStatus" class="hint">还没检查</p><div id="ideaConnections"></div><p class="msg" id="ideaMsg"></p>
+      <div class="opt"><div><b>自动接上 IDEA</b><p>安装、更新时检查；会话触发后台检查，五分钟内不重复。只接本机已开启的 IDEA MCP，保留你已有的配置。接上、又开了 brave mode 的，起服务用你在 IDEA 里配好的运行配置，改完代码自动在 IDEA 里重启。</p></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_ideaMcp"><i></i></label></div></div>
+      <p class="hint">IDEA 2025.2 或更新版本：在设置的 Tools / MCP Server 开启并应用。登记后重新打开 Claude Code，用 /mcp 查看。这里不会下载 IDEA、改变 IDE 的授权选项。要用 IDEA 的运行配置起服务，在同一页勾上"不经确认运行命令和运行配置"（brave mode）：不勾的话 IDEA 每次都要你点允许，套件就照旧用命令起。这个开关管所有连上 IDEA 的 MCP 客户端，开不开你定。</p>
+      <p id="ideaStatus" class="hint">还没检查</p><p id="ideaBrave" class="hint"></p><div id="ideaConnections"></div><p class="msg" id="ideaMsg"></p>
     </div>
   </section>
 
@@ -1200,6 +1200,7 @@
   function renderIdea(s) {
     const names = { unchecked: '还没检查', ready: 'IDEA MCP 已核验，登记后需要重新打开 Claude Code，用 /mcp 查看', off: '自动接入已关掉，只收回套件加的登记', 'no-idea': '没找到 IDEA 的 MCP 设置，打开并开启服务后再检测', 'not-enabled': 'IDEA MCP 尚未开启，请在 IDEA 设置里开启并应用', 'not-running': '没有找到正在运行的 IDEA MCP，打开 IDEA 后再检测', 'user-changed': '你改过或删过登记，自动补登记已暂停；关掉再打开此开关可恢复', 'config-error': 'Claude Code 用户配置无法解析，这次没有修改', 'config-busy': 'Claude Code 用户配置正在变化，稍后再试', 'check-error': '检查没有完成，稍后再试', 'name-conflict': '登记名已被占用，原配置保留' };
     $('ideaStatus').textContent = names[s && s.status] || '还没检查';
+    $('ideaBrave').textContent = s && s.status === 'ready' && typeof s.brave === 'boolean' ? (s.brave ? 'brave mode 开着：起服务用 IDEA 的运行配置，改完代码自动在 IDEA 里重启' : 'brave mode 没开：起服务照旧用命令（要用 IDEA 的运行配置，见上面的说明）') : '';
     $('ideaConnections').innerHTML = ((s && s.connections) || []).map((c) => '<p class="mono">' + esc(c.name) + ' · ' + esc(c.url) + ' · ' + esc(c.version) + ' · ' + (c.managed ? '套件登记' : '已有配置') + '</p>').join('');
   }
   $('ideaCheck').onclick = async () => {
