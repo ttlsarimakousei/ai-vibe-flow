@@ -1,6 +1,6 @@
 # 发版
 
-每批修改完成都必须执行本页流程：全量回归通过、打包、从最近两版压缩包验收安装与自动更新、单独提交 `release` 并打版本标签。不能在修复提交完成后省略发版。只有 push 等仓库主人确认，已有明确推送授权时直接推送。
+什么时候走本页：一批修改做完（改代码、写测试、跑过相关测试、提交）之后，问仓库主人要不要打包发版；他说发版才走，不说不走（2026-10-17 用户定的）。一旦走，就要走完：全量回归通过、打包、从最近两版压缩包验收安装与自动更新、单独提交 `release` 并打版本标签，不能只走一半。只有 push 等仓库主人确认，已有明确推送授权时直接推送。
 
 ## 版本号
 
@@ -34,6 +34,23 @@
 
    要求：全过、桌面上没有多出窗口、临时目录没留下东西。
 2. `dev/diff-hooks.js` 里这一版有意改的用例，`since` 先写 `NEXT`。
+
+## 升级自带的 OpenSpec（要升的时候）
+
+安装包带一份 OpenSpec（`vibe-kit/kit/openspec/`，用户 2026-10-17 定的集成，打包时用当时的最新版）。升级在全量回归之前做，回归要用新的这份跑：
+
+```bash
+npm view @fission-ai/openspec version
+```
+
+```bash
+npm install --prefix vibe-kit/kit/openspec @fission-ai/openspec@<版本号> --omit=dev --ignore-scripts --no-audit --no-fund
+```
+
+然后把 `vibe-kit/kit/openspec/package.json` 里的版本钉成确切的版本号（不留 `^`），核对三件事：
+- 新版要求的 Node 版本（`node_modules/@fission-ai/openspec/package.json` 的 `engines`）。比以前高的，在《更新说明》里写明：Node 不够的电脑会退回用自己装的。
+- 在临时目录里用新版建一个变更、写好四份产物，拿 1.2.0 跑 `list`、`status`、`validate`、`archive`，确认同事的旧版还认（做法见 2026-10-17 的记录：`.vibe/tmp/openspec-probe` 里的探测脚本思路）。
+- 新版生成的命令里调用命令行的写法没变（`openspec <子命令>` 开头），`lib/openspec.js` 的改写还能认出来。
 
 ## 打包
 

@@ -149,6 +149,14 @@ node dev/probes/cc-system-message.js 2.1.289
 ```
 
 ```bash
+node dev/probes/cc-updated-input.js 2.1.289
+```
+
+`cc-updated-input.js`：PreToolUse 钩子用 `updatedInput` 改写 Bash 命令，实际执行的是不是改写后的（套件集成 OpenSpec 靠它，2026-10-17 三版都实测通过）。
+
+测试支架和自带的 OpenSpec（2026-10-17 起）：`H.makeHome` 拷套件时不带任何 `node_modules`，所以假用户目录里默认没有自带的 OpenSpec，钩子不改写 `openspec` 命令（和 Node 版本不够的电脑一样），以前的测试不受影响；要测 OpenSpec 的，第四个参数给 `{ openspec: true }`，拷一份真的进去（约 16MB）。`H.makePackage` 和 `H.stubDeps(dir)` 给安装包放的 OpenSpec 是占位，要求 Node 99，安装器照常装完、只说一句"没装自带的 OpenSpec"。
+
+```bash
 node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.289\node_modules\@anthropic-ai\claude-code\bin\claude.exe" --rt auto
 ```
 

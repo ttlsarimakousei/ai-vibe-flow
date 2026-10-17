@@ -24,9 +24,10 @@ git config --global core.longpaths true
 2. 改代码。守 [conventions.md](conventions.md) 和 [AGENTS.md](../AGENTS.md) 里的硬规矩。
 3. 写测试：加进现有的测试文件，或者新建一个 `dev/test-<批次或主题>.js`，加进 `dev/run-all.js`。写完拿上一版的套件跑一遍，确认新测试在旧版上会失败。
 4. 改了拦截的说法、钩子的输出：`dev/diff-hooks.js` 里加"有意改的"用例，`since` 写 `NEXT`。
-5. 跑相关的测试，再跑 `node dev/run-all.js`。发版前跑全量（见 [release.md](release.md)）。
+5. 跑和这次改动相关的测试（`node dev/test-xxx.js`，或 `node dev/run-all.js --only a.js,b.js`）。不跑全量。
 6. 改文档：`vibe-kit/README.md` 或 `vibe-kit/手册/` 里对应的附录、`vibe-kit/更新说明.md`（最上面那一节，版本号写 `@@VER@@`）、`dev/README.md`、`docs/` 里对应的那篇。
 7. 提交：`类型: 内容`，只 add 这次改的文件。
+8. 问仓库主人要不要打包发版。他说发版，才按 [release.md](release.md) 跑全量回归、打包、验收、发版；不说就停在这里（2026-10-17 用户定的：修问题不自动带上全量回归和发版）。
 
 ## 手工试一个脚本
 

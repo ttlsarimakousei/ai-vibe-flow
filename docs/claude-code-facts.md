@@ -101,3 +101,7 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 2.1.120、2.1.259、2.1.289 均用真实 CLI 加假网关验证：成功 Bash 的 PostToolUse 包含 tool_use_id，tool_response 为 stdout、stderr、interrupted 等字段；失败 Bash 走 PostToolUseFailure，顶层带 error。没有 exit_code 时不能仅凭它缺失判失败，失败事件与后台运行标记单独排除。
 
 官方完成钩子的 updatedToolOutput 可替换送入模型的结果，旧 MCP 形式为 updatedMCPToolOutput；替换不撤回文件或外部遥测。IDEA 实际替换支持需按部署的 CLI 与 IDE 核对，不能把当前文档当作旧版实测。来源：[Claude Code 钩子文档](https://code.claude.com/docs/en/hooks)。
+
+## PreToolUse 的 updatedInput 实测，2026-10-17
+
+`dev/probes/cc-updated-input.js` 在 2.1.120、2.1.259、2.1.289 上都实测：PreToolUse 钩子输出 `hookSpecificOutput.updatedInput`（整个替换 tool_input），Bash 实际执行的是改写后的命令，不需要同时给 `permissionDecision`。`-p` 模式下只允许原命令（`Bash(echo ORIGINAL)`）时，改写后的命令照样执行了。官方文档说权限规则按改写后的输入查，deny 和 ask 规则不管钩子返回什么都照查。套件集成 OpenSpec 靠这个：模型照常敲 `openspec …`，钩子改成调用套件自带的那份。
