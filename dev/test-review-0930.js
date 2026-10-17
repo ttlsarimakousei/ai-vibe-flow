@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 
-const h = H.makeHome('review0930', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', vibeTidy: false, specGate: true });
+const h = H.makeHome('review0930', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', vibeTidy: false, specGate: true });
 const S = require(path.join(h.kit, 'lib', 'session.js'));
 const F = require(path.join(h.kit, 'lib', 'feedback.js'));
 const R = require(path.join(h.kit, 'lib', 'report.js'));

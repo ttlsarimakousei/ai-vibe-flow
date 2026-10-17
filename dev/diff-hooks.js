@@ -115,7 +115,7 @@ add('IDEA MCP 普通符号查询', 'guard-commit', idea('search_symbol', () => (
 
 // ---------- 改文件 ----------
 add('反馈1007：env -C 跑套件场景脚本', 'guard-commit', cmd('env -C "<项目>" node "$HOME/.claude/vibe-kit/page/scenario-run.js" .vibe/scenarios/check.json --base http://127.0.0.1:34907'), /放行，没有输出/, V1010);
-add('反馈1007：否定套件问题不报反馈', 'verify-gate', stop(() => [H.tr.user('查一下'), H.tr.say('不是 vibe-kit 套件的问题。')], { last_assistant_message: '不是 vibe-kit 套件的问题。' }), /放行，没有输出/, V1010, { autoVerify: false, autoCrossReview: false, autoCommit: 'off', vibeTidy: false, lessons: 'off' });
+add('反馈1007：否定套件问题不报反馈', 'verify-gate', stop(() => [H.tr.user('查一下'), H.tr.say('不是 vibe-kit 套件的问题。')], { last_assistant_message: '不是 vibe-kit 套件的问题。' }), /放行，没有输出/, V1010, { autoVerify: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', vibeTidy: false, lessons: 'off' });
 add('反馈1007：全自动时用户当场要求 push', 'guard-commit', (kit) => {
   const r = cmd('git push origin main')(kit);
   r.j.session_id = 'feedback1007-push';
@@ -290,7 +290,7 @@ add('提问框', 'guard-ask', (kit) => { const proj = project(kit); return { pro
 
 // 1012：行为与提示的有意变更，从 V1012 起生效。
 add('1012：根目录产出选项', 'guard-output', (kit) => { const proj=project(kit); const j=base(proj,kit,{tool_name:'Write',tool_input:{file_path:path.join(proj,'工时.csv'),content:'工时'}}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'root-answer.jsonl'),[H.tr.user('生成表格'),H.tr.ran('AskUserQuestion',{},'Your questions have been answered: "产出放哪？"="仓库根目录 工时.csv"')]); return {proj,j}; }, /放行，没有输出/, V1012);
-add('1012：交付新文件可以等用户提交', 'verify-gate', (kit) => { const proj=project(kit); const file=path.join(proj,'交付.xls'); H.write(file,'交付'); const j=base(proj,kit,{hook_event_name:'Stop',last_assistant_message:'交付完成，保留文件等待用户提交。'}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'deliver.jsonl'),[H.tr.user('生成交付表格'),H.tr.ran('Write',{file_path:file,content:'交付'})]);return {proj,j};}, /新文件尚未提交/, V1012, {autoCommit:'off',autoVerify:false,autoSeePage:false,autoCrossReview:false,specGate:false,lessons:'off',vibeTidy:true});
+add('1012：交付新文件可以等用户提交', 'verify-gate', (kit) => { const proj=project(kit); const file=path.join(proj,'交付.xls'); H.write(file,'交付'); const j=base(proj,kit,{hook_event_name:'Stop',last_assistant_message:'交付完成，保留文件等待用户提交。'}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'deliver.jsonl'),[H.tr.user('生成交付表格'),H.tr.ran('Write',{file_path:file,content:'交付'})]);return {proj,j};}, /新文件尚未提交/, V1012, {autoCommit:'off', commitMode: 'off',autoVerify:false,autoSeePage:false,autoCrossReview:false,specGate:false,lessons:'off',vibeTidy:true});
 add('1012：截断推送预览当场提示', 'after-tool', (kit) => {const proj=project(kit);return {proj,j:base(proj,kit,{hook_event_name:'PostToolUse',tool_name:'Bash',tool_input:{command:'node "'+path.join(kit.kit,'tools/merge-push.js').replace(/\\/g,'/')+'" plan --dir "'+proj.replace(/\\/g,'/')+'" | tail -5'},tool_response:{stdout:'截断内容',exit_code:0}})};}, /预览未登记/, V1012);
 
 // 1013：普通推送策略和文案、确认目标、修订入口、反馈正文与用户审查决定。
@@ -320,6 +320,23 @@ for (const c of cases) {
   // #112 起按暂存的产物认提案提交：真实的提案提交会暂存产物，只看提交信息的输入已不现实。
   if (c.name === '提交：提案要单独确认') { const build = c.build; c.build = (kit) => { const r = build(kit); const f = path.join(r.proj, 'openspec/changes/add-export/proposal.md'); fs.appendFileSync(f, '\n- 导出格式为 xlsx\n'); H.git(r.proj, ['add', 'openspec/changes/add-export/proposal.md']); return r; }; c.since = V1017; }
 }
+
+// 2026-10-17（用户定的）：提交方式关 / 询问 / 自动三档，默认询问，人工和自动、走不走 OpenSpec 都按它；tasks.md 只写实现（不写"验："，
+// 测试、审查、验收写进 design.md 的"## 验收用例"）；需求文档一份一份来（人工：上一份写完、用户说过话才写下一份）。
+// 写规格的这几个用例测的是写法检查：让 proposal 是早先写好的、用户之后说过话，一份一份那一关不挡它们
+const shownBefore = (c, rel) => { const build = c.build; c.build = (kit) => { const r = build(kit); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(path.join(r.proj, rel), old, old); return r; }; };
+const ASK_COMMIT = ['命令：git commit -m "feat: 新增导出"', '命令：git commit -m "fix: 导出漏了表头（源自 add-export 2.3）"', '命令：git add src/main/java/com/x/A.java && git commit -m "feat: 新增导出"', 'PowerShell：git commit -m "feat: 新增导出"; if ($?) { git push }', '提交：普通文档修订标题不能免确认'];
+for (const c of cases) {
+  if (['规格缺场景', '规格写得对', '规格的需求没放在增量标题下面'].includes(c.name)) shownBefore(c, 'openspec/changes/add-export/proposal.md');
+  if (ASK_COMMIT.includes(c.name)) { c.expect = /提交方式是\\"询问\\"[\s\S]*用提问框问用户/; c.since = NEXT; }
+  if (c.name === '收工：改了、验了、没提交') { c.expect = /这一轮改过的文件还没提交[\s\S]*用提问框问我提不提交/; c.since = NEXT; }
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /group-1 已完成。用 Ask 问是否审查[\s\S]*用提问框问我提不提交/; c.since = NEXT; }
+  if (c.name === '任务太笼统、没写验法') { c.expect = /^(?![\s\S]*没写怎么验)[\s\S]*\\"完善\\"太笼统/; c.since = NEXT; }
+  if (c.name === '任务里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*不写\\"验：\\"/; c.since = NEXT; }
+  if (c.name === '设计里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*\\"## 验收用例\\"一节/; c.since = NEXT; }
+}
+add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, NEXT);
+add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, NEXT);
 
 let same = 0;
 let changed = 0;

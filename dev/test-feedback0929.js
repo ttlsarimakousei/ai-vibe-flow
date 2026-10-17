@@ -213,8 +213,8 @@ const scen = (name) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/vibe-kit
   // 验证之后又改了这项任务的代码：要重新验
   H.transcript(tfile, [H.tr.user('继续，测试'), javac, scen('weakpwd_export'), editB]);
   const r3 = tickOf('2.1');
-  H.ok('验证之后又改了这项任务的代码：拦', r3 && r3.decision === 'block' && /改完 B\.java 之后还没看到它成功跑过/.test(H.reasonOf(r3)), H.reasonOf(r3));
-  H.ok('提示里说了验不了的部分怎么写', /本次不做（原因）/.test(H.reasonOf(r3)), H.reasonOf(r3));
+  // 2026-10-17 起打勾不查验法（用户定的：任务里不写"验："）：验证之后又改了代码、验证失败、什么都没跑，都照样能打勾
+  H.ok('验证之后又改了这项任务的代码：打勾不查验法，放行', r3 === null, H.reasonOf(r3));
   // 改的是别的任务的文件：不影响这一项
   H.transcript(tfile, [H.tr.user('继续，测试'), editB, scen('weakpwd_export'), editA]);
   const r4 = tickOf('2.1');
@@ -222,11 +222,11 @@ const scen = (name) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/vibe-kit
   // 命令失败不算
   H.transcript(tfile, [H.tr.user('继续，测试'), editB, H.tr.ran('Bash', { command: 'node x/scenario-run.js .vibe/scenarios/weakpwd_export.json' }, 'RESULT {"ok":false}', true)]);
   const r5 = tickOf('2.1');
-  H.ok('验证命令失败了：拦', r5 && r5.decision === 'block', H.reasonOf(r5));
+  H.ok('验证命令失败了：打勾不查验法，放行', r5 === null, H.reasonOf(r5));
   // 什么都没跑
   H.transcript(tfile, [H.tr.user('继续，测试'), editB, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const r6 = tickOf('2.1');
-  H.ok('什么验证都没跑：拦', r6 && r6.decision === 'block' && /拦截编号/.test(H.reasonOf(r6)), H.reasonOf(r6));
+  H.ok('什么验证都没跑：打勾不查验法，放行', r6 === null, H.reasonOf(r6));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -244,7 +244,8 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   H.transcript(tfile, [H.tr.user('全自动做完'), editB, javac]);
   const r = tickOf('3.2', sid);
   const id = blockId(r);
-  H.ok('打勾被拦，带拦截编号', r && r.decision === 'block' && !!id, H.reasonOf(r));
+  // 2026-10-17 起打勾不查验法，这里拦的是"先完成上一整组"（1.3 还没做），照样能申请放行
+  H.ok('打勾被拦，带拦截编号', r && r.decision === 'block' && !!id && /先完成上一整组/.test(H.reasonOf(r)), H.reasonOf(r));
   H.ok('全自动模式的提示：不要停下等，怎么申请放行写在提示里', /全自动模式/.test(H.reasonOf(r)) && /不要停下等我/.test(H.reasonOf(r)) && new RegExp('feedback\\.js" bypass ' + id).test(H.reasonOf(r)), H.reasonOf(r));
   const why = '对照场景要先执行 01c 脚本备号，改库不可逆要用户确认；javac 快检 UserController.java 已通过';
   const b = bypass(id, why);
@@ -264,13 +265,13 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   const r3 = tickOf('4.3', sid);
   H.ok('全自动模式：同一个文件 30 分钟内不用再申请', r3 === null, H.reasonOf(r3));
   // 别的文件不能用这张通行证
-  const other = mk('other-change', '- [ ] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n');
+  const other = mk('other-change', '- [ ] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n- [ ] 2.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n');
   fs.writeFileSync(path.join(h.kit, 'state', 'reviewed-proposal.json'), JSON.stringify(Object.assign(state('reviewed-proposal'), { [S.normKey(other)]: { done: true, at: Date.now() - 3600000, born: S.changeBorn(other), issues: 0 } })));
-  const r4 = edit(path.join(other, 'tasks.md'), '- [ ] 1.1', '- [x] 1.1', sid);
+  const r4 = edit(path.join(other, 'tasks.md'), '- [ ] 2.1', '- [x] 2.1', sid);
   H.ok('别的文件用不了这张通行证', r4 && r4.decision === 'block', H.reasonOf(r4));
   // 确信是套件判断错了：--bug，记成问题
   const id4 = blockId(r4);
-  const b4 = bypass(id4, 'mvn -q -o compile 刚跑过并且成功了（输出 BUILD SUCCESS），钩子还是说没跑过', ['--bug']);
+  const b4 = bypass(id4, '2.1 和 1.1 改的是同一个文件、互不依赖，钩子要求先做完第 1 组拦错了', ['--bug']);
   H.ok('加了 --bug：记成问题，也放行', b4.code === 0 && /已记下问题 F\d{8}-\d+/.test(b4.out) && records().length === n0 + 1, b4.out + b4.err);
   // 拿问题反馈的编号当拦截编号
   const b5 = bypass('F20260929-006', '想修状态文件，拿问题反馈的编号来申请放行，看看会怎么说');
@@ -297,14 +298,16 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   const sid2 = 's-ask';
   H.transcript(tfile, [H.tr.user('继续，测试'), editA, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   fs.writeFileSync(path.join(other, 'tasks.md'), '- [ ] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/main/java/A.java；验：`mvn -q -o compile`\n');
-  const q1 = edit(path.join(other, 'tasks.md'), '- [ ] 1.1', '- [x] 1.1', sid2);
+  // 2026-10-17 起人工模式打勾什么都不查：换成新写一条太笼统的任务（写法检查照样能申请放行）
+  const vague = (line) => edit(path.join(other, 'tasks.md'), '- [ ] 1.2 改 src/main/java/A.java', line + '\n- [ ] 1.2 改 src/main/java/A.java', sid2);
+  const q1 = vague('- [ ] 1.3 完善');
   H.ok('有人在：提示还是原来那句', q1 && /确信是套件拦错了、任务因此走不下去，才按约定申请放行/.test(H.reasonOf(q1)), H.reasonOf(q1));
-  const bq = bypass(blockId(q1), 'mvn -q -o compile 刚跑过并且成功了，钩子说没跑过，查了会话记录确实有这条命令');
+  const bq = bypass(blockId(q1), '这一条是占位，下一轮细化成具体文件，先写进清单免得漏掉，钩子拦得太早');
   H.ok('有人在：申请放行会弹确认框', bq.code === 0 && /会弹确认框/.test(bq.out), bq.out);
   H.transcript(tfile, [H.tr.user('继续，测试'), editA, ranBypass(blockId(q1), bq.out)]);
-  const q2 = edit(path.join(other, 'tasks.md'), '- [ ] 1.1', '- [x] 1.1', sid2);
+  const q2 = vague('- [ ] 1.3 完善');
   H.ok('有人在：再做时弹确认框', q2 && q2.hookSpecificOutput && q2.hookSpecificOutput.permissionDecision === 'ask', q2);
-  const q3 = edit(path.join(other, 'tasks.md'), '- [ ] 1.2', '- [x] 1.2', sid2);
+  const q3 = vague('- [ ] 1.4 优化');
   H.ok('有人在：通行证只用一次', q3 && q3.decision === 'block', H.reasonOf(q3));
 }
 
@@ -315,7 +318,7 @@ H.section('不是问题的不记成问题（F20260929-007、F20260928-006 / -008
   dropState('block-stats');
   H.transcript(tfile, [H.tr.user('继续，测试'), editB, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const other = path.join(changes, 'other-change', 'tasks.md');
-  for (let i = 0; i < 4; i++) edit(other, '- [ ] 1.2', '- [x] 1.2', 's-stuck');
+  for (let i = 0; i < 4; i++) edit(other, '- [ ] 1.2 改 src/main/java/A.java', '- [ ] 1.5 完善\n- [ ] 1.2 改 src/main/java/A.java', 's-stuck');
   H.ok('反馈原样：同一条理由拦了 4 次，不记成问题', records().length === n0, records());
   const stats = F.blockStats(5);
   H.ok('次数记在统计里', stats.length === 1 && stats[0].hook === 'guard-spec' && stats[0].count === 4, stats);
@@ -373,19 +376,19 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   H.ok('整仓 add：照样拦，不给编号，不让它等人', all && all.decision === 'block' && /不要停下等我/.test(H.reasonOf(all)) && !/拦截编号/.test(H.reasonOf(all)), H.reasonOf(all));
   const items = R.stateOf({ session_id: sid }).items;
   H.ok('报告里记了：想 push、想问的问题和选项、没让改的文件、没让跑的命令', items.some((x) => x.kind === 'hand' && /git push/.test(x.title)) && !items.some(x => x.kind === 'ask') && items.some((x) => x.kind === 'hand' && /review-rounds\.json/.test(x.title)) && items.some((x) => x.kind === 'hand' && /git add -A/.test(x.title)), items);
-  // 提交里像有密码：不弹框，放行，记进报告
+  // 2026-10-17 起提交不再查像密码的内容（用户定的）：放行，不记报告
   H.write(path.join(proj, 'src/main/resources/app.properties'), 'db.password=Abc12345xyz\n');
   H.transcript(tfile, [H.tr.user('改好了，提交')]);
   const c = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git add src/main/resources/app.properties && git commit -m "feat: 加配置"' } }));
   H.ok('提交里像有密码：不弹框，放行', c === null, c);
-  H.ok('报告里记了，密码遮住了', R.stateOf({ session_id: sid }).items.some((x) => x.kind === 'secret' && /app\.properties/.test(x.detail) && !/Abc12345xyz/.test(x.detail)), R.stateOf({ session_id: sid }).items);
+  H.ok('报告里不再记像密码的内容', !R.stateOf({ session_id: sid }).items.some((x) => x.kind === 'secret'), R.stateOf({ session_id: sid }).items);
   // 有人在的时候照旧弹框（1008 起不走 OpenSpec 的提交要用户点头：会话记录里用户最后一句说了提交）
   H.setConfig(h, { autoMode: false });
   H.transcript(tfile, [H.tr.user('改好了，提交')]);
   const push2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git push' } }));
   H.ok('有人在：push 先要求预览', push2 && push2.decision === 'block' && /推送预览/.test(H.reasonOf(push2)), push2);
   const c2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git add src/main/resources/app.properties && git commit -m "feat: 加配置"' } }));
-  H.ok('有人在：提交里像有密码弹确认框', c2 && c2.hookSpecificOutput && c2.hookSpecificOutput.permissionDecision === 'ask', c2);
+  H.ok('有人在：提交里像有密码也不再弹框（用户说了提交）', c2 === null, c2);
   H.ok('有人在：提问框照常能用', H.hook(h, 'guard-ask', Object.assign(base('s-man'), { tool_name: 'AskUserQuestion', tool_input: { questions: [] } })) === null);
 }
 
@@ -415,7 +418,7 @@ H.section('收工检查：改了产物有没有记修订，不再只看会话记
   const revs = path.join(chg, 'revisions.md');
   const stop = (entries, said, active) => H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tfile, entries), stop_hook_active: !!active, last_assistant_message: said || '改好了，没验证：这一轮只改了文档' });
   const snap = () => H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', transcript_path: tfile, prompt: '看一下进度' });
-  H.setConfig(h, { autoMode: false, autoCommit: 'off', autoCrossReview: false, lessons: 'off', vibeTidy: false });
+  H.setConfig(h, { autoMode: false, autoCommit: 'off', commitMode: 'off', autoCrossReview: false, lessons: 'off', vibeTidy: false });
   H.transcript(tfile, [H.tr.user('看一下进度')]);
   snap();
   // 几个小时之前：改了 tasks.md 的验法，修订记录是用命令追加的（会话记录里看不到"改过 revisions.md"）
@@ -445,7 +448,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
 {
   for (const n of fs.readdirSync(changes)) if (n !== 'archive') fs.rmSync(path.join(changes, n), { recursive: true, force: true });
   for (const n of ['reviewed', 'reviewed-proposal', 'review-rounds', 'review-nudged', 'task-ticks']) dropState(n);
-  H.setConfig(h, { autoMode: true, kitBypass: 'ask', autoCommit: 'off', autoCrossReview: true, lessons: 'off', vibeTidy: false, reviewLoop: false, autoVerify: false, autoSeePage: false });
+  H.setConfig(h, { autoMode: true, kitBypass: 'ask', autoCommit: 'off', commitMode: 'off', autoCrossReview: true, lessons: 'off', vibeTidy: false, reviewLoop: false, autoVerify: false, autoSeePage: false });
   const sid = 's-report';
   const chg = mk('miping', ['- [x] 3.1 移除审核按钮：src/main/java/A.java；验：`mvn -q -o compile`',
     '- [ ] 3.2 审核接口角色：src/main/java/B.java；验：javac 快检；对照场景 `checklist_role_compare.json`',
@@ -522,7 +525,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
 // ---------------------------------------------------------------------------------------------
 H.section('归档之后主规格跟上了没有；规格增量要放在认得的标题下面（F20260929-014）');
 {
-  H.setConfig(h, { autoMode: false, autoCommit: 'off', autoCrossReview: false, lessons: 'off', vibeTidy: false, autoVerify: false });
+  H.setConfig(h, { autoMode: false, autoCommit: 'off', commitMode: 'off', autoCrossReview: false, lessons: 'off', vibeTidy: false, autoVerify: false });
   const sid = 's-spec';
   const arch = path.join(changes, 'archive', '2026-09-29-secret-level-compare-fix');
   const delta = ['## MODIFIED Requirements', '', '### Requirement: 密级比较', '系统 SHALL 按数值比较密级。', '', '#### Scenario: 低密看高密', '- WHEN 低密账号查高密记录', '- THEN 返回空', '', '## ADDED Requirements', '', '### Requirement: 密级为空', '系统 SHALL 把空密级当成最低。', '', '#### Scenario: 空密级', '- WHEN 记录的密级为空', '- THEN 所有人可见', ''].join('\n');

@@ -4,7 +4,7 @@
  *   产出不算流程      全自动开着、会话在流程里，说"帮我生成一个文件记一下""写一份接口文档"：这一轮不在流程里，放哪照常问，全自动不作数
  *   公共配置被盖掉    application.yml 里的库被 application-dev.yml 用同一个键换掉了：公共配置那一条不算开发库（redis 一样）
  *   自动挑端口        devserver --port auto：30000 到 39999，离 --avoid 的端口远，同一个服务每次同一个端口，{port} 和环境变量
- *   按阶段提交        autoCommit = phase：tasks.md 里同一个大编号的任务全打勾了才催提交
+ *   提交方式          2026-10-17 起关 / 询问 / 自动三档：自动做完一项就催提交，询问在自动模式下记进报告
  * 用法：node dev/test-1007.js [端口，默认 18757]
  */
 const fs = require('fs');
@@ -133,10 +133,10 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('按阶段提交：tasks.md 里同一个大编号的任务全打勾了才催提交');
+  H.section('提交方式（2026-10-17 起关 / 询问 / 自动三档）：自动做完一项就提交，询问在自动模式下记进报告');
   {
-    const ph = H.makeHome('t1007-phase', null, { autoApply: true, autoCommit: 'phase', autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false });
-    const pp = H.makeRepo(path.join(ph.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/main/java/A.java': 'class A {}\n', 'src/main/java/B.java': 'class B {}\n', 'openspec/changes/add-x/tasks.md': ['- [ ] 1.1 改 src/main/java/A.java；验：mvn -q compile', '- [ ] 1.2 改 src/main/java/B.java；验：mvn -q compile', '- [ ] 2.1 改 src/main/java/A.java；验：mvn -q compile', ''].join('\n') });
+    const ph = H.makeHome('t1007-phase', null, { autoApply: true, commitMode: 'auto', autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false });
+    const pp = H.makeRepo(path.join(ph.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/main/java/A.java': 'class A {}\n', 'src/main/java/B.java': 'class B {}\n', 'openspec/changes/add-x/tasks.md': ['- [ ] 1.1 改 src/main/java/A.java', '- [ ] 1.2 改 src/main/java/B.java', '- [ ] 2.1 改 src/main/java/A.java', '- [ ] 2.2 改 src/main/java/B.java', ''].join('\n') });
     const chg = path.join(pp, 'openspec', 'changes', 'add-x');
     const tasks = path.join(chg, 'tasks.md');
     const tfile = path.join(ph.root, 'p.jsonl');
@@ -152,40 +152,36 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     const e1 = edit('src/main/java/A.java', 'class A { int a; }\n');
     const t11 = tick('1.1');
     const r1 = stop([H.tr.user('做 1.1'), e1, t11, H.tr.say('1.1 做完了')]);
-    H.ok('1.x 还没做完（1.2 没打勾）：改了文件也不催提交', !/还没提交/.test(H.reasonOf(r1)), H.reasonOf(r1));
+    H.ok('自动：做完一项、改了文件就催提交，一件事一次', /还没提交|接着提交/.test(H.reasonOf(r1)) && /一件事一次提交/.test(H.reasonOf(r1)), H.reasonOf(r1));
     const e2 = edit('src/main/java/B.java', 'class B { int b; }\n');
     const t12 = tick('1.2');
     H.reviewPoints(ph, chg);
     const r2 = stop([H.tr.user('做 1.2'), e1, t11, e2, t12, H.tr.say('1.2 做完了')]);
-    H.ok('1.x 全打勾了：催提交，说的是"一个阶段一次提交"', !!r2 && r2.decision === 'block' && /还没提交/.test(H.reasonOf(r2)) && /一个阶段（tasks\.md 里同一个大编号的任务）一次提交/.test(H.reasonOf(r2)), H.reasonOf(r2));
+    H.ok('自动：一组做完、审过了也催提交', !!r2 && r2.decision === 'block' && /还没提交|接着提交/.test(H.reasonOf(r2)), H.reasonOf(r2));
     H.git(pp, ['add', 'src/main/java/A.java', 'src/main/java/B.java', 'openspec/changes/add-x/tasks.md']);
-    H.git(pp, ['commit', '-q', '-m', 'feat: 第一阶段']);
+    H.git(pp, ['commit', '-q', '-m', 'feat: 第一组']);
     const r3 = stop([H.tr.user('做 1.2'), e1, t11, e2, t12, H.tr.say('提交了')]);
-    H.ok('提交之后再收工：不催', !/还没提交/.test(H.reasonOf(r3)), H.reasonOf(r3));
+    H.ok('提交之后再收工：不催', !/还没提交|接着提交/.test(H.reasonOf(r3)), H.reasonOf(r3));
     await H.sleep(1200);
+    // 询问：自动模式下用户不在，不催模型提交，记进全自动报告等用户回来说（2.2 还没做：还在自动做的半路上；全做完、审过就是等用户验收，会直接问）
+    H.setConfig(ph, { commitMode: 'ask' });
     const e3 = edit('src/main/java/A.java', 'class A { int a; int c; }\n');
     const t21 = tick('2.1');
     H.reviewPoints(ph, chg);
     const r4 = stop([H.tr.user('做 2.1'), e3, t21, H.tr.say('2.1 做完了')]);
-    H.ok('2.x 做完了（这个阶段只有一项）：催提交', !!r4 && r4.decision === 'block' && /还没提交/.test(H.reasonOf(r4)), H.reasonOf(r4));
-    // 对照：每项任务提交（默认）时，改了 A.java 没提交就催
-    H.setConfig(ph, { autoCommit: 'task' });
-    const again = [H.tr.user('再改一下'), edit('src/main/java/A.java', 'class A { int a; int c; int d; }\n'), H.tr.say('改好了')];
-    // A.java 审过之后又改了：旧审查结论失效，先复审 1.x，不能为了提交跳过审查（1014 起）
-    const r5 = stop(again);
-    H.ok('审过的文件又改了：先复审该组，不先催提交', !!r5 && /审查点 group-1/.test(H.reasonOf(r5)) && !/还没提交|接着提交/.test(H.reasonOf(r5)), H.reasonOf(r5));
-    H.reviewPoints(ph, chg);
-    const r6 = stop(again);
-    H.ok('对照：每项任务提交时，改了就催，说的是"一项任务一次提交"', !!r6 && /还没提交/.test(H.reasonOf(r6)) && /一项任务一次提交/.test(H.reasonOf(r6)), H.reasonOf(r6));
+    H.ok('询问：自动模式下不催模型提交', !/接着提交|现在提交/.test(H.reasonOf(r4)), H.reasonOf(r4));
+    const rep = H.read(path.join(ph.kit, 'state', sid + '-report.json')) || '';
+    H.ok('询问：要提交的记进了全自动报告', /改动还没提交/.test(rep), rep.slice(0, 300));
     const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
-    H.ok('开关存得进去', api.cleanConfig({ autoCommit: 'phase' }).autoCommit === 'phase' && /value="phase"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+    H.ok('提交方式存得进去，配置页上有三档', api.cleanConfig({ commitMode: 'auto' }).commitMode === 'auto' && api.cleanConfig({}).commitMode === 'ask' && /id="k_commitMode"[\s\S]{0,200}value="off"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+    H.setConfig(ph, { commitMode: 'auto' });
     const gen = H.node(ph, path.join(ph.kit, 'install.js'), ['--sync'], { cwd: ph.root, timeout: 60000 });
     const md2 = H.read(path.join(ph.cfg, 'CLAUDE.md')) || '';
-    H.ok('约定里写的是每项任务提交（开关改回 task 之后重新生成）', gen.code === 0 && /每项任务完成后按具体任务提交/.test(md2), md2.slice(0, 200));
-    H.setConfig(ph, { autoCommit: 'phase' });
+    H.ok('约定里写的是自动：做完一件事就提交', gen.code === 0 && /提交方式是"自动"/.test(md2), md2.slice(0, 200));
+    H.setConfig(ph, { commitMode: 'ask' });
     H.node(ph, path.join(ph.kit, 'install.js'), ['--sync'], { cwd: ph.root, timeout: 60000 });
     const md3 = H.read(path.join(ph.cfg, 'CLAUDE.md')) || '';
-    H.ok('开关是按阶段时，约定和提交节奏都写按阶段', /同一组 1\.x 完成并审修、自测后提交一次/.test(md3), md3.slice(0, 200));
+    H.ok('提交方式是询问时，约定写询问', /提交方式是"询问"/.test(md3), md3.slice(0, 200));
   }
 
   const wins = await watch.stop();

@@ -7,8 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 
-// 1008 起不走 OpenSpec 的提交要用户点头（开关 plainCommit）：这套测的是别的检查，开关选"直接提交"；点头那一道在 test-1008.js 里测
-const h = H.makeHome('guard0930', null, { plainCommit: 'auto' });
+// 1008 起不走 OpenSpec 的提交要用户点头：这套测的是别的检查，提交选"直接提交"（2026-10-17 起是提交方式"自动"，旧开关 plainCommit 留着给旧版跑）；点头那一道在 test-1008.js 里测
+const h = H.makeHome('guard0930', null, { plainCommit: 'auto', commitMode: 'auto' });
 const proj = H.makeRepo(path.join(h.work, 'proj'), { 'pom.xml': '<project/>\n', 'frontend/package.json': '{"name":"f"}\n', 'src/A.java': 'class A {}\n' });
 fs.writeFileSync(path.join(h.kit, 'secrets.json'), JSON.stringify({ gitlabToken: 'glpat-SECRET-MARKER-000001' }));
 fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });

@@ -2,7 +2,7 @@
 /* 18:27 问题单：时间预算、无关验证、提交误拦、审查分批失败与收工摘要；所有项目和请求都在测试支架内。 */
 const fs = require('fs'); const path = require('path'); const http = require('http'); const H = require('./lib/harness');
 (async () => {
-  const h = H.makeHome('feedback1014', process.argv[2], { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', specGate: false, lessons: 'off', vibeTidy: false });
+  const h = H.makeHome('feedback1014', process.argv[2], { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', specGate: false, lessons: 'off', vibeTidy: false });
   const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'openspec/changes/add-a/proposal.md': '审查材料：large.js\n', 'openspec/changes/add-a/tasks.md': '- [ ] 1.1 修改 a.js；验：node --check a.js\n' });
   const d = path.join(p, 'openspec/changes/add-a'); const S = require(path.join(h.kit, 'lib/session')); const I = require(path.join(h.kit, 'lib/invocation')); const E = require(path.join(h.kit, 'lib/evidence'));
   if (I.external) { let remaining; await I.run(async () => { await I.external(() => new Promise(r => setTimeout(r, 80))); remaining = I.remaining(100); }, { budgetMs: 60 }); H.ok('#105 外部等待不耗本机预算', remaining > 10); }

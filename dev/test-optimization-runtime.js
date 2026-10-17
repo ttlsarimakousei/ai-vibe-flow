@@ -9,7 +9,8 @@ const fs = require('fs'); const path = require('path'); const H = require('./lib
   const S = require(mod('session')); const W = require(mod('workflow')); const C = require(mod('invocation')); const ready = require(mod('readiness')); const B = require(mod('local-backup')); const Sessions = require(mod('work-sessions'));
   H.ok('就绪区分识别与实际验证', ready.inspect(p).identified.includes('Maven') && /未实际执行/.test(ready.inspect(p).verification));
   const first = ready.inspect(p); H.write(path.join(p, 'pom.xml'), '<project><version>2</version></project>'); H.ok('配置变化使就绪缓存失效', first.fingerprint !== ready.inspect(p).fingerprint);
-  H.ok('任务模板只列交付内容和验收标准', !/\[联合验证\]|\[代码审查\]|\[审查意见处理\]|\[用户验收\]/.test(W.taskTemplate()) && /验：/.test(W.taskTemplate()));
+  // 2026-10-17 起任务只写实现，不写"验："（用户定的），测试和验收写在 design.md 的验收用例里
+  H.ok('任务模板只列要做的实现，不写验法和测试、审查、验收任务', !/\[联合验证\]|\[代码审查\]|\[审查意见处理\]|\[用户验收\]/.test(W.taskTemplate()) && !/验：/.test(W.taskTemplate()));
   H.ok('普通任务提交计划明确先确认', /普通任务/.test(W.commitPlan(p).confirmation) && !W.commitPlan(p).effectiveAuto);
   H.write(path.join(p, '.vibe/run/backend.json'), JSON.stringify({ name: 'backend', pid: process.pid, port: 36781 }));
   H.ok('自测使用实际登记地址', W.selfTest(p).services.some((s) => s.url === 'http://127.0.0.1:36781' && s.owner === 'devserver'));

@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 
-const h = H.makeHome('auto0930', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', vibeTidy: false, specGate: false, lessons: 'on', lessonThreshold: 2 });
+const h = H.makeHome('auto0930', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', vibeTidy: false, specGate: false, lessons: 'on', lessonThreshold: 2 });
 const L = require(path.join(h.kit, 'lib', 'lessons.js'));
 const proj = H.makeRepo(path.join(h.work, 'proj'), {
   'pom.xml': '<project/>\n',

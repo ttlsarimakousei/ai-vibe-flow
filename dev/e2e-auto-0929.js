@@ -149,7 +149,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   const watch = await H.watchWindows('e2e-auto-win');
   const inst = H.node(h, path.join(H.SRC, 'install.js'), ['--no-router', '--no-open'], { cwd: root, timeout: 180000 });
   H.ok('套件装进了假的用户目录', inst.code === 0, inst.out + inst.err);
-  H.setConfig(h, { autoApply: true, applyReviewMaxRounds: 3, autoCommit: 'off', lessons: 'off', vibeTidy: false, autoUpdate: 'off', issueUpload: 'off' });
+  H.setConfig(h, { autoApply: true, applyReviewMaxRounds: 3, autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, autoUpdate: 'off', issueUpload: 'off' });
   const sync = H.node(h, path.join(kit, 'install.js'), ['--sync'], { cwd: root, timeout: 180000 });
   const md = H.read(path.join(cfg, 'CLAUDE.md')) || '';
   // 2026-10-14 起：需求自动和 Apply 自动两套，约定最前面说以本轮提醒的生效阶段为准，开着自动时带"自动执行范围"一节

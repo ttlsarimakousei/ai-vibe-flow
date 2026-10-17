@@ -5,7 +5,7 @@
  *   状态栏      三行；"全自动 开 / 关"、这个会话在不在流程里；超过上限怎么办；到多少自动压缩；今天的用量；"被拦可自行放行"
  *   维护的电脑  写死在代码里：老版本写进 config.json 的那一项，装的时候去掉
  *   使用情况    钩子、状态栏数次数；要传的那一段不带路径；取回来的数和原来一样；几天几台电脑能汇总
- *   拉代码      进流程的那一句话拉；只快进；分叉、冲突、没有远端的不动；2 小时一次；"继续"、问句不拉；关掉不拉；全自动记进报告
+ *   拉代码      2026-10-17 起不再自动拉（用户自己拉）：远端有新提交、提了需求也不拉
  *   问题反馈    列表上每条标上报了没有；没有本机导出了
  * 用法：node dev/test-1001.js
  */
@@ -162,115 +162,27 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('开工前拉代码');
+  H.section('开工前不再拉代码（2026-10-17 起，用户自己拉）');
   {
     const w = H.makeHome('t1001-pull');
     const root = H.tempDir('t1001-remote');
     const bare = path.join(root, 'shop.git');
     H.git(root, ['init', '-q', '--bare', '--initial-branch=main', bare]);
-    const mate = H.makeRepo(path.join(root, 'mate'), { 'src/A.java': 'class A {}\n', 'src/B.java': 'class B {}\n' });
+    const mate = H.makeRepo(path.join(root, 'mate'), { 'src/A.java': 'class A {}\n' });
     H.git(mate, ['branch', '-M', 'main']);
     H.git(mate, ['remote', 'add', 'origin', bare]);
     H.git(mate, ['push', '-q', '-u', 'origin', 'main']);
     const me = path.join(w.work, 'shop');
     fs.mkdirSync(w.work, { recursive: true });
-    // 换行符照原样（这台电脑全局要是 autocrlf=true，检出之后再改配置，文件会被当成改过）
     H.git(w.work, ['clone', '-q', '-c', 'core.autocrlf=false', bare, me]);
     for (const [k, v] of [['user.email', 't@example.com'], ['user.name', 't'], ['core.autocrlf', 'false']]) H.git(me, ['config', k, v]);
-    const push = (file, text, msg) => { H.write(path.join(mate, file), text); H.git(mate, ['add', '-A']); H.git(mate, ['commit', '-q', '-m', msg]); H.git(mate, ['push', '-q', 'origin', 'main']); };
+    H.write(path.join(mate, 'src/C.java'), 'class C {}\n'); H.git(mate, ['add', '-A']); H.git(mate, ['commit', '-q', '-m', 'feat: 同事加了 C']); H.git(mate, ['push', '-q', 'origin', 'main']);
     const head = (d) => H.git(d, ['rev-parse', 'HEAD']).out.trim();
     const tf = H.transcript(path.join(w.root, 'p.jsonl'), [H.tr.user('开始')]);
-    let sid = 0;
-    const forget = () => { try { fs.unlinkSync(path.join(w.kit, 'state', 'pull.json')); } catch (e) { /* 没有 */ } };
-    const raw = (prompt, dir, s) => { const o = H.hook(w, 'task-anchor', { session_id: s || 'sp-' + (++sid), cwd: dir || me, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
-
-    push('src/A.java', 'class A { int x; }\n', 'feat: 同事改了 A');
-    push('src/C.java', 'class C {}\n', 'feat: 同事加了 C');
+    const raw = (prompt) => { const o = H.hook(w, 'task-anchor', { session_id: 'sp-1', cwd: me, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
     const t1 = raw('做一个导出订单的功能');
-    H.ok('提了需求（要开始分析了）：先拉代码，拉到了两个新提交', /开工前拉了一次代码/.test(t1) && /shop：拉到了 2 个新提交/.test(t1) && head(me) === head(mate) && fs.existsSync(path.join(me, 'src', 'C.java')), t1);
-    H.ok('提醒之前读过的代码可能变了', /之前读过的代码可能变了/.test(t1), t1);
-    push('src/B.java', 'class B { int y; }\n', 'feat: 同事又改了 B');
-    const t2 = raw('/opsx:apply export-orders');
-    H.ok('2 小时里不再拉（接着 apply 不拉）', !/开工前拉了一次代码/.test(t2) && head(me) !== head(mate), t2);
-    forget();
-    const q = raw('这个接口为什么报错？');
-    H.ok('问句（不进流程）：不拉', !/开工前拉了一次代码/.test(q) && head(me) !== head(mate), q);
-    const s1 = 'sp-flow';
-    raw('做一个导出订单的功能', me, s1);
-    H.ok('（同一个会话里进了流程，拉过了）', head(me) === head(mate));
-    push('src/D.java', 'class D {}\n', 'feat: 同事加了 D');
-    forget();
-    const cont = raw('继续', me, s1);
-    H.ok('已经在流程里说"继续"：不拉（做到一半不换底下的代码）', !/开工前拉了一次代码/.test(cont) && !fs.existsSync(path.join(me, 'src', 'D.java')), cont);
-    const t3 = raw('/opsx:propose export-orders', me, s1);
-    H.ok('在流程里又敲了 /opsx:… 命令：拉', /拉到了 1 个新提交/.test(t3) && fs.existsSync(path.join(me, 'src', 'D.java')), t3);
-
-    // 分叉：本地有没推的提交，远端也有新的
-    H.write(path.join(me, 'src/Mine.java'), 'class Mine {}\n'); H.git(me, ['add', '-A']); H.git(me, ['commit', '-q', '-m', 'feat: 我的']);
-    push('src/E.java', 'class E {}\n', 'feat: 同事加了 E');
-    forget();
-    const mine = head(me);
-    const t4 = raw('做一个导入客户的功能');
-    H.ok('分叉了：不拉，告诉它，要合并先问我', /本地有 1 个没推的提交，远端也有 1 个新提交（分叉了），没拉/.test(t4) && /问我/.test(t4) && head(me) === mine, t4);
-    H.git(me, ['reset', '-q', '--hard', 'origin/main']);
-    // 没提交的改动和远端改的是同一个文件
-    push('src/A.java', 'class A { int x; int z; }\n', 'feat: 同事又改了 A');
-    H.write(path.join(me, 'src/A.java'), 'class A { int mine; }\n');
-    forget();
-    const before = head(me);
-    const t5 = raw('做一个导入客户的功能');
-    H.ok('没提交的改动和远端碰到同一个文件：git 没让拉，什么都没变', /和没提交的改动碰到同一些文件（src\/A\.java）/.test(t5) && head(me) === before && H.read(path.join(me, 'src/A.java')) === 'class A { int mine; }\n', t5);
-    H.git(me, ['checkout', '-q', '--', 'src/A.java']);
-    // 没有跟踪的远端分支
-    const lone = H.makeRepo(path.join(w.work, 'lone'), { 'a.txt': 'a\n' });
-    forget();
-    const t6 = raw('做一个导入客户的功能', lone);
-    H.ok('没有远端：不拉也不提', !/开工前拉了一次代码/.test(t6), t6);
-    // 连不上远端
-    H.git(me, ['remote', 'set-url', 'origin', path.join(root, 'gone.git')]);
-    forget();
-    const t7 = raw('做一个导入客户的功能');
-    H.ok('远端找不到：没拉成，照本地的做', /shop：没拉成（[^）]+），照本地的代码做/.test(t7), t7);
-    H.git(me, ['remote', 'set-url', 'origin', bare]);
-    // 开关关掉
-    H.setConfig(w, { pullBeforeWork: false });
-    push('src/F.java', 'class F {}\n', 'feat: 同事加了 F');
-    forget();
-    const t8 = raw('做一个导入客户的功能');
-    H.ok('开关关掉：不拉', !/开工前拉了一次代码/.test(t8) && !fs.existsSync(path.join(me, 'src', 'F.java')), t8);
-    H.setConfig(w, { pullBeforeWork: true });
-    // 壳子：下面两个子项目一起拉
-    const shell = path.join(w.work, 'shell');
-    fs.mkdirSync(shell, { recursive: true });
-    H.write(path.join(shell, 'README.md'), '# 壳子\n');
-    // 壳子要有点自己的东西才认（CLAUDE.md、openspec、.claude，或者自己是仓库）：1005 起不是壳子的目录不带下面的仓库
-    H.write(path.join(shell, 'CLAUDE.md'), '# 壳子的约定\n');
-    const bare2 = path.join(root, 'web.git');
-    H.git(root, ['init', '-q', '--bare', '--initial-branch=main', bare2]);
-    const mate2 = H.makeRepo(path.join(root, 'mate2'), { 'index.html': '<p>1</p>\n' });
-    H.git(mate2, ['branch', '-M', 'main']); H.git(mate2, ['remote', 'add', 'origin', bare2]); H.git(mate2, ['push', '-q', '-u', 'origin', 'main']);
-    H.git(shell, ['clone', '-q', '-c', 'core.autocrlf=false', bare, 'api']);
-    H.git(shell, ['clone', '-q', '-c', 'core.autocrlf=false', bare2, 'web']);
-    push('src/G.java', 'class G {}\n', 'feat: 同事加了 G');
-    H.write(path.join(mate2, 'index.html'), '<p>2</p>\n'); H.git(mate2, ['commit', '-qam', 'feat: 页面']); H.git(mate2, ['push', '-q', 'origin', 'main']);
-    forget();
-    const t9 = raw('做一个导出订单的功能', shell);
-    H.ok('壳子：下面的子项目一起拉，一个一行', /\n- api：拉到了 \d+ 个新提交/.test(t9) && /\n- web：拉到了 1 个新提交/.test(t9) && H.read(path.join(shell, 'web', 'index.html')) === '<p>2</p>\n', t9);
-    // 全自动：没拉成的记进报告"留给你做的"
-    H.setConfig(w, { autoMode: true });
-    H.write(path.join(shell, 'web', 'mine.txt'), 'x\n'); H.git(path.join(shell, 'web'), ['add', '-A']); H.git(path.join(shell, 'web'), ['-c', 'user.email=t@e.com', '-c', 'user.name=t', 'commit', '-q', '-m', 'feat: 我的']);
-    H.write(path.join(mate2, 'index.html'), '<p>3</p>\n'); H.git(mate2, ['commit', '-qam', 'feat: 页面 3']); H.git(mate2, ['push', '-q', 'origin', 'main']);
-    forget();
-    // 1008 起全自动只管做任务那一段：提需求是写提案那一段（有人在），拿敲 /opsx:apply 来测全自动的说法
-    H.write(path.join(shell, 'openspec/changes/export-orders/tasks.md'), '- [ ] 1.1 修改 web/index.html；验：node test.js\n');
-    const t10 = raw('/opsx:apply export-orders', shell, 'sp-auto');
-    const rep = readJson(path.join(w.kit, 'state', 'sp-auto-report.json'));
-    H.ok('全自动：分叉了照本地的做，写进最后的交代', /web：本地有 1 个没推的提交，远端也有 1 个新提交（分叉了），没拉。全自动模式：照本地的做/.test(t10), t10);
-    H.ok('全自动：记进报告"留给你做的"', (rep.items || []).some((i) => i.kind === 'hand' && /开工前没拉成代码：web/.test(i.title) && /git pull --rebase/.test(i.detail)), rep);
-    H.setConfig(w, { autoMode: false });
-    const cnt = (readJson(path.join(w.kit, 'state', 'usage.json')).days || {})[dayOf(0)] || { n: {} };
-    H.ok('使用情况：拉代码的结果也数了', cnt.n['pull.updated'] >= 4 && cnt.n['pull.fail'] >= 3, cnt.n);
-    H.ok('流水账里记了', /开工前拉代码 shop=拉到 2 个提交/.test(H.read(path.join(w.kit, 'state', 'hooks.log')) || ''));
+    H.ok('远端有新提交、提了需求：不拉代码，也不说拉代码', head(me) !== head(mate) && !fs.existsSync(path.join(me, 'src', 'C.java')) && !/拉了一次代码|拉到了/.test(t1), t1);
+    H.ok('配置里留着旧开关 pullBeforeWork=true 也不拉', (H.setConfig(w, { pullBeforeWork: true }), raw('/opsx:apply export-orders'), head(me) !== head(mate)));
   }
 
   // ---------------------------------------------------------------------------------------------

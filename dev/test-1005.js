@@ -4,7 +4,6 @@
  *   Claude Code 自带的自动模式   安装器默认把它关掉（settings.json 的 permissions.disableAutoMode）；配置页改成"不管它"就去掉；
  *                               你自己写的、自己把 defaultMode 设成 auto 的不动；卸载只收回自己加的；从上一版升上来也加上
  *   全局约定                     带上了官方那句 "Please remove all mannered prose."
- *   开工前拉代码                 本来就是最新的不往上下文里放字
  *   开关                         ccAutoMode 存得进去，乱填的不收
  *   路由                         配置页的接口不收别的网站的页面发来的请求（<img> 这类不带 Origin 的也挡）
  *   使用情况                     模型名字里的内网地址（网址、域名、IPv6）遮掉
@@ -116,107 +115,8 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     H.ok('配置页"保护"那一节有这个开关', /id="sec-guard"[\s\S]*id="k_ccAutoMode"[\s\S]*最近的开关改动/.test(ui) && /fSel\('ccAutoMode'/.test(ui));
   }
 
-  // ---------------------------------------------------------------------------------------------
-  H.section('开工前拉代码：本来就是最新的不占上下文');
-  {
-    const w = H.makeHome('t1005-pull');
-    const root = H.tempDir('t1005-remote');
-    const bare = path.join(root, 'shop.git');
-    H.git(root, ['init', '-q', '--bare', '--initial-branch=main', bare]);
-    const mate = H.makeRepo(path.join(root, 'mate'), { 'src/A.java': 'class A {}\n' });
-    H.git(mate, ['branch', '-M', 'main']);
-    H.git(mate, ['remote', 'add', 'origin', bare]);
-    H.git(mate, ['push', '-q', '-u', 'origin', 'main']);
-    const me = path.join(w.work, 'shop');
-    fs.mkdirSync(w.work, { recursive: true });
-    H.git(w.work, ['clone', '-q', '-c', 'core.autocrlf=false', bare, me]);
-    const tf = H.transcript(path.join(w.root, 'p.jsonl'), [H.tr.user('开始')]);
-    // dir 不给就是 shop 这个仓库；env 是另加的环境变量（调合并等多久、不读系统的 git 配置）
-    const raw = (prompt, sid, dir, env) => {
-      const r = H.node(w, path.join(w.kit, 'hooks', 'task-anchor.js'), [], { input: JSON.stringify({ session_id: sid, cwd: dir || me, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }), cwd: dir || me, env, timeout: 180000 });
-      return r.out.trim();
-    };
-    const push = (file, text, msg) => { H.write(path.join(mate, file), text); H.git(mate, ['add', '-A']); H.git(mate, ['commit', '-q', '-m', msg]); H.git(mate, ['push', '-q', 'origin', 'main']); };
-    const forget = () => { try { fs.unlinkSync(path.join(w.kit, 'state', 'pull.json')); } catch (e) { /* 没有 */ } };
-    const head = (d) => H.git(d, ['rev-parse', 'HEAD']).out.trim();
-    const locked = () => fs.existsSync(path.join(me, '.git', 'index.lock'));
-    const t1 = raw('做一个导出订单的功能', 't1005-p1');
-    const log = H.read(path.join(w.kit, 'state', 'hooks.log')) || '';
-    H.ok('拉过了（流水账里有），是最新的：不往消息里放"拉代码"的字', /开工前拉代码 shop=最新/.test(log) && !/开工前拉了一次代码/.test(t1) && /这像一条需求/.test(t1), [t1, log.slice(-300)]);
-    push('src/B.java', 'class B {}\n', 'feat: 同事加了 B');
-    forget();
-    const t2 = raw('做一个导入客户的功能', 't1005-p2');
-    H.ok('拉到了新代码：照旧说', /开工前拉了一次代码/.test(t2) && /shop：拉到了 1 个新提交/.test(t2), t2);
-
-    // 流程中插一句问话再说"继续"：不算新开工，不拉（以前问句那一轮记成不在流程里，"继续"就被当成刚进流程）
-    raw('做一个导出订单的功能', 't1005-q');
-    push('src/C.java', 'class C {}\n', 'feat: 同事加了 C');
-    forget();
-    raw('3.2 为什么这么写？', 't1005-q');
-    const cont = raw('继续', 't1005-q');
-    H.ok('流程中插一句问话再说"继续"：不拉（做到一半不换底下的代码）', !/开工前拉了一次代码/.test(cont) && !fs.existsSync(path.join(me, 'src', 'C.java')), cont);
-    const enters = (((readJson(path.join(w.kit, 'state', 'usage.json')).days || {})[today] || {}).n || {})['flow.enter'];
-    H.ok('"继续"接回去的不数成又进了一次流程', enters === 3, enters);
-    const keep = raw('不要停，把剩下的做完', 't1005-q');
-    H.ok('"不要停，把剩下的做完"也一样不拉', !/开工前拉了一次代码/.test(keep) && !fs.existsSync(path.join(me, 'src', 'C.java')), keep);
-    H.git(me, ['pull', '-q', '--ff-only']);
-
-    // 用户配了 merge.autoStash：没提交的改动不藏起来再放回去（放回去有冲突时，冲突标记会留在文件里，退出码还是 0）
-    H.git(me, ['config', 'merge.autoStash', 'true']);
-    push('src/A.java', 'class A { int remote; }\n', 'feat: 同事改了 A');
-    H.write(path.join(me, 'src/A.java'), 'class A { int mine; }\n');
-    forget();
-    const beforeAs = head(me);
-    const as = raw('做一个导入客户的功能', 't1005-as');
-    H.ok('配了 merge.autoStash：照样不动没提交的改动，文件里没有冲突标记', /和没提交的改动碰到同一些文件（src\/A\.java）/.test(as) && head(me) === beforeAs && H.read(path.join(me, 'src/A.java')) === 'class A { int mine; }\n', [as, H.read(path.join(me, 'src/A.java'))]);
-    H.git(me, ['checkout', '-q', '--', 'src/A.java']);
-    H.git(me, ['config', '--unset', 'merge.autoStash']);
-    H.git(me, ['pull', '-q', '--ff-only']);
-
-    // 合并要好几秒（检出时过一个慢的过滤器，杀毒软件扫文件、git-lfs 下大文件就是这样）：到点了不结束它，等它做完。
-    // 强行结束会留下 index.lock 和改了一半的工作区。测试里把"到点"调成 1 秒
-    H.git(me, ['config', 'filter.slow.smudge', "sh -c 'sleep 4; cat'"]);
-    H.git(me, ['config', 'filter.slow.clean', 'cat']);
-    H.write(path.join(mate, '.gitattributes'), '*.slow filter=slow\n');
-    push('big.slow', 'v1\n', 'feat: 同事加了一个检出很慢的文件');
-    forget();
-    const t0 = Date.now();
-    const slow = raw('做一个导入客户的功能', 't1005-slow', me, { VIBE_KIT_PULL_PATIENCE_MS: '1000' });
-    H.ok('合并做到一半到点了：不结束它，等它做完', /shop：拉到了 1 个新提交/.test(slow) && !/被结束了/.test(slow) && head(me) === head(mate) && H.read(path.join(me, 'big.slow')) === 'v1\n' && !locked() && Date.now() - t0 >= 3500, [slow, Date.now() - t0, locked()]);
-    H.ok('工作区是干净的（没有改了一半的文件）', H.git(me, ['status', '--porcelain']).out.trim() === '', H.git(me, ['status', '--porcelain']).out);
-
-    // 合完了、只剩仓库自己的 post-merge 钩子在跑（装依赖这类）：到点结束钩子，代码照样算拉到了，告诉它钩子没跑完
-    H.write(path.join(me, '.git', 'hooks', 'post-merge'), '#!/bin/sh\nsleep 60\n');
-    push('src/E.java', 'class E {}\n', 'feat: 同事加了 E');
-    forget();
-    const t3 = Date.now();
-    const cut = raw('做一个导入客户的功能', 't1005-hook', me, { VIBE_KIT_PULL_PATIENCE_MS: '1000' });
-    H.ok('只剩仓库的 post-merge 钩子在跑：到点结束钩子，代码算拉到了，说了钩子没跑完', /shop：拉到了 1 个新提交/.test(cut) && /post-merge 钩子跑了 \d+ 秒还没完，被结束了/.test(cut) && head(me) === head(mate) && !locked() && Date.now() - t3 < 40000, [cut, Date.now() - t3, locked()]);
-    fs.unlinkSync(path.join(me, '.git', 'hooks', 'post-merge'));
-
-    // 不是壳子的上级目录（一堆项目放在一起，自己没有 openspec、CLAUDE.md，也不是仓库）：不带下面的仓库
-    push('src/F.java', 'class F {}\n', 'feat: 同事加了 F');
-    forget();
-    const plain = raw('做一个导出订单的功能', 't1005-plain', w.work);
-    H.ok('不是壳子的上级目录：下面的仓库不拉', !/开工前拉了一次代码/.test(plain) && !fs.existsSync(path.join(me, 'src', 'F.java')), plain);
-    // 是壳子（放着 CLAUDE.md）：带上
-    H.write(path.join(w.work, 'CLAUDE.md'), '# 壳子的约定\n');
-    const shell = raw('做一个导出订单的功能', 't1005-shell', w.work);
-    H.ok('是壳子：下面的子项目一起拉', /shop：拉到了 1 个新提交/.test(shell) && fs.existsSync(path.join(me, 'src', 'F.java')), shell);
-
-    // 子项目多于 12 个：先拉最久没拉过的，剩下的告诉它
-    const sesJs = JSON.stringify(path.join(w.kit, 'lib', 'session.js'));
-    const pk = H.node(w, '-e', ['const P = require(' + JSON.stringify(path.join(w.kit, 'lib', 'pull.js')) + '); const K = require(' + sesJs + ').normKey; const now = Date.now(); const rs = []; for (let i = 0; i < 14; i++) rs.push("C:/x/r" + i);'
-      + ' const seen = {}; for (const i of [1, 2, 3]) seen[K("C:/x/r" + i)] = { at: now - (3 + i) * 3600000 }; seen[K("C:/x/r13")] = { at: now - 600000 };'
-      + ' const r = P.pick(rs, seen, now); console.log(JSON.stringify({ due: r.due.map((x) => x.split("/").pop()), more: r.more.map((x) => x.split("/").pop()), text: P.linesOf([{ repo: "C:/x/r0", updated: 1, from: "a", to: "b" }], "C:/x", false, r.more) }))'], { cwd: w.root });
-    let po = {};
-    try { po = JSON.parse(pk.out.trim().split('\n').pop()); } catch (e) { po = { error: pk.out + pk.err }; }
-    H.ok('一次最多 12 个：刚拉过的不算，会话所在的排最前，别的先拉最久没拉过的', (po.due || []).length === 12 && po.due[0] === 'r0' && !po.due.includes('r13') && po.due.slice(-2).join() === 'r3,r2' && (po.more || []).join() === 'r1', po.error || po);
-    H.ok('没轮上的告诉它，要动之前自己先拉', /还有 1 个没拉（r1）/.test(po.text || '') && /pull --ff-only/.test(po.text || ''), po.text);
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  H.section('开工前拉代码：登不上的远端不拿提示语当口令去试');
+  // 2026-10-17 起开工前不再拉代码；合并推送照样用 lib/pull.js 的 envFor 设 git 的环境，这里只查它
+  H.section('合并推送的 git 环境：登不上的远端不拿提示语当口令去试');
   {
     const w = H.makeHome('t1005-ask');
     const gl = await H.fakeGitlab('t1005-gl', PORT + 1);
@@ -235,13 +135,7 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     const c0 = gitx(w.work, ['clone', '-q', authUrl, hp]);
     gitx(hp, ['remote', 'set-url', 'origin', url]);
     H.ok('（带令牌克隆下来了，远端地址换成不带令牌的）', p0.code === 0 && c0.code === 0 && fs.existsSync(path.join(hp, 'a.txt')), p0.err + c0.err);
-    gl.clearLogs();
-    const tf = H.transcript(path.join(w.root, 'a.jsonl'), [H.tr.user('开始')]);
-    const r = H.node(w, path.join(w.kit, 'hooks', 'task-anchor.js'), [], { input: JSON.stringify({ session_id: 't1005-http', cwd: hp, hook_event_name: 'UserPromptSubmit', prompt: '做一个导出订单的功能', transcript_path: tf }), cwd: hp, env: { GIT_CONFIG_NOSYSTEM: '1' }, timeout: 120000 });
-    const auths = gl.requests().filter((x) => x.kind === 'git').map((x) => x.auth);
-    H.ok('没拉成，说了是登录信息的事', /hp：没拉成（远端不认这台电脑的登录信息/.test(r.out), r.out + r.err);
-    H.ok('问过服务器，但没有拿提示语当用户名、口令去登录', auths.length > 0 && auths.every((a) => !a), auths);
-    // 上面那一项在新版 git 上新旧代码都过（git 2.55 认 credential.interactive=false，根本不去问）。老一点的 git 会去问：
+    // 老一点的 git 会去问口令：
     // 问口令的程序以前指的是 echo，它把提示语吐回来，git 就拿提示语当用户名、口令发给服务器。所以直接查指到了哪
     const ev = H.node(w, '-e', ['const P = require(' + JSON.stringify(path.join(w.kit, 'lib', 'pull.js')) + '); const e = P.envFor ? P.envFor(' + JSON.stringify(hp) + ', false) : {}; console.log(JSON.stringify([e.GIT_ASKPASS, e.SSH_ASKPASS, e.GIT_TERMINAL_PROMPT]))'], { cwd: w.root });
     H.ok('问口令的程序指到一个不存在的名字，不是 echo', ev.out.trim() === '["vibe-kit-no-askpass","vibe-kit-no-askpass","0"]', ev.out + ev.err);

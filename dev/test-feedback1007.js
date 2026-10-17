@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 const OLD = process.argv[3] || null;
-const quiet = { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', lessons: 'off', vibeTidy: false, specGate: false };
+const quiet = { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, specGate: false };
 const denied = (o) => !!(o && (o.decision === 'block' || o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'deny'));
 
 (async () => {

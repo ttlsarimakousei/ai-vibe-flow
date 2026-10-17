@@ -76,23 +76,23 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
     H.ok('问题列表、使用情况在"更新和上报"这一页；经验规则单开一页', /id="fbList"/.test(remoteTab) && /id="sec-usage-report"/.test(remoteTab) && /data-tab="lessons"/.test(page.text) && /id="tab-lessons"[\s\S]*id="sec-lessons"/.test(page.text) && !/id="sec-feedback"/.test(page.text));
     const kitInfo = await call('GET', '/api/kit');
     const c0 = kitInfo.json && kitInfo.json.config;
-    H.ok('开关里有新的几项，没有"维护套件的电脑"', c0 && c0.autoUpdate === 'auto' && c0.updateCheckHours === 2 && c0.issueUpload === 'on' && c0.sshToken === 'auto' && c0.maintainerHosts === undefined && c0.autoCompactPercent === 90 && c0.statusUsage === true && c0.pullBeforeWork === true && c0.usageReport === 'on', c0);
+    H.ok('开关里有新的几项，没有"维护套件的电脑"', c0 && c0.autoUpdate === 'auto' && c0.updateCheckHours === 2 && c0.issueUpload === 'on' && c0.sshToken === 'auto' && c0.maintainerHosts === undefined && c0.autoCompactPercent === 90 && c0.statusUsage === true && c0.commitMode === 'ask' && c0.pullBeforeWork === undefined && c0.autoCommit === undefined && c0.usageReport === 'on', c0);
     const busy = await call('GET', '/busy');
     H.ok('路由答得出"现在忙不忙"', busy.status === 200 && busy.json && busy.json.inflight === 0 && busy.json.idleMs >= 0, busy.text);
 
     H.section('保存开关：只存改过的项');
-    // 页面甲把审查轮数改成 4；页面乙（打开得早，还显示 3）只改了提交方式——只传改过的那一项，轮数不会被带回 3
+    // 页面甲把审查轮数改成 4；页面乙（打开得早，还显示 3）只改了提交方式（2026-10-17 起是 commitMode）——只传改过的那一项，轮数不会被带回 3
     const s1 = await call('POST', '/api/kit/config', { reviewMaxRounds: 4 });
-    const s2 = await call('POST', '/api/kit/config', { autoCommit: 'off' });
-    H.ok('别的页面只改了别的项：审查轮数不变', s1.json.config.reviewMaxRounds === 4 && s2.json.config.reviewMaxRounds === 4 && s2.json.config.autoCommit === 'off' && readJson(path.join(h.kit, 'config.json')).reviewMaxRounds === 4, s2.text);
-    const s3 = await call('POST', '/api/kit/config', { reviewMaxRounds: 9, updateCheckHours: 99, autoUpdate: 'sometimes', issueUpload: 'maybe', maintainerHosts: ['10.9.8.7'], autoCompactPercent: 30, usageReport: 'maybe', pullBeforeWork: 'yes' });
-    H.ok('乱填的不收，保持原值；"维护套件的电脑"传了也不存', s3.json.config.reviewMaxRounds === 4 && s3.json.config.updateCheckHours === 2 && s3.json.config.autoUpdate === 'auto' && s3.json.config.issueUpload === 'on' && s3.json.config.maintainerHosts === undefined && s3.json.config.autoCompactPercent === 90 && s3.json.config.usageReport === 'on' && s3.json.config.pullBeforeWork === true && !/maintainerHosts/.test(H.read(path.join(h.kit, 'config.json'))), s3.text);
-    const s4 = await call('POST', '/api/kit/config', { autoUpdate: 'notify', updateCheckHours: 6, sshToken: 'off', autoCompactPercent: 80, usageReport: 'off', pullBeforeWork: false, statusUsage: false });
-    H.ok('新的几项存得进去', s4.json.config.autoUpdate === 'notify' && s4.json.config.updateCheckHours === 6 && s4.json.config.sshToken === 'off' && s4.json.config.autoCompactPercent === 80 && s4.json.config.usageReport === 'off' && s4.json.config.pullBeforeWork === false && s4.json.config.statusUsage === false, s4.text);
+    const s2 = await call('POST', '/api/kit/config', { commitMode: 'off' });
+    H.ok('别的页面只改了别的项：审查轮数不变', s1.json.config.reviewMaxRounds === 4 && s2.json.config.reviewMaxRounds === 4 && s2.json.config.commitMode === 'off' && readJson(path.join(h.kit, 'config.json')).reviewMaxRounds === 4, s2.text);
+    const s3 = await call('POST', '/api/kit/config', { reviewMaxRounds: 9, updateCheckHours: 99, autoUpdate: 'sometimes', issueUpload: 'maybe', maintainerHosts: ['10.9.8.7'], autoCompactPercent: 30, usageReport: 'maybe', commitMode: 'sometimes' });
+    H.ok('乱填的不收，保持原值；"维护套件的电脑"传了也不存', s3.json.config.reviewMaxRounds === 4 && s3.json.config.updateCheckHours === 2 && s3.json.config.autoUpdate === 'auto' && s3.json.config.issueUpload === 'on' && s3.json.config.maintainerHosts === undefined && s3.json.config.autoCompactPercent === 90 && s3.json.config.usageReport === 'on' && s3.json.config.commitMode === 'off' && !/maintainerHosts/.test(H.read(path.join(h.kit, 'config.json'))), s3.text);
+    const s4 = await call('POST', '/api/kit/config', { autoUpdate: 'notify', updateCheckHours: 6, sshToken: 'off', autoCompactPercent: 80, usageReport: 'off', commitMode: 'auto', statusUsage: false });
+    H.ok('新的几项存得进去', s4.json.config.autoUpdate === 'notify' && s4.json.config.updateCheckHours === 6 && s4.json.config.sshToken === 'off' && s4.json.config.autoCompactPercent === 80 && s4.json.config.usageReport === 'off' && s4.json.config.commitMode === 'auto' && s4.json.config.statusUsage === false, s4.text);
     H.ok('自动压缩线改了：settings.json 的窗口跟着改', readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow === 833000 && s4.json.synced !== false, [readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow, s4.json.output]);
     const s5 = await call('POST', '/api/kit/config', { autoCompactPercent: 0 });
     H.ok('填 0：窗口去掉，照 Claude Code 自己的', s5.json.config.autoCompactPercent === 0 && readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow === undefined, s5.text);
-    await call('POST', '/api/kit/config', { sshToken: 'auto', autoCommit: 'task', reviewMaxRounds: 3, autoCompactPercent: 90, usageReport: 'on', pullBeforeWork: true, statusUsage: true });
+    await call('POST', '/api/kit/config', { sshToken: 'auto', commitMode: 'ask', reviewMaxRounds: 3, autoCompactPercent: 90, usageReport: 'on', statusUsage: true });
 
     H.section('仓库地址和令牌');
     let d = (await call('GET', '/api/kit/remote')).json;

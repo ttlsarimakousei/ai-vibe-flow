@@ -77,7 +77,8 @@ H.section('tasks.md：要新建的文件、验法里的脚本（F004）');
 H.section('design.md：这个变更里声明过新建的、.vibe/pending 里的（F005）');
 {
   const line = '- 交付物：secflow-gate_ddl.sql、secflow-gate_precheck.sql、secflow-gate_dml.sql、secflow-gate_rollback.sql';
-  const design = ['## Context', '', '- 读过 src/main/java/A.java：现在没有流程闸门', '- 读过 pom.xml', '', '## Decisions', '', line, ''].join('\n');
+  // 2026-10-17 起新写的设计要有验收用例一节（用户定的），这里测的是路径声明，验收用例照规矩写上
+  const design = ['## Context', '', '- 读过 src/main/java/A.java：现在没有流程闸门', '- 读过 pom.xml', '', '## Decisions', '', line, '', '## 验收用例', '', '| 编号 | 对应场景 | 前置数据和环境 | 步骤 | 预期 | 谁来测 | 任务组 |', '|---|---|---|---|---|---|---|', '| AC-1 | 闸门拦截 | 测试库 | 提交流程 | 返回拦截提示 | 人工 | 1 |', ''].join('\n');
   const r = writeDesign(design);
   H.ok('没声明过：拦，四个文件合成一句', r && r.decision === 'block' && (H.reasonOf(r).match(/在项目里找不到/g) || []).length === 1, H.reasonOf(r));
   // tasks.md 里声明过新建三个；第四个已经写在 .vibe/pending 里（全自动模式下产出位置没定时放那里）
@@ -91,7 +92,7 @@ H.section('design.md：这个变更里声明过新建的、.vibe/pending 里的�
   H.ok('"产出"也算在说新建', r4 === null, H.reasonOf(r4));
 }
 
-H.section('打勾：跑过验法里写明的脚本就能打（F001 / F002 / F003）');
+H.section('打勾：2026-10-17 起不查验法，跑没跑过都能打（原 F001 / F002 / F003）');
 {
   const chg2 = path.join(proj, 'openspec', 'changes', 'secadmin-log-split');
   const tasks = path.join(chg2, 'tasks.md');
@@ -102,8 +103,7 @@ H.section('打勾：跑过验法里写明的脚本就能打（F001 / F002 / F003
   const tick = (from, to) => H.hook(h, 'guard-spec', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: tasks, old_string: from, new_string: to } }));
   H.transcript(tfile, [H.tr.user('继续做 secadmin-log-split，测试'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const r0 = tick('- [ ] 4.2', '- [x] 4.2');
-  H.ok('没跑过验法：拦', r0 && r0.decision === 'block', r0);
-  H.ok('拦的时候说清要看到什么', /要看到的是：跑过 `node \.vibe\/run42\.js`/.test(H.reasonOf(r0)), H.reasonOf(r0));
+  H.ok('没跑过验法：也能打勾', r0 === null, H.reasonOf(r0));
   H.transcript(tfile, [H.tr.user('继续做 secadmin-log-split，测试'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'),
     H.tr.ran('Bash', { command: 'node .vibe/mkstate.js && node .vibe/run42.js' }, 'RESULT ok\nRESULT ok'), H.tr.ran('Bash', { command: 'node .vibe/e2e52.js && node .vibe/kbtry.js revert' }, 'E2E52_PASS')]);
   const r1 = tick('- [ ] 4.2', '- [x] 4.2');
@@ -112,7 +112,7 @@ H.section('打勾：跑过验法里写明的脚本就能打（F001 / F002 / F003
   H.ok('跑过 e2e52.js：5.2 能打勾', r2 === null, H.reasonOf(r2));
   H.transcript(tfile, [H.tr.user('测试'), H.tr.ran('Edit', { file_path: tasks, old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'node .vibe/run42.js' }, 'RESULT fail', true)]);
   const r3 = tick('- [ ] 4.2', '- [x] 4.2');
-  H.ok('跑了但失败的不算', r3 && r3.decision === 'block', r3);
+  H.ok('跑了但失败：也能打勾（打勾不查验法）', r3 === null, H.reasonOf(r3));
 }
 
 H.done('内网反馈 0928 的五条');

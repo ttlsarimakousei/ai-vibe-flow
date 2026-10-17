@@ -8,7 +8,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const H = require('./lib/harness');
 const from = process.argv[2] ? path.resolve(process.argv[2]) : H.SRC;
-const h = H.makeHome('idea-tools', from, { autoUpdate: 'off', issueUpload: 'off', usageReport: 'off', autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', outputGate: false, vibeTidy: false, specGate: false });
+const h = H.makeHome('idea-tools', from, { autoUpdate: 'off', issueUpload: 'off', usageReport: 'off', autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', outputGate: false, vibeTidy: false, specGate: false });
 const repo = H.makeRepo(path.join(h.work, '中文项目'), { 'a.js': 'const a=1;\n', 'openspec/changes/c/tasks.md': '- [ ] 1.1 改代码；验：人工看\n' });
 const transcript = path.join(h.root, 't.jsonl');
 H.transcript(transcript, [H.tr.user('改代码')]);

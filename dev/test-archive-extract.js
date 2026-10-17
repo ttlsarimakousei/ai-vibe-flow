@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 const from = process.argv[2] ? path.resolve(process.argv[2]) : H.SRC;
-const h = H.makeHome('archive-extract', from, { autoUpdate: 'off', issueUpload: 'off', usageReport: 'off', autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', specGate: false });
+const h = H.makeHome('archive-extract', from, { autoUpdate: 'off', issueUpload: 'off', usageReport: 'off', autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', specGate: false });
 const repo = H.makeRepo(path.join(h.work, '中文 项目'), { 'src/a.js': 'const a = 1;\n' });
 const tmp = path.join(repo, '.vibe/tmp/1011-查包');
 fs.mkdirSync(tmp, { recursive: true });
@@ -170,7 +170,8 @@ H.inFlow(h, 'archive-extract', [], 'apply');
 bad('全自动仍改用安全目录', 'jar xf app.jar');
 good('全自动事由目录继续工作', 'unzip app.zip -d .vibe/tmp/1011-查包');
 H.setConfig(h, { vibeTidy: false });
-good('整理开关关闭时保持既有约定', 'jar xf app.jar');
+// 2026-10-17 起过程文件的整理固定开，配置里留着旧开关 vibeTidy=false 也照拦（用户定的）
+bad('旧开关 vibeTidy 关着也照拦', 'jar xf app.jar');
 H.ok('检查过程没有真的解包到项目', !fs.existsSync(path.join(repo, 'META-INF')));
 H.ok('全局约定明确解包样本位置', /过程文件和解包样本一律放/.test(H.read(path.join(h.kit, 'CLAUDE.md')) || ''));
 H.ok('审查代理只读查看归档', /不解包、不重定向写文件/.test(H.read(path.join(h.cfg, 'agents/ttls-reviewer.md')) || ''));

@@ -18,7 +18,7 @@ const os = require('os');
 const path = require('path');
 const H = require('./lib/harness');
 
-const h = H.makeHome('fb0930', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', vibeTidy: true, specGate: true, lessons: 'off' });
+const h = H.makeHome('fb0930', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', vibeTidy: true, specGate: true, lessons: 'off' });
 const S = require(path.join(h.kit, 'lib', 'session.js'));
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } };
 const state = (name) => readJson(path.join(h.kit, 'state', name + '.json'));
@@ -145,7 +145,8 @@ H.section('#4 验法写"同 3.1""同上"：查的是那一项写的验法');
   const editTest = H.tr.ran('Edit', { file_path: path.join(proj, 'src/NoTest.java'), old_string: 'a', new_string: 'b' }, 'ok');
   H.transcript(tfile, [H.tr.user('继续，测试'), editTest, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   const b = tick('3.2');
-  H.ok('议题原样：没跑过，提示里说清是 3.1 的哪条命令', b && b.decision === 'block' && /写的验法是"同 3\.1 命令 PASS"（就是 3\.1 的验法："`mvn -o -Dtest=NoTest test`"）/.test(H.reasonOf(b)) && /要看到的是：跑过 `mvn -o -Dtest=NoTest test`/.test(H.reasonOf(b)), H.reasonOf(b));
+  // 2026-10-17 起打勾不查验法（用户定的）：没跑过也能打勾；"同 3.1"的解析（resolveVerify）上面照样测
+  H.ok('议题原样：没跑过也能打勾（打勾不查验法）', b === null, H.reasonOf(b));
   H.transcript(tfile, [H.tr.user('继续'), editTest, H.tr.ran('Bash', { command: 'mvn -o -Dtest=NoTest test' }, 'BUILD SUCCESS')]);
   H.ok('跑过 3.1 的那条命令：能打勾', tick('3.2') === null, H.reasonOf(tick('3.2')));
 }
@@ -193,7 +194,8 @@ H.section('#5 用临时 index 提交：新文件加在那份 index 里');
   spawnSync('git', ['-C', repo, 'add', 'src/app.properties'], { env, windowsHide: true });
   H.transcript(tfile, [H.tr.user('提交 vendor')]);
   const r6 = run('GIT_INDEX_FILE="' + idx.replace(/\\/g, '/') + '" git commit -m "chore: 加 vendor 检查"');
-  H.ok('临时 index 里有像密码的内容：照样让用户看一眼', r6 && r6.hookSpecificOutput && r6.hookSpecificOutput.permissionDecision === 'ask' && /app\.properties/.test(H.reasonOf(r6)), r6);
+  // 2026-10-17 起提交不再查像密码的内容（用户定的）
+  H.ok('临时 index 里有像密码的内容：不再弹框', !(r6 && r6.hookSpecificOutput && r6.hookSpecificOutput.permissionDecision === 'ask' && /密码|key/.test(H.reasonOf(r6))), r6);
 }
 
 // =============================================================================================
@@ -511,7 +513,7 @@ H.section('#7 全自动报告："它自己定的事"和"库里改过的"');
   R.note({ session_id: sid, cwd: proj }, { kind: 'bypass', title: '归档门槛：x', detail: 'y' });
   const r2 = H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: tfile, stop_hook_active: true, last_assistant_message: '又改了一处' });
   const body2 = H.read(((H.reasonOf(r2).match(/报告在 (.+?\.md)/) || [])[1]) || '') || '';
-  H.ok('这一轮新定了一条：列新的那条，以前的 7 条只提一句', /校验表达式加数字约束/.test(body2) && /以前几轮定过的不重复列：add-ec-expiry-remind 7 条/.test(body2) && !/默认按第 1 种做/.test(body2), (body2.match(/## 它自己定的事[\s\S]{0,400}/) || [''])[0]);
+  H.ok('这一轮新定了一条：列新的那条，以前的 7 条只提一句', /校验表达式加数字约束/.test(body2) && /以前几轮定过的不重复列：add-ec-expiry-remind 7 条/.test(body2) && !/默认按第 1 种做/.test(body2), (body2.match(/## 它自己定的事[\s\S]{0,400}/) || [''])[0] || H.reasonOf(r2));
   H.setConfig(h, { autoMode: false });
 }
 

@@ -138,7 +138,7 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
   const watch = await H.watchWindows('e2e-0930-win');
   const inst = H.node(h, path.join(H.SRC, 'install.js'), ['--no-router', '--no-open'], { cwd: root, timeout: 180000 });
   H.ok('套件装进了假的用户目录', inst.code === 0, inst.out + inst.err);
-  H.setConfig(h, { autoCommit: 'off', autoUpdate: 'off', issueUpload: 'off' });
+  H.setConfig(h, { autoCommit: 'off', commitMode: 'off', autoUpdate: 'off', issueUpload: 'off' });
   if (HAS_RT) H.write(path.join(kit, 'local.json'), JSON.stringify({ jdks: [{ name: '17', path: JDK.replace(/\\/g, '/') }], defaultJdk: '17', mavens: [] }));
   const skillsDir = fs.readdirSync(path.join(cfg, 'skills')).sort();
   H.ok('装上的技能是 ttls- 开头的六个', JSON.stringify(skillsDir) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']), skillsDir);

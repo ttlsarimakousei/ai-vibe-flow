@@ -95,8 +95,8 @@ const call = (method, url, body) => new Promise((resolve) => {
     await page.click('nav button[data-tab="kit"]');
     await page.waitForFunction(() => document.getElementById('k_handoverPercent').value !== '');
     const secs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());
-    H.ok('套件开关页：八节（经验规则单开一页，问题反馈挪到了"更新和上报"）', secs.join('|') === '上下文和交接|状态栏|自动探索|全局：过程文件|全局：审查与产物|需求自动模式|Apply 自动模式|拉代码和提交|保护', secs);
-    H.ok('新的几项：自动压缩线、状态栏的用量、开工前拉代码', (await page.inputValue('#k_autoCompactPercent')) === '90' && (await page.locator('#k_statusUsage').isChecked()) && (await page.locator('#k_pullBeforeWork').isChecked()) && /用到 900k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 933000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
+    H.ok('套件开关页：九节（经验规则单开一页，问题反馈挪到了"更新和上报"；2026-10-17 起拉代码去掉了，只剩提交）', secs.join('|') === '上下文和交接|状态栏|自动探索|全局：过程文件|全局：审查与产物|需求自动模式|Apply 自动模式|提交|保护', secs);
+    H.ok('新的几项：自动压缩线、状态栏的用量、提交方式（默认询问，没有开工前拉代码）', (await page.inputValue('#k_autoCompactPercent')) === '90' && (await page.locator('#k_statusUsage').isChecked()) && (await page.inputValue('#k_commitMode')) === 'ask' && (await page.locator('#k_pullBeforeWork').count()) === 0 && /用到 900k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 933000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
     H.ok('页面上没有提示规则、清点技能的东西了', (await page.locator('#sec-hints, #sec-skills, #hints, #skillsReport, #addHint, #checkSkills').count()) === 0);
     H.ok('保存条一开始不出来', !(await page.locator('#savebar').getAttribute('class')).includes(' on'));
     // 每一项开关：一个名字、一句话
@@ -139,17 +139,23 @@ const call = (method, url, body) => new Promise((resolve) => {
     await page.waitForSelector('#barMsg.bad');
     H.ok('填错了：说清哪一项、什么都没存', /Apply 每组审查上限：要在 1 到 20 之间/.test(await page.locator('#barMsg').innerText()) && (await call('GET', '/api/kit')).json.config.applyReviewMaxRounds === before.applyReviewMaxRounds, await page.locator('#barMsg').innerText());
     await page.click('#barDrop');
-    // 上下文那一节改完自动保存
+    // 上下文那一节 2026-10-17 起不自动保存（用户定的）：改完出保存条，点了保存才存
     await page.fill('#k_handoverPercent', '65');
     await page.locator('#k_handoverPercent').blur();
-    await page.waitForSelector('#ctxMsg.ok');
-    H.ok('交接线改完自动保存', (await call('GET', '/api/kit')).json.config.handoverPercent === 65);
-    // 自动压缩线改完也自动保存，预览跟着变
+    await page.waitForSelector('#savebar.on');
+    await page.waitForTimeout(800);
+    H.ok('交接线改完不自动保存，等点保存', (await call('GET', '/api/kit')).json.config.handoverPercent !== 65);
+    await page.click('#barSave');
+    await page.waitForSelector('#barMsg.ok');
+    H.ok('点了保存：交接线存下了', (await call('GET', '/api/kit')).json.config.handoverPercent === 65);
+    // 自动压缩线：预览马上跟着变，保存了说开着的会话怎么马上生效
     await page.fill('#k_autoCompactPercent', '80');
     await page.locator('#k_autoCompactPercent').blur();
     H.ok('预览跟着算：到多少压缩、开着的会话敲哪条命令', /用到 800k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 833000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
-    await page.waitForFunction(() => /\/autocompact/.test(document.getElementById('ctxMsg').textContent));
-    H.ok('自动压缩线改完自动保存，说了开着的会话怎么马上生效', (await call('GET', '/api/kit')).json.config.autoCompactPercent === 80 && /\/autocompact/.test(await page.locator('#ctxMsg').innerText()), await page.locator('#ctxMsg').innerText());
+    await page.waitForSelector('#savebar.on');
+    await page.click('#barSave');
+    await page.waitForFunction(() => /\/autocompact/.test(document.getElementById('barMsg').textContent));
+    H.ok('自动压缩线保存了，说了开着的会话怎么马上生效', (await call('GET', '/api/kit')).json.config.autoCompactPercent === 80 && /\/autocompact/.test(await page.locator('#barMsg').innerText()), await page.locator('#barMsg').innerText());
     // 保护那一节：最近的开关改动
     const audit = await page.locator('#auditList').innerText();
     H.ok('保护那一节列着最近的开关改动', /打开了Apply 自动模式/.test(audit) && /让它自己放行/.test(audit), audit);

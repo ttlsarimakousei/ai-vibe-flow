@@ -122,7 +122,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     const shot = async (name, view) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: !view }); } };
     await page.goto('http://127.0.0.1:' + PORT + '/ui');
     await page.waitForSelector('#meta:has-text("今天")');
-    H.ok('导航里有"数据库驱动"', (await page.locator('nav > button').allInnerTexts()).join('|') === '模型|用量|本机环境|数据库驱动|套件开关|经验规则|更新和上报', await page.locator('nav > button').allInnerTexts());
+    H.ok('导航里有"数据库驱动"（2026-10-17 起第一个是"套件说明"）', (await page.locator('nav > button').allInnerTexts()).join('|') === '套件说明|模型|用量|本机环境|数据库驱动|套件开关|经验规则|更新和上报', await page.locator('nav > button').allInnerTexts());
     await page.click('nav button[data-tab="data"]');
     await page.waitForSelector('#drvList tr');
     const secs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());
@@ -187,7 +187,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     await page.click('nav button[data-tab="kit"]');
     await page.waitForFunction(() => document.getElementById('k_handoverPercent').value !== '');
     const ksecs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());
-    H.ok('套件开关页有"自动探索"一节；"提示规则""清点技能"两节去掉了', ksecs.join('|') === '上下文和交接|状态栏|自动探索|全局：过程文件|全局：审查与产物|需求自动模式|Apply 自动模式|拉代码和提交|保护', ksecs);
+    H.ok('套件开关页有"自动探索"一节；"提示规则""清点技能"两节去掉了', ksecs.join('|') === '上下文和交接|状态栏|自动探索|全局：过程文件|全局：审查与产物|需求自动模式|Apply 自动模式|提交|保护', ksecs);
     H.ok('自动探索、审查问题自动收（在经验规则那一页）：默认开着', (await page.locator('#k_autoOnboard').isChecked()) && (await page.locator('#tab-lessons #k_lessonAuto').isChecked()));
     const opts = await page.locator('#tab-kit .opt, #tab-data .opt, #tab-lessons .opt, #tab-remote .opt').evaluateAll((els) => els.map((e) => ({ t: (e.querySelector('.t') || {}).textContent || '', d: (e.querySelector(':scope > div > .d') || {}).textContent || '' })));
     H.ok('新加的开关也是一句话说明，不超过 90 个字', opts.every((o) => o.t.trim() && o.d.trim() && o.d.trim().length <= 90), opts.filter((o) => o.d.trim().length > 90).map((o) => o.t + ' ' + o.d.trim().length));
