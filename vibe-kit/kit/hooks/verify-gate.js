@@ -569,6 +569,9 @@ function reviewLoopTodo(j, cfg, entries, reviews, turnId) {
  */
 function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
   if (!cfg.autoMode || saidStuck(lastSaid)) return [];
+  // 快到网关上限不催：再催一项，请求体超了网关直接 413（39870c5 删掉过这一行，2026-10-17 审核问题 9 加回）
+  const used = lastUsageTokens(entries);
+  if (used && nearGatewayLimit(used)) return [];
   const flow = flowChanges(j); const policy = require('../lib/flow-policy');
   for (const c of sessionChanges(j.session_id, entries, changes).filter(c => flow.includes(normKey(c.dir)))) {
     if (busy && busy(c.dir, 'code') || policy.pending(c.dir, 'code')) continue;

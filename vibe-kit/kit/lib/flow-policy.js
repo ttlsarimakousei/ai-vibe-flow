@@ -148,6 +148,8 @@ const QUICK_ASK = '跑快检（项目说明里的快检命令，编译级；这�
 function stop(j, touched, codeChanged, turn, quickPending) {
   const quick = () => typeof quickPending === 'function' && quickPending() ? QUICK_ASK : '';
   const cfg = S.readConfigFor(j); const out = [];
+  // 自动模式快到网关上限不再发审查指令：再起一轮，请求体超了网关直接 413（2026-10-17 审核问题 9）
+  if (cfg.autoMode) { const used = S.lastUsageTokens(entriesOf(j)); if (used && S.nearGatewayLimit(used)) return out; }
   const dirs = [...new Set([...touched, ...S.flowChanges(j)].filter(d => fs.existsSync(d)))];
   for (const dir of dirs) {
     const mode = S.flowStage(j) === 'apply' ? 'code' : 'proposal'; const point = cfg.autoMode ? pending(dir, mode) : points(dir, mode).slice().reverse().find(p => !settled(dir, p));
