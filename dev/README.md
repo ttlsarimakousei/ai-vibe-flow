@@ -22,7 +22,13 @@ node dev/run-all.js
 node dev/run-all.js --old dev/baseline/20261005.0302/vibe-kit --old dev/baseline/20261001.0303/vibe-kit --claude <claude.exe> --claude <另一个版本的 claude.exe> --rt auto
 ```
 
-日常只想跑某几套：`--only test-workflow1014.js,test-workflow-intent.js`（文件名，逗号隔开，可以和别的参数一起用）。发版必须全量，不带它。几份新旧钩子对比同时跑（各用自己的临时目录、不占端口），别的套件一个一个跑：机器忙时有的测试会因时序出问题。每套的完整输出存在 `.vibe/tmp/run-all-<年月日-时分>/`，失败时汇总里打印每个失败项和它下面的说明。
+日常只想跑某几套：`--only test-workflow1014.js,test-workflow-intent.js`（文件名，逗号隔开，可以和别的参数一起用）。发版必须全量，不带它。2026-10-18 起分几段、几路同时跑（实测见 [docs/release-timing.md](../docs/release-timing.md)）：
+1. 一般的套 3 路同时跑（`--lanes N`；`--lanes 1` 退回按列表一个接一个，怀疑失败是同时跑引起的时候用）。上一轮各套耗时记在 `.vibe/tmp/run-all-times.json`，跑得久的排前面。
+2. 怕机器忙的套等前面跑完再一个一个单独跑：名单在 `run-all.js` 的 SOLO（现在是空的：3 路跑了三轮都没出时序失败），临时加用 `--solo a.js,b.js`。
+3. 几份新旧钩子对比一起跑（各用自己的临时目录、不占端口）。
+4. 端到端每个 Claude Code 版本一路，几个版本同时跑（`--e2e-lanes N`，默认和版本数一样；假 GitLab、假 redis 的端口每个版本错开 100）。IDEA 开着、内存不够时用 `--e2e-lanes 2`。
+
+结尾打印总用时和每一段的用时。同时跑时每套自带的"桌面上冒没冒窗口"检查，可能把别的套（或者别的程序，比如输入法的更新程序）弹的窗口记到自己头上，报了窗口先按名字看是谁。每套的完整输出存在 `.vibe/tmp/run-all-<年月日-时分>/`，失败时汇总里打印每个失败项和它下面的说明。
 
 `--old` 可以给几个，新旧对比每个都比一遍。有意改过的地方每一项记着是哪一版改的：拿来比的上一版比它老，两版应该不一样；上一版已经带着这个改动，两版应该一样。
 

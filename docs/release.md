@@ -32,7 +32,7 @@
    node dev/run-all.js --rt auto --claude <2.1.289 的 claude.exe> --claude <2.1.259 的 claude.exe> --claude <2.1.120 的 claude.exe> --old dev/baseline/<最新的基线>/vibe-kit --old dev/baseline/<再早一版>/vibe-kit
    ```
 
-   要求：全过、桌面上没有多出窗口、临时目录没留下东西。
+   要求：全过、桌面上没有多出窗口、临时目录没留下东西。默认分几路同时跑，2026-10-18 实测约 33 分钟（以前一个接一个 72 分钟，见 [docs/release-timing.md](release-timing.md)）。有失败、怀疑是同时跑引起的，用 `--lanes 1 --only <那几套>` 单独重跑确认。
 2. `dev/diff-hooks.js` 里这一版有意改的用例，`since` 先写 `NEXT`。
 
 ## 升级自带的 OpenSpec（要升的时候）
@@ -70,6 +70,8 @@ node dev/stamp-and-pack.js
    ```bash
    node dev/accept-packages.js vibe-kit-<上一版>.zip vibe-kit-<这一版>.zip
    ```
+
+   两条升级路可以同时跑，第三个参数给不同的端口（比如 18751、18761）：2026-10-18 实测一个接一个 5 分 25 秒，同时跑 2 分 53 秒。
 
 3. 提交到这个仓库，打标签 `v<版本号>`。push 由仓库主人确认后再推。
 4. 发给内网：维护的人（只有他那台电脑能发）解压新包，双击 `发布到 GitLab（双击我）.bat`。同事的电脑会自己发现、自己装上。手动装的同事直接给 zip。
