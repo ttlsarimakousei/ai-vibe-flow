@@ -172,6 +172,6 @@ IDEA MCP 的归属、检查时间和连接状态存在 `state/idea-mcp.json`，�
 
 **自带的 OpenSpec**：安装包里带一份 OpenSpec（`kit/openspec/node_modules`，打包时的最新版）。安装器用它生成 `/opsx:explore、propose、new、continue、apply、verify、archive`（1.14.3 还会带上 `sync`）的命令和技能，装成用户级，清单 `installed.json` 的 `openspec` 记着装了哪些文件，卸载、换版本时按它收回。guard-commit 的 `handle` 先跑原有的全部检查（`check`），拦下、要问的照旧；放行的命令里以 `openspec` 开头的段，用 PreToolUse 的 `updatedInput` 改成 `node "<自带的 openspec.js>"`，项目还没有 `openspec/` 的先 `init --tools none`。Node 低于它要求的版本时 `usable()` 为假：不生成命令、不改写，用同事自己装的。使用统计由 settings.fragment.json 的 `OPENSPEC_TELEMETRY=0` 关掉。
 
-**提交方式** `commitMode`（关 / 询问 / 自动，默认询问，`session.commitModeOf`）替代以前的 `autoCommit`（只管 Apply 自动）和 `plainCommit`（不走 OpenSpec 的改动），人工和自动都用。guard-commit 的 `consentIssue` 管能不能提交：关——用户说了才提交；询问——用户在就让它问、自动模式下用户不在就不提交并记进报告；自动——做完一件完整的事（新勾完任务、审查修复收尾、需求文档四份定稿）才提交。verify-gate 收工时按同样三档提醒；需求文档四份都写完才提醒提交。
+**提交方式** `commitMode`（关 / 询问 / 自动，默认关，`session.commitModeOf`）替代以前的 `autoCommit`（只管 Apply 自动）和 `plainCommit`（不走 OpenSpec 的改动），人工和自动都用。guard-commit 的 `consentIssue` 管能不能提交：关——用户说了才提交；询问——用户在就让它问、自动模式下用户不在就不提交并记进报告；自动——做完一件完整的事（新勾完任务、审查修复收尾、需求文档四份定稿）才提交。verify-gate 收工时按同样三档提醒；需求文档四份都写完才提醒提交。
 
 **需求文档一份一份来**：guard-spec 新建下一份产物前查上一份。自动模式要上一份审修过；人工模式要上一份最后一次写入之后用户说过话（停下给用户看过）。
