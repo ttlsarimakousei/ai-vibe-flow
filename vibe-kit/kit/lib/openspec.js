@@ -95,10 +95,10 @@ function installClaudeFiles(claudeDir, beforeOverwrite) {
         const p = path.join(from, n); const r2 = path.join(rel, n);
         if (fs.statSync(p).isDirectory()) { copy(p, r2); continue; }
         const to = path.join(claudeDir, r2); fs.mkdirSync(path.dirname(to), { recursive: true });
-        const rel = r2.split(path.sep).join('/');
+        const name = r2.split(path.sep).join('/');
         // 已经有同名文件、内容又不一样：先让调用方处理（安装器拿它备份你自己的同名命令）
-        if (beforeOverwrite && fs.existsSync(to) && !fs.readFileSync(to).equals(fs.readFileSync(p))) beforeOverwrite(rel, to);
-        fs.copyFileSync(p, to); files.push(rel);
+        if (beforeOverwrite && fs.existsSync(to) && !fs.readFileSync(to).equals(fs.readFileSync(p))) beforeOverwrite(name, to);
+        fs.copyFileSync(p, to); files.push(name);
       }
     };
     copy(src, '');

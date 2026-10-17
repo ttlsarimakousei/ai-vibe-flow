@@ -38,6 +38,7 @@ const suites = [['内网反馈 1007', 'test-feedback1007.js', [rt || 'none']], [
   ['查 redis', 'test-redis.js', ['18761']], ['后台自动探索', 'test-onboard.js', rt ? [rt] : []], ['自动归并、工具用量', 'test-auto-0930.js', []], ['全仓审查之后改的', 'test-review-0930.js', []], ['拦截类钩子（0930 审查）', 'test-guard-0930.js', []], ['配置页：数据库驱动', 'ui-data-0930.js', ['18795']], ['经验规则', 'test-lessons.js', []], ['安装、升级、卸载', 'test-install-0928.js', old ? [old] : []], ['配置页的经验规则', 'ui-lessons.js', ['18733', '0']], ['HTTP 方式的钩子', 'test-http-hooks.js', ['18734']], ['令牌保护、发布确认', 'test-secrets.js', []], ['自动更新和发布', 'test-update.js', ['18741']], ['问题上报和导出', 'test-issues.js', ['18743']], ['配置页的更新和上报', 'ui-update.js', ['18745', '0', '18746']]];
 suites.unshift(['内网反馈 1010、提交和多版本驱动', 'test-feedback1010.js', [rt || 'none']]);
 suites.unshift(['提案材料和相似入口', 'test-proposal-files.js', []]);
+suites.unshift(['1017：任务只写实现、验收用例、一份一份来、自带 OpenSpec', 'test-1017.js', []]);
 suites.unshift(['1012 推送反馈', 'test-feedback1012-push.js', []], ['1012 流程反馈', 'test-feedback1012-workflow.js', []], ['1012 页面探针', 'test-feedback1012-page.js', []]);
 suites.unshift(['1012 数据库诊断', 'test-feedback1012-db.js', [rt || 'none']]);
 suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'decisions', 'states', 'context'].map((name) => ['1013 反馈 ' + name, 'test-feedback1013-' + name + '.js', []]));
