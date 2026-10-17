@@ -395,7 +395,8 @@ async function handle(j) {
   // 全自动只在做任务那一段（apply）算开着；写提案那一段用户在
   cfg.autoMode = require('../lib/session').flowView(j).effective;
   // 用户开口了：全自动报告新开一轮（后台任务的通知不算用户开口）
-  if (!note && cfg.autoMode) { try { require('../lib/report.js').begin(j); } catch (e) { /* 老版本没有，或者记不了：不影响对话 */ } }
+  // 只剩用户验收时自动已不生效，但这一轮的报告也要从头记（2026-10-17：任务全做完、审过就算等用户验收）
+  if (!note && (cfg.autoMode || require('../lib/session').flowView(j).awaitingUser)) { try { require('../lib/report.js').begin(j); } catch (e) { /* 老版本没有，或者记不了：不影响对话 */ } }
   if (applyStart) {
     try { const named = allChanges(j.cwd).filter((c) => mentionsChange(j.prompt, c.name)); const targets = named.length ? named : allChanges(j.cwd); if (targets.length === 1 || named.length) require('../lib/review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 基线未知时审查明确要求 --base */ }
   }
