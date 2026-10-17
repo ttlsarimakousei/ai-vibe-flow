@@ -71,6 +71,7 @@ Claude Code 用户级 MCP 在 `~/.claude.json` 顶层 `mcpServers`；设置 `CLA
 - 内网网关给的工具调用 id 会重复，但只在不同会话之间。同一个对话里 id 重复，2.1.120 会把第二次调用换成"[Tool use interrupted]"。
 - 内网网关的回复是整段返回的（攒包在网关那层，不在模型、不在路由）。网关对单次请求体有大小上限（实测约 1 MB，合二十三四万 token），超了直接 413，换模型、`/compact` 都没用。路由记下实测到的上限，快到时状态栏提前警告。
 - 路由原样转发请求，上游收到的字节和 Claude Code 发出的逐字节一致，不破坏提示缓存。真正让缓存失效的是换模型、请求被放弃后重发、上下文太长（30 万 token 时热请求比冷请求还慢）。
+- 工具起的命令行（Bash、PowerShell）里有 `PYTHONDONTWRITEBYTECODE=1`（2026-10-18 桌面版 Code 页实测：两个工具里都有，Windows 的用户、系统环境变量里都没有，是 Claude Code 自己加的）。从这里起的 Python 都不写 `__pycache__`，测试用的 Python 又不带编好的标准库，查库的技能每条命令都要把标准库和技能的模块重新编译一遍（约 0.4 秒，见 [docs/release-timing.md](release-timing.md)）。命令行版 `claude` 的 Bash 工具里有没有没实测。
 - 开新会话、建 worktree 时，Claude Code 会把这个目录登记进 `~/.claude.json` 的 `projects`（2026-10-17 桌面版实测：worktree 建好后约 6 秒文件就变了）。所以测试不能拿整个 `~/.claude.json` 的哈希判断"没碰真实用户目录"。
 
 ## 2.1.289 上实测的（2026-10-05）

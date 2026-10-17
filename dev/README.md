@@ -22,13 +22,23 @@ node dev/run-all.js
 node dev/run-all.js --old dev/baseline/20261005.0302/vibe-kit --old dev/baseline/20261001.0303/vibe-kit --claude <claude.exe> --claude <另一个版本的 claude.exe> --rt auto
 ```
 
-日常只想跑某几套：`--only test-workflow1014.js,test-workflow-intent.js`（文件名，逗号隔开，可以和别的参数一起用）。发版必须全量，不带它。2026-10-18 起分几段、几路同时跑（实测见 [docs/release-timing.md](../docs/release-timing.md)）：
+日常只想跑某几套：`--only test-workflow1014.js,test-workflow-intent.js`（文件名，逗号隔开，可以和别的参数一起用）。`e2e` 代表全部端到端（每个 `--claude` 版本都跑），`diff` 代表新旧钩子对比（每个 `--old` 都比）。发版必须全量，不带它。开发中改了提示的说法、默认值，提交之前跑一次（一个 Claude Code 版本、一份钩子对比，加上改到的几套）：
+
+```bash
+node dev/run-all.js --only test-1008.js,e2e,diff --claude <2.1.289 的 claude.exe> --old dev/baseline/<最新的基线>/vibe-kit
+```
+
+`--since <标签>`：没动过的独立模块（查库 H2、起服务、看页面、查 redis）不测。规则在 `lib/affected.js`：模块的测试用到的文件（测试脚本和它 require 的测试支架、技能目录、调到的套件脚本，连同它们 require 到的）从这个标签以来一个都没改过才跳过，判断不了就照测，开头和结尾打印跳过了什么。`node dev/lib/affected.js <标签>` 列出每个模块用到哪些文件、哪些改过。注意套件的库互相 require 得很多（`session.js`、`guard-commit.js` 几乎在每个模块里），按这个规则最近 11 版一次都跳不了，见 [docs/release-timing.md](../docs/release-timing.md)。
+
+2026-10-18 起分几段、几路同时跑（实测见 [docs/release-timing.md](../docs/release-timing.md)）：
 1. 一般的套 3 路同时跑（`--lanes N`；`--lanes 1` 退回按列表一个接一个，怀疑失败是同时跑引起的时候用）。上一轮各套耗时记在 `.vibe/tmp/run-all-times.json`，跑得久的排前面。
 2. 怕机器忙的套等前面跑完再一个一个单独跑：名单在 `run-all.js` 的 SOLO（现在是空的：3 路跑了三轮都没出时序失败），临时加用 `--solo a.js,b.js`。
 3. 几份新旧钩子对比一起跑（各用自己的临时目录、不占端口）。
 4. 端到端每个 Claude Code 版本一路，几个版本同时跑（`--e2e-lanes N`，默认和版本数一样；假 GitLab、假 redis 的端口每个版本错开 100）。IDEA 开着、内存不够时用 `--e2e-lanes 2`。
 
 结尾打印总用时和每一段的用时。同时跑时每套自带的"桌面上冒没冒窗口"检查，可能把别的套（或者别的程序，比如输入法的更新程序）弹的窗口记到自己头上，报了窗口先按名字看是谁。每套的完整输出存在 `.vibe/tmp/run-all-<年月日-时分>/`，失败时汇总里打印每个失败项和它下面的说明。
+
+测试支架调钩子（`H.hook`）：2026-10-18 起，路由在 HTTP 方式下放进工作线程跑的那几个钩子（`kit/lib/hook-host.js` 的 `NAMES`：改文件、跑命令、提问框、搜文件、收工检查、工具调完）也在工作线程里调（`lib/hook-thread.js`），每份套件载一次反复用，省掉每次起进程的 0.3—0.6 秒；会话开始、用户开口照旧起进程。和起进程跑出来一样的几处做法：输入过一遍 JSON；环境变量指假用户目录、Windows 上不分大小写；`os.homedir()` 跟着 `USERPROFILE` 走；调用时把测试进程的工作目录切到钩子的 `cwd`、调完切回来；套件的钩子和库改了、环境变量变了就换新线程；最多等 60 秒。怀疑是它引起的失败，设环境变量 `VIBE_TEST_HOOK_SPAWN=1` 全部退回起进程重跑对比；要比命令方式本身的（`test-http-hooks.js`），单个调用传 `{ spawn: true }`。
 
 `--old` 可以给几个，新旧对比每个都比一遍。有意改过的地方每一项记着是哪一版改的：拿来比的上一版比它老，两版应该不一样；上一版已经带着这个改动，两版应该一样。
 
@@ -100,7 +110,10 @@ node dev/pack.js
 | `test-secrets.js` | 令牌和模型的 key 不给读；跑发布脚本要确认；安装器加的权限规则 |
 | `ui-update.js` | 配置页"更新和上报"的接口，从页面上点更新（路由会重启）；导出、关掉、使用情况；维护的电脑写死在代码里，测导出时用环境变量 VIBE_KIT_MAINTAINER_HOSTS 把路由装成那台；第二个参数给秒数就留着让人看页面 |
 | `e2e-update.js` | 真的 Claude Code：令牌读不到；会话里后台自己更新、自己上报 |
-| `accept-packages.js` | 验收：拿打好的两个压缩包走一遍发布、安装、再发布、自动更新 |
+| `accept-packages.js` | 验收：拿打好的两个压缩包走一遍发布、安装、再发布、自动更新。给三个以上（`<旧包 1> <旧包 2> ... <新包>`）就从每个旧包各升一次，几条路同时跑、端口各错开 10 |
+| `stale-asserts.js [标签]` | 找测试里还在用旧说法、旧默认值的地方：测试里的中文片段从标签以来在套件源码里删掉了、现在一处都没有了（注释、每一项的名字、`!/旧说法/.test` 这种反着断言的不算），再列出默认值改了的开关和提到它的测试。拿 20261018.0051 修断言之前的测试试过：找出来的正好是当时发版才发现的那 3 个文件 |
+| `lib/affected.js` | `run-all.js --since` 用的：按 git 判断独立模块的测试用到的文件从某个标签以来改没改 |
+| `lib/hook-thread.js` | `H.hook` 在工作线程里调钩子用的线程脚本 |
 | `lib/fake-gitlab.js` | 假 GitLab：git 的 http 通道加 issue 的接口 |
 | `lib/fake-idea.js` | 假 IDEA MCP（单独一个进程）：运行配置、调试方式起停、Run 方式起的停不了、不开事件流的慢调用被丢掉、运行配置有错不回话，照真的 IDEA 实测的样子 |
 | `lib/fake-ssh.js` | 假 ssh：拉仓库、推仓库、申请令牌 |
@@ -224,7 +237,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 - 同一个对话里工具调用的 id 重复，Claude Code 会把第二次调用换成"Tool use interrupted"，假模型会一直重试。要测 id 重复，分成两个会话。
 - `kit/hooks/` 里的文件不能随便删。自动更新装完新版之后的自检，跑的是旧版的代码，它按旧版的名单挨个载钩子，少一个就装回旧版。不用了的钩子留一个空壳（`source-hint.js` 就是）。
 - 测全自动模式的行为，先用 `H.inFlow(h, 会话编号, [变更目录])` 把会话记成在 OpenSpec 流程里。不记的话全自动不算数。
-- 在测试进程里直接 `require` 套件的模块，`os.homedir()` 是真实的用户目录。要读写用户目录的（查库的留痕 `~/.db-crud`），走 `H.hook`、`H.node` 起子进程。
+- 在测试进程里直接 `require` 套件的模块，`os.homedir()` 是真实的用户目录。要读写用户目录的（查库的留痕 `~/.db-crud`），走 `H.hook`、`H.node`：`H.node` 起子进程；`H.hook` 在工作线程里调时，线程里的 `os.homedir()` 已经改成跟着假的 `USERPROFILE` 走（工作线程里原生的 `os.homedir()` 读的是测试进程自己的环境，会指到真的用户目录）。
 
 ## 20261011 专项与兼容性
 
