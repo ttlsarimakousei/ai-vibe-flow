@@ -34,7 +34,7 @@ function handle(j) {
           if (confirmApply(j) || require('../lib/flow-policy').automaticApply(j)) {
             st.stage = 'apply';
             const now = readConfigFor(j);
-            out = { systemMessage: '[vibe-kit] 开始 apply：全自动模式' + (now.autoMode ? '开着，只管实现、验证和审查；提交照你选的档位。' : '关着。') };
+            out = { systemMessage: '[vibe-kit] 开始 apply：全自动模式' + (now.autoMode ? '开着，只管实现、验证和审查；提交照你选的提交方式。' : '关着。') };
           }
           if (!st.on || st.stage === 'plan') out = applyGate(j);
         } else if (/^(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b/i.test(first)) {

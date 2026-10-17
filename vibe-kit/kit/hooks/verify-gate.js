@@ -788,7 +788,7 @@ async function handle(j) {
       return /^(Bash|PowerShell)$/.test(c.name) && /probe-run\.js/.test(String(c.input.command || '')) && !failed(c) && /PAGE_PROBE\s+\{"ok":true[,}]/.test(text) && !/Exit code:?\s*[1-9]|running in (?:the )?background|still running|后台运行/i.test(text);
     });
     if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !probePassed && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /ttls-see-page 跑受影响的页面；场景做不了的，用 page/probe-run.js 执行 .vibe/tmp/<事由>/ 下的探针，断言通过并返回实际读到的值。失败、超时或只启动不算通过。这次改动确实不影响页面显示，就说明原因。');
-    // 它说要攒着打勾：不行，做完一项勾一项（提交才按档位攒）
+    // 它说要攒着打勾：不行，做完一项勾一项（提交按提交方式来）
     if (saidTickLater(lastSaid) && !pending.some((p) => p.mode === 'proposal') && !reviewOpenFor(sid, entries, changes)) todo.push('打勾不攒：每项任务做完就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完的任务都勾上，再收工。');
   } else if (sameTurn && codeNeedingCheck.length > (gate.codeEditsAtBlock || 0)) {
     // 续跑：拦下之后又改了代码（常见于审查之后的修复），没验证就再说一次
