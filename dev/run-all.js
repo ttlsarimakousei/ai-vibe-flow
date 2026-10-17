@@ -11,6 +11,7 @@
  * 结尾查三件事：真实用户目录没被碰（各个测试自己查）、临时目录清干净了、桌面上没有多出窗口。
  * 2026-10-18 起分几路同时跑（--lanes，默认 3；--lanes 1 退回一个接一个），怎么排见下面"怎么排"。结尾打印每一段的用时。
  *   --only a.js,b.js,e2e,diff    只跑这几套（e2e = 全部端到端，diff = 新旧钩子对比）
+ *   --since <标签>               没动过的独立模块不测（规则见 lib/affected.js）
  */
 const fs = require('fs');
 const os = require('os');
@@ -72,6 +73,20 @@ for (const [name, file] of [['状态并发和恢复', 'test-workflow-state.js'],
 const only = all('--only').flatMap((s) => s.split(',')).map((s) => path.basename(s.trim())).filter(Boolean);
 const picked = (file) => only.includes(file) || (only.includes('e2e') && /^e2e-/.test(file)) || (only.includes('diff') && file === 'diff-hooks.js');
 if (only.length) { for (let i = suites.length - 1; i >= 0; i--) if (!picked(suites[i][1])) suites.splice(i, 1); console.log('只跑：' + suites.map((s) => s[0]).join('、')); }
+// --since <标签>：没动过的独立模块（查库、起服务、看页面、redis）不测。判断规则见 lib/affected.js：模块的测试用到的文件
+// （连同它们 require 到的）从这个标签以来一个都没改过才跳过，判断不了就照测。跳过了什么在开头和结尾都打印
+const since = all('--since')[0] || '';
+const skipped = [];
+if (since) {
+  const p = require('./lib/affected').plan(since);
+  if (!p.ok) console.log(p.why);
+  for (const s of p.skip) {
+    for (let i = suites.length - 1; i >= 0; i--) if (s.suites.includes(suites[i][1])) suites.splice(i, 1);
+    skipped.push(s.module + '（' + s.suites.join('、') + '：用到的 ' + s.files + ' 个文件从 ' + since + ' 以来都没改过）');
+  }
+  for (const r of p.run) console.log('照测 ' + r.module + '：从 ' + since + ' 以来改过 ' + (r.changed ? r.changed.length + ' 个用到的文件，比如 ' + r.changed.slice(0, 3).join('、') : '（判断不了）'));
+  console.log('跳过：' + (skipped.length ? skipped.join('；') : '没有'));
+}
 // 每套的完整输出存到 .vibe/tmp/run-all-<时间>/，失败时打印每个失败项和它下面的说明（以前只打印前 30 行，常常只看到原因的第一行）
 const pad2 = (n) => String(n).padStart(2, '0');
 const now = new Date();
@@ -150,6 +165,7 @@ console.log('合计：' + rows.length + ' 套，通过 ' + rows.reduce((n, r) =>
 console.log('桌面上多出来的窗口：' + (newWin.length ? newWin.join('、') : '没有'));
 console.log('临时目录里留下的测试目录：' + (left.length ? left.join('、') : '没有'));
 console.log('用时：' + fmt((Date.now() - t0) / 1000) + '（' + phaseTimes.join('；') + '）');
+if (since) console.log('没测的独立模块：' + (skipped.length ? skipped.join('；') : '没有'));
 console.log('每套的完整输出：' + LOGS);
 process.exit(rows.every((r) => r.ok) && !newWin.length && !left.length ? 0 : 1);
 })();
