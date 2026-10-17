@@ -178,7 +178,7 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
   {
     const h = H.freshHome('t1005-ac');
     const r = install(h, H.SRC);
-    H.ok('默认（上限 100 万、压缩线 90%）：93.3 万，没变', r.code === 0 && settings(h).autoCompactWindow === 933000, settings(h).autoCompactWindow);
+    H.ok('默认（上限 100 万、压缩线 70%，2026-10-17 起）：73.3 万，没变', r.code === 0 && settings(h).autoCompactWindow === 733000, settings(h).autoCompactWindow);
     H.setConfig(h, { autoCompactPercent: 95 });
     sync(h);
     H.ok('压缩线填 95：窗口 96 万（以前是 98.3 万，Claude Code 还没压缩就先报 Prompt is too long）', settings(h).autoCompactWindow === 960000, settings(h).autoCompactWindow);

@@ -5,7 +5,7 @@ const path = require('path');
 const H = require('./lib/harness');
 const denied = r => !!r && (r.decision === 'block' || r.hookSpecificOutput && r.hookSpecificOutput.permissionDecision === 'deny');
 (async () => {
-  const h = H.makeHome('proposal-files', process.argv[2] || null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', lessons: 'off', vibeTidy: false, specGate: true });
+  const h = H.makeHome('proposal-files', process.argv[2] || null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'ask', lessons: 'off', vibeTidy: false, specGate: true });
   const repo = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'notes.md': '原说明\n', 'src/a.js': 'const a=1;\n', 'openspec/changes/a/proposal.md': '## Why\n修复业务状态。\n', 'openspec/changes/a/tasks.md': '- [ ] 1.1 改 src/a.js；验：node --check src/a.js\n' });
   const dir = path.join(repo, 'openspec/changes/a');
   const transcript = entries => H.transcript(path.join(h.root, 't.jsonl'), entries);

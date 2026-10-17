@@ -73,7 +73,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   // ---------------------------------------------------------------------------------------------
   H.section('提交方式"询问"（默认）：我说了提交才提交；"自动"不问；OpenSpec 实施里也一样');
   {
-    const h = H.makeHome('t1008-commit', null, Object.assign({ specGate: false }, QUIET));
+    // 这一节测"询问"那一档（2026-10-17 晚上起默认是"关"）
+    const h = H.makeHome('t1008-commit', null, Object.assign({ specGate: false, commitMode: 'ask' }, QUIET));
     const proj = H.makeRepo(path.join(h.work, 'tool'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', '.claude/rules/ttls-lessons-java.md': '- x\n' });
     const A = path.join(proj, 'src', 'A.java');
     const tf = path.join(h.root, 'c.jsonl');
@@ -127,9 +128,9 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     // 1014 起人工模式改了代码还会先问一次审查、自测；提交那句在前面有别的待办时写作"接着提交"
     H.ok('我在提问框里选了提交、它却没提交就收工：照旧催它现在提交', blocked(s3) && /现在提交|接着提交，不用等我说/.test(H.reasonOf(s3)), H.reasonOf(s3));
     const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
-    H.ok('提交方式存得进去、配置页上有，旧开关不再存', api.cleanConfig({ commitMode: 'off' }).commitMode === 'off' && api.cleanConfig({ commitMode: 'x' }).commitMode === 'ask' && !('plainCommit' in api.cleanConfig({ plainCommit: 'auto' })) && /id="k_commitMode"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+    H.ok('提交方式存得进去、配置页上有，旧开关不再存', api.cleanConfig({ commitMode: 'ask' }).commitMode === 'ask' && api.cleanConfig({ commitMode: 'x' }).commitMode === 'off' && !('plainCommit' in api.cleanConfig({ plainCommit: 'auto' })) && /id="k_commitMode"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
     const sorted = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
-    H.ok('两份默认值一样，默认是先问我', sorted(api.DEFAULT_CONFIG) === sorted(S.DEFAULT_CONFIG) && S.DEFAULT_CONFIG.commitMode === 'ask' && !('plainCommit' in S.DEFAULT_CONFIG) && !('autoCommit' in S.DEFAULT_CONFIG));
+    H.ok('两份默认值一样，默认是关（2026-10-17 晚上起）', sorted(api.DEFAULT_CONFIG) === sorted(S.DEFAULT_CONFIG) && S.DEFAULT_CONFIG.commitMode === 'off' && !('plainCommit' in S.DEFAULT_CONFIG) && !('autoCommit' in S.DEFAULT_CONFIG));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -219,7 +220,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
     H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /两套独立自动模式/.test(md) && /git push[^。\n]*归档[^。\n]*按对应规则确认/.test(md));
-    H.ok('提交那一节：默认是询问，做完一件完整的事用 Ask 问', /提交方式是"询问"：做完一件完整的事/.test(md) && /用 Ask 问"提交 \/ 还要改"/.test(md), md.slice(0, 300));
+    H.ok('提交那一节：默认是关，用户说了提交才提交', /提交方式是"关"：不自动提交，也不问/.test(md), md.slice(0, 300));
     H.ok('约定说明双自动条件外先 Ask，归档由用户决定', /其他情况用 Ask 给出 apply 选项/.test(md) && /归档.*用户/.test(md));
     H.setConfig(h, { commitMode: 'auto' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
@@ -232,7 +233,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   // ---------------------------------------------------------------------------------------------
   H.section('审查过程不进提交：提案审完询问提交，审查未收尾不催提交');
   {
-    const h = H.makeHome('t1008-rev', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', specGate: false, reviewLoop: true, reviewMaxRounds: 3 });
+    const h = H.makeHome('t1008-rev', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', specGate: false, reviewLoop: true, reviewMaxRounds: 3, commitMode: 'ask' });
     const proj = H.makeRepo(path.join(h.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', 'openspec/changes/add-x/tasks.md': '- [ ] 1.1 改 src/A.java；验：mvn -q compile\n' });
     const chg = path.join(proj, 'openspec', 'changes', 'add-x');
     const tf = path.join(h.root, 'r.jsonl');

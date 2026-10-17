@@ -173,7 +173,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     const rep = H.read(path.join(ph.kit, 'state', sid + '-report.json')) || '';
     H.ok('询问：要提交的记进了全自动报告', /改动还没提交/.test(rep), rep.slice(0, 300));
     const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
-    H.ok('提交方式存得进去，配置页上有三档', api.cleanConfig({ commitMode: 'auto' }).commitMode === 'auto' && api.cleanConfig({}).commitMode === 'ask' && /id="k_commitMode"[\s\S]{0,200}value="off"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+    H.ok('提交方式存得进去，配置页上有三档', api.cleanConfig({ commitMode: 'auto' }).commitMode === 'auto' && api.cleanConfig({}).commitMode === 'off' && /id="k_commitMode"[\s\S]{0,200}value="off"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
     H.setConfig(ph, { commitMode: 'auto' });
     const gen = H.node(ph, path.join(ph.kit, 'install.js'), ['--sync'], { cwd: ph.root, timeout: 60000 });
     const md2 = H.read(path.join(ph.cfg, 'CLAUDE.md')) || '';

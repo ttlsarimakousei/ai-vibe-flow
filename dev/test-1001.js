@@ -33,8 +33,8 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     const man = () => readJson(path.join(h.kit, 'installed.json'));
     const sync = () => H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const inst = H.node(h, path.join(H.SRC, 'install.js'), ['--no-router', '--no-open'], { cwd: h.root, timeout: 180000 });
-    H.ok('装的时候写了窗口：上限 100 万的 90% 加 3.3 万', inst.code === 0 && settings().autoCompactWindow === 933000 && man().autoCompactWindow === 933000 && man().autoCompactWindowOrig === 400000, [inst.out.slice(-1200), settings().autoCompactWindow, man()]);
-    H.ok('说了在哪压缩、开着的会话怎么马上生效', /自动压缩：上下文用到约 900k token 时/.test(inst.out) && /\/autocompact 933000/.test(inst.out), inst.out);
+    H.ok('装的时候写了窗口：上限 100 万的 70%（2026-10-17 起的默认）加 3.3 万', inst.code === 0 && settings().autoCompactWindow === 733000 && man().autoCompactWindow === 733000 && man().autoCompactWindowOrig === 400000, [inst.out.slice(-1200), settings().autoCompactWindow, man()]);
+    H.ok('说了在哪压缩、开着的会话怎么马上生效', /自动压缩：上下文用到约 700k token 时/.test(inst.out) && /\/autocompact 733000/.test(inst.out), inst.out);
     H.ok('状态栏没有新消息时也 30 秒刷新一次', settings().statusLine && settings().statusLine.refreshInterval === 30 && /statusline\.js/.test(settings().statusLine.command), settings().statusLine);
     const cfg = readJson(path.join(h.kit, 'config.json'));
     H.ok('开关文件里老的"维护套件的电脑"去掉了，别的开关还在', cfg.maintainerHosts === undefined && cfg.reviewLoop === true && !/32\.1\.4\.4/.test(H.read(path.join(h.kit, 'config.json'))), cfg);
@@ -66,7 +66,7 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     H.node(g, path.join(H.SRC, 'install.js'), ['--no-router', '--no-open'], { cwd: g.root, timeout: 180000 });
     const gs = readJson(path.join(g.cfg, 'settings.json'));
     H.node(g, path.join(g.kit, 'install.js'), ['--uninstall'], { cwd: g.root, timeout: 120000 });
-    H.ok('原来没设过：装上有，卸载后没有', gs.autoCompactWindow === 933000 && readJson(path.join(g.cfg, 'settings.json')).autoCompactWindow === undefined, readJson(path.join(g.cfg, 'settings.json')));
+    H.ok('原来没设过：装上有，卸载后没有', gs.autoCompactWindow === 733000 && readJson(path.join(g.cfg, 'settings.json')).autoCompactWindow === undefined, readJson(path.join(g.cfg, 'settings.json')));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     const r = sl(base(300000));
     H.ok('没装路由：两行', r.code === 0 && r.lines.length === 2, r.raw + r.err);
     H.ok('第一行：模型、目录和分支、上下文', /^Qwen3 │ shop \(\S+\) │ 上下文 ███░░░░░░░ 30% 300k\/1M/.test(r.lines[0]), r.lines[0]);
-    H.ok('第二行：全自动关着、到多少自动压缩', /^需求自动 关 · Apply 自动 关 │ 到 900k 自动压缩$/.test(r.lines[1]), r.lines[1]);
+    H.ok('第二行：全自动关着、到多少自动压缩', /^需求自动 关 · Apply 自动 关 │ 到 700k 自动压缩$/.test(r.lines[1]), r.lines[1]);
     H.setConfig(h, { autoMode: true });
     const on1 = sl(base(300000));
     H.ok('全自动开着、这个会话不在流程里：写明照常', /^需求自动 关 · Apply 自动 开/.test(on1.lines[1]), on1.lines[1]);

@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', commitMode: 'ask', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, usageReport: 'on', ccAutoMode: 'off', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', ccAutoMode: 'off', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -50,7 +50,7 @@ function cleanConfig(x, base) {
   // 提示规则 2026-09-30 去掉了：文件里以前存的那一项不再写回去
   delete c.hints;
   // autoOnboard 后台自动探索；lessonAuto 审查报的问题自动收；dbcrudDaemon 查库的后台执行器
-  for (const k of ['autoVerify', 'autoSeePage', 'autoCrossReview', 'commitCheck', 'specGate', 'autoResume', 'reviewLoop', 'autoMode', 'autoRequirements', 'autoApply', 'autoHandover', 'kitLock', 'autoOnboard', 'lessonAuto', 'dbcrudDaemon']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
+  for (const k of ['autoVerify', 'autoSeePage', 'autoCrossReview', 'commitCheck', 'specGate', 'reviewLoop', 'autoMode', 'autoRequirements', 'autoApply', 'autoHandover', 'kitLock', 'autoOnboard', 'lessonAuto', 'dbcrudDaemon']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
   // 后台执行器多久没人用就退出：1 到 60 分钟
   const idle = Number(x && x.dbcrudDaemonIdleMinutes); if (idle >= 1 && idle <= 60) c.dbcrudDaemonIdleMinutes = Math.round(idle);
   // .vibe/tmp 下的临时目录多少天没动就自动清掉：0 = 不自动清，最多 90 天

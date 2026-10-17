@@ -6,7 +6,8 @@
  *   需求文档一份一份来    人工模式：上一份写完、用户说过话才写下一份
  *   自带的 OpenSpec      openspec 命令改成调用套件自带的那份；项目没有 openspec/ 先建；Node 不够（自带的用不了）照原命令跑
  *                        命令不支持时按在用的那份提示；安装器装成用户级 /opsx:* 命令和 openspec-* 技能，卸载收回
- *   提交方式             旧的提交档位、"不走 OpenSpec 的改动"升级后一律按"询问"
+ *   提交方式             旧的提交档位、"不走 OpenSpec 的改动"升级后一律按"关"（晚上改的默认值）
+ *   强制改默认值         升到这一版时把自动压缩线、交接线之后、提交方式、两个自动模式改成新默认值，只改一次；去掉 autoResume
  * 用法：node dev/test-1017.js [旧版的 vibe-kit 目录]（给了就拿旧版跑，看哪些项不过）
  */
 const fs = require('fs');
@@ -130,18 +131,55 @@ const DESIGN_OK = ['## Context', '', '- 读过 src/A.java：现在只有查询',
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('提交方式：旧的提交档位、"不走 OpenSpec 的改动"升级后按"询问"');
+  H.section('提交方式：旧的提交档位、"不走 OpenSpec 的改动"升级后按"关"（默认）');
   {
     const h = H.makeHome('t1017-commit', FROM, Object.assign({}, QUIET, { autoCommit: 'task', plainCommit: 'auto' }));
     const S = require(path.join(h.kit, 'lib', 'session.js'));
     const cfg = JSON.parse(H.read(path.join(h.kit, 'config.json')));
-    H.ok('旧配置 autoCommit=task、plainCommit=auto：提交方式按"询问"', typeof S.commitModeOf === 'function' && S.commitModeOf(cfg) === 'ask');
+    H.ok('旧配置 autoCommit=task、plainCommit=auto：提交方式按"关"', typeof S.commitModeOf === 'function' && S.commitModeOf(cfg) === 'off' && S.DEFAULT_CONFIG.commitMode === 'off');
     const proj = H.makeRepo(path.join(h.work, 'tool'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n' });
     H.write(path.join(proj, 'src', 'A.java'), 'class A { int x; }\n');
     const r = H.hook(h, 'guard-commit', { session_id: 's-c', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git add src/A.java && git commit -m "fix: 空指针"' }, transcript_path: H.transcript(path.join(h.root, 'c.jsonl'), [H.tr.user('修一下 A 的空指针'), H.tr.ran('Edit', { file_path: path.join(proj, 'src', 'A.java'), old_string: 'class A {}', new_string: 'class A { int x; }' }, 'ok'), H.tr.say('修好了')]) });
-    H.ok('没说提交就提交：按"询问"拦下，让它用提问框问', blocked(r) && /提交方式是"询问"/.test(H.reasonOf(r)), H.reasonOf(r));
+    H.ok('没说提交就提交：按"关"拦下，你说提交才提交', blocked(r) && /提交方式是"关"/.test(H.reasonOf(r)), H.reasonOf(r));
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
-    H.ok('约定里写的是"询问"', gen.code === 0 && /提交方式是"询问"/.test(H.read(path.join(h.cfg, 'CLAUDE.md')) || ''));
+    H.ok('约定里写的是"关"', gen.code === 0 && /提交方式是"关"/.test(H.read(path.join(h.cfg, 'CLAUDE.md')) || ''));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('升级时强制改成新的默认值（只改一次）：压缩线 70%、交接线之后只提醒、提交方式关、两个自动关；去掉 autoResume');
+  {
+    const pkg = (() => { if (!FROM) return H.makePackage('t1017-def', null); const d = path.join(H.tempDir('t1017-def'), 'vibe-kit'); H.copyDir(FROM, d, (n) => n === 'node_modules' || n === '.git'); H.stubDeps(d); return d; })();
+    const u = H.freshHome('t1017-def');
+    const install = () => H.node(u, path.join(pkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+    const cfgOf = () => { try { return JSON.parse(H.read(path.join(u.kit, 'config.json'))) || {}; } catch (e) { return {}; } };
+    const setCfg = (patch) => { const c = Object.assign(cfgOf(), patch); for (const k of Object.keys(patch)) if (patch[k] === undefined) delete c[k]; H.write(path.join(u.kit, 'config.json'), JSON.stringify(c, null, 2)); };
+    const marker = path.join(u.kit, 'state', 'defaults-1017-migration.json');
+    const i1 = install();
+    const c1 = cfgOf();
+    H.ok('新装：默认值就是新的（压缩线 70、交接线之后 off、提交方式 off、没有 autoResume）', i1.code === 0 && c1.autoCompactPercent === 70 && c1.handoverAsk === 'off' && c1.commitMode === 'off' && !('autoResume' in c1) && c1.autoApply === false, [i1.out.slice(-600), c1]);
+    const settings = () => { try { return JSON.parse(H.read(path.join(u.cfg, 'settings.json'))) || {}; } catch (e) { return {}; } };
+    H.ok('压缩窗口跟着写成 73.3 万（上限 100 万 × 70% + 3.3 万）', settings().autoCompactWindow === 733000, settings().autoCompactWindow);
+    // 装好之后用户自己改了：之后的更新不再动
+    setCfg({ autoCompactPercent: 85, handoverAsk: 'ask', commitMode: 'auto' });
+    const i2 = install();
+    const c2 = cfgOf();
+    H.ok('改过一次之后：再更新不动你的选择', i2.code === 0 && c2.autoCompactPercent === 85 && c2.handoverAsk === 'ask' && c2.commitMode === 'auto' && !/改回了新的默认值/.test(i2.out), [c2, i2.out.slice(-400)]);
+    // 从旧版升上来：没有标记、旧值都在、还有一个会话正在 Apply 自动干活
+    try { fs.unlinkSync(marker); } catch (e) { /* 旧版没写标记 */ }
+    setCfg({ autoCompactPercent: 90, handoverAsk: 'ask', commitMode: 'ask', autoResume: true, autoApply: true, autoMode: true, autoRequirements: true });
+    H.write(path.join(u.kit, 'state', 'work-sessions.json'), JSON.stringify({ busy: { pid: process.pid, at: Date.now() } }));
+    const i3 = install();
+    const c3 = cfgOf();
+    H.ok('从旧版升上来：压缩线、交接线之后、提交方式强制改成新默认值，autoResume 去掉', i3.code === 0 && c3.autoCompactPercent === 70 && c3.handoverAsk === 'off' && c3.commitMode === 'off' && !('autoResume' in c3) && /改回了新的默认值：自动压缩线 70%/.test(i3.out), [c3, i3.out.slice(-800)]);
+    H.ok('有会话正在 Apply 自动干活：两个自动这次先不关，说清楚', c3.autoApply === true && c3.autoRequirements === true && /个会话正在 Apply 自动干活，这次先不关两个自动模式/.test(i3.out), [c3, i3.out.slice(-800)]);
+    H.write(path.join(u.kit, 'state', 'work-sessions.json'), '{}');
+    setCfg({ commitMode: 'ask' });
+    const i4 = install();
+    const c4 = cfgOf();
+    H.ok('下次没在跑自动的时候：只补关两个自动，别的不再改', i4.code === 0 && c4.autoApply === false && c4.autoRequirements === false && c4.autoMode === false && c4.commitMode === 'ask' && /需求自动和 Apply 自动关闭/.test(i4.out), [c4, i4.out.slice(-600)]);
+    const i5 = install();
+    H.ok('都改过了：再更新一个字都不说', i5.code === 0 && !/改回了新的默认值/.test(i5.out) && cfgOf().commitMode === 'ask');
+    H.ok('配置页上没有 autoResume 了，存也存不进去', !/k_autoResume/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || '') && !('autoResume' in require(path.join(H.SRC, 'router', 'kit-api.js')).cleanConfig({ autoResume: true })));
   }
 
   const wins = await watch.stop();

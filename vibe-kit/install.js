@@ -290,7 +290,7 @@ function autoMemoryNote(r) {
   else if (r === 'user') console.log('  [!] settings.json 里你自己设了 ' + AUTO_MEMORY_ENV + '，没动它');
 }
 /**
- * 自动压缩的窗口（config.json 的 autoCompactPercent，默认 90；0 = 不管，照 Claude Code 自己的）。
+ * 自动压缩的窗口（config.json 的 autoCompactPercent，默认 70；0 = 不管，照 Claude Code 自己的）。
  * 2.1.259 这类新版本，没设窗口时不按用量自己压缩，要等接口报"请求太长"才补救；内网网关、内网模型的报错它认不出，
  * 上下文一直涨，过了 100% 也不压缩（2026-10-01 用户遇到的，真的 Claude Code 加假模型实测过）。设了之后它在"窗口 − 3.3 万"处压缩。
  * 窗口 = 上下文上限 × 百分比 + 3.3 万，钳到 10 万到 96 万（和 lib/session.js 的 autoCompactWindowOf 一样的算法；为什么最大 96 万见那里）。
@@ -301,7 +301,7 @@ function autoMemoryNote(r) {
  */
 function autoCompactWindow() {
   const c = kitConfig();
-  const p = c.autoCompactPercent === undefined ? 90 : Number(c.autoCompactPercent);
+  const p = c.autoCompactPercent === undefined ? 70 : Number(c.autoCompactPercent);
   if (!(p > 0)) return 0;
   const limit = Number(c.contextLimitTokens) > 0 ? Number(c.contextLimitTokens) : 1000000;
   return Math.max(100000, Math.min(960000, Math.round(limit * Math.min(p, 95) / 100) + 33000));
@@ -530,7 +530,7 @@ const COMMIT_RHYTHM_TEXT = PROPOSAL_COMMIT + ' 实施按提交方式提交；归
 function kitConfig() {
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t) || {}; } catch (e) { return {}; }
 }
-function commitMode() { const m = kitConfig().commitMode; return COMMIT_MODE_TEXT[m] ? m : 'ask'; }
+function commitMode() { const m = kitConfig().commitMode; return COMMIT_MODE_TEXT[m] ? m : 'off'; }
 function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'; }
 // 两阶段各有独立的审查上限；每个产物、每个整组任务分别计数。
 function reviewModeText() {
@@ -796,7 +796,8 @@ if (mode === 'install') {
   let migrateCfg = null;
   if (!fs.existsSync(migrationFile)) { try { const v = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^\uFEFF/, '')); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('\u4E0D\u662F\u5BF9\u8C61'); migrateCfg = v; } catch (e) { console.log('  [!] config.json \u8BFB\u4E0D\u61C2\uFF0C\u8FD9\u6B21\u6CA1\u6709\u5173\u95ED\u4E24\u4E2A\u81EA\u52A8\u6A21\u5F0F\uFF1B\u5728\u914D\u7F6E\u9875\u4FDD\u5B58\u4E00\u6B21\u4F1A\u91CD\u5199\u8FD9\u4E2A\u6587\u4EF6\uFF0C\u4E0B\u6B21\u66F4\u65B0\u518D\u5173'); } }
   // \u6709\u4F1A\u8BDD\u6B63\u5728 Apply \u81EA\u52A8\u5E72\u6D3B\uFF08\u8FDB\u7A0B\u8FD8\u5728\uFF09\uFF1A\u8FD9\u6B21\u5148\u4E0D\u5173\uFF0C\u514D\u5F97\u5B83\u4E2D\u9014\u53D8\u6210\u4EBA\u5DE5\u3001\u505C\u5728\u63D0\u95EE\u6846\u4E0A\uFF1B\u4E0B\u6B21\u6CA1\u6709\u5728\u8DD1\u7684\u81EA\u52A8\u4F1A\u8BDD\u65F6\u7684\u66F4\u65B0\u518D\u5173\uFF08\u7528\u6237 2026-10-17 \u5B9A\u7684\uFF09
-  const busyAuto = migrateCfg && migrateCfg.autoApply ? (() => { try { return Object.values(JSON.parse(fs.readFileSync(path.join(KIT, 'state', 'work-sessions.json'), 'utf8'))).filter((r) => { if (!r || !r.pid) return r && Date.now() - (Number(r.at) || 0) < 30 * 60000; try { process.kill(r.pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }).length; } catch (e) { return 0; } })() : 0;
+  const busyAutoCount = () => { try { return Object.values(JSON.parse(fs.readFileSync(path.join(KIT, 'state', 'work-sessions.json'), 'utf8'))).filter((r) => { if (!r || !r.pid) return r && Date.now() - (Number(r.at) || 0) < 30 * 60000; try { process.kill(r.pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }).length; } catch (e) { return 0; } };
+  const busyAuto = migrateCfg && migrateCfg.autoApply ? busyAutoCount() : 0;
   if (busyAuto) { console.log('  [!] \u6709 ' + busyAuto + ' \u4E2A\u4F1A\u8BDD\u6B63\u5728 Apply \u81EA\u52A8\u5E72\u6D3B\uFF0C\u8FD9\u6B21\u5148\u4E0D\u5173\u95ED\u4E24\u4E2A\u81EA\u52A8\u6A21\u5F0F\uFF0C\u7B49\u4E0B\u6B21\u6CA1\u6709\u5728\u8DD1\u7684\u81EA\u52A8\u4F1A\u8BDD\u65F6\u7684\u66F4\u65B0\u518D\u5173'); migrateCfg = null; }
   if (migrateCfg) {
     const cur = migrateCfg;
@@ -808,6 +809,40 @@ if (mode === 'install') {
     fs.writeFileSync(sealFile, JSON.stringify(Object.assign({ kitLock: true, kitBypass: 'ask' }, oldSeal, { autoMode: false, autoApply: false, autoRequirements: false, at: Date.now() })));
     fs.writeFileSync(migrationFile, JSON.stringify({ at: Date.now() }));
     console.log('  [OK] 两阶段自动模式已关闭，任务进度保留；需要时在配置页重新开启');
+  }
+  // 2026-10-17 晚上（用户定的）：升到这一版时强制改成新的默认值，不管你之前选的是什么；只改一次（记在 defaults-1017-migration.json），之后保留你的选择。
+  //   自动压缩线 70%、到了交接线之后"不问，只提醒"、提交方式"关"、去掉旧 autoResume；需求自动和 Apply 自动关闭。
+  //   有会话正在 Apply 自动干活时，两个自动模式这次先不关（和上面一样），别的照改；下次没在跑的时候再关
+  const forceFile = path.join(KIT, 'state', 'defaults-1017-migration.json');
+  let forced = {}; try { forced = JSON.parse(fs.readFileSync(forceFile, 'utf8')) || {}; } catch (e) { forced = {}; }
+  if (!forced.defaults || !forced.autoOff) {
+    let cur = null;
+    try { cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^﻿/, '')); if (!cur || typeof cur !== 'object' || Array.isArray(cur)) throw new Error('不是对象'); }
+    catch (e) { cur = null; console.log('  [!] config.json 读不懂，这次没改成新的默认值；在配置页保存一次会重写这个文件，下次更新再改'); }
+    if (cur) {
+      const said = [];
+      if (!forced.defaults) {
+        Object.assign(cur, { autoCompactPercent: 70, handoverAsk: 'off', commitMode: 'off' });
+        delete cur.autoResume;
+        forced.defaults = Date.now();
+        said.push('自动压缩线 70%、到了交接线之后只提醒不问、提交方式"关"（你说提交才提交）');
+      }
+      const busy = !forced.autoOff && cur.autoApply ? busyAutoCount() : 0;
+      if (!forced.autoOff && busy) console.log('  [!] 有 ' + busy + ' 个会话正在 Apply 自动干活，这次先不关两个自动模式，等下次没在跑的自动会话时的更新再关');
+      else if (!forced.autoOff) {
+        Object.assign(cur, { autoMode: false, autoRequirements: false, autoApply: false });
+        const sealFile = path.join(KIT, 'state', 'config-seal.json');
+        let oldSeal = {}; try { oldSeal = JSON.parse(fs.readFileSync(sealFile, 'utf8')); } catch (e) { /* 没有旧封条时保护项采用安全默认值 */ }
+        fs.mkdirSync(path.dirname(sealFile), { recursive: true });
+        fs.writeFileSync(sealFile, JSON.stringify(Object.assign({ kitLock: true, kitBypass: 'ask' }, oldSeal, { autoMode: false, autoApply: false, autoRequirements: false, at: Date.now() })));
+        forced.autoOff = Date.now();
+        said.push('需求自动和 Apply 自动关闭');
+      }
+      fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2) + '\n');
+      fs.mkdirSync(path.dirname(forceFile), { recursive: true });
+      fs.writeFileSync(forceFile, JSON.stringify(forced));
+      if (said.length) console.log('  [OK] 这一版把几项开关改回了新的默认值：' + said.join('；') + '。要别的在配置页改，之后的更新不再动');
+    }
   }
   // 问题上报从什么时候算起：头一回装上带问题上报的版本的这一刻，以前攒下的不传（20260929 起去掉了存量推送）。
   // 不在这里记的话要等第一次上报时才记，装好之后、第一次上报之前记的问题会被当成"以前攒下的"，永远传不上去

@@ -229,9 +229,8 @@ function scanWholeFile(file) {
 }
 
 /**
- * 交接之后的新会话：刚写好的交接记录（一小时内、还没接过），用户在新会话里开口时把交接记录接上。
- *   开关 autoResume 开着：第一句话不管说什么都接上（SessionStart 那句 initialUserMessage 有没有真的发出去都行）；
- *   关着（默认，老版本的 Claude Code 不认 initialUserMessage）：用户说"继续""接着做""按交接记录"这类话才接上，说别的不打扰，一小时内说都算。
+ * 交接之后的新会话：刚写好的交接记录（一小时内、还没接过），用户点名要读（"按交接记录继续""读取 .vibe/handover.md"）时接上；
+ *   一句"继续"不算，说别的不打扰。以前的 autoResume 开关（第一句话不管说什么都接上）2026-10-17 删掉了。
  * 这条路什么版本都通。写交接记录的那个老会话里用户再说话不算：会话里跑过 /ttls-handover（改名之前叫 /handover）、用 Skill 工具调过它、
  * 或者自己写过这份 handover.md 的都跳过。只接一次。
  */
@@ -246,7 +245,7 @@ function wroteHandover(entries, file) {
   });
 }
 function handoverContinuation(j, cfg) {
-  // 历史交接只在用户点名选择时读取；"继续"和 autoResume 不再借用旧记录。
+  // 历史交接只在用户点名选择时读取；一句"继续"不借用旧记录。
   if (!/(?:读取|接着|恢复|使用|按)[^。！？\n]{0,36}(?:\.vibe[\\/]handover\.md|交接记录)|(?:交接记录|handover\.md)[^。！？\n]{0,20}(?:继续|接着|恢复)/i.test(intent.plain(j.prompt))) return '';
   try {
     let d = path.resolve(j.cwd || process.cwd());
@@ -356,7 +355,7 @@ function anchorLines(j, cfg, note) {
         }
         else if (declined) lines.push('上下文已经用了 ' + pct + '%，过了交接线。我说过再做一会儿：接着做我说的事，到 ' + (asked.askedAtPct + 10) + '% 会再问我要不要交接。');
         // 和收工检查说法一致：开着"到线问一句"的，收工时会让它用提问框问我，不叫它自己先交接
-        else if ((cfg.handoverAsk || 'ask') !== 'off') lines.push('上下文已经用了 ' + pct + '%，过了公司规定的交接线。做完手头这一小步就收工，收工时会让你用提问框问我要不要交接（我选交接就执行 /ttls-handover）；新的大任务留到新会话里做。');
+        else if ((cfg.handoverAsk || 'off') !== 'off') lines.push('上下文已经用了 ' + pct + '%，过了公司规定的交接线。做完手头这一小步就收工，收工时会让你用提问框问我要不要交接（我选交接就执行 /ttls-handover）；新的大任务留到新会话里做。');
         // 开关选了"不问，只提醒"：只说一句，不让它自己写交接记录（用户 2026-10-07：没让交接就不要交接）
         else lines.push('上下文已经用了 ' + pct + '%，过了公司规定的交接线。我没让你交接就不要交接，接着做我说的事；要交接我会说（/ttls-handover）。新的大任务留到新会话里做。');
       }

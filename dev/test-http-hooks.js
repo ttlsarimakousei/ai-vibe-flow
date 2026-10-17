@@ -12,7 +12,8 @@ const H = require('./lib/harness');
 
 const PORT = Number(process.argv[2]) || 18734;
 // 催记经验是"审查报的问题自动收"关着的时候才有的：这里要测的是两种方式结果一样，关掉它好让这道检查有话说
-const h = H.makeHome('http', null, { lessonAuto: false });
+// 经验规则文件的提交在"询问""自动"下不用再问；2026-10-17 晚上起默认是"关"，这里写明"询问"
+const h = H.makeHome('http', null, { lessonAuto: false, commitMode: 'ask' });
 H.copyDir(path.join(H.SRC, 'router'), path.join(h.kit, 'router'));
 fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });
 fs.writeFileSync(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [], routes: [], default: { provider: '' }, failover: [], options: {} }, null, 2));

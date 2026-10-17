@@ -433,18 +433,13 @@
             <li>套件把它写进 settings.json 的 <span class="mono">autoCompactWindow</span>（窗口 = 上限 × 这个百分比 + 3.3 万，Claude Code 在"窗口 − 3.3 万"处压缩）。2.1.120、2.1.259、2.1.289 都认。</li>
             <li>窗口最大写到 96 万，也就是最晚用到 92.7 万压缩：实测窗口再大，Claude Code 还没压缩就先报 Prompt is too long 了。上限填得比 100 万大、这里填 95 的，都按这个数算，下面的预览里写着。</li>
             <li>改了之后新开的会话生效。开着的会话在 Claude Code 里敲下面算好的那条 <span class="mono">/autocompact</span> 命令，马上生效。</li>
-            <li>比交接线高：先到交接线，提醒你交接；没交接、接着用，到这里 Claude Code 自己压缩。</li>
+            <li>默认 70%。默认的"自动压缩优先"不提醒交接，用到这里 Claude Code 自己压缩；"连续工作的方式"选了"按交接线提醒"的，这一项要比交接线高，才会先提醒交接、再压缩。</li>
           </ul></details></div>
         <div class="ctl"><input type="number" id="k_autoCompactPercent" min="0" max="95"><span class="dim">%</span></div>
       </div>
       <div class="opt">
         <div><div class="t">到了交接线之后</div><div class="d">选"问我"：这一轮说完，Claude 用提问框问你要不要交接；选"再做一会儿"，再涨 10% 才再问。选"不问"：只提醒一句，你说交接它才写。</div></div>
         <div class="ctl"><select id="k_handoverAsk"><option value="ask">用提问框问我要不要交接</option><option value="off">不问，只提醒；我说交接才交接</option></select></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">旧 autoResume 设置</div><div class="d">保留旧值供迁移核对，不再凭历史交接自动续接。需要阅读旧交接时明确点名，动作许可重新确认。</div>
-          <details class="more"><summary>细节</summary><ul><li>压缩和恢复仅核对当前本机事实。</li><li>一句“继续”不读取历史交接，不恢复旧许可。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoResume"><i></i></label></div>
       </div>
       <div class="row" style="margin-top:6px"><span id="ctxPreview" class="dim"></span><span class="msg" id="ctxMsg"></span></div>
       <p class="hint" id="gwNote" style="margin:10px 0 0"></p>
@@ -1106,7 +1101,7 @@
   }, set: (v) => { $('k_' + key).value = v === undefined || v === null ? '' : v; } }; };
   fBool('autoVerify', '改了代码要验证'); fBool('autoSeePage', '改了页面要看页面'); fBool('specGate', '提案、打勾、归档的门槛');
   
-  fBool('autoRequirements', '需求自动模式'); fBool('autoApply', 'Apply 自动模式'); fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查'); fBool('autoResume', '/clear 之后自动接着干');
+  fBool('autoRequirements', '需求自动模式'); fBool('autoApply', 'Apply 自动模式'); fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
   fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('requirementsReviewMaxRounds', '需求每点审查上限', 1, 20); fNum('applyReviewMaxRounds', 'Apply 每组审查上限', 1, 20);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);

@@ -9,7 +9,7 @@ const intent = require('./intent');
 const { execFileSync } = require('child_process');
 
 const KIT = path.join(__dirname, '..');
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, autoResume: false, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'ask', commitMode: 'ask', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 90, statusUsage: true, usageReport: 'on', ccAutoMode: 'off', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', hookTransport: 'auto', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', ccAutoMode: 'off', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 /**
  * 套件开关（~/.claude/vibe-kit/config.json），可以在路由的配置页里改，也可以手改。
  * 三个"放松保护"的（kitLock 关掉、kitBypass 改成 auto、autoMode 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
@@ -350,7 +350,7 @@ function flowAdopt(j) {
  * 提交方式（用户 2026-10-17 定的，人工和自动都用）：off 关（不问、不自动提交）、ask 询问（到了提交时机问一次，默认）、auto 自动（到了时机直接提交）。
  * 以前的 autoCommit（只管 Apply 自动）、plainCommit（不走 OpenSpec 的改动）并进来了，不再认它们；没设过的按"询问"
  */
-function commitModeOf(cfg) { return ['off', 'ask', 'auto'].includes(cfg && cfg.commitMode) ? cfg.commitMode : 'ask'; }
+function commitModeOf(cfg) { return ['off', 'ask', 'auto'].includes(cfg && cfg.commitMode) ? cfg.commitMode : 'off'; }
 /** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */
 function readConfigFor(j) {
   const c = readConfig(); c.autoSwitch = c.autoApply || c.autoRequirements;
@@ -641,7 +641,7 @@ function contextPercent(used, windowSize, cfg) {
  * 自动压缩的窗口（写进 settings.json 的 autoCompactWindow，Claude Code 自己的设置，2.1.120、2.1.259 都认）。0 = 不设，照 Claude Code 自己的。
  * 为什么要设：2.1.259 这类新版本，没设这个窗口时不按用量自己压缩，要等接口报"请求太长"才补救；内网网关、内网模型的报错它认不出，
  * 上下文就一直涨，过了 100% 也不压缩（2026-10-01 用户遇到的，真的 Claude Code 加假模型实测过）。设了之后它在"窗口 − 2 万（留给输出）− 1.3 万"处压缩。
- * 所以窗口 = 上下文上限 × 自动压缩线（autoCompactPercent，默认 90%）+ 3.3 万：用到上限的 90% 左右压缩。
+ * 所以窗口 = 上下文上限 × 自动压缩线（autoCompactPercent，默认 70%）+ 3.3 万：用到上限的 70% 左右压缩。
  * 上限填 0（跟着 Claude Code 报的窗口走）的按 100 万算：Claude Code 取它和模型窗口里小的那个。Claude Code 只认 10 万到 100 万。
  * 窗口最大只写到 96 万（用到 92.7 万压缩）：2.1.259 上实测窗口设到 97.7 万以上，还没压缩就先报 Prompt is too long 了，
  * 正是这个功能要防的事；压缩线和那条线之间还要留出一轮对话涨的量。压缩线填 95%、上限填得比 100 万大的，都落在这个数上

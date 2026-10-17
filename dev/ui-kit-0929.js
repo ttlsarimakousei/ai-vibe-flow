@@ -96,7 +96,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     await page.waitForFunction(() => document.getElementById('k_handoverPercent').value !== '');
     const secs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());
     H.ok('套件开关页：九节（经验规则单开一页，问题反馈挪到了"更新和上报"；2026-10-17 起拉代码去掉了，只剩提交）', secs.join('|') === '上下文和交接|状态栏|自动探索|全局：过程文件|全局：审查与产物|需求自动模式|Apply 自动模式|提交|保护', secs);
-    H.ok('新的几项：自动压缩线、状态栏的用量、提交方式（默认询问，没有开工前拉代码）', (await page.inputValue('#k_autoCompactPercent')) === '90' && (await page.locator('#k_statusUsage').isChecked()) && (await page.inputValue('#k_commitMode')) === 'ask' && (await page.locator('#k_pullBeforeWork').count()) === 0 && /用到 900k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 933000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
+    H.ok('新的几项：自动压缩线、状态栏的用量、提交方式（2026-10-17 晚上起默认 70%、关，没有开工前拉代码）', (await page.inputValue('#k_autoCompactPercent')) === '70' && (await page.locator('#k_statusUsage').isChecked()) && (await page.inputValue('#k_commitMode')) === 'off' && (await page.locator('#k_pullBeforeWork').count()) === 0 && /用到 700k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 733000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
     H.ok('页面上没有提示规则、清点技能的东西了', (await page.locator('#sec-hints, #sec-skills, #hints, #skillsReport, #addHint, #checkSkills').count()) === 0);
     H.ok('保存条一开始不出来', !(await page.locator('#savebar').getAttribute('class')).includes(' on'));
     // 每一项开关：一个名字、一句话
@@ -104,7 +104,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('每一项都有名字、一句话说明和控件', opts.length >= 25 && opts.every((o) => o.t.trim() && o.d.trim() && o.ctl), opts.filter((o) => !(o.t.trim() && o.d.trim() && o.ctl)));
     const longest = opts.reduce((a, o) => Math.max(a, o.d.trim().length), 0);
     H.ok('一句话说明都不超过 90 个字（以前最长的六百多字）', longest <= 90, opts.filter((o) => o.d.trim().length > 90).map((o) => o.t + ' ' + o.d.trim().length));
-    H.ok('细节默认折着', (await page.locator('#tab-kit details.more[open]').count()) === 0 && (await page.locator('#tab-kit details.more').count()) >= 12);
+    H.ok('细节默认折着', (await page.locator('#tab-kit details.more[open]').count()) === 0 && (await page.locator('#tab-kit details.more').count()) >= 11);
     await page.locator('#sec-auto details.more summary').first().click();
     const autoMore = await page.locator('#sec-auto details.more').first().innerText();
     H.ok('自测细节说明无法执行时如实报告', !/1\.x/.test(autoMore) && /验不了/.test(autoMore), autoMore);
