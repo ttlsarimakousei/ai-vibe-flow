@@ -7,16 +7,41 @@
  *   4. 同事的电脑在后台发现第二个包、自己装上；装上之后新记的问题反馈建成了 issue（装之前攒下的不传）
  * 仓库是临时目录里的假 GitLab。全程盯着桌面。
  * 用法：node dev/accept-packages.js <第一个 zip> <第二个 zip> [端口，默认 18751]
+ *       node dev/accept-packages.js <旧包 1> <旧包 2> ... <新包> [端口]   从每个旧包各升一次到新包，几条路同时跑（端口各错开 10），
+ *       2026-10-18 实测两条路一个接一个 5 分 25 秒、同时跑 2 分 53 秒
  */
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const H = require('./lib/harness');
 
-const ZIP1 = path.resolve(process.argv[2] || '');
-const ZIP2 = path.resolve(process.argv[3] || '');
-const PORT = Number(process.argv[4]) || 18751;
-if (!fs.existsSync(ZIP1) || !fs.existsSync(ZIP2)) { console.log('用法：node dev/accept-packages.js <第一个 zip> <第二个 zip> [端口]'); process.exit(2); }
+const argv = process.argv.slice(2);
+const zips = argv.filter((a) => !/^\d+$/.test(a)).map((a) => path.resolve(a));
+const PORT = Number(argv.find((a) => /^\d+$/.test(a))) || 18751;
+if (zips.length < 2 || !zips.every((z) => fs.existsSync(z))) { console.log('用法：node dev/accept-packages.js <第一个 zip> <第二个 zip> [端口]，或 <旧包 1> <旧包 2> ... <新包> [端口]'); process.exit(2); }
+if (zips.length > 2) {
+  // 几条升级路：每条起一个自己（两个包、各自的端口），同时跑，最后汇总
+  const { spawn } = require('child_process');
+  const to = zips[zips.length - 1];
+  const t0 = Date.now();
+  const runs = zips.slice(0, -1).map((from, i) => new Promise((resolve) => {
+    let out = '';
+    const p = spawn(process.execPath, [__filename, from, to, String(PORT + 10 * i)], { windowsHide: true });
+    p.stdout.on('data', (d) => { out += d; }); p.stderr.on('data', (d) => { out += d; });
+    p.on('close', (code) => resolve({ from, code, out }));
+    p.on('error', (e) => resolve({ from, code: -1, out: out + String(e) }));
+  }));
+  Promise.all(runs).then((rs) => {
+    for (const r of rs) { console.log('==== 从 ' + path.basename(r.from) + ' 升到 ' + path.basename(to)); console.log(r.out.trim()); }
+    const bad = rs.filter((r) => r.code !== 0);
+    console.log('');
+    console.log((bad.length ? '[X] ' : '[OK] ') + '验收 ' + rs.length + ' 条升级路（同时跑，' + Math.round((Date.now() - t0) / 1000) + ' 秒）' + (bad.length ? '，没过：' + bad.map((r) => path.basename(r.from)).join('、') : '，都过了'));
+    process.exit(bad.length ? 1 : 0);
+  });
+  return;
+}
+const H = require('./lib/harness');
+const ZIP1 = zips[0];
+const ZIP2 = zips[1];
 const sha = (f) => crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex');
 function filesOf(dir, rel, out) {
   for (const e of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
