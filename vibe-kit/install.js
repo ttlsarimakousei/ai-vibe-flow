@@ -776,8 +776,15 @@ if (mode === 'install') {
   }
   // 2026-10-14 一次性迁移：本次新装和旧版升级都关闭两阶段自动；后续同步保留用户选择。
   const migrationFile = path.join(KIT, 'state', 'workflow-v2-migration.json');
-  if (!fs.existsSync(migrationFile)) {
-    const cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^\uFEFF/, ''));
+  // config.json \u8BFB\u4E0D\u61C2\uFF1A\u8FD9\u6B21\u4E0D\u8FC1\u79FB\u3001\u4E0D\u5199\u6807\u8BB0\uFF0C\u5F80\u4E0B\u7167\u5E38\u88C5\u5B8C\uFF082026-10-17 \u5BA1\u6838\u95EE\u9898 10\uFF1A\u539F\u6765\u5728\u8FD9\u91CC\u629B\u9519\uFF0C\u88C5\u4E86\u4E00\u534A\u5C31\u9000\u51FA\uFF0C\u81EA\u52A8\u66F4\u65B0\u6BCF\u6B21\u90FD\u5931\u8D25\uFF09\u3002
+  // \u8BFB\u4E0D\u61C2\u7684\u914D\u7F6E\u94A9\u5B50\u6309\u9ED8\u8BA4\u503C\u7B97\uFF0C\u4E24\u4E2A\u81EA\u52A8\u672C\u6765\u5C31\u662F\u5173\u7684
+  let migrateCfg = null;
+  if (!fs.existsSync(migrationFile)) { try { const v = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^\uFEFF/, '')); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('\u4E0D\u662F\u5BF9\u8C61'); migrateCfg = v; } catch (e) { console.log('  [!] config.json \u8BFB\u4E0D\u61C2\uFF0C\u8FD9\u6B21\u6CA1\u6709\u5173\u95ED\u4E24\u4E2A\u81EA\u52A8\u6A21\u5F0F\uFF1B\u5728\u914D\u7F6E\u9875\u4FDD\u5B58\u4E00\u6B21\u4F1A\u91CD\u5199\u8FD9\u4E2A\u6587\u4EF6\uFF0C\u4E0B\u6B21\u66F4\u65B0\u518D\u5173'); } }
+  // \u6709\u4F1A\u8BDD\u6B63\u5728 Apply \u81EA\u52A8\u5E72\u6D3B\uFF08\u8FDB\u7A0B\u8FD8\u5728\uFF09\uFF1A\u8FD9\u6B21\u5148\u4E0D\u5173\uFF0C\u514D\u5F97\u5B83\u4E2D\u9014\u53D8\u6210\u4EBA\u5DE5\u3001\u505C\u5728\u63D0\u95EE\u6846\u4E0A\uFF1B\u4E0B\u6B21\u6CA1\u6709\u5728\u8DD1\u7684\u81EA\u52A8\u4F1A\u8BDD\u65F6\u7684\u66F4\u65B0\u518D\u5173\uFF08\u7528\u6237 2026-10-17 \u5B9A\u7684\uFF09
+  const busyAuto = migrateCfg && migrateCfg.autoApply ? (() => { try { return Object.values(JSON.parse(fs.readFileSync(path.join(KIT, 'state', 'work-sessions.json'), 'utf8'))).filter((r) => { if (!r || !r.pid) return r && Date.now() - (Number(r.at) || 0) < 30 * 60000; try { process.kill(r.pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }).length; } catch (e) { return 0; } })() : 0;
+  if (busyAuto) { console.log('  [!] \u6709 ' + busyAuto + ' \u4E2A\u4F1A\u8BDD\u6B63\u5728 Apply \u81EA\u52A8\u5E72\u6D3B\uFF0C\u8FD9\u6B21\u5148\u4E0D\u5173\u95ED\u4E24\u4E2A\u81EA\u52A8\u6A21\u5F0F\uFF0C\u7B49\u4E0B\u6B21\u6CA1\u6709\u5728\u8DD1\u7684\u81EA\u52A8\u4F1A\u8BDD\u65F6\u7684\u66F4\u65B0\u518D\u5173'); migrateCfg = null; }
+  if (migrateCfg) {
+    const cur = migrateCfg;
     Object.assign(cur, { autoMode: false, autoRequirements: false, autoApply: false });
     fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2) + '\n');
     const sealFile = path.join(KIT, 'state', 'config-seal.json');
