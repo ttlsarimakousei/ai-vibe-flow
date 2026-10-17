@@ -19,7 +19,7 @@ const OLD_VERSION = (H.read(path.join(OLD, 'kit', 'VERSION')) || '').trim();
 function asPackage(name, from) {
   const dir = path.join(H.tempDir(name), 'vibe-kit');
   H.copyDir(from, dir, (n) => n === 'node_modules' || n === '.git');
-  for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) H.write(path.join(dir, 'kit', 'page', 'node_modules', dep, 'package.json'), JSON.stringify({ name: dep, version: '0.0.0-test' }) + '\n');
+  H.stubDeps(dir);
   return dir;
 }
 const install = (h, pkg, args) => H.node(h, path.join(pkg, 'install.js'), ['--no-router', '--no-open'].concat(args || []), { cwd: h.root, timeout: 300000 });

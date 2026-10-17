@@ -1683,7 +1683,7 @@ function noteToolFlow(j, cfg) {
   } catch (e) { /* 留不了：工具按用户不在算，只会更严 */ }
 }
 
-function handle(j) {
+function check(j) {
   // IDEA 的终端、工具路由也走现有检查；其它 MCP 不受这个适配影响。
   if (/^mcp__/.test(String(j.tool_name || ''))) {
     const out = require('../lib/idea-tools').handle(j); if (out) return out;
@@ -1789,6 +1789,24 @@ function handle(j) {
   }
   if (ask) return askOut(ask);
   return null;
+}
+
+/**
+ * 检查都过了、照常放行的命令：里面以 openspec 开头的段，改成调用套件自带的那份（lib/openspec.js，用户 2026-10-17 定的集成 OpenSpec）。
+ * 用 PreToolUse 的 updatedInput 改写，2.1.120、2.1.259、2.1.289 实测都支持。项目还没初始化 OpenSpec 的先初始化。
+ * 检查拦下、要问的照旧（不改写）；自带的用不了（Node 版本不够）、出错，都让原命令照常跑
+ */
+function handle(j) {
+  const out = check(j);
+  if (out || /^mcp__/.test(String(j.tool_name || ''))) return out;
+  try {
+    const O = require('../lib/openspec');
+    const next = O.rewrite(String((j.tool_input && j.tool_input.command) || ''), j.tool_name === 'PowerShell');
+    if (!next) return out;
+    const at = O.ensureRoot(j.cwd || process.cwd());
+    if (at) hookLog('guard-commit 自带的 OpenSpec 在 ' + at + ' 建了 openspec/');
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput: Object.assign({}, j.tool_input, { command: next }) } };
+  } catch (e) { try { feedback.recordHookError('guard-commit OpenSpec 改写', j, e); } catch (x) { /* 记不了也放行 */ } return out; }
 }
 
 module.exports = { handle, preprocess, stripComments, splitCommand, words, scanRedirects, parseGit, messageOf };

@@ -634,6 +634,8 @@ if (mode === 'uninstall') {
   }
   // 从改名之前的版本直接卸载：旧名字的技能也是套件装的，一起收回
   removeOldNames();
+  // 自带的 OpenSpec 生成的命令和技能（清单里记着的）
+  for (const rel of Array.isArray(man.openspec) ? man.openspec : []) { try { fs.unlinkSync(path.join(CLAUDE, rel)); } catch (e) { /* 已经没了 */ } }
   const finish = async () => {
     try {
       const f = path.join(KIT, 'lib', 'idea-mcp.js');
@@ -647,7 +649,7 @@ if (mode === 'uninstall') {
     if (fs.existsSync(kitMd) && !same(kitMd, path.join(KIT, 'pristine', 'CLAUDE.md'))) console.log('  [!] 你改过 ' + kitMd + '，删除前备份在 ' + backup(kitMd, 'vibe-kit/CLAUDE.md'));
     // results：老版本看页面的执行器没写 --out 时把结果放在这里
     // update：自动更新从仓库拉下来的暂存处和日志
-    for (const n of ['page', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js']) removeDir(path.join(KIT, n));
+    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js']) removeDir(path.join(KIT, n));
     console.log('  [OK] 已卸载：约定块、钩子、状态栏、技能，以及安装时加的权限和环境变量都收回了。');
     if (mergeSettings.unlinked) console.log('  [OK] 在配置页点过"接上"：' + mergeSettings.unlinked + '（替你点了一次"断开"）。');
     if (unlinkRouter.note && hadRouter) console.log('  [!] ' + unlinkRouter.note + '。');
@@ -704,6 +706,22 @@ function removeOldNames() {
  * urai-db-crud 自带的驱动先挪进套件的驱动目录并登记：不然升级完就连不上库了（这一版起驱动不随包带）。
  * 只收一次：收过之后用户又装回来的（installed.json 的 absorbed 里记着），是用户要的，不再收，只提一句
  */
+/**
+ * 自带的 OpenSpec（用户 2026-10-17 定的集成）：用它生成 /opsx:* 命令和 openspec-* 技能，装成用户级（~/.claude/commands/opsx、~/.claude/skills），
+ * 所有项目都能用，不用各自 openspec init。已有同名、又不是上次装的（你自己的）先备份。上次装了、这次没有的删掉。
+ * Node 版本不够（1.14.3 要 20.19）时不装，上次装的也收回：用你自己装的、项目里初始化好的 OpenSpec。返回这次装的文件（相对 ~/.claude）
+ */
+function installOpenSpec(prev) {
+  const before = Array.isArray(prev.openspec) ? prev.openspec : [];
+  const drop = (keep) => { for (const rel of before) if (!keep.includes(rel)) { try { fs.unlinkSync(path.join(CLAUDE, rel)); } catch (e) { /* 已经没了 */ } } };
+  let O = null; try { O = require(path.join(KIT, 'lib', 'openspec.js')); } catch (e) { O = null; }
+  if (!O) return before;
+  const r = O.installClaudeFiles(CLAUDE, (rel, to) => { if (!before.includes(rel)) console.log('  [!] 已有同名的 ' + rel + '（你自己的），原文件备份在 ' + backup(to, rel)); });
+  if (!r.ok) { drop([]); console.log('  [!] 没装套件自带的 OpenSpec：' + r.why); return []; }
+  drop(r.files);
+  console.log('  [OK] OpenSpec ' + r.version + '（套件自带）：' + O.WORKFLOWS.map((w) => '/opsx:' + w).join('  ') + '。项目里没初始化的，第一次用时自动建 openspec/');
+  return r.files;
+}
 function removeAbsorbed(man) {
   const out = [];
   const done = isObj(man.absorbed) ? man.absorbed : {};
@@ -733,12 +751,15 @@ if (mode === 'install') {
   for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
     if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
   }
+  if (!fs.existsSync(path.join(SRC, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js'))) { console.log('  [X] 安装包不完整：缺自带的 OpenSpec（kit/openspec/node_modules）。重新拷一份完整的包'); process.exit(1); }
   const s = readSettings();
   // 全局 CLAUDE.md 不是 UTF-8：和 settings.json 读不懂一样，什么都不动。装一半、约定写不进去，比不装还乱
   if (readGlobalMd().text === null) { explainNotUtf8(fs.existsSync(MANIFEST) ? '这次什么都没动：现在装着的还是之前那一版，照常工作。转好之后再运行一次安装。' : '这次什么都没动，套件还没装上。转好之后再运行一次安装。'); process.exit(1); }
   fs.mkdirSync(KIT, { recursive: true });
   // 版本号（VERSION）最后写：装到一半被结束（关机、注销）的话，版本号还是旧的，自动更新下次会接着重装；
   // 先写的话，技能、约定、钩子登记都还是旧的，却已经显示"已是最新"，一直到下一版
+  // 自带的 OpenSpec 整个换新：换版本时不留上一版的旧文件
+  removeDirQuiet(path.join(KIT, 'openspec'));
   copyDir(path.join(SRC, 'kit'), KIT, ['VERSION']);
   for (const f of ['install.js', 'settings.fragment.json']) copyFile(path.join(SRC, f), path.join(KIT, f));
   // 路由的程序目录整个换新（数据在 router-data，不在这里），免得留下上一版的旧文件。
@@ -851,7 +872,9 @@ if (mode === 'install') {
     console.log('  [OK] 以前单独装的 ' + a.name + ' 技能并进套件了，现在叫 ' + a.now + '。旧的挪到了 ' + a.backup + '（不会被自动删）');
     if (a.drivers.length) console.log('       它自带的驱动挪到了套件的驱动目录并登记好：' + a.drivers.map((u) => u.name + ' ' + path.basename(u.jar)).join('、'));
   }
+  const openspecFiles = installOpenSpec(man0);
   const man = mergeSettings(s, false);
+  man.openspec = openspecFiles;
   console.log('  [OK] 钩子：编码保护、提交检查、令牌保护、打断后提醒、会话开始核对项目说明和当前事实、收工检查'
     + (mergeSettings.transport === 'http' ? '。改文件、跑命令、收工这几个检查在模型路由里跑（HTTP 方式，不用每次起进程）' : ''));
   autoMemoryNote(mergeSettings.autoMemory);

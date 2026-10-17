@@ -65,9 +65,10 @@ function copyDir(src, dst, skip) {
 const roots = [];
 /**
  * 一个假的用户目录，里面放一份套件（不带看页面的 node_modules，钩子和工具用不着）。
- * from 不给就是现在的源码；给一个目录就拷那一份（新旧对比用）
+ * from 不给就是现在的源码；给一个目录就拷那一份（新旧对比用）。
+ * 自带的 OpenSpec 默认也不带（没有就不改写 openspec 命令，和 Node 版本不够的电脑一样）；opts.openspec 为真时拷一份真的进去
  */
-function makeHome(name, from, config) {
+function makeHome(name, from, config, opts) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vkt-' + name + '-'));
   roots.push(root);
   const home = path.join(root, 'home');
@@ -75,6 +76,7 @@ function makeHome(name, from, config) {
   const kit = path.join(cfg, 'vibe-kit');
   const src = from || SRC;
   copyDir(path.join(src, 'kit'), kit, (n) => n === 'node_modules');
+  if (opts && opts.openspec) copyDir(path.join(SRC, 'kit', 'openspec', 'node_modules'), path.join(kit, 'openspec', 'node_modules'));
   for (const f of ['install.js', 'settings.fragment.json']) fs.copyFileSync(path.join(src, f), path.join(kit, f));
   fs.copyFileSync(path.join(src, 'claude', 'CLAUDE.md'), path.join(kit, 'CLAUDE.md'));
   copyDir(path.join(src, 'claude', 'rules'), path.join(kit, 'rules'));
@@ -130,10 +132,20 @@ function freshHome(name) {
  * 一份安装包（从现在的源码拷，不带看页面的依赖，放几个占位的目录让安装器认）。version 给了就改成这个版本号、
  * 在《更新说明.md》最前面加一节；mutate(dir) 里可以再改文件
  */
+/**
+ * 安装包里看页面的依赖、自带的 OpenSpec 放占位（安装器要看到它们才肯装）。
+ * OpenSpec 的占位要求 Node 99：等于"这台电脑用不了自带的"，安装器不生成 /opsx 命令、钩子不改写 openspec 命令
+ */
+function stubDeps(dir) {
+  for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) write(path.join(dir, 'kit', 'page', 'node_modules', dep, 'package.json'), JSON.stringify({ name: dep, version: '0.0.0-test' }) + '\n');
+  const os1 = path.join(dir, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec');
+  write(path.join(os1, 'package.json'), JSON.stringify({ name: '@fission-ai/openspec', version: '0.0.0-test', engines: { node: '>=99.0.0' } }) + '\n');
+  write(path.join(os1, 'bin', 'openspec.js'), "console.log('占位');\n");
+}
 function makePackage(name, version, mutate, notes) {
   const dir = path.join(tempDir(name), 'vibe-kit');
   copyDir(SRC, dir, (n) => n === 'node_modules' || n === '.git');
-  for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) write(path.join(dir, 'kit', 'page', 'node_modules', dep, 'package.json'), JSON.stringify({ name: dep, version: '0.0.0-test' }) + '\n');
+  stubDeps(dir);
   if (version) {
     fs.writeFileSync(path.join(dir, 'kit', 'VERSION'), version + '\n');
     const f = path.join(dir, '更新说明.md');
@@ -352,4 +364,4 @@ function reviewPoints(h, dir, mode) {
   for (const point of p.points(dir, mode || 'code')) p.noteResult(dir, point, { id: 'fixture-' + point, status: 'completed', issues: [] }, p.fingerprint(dir, point));
 }
 
-module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, makePackage, runtime, inFlow, reviewPoints, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done };
+module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, makePackage, runtime, inFlow, reviewPoints, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done, stubDeps };

@@ -41,6 +41,10 @@ function cleanLocal(x) {
   return { jdks, defaultJdk: pick(str(x && x.defaultJdk), jdks), mavens, defaultMaven: pick(str(x && x.defaultMaven), mavens), tomcats: pairs(x && x.tomcats), notes: str(x && x.notes).slice(0, 2000) };
 }
 /** 清洗配置。base 是"不合法时用什么"：不给就是默认值；保存时给文件里现在的值，传进来的乱写的项保持原样，不会被改回默认 */
+/** 自带的 OpenSpec 是哪一版、这台电脑能不能用（Node 版本够不够）。"套件说明"页上显示 */
+function openspecInfo(kitDir) {
+  try { const O = require(path.join(kitDir, 'lib', 'openspec.js')); const i = O.info(); return i ? { version: i.version, node: i.node, usable: O.usable() } : null; } catch (e) { return null; }
+}
 function cleanConfig(x, base) {
   const c = Object.assign({}, DEFAULT_CONFIG, base && typeof base === 'object' ? base : {});
   // 提示规则 2026-09-30 去掉了：文件里以前存的那一项不再写回去
@@ -379,7 +383,7 @@ async function handle(method, url, body, kitDir, ctx) {
     if (config.kitLock === false && seal.kitLock !== false) tampered.push('关掉"禁止 Claude 自己改套件"');
     if (config.kitBypass === 'auto' && seal.kitBypass !== 'auto') tampered.push('兜底放行"让它自己放行"');
     for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (config[k] === true && seal[k] === false) tampered.push('打开“' + label + '”');
-    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, ideaMcp: ideaStatus(kitDir) };
+    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, ideaMcp: ideaStatus(kitDir), openspec: openspecInfo(kitDir) };
   }
   if (method === 'POST' && url === '/api/kit/idea/check') return { ideaMcp: await runKit(kitDir, ['idea-check'], 30000) };
   if (method === 'GET' && url === '/api/kit/hooks') return hookInfo(kitDir);
