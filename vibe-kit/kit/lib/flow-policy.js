@@ -120,8 +120,9 @@ function automaticApply(j) {
   // 写文档期间用户又问了问题、或者提问框还没回答：照人工给选项，不自动开工
   if (openQuestion(entriesOf(j))) return false;
   const root = path.resolve(c.dir, '../../..'); const rel = path.relative(root, c.dir).replace(/\\/g, '/');
-  // 不是 git 仓库的壳子没有"提交"这一步，审完就算定稿；提交方式不是"自动"的，文档提不提交由用户定，也不等提交
-  if (inGit(root) && S.commitModeOf(cfg) === 'auto') { try { if (!W.checkedGit(root, ['ls-files', '--', rel + '/tasks.md']).trim() || W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim()) return false; } catch (e) { return false; } }
+  // 不是 git 仓库的壳子没有"提交"这一步，审完就算定稿。提交方式是"询问""自动"的，等文档提交了再开工（询问要等用户答了提交）；
+  // "关"的，文档提不提交由用户自己来，不等
+  if (inGit(root) && S.commitModeOf(cfg) !== 'off') { try { if (!W.checkedGit(root, ['ls-files', '--', rel + '/tasks.md']).trim() || W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim()) return false; } catch (e) { return false; } }
   if (!require('./apply-scope').grant(j, c.name, '').ok) return false;
   S.setFlow(j, true, '两阶段自动：文档逐点审修并定稿提交后开工', 'apply'); return true;
 }
