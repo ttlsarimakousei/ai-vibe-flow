@@ -24,7 +24,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | 会话开始（新开、/clear、压缩后、恢复） | `session-start.js`（一直走命令） | 送项目说明、只读就绪摘要和壳子结构；压缩恢复时核对当前事实；不自动续接旧交接许可；记启动目录、核对套件指纹、清过期文件、数使用情况 |
 | 用户开口 | `task-anchor.js`（一直走命令） | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；HTTP 钩子自检 |
 | 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑五道检查：`guard-kit`（套件的文件不许改）→ `guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
-| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add、像密码的内容）、push 核对预览后的真人确认，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）、不走 OpenSpec 的提交要用户点头 |
+| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add）、按提交方式（关 / 询问 / 自动）管提交、push 核对预览后的真人确认，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver（IDEA 能用时提 `--idea`）、归档门槛（含用户没说归档）；都过了再把 `openspec …` 改成调用自带的 OpenSpec（updatedInput） |
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下；IDEA 读取复用相同范围判断 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据、推送预览和消费许可；失败或后台启动不算通过；已适配 IDEA 完成输出先遮盖凭据 |
@@ -54,7 +54,8 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |
 | `usage.js` | 使用情况：每天数次数，第二天传到 GitLab |
 | `pull.js` | 开工前拉代码 |
-| `idea-mcp.js` | 本机 IDEA MCP 身份核验和用户级登记；安装、同步、后台更新共用；只管理自己加的连接 |
+| `idea-mcp.js` | 本机 IDEA MCP 身份核验和用户级登记；安装、同步、后台更新共用；只管理自己加的连接；顺带读出 IDEA 开没开 brave mode |
+| `idea-run.js` | 用 IDEA 的运行配置起停服务（`devserver.js --idea` 用）：能不能用（连着、开了 brave mode、目录在 IDEA 项目里，只读本机文件）、列运行配置、调试方式起、列会话、STOP。MCP 客户端开着事件流（IDEA 等不到事件流会丢掉 15 秒以上的调用） |
 | `idea-tools.js` | IDEA 直接工具和工具路由的入口适配；复用终端、读文件、单文件编辑的既有保护；未适配的脚本和数据库入口拦下 |
 | `hook-host.js`、`hook-worker.js`、`hook-health.js` | HTTP 钩子：路由里跑钩子、自检 |
 
