@@ -22,6 +22,15 @@
  * 下面的进程按父子关系找不到，以前会留下来（两个 java 一起跑，请求打到哪个不一定——问题反馈 F20260928-011）。
  * 输出的最后一行就是结果："起来了：…""没起来：…""停了：…"。用 && 把 stop 和 start 串起来也行：stop 等端口空出来才返回。
  * 模型路由（~/.claude/vibe-kit/router-data/router.pid）无论如何不停。
+ *
+ * 用 IDEA 的运行配置起（用户 2026-10-17 定的；实测见 docs/claude-code-facts.md"运行配置的起、停、重启"，做法见 lib/idea-run.js）：
+ *   node devserver.js start --name <名字> --idea "<运行配置名>" --port <运行配置监听的端口> [-- <启动命令>]
+ *   - IDEA MCP 连着、开了 brave mode、目录在 IDEA 项目里时，用调试方式起这个运行配置（IDEA 的调试窗口里看得到）；"确保跑的是现在的代码"和上面一样：
+ *     起来之后代码改过就停掉会话重起，没改过直接用。端口是运行配置自己的，不能 auto。
+ *   - 端口上是用户在 IDEA 里点 Run 起的（MCP 看不到、停不了）：代码没改过直接用；改过就结束它、用调试方式重起，说一句。不是 IDEA 起的照旧不动。
+ *   - IDEA 用不了（没连上、没开 brave mode）：照 -- 后面的命令起，和不加 --idea 一样；没写命令就说清为什么用不了。
+ *   - IDEA 没回话（多半弹了编辑运行配置的框）：不改用命令起，免得和 IDEA 那边起来的撞上，说清去 IDEA 里看。
+ *   IDEA 连着、项目里有运行配置，start 却没写 --idea：不起，列出运行配置名让它选；前端开发服务器这类没有对应运行配置的加 --no-idea。
  */
 const fs = require('fs');
 const net = require('net');
@@ -379,7 +388,171 @@ async function waitUp(rec, waitSec) {
   return 1;
 }
 
+// ---------- 用 IDEA 的运行配置起 ----------
+/** 端口上的进程是不是 IDEA 起的（往上找得到 idea64.exe / idea.exe；测试用 VIBE_KIT_IDEA_PID 指定哪个进程当 IDEA） */
+function ideaStarted(info, table) {
+  const fake = Number(process.env.VIBE_KIT_IDEA_PID) || 0;
+  const at = new Map(table.map((p) => [p.pid, p]));
+  let cur = at.get(info.pid);
+  for (let depth = 0; cur && depth < 20; depth++) {
+    const parent = at.get(cur.ppid);
+    if (!parent || (parent.created && cur.created && parent.created > cur.created + 2000)) return false;
+    if (/^idea(64)?(\.exe)?$/i.test(parent.name) || (fake && parent.pid === fake)) return true;
+    cur = parent;
+  }
+  return false;
+}
+const ideaLabel = (rec) => 'IDEA 运行配置"' + rec.config + '"，调试方式起的';
+/** IDEA 调用没成：超时（多半弹了编辑运行配置的框）、没有这个运行配置、别的报错 */
+async function ideaFail(x, I, r, cfgName) {
+  if (x.timeout) { console.log('没起来：IDEA 没回话。多半弹出了编辑运行配置的框（运行配置"' + cfgName + '"有错：到 IDEA 里看框底下的报错，改好关掉），或者 IDEA 正忙（建索引、导入 Maven）。没有改用命令起，免得和 IDEA 那边起来的撞上。'); return 1; }
+  if (/not found/i.test(x.why || '')) {
+    const c = await I.configs(r);
+    console.log('没起来：IDEA 里没有叫"' + cfgName + '"的运行配置' + (c.ok && c.names.length ? '。有：' + c.names.map((n) => '"' + n + '"').join('、') : '') + '。--idea 后面写其中一个（原样，带空格、括号的加引号）。');
+    return 2;
+  }
+  console.log('没起来：IDEA 报错：' + x.why);
+  return 1;
+}
+/** 端口上的服务答不答 HTTP（随便哪个状态码都算答了）：Tomcat 先占端口、后部署应用，端口通了请求还会挂着或被断开（实测 tomcat7:run） */
+function httpAnswers(port) {
+  return new Promise((resolve) => {
+    const q = require('http').get({ host: '127.0.0.1', port, path: '/', timeout: 3000, agent: false }, (res) => { res.resume(); resolve(true); });
+    q.on('timeout', () => { q.destroy(); resolve(false); });
+    q.on('error', () => resolve(false));
+  });
+}
+async function waitUpIdea(rec, I, r, waitSec) {
+  const t0 = Date.now();
+  let checked = Date.now();
+  let openAt = 0;
+  while (Date.now() - t0 < waitSec * 1000) {
+    // 端口通了还要答 HTTP 才算起来；一直不答 HTTP 的（不是网页服务），端口通了 60 秒也算
+    const open = await portOpen(rec.port, 400);
+    if (open && !openAt) openAt = Date.now();
+    if (open && ((await httpAnswers(rec.port)) || Date.now() - openAt > 60000)) {
+      try { fs.writeFileSync(recFile(rec.name), JSON.stringify(Object.assign({}, rec, { upAt: Date.now() }), null, 2)); } catch (e) { /* 记不了，下次 start 按 IDEA 的会话认 */ }
+      const who = whoListens(rec.port);
+      console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
+      console.log('起来了：' + rec.name + '，端口 ' + rec.port + '（' + ideaLabel(rec) + '），用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (who ? '。听这个端口的是 ' + who : '') + (rec.log ? '。日志 ' + rec.log : ''));
+      return 0;
+    }
+    // 隔一会儿看一眼 IDEA 里的会话还在不在：启动失败（编译错、端口冲突）会话就没了，不用干等到超时
+    if (Date.now() - checked > 8000) {
+      checked = Date.now();
+      const s = await I.sessions(r);
+      if (s.ok && !s.list.some((x) => x.id === rec.sessionId || x.runConfigurationName === rec.config)) {
+        dropRec(rec.name);
+        console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
+        console.log('没起来：' + rec.name + ' 在 IDEA 里起了又退出了，看上面的日志（IDEA 的运行窗口里也有）。');
+        return 1;
+      }
+    }
+    await sleep(1000);
+  }
+  console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
+  console.log('没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。IDEA 里的会话还在、记录留着：多半还在启动，过一会儿再 start 一次会接着等它，不会重起；也可能它监听的不是 ' + rec.port + '，看上面的日志。');
+  return 1;
+}
+/** --idea：用 IDEA 的运行配置起。返回退出码；IDEA 用不了、要照 -- 后面的命令起时返回 null */
+async function startIdea(cfgName) {
+  const I = require('../lib/idea-run');
+  const r = I.ready(dir);
+  if (!r.ok) {
+    if (!cmdArgs.length) { console.log('没起来：用不了 IDEA 起（' + r.why + '），-- 后面也没写命令。加上启动命令（IDEA 用不了时照它起），或者把上面的问题解决了再起。'); return 1; }
+    console.log('用不了 IDEA 起：' + r.why + '。照 -- 后面的命令起。');
+    return null;
+  }
+  const port = Number(opt('port'));
+  if (!(port > 0 && port < 65536)) { console.log('用 IDEA 起要写 --port <运行配置监听的端口>：application.properties / yml 里的 server.port、pom 里 tomcat 插件的 <port>、Tomcat 运行配置的 HTTP 端口。不能写 auto，端口是运行配置定的。'); return 2; }
+  const name = opt('name') || cfgName;
+  const rec0 = readRec(name);
+  const rec = rec0 && rec0.mode === 'idea' && rec0.config === cfgName ? rec0 : null;
+  const wait = Number(opt('wait')) || 180;
+  const list = await I.sessions(r);
+  if (!list.ok) return ideaFail(list, I, r, cfgName);
+  const sess = list.list.find((s) => s.runConfigurationName === cfgName || s.id === cfgName);
+  const up = await portOpen(port, 500);
+  const keepRec = (since, sessionId) => { const x = { name, mode: 'idea', config: cfgName, projectPath: r.projectPath, sessionId, port, cwd: dir, startedAt: since, log: (rec && rec.log) || '' }; fs.mkdirSync(runDir, { recursive: true }); fs.writeFileSync(recFile(name), JSON.stringify(x, null, 2)); return x; };
+  if (sess && !up) {
+    // 会话在、端口没通：多半还在启动，接着等，不再起第二个会话（用户自己点 Debug 起的也一样）
+    const x = rec || keepRec(Date.now(), sess.id);
+    console.log(name + ' 还在启动（IDEA 运行配置"' + cfgName + '"' + (rec ? '，' + ago(rec.startedAt) + '起的' : '，IDEA 里已经有它的调试会话') + '），接着等它。');
+    return waitUpIdea(x, I, r, wait);
+  }
+  if (sess && up) {
+    // 调试会话在跑：起来之后代码改过就重启。没有记录的（用户自己点 Debug 起的）按听端口的进程的创建时间算
+    let since = rec ? rec.startedAt : 0;
+    if (!since) since = Math.min(...listeners(port).map((p) => procInfo(p).created || Date.now()));
+    const changed = flag('restart') ? ['（要求重启）'] : changedSince(since, dir);
+    if (!changed.length) {
+      if (!rec) keepRec(since, sess.id);
+      console.log('已经在跑：' + name + '（端口 ' + port + '，IDEA 运行配置"' + cfgName + '"，' + ago(since) + '起的），启动之后代码没改过。直接用，不用再起。要强制重启加 --restart。');
+      return 0;
+    }
+    console.log(name + ' 在跑（IDEA 运行配置"' + cfgName + '"，' + ago(since) + '起的），但它跑的不是现在的代码（之后改过：' + changed.slice(0, 5).join('、') + (changed.length > 5 ? ' 等 ' + changed.length + ' 个' : '') + '）：停掉，在 IDEA 里重起。');
+    const s = await I.stopSession(r, sess.id);
+    if (!s.ok) return ideaFail(s, I, r, cfgName);
+    if (!(await waitClosed(port, 20000))) { console.log('没起来：停了 IDEA 的会话，端口 ' + port + ' 还被占着：' + (whoListens(port) || '查不到是哪个进程') + '。没有起新的。'); return 1; }
+  } else if (up) {
+    // 端口被占着、IDEA 里没有这个调试会话：用户点 Run 起的（MCP 停不了）还是别的程序
+    const table = procTable();
+    const infos = listeners(port).map(procInfo).filter((i) => i.pid);
+    const fromIdea = infos.filter((i) => ideaStarted(i, table));
+    const others = infos.filter((i) => !ideaStarted(i, table) || i.pid === routerPid());
+    const desc = (l) => l.map((i) => (i.name || '进程').replace(/\.exe$/i, '') + '（PID ' + i.pid + (i.created ? '，' + ago(i.created) + '起的' : '') + '）').join('、');
+    if (!infos.length || others.length) { console.log('没起来：端口 ' + port + ' 被占着：' + (desc(others) || '查不到是哪个进程') + '，不是 IDEA 起的，没有动它。先弄清它是谁；--port 写的是不是这个运行配置的端口。'); return 1; }
+    const since = Math.min(...fromIdea.map((i) => i.created || 0));
+    const changed = flag('restart') ? ['（要求重启）'] : since ? changedSince(since, dir) : ['（查不到它什么时候起的）'];
+    if (!changed.length) { console.log('已经在跑：端口 ' + port + ' 上是你在 IDEA 里起的 ' + desc(fromIdea) + '，起来之后代码没改过。直接用，不用再起。'); return 0; }
+    // 用户 2026-10-17 定的：Run 起的 MCP 停不了，要重启就结束它、用调试方式重起，说一句
+    for (const i of fromIdea) killTree(i.pid);
+    console.log('端口 ' + port + ' 上是你在 IDEA 里点 Run 起的 ' + desc(fromIdea) + '，它跑的不是现在的代码（之后改过：' + changed.slice(0, 5).join('、') + '）：结束了它，在 IDEA 里用调试方式重起（Run 起的套件停不了，调试方式起的改完能自动重启）。');
+    if (!(await waitClosed(port, 15000))) { console.log('没起来：结束之后端口 ' + port + ' 还被占着：' + (whoListens(port) || '查不到是哪个进程') + '。没有起新的。'); return 1; }
+  }
+  const startedAt = Date.now();
+  const s = await I.startDebug(r, cfgName, wait * 1000);
+  if (!s.ok) return ideaFail(s, I, r, cfgName);
+  const nrec = { name, mode: 'idea', config: cfgName, projectPath: r.projectPath, sessionId: s.sessionId, port, cwd: dir, startedAt, log: s.log };
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(recFile(name), JSON.stringify(nrec, null, 2));
+  return waitUpIdea(nrec, I, r, wait);
+}
+/** 停一个 IDEA 起的：停调试会话；IDEA 用不了了的，结束端口上 IDEA 起的进程。返回 { free, killed, left }（和 stopRec 一样） */
+async function stopIdeaRec(rec) {
+  const killed = [];
+  const I = require('../lib/idea-run');
+  const r = I.ready(dir);
+  if (r.ok) {
+    const l = await I.sessions(r);
+    const sess = l.ok ? l.list.find((s) => s.id === rec.sessionId || s.runConfigurationName === rec.config) : null;
+    if (sess && (await I.stopSession(r, sess.id)).ok) killed.push({ pid: 0, name: 'IDEA 会话 ' + sess.id });
+  }
+  if (rec.port && !(await waitClosed(rec.port, 15000))) {
+    const table = procTable();
+    for (const pid of listeners(rec.port)) { const info = procInfo(pid); if (ideaStarted(info, table) && pid !== routerPid()) { killTree(pid); killed.push({ pid, name: info.name }); } }
+    await waitClosed(rec.port, 8000);
+  }
+  dropRec(rec.name);
+  const free = !(rec.port && (await portOpen(rec.port, 300)));
+  return { free, killed, left: free ? [] : listeners(rec.port).map(procInfo) };
+}
+/** 没写 --idea：IDEA 连着、项目里有运行配置的，提醒用运行配置起。返回要说的话，没有就是 '' */
+async function ideaHint() {
+  try {
+    const I = require('../lib/idea-run');
+    const r = I.ready(dir);
+    if (!r.ok) return '';
+    const c = await I.configs(r);
+    if (!c.ok || !c.names.length) return '';
+    return '没起：IDEA 连着，这个项目在 IDEA 里有运行配置：' + c.names.map((n) => '"' + n + '"').join('、') + '。后端用 IDEA 起（改完代码，下次 start 会自动在 IDEA 里重启）：start 加 --idea "<运行配置名>" --port <它监听的端口>，-- 后面的命令留着（IDEA 用不了时照它起）。'
+      + '例：node "' + __filename + '" start --name ' + (opt('name') || 'backend') + ' --idea "' + c.names[0] + '" --port 8080 -- ' + (cmdArgs.join(' ') || '<启动命令>') + '\n前端开发服务器这类在 IDEA 里没有对应运行配置的，加 --no-idea 照命令起。';
+  } catch (e) { return ''; }
+}
+
 async function start() {
+  if (opt('idea')) { const r = await startIdea(opt('idea')); if (r !== null) return r; }
+  else if (!flag('no-idea')) { const hint = await ideaHint(); if (hint) { console.log(hint); return 2; } }
   const name = opt('name') || 'app';
   const portArg = String(opt('port') || '').trim().toLowerCase();
   const auto = portArg === 'auto';
@@ -452,8 +625,8 @@ async function stop() {
   if (!recs.length) { console.log(opt('name') ? '没有叫 ' + opt('name') + ' 的服务记录（' + runDir + '）' : '这个项目没有记着在跑的服务（' + runDir + '）'); return 0; }
   let bad = 0;
   for (const r of recs) {
-    const s = await stopRec(r);
-    const n = s.killed.filter((k) => k.name !== '看管进程').map((k) => String(k.name || '进程').replace(/\.exe$/i, '') + ' ' + k.pid);
+    const s = r.mode === 'idea' ? await stopIdeaRec(r) : await stopRec(r);
+    const n = s.killed.filter((k) => k.name !== '看管进程').map((k) => String(k.name || '进程').replace(/\.exe$/i, '') + (k.pid ? ' ' + k.pid : ''));
     if (s.free) console.log((s.killed.length ? '停了：' : '本来就没在跑，记录清掉了：') + r.name + '，端口 ' + r.port + ' 空出来了' + (n.length ? '（结束了 ' + n.slice(0, 6).join('、') + '）' : '') + '。');
     else { bad++; console.log('没停干净：' + r.name + '，端口 ' + r.port + ' 还被占着：' + (s.left.map((i) => (i.name || '进程') + '（PID ' + i.pid + '）' + (i.cmd ? ' ' + i.cmd.slice(0, 120) : '')).join('；') || '查不到是哪个进程') + '。无法确认归属，没有动它；先弄清它是谁，不要直接结束它。'); }
   }
@@ -464,6 +637,13 @@ async function status() {
   const recs = allRecs();
   if (!recs.length) { console.log('这个项目没有记着的服务（' + runDir + '）。'); return 0; }
   for (const r of recs) {
+    if (r.mode === 'idea') {
+      // IDEA 起的：只看端口通不通、之后代码改过没有，不连 IDEA（status 要快）
+      const open = await portOpen(r.port, 500);
+      const changed = open ? changedSince(r.startedAt, r.cwd) : [];
+      console.log(r.name + '：' + (open ? '在跑' : '端口没通（还在启动，或者已经在 IDEA 里停了）') + '，端口 ' + r.port + '（' + ideaLabel(r) + '，' + ago(r.startedAt) + '起的）' + (open ? (changed.length ? '，之后代码改过（' + changed.slice(0, 3).join('、') + (changed.length > 3 ? ' 等' : '') + '），测之前要 start 一下（会在 IDEA 里自动重启）' : '，跑的是现在的代码') : '') + (r.log ? '\n  日志：' + r.log : ''));
+      continue;
+    }
     const alive_ = sameProc(r);
     const open = alive_ && (await portOpen(r.port, 500));
     // 只报告，不结束任何进程：进程在、端口没通的是还在启动

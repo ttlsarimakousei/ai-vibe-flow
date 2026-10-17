@@ -46,7 +46,7 @@ description: 项目说明（.vibe/project.md）一般由套件在后台自动探
 1. **这是什么项目**：Maven（单模块／多模块／Spring Boot 几）、Gradle、前端（Vue／React，Vite／webpack）、还是没有 pom、在 IDE 里配 Tomcat 启动的老式 Java Web。一个仓库里常常套着好几个（后端一个目录，前端一个目录），分别记。
 2. **快检**：改完一处（可能涉及几个文件），只检查改过的这几个文件，几秒内出结果的命令。
 3. **全量**：收尾时整体编译或构建一次的命令，记下大概要多久。
-4. **启动**：怎么跑起来，端口是多少，怎么判断它起来了。试跑用 `node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name <名字> --port auto --avoid <配置里的端口> -- <启动命令>`（端口它自己挑，离配置里的远；它会记下来，查完 `stop --all`），项目说明里记原始的启动命令和配置里的端口。登录账号问用户，记到 `.vibe/login.json`，不要猜。
+4. **启动**：怎么跑起来，端口是多少，怎么判断它起来了。试跑用 `node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name <名字> --port auto --avoid <配置里的端口> -- <启动命令>`（端口它自己挑，离配置里的远；它会记下来，查完 `stop --all`），项目说明里记原始的启动命令和配置里的端口；IDEA 里有运行配置的，再记运行配置名和它监听的端口（devserver 加 --idea 用）。登录账号问用户，记到 `.vibe/login.json`，不要猜。
 5. **编码**：源码是 UTF-8、GBK 还是混着的。
 
 前后端联调另外记清：代理配置在哪、是否读取环境变量、后端的上下文路径，以及统一认证回调和服务端 CORS 是否限定前端端口。后端先用 devserver 起，前端带 `--backend <后端服务名>`；代理读取 `VIBE_BACKEND_URL` 并保留上下文路径（例如 `(process.env.VIBE_BACKEND_URL || 'http://127.0.0.1:8096') + '/oa'`）。需改项目配置时保留原默认行为。固定端口已有用户服务时不接管，说明冲突和需要用户处理的依赖；端口能监听不代表登录和代理已通。

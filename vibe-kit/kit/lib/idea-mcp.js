@@ -50,7 +50,9 @@ function configs(dir) {
         if (fs.statSync(f).size > 65536) continue;
         const xml = fs.readFileSync(f, 'utf8');
         const enabled = /<option\b(?=[^>]*\bname=["']enableMcpServer["'])(?=[^>]*\bvalue=["']true["'])[^>]*>/.test(xml);
-        found.push({ enabled });
+        // brave mode：MCP 调用运行配置、命令不用用户在 IDEA 里点允许（lib/idea-run.js 只在开着时用 IDEA 起服务）
+        const brave = /<option\b(?=[^>]*\bname=["']enableBraveMode["'])(?=[^>]*\bvalue=["']true["'])[^>]*>/.test(xml);
+        found.push({ name, enabled, brave, at: fs.statSync(f).mtimeMs });
       } catch (e) { /* 没有设置文件，不代表开过 MCP */ }
     }
   }
@@ -179,4 +181,4 @@ async function sync(opt) {
     try { return save(dir, Object.assign(readState(dir), { status: 'check-error', checkedAt: Date.now(), connections: [] })); } catch (x) { return { status: 'check-error', connections: [] }; }
   } finally { fs.closeSync(fd); try { fs.unlinkSync(f.lock); } catch (e) { /* 已清掉 */ } }
 }
-module.exports = { sync, status, due, EVERY_MS };
+module.exports = { sync, status, due, configs, EVERY_MS };
