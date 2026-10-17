@@ -514,29 +514,23 @@ function localSection() {
   return '## 本机环境\n\n这台机器上的开发环境，是我配好的。要用 JDK、Maven、Tomcat 时直接用这里的路径，不要满硬盘找；这里没有的再问我。项目说明（.vibe/project.md）里写了用哪个版本的，以项目说明为准。\n\n' + lines.join('\n');
 }
 /**
- * 提交规范里"什么时候提交"那几句，跟着配置页的开关走（config.json 的 plainCommit、autoCommit）。改了开关要重新生成全局约定，配置页保存时会自动做。
- * 不走 OpenSpec 的改动（修 bug、改配置、改文案）一句，OpenSpec 的变更一句；用户 2026-10-07 定的：不走 OpenSpec 的改完先问他，他说了提交才提交
+ * 提交规范里"什么时候提交"那几句，跟着配置页的"提交方式"走（config.json 的 commitMode：off 关 / ask 询问 / auto 自动，用户 2026-10-17 定的，
+ * 人工和自动都用；以前的 autoCommit、plainCommit 并进来了）。改了要重新生成全局约定，配置页保存时会自动做。
  */
-const PLAIN_COMMIT_TEXT = {
-  ask: '- 普通修改完成后可以提醒提交，先用 Ask 问我；我已明确要求提交时直接执行。',
-  auto: '- 普通修改允许自动提交；人工模式中的审查、自测仍先 Ask，不能把提交设置当成审查或测试许可。',
-};
-const AUTO_COMMIT_TEXT = {
-  task: '- 仅 Apply 自动执行期间，每项任务完成后按具体任务提交；该组审查修复收尾后再单独提交修复。',
-  phase: '- 仅 Apply 自动执行期间，同一组 1.x 完成并审修、自测后提交一次。',
-  change: '- 仅 Apply 自动执行期间，整个变更完成并审修、自测后提交一次。',
-  off: '- 不自动提交，可以提醒提交；用户要求提交时执行。',
+const COMMIT_MODE_TEXT = {
+  off: '- 提交方式是"关"：不自动提交，也不问；用户说了"提交"再提交。',
+  ask: '- 提交方式是"询问"：做完一件完整的事（勾完一项任务、审查修复收尾、需求文档定稿、普通修改做完并验证过）用 Ask 问"提交 / 还要改"，用户选了提交再提交；Apply 自动时用户不在，先不提交，记进报告。',
+  auto: '- 提交方式是"自动"：做完一件完整的事（快检过了，该看的页面看过了）就提交，一件事一笔；做到一半、审查没收尾不提交。',
 };
 const SEE_PAGE_TEXT = { on: '，页面按已准备的验收场景验证', off: '；页面只在用户要求时验证' };
 const SEE_PAGE_SPEC_TEXT = { on: '自动阶段按验收用例验证接口和页面；人工阶段先 Ask，用户放弃后继续，不记待办。', off: '页面由用户决定是否验证；人工阶段的接口自测也先 Ask。' };
 const PAGE_VERIFY_TEXT = { on: '<命令或验收场景及预期>', off: '<命令或人工验收步骤及预期>' };
-const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例逐步完善，定稿后一起提交一次 docs: 提案 <名字>；需求自动满足条件时自动提交，人工时提醒用户。两阶段均自动且用户未限定只写需求时，定稿提交后自动 apply；其他情况用 Ask 给出 apply 选项。';
-const COMMIT_RHYTHM_TEXT = Object.fromEntries(Object.entries(AUTO_COMMIT_TEXT).map(([k,v]) => [k, PROPOSAL_COMMIT + v + ' 人工阶段可提醒提交，已明确要求就执行；归档、验收节点单独保留，push 需要用户确认。']));
+const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例逐份完善，定稿后按提交方式一起提交一次 docs: 提案 <名字>。两阶段均自动且用户未限定只写需求时，定稿提交后自动 apply；其他情况用 Ask 给出 apply 选项。';
+const COMMIT_RHYTHM_TEXT = PROPOSAL_COMMIT + ' 实施按提交方式提交；归档、验收节点单独保留，push 需要用户确认。';
 function kitConfig() {
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t) || {}; } catch (e) { return {}; }
 }
-function autoCommitMode() { const m = kitConfig().autoCommit; return AUTO_COMMIT_TEXT[m] ? m : 'task'; }
-function plainCommitMode() { return kitConfig().plainCommit === 'auto' ? 'auto' : 'ask'; }
+function commitMode() { const m = kitConfig().commitMode; return COMMIT_MODE_TEXT[m] ? m : 'ask'; }
 function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'; }
 // 两阶段各有独立的审查上限；每个产物、每个整组任务分别计数。
 function reviewModeText() {
@@ -549,12 +543,12 @@ const AUTO_TOP_TEXT = '> 需求和 Apply 是两套独立自动模式；以本轮
 function fill(text) {
   const c = kitConfig();
   const see = seePageMode();
-  let commit = PLAIN_COMMIT_TEXT[plainCommitMode()] + '\n' + AUTO_COMMIT_TEXT[autoCommitMode()];
+  let commit = COMMIT_MODE_TEXT[commitMode()];
   if (see === 'off') commit = commit.split('（快检过了，该看的页面看过了）').join('（快检过了）');
   const auto = c.autoRequirements || c.autoApply ? AUTO_MODE_TEXT : '';
   return text.split('{{AUTO_COMMIT}}').join(commit).split('{{SEE_PAGE}}').join(SEE_PAGE_TEXT[see])
     .split('{{SEE_PAGE_SPEC}}').join(SEE_PAGE_SPEC_TEXT[see]).split('{{PAGE_VERIFY}}').join(PAGE_VERIFY_TEXT[see])
-    .split('{{COMMIT_RHYTHM}}').join(COMMIT_RHYTHM_TEXT[autoCommitMode()])
+    .split('{{COMMIT_RHYTHM}}').join(COMMIT_RHYTHM_TEXT)
     .split('{{REVIEW_MODE}}').join(reviewModeText()).split('{{AUTO_MODE}}').join(auto)
     .split('{{AUTO_TOP}}').join(AUTO_TOP_TEXT).replace(/\n{3,}/g, '\n\n').trim();
 }

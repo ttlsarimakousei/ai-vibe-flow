@@ -11,8 +11,8 @@
  *      是 for 循环的变量、取值写在命令里，就挨个代进去查；代不出来的不猜是哪个仓库。
  *   4. 归档门槛（开关 specGate）：openspec archive、或者把 openspec/changes/<名字> 挪进 archive，要任务全打勾、代码真的审过，
  *      还要用户自测过、说了归档（会话记录里他最后一句话是"归档"，或者提问框里选了"归档"；用户 2026-10-07 定的。这一条不能放行）。
- *  12. 不走 OpenSpec 的改动，提交之前要用户点头（开关 plainCommit，用户 2026-10-07 定的）：这个会话没动过任何变更、他最后一句又不是
- *      "提交"，git commit 拦下，让它交代改了什么、用提问框问。全自动、提交的是 openspec 产物或经验规则文件的不问。不能放行。
+ *  12. 提交方式（配置页"提交方式"，用户 2026-10-17 定的，人工和自动都用）：关——用户说了"提交"才提交；询问——用户在就交代改动、用提问框问，
+ *      自动模式下用户不在就先不提交、记进报告；自动——做完一件完整的事（新勾完任务、审查修复收尾、需求文档定稿）才提交。不能放行。
  *   5. 禁止改套件（开关 kitLock）：命令动到套件的文件、直接调路由的 /api、命令里出现 disableAllHooks，都拦。
  *   6. 装了路由时，不许一把结束所有 node 进程（taskkill /IM node.exe 之类），也不许结束路由自己的进程：路由一停，模型连不上、走 HTTP 的检查全部失效。
  *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（开关 serverGuard）：不重复起、不换端口。
@@ -1416,11 +1416,11 @@ function secretIssue(g, st) {
     + '\n确认是可以进仓库的（测试环境、示例值）就点同意；不该提交的点拒绝，改成占位符（比如 ${DB_PASSWORD}）或者放进不进仓库的配置里。';
 }
 
-// ---------- 不走 OpenSpec 的改动，提交之前要用户点头（开关 plainCommit） ----------
+// ---------- 提交方式：关 / 询问 / 自动（用户 2026-10-17 定的，人工和自动都用，替代 autoCommit 档位和 plainCommit） ----------
 /*
- * 用户 2026-10-07 定的：修 bug、改配置、改文案这类不走提案的活（他叫"非 OpenSpec 的长任务"），改完先交代、问他，他说了提交才提交。
- * 哪些不用问：全自动模式（在做任务那一段，按自动提交的档位来）；这个会话动过某个 OpenSpec 变更的（提案、任务都在流程里，按提交节奏来）；
- * 提交的只有 openspec 的产物、经验规则的文件（套件自己催着提交的）；标题不能代替实际文件的检查。
+ * 关：只在用户说了"提交"时提交。询问：用户在就交代改动、用提问框问"提交 / 还要改"；自动模式下用户不在，先不提交、记进报告。
+ * 自动：做完一件完整的事才提交（OpenSpec 实施里上次提交之后又勾完任务、审查修复收尾；需求文档定稿；不走 OpenSpec 的改动做完）。
+ * 提案产物的提交始终要用户点头，提交方式是自动、需求文档定稿时除外；经验规则文件（套件催着单独提交的）询问、自动都不再问。
  * 怎么算他点了头：会话记录里他最后一次开口（自己打的字、提问框里选的）是"提交"（lib/session.js 的 userSaid）。
  */
 function onlyMetadata(g, st) {
@@ -1434,6 +1434,26 @@ function onlyMetadata(g, st) {
     return files.length > 0 && files.every(kitFile);
   } catch (e) { return false; }
 }
+/**
+ * 这次提交会带上的文件（相对仓库根）：已经暂存的，加上这条命令里 git add 的路径下有改动的。
+ * PreToolUse 时同一条命令里的 git add 还没执行，只看暂存区会把"git add 提案 && git commit"当成空提交（2026-10-17 审核问题 1）。
+ * Git 出错、超时返回 null，调用方按更严的一边处理。
+ */
+function commitFiles(g, st) {
+  const root = repoRoot(g.dir) || g.dir; const rk = normKey(root);
+  const opt = { encoding: 'utf8', windowsHide: true, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] };
+  try {
+    const out = new Set(execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], opt).split('\0').filter(Boolean));
+    const added = [...st.added].filter((a) => a === rk || a.startsWith(rk + '/')).map((a) => path.relative(root, a).split(path.sep).join('/') || '.');
+    if (added.length) {
+      // -z 的格式：两位状态、一个空格、路径；改名、复制的后面再跟一段原路径
+      const parts = execFileSync('git', ['-C', root, 'status', '--porcelain', '-z', '-uall', '--'].concat(added.slice(0, 50)), opt).split('\0');
+      for (let i = 0; i < parts.length; i++) { const e = parts[i]; if (e.length < 4) continue; out.add(e.slice(3)); if (/^[RC]/.test(e)) i++; }
+    }
+    return [...out];
+  } catch (e) { return null; }
+}
+const PROPOSAL_FILE = /(?:^|\/)openspec\/changes\/(?!archive\/)[^/]+\/(?:proposal\.md|design\.md|tasks\.md|specs\/)/;
 function consentIssue(g, st, cfg, docs) {
   const j = st.j || {};
   const msg = messageOf(g.args, docs);
@@ -1443,47 +1463,40 @@ function consentIssue(g, st, cfg, docs) {
   if (permit.reason && !permit.ok) return '[vibe-kit] ' + permit.reason + '。交代当前改动后重新确认是否提交。';
   const approved = permit.ok;
   const fl = flowState(j);
-  const staged = execFileSync('git', ['-C', repoRoot(g.dir) || g.dir, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000 }).split('\0').filter(Boolean);
-  const proposalCommit = staged.some(f => /^openspec\/changes\/(?!archive\/)[^/]+\/(?:proposal\.md|design\.md|tasks\.md|specs\/)/.test(f));
-  const planRoots = allChanges(st.cwd0).filter(c => flowChanges(j).includes(normKey(c.dir)) && require('../lib/flow-policy').points(c.dir, 'proposal').length === 4 && require('../lib/flow-policy').allPassed(c.dir, 'proposal')).map(c => normKey(c.dir) + '/');
-  const automaticPlan = cfg.autoMode && fl.stage === 'plan' && staged.length && staged.every(f => planRoots.some(d => normKey(path.resolve(repoRoot(g.dir) || g.dir, f)).startsWith(d)));
+  const files = commitFiles(g, st);
+  // 读不出要提交哪些文件：后面按提交方式的判断都做不了，没有用户许可就先问（审核问题 13）
+  if (files === null) return approved ? '' : '[vibe-kit] 读不出这次要提交哪些文件（Git 超时或出错）。先交代改动，问用户是否提交。';
+  const proposalCommit = files.some(f => PROPOSAL_FILE.test(f));
+  const S = require('../lib/session'); const P = require('../lib/flow-policy');
+  const mode = S.commitModeOf(cfg);
+  // 需求文档定稿：提交方式是"自动"才直接提交（需求自动生效时要四份都审过；人工时四份都写完，每份用户都看过）。询问、关都要用户点头（审核问题 2）
+  const planRoots = allChanges(st.cwd0).filter(c => flowChanges(j).includes(normKey(c.dir)) && P.points(c.dir, 'proposal').length === 4 && (!cfg.autoMode || P.allPassed(c.dir, 'proposal'))).map(c => normKey(c.dir) + '/');
+  const automaticPlan = mode === 'auto' && fl.stage === 'plan' && files.length && files.every(f => planRoots.some(d => normKey(path.resolve(repoRoot(g.dir) || g.dir, f)).startsWith(d)));
   if (automaticPlan) return '';
   if (!approved && proposalCommit && fl.stage !== 'apply') return '[vibe-kit] 提案提交要单独确认：先交代定稿内容，问用户是否提交；开工许可不能代替提交许可。';
-  if (cfg.autoMode && !approved) {
-    if (cfg.autoCommit === 'off') return '[vibe-kit] 自动提交选了"我说了才提交"，全自动模式也不改变这个选择。';
-    const current = allChanges(st.cwd0).filter((c) => flowChanges(j).some((d) => normKey(d) === normKey(c.dir)));
-    if (!current.length) return '[vibe-kit] 这次提交没有对应的当前 OpenSpec 变更，不能借用全自动许可；交代改动后问用户是否提交。';
-    const root = repoRoot(g.dir) || g.dir; const baselines = readState('work-baselines');
-    const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
-    if (original.size) { const staged = execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000 }).split('\0').filter(Boolean); const mixed = staged.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
-    const rounds = syncReviewRounds(es, syncReviews(es, st.cwd0));
-    const rr = readState('review-rounds');
-    const open = current.some(c => require('../lib/flow-policy').points(c.dir, 'code').some(p => { const r = require('../lib/flow-policy').record(c.dir, p); return r.rounds && !require('../lib/flow-policy').settled(c.dir, p); })) || current.some(c => { const r = readState('review-rounds')['code|' + normKey(c.dir)]; return r && r.pendingFix && !r.done; });
-    if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
-    const pending = require('../lib/session').pendingReviewsIn(toolCalls(es, 0), toolResults(es), current, require('../lib/session').taskNotes(es));
-    if (pending.length) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
-    const V = require('./verify-gate');
-    const since = V.lastCommitAt(repoRoot(g.dir) || g.dir);
-    const reviewReady = rounds.some((x) => x.key.startsWith('code|') && current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && (x.rec.done || (!cfg.reviewLoop && x.fixed)) && x.rec.at > since);
-    if (cfg.autoCommit === 'change' && current.some((c) => !require('../lib/session').reviewAllowed('code', c.dir) || require('../lib/session').listChanges(st.cwd0).some((x) => normKey(x.dir) === normKey(c.dir) && x.todo > 0))) return '[vibe-kit] 整个变更提交：任务做完并处理代码审查后再提交。';
-    if (cfg.autoCommit === 'phase') {
-      const active = require('../lib/session').listChanges(st.cwd0).filter((c) => current.some((x) => normKey(x.dir) === normKey(c.dir)));
-      if (!reviewReady && active.length && !active.some((c) => V.phaseDone(c, since))) return '[vibe-kit] 按阶段提交：当前阶段还没全部完成并验证，不要提前提交；每项任务做完仍立即打勾。';
-    }
-    if (cfg.autoCommit === 'task') {
-      const S = require('../lib/session');
-      const ready = reviewReady || current.some((c) => Object.values(S.syncTicks(c.dir)).some((t) => t > since));
-      if (!ready && !onlyMetadata(g, st)) return '[vibe-kit] 按任务提交：还没有新完成并验证、打勾的任务，也没有刚收尾的审查修复，不要提前提交。';
-    }
-    return '';
-  }
-  if ((cfg.plainCommit || 'ask') !== 'ask') return '';
-  // add 与 commit 可以分两条命令：已经暂存的普通文件不能搭产物的标题免掉确认。
-  if (onlyMetadata(g, st)) return '';
-  // 只看这一轮的 apply 状态；历史上碰过变更不能替普通任务授权。
-  if (fl.on && fl.stage === 'apply') return '';
   if (approved) return '';
-  return '[vibe-kit] 不走 OpenSpec 的改动，提交之前要我点头（配置页"不走 OpenSpec 的改动，验证过之后"选了"先问我"）。先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说还要改什么，改完再问；我说提交了再提交。';
+  if (mode === 'off') return '[vibe-kit] 提交方式是"关"：不自动提交，也不问。用户说了"提交"再提交，没说就留给用户自己提交，接着做别的。';
+  // 经验规则文件（套件自己催着单独提交的 docs: 更新经验规则）：询问、自动都不用再问
+  if (onlyMetadata(g, st)) return '';
+  if (mode === 'ask') return cfg.autoMode
+    ? '[vibe-kit] 提交方式是"询问"，自动模式下用户不在：先不提交，收工时列进全自动报告，等用户回来说。接着做别的。'
+    : '[vibe-kit] 提交方式是"询问"：先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问用户（选项写"提交"和"还要改"）。用户选了提交再提交；说还要改什么，改完再问。';
+  // 自动：做完一件完整的事才提交。OpenSpec 实施里，上次提交之后又勾完了任务、或者审查修复刚收尾；做到一半、审查没收尾不提交
+  const current = allChanges(st.cwd0).filter((c) => flowChanges(j).some((d) => normKey(d) === normKey(c.dir)));
+  if (!(cfg.autoMode || fl.on && fl.stage === 'apply')) return '';
+  if (!current.length) return cfg.autoMode ? '[vibe-kit] 这次提交没有对应的当前 OpenSpec 变更，不能借用全自动许可；交代改动后问用户是否提交。' : '';
+  const root = repoRoot(g.dir) || g.dir; const baselines = readState('work-baselines');
+  const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
+  if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
+  const rounds = syncReviewRounds(es, syncReviews(es, st.cwd0));
+  const open = current.some(c => P.points(c.dir, 'code').some(p => { const r = P.record(c.dir, p); return r.rounds && !P.settled(c.dir, p); })) || current.some(c => { const r = readState('review-rounds')['code|' + normKey(c.dir)]; return r && r.pendingFix && !r.done; });
+  if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
+  if (S.pendingReviewsIn(toolCalls(es, 0), toolResults(es), current, S.taskNotes(es)).length) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
+  const since = require('./verify-gate').lastCommitAt(root);
+  const reviewReady = rounds.some((x) => x.key.startsWith('code|') && current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && (x.rec.done || (!cfg.reviewLoop && x.fixed)) && x.rec.at > since);
+  const ready = reviewReady || current.some((c) => Object.values(S.syncTicks(c.dir)).some((tick) => tick > since));
+  if (!ready) return '[vibe-kit] 提交方式是"自动"，但还没做完一件事：上次提交之后还没有新勾完的任务，也没有刚收尾的审查修复。做完、勾上再提交。';
+  return '';
 }
 
 // ---------- 主流程 ----------
@@ -1641,7 +1654,7 @@ function analyze(cmd, ps, st, cfg, depth) {
           if (found.length) setBlock(st, 'spec', '[vibe-kit] 提案材料不能交付：' + found.slice(0, 3).join('\n'));
         } catch (e) { /* 检查出错照常放行，由收工再次核对 */ }
       }
-      // 不走 OpenSpec 的改动，提交之前要用户点头（开关 plainCommit）：会话记录里他最后一句得是"提交"。不能放行
+      // 按提交方式判断能不能提交（consentIssue）。不能放行
       if (g.sub === 'commit' && !st.block && !commitAll(g.args)) { let c = ''; try { c = consentIssue(g, st, cfg, docs); } catch (e) { c = ''; } if (c) setBlock(st, 'commit-ok', c); }
       // 下面两道要去那个仓库里看：目录算不出来的不查
       if (g.dyn) continue;

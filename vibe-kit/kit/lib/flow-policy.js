@@ -95,9 +95,21 @@ function qualify(j, assessment) {
   const st = S.flowState(j); const since = Number(st.explorationAt) || 0;
   const explored = S.toolCalls(entries.filter(e => !since || (Date.parse(e.timestamp || '') || 0) >= since), 0);
   if (!S.lastUserVoice(entries) || !S.projectReads(explored).length) throw new Error('还没有用户描述或实际探索记录，先读相关代码并沟通');
-  const ready = a.unresolved.length === 0;
+  const open = openQuestion(entries);
+  const ready = a.unresolved.length === 0 && !open;
   S.updateState(j.session_id + '-flow', st => { st.planReady = ready; st.planAssessment = { description: a.description, scope: a.scope, acceptance: a.acceptance, unresolved: a.unresolved, onlyPlan: a.onlyPlan === true, at: Date.now() }; st.waiting = ready ? '' : '需求仍有疑问'; });
-  return { ready, next: ready ? '逐个产物完成审修，验收用例随需求和设计完善' : '先用 Ask 沟通 unresolved，明确后重新评估' };
+  return { ready, next: ready ? '逐个产物完成审修，验收用例随需求和设计完善' : open ? open + '，明确后重新评估' : '先用 Ask 沟通 unresolved，明确后重新评估' };
+}
+/**
+ * 需求自动的资格不能只凭模型自报（用户 2026-10-17 定的）：用户最近一句是问句、或者模型最近一次提问框还没得到回答，都不算明确。
+ * 返回没明确的原因，明确了返回空串
+ */
+function openQuestion(entries) {
+  const v = S.lastUserVoice(entries);
+  if (v && v.kind === 'prompt' && /(?:[？?]|吗|么|呢|是不是|要不要|能不能|行不行|对不对|好不好)[\s。.!！~～]*$/.test(String(v.text || '').trim())) return '用户最近一句是问句，先回答';
+  const asks = S.toolCalls(entries, 0).filter(c => c.name === 'AskUserQuestion');
+  if (asks.length) { const r = S.toolResults(entries).get(asks[asks.length - 1].id); if (!r || r.error || !S.ANSWERED.test(r.text)) return '最近一次提问框还没得到回答，先等用户回答'; }
+  return '';
 }
 function automaticApply(j) {
   const cfg = S.readConfig(); const st = S.flowState(j);
@@ -105,18 +117,36 @@ function automaticApply(j) {
   const changes = S.allChanges(j.cwd).filter(c => S.flowChanges(j).includes(S.normKey(c.dir)));
   if (changes.length !== 1) return false;
   const c = changes[0]; if (points(c.dir, 'proposal').length !== 4 || !allPassed(c.dir, 'proposal')) return false;
+  // 写文档期间用户又问了问题、或者提问框还没回答：照人工给选项，不自动开工
+  if (openQuestion(entriesOf(j))) return false;
   const root = path.resolve(c.dir, '../../..'); const rel = path.relative(root, c.dir).replace(/\\/g, '/');
-  try { if (!W.checkedGit(root, ['ls-files', '--', rel + '/tasks.md']).trim() || W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim()) return false; } catch (e) { return false; }
+  // 不是 git 仓库的壳子没有"提交"这一步，审完就算定稿；提交方式不是"自动"的，文档提不提交由用户定，也不等提交
+  if (inGit(root) && S.commitModeOf(cfg) === 'auto') { try { if (!W.checkedGit(root, ['ls-files', '--', rel + '/tasks.md']).trim() || W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim()) return false; } catch (e) { return false; } }
   if (!require('./apply-scope').grant(j, c.name, '').ok) return false;
   S.setFlow(j, true, '两阶段自动：文档逐点审修并定稿提交后开工', 'apply'); return true;
 }
+/** 往上找得到 .git（目录或 worktree 的文件）才算在 git 仓库里；不调 git，出错不会被当成"不是仓库" */
+function inGit(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) { if (fs.existsSync(path.join(d, '.git'))) return true; if (path.dirname(d) === d) return false; }
+}
 function planNext(j, c) {
   const root = path.resolve(c.dir, '../../..'); const rel = path.relative(root, c.dir).replace(/\\/g, '/');
-  let dirty; try { dirty = W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim(); } catch (e) { return ''; }
-  if (dirty) return once(j, 'plan-commit|' + c.dir, fingerprint(c.dir, 'tasks'), '同一套需求文档已定稿，提交本变更的产物和用例一次 docs: 提案 ' + c.name + '。');
+  // 壳子本身可以不是 git 仓库（openspec 在壳子根，代码在子项目）：没有可提交的，直接问开工（2026-10-17 审核问题 12）
+  const git = inGit(root); let dirty = '';
+  if (git) { try { dirty = W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim(); } catch (e) { return ''; } }
+  if (dirty) {
+    // 提交方式（用户 2026-10-17 定的）：自动——提交一次；询问——问用户一次；关——不提交。问过、不提交的接着给开工选项（审核问题 2：不能自己提交）
+    const mode = S.commitModeOf(S.readConfig());
+    const msg = mode === 'off' ? '' : once(j, 'plan-commit|' + c.dir, fingerprint(c.dir, 'tasks'), mode === 'ask'
+      ? '同一套需求文档已定稿。提交方式是"询问"：用 Ask 问用户是否提交 docs: 提案 ' + c.name + '（选项"提交定稿"和"先不提交"），用户说提交再提交；然后给出开工选项。'
+      : '同一套需求文档已定稿，提交本变更的产物和用例一次 docs: 提案 ' + c.name + '。');
+    if (msg) return msg;
+    if (mode === 'auto') return '';
+  }
   const st = S.flowState(j);
   if (st.planAssessment && st.planAssessment.onlyPlan) return '';
-  return once(j, 'plan-apply|' + c.dir, fingerprint(c.dir, 'tasks'), '文档已经定稿提交。用 Ask 给出“执行 apply / 继续修改 / 暂不执行”的选项。');
+  const done = !git ? '文档已经定稿（' + c.name + ' 所在的目录不是 git 仓库，没有要提交的）。' : dirty ? '文档已经定稿（还没提交，提不提交由用户定）。' : '文档已经定稿提交。';
+  return once(j, 'plan-apply|' + c.dir, fingerprint(c.dir, 'tasks'), done + '用 Ask 给出“执行 apply / 继续修改 / 暂不执行”的选项。');
 }
 function instruction(dir, point, cfg) {
   const mode = point.startsWith('group-') ? 'code' : 'proposal'; const rec = record(dir, point); const max = limit(cfg, mode);
