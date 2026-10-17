@@ -1745,7 +1745,8 @@ function noteToolFlow(j, cfg) {
     updateState('tool-flow', (o) => {
       const by = o.byCwd && typeof o.byCwd === 'object' ? o.byCwd : {};
       for (const x of Object.keys(by)) if (now - (Number(by[x] && by[x].at) || 0) > 600000) delete by[x];
-      by[k] = { auto: cfg.autoMode === true, at: now, sid: String(j.session_id || '').slice(0, 8) };
+      // 只在做任务那一段（apply）按全自动：写需求那一段的"需求自动"不能让查库工具改库不要确认串（审核问题 16）
+      by[k] = { auto: cfg.autoMode === true && flowState(j).stage === 'apply', at: now, sid: String(j.session_id || '').slice(0, 8) };
       return { byCwd: by, at: now };
     });
   } catch (e) { /* 留不了：工具按用户不在算，只会更严 */ }

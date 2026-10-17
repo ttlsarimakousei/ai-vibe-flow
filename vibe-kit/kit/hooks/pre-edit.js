@@ -55,14 +55,15 @@ function handle(j) {
     try { out = checks[i].handle(j); } catch (e) { out = null; if (feedback) feedback.recordHookError(NAMES[i], j, e); }
     if (!out) continue;
     // 通行证只管申请时说的那条规矩：这一次拦下的是别的规矩，照拦
-    if (out.decision === 'block' && passes[NAMES[i]] && feedback.pickPass([passes[NAMES[i]]], NAMES[i], sig, target, out.reason)) {
+    // noBypass：这道拦截不能放行（guard-spec 的"我还没说开工"），不认通行证、不给拦截编号
+    if (out.decision === 'block' && !out.noBypass && passes[NAMES[i]] && feedback.pickPass([passes[NAMES[i]]], NAMES[i], sig, target, out.reason)) {
       used.push(passes[NAMES[i]]);
       blocked[NAMES[i]] = out.reason;
       // 打勾这一步放行了：打勾的时间照样要记（"代码审过了吗"要用）
       if (NAMES[i] === 'guard-spec' && typeof checks[i].afterBypass === 'function') { try { checks[i].afterBypass(j); } catch (e) { /* 记不了不影响放行 */ } }
       continue;
     }
-    if (out.decision === 'block' && feedback && sig) {
+    if (out.decision === 'block' && feedback && sig && !out.noBypass) {
       let tail = '';
       try { tail = feedback.registerBlock(j, NAMES[i], sig, out.reason, action, target); } catch (e) { tail = ''; /* 记不了编号也照样拦 */ }
       if (!tail && cfg.autoMode) {

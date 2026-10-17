@@ -212,7 +212,7 @@ function handle(j, opts) {
     else if (/^\s*[-*]\s*\[[xX]\]/m.test(newText)) tk = tickCheck(j, file, normTicks(newText), newText, art, cfg, roots);
     if (tk) flow.push(...tk.issues);
     // 还在写提案那一段（用户没说开工）就打勾：拦下。用户 2026-10-07 定的：任务清单要他看过、他说了开工才开始做（规矩见 lib/session.js"流程分两段"）
-    if (tk && tk.ticked.length) { const fl = flowState(j); if (fl.on && fl.stage === 'plan') flow.unshift('我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工"和"还要改"）；我说开工、或者我自己敲 /opsx:apply 之后再做'); }
+    if (tk && tk.ticked.length) { const fl = flowState(j); if (fl.on && fl.stage === 'plan') notStarted = true; if (notStarted) flow.unshift('我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工"和"还要改"）；我说开工、或者我自己敲 /opsx:apply 之后再做'); }
   }
   if (art.kind === 'spec') format.push(...checkSpec(newText, isAdded));
   if (art.kind === 'design') format.push(...checkDesign(newText, isAdded, roots, !existed, isDeclared));
@@ -225,7 +225,11 @@ function handle(j, opts) {
   const shown = issues.slice(0, 8);
   let guide = GUIDE[art.kind] || '';
   const tail = format.length ? '\n' + guide + (hedges.length ? '\n' + HEDGE_GUIDE : '') + '\n改好再写。' : '';
-  return blockOut('PreToolUse', '[vibe-kit 提案检查] ' + art.rel + '（变更 ' + art.name + '）' + (format.length ? '还不能这么写' : '现在还不能改') + '：\n' + shown.map((s) => '- ' + s).join('\n') + (issues.length > shown.length ? '\n- …还有 ' + (issues.length - shown.length) + ' 处' : '') + tail);
+  const out = blockOut('PreToolUse', '[vibe-kit 提案检查] ' + art.rel + '（变更 ' + art.name + '）' + (format.length ? '还不能这么写' : '现在还不能改') + '：\n' + shown.map((s) => '- ' + s).join('\n') + (issues.length > shown.length ? '\n- …还有 ' + (issues.length - shown.length) + ' 处' : '') + tail);
+  // "我还没说开工"不能申请放行：开工要用户许可，需求自动在写需求那一段生效也不能自己放（2026-10-17 审核问题 3）。
+  // 不可枚举，不会被写进钩子的输出；pre-edit 看到它就不给拦截编号、不认通行证
+  if (notStarted) Object.defineProperty(out, 'noBypass', { value: true });
+  return out;
 }
 
 /** 这一步被拦下、又用通行证放行了：打勾的时间、验法里说了不做的照样要记 */
