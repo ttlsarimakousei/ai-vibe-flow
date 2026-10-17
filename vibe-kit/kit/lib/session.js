@@ -349,7 +349,9 @@ function flowAdopt(j) {
 /** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */
 function readConfigFor(j) {
   const c = readConfig(); c.autoSwitch = c.autoApply || c.autoRequirements;
-  const view = flowView(j); c.autoMode = !!view.effective;
+  // 算流程状态要读任务、算指纹、调 git，出错不能让调用的钩子整道放行（2026-10-17 审核问题 14）：按人工模式算，更严
+  let view; try { view = flowView(j); } catch (e) { hookLog('readConfigFor 算流程状态出错，按人工模式算：' + ((e && e.message) || e)); view = { effective: false, phase: '普通任务' }; }
+  c.autoMode = !!view.effective;
   c.reviewLoop = c.autoMode;
   c.reviewMaxRounds = view.phase === '需求与提案' ? c.requirementsReviewMaxRounds : c.applyReviewMaxRounds;
   return c;
