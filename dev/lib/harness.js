@@ -266,12 +266,90 @@ function run(h, exe, args, opts) {
   const r = spawnSync(exe, args || [], { cwd: o.cwd || h.root, env: envFor(h, o.env), encoding: 'utf8', input: o.input, windowsHide: true, timeout: o.timeout || 120000 });
   return { code: r.status, out: String(r.stdout || ''), err: String(r.stderr || ''), ms: Date.now() - t0 };
 }
-/** 跑一个钩子：输入是对象，输出解析成对象（没有输出返回 null） */
-function hook(h, name, input) {
-  const r = node(h, path.join(h.kit, 'hooks', name + '.js'), [], { input: JSON.stringify(input), cwd: input.cwd });
-  const t = r.out.trim();
+// ---------- 调钩子：路由在工作线程里跑的那几个，测试也在工作线程里调（2026-10-18 起） ----------
+// 起进程调一次，每次固定多 0.3—0.6 秒；调钩子多的套，一半上下的时间花在这上面（实测见 docs/release-timing.md）。
+// 只用于套件自己在 HTTP 方式下也放进工作线程跑的钩子（kit/lib/hook-host.js 的 NAMES）：会话开始、用户开口这些照旧起进程。
+// 每份套件一个线程；套件的钩子、库改了（修改时间、大小，和 hook-host.js 认的一样），或者给钩子的环境变量变了，换新线程。
+// 怀疑是工作线程引起的：环境变量 VIBE_TEST_HOOK_SPAWN=1 全部退回起进程；单个调用传 { spawn: true }（比命令方式和 HTTP 方式的测试要用）
+const { Worker, MessageChannel, receiveMessageOnPort } = require('worker_threads');
+const threads = new Map();
+const threadNames = new Map();
+let threadSeq = 0;
+function kitStamp(kit) {
+  const parts = [];
+  for (const d of ['hooks', 'lib']) {
+    let names = [];
+    try { names = fs.readdirSync(path.join(kit, d)).filter((n) => /\.js$/i.test(n)).sort(); } catch (e) { /* 没有 */ }
+    for (const n of names) { try { const st = fs.statSync(path.join(kit, d, n)); parts.push(d + '/' + n + ':' + st.mtimeMs + ':' + st.size); } catch (e) { /* 刚被删 */ } }
+  }
+  for (const d of ['pristine/skills', 'pristine/agents']) { try { parts.push(d + ':' + fs.readdirSync(path.join(kit, d)).sort().join(',')); } catch (e) { /* 没有 */ } }
+  return parts.join('|');
+}
+function inThreadNames(kit) {
+  if (!threadNames.has(kit)) {
+    let names = new Set();
+    try { if (fs.existsSync(path.join(kit, 'lib', 'invocation.js'))) names = new Set(require(path.join(kit, 'lib', 'hook-host.js')).NAMES || []); } catch (e) { names = new Set(); }
+    threadNames.set(kit, names);
+  }
+  return threadNames.get(kit);
+}
+function dropThread(kit) {
+  const t = threads.get(kit);
+  if (!t) return;
+  threads.delete(kit);
+  try { t.port.close(); } catch (e) { /* 已经关了 */ }
+  try { t.w.terminate(); } catch (e) { /* 已经退了 */ }
+}
+/** 在工作线程里调；这次不适合（名字不在名单、目录不存在）返回 undefined，由调用的人退回起进程 */
+function threadHook(h, name, input) {
+  if (process.env.VIBE_TEST_HOOK_SPAWN === '1' || !inThreadNames(h.kit).has(name)) return undefined;
+  if (!fs.existsSync(path.join(h.kit, 'hooks', name + '.js'))) return undefined;
+  const cwd = path.resolve(input.cwd || h.root);
+  try { if (!fs.statSync(cwd).isDirectory()) return undefined; } catch (e) { return undefined; }
+  const env = envFor(h);
+  const envKey = JSON.stringify(env);
+  const stamp = kitStamp(h.kit);
+  let t = threads.get(h.kit);
+  if (t && (t.envKey !== envKey || t.stamp !== stamp || Atomics.load(t.flag, 1))) { dropThread(h.kit); t = null; }
+  if (!t) {
+    const { port1, port2 } = new MessageChannel();
+    const flag = new Int32Array(new SharedArrayBuffer(8));
+    const w = new Worker(path.join(__dirname, 'hook-thread.js'), { env, workerData: { kit: h.kit, port: port2, flag }, transferList: [port2], stdout: true, stderr: true });
+    w.stdout.resume(); w.stderr.resume();
+    w.on('error', () => dropThread(h.kit));
+    w.unref(); port1.unref();
+    t = { w, port: port1, flag, envKey, stamp };
+    threads.set(h.kit, t);
+  }
+  const id = ++threadSeq;
+  Atomics.store(t.flag, 0, 0);
+  const back = process.cwd();
+  process.chdir(cwd);
+  try {
+    // 过一遍 JSON：和起进程时从标准输入读到的一样（undefined 的字段没有了）
+    t.port.postMessage({ id, name, input: JSON.parse(JSON.stringify(input)) });
+    // 和起进程时一样最多等 60 秒；到点当没有输出，换掉这个线程
+    for (const until = Date.now() + 60000; ;) {
+      const left = until - Date.now();
+      if (left <= 0 || Atomics.wait(t.flag, 0, 0, left) === 'timed-out') { dropThread(h.kit); return null; }
+      let m;
+      while ((m = receiveMessageOnPort(t.port))) { if (m.message && m.message.id === id) return m.message.text || ''; }
+      if (Atomics.load(t.flag, 1)) { dropThread(h.kit); return null; }
+      Atomics.store(t.flag, 0, 0);
+    }
+  } finally { process.chdir(back); }
+}
+/** 跑一个钩子：输入是对象，输出解析成对象（没有输出返回 null）。opts.spawn 为真时一定起进程 */
+function hook(h, name, input, opts) {
+  const text = opts && opts.spawn ? undefined : threadHook(h, name, input);
+  let t;
+  let err = '';
+  if (text === undefined) {
+    const r = node(h, path.join(h.kit, 'hooks', name + '.js'), [], { input: JSON.stringify(input), cwd: input.cwd });
+    t = r.out.trim(); err = r.err;
+  } else t = String(text || '').trim();
   if (!t) return null;
-  try { return JSON.parse(t); } catch (e) { return { raw: t, err: r.err }; }
+  try { return JSON.parse(t); } catch (e) { return { raw: t, err }; }
 }
 const reasonOf = (o) => (o ? String(o.reason || (o.hookSpecificOutput && (o.hookSpecificOutput.permissionDecisionReason || o.hookSpecificOutput.additionalContext)) || o.raw || '') : '');
 function git(dir, args) {
@@ -307,6 +385,7 @@ const tr = {
 function transcript(file, entries) { write(file, entries.flat().map((e) => JSON.stringify(e)).join('\n') + '\n'); return file; }
 
 function cleanup() {
+  for (const k of [...threads.keys()]) dropThread(k);
   for (const c of children.splice(0)) { try { c.kill(); } catch (e) { /* 已经退了 */ } }
   for (const r of roots.splice(0)) {
     // 刚结束的子进程可能还占着目录一小会儿：多试几次

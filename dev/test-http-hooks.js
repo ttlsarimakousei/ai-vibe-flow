@@ -62,7 +62,8 @@ const clean = (o) => JSON.stringify(o === null || (o && typeof o === 'object' &&
     for (const [name, hook, input, expect] of cases) {
       // 两种方式各用一个会话号：同一道检查"每个会话只催一次"，不能互相影响
       const viaHttp = await post(hook, Object.assign({ session_id: 's-http-' + hook }, base, input));
-      const viaCmd = H.hook(h, hook, Object.assign({ session_id: 's-cmd-' + hook }, base, input));
+      // 命令方式这一侧一定起进程（测试支架默认在工作线程里调，那样比的就不是命令方式了）
+      const viaCmd = H.hook(h, hook, Object.assign({ session_id: 's-cmd-' + hook }, base, input), { spawn: true });
       H.ok(name + '：HTTP 方式有回应', viaHttp.status === 200, viaHttp.text);
       if (expect) H.ok(name + '：HTTP 方式结果符合预期', expect.test(H.reasonOf(viaHttp.json)), viaHttp.text);
       else H.ok(name + '：HTTP 方式放行', clean(viaHttp.json) === 'null', viaHttp.text);
