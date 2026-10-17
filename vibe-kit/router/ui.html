@@ -62,6 +62,22 @@
   }
 
   /* ---------- 卡片 ---------- */
+  /* 套件说明页的图：两栏流程、组成图（只用页面已有的颜色变量，深浅色都跟着走） */
+  .g-arch { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  .g-row3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .g-box { border:1px solid var(--line); border-radius:9px; padding:9px 11px; background:var(--card); display:flex; flex-direction:column; gap:3px; font-size:13px; }
+  .g-box span { color:var(--dim); font-size:12px; line-height:1.5; }
+  .g-acc { background:var(--accent-soft); border-color:var(--accent); }
+  .g-mute { background:var(--chip); }
+  .g-arrow { text-align:center; color:var(--faint); line-height:1; }
+  .g-lanes { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; font-size:13px; line-height:1.55; margin-top:10px; }
+  .g-head { font-weight:700; text-align:center; padding:6px; border-radius:8px; border:1px solid var(--line); }
+  .g-phase { grid-column:1 / -1; color:var(--dim); font-size:12px; margin-top:8px; border-bottom:1px solid var(--hair); padding-bottom:3px; }
+  .g-both { grid-column:1 / -1; text-align:center; border:1px dashed var(--line); border-radius:8px; padding:7px 10px; }
+  .g-step { border:1px solid var(--line); border-radius:8px; padding:7px 10px; background:var(--card); }
+  .g-step.g-a { background:var(--accent-soft); border-color:var(--accent); }
+  .g-list { margin:8px 0 0; padding-left:20px; line-height:1.7; font-size:13px; }
+  @media (max-width: 760px) { .g-row3, .g-lanes { grid-template-columns:1fr; } }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:16px; box-shadow:var(--shadow); }
   .card h2 { font-size:15px; margin:0 0 4px; letter-spacing:.01em; }
   .card h2 .n { font:12px var(--mono); color:var(--faint); margin-right:8px; font-weight:400; }
@@ -132,6 +148,8 @@
   .pairs .row { margin-bottom:6px; flex-wrap:nowrap; } .pairs .row input:first-child { flex:0 0 110px; }
   .bar { height:8px; background:var(--hair); border-radius:4px; overflow:hidden; } .bar > i { display:block; height:100%; background:var(--ok); } .bar.warn > i { background:var(--warn); } .bar.bad > i { background:var(--bad); }
   .msg { font-size:12px; margin-left:4px; } .msg.ok { color:var(--ok); } .msg.bad { color:var(--bad); }
+  .clip { display:inline-block; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+  .clip[data-full] { cursor:pointer; text-decoration:underline dotted; }
   dialog { border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--text); padding:22px; width:min(560px,92vw); box-shadow:0 30px 80px -30px rgba(0,0,0,.6); }
   dialog::backdrop { background:rgba(20,18,14,.45); }
   .check { display:flex; gap:8px; align-items:flex-start; margin-bottom:10px; } .check input { margin-top:5px; accent-color:var(--accent); }
@@ -170,6 +188,7 @@
     <span class="meta" id="kitVer"></span>
   </div>
   <nav>
+    <button data-tab="guide">套件说明</button>
     <button data-tab="models" class="on">模型</button>
     <button data-tab="usage">用量</button>
     <button data-tab="local">本机环境</button>
@@ -183,6 +202,82 @@
 </aside>
 <main>
   <div id="banner"></div>
+
+  <section id="tab-guide" class="tab hide">
+    <div class="pagehead"><h2>套件说明</h2><p>vibe-kit 是什么、由哪几块组成、人工和自动两种模式各怎么走，以及哪些规矩是固定的、不做开关。</p></div>
+    <div class="card" id="sec-guide-core" data-sec="核心思路">
+      <h2>核心思路</h2>
+      <p>能用本机脚本确定判断的事，不交给模型：编号、阶段、git 状态、编译、起停服务、截图比对、该不该问你。模型只做要理解的事：读需求、写文档和代码、核对审查意见。所以套件钩子多、给模型的提示少。</p>
+      <div class="g-arch">
+        <div class="g-box g-mute"><b>你在 Claude Code 里说话</b><span>提需求、开工、审查、提交……</span></div>
+        <div class="g-arrow">↓</div>
+        <div class="g-row3">
+          <div class="g-box g-acc"><b>钩子（十几个）</b><span>每次开口、改文件、跑命令、答完时做确定性检查：拦下、先问或放行</span></div>
+          <div class="g-box g-acc"><b>约定、规范、技能</b><span>告诉模型怎么做；6 个技能、1 个审查代理</span></div>
+          <div class="g-box g-acc"><b>状态栏</b><span>阶段、用量、该做什么的提醒</span></div>
+        </div>
+        <div class="g-row3">
+          <div class="g-box"><b>模型路由（本机 15730）</b><span>请求转到公司网关；挂了换下一个；这个配置页</span></div>
+          <div class="g-box"><b>自带的 OpenSpec</b><span>需求、规格、设计、任务归它管；项目不用自己初始化</span></div>
+          <div class="g-box"><b>本机记录</b><span>审查进度、自测证据、报告都记在本机，不写进团队的文档</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="sec-guide-flow" data-sec="人工和自动">
+      <h2>人工和自动怎么走</h2>
+      <p class="hint">"套件开关"页里两个开关都关就是人工模式。只开"需求自动"：写需求那段自动，开工后照人工。两个都开：定稿后可以自动开工，一路做下去。中间横跨两栏的是两种模式一样的步骤。</p>
+      <div class="g-lanes">
+        <div class="g-head g-mute">人工模式</div><div class="g-head g-acc">自动模式</div>
+        <div class="g-phase">需求阶段（右栏看"需求自动"）</div>
+        <div class="g-both">你提需求 → 套件认出你要做什么；否定、提问、引用不算许可</div>
+        <div class="g-both">先探索代码、问清业务；没初始化 OpenSpec 的项目，第一次用时自动建 openspec/</div>
+        <div class="g-step">一份一份写：proposal → specs → design → tasks。每写完一份停下给你看，你选"审一下 / 直接写下一份 / 我要改"</div><div class="g-step g-a">范围和验收都明确、你没有未答的问题，才自动逐份写；每份自动审查、修改、复审，过了才写下一份；到轮数上限还没过就停下报告</div>
+        <div class="g-both">design.md 里写"验收用例"：对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。tasks.md 只写要做的实现</div>
+        <div class="g-step">四份定稿后按提交方式提交（询问就问你），再问你：开工 / 继续修改 / 暂不执行</div><div class="g-step g-a">按提交方式提交；两个自动都开就自动开工，只开需求自动就照人工问你</div>
+        <div class="g-phase">实施阶段（右栏看"Apply 自动"）</div>
+        <div class="g-both">按 1.1、1.2 做，做完打勾；没说开工不能打勾</div>
+        <div class="g-step">编译、类型检查直接跑；跑测试、起服务、看页面先问你</div><div class="g-step g-a">每组做完先跑这一组的验收用例（"自动自测"开着时），再自动审修，过了才进下一组；全部做完把能自动跑的用例全跑一遍</div>
+        <div class="g-step">每组做完，问你要不要审查、自测（同一个要求只问一次）</div><div class="g-step g-a">到轮数上限还没过就停下报告；业务上拿不准的仍然问你；快到网关上限停下交报告</div>
+        <div class="g-step">每轮收工：没快检、没审、没测、没提交的，在一个提问里问你，不强制</div><div class="g-step g-a">每轮收工：有下一项接着做；做完或卡住写全自动报告</div>
+        <div class="g-both">提交按"提交方式"：询问 / 自动 / 关。推送、发内网都要你亲口说，自动模式不能代替</div>
+        <div class="g-both">任务全打勾、代码审过，就是等你照验收用例自测；你说"自测通过""归档"才归档</div>
+      </div>
+    </div>
+    <div class="card" id="sec-guide-fixed" data-sec="固定的规矩">
+      <h2>固定的规矩（不做开关）</h2>
+      <p class="hint">这些一直生效，配置页上没有开关。</p>
+      <ul class="g-list">
+        <li><b>过程文件放 .vibe/tmp</b>：备份（.bak、.orig、"xx - 副本"、backup 目录）、日志、临时脚本不许落在项目里，也不许 git add；放 .vibe/tmp/&lt;事由&gt;/。变更没归档前它的过程文件留着，归档之后套件清掉；多少天没动就清，在"套件开关"里设。</li>
+        <li><b>代码之外的产出先问位置</b>：新建 DDL、说明文档、报告这类文件，放哪要你定过；没定过就拦下让它先问你，定了记进项目说明的"产出位置"，以后同类不再问。自动模式下你不在，先放 .vibe/pending/，报告里列出来等你定。</li>
+        <li><b>起服务走 devserver</b>：直接敲 mvn spring-boot:run、npm run dev 会被拦下，要经过套件的 devserver.js。同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000，不和你在 IDE 里跑着的冲突。</li>
+        <li><b>推送、发内网要你亲口说</b>：git push、把安装包发到内网 GitLab，都要你当场明确说；同意推送不代表同意发内网。自动模式也不能代替。</li>
+        <li><b>令牌和口令模型读不到</b>：GitLab 令牌、模型的 key、数据库和 redis 的口令，模型读不到、不进命令行、不进日志，也不许提交。</li>
+        <li><b>需求文档一份一份写</b>：上一份审完（人工是你看过、说了写下一份）才写下一份。</li>
+        <li><b>任务只写实现</b>：tasks.md 不写"验："，不写测试、审查、用户验收任务；测试和验收写在 design.md 的"验收用例"里。打勾不查验法。</li>
+        <li><b>人工模式先问</b>：跑测试、起服务、看页面、审查、复验先问你，同一个要求只问一次；编译、类型检查、静态检查直接跑。你放弃就继续，不记待办。</li>
+        <li><b>开工前不拉代码</b>：要拉最新代码你自己拉。</li>
+      </ul>
+    </div>
+    <div class="card" id="sec-guide-docs" data-sec="大需求怎么写">
+      <h2>大需求怎么写</h2>
+      <ul class="g-list">
+        <li>文档写多长都行，套件不限行数；审查时长文件按 4 万字一片、8 万字一批送审，不截断。</li>
+        <li>按能力拆规格：一个能力一份 specs/&lt;能力&gt;/spec.md，不要全堆在一份里。</li>
+        <li>关系复杂的地方画图：状态流转、调用链、数据流在 design.md 里用 mermaid 图。</li>
+        <li>真的太大就拆成几个变更：每个能单独开工、单独验收的部分各建一个。</li>
+        <li>真正的上限是公司网关单次请求约 1MB：一个会话读太多大文件、对话太长会撞上，状态栏会提前警告。</li>
+      </ul>
+    </div>
+    <div class="card" id="sec-guide-openspec" data-sec="自带的 OpenSpec">
+      <h2>自带的 OpenSpec</h2>
+      <p>安装包里带一份 OpenSpec（<span id="gOpenspecVer">打包时的最新版</span>），/opsx:* 命令装成用户级，所有项目都能用；模型敲 openspec 命令时，套件改成调用自带的这份，项目没初始化的第一次用时自动建 openspec/。写出来的变更，同事用自己的 OpenSpec 1.2 也能看、校验、归档。</p>
+      <ul class="g-list">
+        <li>Node 低于它要求的版本（1.14.3 要 20.19）时，不用自带的，照旧用你自己装的、项目里初始化好的 OpenSpec。</li>
+        <li>不往外发使用统计（OPENSPEC_TELEMETRY=0）。</li>
+        <li>装的命令：/opsx:explore、/opsx:propose、/opsx:new、/opsx:continue、/opsx:apply、/opsx:verify、/opsx:archive。一份一份写用 /opsx:new 加 /opsx:continue，用 /opsx:propose 也一样会一份一份停下。</li>
+      </ul>
+    </div>
+  </section>
 
   <section id="tab-models" class="tab">
     <div class="pagehead"><h2>模型</h2><p>Claude Code 的请求先到这里，再交给你配的模型。一个不行自动换下一个。</p></div>
@@ -322,7 +417,7 @@
         <div><div class="t">连续工作的方式</div><div class="d">默认自动压缩。手动交接必须明确选择记录；一句“继续”不会恢复旧记录。旧交接开关保留，选择交接提醒后生效。</div></div>
         <div class="ctl"><select id="k_contextStrategy"><option value="compact">自动压缩优先</option><option value="handover">按交接线提醒</option></select></div>
       </div>
-      <p class="hint">这几项改完就自动保存。上限、交接线：开着的会话不用重开，下一条消息就按新值算。</p>
+      <p class="hint">改完点底部的保存条。上限、交接线：开着的会话不用重开，下一条消息就按新值算。</p>
       <div class="opt">
         <div><div class="t">上下文上限</div><div class="d">状态栏进度条的分母，单位 token。填 0：用 Claude Code 自己报的窗口大小。</div></div>
         <div class="ctl"><input type="number" id="k_contextLimitTokens" min="0" step="10000" style="width:130px"></div>
@@ -360,7 +455,7 @@
       <h2>状态栏</h2>
       <p class="hint">Claude Code 底下的状态栏最多三行。第一行：警告、模型、目录和分支、上下文、进行中的变更。第二行：需求和 Apply 自动是否生效、用到多少自动压缩、放松了的保护、经验待确认、更新。第三行是下面这一项。没有新消息时每 30 秒刷新一次。</p>
       <div class="opt">
-        <div><div class="t">显示今天的用量</div><div class="d">开着：第三行显示今天经过路由的请求次数、token，和用得最多的三个模型各自的次数、token。次数到公司提醒线的 75% 变黄，到了变红。改完自动保存，下一次刷新就变。</div></div>
+        <div><div class="t">显示今天的用量</div><div class="d">开着：第三行显示今天经过路由的请求次数、token，和用得最多的三个模型各自的次数、token。次数到公司提醒线的 75% 变黄，到了变红。保存后下一次刷新就变。</div></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_statusUsage"><i></i></label></div>
       </div>
     </div>
@@ -389,11 +484,6 @@
 
 
       <div class="opt">
-        <div><div class="t">过程文件放 .vibe/tmp</div><div class="d">开着：备份、日志、临时脚本不许落在项目里，要放 <span class="mono">.vibe/tmp/&lt;事由&gt;/</span>。收工时点名它新建了还没提交的文件。</div>
-          <details class="more"><summary>细节</summary><ul><li>拦的是：往项目里写 .bak、.orig、.log、"xx - 副本"，建 backup、bak 这类目录，以及 git add 这些文件。</li><li>拦错了，它原样再做一次就放行。</li><li>.vibe 里只放项目说明、交接记录、账号、快检的中间文件、看页面的场景和结果、全自动报告。</li><li>变更没归档之前，它的临时目录（<span class="mono">.vibe/tmp/&lt;变更名&gt;/</span>）不让它删，也不自动清。归档之后套件自己清掉。</li><li>别的临时目录那件事做完就删；超过下面天数没动的，会话开始时自动清。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_vibeTidy"><i></i></label></div>
-      </div>
-      <div class="opt sub">
         <div><div class="t">临时目录留几天</div><div class="d">.vibe/tmp 下的目录这么多天没动就清掉。0 是不清。</div></div>
         <div class="ctl"><input type="number" id="k_tmpKeepDays" min="0" max="90" step="1"><span class="dim">天</span></div>
       </div>
@@ -402,7 +492,7 @@
     <div class="card" id="sec-spec" data-sec="全局：审查与产物">
       <h2>全局：审查与产物</h2>
       <div class="opt">
-        <div><div class="t">审查方式</div><div class="d">自动逐点审查固定使用有限请求；本选项控制人工整套审查的兼容方式。超时和部分结果不能算审完。</div></div>
+        <div><div class="t">审查方式</div><div class="d">限时独立模型审查：把要审的文件分批发给"模型"页角色分配里 sonnet 那一条指向的模型，不要求和主会话是不同的模型；它挂了按换模型的顺序换，只剩一个模型能用也照样审。自动逐点审查固定用这种；本选项只管人工整套审查。超时和部分结果不能算审完。</div></div>
         <div class="ctl"><select id="k_reviewExecutor"><option value="direct">限时独立模型审查</option><option value="agent">原审查代理</option></select></div>
       </div>
       <div class="opt">
@@ -415,29 +505,19 @@
       </div>
       <p class="hint">提案、任务、归档各有一道门槛。过不去就拦下，提示里写着怎么改。</p>
       <div class="opt">
-        <div><div class="t">提案、打勾、归档的门槛</div><div class="d">检查产物格式、探索依据和任务验收描述。审查与自测是否自动执行由所属阶段决定。</div>
+        <div><div class="t">提案、打勾、归档的门槛</div><div class="d">写提案、规格、设计、任务时查写法和顺序；打勾、归档时查流程。审查与自测是否自动执行由所属阶段决定。</div>
           <details class="more"><summary>细节</summary><ul>
             <li><b>写提案</b>：没在项目里读过代码不让写。不许写"待定、后续完善、视情况"，拿不准的写成决策项。设计里提到的文件要真的存在。</li>
-            <li><b>写任务</b>：每项要写改哪个文件、怎么验。</li>
-            <li><b>打勾</b>：自动 Apply 要在改完代码后跑过本项验法。人工自测先 Ask，用户放弃不阻止完成任务。验法里写了"本次不做（原因）"的那一部分不查。需求自动时逐产物审修，人工审查由你决定。</li>
+            <li><b>一份一份写</b>：proposal → specs → design → tasks，上一份审完（人工模式是你看过、说了写下一份）才写下一份。</li><li><b>写设计</b>：要有"## 验收用例"一节，每条写对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。</li><li><b>写任务</b>：只写要做的实现，每项写改哪个文件；不写"验："，不写测试、审查、用户验收任务（新写的会被拦下）。</li>
+            <li><b>打勾</b>：不查验法。还没说开工不能打勾（不能申请放行）。Apply 自动时，后面一组的任务要等前面一组做完、审修过才能打勾。</li>
             <li><b>改产物</b>：要在 revisions.md 记原因。</li>
-            <li><b>归档</b>：任务必须完成；自动阶段还要完成审修。归档之后主规格里没有这个变更的需求会提醒。</li>
+            <li><b>归档</b>：任务全部打勾，你说了归档才归档；人工模式不要求先审查，提示照实说审过没有。归档之后主规格里没有这个变更的需求会提醒。</li>
             <li>只查这次新加、改过的行，老内容不追究。</li>
           </ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_specGate"><i></i></label></div>
       </div>
 
 
-      <div class="opt">
-        <div><div class="t">代码之外的产出先定位置</div><div class="d">开着：新建 DDL、说明文档、报告这类文件，放哪要是你定过的。没定过就拦下，让它先问你。</div>
-          <details class="more"><summary>细节</summary><ul><li>你定了，它记进项目说明的"产出位置"，以后同类的不再问。</li><li>全自动模式下不问，先放 <span class="mono">.vibe/pending/</span>，写进报告等你定。</li><li>openspec、.vibe、README、源码目录里的迁移脚本不管。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_outputGate"><i></i></label></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">起服务走 devserver</div><div class="d">开着：起后端、前端服务要用套件的 devserver.js。它不重复起，不换端口。</div>
-          <details class="more"><summary>细节</summary><ul><li>直接敲 mvn spring-boot:run、npm run dev 会被拦下。</li><li>服务已经在跑、代码没改过：直接用。代码改过：在同一个端口重启。</li><li>端口被别的程序占着：说清是谁，不动它。</li><li>停的时候把它起的进程都清掉，等端口空出来才返回。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_serverGuard"><i></i></label></div>
-      </div>
     </div>
 
     <div class="card" id="sec-requirements" data-sec="需求自动模式">
@@ -445,16 +525,16 @@
       <p class="hint">先有描述、探索代码、沟通业务疑问。条件具备后，逐个完成提案、规格、设计和任务，审修当前产物后再写下一个。同一套文档定稿提交一次。</p>
       <div class="opt"><div><div class="t">自动完善需求</div><div class="d">本次安装和升级默认关闭。开启后仍先明确范围、业务规则和验收标准；有疑问就问你。</div></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_autoRequirements"><i></i></label></div></div>
       <div class="opt"><div><div class="t">每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_requirementsReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
-      <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档不限制 250 行，必要时画图。两种自动都开时定稿提交后自动 apply；只要求写需求时不会自行开工。</p>
+      <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档写多长都行，复杂的关系画图。两种自动都开时定稿提交后自动 apply；只要求写需求时不会自行开工。</p>
     </div>
     <div class="card" id="sec-auto" data-sec="Apply 自动模式">
       <h2>Apply 自动模式</h2>
       <p class="hint">只执行已明确的变更范围。整组 1.x 做完后先审查、核验、修改和复验，再做下一组。关闭时，审查、自测和复验都先用 Ask 问你；放弃就继续，不记待办。</p>
-      <div class="opt"><div><div class="t">自动完成 Apply</div><div class="d">本次安装和升级默认关闭。可以提醒提交；只有本模式生效时，下面的自动提交档位才执行。归档与 push 仍需确认。</div></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_autoApply"><i></i></label></div></div>
+      <div class="opt"><div><div class="t">自动完成 Apply</div><div class="d">本次安装和升级默认关闭。提交按"提交"卡片里的提交方式；归档与 push 仍需确认。</div></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_autoApply"><i></i></label></div></div>
       <div class="opt"><div><div class="t">每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_applyReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
       <div class="opt">
-        <div><div class="t">自动自测</div><div class="d">Apply 自动生效时，按已准备的验收用例自测；人工模式先 Ask。</div>
-          <details class="more"><summary>细节</summary><ul><li>验不了的，它说明"没验证"和原因就放行。</li><li>项目说明里标了"快检：不适用"的项目不查。</li></ul></details></div>
+        <div><div class="t">自动自测</div><div class="d">Apply 自动生效时，每组任务做完先跑 design.md "验收用例"里这一组的、Claude 能自动跑的用例，全部做完再全跑一遍；改了代码还要跑过快检。人工模式先 Ask。</div>
+          <details class="more"><summary>细节</summary><ul><li>验不了的，它说明"没验证"和原因就放行。</li><li>快检：项目说明（.vibe/project.md）里记的那条编译级命令，比如 <span class="mono">mvn -q compile</span>，后台探索时找出来的。标了"快检：不适用"的项目不查。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoVerify"><i></i></label></div>
       </div>
       <div class="opt">
@@ -462,39 +542,24 @@
           <details class="more"><summary>细节</summary><ul><li>/ttls-see-page 会自己起服务，用无头浏览器照步骤操作，不开窗口。</li><li>改动不影响显示的，它说明原因就放行。</li><li>关掉之后，约定改成"页面不用自己去看，我让你看时再看"，任务的验法写"人工看页面"。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoSeePage"><i></i></label></div>
       </div>
-      <div class="opt">
-        <div><div class="t">自动提交档位</div><div class="d">只 add 它这一轮改的和新建的文件。你工作区里原来就有的改动不会被带上。"一个阶段"是 tasks.md 里同一个大编号的任务（1.x、2.x）：每项太碎、整个变更太大时选它。</div></div>
-        <div class="ctl"><select id="k_autoCommit"><option value="task">每完成一件事提交一次</option><option value="phase">一个阶段做完提交一次（tasks.md 里同一个大编号的任务）</option><option value="change">一个变更整个做完才提交</option><option value="off">不自动提交，我说了才提交</option></select></div>
-      </div>
       <div class="opt sub">
         <div><div class="t">到交接线先写交接记录</div><div class="d">只在“连续工作的方式”选了按交接线提醒、而且 Apply 自动正在生效时起作用：到了交接线先写一份交接记录再接着做。关着：不写。默认的自动压缩方式下这一项不起作用。</div></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoHandover"><i></i></label></div>
       </div>
     </div>
 
-    <div class="card" id="sec-commit" data-sec="拉代码和提交">
-      <h2>拉代码和提交</h2>
+    <div class="card" id="sec-commit" data-sec="提交">
+      <h2>提交</h2>
       <p class="hint">开工前拉一次代码；只提交，不自己 push。push 要你当场明确说：只有一笔、目标明确时直接推，多笔先给你看合并预览、再确认一次；自动模式也一样。不走 OpenSpec 的改动，提交前先问你。</p>
-      <div class="opt">
-        <div><div class="t">开工前拉代码</div><div class="d">开着：你提了需求、敲了 /opsx:… 命令、接着交接记录做的那一句话，先把会话所在的仓库（壳子里加上子项目）拉到最新，再开始分析、写代码。同一个仓库 2 小时里只拉一次。</div>
-          <details class="more"><summary>细节</summary><ul>
-            <li>只快进：先 fetch，再 merge --ff-only 跟踪的远端分支。不做合并提交、不变基、不动你没提交的改动（配了 merge.autoStash 也不藏改动）。</li>
-            <li>本地有没推的提交、远端也有新的（分叉了）：不拉，告诉 Claude，要合并先问你。没提交的改动和远端改的是同一些文件：git 自己拒绝，什么都不变。</li>
-            <li>已经在流程里说"继续""好""不要停"不拉，做到一半不换底下的代码。中间插了一句问话再说"继续"也不拉。</li>
-            <li>不是壳子的目录（一堆不相干的项目放在一起的上级目录）不带下面的仓库。壳子下面超过 12 个子项目的，一次拉 12 个，先拉最久没拉过的。</li>
-            <li>连不上、没权限、连远端 15 秒没下完：没拉成，照本地的做。不弹登录框，登不上也不会拿别的东西当口令去试。全自动模式下没拉成的写进报告"留给你做的"。</li>
-            <li>合并做到一半不结束它，等它做完：中途结束会留下 index.lock 和改了一半的工作区。合完了、只剩仓库自己的 post-merge 钩子在跑的，等 20 秒结束钩子。</li>
-          </ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_pullBeforeWork"><i></i></label></div>
-      </div>
 
       <div class="opt">
-        <div><div class="t">不走 OpenSpec 的改动，验证过之后</div><div class="d">修 bug、改配置、改文案这类不用提案的活。选"先问我"：它交代改了什么、怎么验的，用提问框问你，你说提交了才提交；没点头就 git commit 会被拦下。</div></div>
-        <div class="ctl"><select id="k_plainCommit"><option value="ask">先问我，我说提交了才提交</option><option value="auto">直接提交，不用问</option></select></div>
+        <div><div class="t">提交方式</div><div class="d">人工和自动模式都用，不走 OpenSpec 的改动也按它。到了提交时机（做完一件完整的事）：<b>询问</b>就交代改了什么、怎么验的，用提问框问你"提交 / 还要改"；<b>自动</b>就直接提交；<b>关</b>就什么都不做，你说"提交"它才提交。</div>
+          <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>Apply 自动时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
+        <div class="ctl"><select id="k_commitMode"><option value="ask">询问：到了时机问我</option><option value="auto">自动：到了时机直接提交</option><option value="off">关：不问也不提交，我说了才提交</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">提交检查</div><div class="d">开着：提交信息要写成"类型: 内容"；不许 git add -A、git add .、git commit -a；提交里像有密码的先让你看。</div>
-          <details class="more"><summary>细节</summary><ul><li>提交信息的例子：<span class="mono">feat: 新增修改页面</span>。</li><li>壳子里 add 子项目目录也拦，那样会提交成 gitlink。</li><li>它新建的文件漏了 add 就提交，会点名拦一次。</li><li>像密码的内容：有人在时弹框让你确认，框里写着哪个文件第几行。全自动模式下提交放行，记进报告。</li></ul></details></div>
+        <div><div class="t">提交检查</div><div class="d">开着：提交信息要写成"类型: 内容"；不许 git add -A、git add .、git commit -a。</div>
+          <details class="more"><summary>细节</summary><ul><li>提交信息的例子：<span class="mono">feat: 新增修改页面</span>。</li><li>壳子里 add 子项目目录也拦，那样会提交成 gitlink。</li><li>它新建的文件漏了 add 就提交，会点名拦一次。</li><li>不查提交内容里像密码的东西；套件自己的令牌文件（GitLab 令牌、模型的 key）一直不许提交，不受这个开关管。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_commitCheck"><i></i></label></div>
       </div>
     </div>
@@ -513,7 +578,7 @@
         <div class="ctl"><select id="k_kitBypass"><option value="ask">要我点同意</option><option value="auto">它自己放行</option><option value="off">不许放行</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">检查在哪里跑</div><div class="d">在路由里跑每次几十毫秒。用命令跑每次零点几秒，但不依赖路由。</div>
+        <div><div class="t">检查在哪里跑</div><div class="d">套件的检查（钩子）在哪里执行。在路由里跑：每次几十毫秒，路由停了就检查不了。用命令跑：每次单独起进程，零点几秒，不依赖路由。推荐"自动"：路由在就在路由里跑，不在就退回命令，一般不用动。</div>
           <details class="more"><summary>细节</summary><ul><li>管的是五个检查：改文件、跑命令、提问框和调技能、搜文件内容、收工检查。会话开始、你发消息时的两个一直用命令。</li><li>在路由里跑时，路由没在跑这几个检查会被跳过。所以你每次发消息会自检一次：收不到就把路由拉起来，还不行就自动切回命令方式。</li></ul></details>
           <div class="d" id="hookStatus" style="margin-top:4px"></div></div>
         <div class="ctl"><select id="k_hookTransport"><option value="auto">自动：装了路由就在路由里跑</option><option value="http">在路由里跑</option><option value="command">用命令跑</option></select></div>
@@ -629,6 +694,7 @@
       <div class="row end"><span class="msg" id="riMsg" style="margin-right:auto"></span><button class="btn" id="fbRefresh">刷新</button><button class="btn" id="riSync">立即上报</button></div>
       <h3>这台电脑记下的问题</h3>
       <div class="scroll"><table><thead><tr><th>最近一次</th><th>类型</th><th>涉及</th><th>问题</th><th class="num">次数</th><th>上报</th></tr></thead><tbody id="fbList"></tbody></table></div>
+      <div class="row" id="fbPager" style="margin-top:8px;gap:8px;align-items:center"></div>
       <p class="hint" id="fbCount" style="margin:8px 0 0"></p>
       <p class="msg" id="fbMsg" style="margin:4px 0 0"></p>
       <details class="plain" style="margin-top:12px"><summary>放行记录（最近 7 天）<span id="fbPassCount"></span></summary><div class="scroll" style="margin-top:6px"><table><thead><tr><th>时间</th><th>检查</th><th>哪一步</th><th>理由</th><th class="num">用了几次</th></tr></thead><tbody id="fbPasses"></tbody></table></div></details>
@@ -667,6 +733,13 @@
   <div class="msg" id="pkMark" style="margin:6px 0 0"></div>
   <div id="pkList" style="max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:6px;margin:8px 0"></div>
   <div class="row end"><span class="msg" id="pkMsg" style="margin-right:auto"></span><button class="btn" id="pkCancel">取消</button><button class="btn primary" id="pkChoose">选这个目录</button></div>
+</dialog>
+
+<!-- 长文本（模型测试的报错、请求的报错）在表格里只显示一行，点开在这里看全文（2026-10-17 用户提的：报错太长把表格撑歪） -->
+<dialog id="textDlg">
+  <h2 id="tdTitle" style="margin-top:0"></h2>
+  <pre id="tdBody" class="mono" style="white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0;font-size:12px"></pre>
+  <div class="row end"><span class="msg" id="tdMsg" style="margin-right:auto"></span><button class="btn" id="tdCopy">复制</button><button class="btn primary" id="tdClose">关闭</button></div>
 </dialog>
 
 <dialog id="dlg">
@@ -713,12 +786,12 @@
   }
   document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
     document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
-    for (const t of ['models', 'usage', 'local', 'data', 'kit', 'lessons', 'remote']) $('tab-' + t).classList.toggle('hide', t !== b.dataset.tab);
+    for (const t of ['guide', 'models', 'usage', 'local', 'data', 'kit', 'lessons', 'remote']) $('tab-' + t).classList.toggle('hide', t !== b.dataset.tab);
     buildSubnav(b.dataset.tab);
     window.scrollTo(0, 0);
     if (b.dataset.tab === 'usage') loadUsage();
     // 每次切到这几页都重新读一遍开关：页面开着的时候别处改过的，这里跟着变（你在页面上改了还没保存的不动）
-    if (['local', 'data', 'kit', 'lessons', 'remote'].includes(b.dataset.tab)) loadKit(true).then(() => { if (b.dataset.tab === 'remote') loadRemote(true); renderBar(); });
+    if (['guide', 'local', 'data', 'kit', 'lessons', 'remote'].includes(b.dataset.tab)) loadKit(true).then(() => { if (b.dataset.tab === 'remote') loadRemote(true); renderBar(); });
     if (b.dataset.tab === 'data') { loadDrivers(); loadToolUse(); }
     if (b.dataset.tab === 'kit') { loadSessions(); loadFeedback(); }
     if (b.dataset.tab === 'lessons') loadLessons();
@@ -750,7 +823,7 @@
       return '<tr><td><b>' + esc(p.name) + '</b>' + (p.model_override ? '<div class="dim mono">→ ' + esc(p.model_override) + '</div>' : '') + (p.note ? '<div class="dim">' + esc(p.note) + '</div>' : '') + (p.verify_cert ? '<div class="dim">校验证书</div>' : '') + '</td>'
         + '<td class="mono">' + esc(p.base_url) + '</td><td class="mono">' + esc(p.key_masked) + '</td><td>' + st + '</td>'
         + '<td class="num">' + t.requests + (t.fail ? ' <span class="dim">（失败 ' + t.fail + '）</span>' : '') + '</td><td class="num">' + fmt(t.input + t.cacheRead + t.cacheWrite) + ' / ' + fmt(t.output) + '</td>'
-        + '<td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end"><span class="msg' + (tr ? (tr.ok ? ' ok' : ' bad') : '') + '" data-msg="' + esc(p.name) + '">' + (tr ? esc(tr.text) : '') + '</span><button class="btn" data-test="' + esc(p.name) + '"' + (tr && tr.busy ? ' disabled' : '') + '>测试</button><button class="btn" data-edit="' + esc(p.name) + '">编辑</button><button class="btn danger" data-del="' + esc(p.name) + '">删除</button></div></td></tr>';
+        + '<td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end"><span class="msg clip' + (tr ? (tr.ok ? ' ok' : ' bad') : '') + '" data-msg="' + esc(p.name) + '"' + (tr && tr.text.length > 24 ? ' data-full="' + esc(p.name) + '" title="点开看完整内容"' : '') + '>' + (tr ? esc(tr.text) : '') + '</span><button class="btn" data-test="' + esc(p.name) + '"' + (tr && tr.busy ? ' disabled' : '') + '>测试</button><button class="btn" data-edit="' + esc(p.name) + '">编辑</button><button class="btn danger" data-del="' + esc(p.name) + '">删除</button></div></td></tr>';
     }).join('') || '<tr><td colspan="7" class="dim">还没有模型，点右上角"添加模型"。</td></tr>';
   }
   const providerOptions = (sel) => state.providers.map((p) => '<option' + (p.name === sel ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
@@ -815,6 +888,7 @@
 
   $('providers').onclick = async (ev) => {
     const t = ev.target;
+    if (t.dataset.full && tests[t.dataset.full]) { showText('测试结果：' + t.dataset.full, tests[t.dataset.full].text); return; }
     if (t.dataset.test) {
       const name = t.dataset.test;
       tests[name] = { text: '测试中…', ok: true, busy: true }; renderProviders();
@@ -938,9 +1012,14 @@
       // failed：状态码是 200 但其实没成（流里报错、没收全）；cancelled：客户端自己取消的（按了 Esc），不算模型的错
       const ok = !r.failed && !r.cancelled && r.status > 0 && r.status < 400;
       const tag = r.cancelled ? '<span class="tag off">取消</span>' : '<span class="tag ' + (ok ? 'ok' : 'bad') + '">' + (r.status || '断开') + '</span>';
-      return '<tr><td class="mono">' + esc(new Date(r.timestamp).toLocaleTimeString('zh-CN', { hour12: false })) + '</td><td class="mono">' + esc(r.model) + '</td><td>' + esc(r.provider) + (r.failover ? ' <span class="tag off">换过来的</span>' : '') + '</td><td>' + tag + '</td><td class="num">' + (r.latencyMs || 0) + ' ms</td><td class="num">' + (((r.totalMs || 0) / 1000).toFixed(1)) + ' s</td><td class="num">' + fmt((r.input || 0) + (r.cacheRead || 0) + (r.cacheWrite || 0)) + ' / ' + fmt(r.output) + '</td><td class="dim" style="max-width:320px">' + esc(r.error || '') + '</td></tr>';
+      return '<tr><td class="mono">' + esc(new Date(r.timestamp).toLocaleTimeString('zh-CN', { hour12: false })) + '</td><td class="mono">' + esc(r.model) + '</td><td>' + esc(r.provider) + (r.failover ? ' <span class="tag off">换过来的</span>' : '') + '</td><td>' + tag + '</td><td class="num">' + (r.latencyMs || 0) + ' ms</td><td class="num">' + (((r.totalMs || 0) / 1000).toFixed(1)) + ' s</td><td class="num">' + fmt((r.input || 0) + (r.cacheRead || 0) + (r.cacheWrite || 0)) + ' / ' + fmt(r.output) + '</td><td class="dim">' + (r.error ? '<span class="clip"' + (r.error.length > 24 ? ' data-full="' + esc(r.error) + '" title="点开看完整内容"' : '') + '>' + esc(r.error) + '</span>' : '') + '</td></tr>';
     }).join('') || '<tr><td colspan="8" class="dim">还没有请求。</td></tr>';
   }
+  $('recent').addEventListener('click', (ev) => { const t = ev.target.closest('[data-full]'); if (t) showText('请求的说明', t.dataset.full); });
+  /** 长文本弹窗：表格里只显示一行，点开看全文 */
+  function showText(title, text) { $('tdTitle').textContent = title; $('tdBody').textContent = text; $('tdMsg').textContent = ''; $('textDlg').showModal(); }
+  $('tdClose').onclick = () => $('textDlg').close();
+  $('tdCopy').onclick = async () => { try { await navigator.clipboard.writeText($('tdBody').textContent); $('tdMsg').textContent = '复制好了'; } catch (e) { $('tdMsg').textContent = '复制不了，手动选中文字复制'; } };
 
   // ---------- 本机环境、套件开关 ----------
   let kit = null;
@@ -1029,13 +1108,13 @@
     return n;
   }, set: (v) => { $('k_' + key).value = v === undefined || v === null ? '' : v; } }; };
   fBool('autoVerify', '改了代码要验证'); fBool('autoSeePage', '改了页面要看页面'); fBool('specGate', '提案、打勾、归档的门槛');
-  fBool('outputGate', '代码之外的产出先定位置'); fBool('serverGuard', '起服务走 devserver'); fBool('vibeTidy', '过程文件放 .vibe/tmp');
+  
   fBool('autoRequirements', '需求自动模式'); fBool('autoApply', 'Apply 自动模式'); fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查'); fBool('autoResume', '/clear 之后自动接着干');
   fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('requirementsReviewMaxRounds', '需求每点审查上限', 1, 20); fNum('applyReviewMaxRounds', 'Apply 每组审查上限', 1, 20);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
-  fBool('statusUsage', '状态栏显示今天的用量'); fBool('pullBeforeWork', '开工前拉代码'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
+  fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
   fBool('ideaMcp', '自动接上 IDEA');
-  fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('autoCommit', 'OpenSpec 的变更，验证过之后提交吗', ['task', 'phase', 'change', 'off']); fSel('plainCommit', '不走 OpenSpec 的改动，验证过之后', ['ask', 'auto']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
+  fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fSel('contextStrategy', '连续工作的方式', ['compact', 'handover']);
   fSel('reviewExecutor', '审查方式', ['direct', 'agent']);
   fNum('reviewBudgetSeconds', '审查总预算', 10, 1800); fNum('reviewMaxFiles', '审查文件上限', 1, 60);
@@ -1098,6 +1177,7 @@
       const first = !kit;
       const fresh = await api('GET', '/api/kit');
       renderIdea(fresh.ideaMcp);
+      const osi = fresh.openspec; if (osi) $('gOpenspecVer').textContent = osi.version + (osi.usable ? '，这台电脑在用它' : '，这台电脑的 Node 低于它要求的 ' + osi.node + '，用的是你自己装的 OpenSpec');
       const c = fresh.config || {};
       if (first) {
         kit = fresh;
@@ -1148,7 +1228,7 @@
   $('saveLocal').onclick = async () => {
     try { const r = await api('POST', '/api/kit/local', readLocal()); say($('localMsg'), r.synced ? '已保存并写进全局约定，新开的会话生效' : '已保存。' + (r.output || ''), r.synced); } catch (e) { say($('localMsg'), e.message, false); }
   };
-  // ---------- 上下文上限和交接线：改完自动保存，预览和"正在用的会话"跟着变 ----------
+  // ---------- 上下文上限和交接线：改的时候预览和"正在用的会话"跟着变，点保存条才存 ----------
   const tok = (n) => (n >= 1000000 ? String(Math.round(n / 100000) / 10) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(n));
   let sessions = [];
   function renderCtx() {
@@ -1184,17 +1264,8 @@
     $('hookStatus').textContent = [reg, last].filter(Boolean).join('；') + (errs.length ? '。' + errs.join('；') : '');
   }
   async function loadHooks() { try { renderHookStatus(await api('GET', '/api/kit/hooks')); } catch (e) { /* 老版本没有这个接口 */ } }
-  async function saveCtx() {
-    // 只存这四项里改过的：别的开关在页面上没保存的改动不受影响
-    const r = await saveFields(['contextStrategy', 'handoverPercent', 'contextLimitTokens', 'handoverAsk', 'autoResume', 'autoCompactPercent', 'statusUsage'], $('ctxMsg'), '已保存，下一次状态栏刷新、下一条消息就按新值算');
-    if (r && r.saved.includes('autoCompactPercent')) say($('ctxMsg'), '已保存。自动压缩线新开的会话生效；开着的会话照上面那条 /autocompact 命令敲一下', true);
-    renderBar();
-  }
-  for (const id of ['k_contextLimitTokens', 'k_handoverPercent', 'k_autoCompactPercent']) { $(id).addEventListener('input', renderCtx); $(id).addEventListener('change', saveCtx); }
-  $('k_statusUsage').addEventListener('change', saveCtx);
-  $('k_handoverAsk').addEventListener('change', saveCtx);
-  $('k_contextStrategy').addEventListener('change', saveCtx);
-  $('k_autoResume').addEventListener('change', saveCtx);
+  // 上下文这几项以前一改就自动保存：保存条冒出来又马上消失，看着像没存（2026-10-17 用户提的）。现在和别的开关一样，等点保存条
+  for (const id of ['k_contextLimitTokens', 'k_handoverPercent', 'k_autoCompactPercent']) $(id).addEventListener('input', renderCtx);
   setInterval(() => { if (!$('tab-kit').classList.contains('hide')) { loadSessions(); loadHooks(); } }, 5000);
 
   // ---------- 底部的保存条：页面上有开关改了还没保存，它就冒出来。存的是这个页面上所有改过的开关 ----------
@@ -1216,6 +1287,7 @@
     $('barSave').disabled = true;
     try {
       const r = await saveFields(null, $('barMsg'), '已保存，立即生效');
+      if (r && r.saved.includes('autoCompactPercent')) say($('barMsg'), '已保存。自动压缩线新开的会话生效；开着的会话照"上下文和交接"里那条 /autocompact 命令敲一下', true);
       if (r) { barKeep = Date.now() + 4000; setTimeout(renderBar, 4100); loadRemote(false); loadLessons(); loadFeedback(); }
     } finally { $('barSave').disabled = false; renderBar(); }
   };
@@ -1228,12 +1300,22 @@
     const x = UPLOAD[u];
     return x ? (x[0] ? '<span class="tag ' + x[0] + '">' + x[1] + '</span>' : '<span class="dim">' + x[1] + '</span>') : '';
   }
+  // 问题多了页面会很长（2026-10-17 用户提的）：每页 5 条，刷新后停在原来那一页
+  const FB_PAGE = 5; let fbRecords = []; let fbPage = 1;
+  function drawFeedbackList() {
+    const list = fbRecords; const pages = Math.max(1, Math.ceil(list.length / FB_PAGE));
+    fbPage = Math.min(Math.max(1, fbPage), pages);
+    const shown = list.slice((fbPage - 1) * FB_PAGE, fbPage * FB_PAGE);
+    $('fbList').innerHTML = shown.length ? shown.map((x) => '<tr><td class="mono">' + esc(x.updated || x.time || '') + '</td><td>' + esc(x.kind || '') + '</td><td>' + esc(x.hook || '') + '</td><td>' + esc(x.title || '') + '<div class="dim mono" style="font-size:12px">' + esc([x.id, x.project, x.source, x.bypass && x.bypass !== '没有申请' ? '放行：' + x.bypass : ''].filter(Boolean).join('　')) + '</div></td><td class="num">' + (x.count || 1) + '</td><td style="white-space:nowrap">' + uploadCell(x.upload) + '</td></tr>').join('') : '<tr><td colspan="6" class="dim">还没有记过问题。</td></tr>';
+    $('fbPager').innerHTML = pages > 1 ? '<button class="btn" id="fbPrev"' + (fbPage <= 1 ? ' disabled' : '') + '>上一页</button><span class="dim">第 ' + fbPage + ' / ' + pages + ' 页（每页 ' + FB_PAGE + ' 条）</span><button class="btn" id="fbNext"' + (fbPage >= pages ? ' disabled' : '') + '>下一页</button>' : '';
+    if (pages > 1) { $('fbPrev').onclick = () => { fbPage--; drawFeedbackList(); }; $('fbNext').onclick = () => { fbPage++; drawFeedbackList(); }; }
+  }
   async function loadFeedback() {
     try {
       const r = await api('GET', '/api/kit/feedback');
       $('fbDir').textContent = r.dir || '';
       const list = r.records || [];
-      $('fbList').innerHTML = list.length ? list.map((x) => '<tr><td class="mono">' + esc(x.updated || x.time || '') + '</td><td>' + esc(x.kind || '') + '</td><td>' + esc(x.hook || '') + '</td><td>' + esc(x.title || '') + '<div class="dim mono" style="font-size:12px">' + esc([x.id, x.project, x.source, x.bypass && x.bypass !== '没有申请' ? '放行：' + x.bypass : ''].filter(Boolean).join('　')) + '</div></td><td class="num">' + (x.count || 1) + '</td><td style="white-space:nowrap">' + uploadCell(x.upload) + '</td></tr>').join('') : '<tr><td colspan="6" class="dim">还没有记过问题。</td></tr>';
+      fbRecords = list; drawFeedbackList();
       const up = list.filter((x) => x.upload && typeof x.upload === 'object').length;
       const wait = list.filter((x) => x.upload === 'waiting').length;
       $('fbCount').textContent = list.length ? '共 ' + list.length + ' 条，按出现次数算 ' + list.reduce((a, x) => a + (x.count || 1), 0) + ' 次；已上报 ' + up + ' 条' + (wait ? '，' + wait + ' 条等着上报' : '') : '';
