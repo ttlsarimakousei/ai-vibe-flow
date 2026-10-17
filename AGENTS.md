@@ -16,7 +16,7 @@
 
 按这个顺序：
 
-1. 这份文件。
+1. 这份文件，和 [docs/handoff.md](docs/handoff.md)（现在做到哪、没做完的、待仓库主人定的；Claude Code 通过 CLAUDE.md 自动带上）。
 2. [docs/architecture.md](docs/architecture.md)：套件由哪几块组成、钩子在哪个时机做什么、状态记在哪。
 3. 要改的那块的源码。每个文件开头都有一段中文注释，写着它管什么、为什么这么做。改之前先读它。
 4. [docs/conventions.md](docs/conventions.md)：代码、提示语、文档怎么写。
