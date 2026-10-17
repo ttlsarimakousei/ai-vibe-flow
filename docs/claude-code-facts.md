@@ -8,6 +8,18 @@
 
 2026-10-10 MCP 实测：本机 IDEA 2026.2.3 内置 HTTP MCP 在 `127.0.0.1:64342/stream`，握手返回 `IntelliJ IDEA MCP Server`、协议 `2025-06-18`。启用工具路由后只暴露 `execute_tool`，不是没有工具。已核对项目模块和运行配置；当前测试项目没有运行配置，普通 Run 的停止、重启和旧日志未验证。
 
+### 运行配置的起、停、重启（2026-10-17 实测）
+
+IDEA 2026.2.3 Ultimate，测试项目在 `C:\WorkSpace\TestIdea`：Spring Boot 2.7（运行配置类型 Spring Boot）、Spring MVC 4.3 + pom 里的 tomcat7-maven-plugin（Maven 运行配置 `tomcat7:run`）、没有 pom 的 Spring MVC + IDEA 里登记的本机 Tomcat 9（Tomcat 本地运行配置）。没关工具路由时直接暴露 50 多个工具，和运行有关的是 `get_run_configurations`、`execute_run_configuration`、`xdebug_start_debugger_session`、`xdebug_get_debugger_status`、`xdebug_control_session`，**没有"停止运行"的工具**。
+
+- **每次调用要用户在 IDEA 里点允许**，除非用户在 IDEA 设置 → 工具 → MCP 服务器里开了"不经确认运行命令和运行配置"（brave mode，存在 `%APPDATA%\JetBrains\<版本>\options\mcpServer.xml` 的 `enableBraveMode`）。没点之前调用一直挂着。
+- **IDEA 只等 15 秒左右**：客户端只发 POST、没开着 GET `/stream` 的事件流时，超过约 15 秒的调用被丢掉（idea.log 记 `Pending StreamableHttp transport timed out without SSE stream`），客户端拿到 404 或等不到回复。套件自己调 IDEA 时要开着事件流；Claude Code 自己的 MCP 客户端没这个问题。
+- **运行配置有错时 IDEA 弹出编辑运行配置的模态框**，不启动；框不关，之后所有 MCP 调用都挂着（连停别的会话都不行）。
+- **普通 Run（`execute_run_configuration`，`waitForExit: false`）**：半秒到几秒就返回，只给 `output` 和 `fullOutputPath`（IDEA 临时目录里一直在长的完整输出），没有能用来停的东西。**还在跑的时候再调一次不会重启**：Maven 的 `tomcat7:run` 起了第二份，第二份端口绑不上（`BindException`）但进程不退，旧的那份照样用旧代码答话。用户在 IDEA 里点 Run 起的也一样：调试会话列表里没有它，`xdebug_control_session` 停它回"Session not found"。
+- **调试方式（`xdebug_start_debugger_session`，传运行配置名）**能起能停：返回 `sessionId`（就是运行配置名），`xdebug_get_debugger_status` 列得出来，`xdebug_control_session` 的 `STOP` 一两秒内放掉端口。重启 = STOP 再起：Spring Boot 起之前 IDEA 先按运行配置编译，Maven 的 `tomcat7:run` 自己编译，**改过的代码在重启后生效**（Spring Boot 约 7 秒、tomcat7:run 约 24 秒能答话）。不打断点就照常跑，和 Run 一样用。
+- tomcat7-maven-plugin 2.2 内嵌的是 Tomcat 7.0.47（Servlet 3.0）：Spring 5 要 Servlet 3.1，`@ResponseBody` 返回时报 `NoSuchMethodError: setContentLengthLong`。用这个插件的老项目配 Spring 4.x。
+- 没测：Tomcat 本地运行配置的重启（测试用的那份是手写的，IDEA 弹了编辑框）；IDEA 的"更新"（热替换类和资源）MCP 里没有对应的工具。
+
 Claude Code 用户级 MCP 在 `~/.claude.json` 顶层 `mcpServers`；设置 `CLAUDE_CONFIG_DIR` 时改为该目录里的 `.claude.json`，不是 `settings.json`。HTTP 登记要写 `type: "http"`。在假用户目录、假本机 MCP 服务上，2.1.120、2.1.259、2.1.289 的 `claude mcp get` 都能识别此登记，不调用模型接口。官方位置说明见 [MCP 快速入门](https://code.claude.com/docs/en/mcp-quickstart#find-your-configuration-on-disk)。
 
 ## 读写文件
