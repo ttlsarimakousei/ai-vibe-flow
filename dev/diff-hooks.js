@@ -67,6 +67,7 @@ const V1012 = '20261013.0058'; // 1012 反馈：页面探针、产出位置、�
 const V1013 = '20261013.1453'; // 1013 非数据库反馈修复
 const V1013B = '20261013.2358'; // 1013 下午清单：业务状态名
 const V1017 = '20261017.0243'; // 两阶段自动、逐点审查、人工模式先问（10-14 至 10-16 决定）
+const V1018 = '20261018.0051'; // 提交方式三档（默认关）、任务只写实现、验收用例写进设计、需求文档一份一份来、自带 OpenSpec、起服务等答 HTTP（10-17 这一批）
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -329,18 +330,18 @@ const ASK_COMMIT = ['命令：git commit -m "feat: 新增导出"', '命令：git
 for (const c of cases) {
   if (['规格缺场景', '规格写得对', '规格的需求没放在增量标题下面'].includes(c.name)) shownBefore(c, 'openspec/changes/add-export/proposal.md');
   // 2026-10-17 晚上起提交方式默认"关"：没说提交就不提交，也不问
-  if (ASK_COMMIT.includes(c.name)) { c.expect = /提交方式是\\"关\\"：不自动提交，也不问/; c.since = NEXT; }
-  if (c.name === '命令：提交经验规则文件') { c.expect = /提交方式是\\"关\\"：不自动提交，也不问/; c.since = NEXT; }
+  if (ASK_COMMIT.includes(c.name)) { c.expect = /提交方式是\\"关\\"：不自动提交，也不问/; c.since = V1018; }
+  if (c.name === '命令：提交经验规则文件') { c.expect = /提交方式是\\"关\\"：不自动提交，也不问/; c.since = V1018; }
   // 这一版有意改的：devserver 答了 HTTP 才算起来，起服务的提示里"起好（端口通了）"改成"起好（答了 HTTP）"
-  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*它起好（答了 HTTP）才返回/; c.since = NEXT; }
-  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用 Ask 询问是否审查/; c.since = NEXT; }
-  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用 Ask 问是否审查/; c.since = NEXT; }
-  if (c.name === '任务太笼统、没写验法') { c.expect = /^(?![\s\S]*没写怎么验)[\s\S]*\\"完善\\"太笼统/; c.since = NEXT; }
-  if (c.name === '任务里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*不写\\"验：\\"/; c.since = NEXT; }
-  if (c.name === '设计里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*\\"## 验收用例\\"一节/; c.since = NEXT; }
+  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*它起好（答了 HTTP）才返回/; c.since = V1018; }
+  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用 Ask 询问是否审查/; c.since = V1018; }
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用 Ask 问是否审查/; c.since = V1018; }
+  if (c.name === '任务太笼统、没写验法') { c.expect = /^(?![\s\S]*没写怎么验)[\s\S]*\\"完善\\"太笼统/; c.since = V1018; }
+  if (c.name === '任务里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*不写\\"验：\\"/; c.since = V1018; }
+  if (c.name === '设计里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*\\"## 验收用例\\"一节/; c.since = V1018; }
 }
-add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, NEXT);
-add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, NEXT);
+add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, V1018);
+add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, V1018);
 
 let same = 0;
 let changed = 0;
