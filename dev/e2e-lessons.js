@@ -142,6 +142,8 @@ const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
   const st = JSON.parse(H.read(path.join(cfg, 'settings.json')));
   H.ok('钩子登记成命令方式', JSON.stringify(st.hooks).includes('verify-gate.js') && !JSON.stringify(st.hooks).includes('"type":"http"'), st.hooks);
   if (!AUTO) H.setConfig(h, { lessonAuto: false });
+  // 测的是经验规则的流程：套件催着提交的规则文件在"询问"下不用再问（2026-10-17 晚上起默认是"关"，这里写明"询问"）
+  H.setConfig(h, { commitMode: 'ask' });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
   const L = require(path.join(kit, 'lib', 'lessons.js'));

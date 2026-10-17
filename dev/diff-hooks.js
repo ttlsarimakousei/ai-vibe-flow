@@ -328,11 +328,13 @@ const shownBefore = (c, rel) => { const build = c.build; c.build = (kit) => { co
 const ASK_COMMIT = ['命令：git commit -m "feat: 新增导出"', '命令：git commit -m "fix: 导出漏了表头（源自 add-export 2.3）"', '命令：git add src/main/java/com/x/A.java && git commit -m "feat: 新增导出"', 'PowerShell：git commit -m "feat: 新增导出"; if ($?) { git push }', '提交：普通文档修订标题不能免确认'];
 for (const c of cases) {
   if (['规格缺场景', '规格写得对', '规格的需求没放在增量标题下面'].includes(c.name)) shownBefore(c, 'openspec/changes/add-export/proposal.md');
-  if (ASK_COMMIT.includes(c.name)) { c.expect = /提交方式是\\"询问\\"[\s\S]*用提问框问用户/; c.since = NEXT; }
+  // 2026-10-17 晚上起提交方式默认"关"：没说提交就不提交，也不问
+  if (ASK_COMMIT.includes(c.name)) { c.expect = /提交方式是\\"关\\"：不自动提交，也不问/; c.since = NEXT; }
+  if (c.name === '命令：提交经验规则文件') { c.expect = /提交方式是\\"关\\"：不自动提交，也不问/; c.since = NEXT; }
   // 这一版有意改的：devserver 答了 HTTP 才算起来，起服务的提示里"起好（端口通了）"改成"起好（答了 HTTP）"
   if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*它起好（答了 HTTP）才返回/; c.since = NEXT; }
-  if (c.name === '收工：改了、验了、没提交') { c.expect = /这一轮改过的文件还没提交[\s\S]*用提问框问我提不提交/; c.since = NEXT; }
-  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /group-1 已完成。用 Ask 问是否审查[\s\S]*用提问框问我提不提交/; c.since = NEXT; }
+  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用 Ask 询问是否审查/; c.since = NEXT; }
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用 Ask 问是否审查/; c.since = NEXT; }
   if (c.name === '任务太笼统、没写验法') { c.expect = /^(?![\s\S]*没写怎么验)[\s\S]*\\"完善\\"太笼统/; c.since = NEXT; }
   if (c.name === '任务里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*不写\\"验：\\"/; c.since = NEXT; }
   if (c.name === '设计里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*\\"## 验收用例\\"一节/; c.since = NEXT; }

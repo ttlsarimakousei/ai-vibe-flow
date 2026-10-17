@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 端到端（0929）：真的 Claude Code + 按脚本回复的假模型，Apply 自动模式走一遍。
- *   打勾被拦（验法里的场景没跑）→ 自己申请放行 → 中间内容变了再打勾，照样放行
+ *   直接起服务被拦（要走 devserver）→ 自己申请放行 → 再跑一次，照样放行（2026-10-17 起打勾不查验法，原来用的"打勾被拦"换成这一道）；打勾照常
  *   整组 1.x 做完用 review.js 逐点审查，报了问题、改了；下一个会话里复审，工具调用的 id 和上一个会话那次一样（内网的网关就是这样）→ 照样计成第 2 轮
  *   收工 → 套件交报告 → 它照着交代 → 它的交代接在报告后面；复审通过但用户没说归档，不归档
  * 2026-10-14 起：自动模式可以用提问框问业务疑问，不再拦下记进报告；-p 跑时没人回答，这一步不在端到端里测（放行由 test-workflow1014 测）。
@@ -40,7 +40,7 @@ const TASKS = path.join(proj, 'openspec', 'changes', 'a1', 'tasks.md');
 const FEEDBACK = path.join(kit, 'tools', 'feedback.js').replace(/\\/g, '/');
 const REVIEW = 'node "' + path.join(kit, 'tools', 'review.js').replace(/\\/g, '/') + '" run --change a1 --mode code --point group-1';
 const isReviewBody = (b) => !!b && (b.model === 'claude-sonnet-vibe-review' || /你是独立审查者/.test(JSON.stringify(b.system || '')));
-const FINAL = '## 做了什么\na1 的 1.1 做完了，代码审过一轮、改了。\n## 留给你做的\n没有。\n## 库里改过的\n没有。\n## 自己定的事\n导出的文件名按带日期的做。\n## 没验证的\n1.1 的对照场景没跑：要先改库。\n## 放行的检查\n打勾检查一次。\n## 套件问题\n没有。';
+const FINAL = '## 做了什么\na1 的 1.1 做完了，代码审过一轮、改了。\n## 留给你做的\n没有。\n## 库里改过的\n没有。\n## 自己定的事\n导出的文件名按带日期的做。\n## 没验证的\n1.1 的对照场景没跑：要先改库。\n## 放行的检查\n起服务检查一次。\n## 套件问题\n没有。';
 
 // ---------- 假模型 ----------
 let requests = [];
@@ -98,12 +98,15 @@ function answer(body, res) {
   if (!read(JAVA)) return tool(body, res, 'Read', { file_path: JAVA });
   if (!edits(JAVA).length) return tool(body, res, 'Edit', { file_path: JAVA, old_string: '  // FILE-ORDER-SERVICE', new_string: '  // FILE-ORDER-SERVICE\n  // 角色改成 aqbmy' });
   if (!ran(/console\.log\('verify ok'\)/)) return tool(body, res, 'Bash', { command: 'node -e "console.log(\'verify ok\')"', description: '快检' });
-  // 2. 打勾：被拦 → 申请放行 → 换个写法再打
-  if (!read(TASKS)) return tool(body, res, 'Read', { file_path: TASKS });
-  if (!edits(TASKS).length) return tool(body, res, 'Edit', { file_path: TASKS, old_string: '- [ ] 1.1', new_string: '- [x] 1.1' });
+  // 2. 起服务烟测：直接 java -jar 被拦（要走 devserver）→ 申请放行 → 再跑一次
+  const jars = done.filter((u) => u.name === 'Bash' && /java -jar target\/app\.jar/.test(String((u.input || {}).command || ''))).length;
+  if (!jars) return tool(body, res, 'Bash', { command: 'java -jar target/app.jar --server.port=8080', description: '起服务烟测' });
   const id = (everything.match(/拦截编号 ([A-Z0-9]{4})/) || [])[1];
-  if (id && !ran(/feedback\.js" bypass/)) return tool(body, res, 'Bash', { command: 'node "' + FEEDBACK + '" bypass ' + id + ' --why "对照场景要先执行备号脚本，改库不可逆要用户确认；快检刚跑过，输出 verify ok"', description: '申请放行' });
-  if (ran(/feedback\.js" bypass/) && edits(TASKS).length < 2) return tool(body, res, 'Edit', { file_path: TASKS, old_string: '- [ ] 1.1 审核接口角色', new_string: '- [x] 1.1 审核接口角色' });
+  if (id && !ran(/feedback\.js" bypass/)) return tool(body, res, 'Bash', { command: 'node "' + FEEDBACK + '" bypass ' + id + ' --why "联调网关只认 8080 端口，devserver 会换端口；只跑一下看能不能起来，改库不可逆要用户确认的对照场景不跑"', description: '申请放行' });
+  if (ran(/feedback\.js" bypass/) && jars < 2) return tool(body, res, 'Bash', { command: 'java -jar target/app.jar --server.port=8080', description: '起服务烟测' });
+  // 打勾（2026-10-17 起不查验法，直接打上）
+  if (!read(TASKS)) return tool(body, res, 'Read', { file_path: TASKS });
+  if (!edits(TASKS).length) return tool(body, res, 'Edit', { file_path: TASKS, old_string: '- [ ] 1.1 审核接口角色', new_string: '- [x] 1.1 审核接口角色' });
   // 3. 整组 1.x 做完，逐点审查（报 1 条）→ 改 → 验
   if (!reviewed) return tool(body, res, 'Bash', { command: REVIEW, description: '审查 a1 的 group-1' }, DUP);
   if (edits(JAVA).length < 2) return tool(body, res, 'Edit', { file_path: JAVA, old_string: '  // 角色改成 aqbmy', new_string: '  // 角色改成 aqbmy，名字从配置里读' });
@@ -181,9 +184,9 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   const cmds = cmdsOf(r);
   H.ok('第一个会话跑完了，没有挂住', r.code === 0 && !r.killed, r.err.slice(-600));
 
-  H.section('打勾：被拦 → 申请放行 → 内容变了再打，照样放行');
-  H.ok('第一次打勾被拦，提示里有拦截编号和申请放行的命令', seen(r, /打勾之前先验证/) && seen(r, /拦截编号 [A-Z0-9]{4}。全自动模式：照提示能改的先改/), cmds);
-  H.ok('它申请了放行，当场放行', cmds.some((c) => /feedback\.js" bypass/.test(c)) && seen(r, /放行申请登记好了/) && seen(r, /会直接放行/), cmds);
+  H.section('直接起服务：被拦 → 申请放行 → 再跑一次，照样放行；打勾照常');
+  H.ok('第一次直接起服务被拦，提示里有拦截编号和申请放行的命令', seen(r, /起服务自测用 devserver\.js/) && seen(r, /拦截编号 [A-Z0-9]{4}。全自动模式：照提示能改的先改/), cmds);
+  H.ok('它申请了放行，当场放行', cmds.some((c) => /feedback\.js" bypass/.test(c)) && seen(r, /放行申请登记好了/) && seen(r, /会直接放行/) && cmds.filter((c) => /java -jar target\/app\.jar/.test(c)).length === 2, cmds);
   H.ok('勾打上了', /- \[x\] 1\.1 审核接口角色/.test(H.read(TASKS) || ''), H.read(TASKS));
   H.ok('没有记成套件的问题', fbCount() === n0, fs.existsSync(path.join(kit, 'feedback')) ? fs.readdirSync(path.join(kit, 'feedback')) : []);
 
@@ -196,7 +199,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   H.ok('收工时套件交了报告', seen(r, /\[vibe-kit 全自动报告\] 这一轮的情况套件记下来了/));
   const body = reports().length ? fs.readFileSync(reports()[reports().length - 1], 'utf8') : '';
   H.ok('报告文件在项目的 .vibe/reports 里', reports().length === 1, reports());
-  H.ok('报告里有放行的那一次和理由', /## 放行的检查\n\n- \d\d:\d\d OpenSpec 产物的门槛：Edit：/.test(body) && /改库不可逆要用户确认/.test(body), body);
+  H.ok('报告里有放行的那一次和理由', /## 放行的检查\n\n- \d\d:\d\d 起服务要经过 devserver\.js：/.test(body) && /联调网关只认 8080 端口/.test(body), body);
   H.ok('报告里说了 a1 做到哪：审了一轮、还没复审', /- a1：任务 2\/2，审查点 group-1 审了 1 轮，上一轮报了 1 条，还没复审/.test(body), body);
   H.ok('以前打的勾（验法是人工看的）不重复列进"没验证的"', !/要你看一眼（a1）：1\.0/.test(body), body);
   H.ok('它最后的交代接在报告后面', body.includes('## AI 最后的交代\n\n## 做了什么\na1 的 1.1 做完了'), body.slice(-500));

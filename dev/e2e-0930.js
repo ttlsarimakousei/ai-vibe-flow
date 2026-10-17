@@ -141,7 +141,8 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
   H.setConfig(h, { autoCommit: 'off', commitMode: 'off', autoUpdate: 'off', issueUpload: 'off' });
   if (HAS_RT) H.write(path.join(kit, 'local.json'), JSON.stringify({ jdks: [{ name: '17', path: JDK.replace(/\\/g, '/') }], defaultJdk: '17', mavens: [] }));
   const skillsDir = fs.readdirSync(path.join(cfg, 'skills')).sort();
-  H.ok('装上的技能是 ttls- 开头的六个', JSON.stringify(skillsDir) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']), skillsDir);
+  // 2026-10-17 起安装器还把自带 OpenSpec 的技能装成用户级（openspec-* 开头）
+  H.ok('装上的技能：ttls- 开头的六个，加上自带 OpenSpec 的 openspec-*', JSON.stringify(skillsDir.filter((n) => /^ttls-/.test(n))) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']) && skillsDir.includes('openspec-propose') && skillsDir.every((n) => /^(ttls|openspec)-/.test(n)), skillsDir);
 
   // 两个假 redis：配置文件里先写旧端口，后面改成新端口
   const servers = [];
