@@ -32,10 +32,23 @@ const FILES = {
   'openspec/changes/add-export/tasks.md': '- [x] 1.1 改 src/main/java/com/x/A.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/main/java/com/x/B.java；验：`mvn -q -o compile`\n',
 };
 let n = 0;
+// 同样的文件只真建一次 git 仓库（模板），之后每个用例、每一版各复制一份：H.makeRepo 要起 6 个 git 进程，一次 1.3 秒左右，
+// 复制 0.2 秒左右（2026-10-18 实测；151 个输入 × 新旧两版，以前光建仓库就要 6 分多钟）。复制出来的仓库干净、有那一次提交，git 配置在 .git 里跟着走
+const TEMPLATES = new Map();
+let tplRoot = '';
 /** 每个用例、每一版各一份一模一样的项目 */
 function project(kit, extra) {
   const dir = path.join(kit.work, 'c' + (++n), 'proj');
-  H.makeRepo(dir, Object.assign({}, FILES, extra || {}));
+  const files = Object.assign({}, FILES, extra || {});
+  const key = JSON.stringify(files);
+  let tpl = TEMPLATES.get(key);
+  if (!tpl) {
+    if (!tplRoot) tplRoot = H.tempDir('diff-tpl');
+    tpl = H.makeRepo(path.join(tplRoot, 't' + TEMPLATES.size, 'proj'), files);
+    TEMPLATES.set(key, tpl);
+  }
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  fs.cpSync(tpl, dir, { recursive: true });
   return dir;
 }
 const norm = (s, kit, proj) => String(s)
