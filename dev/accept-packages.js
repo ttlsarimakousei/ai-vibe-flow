@@ -103,7 +103,7 @@ function unzip(zip, name) {
   H.ok('看页面用的依赖也在', fs.existsSync(path.join(u.kit, 'page', 'node_modules', 'playwright-core', 'package.json')));
   if (V2 > '20260929.2205') {
     const sk = fs.readdirSync(path.join(u.cfg, 'skills')).sort();
-    H.ok('自动更新之后：技能是 ttls- 开头的六个' + (RENAMED ? '，旧名字的、以前单独装的都收掉了' : ''), JSON.stringify(sk) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']), sk);
+    H.ok('自动更新之后：技能是 ttls- 开头的六个' + (RENAMED ? '，旧名字的、以前单独装的都收掉了' : ''), JSON.stringify(sk.filter((n) => /^ttls-/.test(n))) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']) && sk.every((n) => /^(ttls|openspec)-/.test(n)), sk); // 2026-10-17 起还装自带 OpenSpec 的 openspec-* 技能
     H.ok('审查代理是 ttls-reviewer', fs.existsSync(path.join(u.cfg, 'agents', 'ttls-reviewer.md')) && !fs.existsSync(path.join(u.cfg, 'agents', 'vibe-reviewer.md')), fs.readdirSync(path.join(u.cfg, 'agents')));
     const md = H.read(path.join(u.cfg, 'CLAUDE.md')) || '';
     H.ok('全局约定里的斜杠命令换成了新名字', /\/ttls-see-page/.test(md) && /\/ttls-handover/.test(md) && !/(^|[^\w.\\/-])\/(cross-review|see-page|handover|onboard)\b/.test(md), (md.match(/[^\n]*\/(cross-review|see-page|handover|onboard)\b[^\n]*/g) || []).slice(0, 3));
