@@ -6,11 +6,11 @@
  *   所有产物：不许"待定、后续完善、开发阶段再、视情况、TBD"这类话，拿不准的写成决策项（同一行写明"默认按…做"）；模板的占位注释不能留着；复杂需求和设计允许长文，必要时用图说明
  *   proposal.md 第一次写：这个会话里得探索过项目（读过代码、搜过），而且探索和提案不在同一轮——先把现状给用户看。
  *             用户自己敲 /opsx:propose、全自动模式、交接之后的新会话（这个会话读过一天内的交接记录）不要求分轮
- *   tasks.md：每项任务写清改哪个文件（路径，而且找得到，新建的写明"新建"）、怎么验（"验：…"）；不许"联调、完善、收尾"这种任务
- *             打勾（[ ] → [x]，行尾加了字也认得；第一次写就带着 [x] 的也算）之前，这项任务写的验法必须在改完这项任务的代码之后成功跑过
- *             这个变更的第一次打勾（apply 开工）要提案审过；开了多轮审查的，提案的多轮审查要审完
+ *   tasks.md：只写实现任务（用户 2026-10-17 定的），每项写清改哪个文件（路径，而且找得到，新建的写明"新建"）；不写"验：…"；
+ *             不许"联调、完善、收尾"这种任务；新写的测试、审查、验收任务拦下，让它写进 design.md 的"验收用例"
+ *             打勾不检查验法；自动模式下这个变更的第一次打勾（apply 开工）要提案审过，后面的组要等前面的组做完、审修过
  *   specs：每条 Requirement 至少一个四井号的 Scenario，场景里有 WHEN 和 THEN
- *   design.md：提到的路径要找得到（新建的在同一行写明"新建"）；新写的设计 Context（现状）一节不能空
+ *   design.md：提到的路径要找得到（新建的在同一行写明"新建"）；新写的设计 Context（现状）一节不能空，要有"验收用例"一节
  * 只判这次新加、改过的行：老变更里以前写的不追究，打勾不算改。revisions.md（修订记录）不检查。
  * 模拟这次编辑时先把换行统一成 \n（Claude Code 的 Edit 自己也这么做），匹配不到再试引号归一化；都匹配不到说明这次编辑会失败，按没改算。
  * 开关：config.json 的 specGate。
@@ -22,10 +22,9 @@ let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 
 const GUIDE = {
-  // 验法的写法跟着"看页面"开关走（关着时页面上的写"人工看页面"），用的时候再按开关换
-  tasks: '任务的写法：- [ ] 2.1 <做什么>：<文件路径>；验：<命令或 /ttls-see-page 场景>。一项任务 = 一次提交的量，按依赖排序；文件要新建的在同一行写明"新建"。',
+  tasks: '任务的写法：- [ ] 2.1 <做什么>：<文件路径>。一项任务 = 一次提交的量，按依赖排序；文件要新建的在同一行写明"新建"。只写要做的实现：不写"验："，测试、审查、验收写进 design.md 的"验收用例"一节。',
   spec: '规格的写法：每条 ### Requirement 下至少一个 #### Scenario，WHEN 写具体的输入和状态，THEN 写能核对的结果（字段值、提示文字、跳转、状态码）。正常、异常、空数据、无权限各一条，不适用的写明为什么。',
-  design: '设计的写法：Context 列出探索时读过的真实文件、表、接口；Decisions 每条写为什么选它、不选什么；提到的路径必须找得到，要新建的写明"新建"；Open Questions 只能是空的，或者每条都是决策项。',
+  design: '设计的写法：Context 列出探索时读过的真实文件、表、接口；Decisions 每条写为什么选它、不选什么；提到的路径必须找得到，要新建的写明"新建"；Open Questions 只能是空的，或者每条都是决策项；"## 验收用例"一节逐条写对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。',
   proposal: '提案的写法：What Changes 逐条可核对；Capabilities 里每个能力都要有对应的 specs/<能力>/spec.md；Impact 列出会动到的文件、表、接口；本次不做的写成"本次不做：X（原因）"。',
 };
 const HEDGE_GUIDE = '不许写"以后再说"。拿不准的写成决策项：未定什么、默认按哪种做、理由（同一行写明"默认按…做"就算）；我不接受会改。本次不做的写成"本次不做：X（原因）"。';
@@ -84,13 +83,10 @@ function scenarioFinder(roots) {
   };
 }
 /**
- * 打勾前先验证：这次编辑把哪些任务打了勾，每一项写的验法在"改完这项任务的代码之后"成功跑过了吗。
- * 从哪开始算：任务行里写的文件最后一次改成功之后；这段会话记录里没改过它们（更早改的、用命令改的）就整段都算；
- * 任务行里没写文件的，从最后一次改代码之后算。改 tasks.md 本身不算——以前从"上次改 tasks.md 之后"算，
- * 连着给几项任务打勾、打勾前改一句验法，刚跑过的验证就不认了（问题反馈 F20260928-010、F20260929-015）。
- * 失败的编辑（找不到要替换的文字、被钩子拦下）不算改过；失败的命令不算跑过。
- * 这个变更的第一次打勾（apply 开工）还要求提案审过：状态里没有记录，就去会话记录里找一次成功的审提案调用兜底。
- * 返回 { issues, ticked, skipped }：skipped 是验法里明说"不做"的部分（打勾放行，记进全自动报告）
+ * 打勾前的检查：这次编辑把哪些任务打了勾。不查验法（用户 2026-10-17 定的：任务里不写"验："，两种模式打勾都不查）。
+ * 自动模式下：这个变更的第一次打勾（apply 开工）要提案审过，状态里没有记录就去会话记录里找一次成功的审提案调用兜底；
+ * 后面的组要等前面的组做完、审修过。老变更里的审查、验收任务按 task-types 的规矩查。
+ * 返回 { issues, ticked, skipped }：skipped 现在总是空的（以前是验法里明说"不做"的部分）
  */
 function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const ticked = tickedLines(oldText, newText);
@@ -117,50 +113,15 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   }
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);
-  if ((!cfg.autoMode && !require('../lib/flow-policy').explicit(j, 'test')) || !j.transcript_path) return done([]);
+  // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一整组并审修过
+  if (!cfg.autoMode) return done([]);
   const policy = require('../lib/flow-policy');
-  for (const t of cfg.autoMode ? ticked : []) {
+  for (const t of ticked) {
     const m = t.match(/^(\d+)\./); if (!m) continue;
     const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done || !policy.settled(art.dir, g.id));
     if (prior) return done(['先完成上一整组任务及审修：' + prior.id + '。' + (prior.done ? policy.instruction(art.dir, prior.id, cfg) : '当前组尚未完成。')]);
   }
-  const es = load();
-  const calls = toolCalls(es, 0);
-  const res = toolResults(es);
-  const cwd = path.resolve(j.cwd || art.root);
-  const edited = (c) => { const r = res.get(c.id); return /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(c.name) && !!r && !r.error; };
-  const fileOf = (c) => normKey(path.resolve(cwd, String(c.input.file_path || c.input.notebook_path || '')));
-  const nameOf = (c) => path.basename(String(c.input.file_path || c.input.notebook_path || ''));
-  const isCode = (f) => !/\/(openspec|\.vibe|\.claude)\//.test(f);
-  const scenarioExists = scenarioFinder(roots || [art.root, cwd]);
-  const out = [];
-  for (const t of ticked) {
-    if (['review', 'review-fix', 'user'].includes(require('../lib/task-types').kind(t))) continue;
-    // 验法写的是"同 3.1""同上"：查的是那一项写的验法（议题 #4）
-    const own = verifyPartOf(t);
-    const rv = resolveVerify(t, newText);
-    const v = rv.text;
-    const plan = verifyPlan(v, { scenarioExists });
-    for (const s of plan.skipped || []) skipped.push({ task: t, part: s });
-    // 这项任务的代码是什么时候改完的：任务行里写的文件最后一次改成功
-    const tokens = pathTokens(beforeVerify(t)).map((x) => x.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '').toLowerCase()).filter(Boolean);
-    let since = -1;
-    let by = '';
-    for (let i = calls.length - 1; i >= 0 && since < 0 && tokens.length; i--) {
-      if (!edited(calls[i])) continue;
-      const f = fileOf(calls[i]);
-      if (isCode(f) && tokens.some((k) => (k.includes('/') ? f === k || f.endsWith('/' + k) : path.basename(f) === k))) { since = i + 1; by = nameOf(calls[i]); }
-    }
-    if (since < 0 && !tokens.length) for (let i = calls.length - 1; i >= 0; i--) if (edited(calls[i]) && isCode(fileOf(calls[i]))) { since = i + 1; by = nameOf(calls[i]); break; }
-    const cmds = calls.slice(Math.max(0, since)).filter((c) => { const r = res.get(c.id); return /^(Bash|PowerShell)$/.test(c.name) && r && !r.error; }).map((c) => String(c.input.command || ''));
-    if (plan.test(cmds) || plan.test(require('../lib/evidence').commands(art.root))) continue;
-    const when = since > 0 ? '改完 ' + by + ' 之后' : '这段会话记录里';
-    hookLog('guard-spec tick blocked task="' + t.slice(0, 40) + '" verify="' + v.slice(0, 40) + '" need="' + plan.need.slice(0, 60) + '" since=' + (since > 0 ? by : '头') + ' okCmds=' + cmds.length + (cmds.length ? ' last=' + cmds[cmds.length - 1].slice(0, 60) : ''));
-    // 说清"要看到什么才算"：只说"还没跑过"，模型跑了十几遍也不知道差在哪（问题反馈 F20260928-003）
-    out.push('打勾之前先验证："' + t.slice(0, 50) + '"' + (v ? ' 写的验法是"' + own.slice(0, 40) + '"' + (rv.ref ? '（就是 ' + rv.ref + ' 的验法："' + v.slice(0, 60) + '"）' : '') + '，' + when + '还没看到它成功跑过' : ' 没写验法，' + when + '也没成功跑过任何验证命令') + '。要看到的是：' + plan.need + (cmds.length ? '（' + (since > 0 ? '之后' : '这段记录里') + '成功跑过的命令：' + cmds.slice(-3).map((c) => c.slice(0, 50)).join(' ｜ ') + '）' : '（' + (since > 0 ? '之后' : '这段记录里') + '还没有成功跑过任何命令）')
-      + '。跑过、通过了再打勾；验证没过就不打勾，说明卡在哪。这一项里有现在验不了的部分（要等用户、环境不具备）：在验法里把那一部分写成"……本次不做（原因）"，能验的照样要跑。');
-  }
-  return done(out);
+  return done([]);
 }
 /** 打勾放行了：记下打勾的时间；验法里说了不做的，全自动模式下记进报告 */
 function afterTick(j, art, cfg, tk) {
@@ -213,10 +174,23 @@ function handle(j, opts) {
   const format = [];   // 写法上的问题：附上写法说明
   format.push(...require('../lib/proposal-files').issuesIn(newText, art, isAdded));
   const flow = [];     // 流程上的问题（没验证、没审、没探索）：只说这件事
-  if (cfg.autoMode && !existed && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
+  let notStarted = false; // 写需求那一段就打勾
+  // 需求文档一份一份来（用户 2026-10-17 定的）：proposal → specs → design → tasks，新建下一份之前上一份要过了这一关
+  if (!existed && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
     const policy = require('../lib/flow-policy'); const point = art.kind === 'spec' ? 'specs' : art.kind; const order = ['proposal', 'specs', 'design', 'tasks'];
-    const prior = policy.points(art.dir, 'proposal').filter(p => order.indexOf(p) < order.indexOf(point)).find(p => !policy.settled(art.dir, p));
-    if (prior) flow.push(policy.instruction(art.dir, prior, cfg) + '，完成后再生成下一产物。');
+    const earlier = policy.points(art.dir, 'proposal').filter(p => order.indexOf(p) < order.indexOf(point));
+    if (cfg.autoMode) {
+      // 自动：上一份审修过再写下一份
+      const prior = earlier.find(p => !policy.settled(art.dir, p));
+      if (prior) flow.push(policy.instruction(art.dir, prior, cfg) + '，完成后再生成下一产物。');
+    } else if (earlier.length) {
+      // 人工：上一份写完要停下给用户看。上一份最后一次写入之后用户说过话（"写下一份""审一下"之后的回复）才写下一份
+      const prev = earlier[earlier.length - 1];
+      const own = policy.pointFiles(art.dir, prev).filter(f => prev === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === prev + '.md');
+      const wroteAt = Math.max(0, ...own.map(f => { try { return fs.statSync(f).mtimeMs; } catch (e) { return 0; } }));
+      let saidAt = 0; try { const v = j.transcript_path ? lastUserVoice(tailEntries(j.transcript_path, 3000000)) : null; saidAt = (v && v.at) || 0; } catch (e) { saidAt = Date.now(); }
+      if (wroteAt && saidAt < wroteAt) flow.push(prev + ' 写完还没给我看过。一份一份来：先停下，交代 ' + prev + ' 写了什么，用提问框问我（选项写"审一下""直接写下一份""我要改"）；我说写下一份再写 ' + point + '，拿模板：openspec instructions ' + point + ' --change "' + art.name + '"');
+    }
   }
   const hedges = findHedges(newText, isAdded);
   for (const h of hedges) format.push('第 ' + h.line + ' 行有"' + h.word + '"：' + h.text);
@@ -250,7 +224,6 @@ function handle(j, opts) {
   hookLog('guard-spec block ' + art.kind + ' ' + file + ' issues=' + issues.length);
   const shown = issues.slice(0, 8);
   let guide = GUIDE[art.kind] || '';
-  if (art.kind === 'tasks' && cfg.autoSeePage === false) guide = guide.replace('验：<命令或 /ttls-see-page 场景>', '验：<命令>（页面上的写"人工看页面"）');
   const tail = format.length ? '\n' + guide + (hedges.length ? '\n' + HEDGE_GUIDE : '') + '\n改好再写。' : '';
   return blockOut('PreToolUse', '[vibe-kit 提案检查] ' + art.rel + '（变更 ' + art.name + '）' + (format.length ? '还不能这么写' : '现在还不能改') + '：\n' + shown.map((s) => '- ' + s).join('\n') + (issues.length > shown.length ? '\n- …还有 ' + (issues.length - shown.length) + ' 处' : '') + tail);
 }

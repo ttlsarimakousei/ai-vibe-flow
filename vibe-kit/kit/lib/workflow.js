@@ -14,7 +14,8 @@ function facts(root, j) {
   return { root, branch: W.git(root, ['branch', '--show-current']).trim(), dirty: W.git(root, ['status', '--porcelain']).split('\n').filter(Boolean).length, changes, services: services(root), evidence: require('./evidence').current(root).map((e) => ({ kind: e.kind, command: e.command, at: e.at })), flow: j ? S.flowView(j) : null };
 }
 function brief(root, j) { const f = facts(root, j); return '[本机事实] 分支 ' + (f.branch || '无 Git') + '，未提交文件 ' + f.dirty + '；' + (f.changes.length ? f.changes.map((c) => c.name + ' ' + c.done + '/' + c.total + '，审查 ' + c.review + (c.userPending ? '，等用户验收' : '')).join('；') : '没有活动变更') + '。当前有效验证 ' + f.evidence.length + ' 项。历史交接不授予 apply、提交、归档或 push 许可。'; }
-function taskTemplate() { return '## 1. 实现\n- [ ] 1.1 实现已确认需求：<代码文件>；验：<对应验收用例及预期>。\n\n## 2. 交付\n- [ ] 2.1 交付需求明确要求的材料：<文件路径>；验：<可核对结果>。\n'; }
+// 任务清单只写实现任务，不写"验："（用户 2026-10-17 定的）；测试和验收写在 design.md 的"验收用例"一节
+function taskTemplate() { return '## 1. 实现\n- [ ] 1.1 实现已确认需求：<代码文件>。\n\n## 2. 交付\n- [ ] 2.1 交付需求明确要求的材料：<文件路径>。\n'; }
 function decisionIssues(dir) {
   const files = S.artifactFiles(dir).filter((f) => !/revisions\.md$/.test(f)); const declared = new Set(); const used = new Set();
   for (const f of files) { const text = read(f); for (const m of text.matchAll(/\[决策:([A-Za-z0-9_-]+)\]/g)) declared.add(m[1]); for (const m of text.matchAll(/\[依据:([A-Za-z0-9_-]+)\]/g)) used.add(m[1]); }

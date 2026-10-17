@@ -361,7 +361,8 @@ function flowView(j) {
   const cfg = readConfig(); const st = flowState(j); const over = st.on && flowDone(j);
   const scope = st.on && st.stage === 'apply' ? require('./apply-scope').valid(j) : { ok: true };
   const typed = require('./task-types'); const dirs = flowChanges(j).filter((d) => fs.existsSync(d));
-  const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code')) && dirs.some((d) => typed.tasks(d).some((t) => t.kind === 'user' && !t.done));
+  // 用户验收不靠打勾（用户 2026-10-17 定的）：任务全打勾、代码审查都过了，就是等用户按验收用例自测。老变更里没勾的 [用户验收] 不算自动能做的，结果一样
+  const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code'));
   const waiting = st.waiting || (!scope.ok ? '范围变化，等用户确认' : userWait ? '等用户自测验收' : '');
   // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。自动不再生效，但收工还要交这一轮的报告。
   return { switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!((st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && st.planReady) && st.on === true && !over && !waiting), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
@@ -986,23 +987,27 @@ function addedLines(oldText, newText) {
 }
 
 const VAGUE_TASK = /^(联调|完善|优化|收尾|善后|补充|调整|其他|其它|测试|自测|验证|检查|确认|沟通|对接|处理|整理|清理|重构|修改|更新|实现|开发|编码|写代码|完成|部署|上线)(相关)?(细节|逻辑|功能|代码|问题|一下|工作|页面|接口)?$/;
-/** tasks.md：每项任务要写清改哪个文件、怎么验；不许"联调、完善"这种 */
+/**
+ * tasks.md：每项任务要写清改哪个文件、做什么；不许"联调、完善"这种。
+ * 用户 2026-10-17 定的：任务清单只放实现任务，不写"验：<命令>"；测试、审查、验收不写成任务，写进 design.md 的"验收用例"一节。
+ * 只查新写的行：已经写了这些任务的老变更照常打勾、走完
+ */
+const NOT_A_TASK = ['review', 'review-fix', 'user', 'prepare', 'test'];
 function checkTasks(text, isAdded) {
   const issues = [];
-  // 验法的写法跟着"看页面"开关走：关着时页面上的结果不自己起服务看，验法写"人工看页面"
-  const verifyHint = readConfig().autoSeePage === false ? '加"验：<命令>"，页面上的写"验：人工看页面"' : '加"验：<命令或 /ttls-see-page 场景>"';
   String(text || '').split(/\r?\n/).forEach((l, i) => {
     if (isAdded && !isAdded(i)) return;
     const m = l.match(/^\s*[-*]\s*\[[ xX]\]\s*(?:\d+(?:\.\d+)*[.)]?\s*)?(.+)$/);
     if (!m) return;
     const body = m[1].trim();
     const n = i + 1;
+    if (NOT_A_TASK.includes(require('./task-types').kind(l))) { issues.push('第 ' + n + ' 行"' + body.slice(0, 40) + '"是测试、审查或验收，不写进任务清单：测试和验收写进 design.md 的"验收用例"一节（' + CASE_EXAMPLE + '），审查进度套件自己记。任务清单只写要做的实现'); return; }
     if (VAGUE_TASK.test(body.replace(/[\s，,。.：:；;、]/g, ''))) issues.push('第 ' + n + ' 行"' + body.slice(0, 40) + '"太笼统：写清楚改哪个文件、做什么');
-    if (!['review', 'review-fix', 'user'].includes(require('./task-types').kind(l)) && !pathTokens(body).length) issues.push('第 ' + n + ' 行没写改哪个文件（路径或文件名）："' + body.slice(0, 50) + '"');
-    if (!/(验|验证|验收|检验|核对)\s*[:：]/.test(body)) issues.push('第 ' + n + ' 行没写怎么验（' + verifyHint + '）："' + body.slice(0, 50) + '"');
+    if (!pathTokens(body).length) issues.push('第 ' + n + ' 行没写改哪个文件（路径或文件名）："' + body.slice(0, 50) + '"');
   });
   return issues;
 }
+const CASE_EXAMPLE = '一条一行，例：| AC-1 | 查询订单：没有订单 | 测试库里用户 1 没有订单 | 调 GET /orders?uid=1 | 返回 []，状态码 200 | Claude：curl http://localhost:8080/orders?uid=1 | 1 |';
 /**
  * 规格：每条 Requirement 至少一个四井号的 Scenario，场景里要有 WHEN 和 THEN；需求要放在 OpenSpec 认得的增量标题下面
  * （## ADDED / MODIFIED / REMOVED / RENAMED Requirements），不然归档时它认不出来，报 no deltas found（问题反馈 F20260929-014）
@@ -1073,6 +1078,13 @@ function checkDesign(text, isAdded, roots, isNew, isDeclared) {
   if (isNew) {
     const ctx = sectionOf(text, /^##\s*(Context|背景|现状)/i).filter((l) => l.trim() && !/^\s*<!--/.test(l));
     if (ctx.length < 2) issues.push('Context（现状）一节太空：列出探索时读过的文件、表、接口和发现，这是设计的依据');
+    // 验收用例写在设计里（用户 2026-10-17 定的）：需求和设计阶段写完给用户看，Claude 自测、用户验收都照它做。只查新写的设计，老变更不追究
+    // 到下一个二级标题为止：一条用例一个"### AC-1"小标题的写法也认
+    const cases = []; let inCases = false;
+    for (const l of String(text || '').split(/\r?\n/)) { if (/^#{1,2}\s/.test(l)) { if (inCases) break; inCases = /^##\s*验收用例/.test(l); continue; } if (inCases) cases.push(l); }
+    const tableRows = cases.filter((l) => /^\s*\|/.test(l) && !/^\s*\|[\s:|-]+\|\s*$/.test(l)).length;
+    const count = Math.max(0, tableRows - 1) + cases.filter((l) => /^\s*[-*]\s+\S/.test(l) || /^###\s+\S/.test(l)).length;
+    if (count < 1 || !/预期/.test(cases.join('\n'))) issues.push('缺"## 验收用例"一节，或者一条用例都没有、没写预期。每条写：对应的场景、前置数据和环境、步骤、预期、谁来测（Claude 自动跑的写清命令、接口或页面场景；要人看的写"人工"）、对应第几组任务。表头：| 编号 | 对应场景 | 前置数据和环境 | 步骤 | 预期 | 谁来测 | 任务组 |，' + CASE_EXAMPLE);
   }
   return issues;
 }

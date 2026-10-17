@@ -121,7 +121,19 @@ function planNext(j, c) {
 function instruction(dir, point, cfg) {
   const mode = point.startsWith('group-') ? 'code' : 'proposal'; const rec = record(dir, point); const max = limit(cfg, mode);
   if ((rec.rounds || 0) >= max) return '当前审查点 ' + point + ' 已达到 ' + max + ' 轮上限且尚未通过，停止自动循环并报告问题；用户主动要求仍可继续审查。';
-  return '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '。自动核验、修改、复验，最多 ' + max + ' 轮；当前已经 ' + (rec.rounds || 0) + ' 轮。需求变化先沟通并同步相关产物和用例。';
+  return selfTestFirst(dir, point, cfg) + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '。自动核验、修改、复验，最多 ' + max + ' 轮；当前已经 ' + (rec.rounds || 0) + ' 轮。需求变化先沟通并同步相关产物和用例。';
+}
+/**
+ * 自动模式按验收用例自测（用户 2026-10-17 定的）：用例写在 design.md 的"验收用例"一节，任务清单里不写测试任务。
+ * "自动自测"开着时：每组做完先跑任务组写着这一组的、Claude 能自动跑的用例；全部做完先把能自动跑的全跑一遍。
+ * 页面上的用例在"自动验证页面"开着时用 /ttls-see-page 跑，关着的留给人工。只在代码审查点前说
+ */
+function selfTestFirst(dir, point, cfg) {
+  if (!point.startsWith('group-') || point === REST || cfg.autoVerify === false) return '';
+  const page = cfg.autoSeePage === false ? '页面上的留给人工' : '页面上的用 /ttls-see-page 跑';
+  const all = groups(dir); const finished = all.length > 0 && all.every(g => g.done);
+  if (finished) return '任务全部做完：先把 design.md "验收用例"里 Claude 能自动跑的全部跑一遍（' + page + '），结果写进最后的交代；跑不了的写明原因。然后';
+  return '先按 design.md "验收用例"里任务组写 ' + point.slice(6) + ' 的、Claude 能自动跑的用例自测（' + page + '）。然后';
 }
 function entriesOf(j) { return j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : []; }
 function explicit(j, action) { return S.userSaid(entriesOf(j), action).ok; }
@@ -157,7 +169,12 @@ function stop(j, touched, codeChanged, turn, quickPending) {
     if (!cfg.autoMode) {
       // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
       const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).replace(/\\/g, '/');
-      const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '') + ' 的 ' + point + ' 已完成。用 Ask 问是否' + (mode === 'code' ? quick() + '审查、是否按验收用例自测' : '审查') + '，用户已明确要求的直接执行。选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。');
+      const where = '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '') + ' 的 ' + point;
+      const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。';
+      // 需求文档一份一份来（用户 2026-10-17 定的）：写完一份停下给用户看，用户选了才写下一份
+      const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => mode === 'code'
+        ? where + ' 已完成。用 Ask 问是否' + quick() + '审查、是否按验收用例自测，用户已明确要求的直接执行。' + after
+        : where + ' 写完了。一份一份来：停下给用户看，交代写了什么，用 Ask 问（选项写"审一下""' + (point === 'tasks' ? '就这样定稿' : '直接写下一份') + '""我要改"），用户已明确要求审查的直接审。' + after);
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
   }
