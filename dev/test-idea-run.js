@@ -3,7 +3,7 @@
  * devserver.js --idea：用 IDEA 的运行配置起服务、改完代码自动重启（用户 2026-10-17 定的）。对着假的 IDEA MCP（lib/fake-idea.js）跑，不用开着 IDEA。
  *   IDEA 用不了          没连上、没开 brave mode：照 -- 后面的命令起
  *   没写 --idea          IDEA 连着、有运行配置：不起，列出运行配置名
- *   调试方式起            起来了要等它答 HTTP；调用开着事件流（IDEA 等不到事件流会把慢的调用丢掉）
+ *   调试方式起            起来了要等它答 HTTP，上次没等到答 HTTP 的再 start 接着等；调用开着事件流（IDEA 等不到事件流会把慢的调用丢掉）
  *   没改直接用、改了重启   改了代码：停掉 IDEA 的会话、重起，答的是新代码
  *   用户点 Run 起的        MCP 停不了：没改直接用；改了结束它、调试方式重起
  *   出错                  运行配置名写错列出有哪些；IDEA 不回话（弹了编辑框）说清去 IDEA 里看、不改用命令起；端口被别的程序占着不动它
@@ -67,6 +67,11 @@ const BRAVE = (on) => '<application>\n  <component name="McpServerSettings">\n  
     const r4 = startIdea();
     H.ok('调试方式起来了：最后一行说是 IDEA 运行配置', r4.code === 0 && new RegExp('^起来了：app，端口 ' + svcPort + '（IDEA 运行配置"app"，调试方式起的）').test(last(r4)), r4.out);
     H.ok('"起来了"的时候已经答 HTTP（先占端口、后答话的也等到答话）', (await get(svcPort)) === 'v1');
+    // 上一次 start 没等到它答 HTTP（等超时了、被打断了）：记录里没有 upAt，端口通着也不能说已经在跑
+    const recF = path.join(app, '.vibe', 'run', 'app.json');
+    const rj = JSON.parse(fs.readFileSync(recF, 'utf8')); delete rj.upAt; fs.writeFileSync(recF, JSON.stringify(rj));
+    const r4b = startIdea();
+    H.ok('记录里没有 upAt：接着等它答 HTTP，不重起', r4b.code === 0 && /app 还在启动（IDEA 运行配置"app".*端口通了，上次没等到它答 HTTP）/.test(r4b.out) && /^起来了：app/.test(last(r4b)) && !/停掉，在 IDEA 里重起/.test(r4b.out) && !!JSON.parse(fs.readFileSync(recF, 'utf8')).upAt, r4b.out);
     // 测试自己调假 IDEA 用现在源码里的客户端（拿旧版跑时旧版没有它）
     const I = require(path.join(H.SRC, 'kit', 'lib', 'idea-run.js'));
     const stats = await I.callTool(url, '__stats', {}, 5000);

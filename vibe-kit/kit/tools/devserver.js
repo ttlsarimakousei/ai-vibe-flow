@@ -16,7 +16,9 @@
  *   - 端口被占着、却没有记录：看占着的进程是谁。它的命令行里有这个项目的目录：Claude Code 起的、没人管的（起它的程序已经不在了）停掉重起；
  *     用户自己在终端、IDE 里起的（带着调试器的也算）不动，说清是谁、退出码 1（要接管加 --takeover，先问用户）；
  *     是别的程序，就说清是谁、退出码 1，不动它，也不换端口。
- *   - 起好（端口通了）才返回；起不来把日志最后几十行打出来。日志在 .vibe/run/<名字>.log，记录在 .vibe/run/<名字>.json。
+ *   - 起好才返回：端口通了还要答 HTTP（随便哪个状态码），Tomcat 这类先占端口、后部署应用的，端口一通就返回会让紧接着的请求超时；
+ *     一直不答 HTTP 的（不是网页服务）端口通了 60 秒也算起来。上一次没等到它答 HTTP（等超时、被打断）的，再 start 接着等。
+ *     起不来把日志最后几十行打出来。日志在 .vibe/run/<名字>.log，记录在 .vibe/run/<名字>.json。
  * 停的时候连子进程一起停（mvn → java 这种）；停完端口还被这个项目的进程占着的（Tomcat 的 startup.bat 这类会甩开父进程），也一起停；
  * 起来的时候记下它起的每个进程（.vibe/run/<名字>.json 的 tree），停的时候还活着的一个个结束：中间那层进程先退了的，
  * 下面的进程按父子关系找不到，以前会留下来（两个 java 一起跑，请求打到哪个不一定——问题反馈 F20260928-011）。
@@ -96,6 +98,32 @@ function portOpen(port, ms) {
     tryHost(['127.0.0.1', '::1']);
   });
 }
+/** 端口上的服务答不答 HTTP（随便哪个状态码都算答了）。127.0.0.1 上没人听再问 ::1：Vite 这类只听 localhost 的，可能只在 ::1 上 */
+function httpAnswers(port) {
+  const ask = (hosts) => new Promise((resolve) => {
+    if (!hosts.length) return resolve(false);
+    const q = require('http').get({ host: hosts[0], port, path: '/', timeout: 3000, agent: false }, (res) => { res.resume(); resolve(true); });
+    q.on('timeout', () => { q.destroy(); resolve(false); });
+    q.on('error', (e) => (e && e.code === 'ECONNREFUSED' ? ask(hosts.slice(1)).then(resolve) : resolve(false)));
+  });
+  return ask(['127.0.0.1', '::1']);
+}
+const NO_HTTP_MS = 60000;
+/**
+ * 服务起来了没有（照命令起、IDEA 起的两条路都用它）：端口通了还要答 HTTP。Tomcat（mvn tomcat7:run、catalina run）先占端口、后部署应用，
+ * 端口通了请求还会挂着或被断开（实测 tomcat7:run），只看端口就说起来了，模型紧接着调接口会超时，当成服务坏了。
+ * 一直不答 HTTP 的（不是网页服务），端口通了 60 秒也算。seen 是这一轮等的时候的记录（端口什么时候通的），每次传同一个。
+ * 返回 'http'（答了 HTTP）、'port'（端口通了 60 秒还不答）、''（还没起来）
+ */
+async function serving(port, seen) {
+  if (!(await portOpen(port, 400))) return '';
+  if (!seen.openAt) seen.openAt = Date.now();
+  if (await httpAnswers(port)) return 'http';
+  return Date.now() - seen.openAt > NO_HTTP_MS ? 'port' : '';
+}
+const NO_HTTP_NOTE = '，端口通了 60 秒一直没答 HTTP，当它不是网页服务';
+/** 等超时了、端口通着却还没答 HTTP 时怎么说 */
+const noHttpYet = (port, waitSec) => '没起来：端口 ' + port + ' 通了，但 ' + waitSec + ' 秒内一直没答 HTTP（Tomcat 这类先占端口、后部署应用，多半还在部署；不是网页服务的，端口通了 60 秒才算起来）。';
 /** 正在监听这个端口的进程号（本机所有地址上的都算） */
 function listeners(port) {
   const out = new Set();
@@ -355,17 +383,19 @@ function logTail(file) {
     try { return new TextDecoder('utf-8', { fatal: true }).decode(s); } catch (e) { try { return new TextDecoder('gbk').decode(s); } catch (err) { return s.toString('utf8'); } }
   } catch (e) { return ''; }
 }
-/** 等它起来（端口通了）。0 = 起来了；1 = 没起来：进程退了就删掉记录，等到超时进程还在就留着记录（多半还在启动，再 start 会接着等） */
 /** 现在是谁在听这个端口：'java（PID 19228）' */
 function whoListens(port) {
   const l = listeners(port).map(procInfo).filter((i) => i.pid);
   return l.length ? l.map((i) => (i.name || '进程').replace(/\.exe$/i, '') + '（PID ' + i.pid + '）').join('、') : '';
 }
+/** 等它起来（端口通了、答了 HTTP，见 serving）。0 = 起来了；1 = 没起来：进程退了就删掉记录，等到超时进程还在就留着记录（多半还在启动，再 start 会接着等） */
 async function waitUp(rec, waitSec) {
   const t0 = Date.now();
+  const seen = {};
   let deadAt = 0;
   while (Date.now() - t0 < waitSec * 1000) {
-    if (await portOpen(rec.port, 400)) {
+    const up = await serving(rec.port, seen);
+    if (up) {
       // 记下它起的每个进程：停的时候一个个清掉。听端口的进程单独说：看进程列表时认的是它，不是看管进程
       const table = procTable();
       const tree = descendants(rec.pid, table).map((p) => ({ pid: p.pid, name: p.name, created: p.created }));
@@ -374,17 +404,19 @@ async function waitUp(rec, waitSec) {
       const who = whoListens(rec.port);
       // 这一行放在最后：输出的最后一行就是结果
       console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
-      console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
+      console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
       return 0;
     }
-    // 启动命令自己退了（startup.bat 这类把服务甩到后台就走）：服务可能还在起，再等它 15 秒
-    if (!alive(rec.pid)) { if (!deadAt) deadAt = Date.now(); if (Date.now() - deadAt > 15000) break; }
+    // 启动命令自己退了（startup.bat 这类把服务甩到后台就走）：服务可能还在起，再等它 15 秒；端口已经通了的是在部署，接着等到超时
+    if (!alive(rec.pid) && !seen.openAt) { if (!deadAt) deadAt = Date.now(); if (Date.now() - deadAt > 15000) break; }
     await sleep(deadAt ? 500 : 1000);
   }
   const dead = !alive(rec.pid);
   if (dead) dropRec(rec.name);
+  const open = seen.openAt && (await portOpen(rec.port, 400));
   console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
-  console.log(dead ? '没起来：' + rec.name + ' 的进程已经退出了，看上面的日志。' : '没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。进程还在、记录留着：多半还在启动（大项目要一两分钟），过一会儿再 start 一次会接着等它，不会重起；也可能它实际监听的不是这个端口，看上面的日志。');
+  if (open) console.log(noHttpYet(rec.port, waitSec) + (dead ? '启动命令已经退出了，看上面的日志有没有报错。' : '进程还在、记录留着：过一会儿再 start 一次会接着等它，不会重起；也看看上面的日志有没有报错。'));
+  else console.log(dead ? '没起来：' + rec.name + ' 的进程已经退出了，看上面的日志。' : '没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。进程还在、记录留着：多半还在启动（大项目要一两分钟），过一会儿再 start 一次会接着等它，不会重起；也可能它实际监听的不是这个端口，看上面的日志。');
   return 1;
 }
 
@@ -414,27 +446,17 @@ async function ideaFail(x, I, r, cfgName) {
   console.log('没起来：IDEA 报错：' + x.why);
   return 1;
 }
-/** 端口上的服务答不答 HTTP（随便哪个状态码都算答了）：Tomcat 先占端口、后部署应用，端口通了请求还会挂着或被断开（实测 tomcat7:run） */
-function httpAnswers(port) {
-  return new Promise((resolve) => {
-    const q = require('http').get({ host: '127.0.0.1', port, path: '/', timeout: 3000, agent: false }, (res) => { res.resume(); resolve(true); });
-    q.on('timeout', () => { q.destroy(); resolve(false); });
-    q.on('error', () => resolve(false));
-  });
-}
 async function waitUpIdea(rec, I, r, waitSec) {
   const t0 = Date.now();
+  const seen = {};
   let checked = Date.now();
-  let openAt = 0;
   while (Date.now() - t0 < waitSec * 1000) {
-    // 端口通了还要答 HTTP 才算起来；一直不答 HTTP 的（不是网页服务），端口通了 60 秒也算
-    const open = await portOpen(rec.port, 400);
-    if (open && !openAt) openAt = Date.now();
-    if (open && ((await httpAnswers(rec.port)) || Date.now() - openAt > 60000)) {
+    const up = await serving(rec.port, seen);
+    if (up) {
       try { fs.writeFileSync(recFile(rec.name), JSON.stringify(Object.assign({}, rec, { upAt: Date.now() }), null, 2)); } catch (e) { /* 记不了，下次 start 按 IDEA 的会话认 */ }
       const who = whoListens(rec.port);
       console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
-      console.log('起来了：' + rec.name + '，端口 ' + rec.port + '（' + ideaLabel(rec) + '），用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (who ? '。听这个端口的是 ' + who : '') + (rec.log ? '。日志 ' + rec.log : ''));
+      console.log('起来了：' + rec.name + '，端口 ' + rec.port + '（' + ideaLabel(rec) + '），用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (who ? '。听这个端口的是 ' + who : '') + (rec.log ? '。日志 ' + rec.log : ''));
       return 0;
     }
     // 隔一会儿看一眼 IDEA 里的会话还在不在：启动失败（编译错、端口冲突）会话就没了，不用干等到超时
@@ -451,7 +473,8 @@ async function waitUpIdea(rec, I, r, waitSec) {
     await sleep(1000);
   }
   console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
-  console.log('没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。IDEA 里的会话还在、记录留着：多半还在启动，过一会儿再 start 一次会接着等它，不会重起；也可能它监听的不是 ' + rec.port + '，看上面的日志。');
+  if (seen.openAt && (await portOpen(rec.port, 400))) console.log(noHttpYet(rec.port, waitSec) + 'IDEA 里的会话还在、记录留着：过一会儿再 start 一次会接着等它，不会重起；也看看上面的日志有没有报错。');
+  else console.log('没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。IDEA 里的会话还在、记录留着：多半还在启动，过一会儿再 start 一次会接着等它，不会重起；也可能它监听的不是 ' + rec.port + '，看上面的日志。');
   return 1;
 }
 /** --idea：用 IDEA 的运行配置起。返回退出码；IDEA 用不了、要照 -- 后面的命令起时返回 null */
@@ -473,11 +496,12 @@ async function startIdea(cfgName) {
   if (!list.ok) return ideaFail(list, I, r, cfgName);
   const sess = list.list.find((s) => s.runConfigurationName === cfgName || s.id === cfgName);
   const up = await portOpen(port, 500);
-  const keepRec = (since, sessionId) => { const x = { name, mode: 'idea', config: cfgName, projectPath: r.projectPath, sessionId, port, cwd: dir, startedAt: since, log: (rec && rec.log) || '' }; fs.mkdirSync(runDir, { recursive: true }); fs.writeFileSync(recFile(name), JSON.stringify(x, null, 2)); return x; };
-  if (sess && !up) {
-    // 会话在、端口没通：多半还在启动，接着等，不再起第二个会话（用户自己点 Debug 起的也一样）
+  const keepRec = (since, sessionId, upAt) => { const x = { name, mode: 'idea', config: cfgName, projectPath: r.projectPath, sessionId, port, cwd: dir, startedAt: since, log: (rec && rec.log) || '', upAt }; fs.mkdirSync(runDir, { recursive: true }); fs.writeFileSync(recFile(name), JSON.stringify(x, null, 2)); return x; };
+  if (sess && (!up || (rec && !rec.upAt && !flag('restart')))) {
+    // 会话在、端口没通：多半还在启动，接着等，不再起第二个会话（用户自己点 Debug 起的也一样）。
+    // 端口通了、记录里却没有 upAt 的：上一次 start 没等到它答 HTTP（等超时了、被打断了），也接着等
     const x = rec || keepRec(Date.now(), sess.id);
-    console.log(name + ' 还在启动（IDEA 运行配置"' + cfgName + '"' + (rec ? '，' + ago(rec.startedAt) + '起的' : '，IDEA 里已经有它的调试会话') + '），接着等它。');
+    console.log(name + ' 还在启动（IDEA 运行配置"' + cfgName + '"' + (rec ? '，' + ago(rec.startedAt) + '起的' : '，IDEA 里已经有它的调试会话') + (up ? '，端口通了，上次没等到它答 HTTP' : '') + '），接着等它。');
     return waitUpIdea(x, I, r, wait);
   }
   if (sess && up) {
@@ -486,7 +510,7 @@ async function startIdea(cfgName) {
     if (!since) since = Math.min(...listeners(port).map((p) => procInfo(p).created || Date.now()));
     const changed = flag('restart') ? ['（要求重启）'] : changedSince(since, dir);
     if (!changed.length) {
-      if (!rec) keepRec(since, sess.id);
+      if (!rec) keepRec(since, sess.id, Date.now());
       console.log('已经在跑：' + name + '（端口 ' + port + '，IDEA 运行配置"' + cfgName + '"，' + ago(since) + '起的），启动之后代码没改过。直接用，不用再起。要强制重启加 --restart。');
       return 0;
     }
@@ -572,13 +596,15 @@ async function start() {
   // 同一个服务：命令、端口、运行目录都一样（同名同端口换了个子项目，不能拿另一个子项目的服务来用）
   const same = (r) => r.cmd === command && r.port === port && normPath(r.cwd || dir) === normPath(cwd);
   const recUp = rec ? await portOpen(rec.port, 500) : false;
-  if (rec && sameProc(rec) && !recUp) {
-    // 进程还在、端口没通：多半还在启动。同一个服务就接着等，不结束重来（大项目起得慢，结束重来可能永远起不来）
-    if (same(rec)) { console.log(name + ' 还在启动（进程 ' + rec.pid + '，' + ago(rec.startedAt) + '起的），接着等它。'); return waitUp(rec, Number(opt('wait')) || 180); }
+  const recLive = rec ? sameProc(rec) : false;
+  // 进程还在、端口没通：多半还在启动。同一个服务就接着等，不结束重来（大项目起得慢，结束重来可能永远起不来）。
+  // 端口通了、记录里却没有 upAt 的：上一次 start 没等到它答 HTTP（等超时了、被打断了），也接着等
+  if (rec && recLive && (!recUp || (!rec.upAt && !flag('restart'))) && same(rec)) { console.log(name + ' 还在启动（进程 ' + rec.pid + '，' + ago(rec.startedAt) + '起的' + (recUp ? '，端口通了，上次没等到它答 HTTP' : '') + '），接着等它。'); return waitUp(rec, Number(opt('wait')) || 180); }
+  if (rec && recLive && !recUp) {
     console.log(name + ' 还在启动，但这次的启动命令、端口或运行目录变了：停掉，重来。');
     killTree(rec.pid);
     dropRec(rec.name);
-  } else if (rec && recUp && sameProc(rec)) {
+  } else if (rec && recUp && recLive) {
     const changed = flag('restart') ? ['（要求重启）'] : rec.hot ? [] : changedSince(rec.startedAt, rec.cwd);
     if (!changed.length && same(rec)) {
       const who = whoListens(rec.port);

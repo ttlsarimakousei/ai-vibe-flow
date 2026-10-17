@@ -2,17 +2,20 @@
 /*
  * 起服务的工具（kit/tools/devserver.js），0929 反馈里的一条：
  *   F20260928-011   stop && start 串起来重启：看不到"起来了"那一行；反复几次之后两个 java 一起跑
+ * 1017 加的：先占端口、过几秒才答 HTTP 的（Tomcat 那种）要等它答 HTTP 才说起来了；一直不答 HTTP 的端口通了 60 秒也算；只听 ::1 的也认得。
  * 拿一个 node 写的小服务当被测的服务。全程盯着桌面，结尾查没有留下进程。
- * 用法：node dev/test-devserver-0929.js [端口，默认 18781]
+ * 用法：node dev/test-devserver-0929.js [端口，默认 18781] [旧版的 vibe-kit 目录]
  */
 const fs = require('fs');
 const path = require('path');
 const net = require('net');
+const http = require('http');
 const { spawnSync } = require('child_process');
 const H = require('./lib/harness');
 
 const PORT = Number(process.argv[2]) || 18781;
-const h = H.makeHome('dev0929');
+const FROM = process.argv[3] && fs.existsSync(path.join(process.argv[3], 'kit')) ? process.argv[3] : null;
+const h = H.makeHome('dev0929', FROM);
 const TOOL = path.join(h.kit, 'tools', 'devserver.js');
 const proj = H.makeRepo(path.join(h.work, 'app'), { 'pom.xml': '<project/>' });
 // 被测的服务：听一个端口，另外起一个不听端口的帮手进程（像 mvn 起的 java 旁边那个）
@@ -118,6 +121,42 @@ const startArgs = ['start', '--name', 'app', '--port', String(PORT), '--hot', '-
   try { process.kill(otherPid); } catch (e) { /* 已经没了 */ }
   try { const p = JSON.parse(fs.readFileSync(path.join(proj, 'pids.json'), 'utf8')); for (const x of [p.srv, p.helper]) { try { process.kill(x); } catch (e) { /* 没了 */ } } } catch (e) { /* 没有 */ }
   await waitOpen(false);
+
+  H.section('先占端口、过几秒才答 HTTP 的（Tomcat 那种，1017）');
+  // 服务用 lib/fake-idea.js 的 __service：一起来就占端口，过 SLOW_MS 才答（之前来的请求挂着）。答的是 v.txt 的内容。
+  // 模型紧接着调接口的超时给 2 秒：只看端口就说起来了的话，这一下拿不到内容
+  const SLOW_MS = 10000;
+  const get = (timeout) => new Promise((resolve) => { const g = http.get({ host: '127.0.0.1', port: PORT, path: '/', timeout, agent: false }, (res) => { let t = ''; res.on('data', (c) => t += c); res.on('end', () => resolve(t.trim())); }); g.on('timeout', () => { g.destroy(); resolve('ERR timeout'); }); g.on('error', (e) => resolve('ERR ' + e.code)); });
+  H.write(path.join(proj, 'v.txt'), 'slow-v1\n');
+  const slowArgs = (extra) => ['start', '--name', 'slow', '--port', String(PORT)].concat(extra || [], ['--', 'node', path.join(__dirname, 'lib', 'fake-idea.js'), '__service', String(PORT), proj, String(SLOW_MS)]);
+  const slowRec = () => { try { return JSON.parse(fs.readFileSync(path.join(proj, '.vibe', 'run', 'slow.json'), 'utf8')); } catch (e) { return null; } };
+  const w1 = tool(slowArgs());
+  const got1 = await get(2000);
+  H.ok('"起来了"之后第一次请求就拿到内容（端口通了还要等它答 HTTP）', w1.code === 0 && /^起来了：slow，端口 \d+/.test(lastLine(w1)) && got1 === 'slow-v1', [lastLine(w1), got1]);
+  tool(['stop', '--name', 'slow']);
+  await waitOpen(false);
+  const w2 = tool(slowArgs(['--wait', '2']));
+  const kept = slowRec();
+  H.ok('等超时的时候端口通着、还没答 HTTP：说清楚，记录留着', w2.code === 1 && /^没起来：端口 \d+ 通了，但 2 秒内一直没答 HTTP/.test(lastLine(w2)) && kept && !kept.upAt, [w2.out, kept]);
+  const w3 = tool(slowArgs());
+  const got3 = await get(2000);
+  H.ok('再 start：接着等它答 HTTP，不重起；"起来了"之后第一次请求就拿到内容', w3.code === 0 && /slow 还在启动（进程 \d+，.*端口通了，上次没等到它答 HTTP）/.test(w3.out) && /^起来了：slow/.test(lastLine(w3)) && got3 === 'slow-v1' && kept && (slowRec() || {}).pid === kept.pid, [w3.out, got3]);
+  tool(['stop', '--name', 'slow']);
+  await waitOpen(false);
+  // 一直不答 HTTP 的（不是网页服务，像 Dubbo 的端口）：连上了不说话
+  H.write(path.join(proj, 'tcp.js'), "require('net').createServer(() => {}).listen(Number(process.argv[2]), '127.0.0.1');\n");
+  const n1 = tool(['start', '--name', 'tcp', '--port', String(PORT), '--', 'node', 'tcp.js', String(PORT)]);
+  H.ok('一直不答 HTTP 的：端口通了 60 秒也算起来，说了没答 HTTP', n1.code === 0 && /^起来了：tcp，端口 \d+，用了 \d+ 秒，端口通了 60 秒一直没答 HTTP/.test(lastLine(n1)), n1.out);
+  tool(['stop', '--name', 'tcp']);
+  await waitOpen(false);
+  // 只听 ::1 的（Vite 这类只听 localhost 的，Node 17 起可能只在 ::1 上）：问 127.0.0.1 没人听，要再问 ::1，不能拖成 60 秒
+  const v6 = await new Promise((resolve) => { const s = net.createServer(); s.once('error', () => resolve(false)); s.listen(PORT, '::1', () => s.close(() => resolve(true))); });
+  if (v6) {
+    H.write(path.join(proj, 'v6.js'), "require('http').createServer((q, s) => s.end('v6')).listen(Number(process.argv[2]), '::1');\n");
+    const s6 = tool(['start', '--name', 'v6', '--port', String(PORT), '--wait', '30', '--', 'node', 'v6.js', String(PORT)]);
+    H.ok('只听 ::1 的网页服务：答了 HTTP 就算起来，不等 60 秒', s6.code === 0 && /^起来了：v6/.test(lastLine(s6)) && !/没答 HTTP/.test(lastLine(s6)), s6.out);
+    tool(['stop', '--name', 'v6']);
+  } else console.log('  （这台电脑听不了 ::1，跳过只听 ::1 的那一项）');
 
   H.section('起不来：最后一行说清没起来');
   const f = tool(['start', '--name', 'bad', '--port', String(PORT), '--wait', '5', '--', 'node', '-e', 'process.exit(3)']);

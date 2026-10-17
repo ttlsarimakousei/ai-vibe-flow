@@ -65,7 +65,7 @@ node dev/pack.js
 | `test-feedback1012-db.js` | 1012 数据库诊断：只模拟错误，不连接真实业务库；参数 [auto或none] [旧套件目录] |
 | `probes/` | 探测，不是回归测试：真的 Claude Code 加假网关，看某个版本在一件事上是怎么做的，输出给人看。`cc-compact.js`（到多少自动压缩）、`cc-automode.js`（没配权限模式进不进自带的自动模式、分类请求长什么样）、`cc-statusline.js`（交互界面里状态栏照不照常，用 winpty 抓屏）、`cc-http-hooks.js`（钩子走 HTTP 照不照常）、`cc-system-message.js`（用户开口的钩子用 JSON 输出时 systemMessage 显不显示、给模型的提醒送不送到）。见下面"换 Claude Code 版本之前" |
 | `test-page-0929.js` | 看页面的场景：同一步里写断言、上传、应答文件选择框、点被盖住的控件。用本机的 Edge 无头跑 |
-| `test-devserver-0929.js` | 起服务的工具：最后一行是结果，停的时候进程清干净 |
+| `test-devserver-0929.js [端口] [旧套件目录]` | 起服务的工具：最后一行是结果，停的时候进程清干净；先占端口、过 10 秒才答 HTTP 的（Tomcat 那种，用 `lib/fake-idea.js` 的 `__service`）等它答了才说起来了，等超时再 start 接着等；一直不答 HTTP 的端口通了 60 秒也算（这一项要等一分钟）；只听 ::1 的也认得 |
 | `ui-kit-0929.js` | 配置页重排之后：接口、页面上每个开关都在、保存条、三张表。第二个参数给目录就存截图 |
 | `check-old-repro-0929.js` | 拿 20260928.2054 / 2055 跑同样的输入，确认修之前确实有那些毛病 |
 | `e2e-auto-0929.js` | 真的 Claude Code 加假模型，全自动模式走两个会话：放行、审查、报告、id 重复的复审、归档 |
@@ -89,7 +89,7 @@ node dev/pack.js
 | `test-update.js` | 自动更新和发布：维护的人发布，同事的电脑自己发现、自己装上；装坏了退回；路由忙就等 |
 | `test-issues.js` | 问题上报：用 SSH 申请令牌、装之前攒下的不传、不重复建、又出现；导出（本机不存）、关掉是另一步；使用情况一台电脑一条议题、一天一条补充，导出时汇总在最后 |
 | `test-proposal-files.js` | 提案材料随变更交付；四产物临时引用、忽略材料、暂存区旧内容；普通文档标题不能跳许可；中文事件和归档边界 |
-| `test-idea-run.js [旧套件目录]` | `devserver.js --idea`，对着假 IDEA（`lib/fake-idea.js`）：IDEA 用不了照命令起、没写 --idea 列运行配置、调试方式起要等答 HTTP、没改直接用、改了重启、用户点 Run 起的改了就结束重起、运行配置名写错、IDEA 不回话、端口被别的程序占着、起服务拦截提示里的 --idea。真的 IDEA 上走一遍用 `probes/idea-devserver.js` |
+| `test-idea-run.js [旧套件目录]` | `devserver.js --idea`，对着假 IDEA（`lib/fake-idea.js`）：IDEA 用不了照命令起、没写 --idea 列运行配置、调试方式起要等答 HTTP（上次没等到答 HTTP 的再 start 接着等）、没改直接用、改了重启、用户点 Run 起的改了就结束重起、运行配置名写错、IDEA 不回话、端口被别的程序占着、起服务拦截提示里的 --idea。真的 IDEA 上走一遍用 `probes/idea-devserver.js` |
 | `test-1017.js [旧套件目录]` | 2026-10-17 第二批：任务清单只写实现（[代码审查][测试][用户验收] 拦下）、新设计要有"## 验收用例"、人工模式需求文档一份一份来；自带 OpenSpec 的命令改写、自动建 openspec/、Node 不够时照原命令跑、三种"指令不支持"提示；安装器装用户级 /opsx 命令（用真的 OpenSpec，别的测试只放占位）、备份同名、卸载收回；旧的提交档位升级后按"询问" |
 | `test-secrets.js` | 令牌和模型的 key 不给读；跑发布脚本要确认；安装器加的权限规则 |
 | `ui-update.js` | 配置页"更新和上报"的接口，从页面上点更新（路由会重启）；导出、关掉、使用情况；维护的电脑写死在代码里，测导出时用环境变量 VIBE_KIT_MAINTAINER_HOSTS 把路由装成那台；第二个参数给秒数就留着让人看页面 |
