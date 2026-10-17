@@ -28,7 +28,8 @@ function handle(j) {
       if (JSON.stringify(safe) !== JSON.stringify(j.tool_response)) return { hookSpecificOutput: { hookEventName: 'PostToolUse', updatedToolOutput: safe, updatedMCPToolOutput: safe } };
     }
     const cmd = String(j.tool_input && j.tool_input.command || '');
-    const output = String(j.tool_response && (j.tool_response.stderr || j.tool_response.stdout || j.tool_response.error) || '');
+    // 失败的命令走 PostToolUseFailure，顶层是 error、没有 tool_response（docs/claude-code-facts.md 三版实测；2026-10-17 审核问题 11）
+    const output = String(j.tool_response && (j.tool_response.stderr || j.tool_response.stdout || j.tool_response.error) || j.error || '');
     if (/\bopenspec\b/i.test(cmd) && /unknown command|unknown option|不支持.*(?:指令|命令)|未知.*(?:指令|命令)/i.test(output)) return { hookSpecificOutput: { hookEventName: j.hook_event_name || 'PostToolUse', additionalContext: '当前 OpenSpec 不支持这条指令，先运行 openspec --version 和 openspec --help 核对版本与可用命令。向用户说明需要自行升级 OpenSpec（按其原安装方式升级）；vibe-kit 不内置、不安装、不自动升级 OpenSpec。不要重复执行不支持的指令。' } };
     return null;
   } catch (e) { try { require('../lib/feedback').recordHookError('after-tool', j, e); } catch (ignored) { /* 记不了也放行 */ } return null; }
