@@ -10,6 +10,7 @@
  *                                                 也可以给一个放着便携版的目录（里面有 python/python.exe、jdk/bin/java.exe、h2.jar）
  * 结尾查三件事：真实用户目录没被碰（各个测试自己查）、临时目录清干净了、桌面上没有多出窗口。
  * 2026-10-18 起分几路同时跑（--lanes，默认 3；--lanes 1 退回一个接一个），怎么排见下面"怎么排"。结尾打印每一段的用时。
+ *   --only a.js,b.js,e2e,diff    只跑这几套（e2e = 全部端到端，diff = 新旧钩子对比）
  */
 const fs = require('fs');
 const os = require('os');
@@ -67,9 +68,10 @@ suites.unshift(['归档解包的临时目录', 'test-archive-extract.js', []]);
 suites.unshift(['推送预览和合并确认', 'test-push-preview.js', []]);
 suites.unshift(['服务实际地址', 'test-service-address.js', []]);
 for (const [name, file] of [['状态并发和恢复', 'test-workflow-state.js'], ['用户意图与许可', 'test-workflow-intent.js'], ['许可与上下文', 'test-workflow-permissions.js'], ['连接生命周期', 'test-connection-lifecycle.js'], ['诊断脱敏', 'test-diagnostic-redaction.js'], ['审查和执行证据', 'test-review-evidence.js'], ['运行流程优化', 'test-optimization-runtime.js'], ['优化边界', 'test-optimization-boundaries.js']]) suites.unshift([name, file, []]);
-// --only a.js,b.js：只跑这几套（日常专项用；发版必须全量，不带它）
+// --only a.js,b.js：只跑这几套（日常专项用；发版必须全量，不带它）。e2e 代表全部端到端（每个 --claude 版本），diff 代表新旧钩子对比（每个 --old）
 const only = all('--only').flatMap((s) => s.split(',')).map((s) => path.basename(s.trim())).filter(Boolean);
-if (only.length) { for (let i = suites.length - 1; i >= 0; i--) if (!only.includes(suites[i][1])) suites.splice(i, 1); console.log('只跑：' + suites.map((s) => s[0]).join('、')); }
+const picked = (file) => only.includes(file) || (only.includes('e2e') && /^e2e-/.test(file)) || (only.includes('diff') && file === 'diff-hooks.js');
+if (only.length) { for (let i = suites.length - 1; i >= 0; i--) if (!picked(suites[i][1])) suites.splice(i, 1); console.log('只跑：' + suites.map((s) => s[0]).join('、')); }
 // 每套的完整输出存到 .vibe/tmp/run-all-<时间>/，失败时打印每个失败项和它下面的说明（以前只打印前 30 行，常常只看到原因的第一行）
 const pad2 = (n) => String(n).padStart(2, '0');
 const now = new Date();
