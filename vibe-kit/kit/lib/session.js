@@ -720,7 +720,7 @@ function cleanState(days) {
     }
     // 全局记录里 60 天前的条目清掉（审查记录、催过、计划提醒）
     const old = Date.now() - 60 * 86400000;
-    for (const name of ['reviewed', 'reviewed-proposal', 'review-rounds', 'review-nudged', 'task-ticks', 'plan-hint', 'plan-unlisted']) {
+    for (const name of ['reviewed', 'reviewed-proposal', 'review-rounds', 'review-points', 'review-nudged', 'task-ticks', 'plan-hint', 'plan-unlisted']) {
       if (!fs.existsSync(stateFile(name))) continue;
       updateState(name, (o) => { for (const k of Object.keys(o)) { const t = entryAt(o[k]); if (t && t < old) delete o[k]; } });
     }

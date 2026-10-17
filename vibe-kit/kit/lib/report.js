@@ -18,7 +18,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { readState, writeState, updateState, normKey, hookLog, listChanges, changeRoots, nestedRepos, proposalReviewed, codeReviewIssue, reviewRecord, TASK_LINE, taskKey, syncTicks, readConfig, verifyPartOf, isDeferredTask, ensureVibeIgnored, sessionHome } = require('./session');
+const { readState, writeState, updateState, normKey, hookLog, listChanges, changeRoots, nestedRepos, proposalReviewed, reviewAllowed, codeReviewIssue, reviewRecord, TASK_LINE, taskKey, syncTicks, readConfig, verifyPartOf, isDeferredTask, ensureVibeIgnored, sessionHome } = require('./session');
 
 const TITLES = { hand: '留给你做的', db: '库里改过的', ask: '它想问你、没问成的', unverified: '没验证的', bypass: '放行的检查', secret: '提交里像密码的内容', decision: '它自己定的事' };
 const MAX_ITEMS = 200;
@@ -109,7 +109,7 @@ function changeView(c, since, revs) {
   // 逐点审查（2026-10-14 起）：某一整组审过、还没收尾的，照实说审到第几轮、上一轮报了几条
   let point = null;
   try { const P = require('./flow-policy'); const id = P.points(c.dir, 'code').find((p) => P.record(c.dir, p).rounds && !P.settled(c.dir, p)); if (id) point = Object.assign({ id }, P.record(c.dir, id)); } catch (e) { point = null; }
-  if (c.done === 0 && c.todo > 0) state.push(require('./review-runner').waived(c.dir, 'proposal') ? '用户明确跳过提案审查，还没开工' : proposalReviewed(c.dir) ? '提案审过，还没开工' : '提案还没审');
+  if (c.done === 0 && c.todo > 0) state.push(require('./review-runner').waived(c.dir, 'proposal') ? '用户明确跳过提案审查，还没开工' : reviewAllowed('proposal', c.dir) ? '提案审过，还没开工' : '提案还没审');
   else if (point) state.push('审查点 ' + point.id + ' 审了 ' + point.rounds + ' 轮，上一轮报了 ' + (point.issues || 0) + ' 条，还没复审');
   else if (loop) state.push('代码审了 ' + loop.rounds + ' 轮，上一轮报了 ' + (loop.issues || 0) + ' 条，还没复审');
   else if (c.todo === 0) state.push(issue ? '代码还没审完' : '代码审过，等用户自测后归档');

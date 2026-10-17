@@ -7,16 +7,43 @@ const W = require('./workspace');
 const T = require('./task-types');
 const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return ''; } };
 const key = (dir, point) => S.normKey(dir) + '|' + point;
+// 没有 1.1 这种编号的任务归到前一个有编号的组，开头就没编号的算第 1 组（2026-10-17 审核问题 7：没编号时一个代码审查点都没有，自动审查走不通）
 function groups(dir) {
-  const out = new Map();
+  const out = new Map(); let last = '1';
   for (const t of T.tasks(dir).filter(t => !['review', 'review-fix', 'user', 'deferred'].includes(t.kind))) {
-    const m = t.text.match(/^(\d+)\./); if (!m) continue;
-    if (!out.has(m[1])) out.set(m[1], []); out.get(m[1]).push(t);
+    const m = t.text.match(/^(\d+)\./); const id = m ? m[1] : last; last = id;
+    if (!out.has(id)) out.set(id, []); out.get(id).push(t);
   }
   return [...out].map(([id, tasks]) => ({ id: 'group-' + id, tasks, done: tasks.every(t => t.done) }));
 }
+// 各组只审任务里点了名的文件。开工以来改了、没被任何一组点名的文件，所有组做完后并成一个审查点 group-rest：
+// 不审就记成"代码审过了"是 2026-10-17 审核问题 6。有哪一组一个文件都没点名的，那一组本来就审全部改动，不再另设
+const REST = 'group-rest';
+function namedFiles(dir, group) {
+  const roots = S.projectRootsOf(dir); const code = new Set();
+  for (const t of group.tasks) for (const token of S.pathTokens(t.text.split(/(?:验|验证|验收)\s*[:：]/)[0])) {
+    for (const root of roots) { const f = path.resolve(root, token); const checked = W.pathStatus(f, root); if (checked.safe && !checked.missing && !/[\\/](?:openspec|\.vibe)[\\/]/.test(f)) code.add(f); }
+  }
+  return [...code];
+}
+/** 开工基线以来改过的代码文件（绝对路径）：和审查执行器取代码材料的范围一致，不含 .vibe、openspec。没有基线返回空 */
+function changedCode(dir) {
+  const saved = S.readState('work-baselines')[S.normKey(dir)]; if (!saved) return [];
+  const out = [];
+  for (const repo of saved.repos || []) {
+    if (!repo.ref) continue;
+    const files = W.git(repo.root, ['diff', '--name-only', '-z', repo.ref]).split('\0').concat(W.git(repo.root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0'));
+    for (const f of new Set(files)) if (f && !/^(?:\.vibe|openspec)\//.test(f)) out.push(path.join(repo.root, f));
+  }
+  return out;
+}
+function restFiles(dir) {
+  const all = groups(dir); if (!all.length || !all.every(g => g.done)) return [];
+  const named = new Set(); for (const g of all) { const files = namedFiles(dir, g); if (!files.length) return []; files.forEach(f => named.add(S.normKey(f))); }
+  return changedCode(dir).filter(f => !named.has(S.normKey(f)));
+}
 function points(dir, mode) {
-  if (mode === 'code') return groups(dir).filter(g => g.done).map(g => g.id);
+  if (mode === 'code') { const done = groups(dir).filter(g => g.done).map(g => g.id); return restFiles(dir).length ? done.concat(REST) : done; }
   const files = S.artifactFiles(dir);
   return ['proposal', 'specs', 'design', 'tasks'].filter(p => files.some(f => p === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === p + '.md'));
 }
@@ -24,12 +51,9 @@ function pointFiles(dir, point) {
   const files = S.artifactFiles(dir).filter(f => !/revisions\.md$/.test(f));
   const order = ['proposal', 'specs', 'design', 'tasks']; const rank = order.indexOf(point);
   if (rank >= 0) return files.filter(f => { const p = /[\\/]specs[\\/]/.test(f) ? 'specs' : path.basename(f, '.md'); return order.indexOf(p) >= 0 && order.indexOf(p) <= rank; });
+  if (point === REST) return restFiles(dir);
   const group = groups(dir).find(g => g.id === point); if (!group) return files;
-  const roots = S.projectRootsOf(dir); const code = new Set();
-  for (const t of group.tasks) for (const token of S.pathTokens(t.text.split(/(?:验|验证|验收)\s*[:：]/)[0])) {
-    for (const root of roots) { const f = path.resolve(root, token); const checked = W.pathStatus(f, root); if (checked.safe && !checked.missing && !/[\\/](?:openspec|\.vibe)[\\/]/.test(f)) code.add(f); }
-  }
-  return [...code];
+  return namedFiles(dir, group);
 }
 function fingerprint(dir, point) {
   const group = groups(dir).find(g => g.id === point); const files = pointFiles(dir, point);
@@ -41,17 +65,26 @@ function fingerprint(dir, point) {
   }
   return W.hash(JSON.stringify(rows));
 }
-function record(dir, point) { return S.readState('review-points')[key(dir, point)] || {}; }
+// 记录带着变更目录的创建时间：旧变更归档后新建同名变更，路径一样，不能接着用旧轮数（2026-10-17 审核问题 5）。没有 born 的旧记录照认
+function live(dir, r) { return r && (!r.born || r.born === S.changeBorn(dir)) ? r : {}; }
+function record(dir, point) { return live(dir, S.readState('review-points')[key(dir, point)]); }
 function passed(dir, point) { const r = record(dir, point); return r.status === 'completed' && r.issues === 0 && r.fingerprint === fingerprint(dir, point) && require('./review-runner').inputsCurrent(r.materialInputs); }
 function settled(dir, point) { const r = record(dir, point); return passed(dir, point) || r.status === 'resolved' && r.resolvedFingerprint === fingerprint(dir, point) && require('./review-runner').inputsCurrent(r.materialInputs); }
 function pending(dir, mode) { return points(dir, mode).find(p => !settled(dir, p)) || ''; }
 function allPassed(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p)); }
 function limit(cfg, mode) { return Math.min(20, Math.max(1, Number(mode === 'proposal' ? cfg.requirementsReviewMaxRounds : cfg.applyReviewMaxRounds) || 3)); }
+// 轮数只数"审出问题、修了再审"这一串：上一轮已经零问题通过、或者问题处理完了，这次重审是因为后面的组改到了同一个文件，从头数。
+// 否则全程零问题也会被复审耗光轮数，提交被永久拦下（2026-10-17 审核问题 4）
+function concluded(r) { return r.status === 'completed' && r.issues === 0 || r.status === 'resolved'; }
 function begin(dir, point, id, inputHash) {
-  S.updateState('review-points', o => { const k = key(dir, point); const previous = o[k] || {}; o[k] = { rounds: (previous.rounds || 0) + 1, status: 'running', key: id, fingerprint: inputHash, at: Date.now() }; });
+  S.updateState('review-points', o => { const k = key(dir, point); const previous = live(dir, o[k]); const base = concluded(previous) ? 0 : previous.rounds || 0; o[k] = { rounds: base + 1, status: 'running', key: id, fingerprint: inputHash, born: S.changeBorn(dir), at: Date.now() }; });
 }
 function noteResult(dir, point, result, inputHash) {
-  S.updateState('review-points', o => { const k = key(dir, point); const previous = o[k] || {}; o[k] = { rounds: (previous.rounds || 0) + (previous.key === result.id && previous.status === 'running' ? 0 : 1), status: result.status, issues: result.issues.length, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, at: Date.now() }; });
+  S.updateState('review-points', o => {
+    const k = key(dir, point); const previous = live(dir, o[k]);
+    const rounds = previous.key === result.id && previous.status === 'running' ? previous.rounds || 1 : (concluded(previous) ? 0 : previous.rounds || 0) + 1;
+    o[k] = { rounds, status: result.status, issues: result.issues.length, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, born: S.changeBorn(dir), at: Date.now() };
+  });
 }
 function qualify(j, assessment) {
   if (!j.session_id || j.session_id === 'unknown') throw new Error('自动条件评估需要当前会话编号');
