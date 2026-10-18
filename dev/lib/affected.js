@@ -2,12 +2,13 @@
 /*
  * 发版回归里"没动过的独立模块不测"（用户 2026-10-17 提的，2026-10-18 做）：从某个版本（git 标签）以来，
  * 一个模块的测试用到的文件一个都没改过，这个模块的测试就跳过。全由脚本判断，不靠模型。
- *   - 一个模块 = 几套测试 + 它们用到的文件。用到的文件这样找：
+ *   - 一个模块 = 几套测试 + 它们用到的文件。用到的文件这样找（仓库主人 2026-10-18 定的放宽规则）：
  *       1. 写明的目录（技能目录、看页面的执行器）：整个目录
- *       2. 测试脚本自己，连同它 require 到的 dev/ 下的文件（测试支架、假服务）
- *       3. 测试脚本、写明的目录里的脚本调到的套件文件（H.hook(h, '名字')、'tools', 'x.js' 这类写法、Python 里的 "tools" / "x.js"），
- *          连同这些套件文件 require 到的（按源码里的 require('./x')、path.join(__dirname, ...) 逐层找）
- *     测试支架（dev/lib/）里提到的套件文件不往下找：那是某些测试才调的公共函数，不是每个模块都用
+ *       2. 测试脚本自己，连同它 require 到的 dev/ 下的文件（测试支架、假服务）：测试支架改了也照测
+ *       3. 测试脚本、写明的目录里的脚本直接调到的套件文件（H.hook(h, '名字')、'tools', 'x.js' 这类写法、Python 里的 "tools" / "x.js"）：
+ *          只算这一层，不往下追它们 require 到的（套件的库互相 require 得很多，追下去 session.js、guard-commit.js 几乎在每个模块里，
+ *          这两个差不多每版都改，最近 11 版一次都跳不了）。代价：共用的库改了、模块的行为跟着变了，这一版不测
+ *     测试支架（dev/lib/）里提到的套件文件不算：那是某些测试才调的公共函数，不是每个模块都用
  *   - 这些文件从 <since> 以来改过的（提交过的、工作区里没提交的、新加没跟踪的），有一个就照测；都没改才跳过
  *   - 判断不了（git 出错、标签不存在）一律照测
  *   - 运行环境（Python、JDK、H2 的版本）不在 git 里，换了要自己全量跑一次（不给 --since）
@@ -55,6 +56,8 @@ function refsOf(abs, kitRefs) {
   for (const m of text.matchAll(/['"](lib|hooks|tools|router|page)\/([\w.-]+\.js)['"]/g)) add(path.join(kit, m[1], m[2]));
   // Python：k / "tools" / "onboard.js"
   for (const m of text.matchAll(/["'](lib|hooks|tools|router)["']\s*\/\s*["']([\w.-]+\.js)["']/g)) add(path.join(kit, m[1], m[2]));
+  // 说明里明写的配套关系："和 kit/lib/drivers.js 里的 DIALECTS 对着"
+  for (const m of text.matchAll(/\bkit\/(lib|hooks|tools|router|page)\/([\w.-]+\.js)\b/g)) add(path.join(kit, m[1], m[2]));
   // 测试里调钩子：H.hook(h, 'guard-commit' …)、hook('pre-edit' …)
   for (const m of text.matchAll(/\bhook\(\s*(?:[\w.]+\s*,\s*)?['"]([a-z][\w-]*)['"]/g)) add(path.join(kit, 'hooks', m[1] + '.js'));
   return out;
@@ -62,17 +65,19 @@ function refsOf(abs, kitRefs) {
 /** 一个模块用到的文件（仓库根起的相对路径，排好序） */
 function filesOf(mod) {
   const seen = new Set();
-  const queue = [];
-  const push = (abs) => { const k = path.resolve(abs); if (!seen.has(k) && isFile(k)) { seen.add(k); queue.push(k); } };
-  for (const s of mod.suites) push(path.join(REPO, 'dev', s));
-  for (const d of mod.dirs) for (const f of walk(path.join(REPO, d), [])) push(f);
-  const devLib = path.join(REPO, 'dev', 'lib') + path.sep;
-  const inDirs = (abs) => mod.dirs.some((d) => rel(abs).startsWith(d));
-  for (let i = 0; i < queue.length; i++) {
-    const f = queue[i];
-    // node_modules 里的不往下找（整个目录已经算进去了）；只看脚本
+  const add = (abs) => { const k = path.resolve(abs); if (seen.has(k) || !isFile(k)) return false; seen.add(k); return true; };
+  const own = [];
+  for (const s of mod.suites) { const f = path.join(REPO, 'dev', s); if (add(f)) own.push(f); }
+  for (const d of mod.dirs) for (const f of walk(path.join(REPO, d), [])) if (add(f)) own.push(f);
+  const dev = path.join(REPO, 'dev') + path.sep;
+  const kit = path.join(REPO, KIT) + path.sep;
+  // 测试脚本 require 到的 dev/ 下的文件，连同它们再 require 到的 dev/ 下的文件
+  const queue = own.filter((f) => f.startsWith(dev));
+  for (let i = 0; i < queue.length; i++) for (const r of refsOf(queue[i], false)) if (r.startsWith(dev) && add(r)) queue.push(r);
+  // 测试脚本、模块目录里的脚本直接调到的套件文件：只算这一层（node_modules 里的不看，整个目录已经算进去了）
+  for (const f of own) {
     if (/[\\/]node_modules[\\/]/.test(f) || !/\.(js|py|ps1)$/i.test(f)) continue;
-    for (const r of refsOf(f, !f.startsWith(devLib) || inDirs(f))) push(r);
+    for (const r of refsOf(f, true)) if (r.startsWith(kit)) add(r);
   }
   return [...seen].map(rel).sort();
 }

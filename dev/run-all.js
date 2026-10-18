@@ -73,8 +73,8 @@ for (const [name, file] of [['状态并发和恢复', 'test-workflow-state.js'],
 const only = all('--only').flatMap((s) => s.split(',')).map((s) => path.basename(s.trim())).filter(Boolean);
 const picked = (file) => only.includes(file) || (only.includes('e2e') && /^e2e-/.test(file)) || (only.includes('diff') && file === 'diff-hooks.js');
 if (only.length) { for (let i = suites.length - 1; i >= 0; i--) if (!picked(suites[i][1])) suites.splice(i, 1); console.log('只跑：' + suites.map((s) => s[0]).join('、')); }
-// --since <标签>：没动过的独立模块（查库、起服务、看页面、redis）不测。判断规则见 lib/affected.js：模块的测试用到的文件
-// （连同它们 require 到的）从这个标签以来一个都没改过才跳过，判断不了就照测。跳过了什么在开头和结尾都打印
+// --since <标签>：没动过的独立模块（查库、起服务、看页面、redis）不测，发版时带上一版的标签。判断规则见 lib/affected.js：模块自己的目录、
+// 测试脚本和它 require 的测试支架、直接调到的套件脚本，从这个标签以来一个都没改过才跳过，判断不了就照测。跳过了什么在开头和结尾都打印
 const since = all('--since')[0] || '';
 const skipped = [];
 if (since) {
