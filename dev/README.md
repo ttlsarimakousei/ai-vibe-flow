@@ -28,7 +28,7 @@ node dev/run-all.js --old dev/baseline/20261005.0302/vibe-kit --old dev/baseline
 node dev/run-all.js --only test-1008.js,e2e,diff --claude <2.1.289 的 claude.exe> --old dev/baseline/<最新的基线>/vibe-kit
 ```
 
-`--since <标签>`：没动过的独立模块（查库 H2、起服务、看页面、查 redis）不测。规则在 `lib/affected.js`：模块的测试用到的文件（测试脚本和它 require 的测试支架、技能目录、调到的套件脚本，连同它们 require 到的）从这个标签以来一个都没改过才跳过，判断不了就照测，开头和结尾打印跳过了什么。`node dev/lib/affected.js <标签>` 列出每个模块用到哪些文件、哪些改过。注意套件的库互相 require 得很多（`session.js`、`guard-commit.js` 几乎在每个模块里），按这个规则最近 11 版一次都跳不了，见 [docs/release-timing.md](../docs/release-timing.md)。
+`--since <标签>`：没动过的独立模块（查库 H2、起服务、看页面、查 redis）不测，发版时带上一版的标签（见 [docs/release.md](../docs/release.md)）。规则在 `lib/affected.js`（2026-10-18 用户定的放宽版）：模块自己的目录（技能目录、看页面的执行器）、测试脚本和它 require 的测试支架、测试和模块目录里的脚本直接调到的套件脚本（说明里明写的 `kit/lib/x.js` 也算），从这个标签以来一个都没改过才跳过；不往下追套件脚本 require 到的；判断不了就照测；开头和结尾打印跳过了什么。`node dev/lib/affected.js <标签>` 列出每个模块用到哪些文件、哪些改过。
 
 2026-10-18 起分几段、几路同时跑（实测见 [docs/release-timing.md](../docs/release-timing.md)）：
 1. 一般的套 3 路同时跑（`--lanes N`；`--lanes 1` 退回按列表一个接一个，怀疑失败是同时跑引起的时候用）。上一轮各套耗时记在 `.vibe/tmp/run-all-times.json`，跑得久的排前面。

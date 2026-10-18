@@ -170,7 +170,7 @@
 - 测试支架调钩子：路由在 HTTP 方式下放进工作线程的那几个钩子，测试也在工作线程里调（`dev/lib/hook-thread.js`），环境变量、`os.homedir()`、工作目录照起进程的样子补齐；`VIBE_TEST_HOOK_SPAWN=1` 退回起进程。比命令方式本身的测试（`test-http-hooks.js`）照旧起进程。
 - 改了提示的说法、默认值之后，提交之前跑 `dev/stale-asserts.js`，再跑改到的几套加一个 Claude Code 版本的端到端、一份钩子对比；确定发版就直接全量，不先跑一遍完整的基础回归。写在 [release.md](release.md)。
 - 验收：`accept-packages.js` 给几个旧包就同时走几条升级路。
-- 没动过的独立模块不测（用户 10-17 提的）：`run-all.js --since <标签>` 和判断规则（`dev/lib/affected.js`）做了，发版命令里先不加。按"用到的文件连同它们 require 到的有一个改过就照测"，套件的库互相 require 得很多，最近 11 版查库那套一次都跳不了；要不要放宽（只看模块自己的目录和入口脚本，不往下追 require）**待仓库主人定**。
+- 没动过的独立模块不测（用户 10-17 提的）：发版全量回归带 `--since v<上一版>`，判断规则在 `dev/lib/affected.js`。规则是用户 10-18 选的放宽版：只看模块自己的目录、测试脚本、直接调到的套件脚本（说明里明写的配套文件也算），**测试支架改了也照测**，不往下追 require。起因：追 require 的话 `session.js`、`guard-commit.js` 几乎在每个模块里，这两个差不多每版都改，最近 11 版一次都跳不了；放宽后查库能跳 4 次、起服务 4 次、看页面 1 次、查 redis 2 次。代价是共用的库改了、模块行为跟着变了，那一版不测；换了查库的运行环境或拿不准时不带 `--since`。
 
 换 Claude Code 版本之前先探测（2026-10-05 定的做法）：`dev/probes/` 里四个脚本用真的 Claude Code 加假网关，看自动压缩、自带的自动模式、状态栏、HTTP 钩子在那个版本上是什么行为；再拿那个版本跑端到端五套。结果记进 [claude-code-facts.md](claude-code-facts.md)。
 

@@ -47,8 +47,10 @@
 1. 全量回归，盯着桌面跑（参数见 [dev/README.md](../dev/README.md)）：
 
    ```bash
-   node dev/run-all.js --rt auto --claude <2.1.289 的 claude.exe> --claude <2.1.259 的 claude.exe> --claude <2.1.120 的 claude.exe> --old dev/baseline/<最新的基线>/vibe-kit --old dev/baseline/<再早一版>/vibe-kit
+   node dev/run-all.js --rt auto --claude <2.1.289 的 claude.exe> --claude <2.1.259 的 claude.exe> --claude <2.1.120 的 claude.exe> --old dev/baseline/<最新的基线>/vibe-kit --old dev/baseline/<再早一版>/vibe-kit --since v<上一版的版本号>
    ```
+
+   `--since`：从上一版以来没动过的独立模块（查库 H2、起服务、看页面、查 redis）不测（2026-10-18 用户定的）。没动过 = 模块自己的目录、测试脚本和它用的测试支架、直接调到的套件脚本一个都没改过，由脚本判断（`dev/lib/affected.js`），开头和结尾打印跳过了哪些、为什么。换了查库的运行环境（Python、JDK、H2 的版本）、或者改了共用的库又拿不准会不会影响这些模块，这一次不带 `--since`。
 
    要求：全过、桌面上没有多出窗口、临时目录没留下东西。默认分几路同时跑，2026-10-18 实测约 33 分钟（以前一个接一个 72 分钟，见 [docs/release-timing.md](release-timing.md)）。有失败、怀疑是同时跑引起的，用 `--lanes 1 --only <那几套>` 单独重跑确认。
 2. `dev/diff-hooks.js` 里这一版有意改的用例，`since` 先写 `NEXT`。
