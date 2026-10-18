@@ -15,10 +15,7 @@ docs/release-timing.md"后面几项"一节有实测数据，用法在 dev/README
 - accept-packages.js 给几个旧包就同时走几条升级路。
 - 没动过的独立模块不测：发版全量回归带 `--since v<上一版>`（docs/release.md）。规则是仓库主人选的放宽版（dev/lib/affected.js：模块自己的目录、测试脚本和测试支架、直接调到的套件脚本，不追 require），最近 11 版查库能跳 4 次。下一版测试支架改过，四个模块都会照测。
 - 查库（H2）那套慢的原因分析完了：每条命令起 Java 约 0.95 秒、Python 每次重新编译约 0.4 秒（Claude Code 给命令行设了 PYTHONDONTWRITEBYTECODE=1）。
-
-## 在做的
-
-- 另一个会话在改查库技能，把字节码缓存放到技能目录外面（db.py、test-dbcrud.js、更新说明）。它和这边共用一个工作区，提交时只 add 自己的文件。
+- 查库技能的字节码缓存改写到 `~/.db-crud/pycache/`（db.py 开头设 `sys.pycache_prefix`、盖掉不写字节码）：`query` 2.09→1.78 秒，`--help` 0.92→0.75 秒。改的是技能行为，更新说明 @@VER@@ 一节写了，还没打包。
 
 ## 要注意的
 
