@@ -32,7 +32,8 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const ini = (extra) => ['; 测试', '[main]', 'dialect = mysql', 'jdbc = ' + url, 'user = sa', 'password =', 'driver_class = org.h2.Driver'].concat(extra || []).join('\n') + '\n';
   const cfgFile = path.join(proj, '.vibe', 'db-crud.ini');
   H.write(cfgFile, ini(['driver_jar = ' + H2.replace(/\\/g, '/')]));
-  const db = (args, opts) => H.run(h, PY, [DB].concat(args), Object.assign({ cwd: proj, env: Object.assign({ DBCRUD_JAVA: JAVA, DBCRUD_DAEMON: '0' }, (opts && opts.env) || {}) }, opts && opts.cwd ? { cwd: opts.cwd } : {}));
+  // PYTHONDONTWRITEBYTECODE：Claude Code 给命令行设了它，照着测
+  const db = (args, opts) => H.run(h, PY, [DB].concat(args), Object.assign({ cwd: proj, env: Object.assign({ DBCRUD_JAVA: JAVA, DBCRUD_DAEMON: '0', PYTHONDONTWRITEBYTECODE: '1' }, (opts && opts.env) || {}) }, opts && opts.cwd ? { cwd: opts.cwd } : {}));
   const usage = () => (H.read(path.join(h.kit, 'state', 'tool-usage.jsonl')) || '').split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l));
   const lastUse = () => usage().filter((u) => !u.incident).pop() || {};
   const ackOf = (r) => ((r.out.match(/--ack (\S+)/) || [])[1] || '');
@@ -47,6 +48,9 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const ping = db(['conn', 'test']);
   H.ok('连上了，说了驱动是哪来的', ping.code === 0 && /连上了：main/.test(ping.out) && /驱动来自 配置里指定的/.test(ping.out), ping.out + ping.err);
   H.ok('技能目录里没有留下 __pycache__', !fs.existsSync(path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts', '__pycache__')));
+  const walk = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])); } catch (e) { return []; } };
+  const pyc = walk(path.join(h.home, '.db-crud', 'pycache'));
+  H.ok('字节码缓存写在 ~/.db-crud/pycache/ 里（盖掉了不写字节码的环境变量）', pyc.some((f) => /ttls-db-crud[\\/]scripts[\\/]sqlguard\.cpython-\d+\.pyc$/.test(f)) && pyc.some((f) => /[\\/]argparse\.cpython-\d+\.pyc$/.test(f)), pyc.slice(0, 20));
 
   H.section('建表、插入（两步确认）');
   const c1 = execBoth('CREATE TABLE T_ORDER (ID INT PRIMARY KEY, CUSTOMER VARCHAR(50), STATUS VARCHAR(20), AMOUNT DECIMAL(10,2), CREATED TIMESTAMP, NOTE VARCHAR(200))');

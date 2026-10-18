@@ -22,18 +22,29 @@ db.py —— ttls-db-crud 技能的入口。只用 Python 标准库。
 一条命令尽量只起一次 java：看表结构、试大小写、取主键在一次里做完；
 写操作的核对行数、留快照、执行、提交、取主键也在一次里做完。
 """
-import argparse
-import datetime
-import hashlib
-import json
 import os
-import pathlib
-import re
-import subprocess
 import sys
 
-# 不在技能目录里留 __pycache__：安装器靠逐个文件比对来判断技能有没有被改过
-sys.dont_write_bytecode = True
+# 字节码缓存写到 ~/.db-crud/pycache/，不写进技能目录：安装器靠逐个文件比对来判断技能有没有被改过。
+# 不留缓存的话每条命令都要把标准库和技能的模块重新编译一遍（0.2—0.3 秒）。
+# Claude Code 给命令行设了 PYTHONDONTWRITEBYTECODE=1，这里要盖掉。
+# 放在别的 import 前面：在它前面载入的模块用不上缓存。只用 os、sys，这两个起 Python 时已经载入了。
+# 源文件改了（装了新版）缓存自己作废：Python 按源文件的修改时间和大小核对，对不上就重新编译。
+# 找不到用户目录（expanduser 原样返回 ~）、Python 3.8 以前（没有 pycache_prefix），照旧不写缓存
+_PYCACHE = os.path.join(os.path.expanduser("~"), ".db-crud", "pycache")
+if hasattr(sys, "pycache_prefix") and os.path.isabs(_PYCACHE):
+    sys.pycache_prefix = _PYCACHE
+    sys.dont_write_bytecode = False
+else:
+    sys.dont_write_bytecode = True
+
+import argparse                                                  # noqa: E402
+import datetime                                                  # noqa: E402
+import hashlib                                                   # noqa: E402
+import json                                                      # noqa: E402
+import pathlib                                                   # noqa: E402
+import re                                                        # noqa: E402
+import subprocess                                                # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")   # 不设的话 Windows 上错误信息里的中文全是乱码
