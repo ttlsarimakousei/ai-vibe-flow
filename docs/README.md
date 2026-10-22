@@ -8,6 +8,7 @@
 | [release.md](release.md) | 版本号、更新说明、打包、验收、发布到内网、内网的议题怎么进来 |
 | [claude-code-facts.md](claude-code-facts.md) | 在真的 Claude Code（2.1.120、2.1.259、2.1.289）上实测过的行为和验证边界 |
 | [decisions.md](decisions.md) | 设计决定和原因，哪些是用户定的不能改回去 |
+| [owner-issues.md](owner-issues.md) | 项目问题自主反馈表：仓库主人在对话里提的问题，先按原话记，让修时再分析 |
 | [glossary.md](glossary.md) | 术语 |
 | [reviews/20261011-vibe-kit-neutral-review.md](reviews/20261011-vibe-kit-neutral-review.md) | 20261010.2210 的中立审查、边界复现和改进顺序，结论以对应源码提交为准 |
 | [reviews/20261011-archive-inspection-verification.md](reviews/20261011-archive-inspection-verification.md) | 解包临时目录、Windows 包装路径修复、回归结果和适用边界 |
