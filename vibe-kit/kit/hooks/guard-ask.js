@@ -13,8 +13,12 @@ try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ 
 
 /** 还没到 apply：提案那一段要用户看过、说了开工才开始做任务 */
 function applyGate(j) {
-  hookLog('guard-ask block Skill opsx:apply（用户还没说开工）');
+  // 用户说了开工、却没认下来（#214：有几个变更、没点名）：说出原因，不再只说"用户还没说开工"
+  let why = '';
+  try { why = require('../lib/apply-scope').refusal(j); } catch (e) { why = ''; }
+  hookLog('guard-ask block Skill opsx:apply（' + (why ? '开工没认下来：' + why.slice(0, 60) : '用户还没说开工') + '）');
   try { require('../lib/feedback.js').countBlock('guard-apply', '[vibe-kit] 还没到 apply', String((j && j.session_id) || '')); } catch (e) { /* 数不了不影响 */ }
+  if (why) return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：用户说了开工，但' + why + '。调 /opsx:apply 时参数写上变更名也行（/opsx:apply <变更名>）。');
   return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：当前尚未满足双自动衔接条件，也没有用户开工许可。现在把要点交代给我：改哪些地方、新加的操作和接口、任务清单；我原话里没提过、你自己加上的，单独列出来。然后用提问框提供"apply 开工"和"还要改"选项。我说开工、或者我自己敲 /opsx:apply，再开始。');
 }
 function handle(j) {
@@ -30,8 +34,8 @@ function handle(j) {
         const st = flowState(j);
         const cfg = readConfigFor(j);
         if (/^(opsx:|openspec[-:])apply\b/i.test(first)) {
-          // 提问框的答案不触发 UserPromptSubmit，开工许可要在用技能前补读。
-          if (confirmApply(j) || require('../lib/flow-policy').automaticApply(j)) {
+          // 提问框的答案不触发 UserPromptSubmit，开工许可要在用技能前补读。技能参数里写了变更名的，用它认开哪个
+          if (confirmApply(j, { args: name.trim().split(/\s+/).slice(1).join(' ') + ' ' + String(inp.args || '') }) || require('../lib/flow-policy').automaticApply(j)) {
             st.stage = 'apply';
             const now = readConfigFor(j);
             out = { systemMessage: '[vibe-kit] 开始 apply：全自动模式' + (now.autoMode ? '开着，只管实现、验证和审查；提交照你选的提交方式。' : '关着。') };

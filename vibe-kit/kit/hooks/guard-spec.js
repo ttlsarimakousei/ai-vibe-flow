@@ -92,7 +92,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const ticked = tickedLines(oldText, newText);
   const skipped = [];
   if (!ticked.length) return { issues: [], ticked, skipped };
-  if (require('../lib/session').confirmApply(j)) Object.assign(cfg, readConfigFor(j));
+  // 用户只说"开工"、有几个变更时，打的是哪个变更的勾就认哪个（#214）
+  if (require('../lib/session').confirmApply(j, { hint: art.dir })) Object.assign(cfg, readConfigFor(j));
   const scopeIssue = require('../lib/apply-scope').check(j, art.dir);
   if (scopeIssue) return { issues: [scopeIssue], ticked, skipped };
   let entries = null;
@@ -212,7 +213,12 @@ function handle(j, opts) {
     else if (/^\s*[-*]\s*\[[xX]\]/m.test(newText)) tk = tickCheck(j, file, normTicks(newText), newText, art, cfg, roots);
     if (tk) flow.push(...tk.issues);
     // 还在写提案那一段（用户没说开工）就打勾：拦下。用户 2026-10-07 定的：任务清单要他看过、他说了开工才开始做（规矩见 lib/session.js"流程分两段"）
-    if (tk && tk.ticked.length) { const fl = flowState(j); if (fl.on && fl.stage === 'plan') notStarted = true; if (notStarted) flow.unshift('我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工"和"还要改"）；我说开工、或者我自己敲 /opsx:apply 之后再做'); }
+    if (tk && tk.ticked.length) {
+      const fl = flowState(j); if (fl.on && fl.stage === 'plan') notStarted = true;
+      // 用户说了开工、却没认下来（#214）：说出原因，不再说"我还没说开工"
+      let why = ''; try { why = notStarted ? require('../lib/apply-scope').refusal(j) : ''; } catch (e) { why = ''; }
+      if (notStarted) flow.unshift(why ? '我说了开工，但' + why + '。认下来之前先不打勾' : '我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工"和"还要改"）；我说开工、或者我自己敲 /opsx:apply 之后再做');
+    }
   }
   if (art.kind === 'spec') format.push(...checkSpec(newText, isAdded));
   if (art.kind === 'design') format.push(...checkDesign(newText, isAdded, roots, !existed, isDeclared));

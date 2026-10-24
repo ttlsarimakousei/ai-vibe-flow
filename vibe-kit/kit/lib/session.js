@@ -336,11 +336,28 @@ function canWriteHandover(j, cfg) {
   if (c.contextStrategy === 'handover' && c.autoMode && c.autoHandover !== false) return true;
   return userSaid(j && j.transcript_path ? tailEntries(j.transcript_path, 3000000) : [], 'handover').ok;
 }
-/** 提问框不触发用户开口钩子：用技能、打勾前补读最新的真实开工答案。 */
-function confirmApply(j) {
+/** 模型在第 pos 条之前最后说的那段话（开工没点名时，用它认是哪个变更） */
+function saidBefore(entries, pos) {
+  for (let i = Math.min(pos, entries.length) - 1; i >= 0; i--) {
+    const e = entries[i];
+    if (!e || e.isSidechain) continue;
+    if (isUserTurn(e) && !isTaskNote(e)) break;
+    if (e.type === 'assistant') { const t = textOf(e).trim(); if (t) return t.slice(-3000); }
+  }
+  return '';
+}
+/**
+ * 提问框不触发用户开口钩子：用技能、打勾、改代码前补读最新的真实开工答案（旧第 2 类：pre-edit 以前没补读，提问框选了开工、改代码还是拦）。
+ * more.hint：这一步要改的文件；more.args：/opsx:apply 技能的参数（用户只说"开工"、有几个变更时，用它们认是哪个，#214）
+ */
+function confirmApply(j, more) {
+  const { hint, args } = more || {};
   const st = flowState(j);
-  if (!st.on || st.stage !== 'plan' || !j.transcript_path) return false;
-  const v = lastUserVoice(tailEntries(j.transcript_path, 3000000));
+  if (!st.on || !j.transcript_path) return false;
+  // 做任务那一段里改了需求、旧开工范围已经失效的，也要能凭新的开工答案重新开工（提问框选开工，旧第 2 类）
+  if (st.stage !== 'plan' && !(st.applyScope && !require('./apply-scope').valid(j).ok)) return false;
+  const entries = tailEntries(j.transcript_path, 3000000);
+  const v = lastUserVoice(entries);
   const text = v && (v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text);
   if (!text || !applyIntent(text)) return false;
   const voice = voiceKey(v);
@@ -348,7 +365,7 @@ function confirmApply(j) {
   const grantedAt = st.lastApplyAt || st.applySource && st.applySource.at || st.applyScope && st.applyScope.at || 0;
   if (st.applyVoice && st.applyVoiceSchema !== 2 && (!v.at || !grantedAt || v.at <= grantedAt)) return false;
   const context = v.kind === 'answer' ? v.answers.filter((a) => applyIntent(a.a)).map((a) => a.q).join('\n') : '';
-  if (!require('./apply-scope').grant(j, text, context).ok) return false;
+  if (!require('./apply-scope').grant(j, text, context, { said: saidBefore(entries, v.pos), hint, args }).ok) return false;
   setFlow(j, true, '用户确认开工', 'apply');
   return true;
 }
@@ -2409,7 +2426,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, voiceKey, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,

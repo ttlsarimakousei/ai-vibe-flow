@@ -107,7 +107,10 @@ function decideFlow(j, cfg, note, resumed) {
   else if (named.length && p.length <= 3000) { on = true; why = '点了变更 ' + named[0].name; stage = stageOf('plan'); }
   setFlow(j, on, why, on ? stage : undefined);
   if (on && stage === 'apply' && applyIntent(p)) {
-    const permit = require('../lib/apply-scope').grant(j, p);
+    // 用户只说"开工"、有几个变更时，看模型刚才那段话点的是哪个（#214）
+    let said = '';
+    try { const es = j.transcript_path ? tailEntries(j.transcript_path, 3000000) : []; const v = require('../lib/session').lastUserVoice(es); said = require('../lib/session').saidBefore(es, v && v.kind === 'prompt' && v.text === p ? v.pos : es.length); } catch (e) { said = ''; }
+    const permit = require('../lib/apply-scope').grant(j, p, '', { said });
     if (!permit.ok) { stage = 'plan'; setFlow(j, true, permit.reason, 'plan'); }
   }
   if (isStop(p) || intent.denied(p, 'apply')) require('../lib/session').updateState(String(j.session_id) + '-flow', (s) => { s.was = 0; s.stage = 'plan'; delete s.applyScope; });

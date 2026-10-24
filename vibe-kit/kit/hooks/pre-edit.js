@@ -44,7 +44,15 @@ function handle(j) {
   let passes = {};
   const cfg = readConfigFor(j);
   if (/(^|[\\/])\.vibe[\\/]handover\.md$/i.test(f) && !require('../lib/session').canWriteHandover(j, cfg)) return require('../lib/session').blockOut('PreToolUse', '[vibe-kit] 没有当前用户的手动交接要求，不写交接记录。连续工作依靠自动压缩，接着处理当前任务。');
-  if (f) { try { const scope = require('../lib/apply-scope'); scope.prepareEdit(j, f); const no = scope.check(j, f); if (no) return require('../lib/session').blockOut('PreToolUse', '[vibe-kit 范围] ' + no); } catch (e) { if (feedback) feedback.recordHookError('pre-edit 范围', j, e); } }
+  if (f) {
+    try {
+      const scope = require('../lib/apply-scope'); scope.prepareEdit(j, f);
+      let no = scope.check(j, f);
+      // 提问框的开工答案不触发用户开口钩子：拦之前先补读（以前只有调 apply 技能、打勾才补读，提问框选了开工、改代码还是拦）
+      if (no && require('../lib/session').confirmApply(j, { hint: f })) no = scope.check(j, f);
+      if (no) { const why = scope.refusal(j); return require('../lib/session').blockOut('PreToolUse', '[vibe-kit 范围] ' + no + (why ? '。用户说了开工，但' + why + '。' : '')); }
+    } catch (e) { if (feedback) feedback.recordHookError('pre-edit 范围', j, e); }
+  }
   const target = f ? 'file:' + normKey(f) : '';
   const action = String(j.tool_name || '') + '：' + f;
   try { if (feedback) { sig = actionSig(j, f); passes = feedback.passesFor(sig, cfg, j, target); } } catch (e) { passes = {}; }
