@@ -42,9 +42,11 @@ IDEA 连着、开了 brave mode、项目在 IDEA 里打开着的时候，起服�
 
 ## 走哪些保护
 
-- 操作必须写明 `projectPath`，填当前项目的完整路径。
-- 直接调用的工具和经 `execute_tool` 转发的都走保护：终端沿用提交、push 和令牌检查；读文件、索引搜索沿用令牌范围检查；单文件编辑沿用产出位置、编码、提案和任务检查。
-- 批量补丁、检查脚本、调试表达式、运行参数覆盖还没适配，不放行，继续用普通工具。格式化和重构不用来改 OpenSpec、`.vibe` 或约定文件。
+2026-10-25 起，IDEA 的工具只走和普通工具一样的检查，别的一律不拦：
+
+- 终端命令（`execute_terminal_command`）按 Bash、PowerShell 的检查走：push 要确认、结束路由、整仓 add、串着 cd 这类，和你在 Bash 里跑一样。
+- 改文件（`replace_text_in_file`、`create_new_file`、格式化、重构、批量补丁里点到的文件）按 Edit、Write 的检查走：不许改套件、不许写坏非 UTF-8 文件、提案和任务清单的门槛、代码之外的产出先问位置。补丁要改 OpenSpec 产物的，改用 Edit、Write（要看改完的文字）。
+- 读套件的令牌文件、模型的 key、Claude Code 的用户配置（`.claude.json`，里面有别的 MCP 的认证信息）照拦。
 - 人工模式下，`build_project`、`get_file_problems`、`lint_files` 算快检，直接跑；`execute_run_configuration` 算自测，先问你。
+- 不再拦：没写 `projectPath`（按会话的目录算）、IDEA 的查库工具、整份运行配置、运行参数覆盖、检查脚本、调试表达式、带表达式的断点、套件没见过的新工具。IDEA 工具返回的内容也不再遮口令。
 - IDEA 的编译结果还不算收工检查认的验证记录，仍要用命令跑一次快检。
-- 完整的运行配置可能带着环境变量里的口令，不能读进会话。运行已有配置时由你提供配置名；按文件找运行入口用 `get_run_configurations(filePath=...)`。

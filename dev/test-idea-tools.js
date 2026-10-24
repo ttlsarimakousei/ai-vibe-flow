@@ -58,32 +58,38 @@ for (const [label, name, input] of [
   ['修改套件', 'replace_text_in_file', { pathInProject: path.join(h.kit, 'lib/session.js'), oldText: 'a', newText: 'b' }],
   ['读取路径别名不能盖过令牌路径', 'get_file_text_by_path', { file_path: 'a.js', pathInProject: secret }],
   ['编辑路径别名不能盖过套件路径', 'replace_text_in_file', { file_path: 'a.js', pathInProject: path.join(h.kit, 'lib/session.js'), oldText: 'a', newText: 'b' }],
-  ['路径别名不能盖过任务文件', 'replace_text_in_file', { file_path: 'a.js', pathInProject: 'openspec/changes/c/tasks.md', oldText: '- [ ]', newText: '- [x]' }],
   ['未确认提交', 'execute_terminal_command', { command: 'git add a.js && git commit -m "fix: 改代码"' }],
+  ['补丁改套件', 'apply_patch', { input: '*** Begin Patch\n*** Update File: ' + path.join(h.kit, 'lib/session.js').replace(/\\/g, '/') + '\n@@\n-a\n+b\n*** End Patch' }],
+  ['路由解析不了、原文里点了令牌', 'execute_tool', { command: 'read_file --file_path "' + secret.replace(/\\/g, '/') }],
+]) { const r = call(name, input); H.ok(label + '被拦', denied(r), H.reasonOf(r)); }
+// 2026-10-25 用户定的（问题反馈表第 1、3、4 条）：IDEA 的工具只留和普通工具一样的检查，下面这些不再拦
+for (const [label, name, input] of [
   ['数据库操作', 'execute_tool', { command: 'execute_sql_query --query "select 1"' }],
-  ['全量运行配置可能带口令', 'get_run_configurations', {}],
-  ['运行参数覆盖', 'execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }],
-  ['调试环境变量覆盖', 'xdebug_start_debugger_session', { configurationName: 'app', envs: { TOKEN: 'TEST_ONLY' } }],
-  ['格式化任务不能绕检查', 'reformat_file', { path: 'openspec/changes/c/tasks.md' }],
+  ['整份运行配置（可能带口令）', 'get_run_configurations', {}],
+  ['调试方式起、带环境变量', 'xdebug_start_debugger_session', { configurationName: 'app', envs: { TOKEN: 'TEST_ONLY' } }],
+  ['格式化任务清单', 'reformat_file', { path: 'openspec/changes/c/tasks.md' }],
   ['带表达式的断点', 'xdebug_set_breakpoint', { filePath: 'a.js', condition: 'f()' }],
-  ['批量补丁', 'apply_patch', { input: '*** Begin Patch' }],
+  ['没点文件的批量补丁', 'apply_patch', { input: '*** Begin Patch' }],
+  ['补丁只改项目里的代码', 'apply_patch', { input: '*** Begin Patch\n*** Update File: a.js\n@@\n-1\n+2\n*** End Patch' }],
   ['执行检查脚本', 'run_inspection_kts', { script: 'print(1)' }],
   ['执行调试表达式', 'xdebug_evaluate_expression', { expression: 'f()' }],
   ['修改调试变量', 'xdebug_set_variable', { newValue: 'f()' }],
-  ['未知工具', 'new_unadapted_tool', {}],
-  ['缺项目路径', 'read_file', { file_path: 'a.js', projectPath: undefined }],
-  ['相对项目路径', 'read_file', { file_path: 'a.js', projectPath: '.' }],
-  ['路由项目冲突', 'execute_tool', { command: 'read_file --file_path "a.js" --projectPath ' + quote(h.work) }],
-  ['坏路由引号', 'execute_tool', { command: 'read_file --file_path "unfinished' }],
-  ['路由重复参数', 'execute_tool', { command: 'read_file --file_path "a.js" --file_path "b.js"' }],
-]) { const r = call(name, input); H.ok(label + '被拦', denied(r), H.reasonOf(r)); }
+  ['名单外的工具（以前"尚未适配套件检查"）', 'new_unadapted_tool', {}],
+  ['没写 projectPath（按会话目录算）', 'read_file', { file_path: 'a.js', projectPath: undefined }],
+  ['相对的 projectPath', 'read_file', { file_path: 'a.js', projectPath: '.' }],
+  ['路由内外的 projectPath 不一样（两个都查）', 'execute_tool', { command: 'read_file --file_path "a.js" --projectPath ' + quote(h.work) }],
+  ['路由参数解析不了', 'execute_tool', { command: 'read_file --file_path "unfinished' }],
+  ['路由里参数写了两遍', 'execute_tool', { command: 'read_file --file_path "a.js" --file_path "b.js"' }],
+]) { const r = call(name, input); H.ok('不再拦：' + label, !denied(r), H.reasonOf(r)); }
+// 运行参数覆盖不再拦；跑运行配置照旧算自测：人工模式先问，用户说了自测就跑
+H.ok('运行参数覆盖：照自测先问（不是因为参数）', /人工模式/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))) && !/运行参数覆盖/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))));
 H.ok('IDEA 终端的 push 也先检查预览', denied(call('execute_terminal_command', { command: 'git push' })));
 H.transcript(transcript, [H.tr.user('推送')]);
 H.ok('当场说 push 不能跳过 IDEA 终端的预览检查', denied(call('execute_tool', { command: 'execute_terminal_command --command "git push"' })));
 H.transcript(transcript, [H.tr.user('改代码')]);
 H.inFlow(h, 'ide-tools', [], 'apply'); H.setConfig(h, { autoMode: true });
 H.ok('全自动时读令牌仍拦', denied(call('read_file', { file_path: secret })));
-H.ok('全自动也不能直接操作数据库', denied(call('execute_sql_query', { query: 'select 1' })));
+H.ok('全自动：IDEA 的数据库工具也不再拦（2026-10-25 用户定的）', !denied(call('execute_sql_query', { query: 'select 1' })));
 H.ok('全自动 push 未授权仍拦下', denied(call('execute_terminal_command', { command: 'git push' })));
 H.setConfig(h, { autoMode: false });
 const gbk = path.join(repo, 'gbk.js');
@@ -94,6 +100,7 @@ H.ok('IDE 新建文档也要求确认产出位置', denied(call('create_new_file
 H.setConfig(h, { outputGate: false, specGate: true });
 H.inFlow(h, 'ide-tools', [path.join(repo, 'openspec/changes/c')], true, 'plan');
 H.ok('提案阶段不能借 IDE 编辑打任务勾', denied(call('replace_text_in_file', { pathInProject: 'openspec/changes/c/tasks.md', oldText: '- [ ]', newText: '- [x]' })));
+H.ok('路径别名不能盖过任务文件（几个路径字段都按 Edit 查）', denied(call('replace_text_in_file', { file_path: 'a.js', pathInProject: 'openspec/changes/c/tasks.md', oldText: '- [ ]', newText: '- [x]' })));
 H.setConfig(h, { specGate: false });
 H.ok('惯用 jetbrains 名字有保护', denied(call('read_file', { file_path: secret }, 'jetbrains')));
 H.ok('服务器名连字符转下划线有保护', denied(call('read_file', { file_path: secret }, 'vibe_idea_64342')));
