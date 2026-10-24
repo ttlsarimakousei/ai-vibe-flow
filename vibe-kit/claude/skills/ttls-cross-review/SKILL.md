@@ -14,9 +14,12 @@ description: 逐个需求产物完成后审文档；每整组 1.x 完成后审�
 ```bash
 node "$HOME/.claude/vibe-kit/tools/review.js" run --change <变更名> --mode proposal --point proposal --project <项目>
 node "$HOME/.claude/vibe-kit/tools/review.js" run --change <变更名> --mode code --point group-1 --project <项目> --base <已核对基线>
+node "$HOME/.claude/vibe-kit/tools/review.js" run --mode code --project <项目> --base <改之前的提交>
 node "$HOME/.claude/vibe-kit/tools/review.js" status --change <变更名> --mode code --project <项目>
 node "$HOME/.claude/vibe-kit/tools/review.js" cancel --change <变更名> --mode code --project <项目>
 ```
+
+--change 只认 openspec/changes 下已有的变更。不走 OpenSpec 的改动（小修复、改配置）用第三行，不带 --change，--base 写改之前的提交。壳子里几个仓库一起改的，--base 每个仓库写一个：`--base gwjh=11325fd --base .=32171c4`（等号前是相对 --project 的仓库路径）；只写一个不带等号的，只用在认得这个提交的仓库上。`review.js --help` 列着全部写法。
 
 需求点用 proposal、specs、design、tasks；代码点用 group-1、group-2 等整组编号。status、cancel、resolve 使用相同 --point。每个点每轮有独立时间预算；运行失败或取消也计入这一点的轮数。
 

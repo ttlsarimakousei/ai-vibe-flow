@@ -11,7 +11,8 @@ const store = require('./state-store');
 const secretFile = (f) => /(^|[\\/])(secrets\.json|router-data|\.env(?:\.[^/]*)?|db-crud\.ini|redis\.json|login\.json)([\\/]|$)/i.test(f);
 function alive(pid) { try { process.kill(Number(pid), 0); return true; } catch (e) { return false; } }
 function changeOf(cwd, name) { return name ? S.allChanges(cwd).find((c) => c.name.toLowerCase() === String(name).toLowerCase()) : null; }
-function jobKey(cwd, name, mode, point) { const c = changeOf(cwd, name); return W.hash((c ? S.normKey(c.dir) : W.rootOf(cwd).toLowerCase()) + '|' + mode + (point ? '|' + point : '')).slice(0, 24); }
+// 不带变更名的审查按"项目 + 基线"算一次审查（#211：以前只按项目算，前一次不相干的审查把累计预算占掉了，这次一开始就超时）
+function jobKey(cwd, name, mode, point, base) { const c = changeOf(cwd, name); const b = !c && base ? '|' + [].concat(base).filter(Boolean).join(',') : ''; return W.hash((c ? S.normKey(c.dir) : W.rootOf(cwd).toLowerCase() + b) + '|' + mode + (point ? '|' + point : '')).slice(0, 24); }
 function baseline(j, dirs) {
   const cwd = j.cwd || process.cwd();
   S.updateState('work-baselines', (o) => {
@@ -46,7 +47,7 @@ function proposalReferences(rows) {
   return { references, required, contextOnly: [...context].filter(ref => !references.has(ref)) };
 }
 function materials(opts, change) {
-  const items = [], skipped = [], files = new Set(), inputs = new Map(); let contextOnly = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
+  const items = [], skipped = [], excluded = [], files = new Set(), inputs = new Map(); let contextOnly = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
   const add = (file, text, root, source) => {
     if (files.has(file)) return;
     if (files.size >= maxFiles) { skipped.push({ file, reason: '超过本轮文件上限；在配置页提高审查文件上限（最多 60），或明确拆成独立变更后审查' }); return; }
@@ -113,11 +114,37 @@ function materials(opts, change) {
   } else {
     const roots = change ? S.projectRootsOf(change.dir) : [W.rootOf(opts.cwd)];
     const saved = change && S.readState('work-baselines')[S.normKey(change.dir)];
+    // --base 可以写几次：<仓库相对路径>=<提交> 指定某个仓库的基线（#189：壳子带两个子项目，只有一个值时对每个仓库都用它，
+    // 在没有这个提交的仓库里整轮报"审查基线不是本地提交"）。不带等号的值只用在认得它的仓库上，其余仓库用开工时登记的基线
+    const given = [].concat(opts.base || []).filter(Boolean).map(String);
+    const pairs = given.filter((b) => /=/.test(b)).map((b) => { const at = b.lastIndexOf('='); return { root: W.rootOf(path.resolve(opts.cwd, b.slice(0, at))), ref: b.slice(at + 1) }; });
+    const bare = given.filter((b) => !/=/.test(b));
+    const isCommit = (root, ref) => !!W.git(root, ['rev-parse', '--verify', ref + '^{commit}']).trim();
+    const used = new Set();
+    const hint = '--base ' + roots.map((r) => (path.relative(opts.cwd, r).replace(/\\/g, '/') || '.') + '=<改之前的提交>').join(' --base ');
     for (const root of roots) {
-      const base = opts.base || (saved && saved.repos.find((r) => S.normKey(r.root) === S.normKey(root)) || {}).ref;
-      if (!base) { skipped.push({ file: root, reason: '缺开工基线，使用 --base 明确基线后再审' }); continue; }
-      if (!W.git(root, ['rev-parse', '--verify', base + '^{commit}']).trim()) throw new Error('审查基线不是本地提交');
-      const files = [...new Set(W.git(root, ['diff', '--name-only', '-z', base]).split('\0').concat(W.git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0')))].filter(Boolean);
+      const pair = pairs.find((x) => S.normKey(x.root) === S.normKey(root));
+      const own = pair ? pair.ref : bare.find((b) => isCommit(root, b));
+      if (own) used.add(own);
+      const base = own || (saved && saved.repos.find((r) => S.normKey(r.root) === S.normKey(root)) || {}).ref;
+      if (!base) { skipped.push({ file: root, reason: '缺开工基线：用 --base 明确这个仓库改之前的提交再审，几个仓库各写一个，例：' + hint }); continue; }
+      if (!isCommit(root, base)) throw new Error('审查基线 ' + base + ' 不是 ' + root + ' 里的本地提交；几个仓库各写各的：' + hint);
+      // 已跟踪的改动排在前面，未跟踪的只要基线之后建的、改过的（#206：--base HEAD 把 167 个早就在的 .claude、.review、docs 文件也送审，
+      // 20 个文件的上限被它们占满）；有开工基线的，开工时就在的未跟踪文件不算，之后又改过的照算
+      const tracked = W.git(root, ['diff', '--name-only', '-z', base]).split('\0').filter(Boolean);
+      const since = (Number(W.git(root, ['show', '-s', '--format=%ct', base]).trim()) || 0) * 1000;
+      const repoRec = saved && saved.repos.find((r) => S.normKey(r.root) === S.normKey(root));
+      const before = repoRec ? repoRec.dirtyFiles || [] : [];
+      const preexisting = (f) => before.some((p) => p === f || (/\/$/.test(p) && f.startsWith(p)));
+      const mtime = (f) => { try { return fs.statSync(path.join(root, f)).mtimeMs; } catch (e) { return 0; } };
+      let old = 0;
+      const fresh = W.git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean).filter((f) => {
+        const keep = preexisting(f) ? mtime(f) > (saved.at || 0) : !since || mtime(f) >= since - 60000;
+        if (!keep && !/^(?:\.vibe|openspec)\//.test(f)) old++;
+        return keep;
+      });
+      if (old) excluded.push({ root, untracked: old, reason: '基线之前就在、之后没改过的未跟踪文件，不算这次的改动' });
+      const files = [...new Set(tracked.concat(fresh))];
       for (const file of files) {
         if (/^(?:\.vibe|openspec)\//.test(file)) continue;
         const f = path.join(root, file);
@@ -131,12 +158,14 @@ function materials(opts, change) {
         add(label, text, root, f);
       }
     }
+    // 不带等号的 --base 一个仓库都不认得：是写错了，不当成缺基线
+    for (const b of bare) if (!used.has(b)) throw new Error('审查基线 ' + b + ' 不是本地提交（这几个仓库里都没有）；几个仓库各写各的：' + hint);
     if (change) for (const row of artifacts().filter((r) => !/revisions\.md$/.test(r.file))) add(row.file, row.text, change.dir);
   }
   const batches = []; let batch = [], size = 0;
   for (const item of items) { if (size + item.text.length > 80000 && batch.length) { batches.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
   if (batch.length) batches.push(batch);
-  return { items, skipped, batches, contextOnly, inputs: [...inputs.values()] };
+  return { items, skipped, excluded, batches, contextOnly, inputs: [...inputs.values()] };
 }
 /** 随提案交付的补充材料变化后结论失效；实施源码的变化留给代码审查，不重开需求审查。 */
 function inputsCurrent(inputs) {
@@ -243,8 +272,9 @@ function waive(opts) {
 async function run(opts, progress) {
   opts = Object.assign({ cwd: process.cwd(), mode: 'code' }, opts); opts.cwd = path.resolve(opts.cwd);
   if (!['proposal', 'code'].includes(opts.mode)) throw new Error('审查模式只能是 proposal 或 code');
-  const change = changeOf(opts.cwd, opts.change); if (opts.change && !change) throw new Error('没找到当前变更');
-  const key = jobKey(opts.cwd, opts.change, opts.mode, opts.point); const id = crypto.randomBytes(12).toString('hex'); const cfg = S.readConfig();
+  // #197：不走 OpenSpec 的小修复，模型编了一个变更名。报错里说清不带 --change 的写法
+  const change = changeOf(opts.cwd, opts.change); if (opts.change && !change) throw new Error('没找到当前变更 ' + opts.change + '（' + opts.cwd + ' 的 openspec/changes 里没有这个变更）。不走 OpenSpec 的改动不带 --change，按改之前的提交审：review.js run --mode code --project ' + opts.cwd.replace(/\\/g, '/') + ' --base <改之前的提交>');
+  const key = jobKey(opts.cwd, opts.change, opts.mode, opts.point, opts.base); const id = crypto.randomBytes(12).toString('hex'); const cfg = S.readConfig();
   const policy = require('./flow-policy');
   if (opts.point && (!change || !policy.points(change.dir, opts.mode).includes(opts.point))) throw new Error('审查点不存在或该任务组尚未完成');
   const pointHash = opts.point ? policy.fingerprint(change.dir, opts.point) : '';
@@ -260,7 +290,7 @@ async function run(opts, progress) {
   let result = { id, mode: opts.mode, status: 'failed', issues: [], covered: [], skipped: [], attemptedBatches: 0, receivedBatches: 0, completedBatches: 0, attemptedFiles: [], diagnostics: [] };
   try {
     if (deadline <= started) throw new Error('累计审查预算已用完；交代现有结果和未覆盖范围，用户可明确用 --new-budget 开启新预算');
-    const material = materials(opts, change); result.skipped = material.skipped; result.contextOnly = material.contextOnly; result.materialInputs = material.inputs;
+    const material = materials(opts, change); result.skipped = material.skipped; result.excluded = material.excluded; result.contextOnly = material.contextOnly; result.materialInputs = material.inputs;
     if (!material.batches.length) throw new Error('没有可审查材料或开工基线缺失');
     const left = new Map(); for (const item of material.items) left.set(item.file, (left.get(item.file) || 0) + 1);
     result.totalBatches = material.batches.length;
@@ -320,8 +350,8 @@ async function run(opts, progress) {
   }
   return result;
 }
-function status(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point); const r = S.readState('review-jobs')[key]; if (r && r.status === 'running' && (!alive(r.pid) || Date.now() >= r.deadline)) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === r.id) { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'interrupted'; o[key].reason = '执行进程退出或超过截止时间，没有完整结果'; } }); return S.readState('review-jobs')[key]; } return r || { status: 'none' }; }
-function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
+function status(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point, opts.base); const r = S.readState('review-jobs')[key]; if (r && r.status === 'running' && (!alive(r.pid) || Date.now() >= r.deadline)) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === r.id) { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'interrupted'; o[key].reason = '执行进程退出或超过截止时间，没有完整结果'; } }); return S.readState('review-jobs')[key]; } return r || { status: 'none' }; }
+function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point, opts.base); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = used(o[key], Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
 function resolve(opts) {
   const change = changeOf(opts.cwd || process.cwd(), opts.change); if (!change) throw new Error('意见处理需要当前变更');
   const policy = require('./flow-policy');

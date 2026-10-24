@@ -2,9 +2,27 @@
 /* 限时审查与兼容记账入口。sync 仅登记会话中可核对的完整结果，诊断不输出提示词或审查正文；不调用 Claude CLI 或自主子代理。 */
 const R = require('../lib/review-runner');
 const args = process.argv.slice(2); const val = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
-const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), mode: val('--mode') || 'code', point: val('--point'), base: val('--base'), budgetSeconds: val('--budget'), newBudget: args.includes('--new-budget'), decisions: val('--decisions'), reason: val('--reason') };
+// --base 可以写几次（几个仓库各写一个：--base <仓库相对路径>=<提交>，#189）
+const bases = args.flatMap((a, i) => (a === '--base' && args[i + 1] ? [args[i + 1]] : []));
+const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), mode: val('--mode') || 'code', point: val('--point'), base: bases.length > 1 ? bases : bases[0], budgetSeconds: val('--budget'), newBudget: args.includes('--new-budget'), decisions: val('--decisions'), reason: val('--reason') };
+// #197：以前 --help 只有一行，没说 --change 必须是 openspec/changes 下已有的变更，也没写不走 OpenSpec 的改动怎么审
+const HELP = [
+  '用法：node review.js <run|status|cancel|resolve|diagnose|sync|waive> [参数]',
+  '',
+  'run：审一次（经本机路由向独立模型发有限材料）',
+  '  OpenSpec 变更的需求文档：run --change <变更名> --mode proposal --point proposal|specs|design|tasks --project <项目>',
+  '  OpenSpec 变更的代码：    run --change <变更名> --mode code --point group-1 --project <项目> [--base <改之前的提交>]',
+  '  不走 OpenSpec 的改动：   run --mode code --project <项目> --base <改之前的提交>（不带 --change；--change 只认 openspec/changes 下已有的变更）',
+  '  壳子里几个仓库：         --base 写几次，每个仓库一个：--base <仓库相对路径>=<提交>，例 --base gwjh=11325fd --base .=32171c4',
+  '                           只写一个不带等号的 --base：只用在认得这个提交的仓库上，其余仓库用开工时登记的基线',
+  '  其它：--budget <秒> 这一次的时间预算；--new-budget 用户明确同意重开累计预算时才用',
+  'status / cancel：和 run 一样的 --change、--mode、--point（不带变更名的再加同样的 --base），看进度或取消',
+  'resolve：--change <变更名> --mode proposal|code --point <审查点> --decisions <处理明细 JSON>',
+  'diagnose / sync：--project <项目> --transcript <当前会话记录>，看兼容审查代理的结果、补登记能核对的完整结论',
+].join('\n');
 (async () => {
   const cmd = args[0] || 'status'; let r;
+  if (cmd === '--help' || cmd === '-h' || cmd === 'help') { console.log(HELP); return; }
   if (cmd === 'run') r = await R.run(opts, (s) => process.stderr.write(s + '\n'));
   else if (cmd === 'diagnose' || cmd === 'sync') {
     const S = require('../lib/session'); if (!val('--transcript')) throw new Error('诊断和记账要给 --transcript <当前会话记录>');
@@ -15,6 +33,6 @@ const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), 
   else if (cmd === 'cancel') r = R.cancel(opts);
   else if (cmd === 'resolve') r = R.resolve(opts);
   else if (cmd === 'waive') r = R.waive(opts);
-  else throw new Error('用法：review.js run|status|diagnose|sync|cancel|resolve|waive --change <变更> --mode proposal|code；waive 还要 --reason <用户决定的原因>');
+  else throw new Error(HELP);
   console.log(JSON.stringify(r)); if (['failed', 'timed_out', 'partial', 'stale', 'interrupted'].includes(r.status)) process.exitCode = 1;
 })().catch((e) => { console.error(require('../lib/redact').text(e.message)); process.exitCode = 1; });
