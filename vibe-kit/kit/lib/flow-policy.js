@@ -230,19 +230,42 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   }
   return out;
 }
+/**
+ * 这条命令真的在跑审查：拆开的命令段里有"node <套件的 tools/review.js> run"。以前对整条命令文字匹配 review.js run，
+ * 记问题反馈、写提交信息时正文里引用了这几个字也被当成要审查（旧第 5 类，#187 第 6 点；同类的 #153 只改了审查预算那一处）
+ */
+function reviewRun(j, cmd, ps) {
+  if (!/review\.js/i.test(cmd)) return false;
+  try {
+    const G = require('../hooks/guard-commit');
+    for (const seg of G.splitCommand(G.preprocess(cmd, ps).s, ps).flat()) {
+      const ws = G.words(G.scanRedirects(seg).rest, ps).map(w => String(w.text));
+      let k = 0;
+      while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(ws[k] || '')) k++;
+      if (!/^node(?:\.exe)?$/i.test(path.basename(String(ws[k] || '').replace(/\\/g, '/')))) continue;
+      const script = String(ws[k + 1] || '');
+      if (!/(?:^|[\\/])review\.js$/i.test(script)) continue;
+      // 认套件的那份；路径里带着套件目录名的也算（写的是 $HOME/.claude/vibe-kit/tools/review.js 这类）
+      const kitOwn = S.normKey(path.resolve(j.cwd || process.cwd(), S.expandHome(script))) === S.normKey(path.join(S.KIT, 'tools/review.js')) || /vibe-kit[\\/]+tools[\\/]+review\.js$/i.test(script);
+      if (kitOwn && ws[k + 2] === 'run') return true;
+    }
+  } catch (e) { return /review\.js["']?\s+run\b/.test(cmd); }
+  return false;
+}
 function actionIssue(j) {
   const cfg = S.readConfigFor(j); let inp = j.tool_input || {}; let name = String(j.tool_name || '');
   // IDEA 的 execute_tool 按路由里的实际工具判断：转发的编译、检查同样要人工许可。
   if (/^mcp__.+__execute_tool$/.test(name)) { const r = require('./idea-tools').route(inp.command); if (r) { name = name.replace(/execute_tool$/, r.name); inp = r.input; } }
   const cmd = String(inp.command || '');
-  const review = /^(Agent|Task)$/.test(name) && /(?:ttls|vibe)-reviewer/.test(inp.subagent_type || '') || /review\.js["']?\s+run\b/.test(cmd) || name === 'Skill' && /cross-review/.test(inp.skill || '');
+  const runsReview = /^(Bash|PowerShell)$/.test(name) && reviewRun(j, cmd, name === 'PowerShell');
+  const review = /^(Agent|Task)$/.test(name) && /(?:ttls|vibe)-reviewer/.test(inp.subagent_type || '') || runsReview || name === 'Skill' && /cross-review/.test(inp.skill || '');
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
   // IDEA 的编译、文件检查、lint 是快检，直接跑；运行配置会起程序或跑测试，算自测。
   const test = !review && (shellTest || /execute_run_configuration/.test(name) || name === 'Skill' && /see-page/.test(inp.skill || ''));
   if (!review && !test) return '';
   if (cfg.autoMode) {
     if (review) {
-      if (!/review\.js["']?\s+run\b/.test(cmd)) return '自动逐点审查使用 review.js 的有限材料请求，不启动兼容代理；先确定当前 --point。';
+      if (!runsReview) return '自动逐点审查使用 review.js 的有限材料请求，不启动兼容代理；先确定当前 --point。';
       const m = cmd.match(/--change\s+["']?([^\s"']+)/); const p = cmd.match(/--point\s+([\w-]+)/);
       const change = m && S.allChanges(j.cwd).find(c => c.name === m[1]);
       const mode = /--mode\s+proposal/.test(cmd) ? 'proposal' : 'code';
