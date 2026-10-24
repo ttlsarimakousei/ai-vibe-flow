@@ -22,9 +22,14 @@ function handle(j) {
     return blockOut('PreToolUse', '[vibe-kit 产出位置] 全自动模式：要新建的 ' + show(r.file) + ' 是一份' + r.type + '，不是代码，放哪还没跟用户定过。不要问，也不要自己挑地方：先写到 '
       + show(r.pending) + '（位置待定，.vibe 不进仓库），在最后交代的"等你回来定的事"里列出来；用户定了位置再挪过去，记进项目说明的"产出位置"。');
   }
-  return blockOut('PreToolUse', '[vibe-kit 产出位置] 要新建的 ' + show(r.file) + ' 是一份' + r.type + '，不是代码。这类产出放哪还没跟用户定过：项目说明的"产出位置"里没有，用户这次也没说过。\n'
-    + '先定位置再写：用提问框问用户放哪，选项写实际的目录（第一个放你推荐的，比如项目里已有的同类目录）；用户选定后，把它记进 ' + show(r.projectMd)
-    + ' 的"产出位置"一节（没有这个文件就新建；一类一行，例：`- DDL 脚本：sql/ddl/`），然后写到那里。以后同类产出照着放，不用再问。');
+  // 选项要写成目录（例：子项目根目录写 jssslt-oa/），"子项目根目录""仓库根目录"这种说法认不出是哪个目录（#196）
+  const dir = (() => { const d = show(path.dirname(r.file)).replace(/\\/g, '/'); return d === '.' || !d ? './' : d.replace(/\/?$/, '/'); })();
+  const how = '用提问框问用户放哪，选项写实际的目录（例：`' + dir + '`；第一个放你推荐的，比如项目里已有的同类目录），不写"子项目根目录""仓库根目录"这种说法；用户选定后，把它记进 ' + show(r.projectMd)
+    + ' 的"产出位置"一节（没有这个文件就新建；一类一行，例：`- DDL 脚本：sql/ddl/`），然后写到那里。以后同类产出照着放，不用再问。';
+  if (r.selfAdded) {
+    return blockOut('PreToolUse', '[vibe-kit 产出位置] 要新建的 ' + show(r.file) + ' 是一份' + r.type + '。项目说明里现在有这个位置，但它是这个会话里自己加的，没问过用户，不算定过（防止自己给自己定位置）。别再改项目说明的写法：\n' + how);
+  }
+  return blockOut('PreToolUse', '[vibe-kit 产出位置] 要新建的 ' + show(r.file) + ' 是一份' + r.type + '，不是代码。这类产出放哪还没跟用户定过：项目说明的"产出位置"里没有，用户这次也没说过。\n先定位置再写：' + how);
 }
 
 module.exports = { handle };

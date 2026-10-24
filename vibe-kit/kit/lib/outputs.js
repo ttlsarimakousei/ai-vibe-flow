@@ -155,6 +155,7 @@ function pathsIn(text0) {
   // 没有斜杠的：整条就是一个目录名（"docs"）
   return /^[\w.\-一-龥*]+$/.test(s) ? [s] : [];
 }
+const OUTPUT_HEAD = /产出位置|output\s*(?:locations?|paths?|dirs?|directories)/i;
 /** 解析"产出位置"一节：返回 [{ label, pattern }]，pattern 是绝对路径（正斜杠、小写），带 * 的是通配 */
 function parseDecls(text, base) {
   const out = [];
@@ -191,7 +192,8 @@ function parseDecls(text, base) {
   for (const line of String(text || '').split(/\r?\n/)) {
     const h = line.match(/^(#{1,6})\s*(.*)$/);
     if (h) {
-      if (/产出位置/.test(h[2])) { mode = 1; headLevel = h[1].length; } else if (mode === 2 || (mode === 1 && h[1].length <= headLevel)) mode = 0;
+      // 英文写的标题也认（#218：模型写了"## Output locations"，以后的会话里也认不出）
+      if (OUTPUT_HEAD.test(h[2])) { mode = 1; headLevel = h[1].length; } else if (mode === 2 || (mode === 1 && h[1].length <= headLevel)) mode = 0;
       continue;
     }
     const li = line.match(/^(\s*)[-*]\s+(.*)$/);
@@ -203,8 +205,8 @@ function parseDecls(text, base) {
     if (mode === 1) { if (li) addItem(li[2].trim()); continue; }
     if (li) {
       // "**产出位置**（用户定的）：…"：加粗的记号、名字后面括号里的备注不算内容
-      const t = li[2].trim().replace(/^(\*\*|__)\s*(产出位置[^*_]{0,20}?)\s*(\*\*|__)/, '$2');
-      const pm = t.match(/^产出位置\s*(?:[（(][^）)]*[）)])?\s*[:：]?\s*(.*)$/);
+      const t = li[2].trim().replace(/^(\*\*|__)\s*(产出位置[^*_]{0,20}?|output\s*(?:locations?|paths?|dirs?|directories))\s*(\*\*|__)/i, '$2');
+      const pm = t.match(/^(?:产出位置|output\s*(?:locations?|paths?|dirs?|directories))\s*(?:[（(][^）)]*[）)])?\s*[:：]?\s*(.*)$/i);
       if (pm) { mode = 2; parentIndent = li[1].length; if (pm[1].trim()) addItem(pm[1].trim()); continue; }
     }
     const lm = line.match(LOOSE);
@@ -321,7 +323,9 @@ function outputCheck(j, cfg) {
   if (mentioned(userTexts(entries), f, roots)) return null;
   const auto = !!(cfg && cfg.autoMode);
   if (auto && establishedDir(f, root)) return null;
-  return { type, file: f, root, projectMd: pm || path.join(root, '.vibe', 'project.md'), auto, pending: path.join(root, '.vibe', 'pending', path.basename(f)), cwd };
+  // 现在的项目说明里其实有这个位置，只是这个会话里自己加的（没问过用户）：提示里直说，别让模型反复改写法（#218、#196）
+  const selfAdded = files.some((df) => declsOf(df).some((d) => matches(f, d.pattern)));
+  return { type, file: f, root, projectMd: pm || path.join(root, '.vibe', 'project.md'), auto, pending: path.join(root, '.vibe', 'pending', path.basename(f)), cwd, selfAdded, home };
 }
 
 module.exports = { outputTypeOf, exempt, declFiles, parseDecls, declsOf, matches, snapshot, trustedPatterns, userTexts, mentioned, establishedDir, outputCheck, nearestProjectMd };
