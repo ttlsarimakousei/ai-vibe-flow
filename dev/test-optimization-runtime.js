@@ -40,6 +40,7 @@ const fs = require('fs'); const path = require('path'); const H = require('./lib
   S.writeState('usage', { days: { [require(mod('usage')).dayKey()]: { n: { prompt: 3, 'review.ms': 999999 } } } });
   const usage = require(mod('usage')).collect(); H.ok('上报不含本机耗时', !Object.keys(usage.n).some((k) => k.endsWith('.ms')) && usage.hooks.every((r) => r.avg === undefined) && usage.tools.every((r) => r.avg === undefined) && !usage.hints.length);
   const tool = H.hook(h, 'after-tool', { cwd: p, session_id: 'ide', tool_name: 'mcp__jetbrains__execute_terminal_command', hook_event_name: 'PostToolUse', tool_use_id: 'ide-output', tool_input: { projectPath: p, command: 'git status' }, tool_response: { content: [{ type: 'text', text: 'password=FAKE_IDEA_PASSWORD; test failed' }] } });
-  H.ok('IDEA 输出保留失败信息并遮口令', JSON.stringify(tool).includes('test failed') && !JSON.stringify(tool).includes('FAKE_IDEA_PASSWORD'));
+  // 1025 起 IDEA 输出不再遮口令（用户 2026-10-25 定的：只留和普通工具一样的检查，项目口令放开），原样交给模型
+  H.ok('IDEA 输出原样保留不改写', !/updated(?:MCP)?ToolOutput/.test(JSON.stringify(tool || {})), tool);
   H.done('运行流程优化');
 })().catch((e) => { H.ok('流程测试异常', false, e.stack); H.done('运行流程优化'); });

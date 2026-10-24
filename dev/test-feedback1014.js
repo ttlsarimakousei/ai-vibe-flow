@@ -15,7 +15,8 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   H.ok('#112 非提案暂存文件不套提案提交许可', !/提案提交要单独确认/.test(JSON.stringify(commit)), commit);
   H.write(path.join(p, 'large.js'), 'const value=1;\n'.repeat(15000));
   const R = require(path.join(h.kit, 'lib/review-runner')); let calls = 0;
-  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; res.writeHead(200); res.end(JSON.stringify({ content: calls === 1 ? [{ type: 'thinking', thinking: '模拟空正文' }] : [{ type: 'text', text: '{"issues":[],"summary":"本批完成"}' }] })); }); });
+  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; res.writeHead(200); res.end(JSON.stringify(calls === 1 ? { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '模拟空正文' }] } : { content: [{ type: 'text', text: '{"issues":[],"summary":"本批完成"}' }] })); }); });
+  // 回 end_turn：模型自己停了、不是到了输出上限，1025 起的"加上限重试一次"不触发，这一批照旧算失败
   await new Promise(r => server.listen(0, '127.0.0.1', r)); const prev = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
   try {
     const result = await R.run({ cwd: p, mode: 'proposal', change: 'add-a', newBudget: true });
