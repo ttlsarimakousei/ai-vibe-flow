@@ -478,9 +478,17 @@ async function waitUpIdea(rec, I, r, waitSec) {
   return 1;
 }
 /** --idea：用 IDEA 的运行配置起。返回退出码；IDEA 用不了、要照 -- 后面的命令起时返回 null */
+/**
+ * 看 IDEA 能不能用；记着的状态是"没连上"时当场再查一次（用户说连 IDEA、也连上了，套件还照几分钟前查的结果当没连上，问题反馈表第 4 条）
+ */
+async function ideaReady(I) {
+  let r = I.ready(dir);
+  if (!r.ok && /没连上/.test(r.why || '')) { try { await require('../lib/idea-mcp').sync(); r = I.ready(dir); } catch (e) { /* 查不了照原来的结果 */ } }
+  return r;
+}
 async function startIdea(cfgName) {
   const I = require('../lib/idea-run');
-  const r = I.ready(dir);
+  const r = await ideaReady(I);
   if (!r.ok) {
     if (!cmdArgs.length) { console.log('没起来：用不了 IDEA 起（' + r.why + '），-- 后面也没写命令。加上启动命令（IDEA 用不了时照它起），或者把上面的问题解决了再起。'); return 1; }
     console.log('用不了 IDEA 起：' + r.why + '。照 -- 后面的命令起。');
@@ -565,7 +573,7 @@ async function stopIdeaRec(rec) {
 async function ideaHint() {
   try {
     const I = require('../lib/idea-run');
-    const r = I.ready(dir);
+    const r = await ideaReady(I);
     if (!r.ok) return '';
     const c = await I.configs(r);
     if (!c.ok || !c.names.length) return '';

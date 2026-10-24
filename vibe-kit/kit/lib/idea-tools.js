@@ -43,6 +43,59 @@ function capabilities() { return { supported: ['execute_terminal_command', 'get_
 const SECRET_MSG = '读的范围里有套件的令牌、模型的 key 或 Claude Code 的用户配置（带别的 MCP 的认证信息），内容不能读进会话。缩小到要看的那个文件或目录；令牌、模型、连接配没配好让用户看配置页或 /mcp。';
 function secretMention(text) { return /secrets\.json|router-data|\.claude\.json/i.test(String(text || '')); }
 const FILE_KEYS = ['file_path', 'pathInProject', 'filePath', 'path'];
+/** 本机这个端口有没有程序在听（另起一个 node 试连，最多等 0.8 秒；钩子里不能同步等网络） */
+function listening(port) {
+  if (!(Number(port) > 0 && Number(port) < 65536)) return false;
+  const script = "const s=require('net').connect(+process.argv[1],'127.0.0.1');s.setTimeout(800);s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));s.on('timeout',()=>process.exit(1));";
+  try { return require('child_process').spawnSync(process.execPath, ['-e', script, String(port)], { windowsHide: true, stdio: 'ignore', timeout: 3000 }).status === 0; } catch (e) { return false; }
+}
+/**
+ * 同一个运行配置已经在跑：再起就多一份（用户 2026-10-22 提的，问题反馈表第 2 条）。普通 Run 起的 IDEA 的 MCP 停不了，
+ * 再调一次 execute_run_configuration 会起第二份、端口绑不上、旧的照样用旧代码答话（docs/claude-code-facts.md）。
+ * 认法：这个会话里用 MCP 起过同名的运行配置、结果不是跑完退出的、之后没停掉它；或者 devserver 记着它在跑、端口在听。
+ * 返回要说的话；没在跑返回 ''
+ */
+function alreadyRunning(j, name, input, dirs) {
+  const cfgName = String(input.configurationName || input.name || '');
+  if (!cfgName || !['execute_run_configuration', 'xdebug_start_debugger_session'].includes(name)) return '';
+  if (name === 'execute_run_configuration' && String(input.waitForExit) === 'true') return '';
+  let since = 0;
+  try {
+    const es = j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : [];
+    const res = S.toolResults(es);
+    for (const c of S.toolCalls(es, 0)) {
+      const m = /^mcp__(.+)__([a-zA-Z_0-9]+)$/.exec(c.name || ''); if (!m || !isIdea(c.name)) continue;
+      let tool = m[2], inp = obj(c.input) ? c.input : {};
+      if (tool === 'execute_tool') { const r = route(inp.command); if (!r) continue; tool = r.name; inp = r.input; }
+      const nm = String(inp.configurationName || inp.name || inp.sessionId || '');
+      if (nm !== cfgName) continue;
+      if (tool === 'xdebug_control_session' && /stop/i.test(String(inp.action || ''))) { since = 0; continue; }
+      if (tool !== 'execute_run_configuration' && tool !== 'xdebug_start_debugger_session') continue;
+      const r = res.get(c.id);
+      if (!r || r.error) continue;
+      // 跑完退出的（测试类的运行配置、waitForExit）不算在跑
+      if (String(inp.waitForExit) === 'true' || /exit\s*code|exitCode"?\s*:\s*-?\d|Process finished|进程已结束/i.test(r.text)) { since = 0; continue; }
+      since = c.at || Date.now();
+    }
+  } catch (e) { since = 0; }
+  let port = 0;
+  if (!since) {
+    // devserver.js start --idea 起的：记录在 <目录>/.vibe/run/<名字>.json
+    const fs = require('fs');
+    for (const d of dirs) {
+      let names = []; try { names = fs.readdirSync(path.join(d, '.vibe', 'run')).filter(n => /\.json$/.test(n)); } catch (e) { continue; }
+      for (const n of names) {
+        let rec = null; try { rec = JSON.parse(fs.readFileSync(path.join(d, '.vibe', 'run', n), 'utf8')); } catch (e) { continue; }
+        if (rec && rec.mode === 'idea' && rec.config === cfgName && listening(rec.port)) { port = Number(rec.port); since = rec.startedAt || 0; break; }
+      }
+      if (port) break;
+    }
+  }
+  if (!since) return '';
+  const devserver = path.join(S.KIT, 'tools', 'devserver.js').replace(/\\/g, '/');
+  return '运行配置"' + cfgName + '"已经在跑（' + (port ? 'devserver 起的，端口 ' + port : '这个会话里用 IDEA 起过、还没停') + '）。再起会多起一份：普通 Run 起的 IDEA 停不了，第二份端口绑不上，旧的照样用旧代码答话。'
+    + '先告诉用户它已经在跑；要重启就用 node "' + devserver + '" start --idea "' + cfgName + '" --port ' + (port || '<它监听的端口>') + ' --restart：会结束原来那个，再用调试方式起（以后改完代码 start 一次就自动重启）。不要再直接调运行配置。';
+}
 function handle(j) {
   const m = /^mcp__(.+)__([a-zA-Z_0-9]+)$/.exec(String(j.tool_name || ''));
   if (!m || !isIdea(j.tool_name)) return null;
@@ -89,6 +142,9 @@ function handle(j) {
   }
   for (const p of projects.length ? projects : [cwd]) { const r = checkRead(p); if (r) return r; }
   for (const f of files) { const r = checkRead(f); if (r) return r; }
+  // 同一个运行配置已经在跑：不再多起一份（问题反馈表第 2 条）
+  const running = alreadyRunning(j, name, input, [...new Set([cwd, path.resolve(j.cwd || process.cwd()), S.sessionHome(j)])]);
+  if (running) return denied(running, j);
   // 改文件：和 Edit / Write 一样查（改套件、编码、提案门槛、产出位置）。几个路径字段写得不一样的，每个都查
   if (['create_new_file', 'replace_text_in_file', 'rename_refactoring', 'reformat_file'].includes(name)) {
     for (const f of [...new Set(files)]) {
