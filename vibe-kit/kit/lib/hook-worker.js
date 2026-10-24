@@ -19,7 +19,8 @@ if (parentPort) {
   parentPort.on('message', (m) => {
     const id = m && m.id;
     Promise.resolve()
-      .then(() => require('./invocation').run(() => load(String(m.name)).handle(m.input || {}), { budgetMs: 12000, onPhase: (phase, ms) => parentPort.postMessage({ id, progress: true, phase, ms }) }))
+      // 第一次载入钩子模块不算在这次检查的 12 秒里（旧 #181：工作线程刚建好、慢电脑上载入就占掉几秒，阶段名还停在"开始"）
+      .then(() => { const mod = load(String(m.name)); return require('./invocation').run(() => mod.handle(m.input || {}), { budgetMs: 12000, onPhase: (phase, ms) => parentPort.postMessage({ id, progress: true, phase, ms }) }); })
       .then((out) => parentPort.postMessage({ id, ok: true, out: out == null ? null : out }))
       .catch((e) => {
         // 出错当放行（路由那边回空），记进问题反馈：用户和模型都看不到，只有那里有

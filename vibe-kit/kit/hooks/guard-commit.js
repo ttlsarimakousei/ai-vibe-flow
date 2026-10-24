@@ -1699,6 +1699,9 @@ function check(j) {
   }
   const cmd = String((j.tool_input && j.tool_input.command) || '');
   if (!cmd.trim()) return null;
+  // 前面这几段各记一个阶段名：12 秒预算在第一次登记阶段之前花完时，报错里以前只写"开始"，看不出慢在哪（旧 #181）
+  const I = require('../lib/invocation');
+  I.phase('命令：读开关');
   let cfg = readConfigFor(j);
   // 全自动模式开着、这个会话还没进 OpenSpec 流程，这条命令在建变更（用户用大白话让它出提案，它照 OpenSpec 的步骤做）：从这时起算进了流程
   // 建变更是写提案那一段（plan）：全自动还不算数，用户要看过提案、说了开工才算
@@ -1708,10 +1711,12 @@ function check(j) {
   if (cfg.autoSwitch && /\b(db\.py|redis\.js)\b/i.test(cmd)) noteToolFlow(j, cfg);
   const ps = j.tool_name === 'PowerShell';
   // cd 和别的命令串在一条里。放在改套件、读令牌那几道后面查：那几道的话更要紧（它们拦下时顺带提一句）
+  I.phase('命令：串着 cd');
   let cdHit = null;
   try { cdHit = ps ? null : cdCompoundIssue(cmd, j.cwd); } catch (e) { cdHit = null; }
   // 不走拦截编号的几处（串着 cd、关钩子、调路由的接口、全自动下的 push）也数一笔：哪条规矩拦得多，使用情况里要看得到
   const counted = (kind, text) => { try { if (feedback && feedback.countBlock) feedback.countBlock(kind, text, String(j.session_id || '')); } catch (e) { /* 数不了不影响 */ } return blockOut('PreToolUse', text); };
+  I.phase('命令：审查预算和决定');
   const budgetIssue = require('../lib/review-runner').budgetIssue(j);
   if (budgetIssue) return counted('review-budget', '[vibe-kit 审查预算] ' + budgetIssue);
   const decisionIssue = require('../lib/review-runner').decisionIssue(j);
@@ -1721,6 +1726,7 @@ function check(j) {
     hookLog('guard-commit 拦下串着 cd 的命令：' + cmd.replace(/\s+/g, ' ').slice(0, 100));
     return counted('cd', cdCompoundText(cdHit, j.cwd));
   };
+  I.phase('命令：改套件和路由接口');
   if (cfg.kitLock !== false) {
     // disableAllHooks 会把套件的检查一起关掉：只在命令要写东西的时候拦。只读的命令（grep 排查、cat）、提交信息、文档里提到这个词不拦
     if (/disableAllHooks/i.test(cmd) && !readOnlyCommand(cmd, ps) && (/settings[\w.-]*\.json/i.test(cmd) || /(>|\b(set-content|sc|out-file|add-content|ac|tee|tee-object)\b|sed\s+-i|writefile|write_text|\.write\s*\(|\bnode(\.exe)?\s+-e\b|\bpython3?(\.exe)?\s+-c\b)/i.test(cmd))) return counted('kit', '[vibe-kit] 不许写 disableAllHooks：它会把套件的所有检查一起关掉。钩子拦错了就把原因告诉用户，由用户来定；不要绕过。');
@@ -1728,6 +1734,7 @@ function check(j) {
     if (api) return counted('kit', api);
   }
   // push 不看任何开关，没有当场授权就确认；拆命令没认出来的写法由 pushAnywhere 兜底
+  I.phase('命令：发布和推送');
   const publishing = publishAnywhere(cmd, j.cwd);
   const mergeApply = require('../lib/merge-push').isApplyCommand(j);
   let mergeCall = null;
@@ -1743,8 +1750,10 @@ function check(j) {
   const cwd0 = path.resolve(j.cwd || process.cwd());
   const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
   // 先按名字挑出进程再结束的写法（Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process）：拆成组之后认不出来，整条看一遍
+  I.phase('命令：结束进程');
   if (!st.block) { const k = killAnywhere(cmd, ps); if (k) setBlock(st, 'kill', k); }
   // 兜底放行：这个会话里申请过、还能用的通行证
+  I.phase('命令：放行记录');
   const action = (j.tool_name || 'Bash') + '：' + cmd;
   try { if (feedback) { st.sig = feedback.sigOf([j.tool_name || 'Bash', cmd.trim()]); st.passes = feedback.validPasses(cfg, j); } } catch (e) { st.passes = []; }
   analyze(cmd, ps, st, cfg, 0);
