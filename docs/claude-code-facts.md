@@ -68,6 +68,7 @@ Claude Code 用户级 MCP 在 `~/.claude.json` 顶层 `mcpServers`；设置 `CLA
 
 - `/clear` 不发给模型，触发 SessionStart（`source=clear`）。SessionStart 输出 `initialUserMessage` 能让新会话自动发出第一句话（2.1.259 上 `-p` 也生效）。
 - 2.1.259 用 `claude -p` 时不给模型 AskUserQuestion 这个工具，2.1.120 给。提问框的端到端只能在 2.1.120 上测。
+- 提问框的结果（2026-10-25 看这台电脑 2.1.299 桌面版的会话记录）：点选项时 tool_result 文字是 `Your questions have been answered: "问题"="答案", …`；自己打字回答时是 `The user answered: "问题"="答案". Read the answers carefully …`。两种都带结构化的 `toolUseResult.answers`（问题 → 答案）。答完后面紧跟一条 `type: "attachment"` 的条目，不是用户消息。
 - 内网网关给的工具调用 id 会重复，但只在不同会话之间。同一个对话里 id 重复，2.1.120 会把第二次调用换成"[Tool use interrupted]"。
 - 内网网关的回复是整段返回的（攒包在网关那层，不在模型、不在路由）。网关对单次请求体有大小上限（实测约 1 MB，合二十三四万 token），超了直接 413，换模型、`/compact` 都没用。路由记下实测到的上限，快到时状态栏提前警告。
 - 路由原样转发请求，上游收到的字节和 Claude Code 发出的逐字节一致，不破坏提示缓存。真正让缓存失效的是换模型、请求被放弃后重发、上下文太长（30 万 token 时热请求比冷请求还慢）。

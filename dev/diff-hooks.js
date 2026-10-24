@@ -353,6 +353,13 @@ for (const c of cases) {
   if (c.name === '任务里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*不写\\"验：\\"/; c.since = V1018; }
   if (c.name === '设计里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*\\"## 验收用例\\"一节/; c.since = V1018; }
 }
+// 这一版有意改的（1024 议题第 1 类）：人工模式先问自测、审查的提示里写清用户怎么答才算；提问框的答案、"git add/commit"认得出了
+for (const c of cases) if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*选项写成\\"自测（范围）\\"和\\"不用\\"/; c.since = NEXT; }
+const said = (command, entries) => (kit) => { const proj = project(kit); const j = base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 'said.jsonl'), entries); return { proj, j }; };
+const asked = (q, a) => H.tr.ran('AskUserQuestion', { questions: [{ question: q }] }, 'User has answered your questions: "' + q + '"="' + a + '". You can now continue with the user\'s answers in mind.');
+add('1024：提问框答"全量自测（推荐）"后跑 mvn test', 'guard-commit', said('mvn -q test', [H.tr.user('改完了'), ...asked('是否要我先自测？范围选哪个？', '全量自测（推荐）')]), /放行，没有输出/, NEXT);
+add('1024：用户说"跑复验"后跑 mvn test', 'guard-commit', said('mvn -q test', [H.tr.user('跑复验')]), /放行，没有输出/, NEXT);
+add('1024：用户说"git add/commit"后提交', 'guard-commit', said('git commit -m "fix: 导出漏了表头"', [H.tr.user('把改动 git add/commit 一下')]), /放行，没有输出/, NEXT);
 add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, V1018);
 add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, V1018);
 

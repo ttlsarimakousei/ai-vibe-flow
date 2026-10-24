@@ -171,7 +171,8 @@ const SMALL_FIX_TEXT = '先查清原因，改动小（三个文件以内、不�
  * 钩子附在消息里的提醒（[vibe-kit 开头的行）、后台任务的通知、打断标记、别的系统消息不算他说的话；斜杠命令认 <command-name>。
  * 只看最后一句：他说过"归档"之后又说"等等，还有个问题"，就得改完再问一次。
  */
-const ANSWERED = /^\s*(?:User has answered your questions?|Your questions? have been answered):/i;
+// 自己打字回答的提问框，2.1.299 起结果文字是"The user answered: …"（docs/claude-code-facts.md）
+const ANSWERED = /^\s*(?:User has answered your questions?|Your questions? have been answered|The user answered)\s*:/i;
 /** 提问框答案里的 "问题"="答案" 一对一对 */
 function answersOf(text) {
   const out = [];
@@ -180,50 +181,59 @@ function answersOf(text) {
   while ((m = re.exec(String(text || '')))) out.push({ q: m[1], a: m[2] });
   return out;
 }
-/** 用户最后一次开口：{ kind: prompt | answer | command, text, id, at, pos }；位置只用于查记录，不能标识许可。 */
-function lastUserVoice(entries) {
-  const list = Array.isArray(entries) ? entries : [];
-  for (let i = list.length - 1; i >= 0; i--) {
-    const e = list[i];
-    if (!e || e.type !== 'user' || e.isSidechain) continue;
-    const at = Date.parse(e.timestamp || '') || 0;
-    const c = e.message && e.message.content;
-    if (Array.isArray(c) && c.some((b) => b && b.type === 'tool_result')) {
-      for (const b of c) {
-        if (!b || b.type !== 'tool_result') continue;
-        const t = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map((x) => (x && x.text) || '').join('\n') : '';
-        const structured = e.toolUseResult && e.toolUseResult.answers;
-        if (ANSWERED.test(t) || (structured && typeof structured === 'object' && !Array.isArray(structured))) {
-          // 只认真正提问框的结果；脚本输出里引用同样的文字不算人工确认。
-          // 提问后用户又发了新指令，旧提问迟到的答案也不能盖过新指令。
-          let fromAsk = false;
-          for (let k = i - 1; k >= 0; k--) {
-            const prev = list[k];
-            if (isUserTurn(prev) && !isTaskNote(prev)) break;
-            const blocks = prev && !prev.isSidechain && prev.type === 'assistant' && prev.message && prev.message.content;
-            const call = Array.isArray(blocks) && blocks.find((x) => x && x.type === 'tool_use' && x.id === b.tool_use_id);
-            if (call) { fromAsk = call.name === 'AskUserQuestion'; break; }
-          }
-          if (fromAsk) {
-            const answers = answersOf(t);
-            if (!answers.length && structured) for (const [q, a] of Object.entries(structured)) if (typeof a === 'string') answers.push({ q, a });
-            if (answers.length) return { kind: 'answer', text: t, answers, id: String(e.uuid || b.tool_use_id || ''), at, pos: i };
-          }
+/** 第 i 条记录是不是用户开口：{ kind: prompt | answer | command, text, id, at, pos }，不是返回 null。位置只用于查记录，不能标识许可。 */
+function voiceAt(list, i) {
+  const e = list[i];
+  if (!e || e.type !== 'user' || e.isSidechain) return null;
+  const at = Date.parse(e.timestamp || '') || 0;
+  const c = e.message && e.message.content;
+  if (Array.isArray(c) && c.some((b) => b && b.type === 'tool_result')) {
+    for (const b of c) {
+      if (!b || b.type !== 'tool_result') continue;
+      const t = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? b.content.map((x) => (x && x.text) || '').join('\n') : '';
+      const structured = e.toolUseResult && e.toolUseResult.answers;
+      if (ANSWERED.test(t) || (structured && typeof structured === 'object' && !Array.isArray(structured))) {
+        // 只认真正提问框的结果；脚本输出里引用同样的文字不算人工确认。
+        // 提问后用户又发了新指令，旧提问迟到的答案也不能盖过新指令。
+        let fromAsk = false;
+        for (let k = i - 1; k >= 0; k--) {
+          const prev = list[k];
+          if (isUserTurn(prev) && !isTaskNote(prev)) break;
+          const blocks = prev && !prev.isSidechain && prev.type === 'assistant' && prev.message && prev.message.content;
+          const call = Array.isArray(blocks) && blocks.find((x) => x && x.type === 'tool_use' && x.id === b.tool_use_id);
+          if (call) { fromAsk = call.name === 'AskUserQuestion'; break; }
+        }
+        if (fromAsk) {
+          const answers = answersOf(t);
+          if (!answers.length && structured) for (const [q, a] of Object.entries(structured)) if (typeof a === 'string') answers.push({ q, a });
+          if (answers.length) return { kind: 'answer', text: t, answers, id: String(e.uuid || b.tool_use_id || ''), at, pos: i };
         }
       }
-      continue;
     }
-    if (!isUserTurn(e) || isTaskNote(e)) continue;
-    const raw = textOf(e);
-    if (/\[Request interrupted by user/.test(raw)) continue;
-    const cmd = raw.match(/<command-name>\s*\/?([^<\s]+)\s*<\/command-name>/);
-    if (cmd) { const a = raw.match(/<command-args>([\s\S]*?)<\/command-args>/); return { kind: 'command', command: cmd[1], text: '/' + cmd[1] + (a && a[1].trim() ? ' ' + a[1].trim() : ''), id: String(e.uuid || ''), at, pos: i }; }
-    if (/^\s*</.test(raw)) continue;
-    const text = raw.split('\n').filter((l) => !/^\s*\[vibe-kit/.test(l)).join('\n').trim();
-    if (!text) continue;
-    return { kind: 'prompt', text, id: String(e.uuid || ''), at, pos: i };
+    return null;
   }
+  if (!isUserTurn(e) || isTaskNote(e)) return null;
+  const raw = textOf(e);
+  if (/\[Request interrupted by user/.test(raw)) return null;
+  const cmd = raw.match(/<command-name>\s*\/?([^<\s]+)\s*<\/command-name>/);
+  if (cmd) { const a = raw.match(/<command-args>([\s\S]*?)<\/command-args>/); return { kind: 'command', command: cmd[1], text: '/' + cmd[1] + (a && a[1].trim() ? ' ' + a[1].trim() : ''), id: String(e.uuid || ''), at, pos: i }; }
+  if (/^\s*</.test(raw)) return null;
+  const text = raw.split('\n').filter((l) => !/^\s*\[vibe-kit/.test(l)).join('\n').trim();
+  if (!text) return null;
+  return { kind: 'prompt', text, id: String(e.uuid || ''), at, pos: i };
+}
+/** 用户最后一次开口：{ kind: prompt | answer | command, text, id, at, pos } */
+function lastUserVoice(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  for (let i = list.length - 1; i >= 0; i--) { const v = voiceAt(list, i); if (v) return v; }
   return null;
+}
+/** 这一轮里用户的每次开口，按先后：最后一句原话（或斜杠命令）起，加上之后每个提问框的答案 */
+function turnVoices(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  const out = [];
+  for (let i = list.length - 1; i >= 0; i--) { const v = voiceAt(list, i); if (!v) continue; out.unshift(v); if (v.kind !== 'answer') break; }
+  return out;
 }
 /** 截取尾部或前面增加记录时，同一真人消息仍是同一次许可。缺少 UUID 的旧记录退回时间与正文。 */
 function voiceKey(v) { return crypto.createHash('sha256').update(JSON.stringify(v ? [v.kind, v.id || v.at, v.text] : null)).digest('hex'); }
@@ -242,17 +252,69 @@ const SAID = {
   archive: { yes: /归档|archive|验收(通过|过了|没问题|ok)/i, no: new RegExp(NO_BEFORE + '(归档|archive)|(归档|archive)(之前|前|以后再说|稍后|晚点|等等|先等)|(归档|archive)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)归档', 'i'), command: /^(opsx:|openspec[-:])(archive|bulk-archive)$/i },
   commit: { yes: /提交|commit/i, no: new RegExp(NO_BEFORE + '(提交|commit)|(提交|commit)(之前|前|以后再说|稍后|晚点|等等|先等)|(提交|commit)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)提交|提不提交', 'i'), command: /^$/ },
 };
-/** 用户最后一句是不是让它做这件事（topic：archive 归档 / commit 提交 / push 推送）。返回 { ok, voice, text } */
+/*
+ * 提问框的答案怎么算（用户 2026-10-21 定的，#179、#182、#187、#207、#210、#212、#213）：
+ *   选项是用户点的，不要求动作词在句首。答案里有这件事的动作词、不含否定就算（"全量自测（推荐）""合成一条提交""复验 specs"）；
+ *   问题里点了这件事、答案没重复动作词时，短肯定（"好""可以"）或执行的说法（自测"跑""就按这个范围跑"，审查"重试""兼容代理方式"，
+ *   提交"提"，推送"推"）也算。"就这样定稿""直接写下一份"不是审查许可。模型给推荐项加的"（推荐）"先去掉再判断。
+ */
+const bareAnswer = (a) => String(a || '').replace(/\s*[（(]\s*(?:推荐|建议|recommended)\s*[）)]\s*/gi, ' ').trim();
+const ANSWER_NO = /不|别|跳过|放弃|取消|算了|以后|稍后|晚点|回头|免了|省了|暂缓|先缓|改天/;
+const ANSWER_DO = {
+  test: /跑|执行|运行|重试|再试|开始|起来|^起/,
+  review: /审|重试|再试|兼容|代理|reviewer|cross-review|独立模型|限时|^开始|^执行/i,
+  commit: /^提(?:交)?(?:吧|了|上)?[。！!\s]*$/,
+  push: /^推(?:送|上去)?吧?[。！!\s]*$/,
+};
+// 往回看本轮时，后面的提问框选了这些就是不要了：前面给过的审查、自测许可作废
+const ANSWER_DECLINE = { review: /就这样定稿|直接写下一份|写下一份|不审|跳过审查/, test: /不测|不跑|跳过自测|跳过测试/ };
+const WIDE = ['review', 'test', 'commit', 'push', 'archive'];
+/** 一个提问框答案对这件事是 'yes'（许可）、'no'（不要）还是 ''（没说） */
+function answerSays(x, topic, g) {
+  const a = bareAnswer(x.a);
+  const asked = topic === 'push' ? /推送|\bpush\b/i.test(x.q) : g.yes.test(x.q) || intent.has(x.q, topic);
+  if (intent.explicit(a, topic)) return 'yes';
+  if (WIDE.includes(topic)) {
+    if (intent.mentions(a, topic) && !intent.denied(a, topic) && !(g.no && g.no.test(a))) return 'yes';
+    if (asked && !ANSWER_NO.test(a) && (YES_SHORT.test(a) || (ANSWER_DO[topic] && ANSWER_DO[topic].test(a)))) return 'yes';
+    if (asked && (ANSWER_NO.test(a) || (ANSWER_DECLINE[topic] && ANSWER_DECLINE[topic].test(a)))) return 'no';
+    return '';
+  }
+  // 其它几类照旧：问题里说了是哪件事、答案是"好""可以"
+  if (asked && !intent.denied(a, topic) && (YES_SHORT.test(a) || (topic === 'reviewAccept' && /^不改[。！!\s]*$/.test(a)))) return 'yes';
+  return '';
+}
+/** 一次开口对这件事是 'yes'、'no' 还是 ''。返回 { say, text, target } */
+function voiceSays(v, topic, g) {
+  if (v.kind === 'answer') {
+    const says = v.answers.map((x) => answerSays(x, topic, g));
+    const matching = v.answers.filter((x, i) => says[i] === 'yes');
+    return { say: matching.length ? 'yes' : says.includes('no') ? 'no' : '', text: v.answers.map((x) => x.a).join('；'), target: matching.map((x) => x.q + '\n' + x.a).join('\n') };
+  }
+  if (v.kind === 'command') { const name = v.command.replace(/^\//, ''); return { say: g.command.test(name) || name.toLowerCase() === topic ? 'yes' : '', text: v.text }; }
+  if (intent.explicit(v.text, topic)) return { say: 'yes', text: v.text };
+  const no = (intent.has(v.text, topic) && intent.denied(v.text, topic)) || (topic === 'review' && intent.explicit(v.text, 'reviewSkip'));
+  return { say: no ? 'no' : '', text: v.text };
+}
+/**
+ * 用户是不是让它做这件事。返回 { ok, voice, text, targetText }。
+ * 归档、提交、推送和别的几类只看最后一句（用户 2026-10-07 定的）。
+ * 审查、自测往回看本轮（用户 2026-10-21 定的）：本轮的原话和之后每个提问框答案里，有一处给了许可、后面没有一处否定就算；
+ * voice 是给许可的那一次开口，许可在 permissions.allow() 里按它绑定、用过一次就消费，借不到下一轮
+ */
 function userSaid(entries, topic) {
   const g = SAID[topic];
   const v = lastUserVoice(entries);
   if (!g || !v) return { ok: false, voice: v, text: '' };
-  if (v.kind === 'answer') {
-    const matching = v.answers.filter((x) => intent.explicit(x.a, topic) || ((topic === 'push' ? /推送|\bpush\b/i.test(x.q) : g.yes.test(x.q)) && !intent.denied(x.a, topic) && (YES_SHORT.test(x.a.trim()) || topic === 'push' && /^推[。！!\s]*$/.test(x.a) || topic === 'reviewAccept' && /^不改[。！!\s]*$/.test(x.a))));
-    return { ok: matching.length > 0, voice: v, text: v.answers.map((x) => x.a).join('；'), targetText: matching.map((x) => x.q + '\n' + x.a).join('\n') };
+  if (topic === 'review' || topic === 'test') {
+    let grant = null;
+    for (const x of turnVoices(entries)) { const d = voiceSays(x, topic, g); if (d.say === 'yes') grant = { voice: x, d }; else if (d.say === 'no') grant = null; }
+    if (grant) return { ok: true, voice: grant.voice, text: grant.d.text, targetText: grant.d.target };
+    const d = voiceSays(v, topic, g);
+    return { ok: false, voice: v, text: d.text, targetText: d.target };
   }
-  if (v.kind === 'command') return { ok: g.command.test(v.command.replace(/^\//, '')) || v.command.replace(/^\//, '').toLowerCase() === topic, voice: v, text: v.text };
-  return { ok: intent.explicit(v.text, topic), voice: v, text: v.text };
+  const d = voiceSays(v, topic, g);
+  return { ok: d.say === 'yes', voice: v, text: d.text, targetText: d.target };
 }
 /** 用户选择本次不提交后，同一份改动可正常收工；后来新增改动再按现有规则确认。 */
 function commitDeclined(j, entries) {
@@ -2347,7 +2409,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, voiceKey, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, voiceKey, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,

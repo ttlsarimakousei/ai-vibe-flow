@@ -19,6 +19,37 @@ if (fs.existsSync(mod)) {
   P.capture(j); H.ok('重新明确同意批准新版', P.allow(j, 'commit', p, j.tool_use_id).ok);
   H.git(p, ['add', 'a.js']); H.git(p, ['commit', '-m', 'fix: 测试变更']); P.consume(j, true);
   H.ok('成功操作消费许可', !P.allow(j, 'commit', p, 'commit-2').ok);
+  // 壳子里两个子项目都改了：一句"提交"每个仓库各用一次（#207）；点了名的只用在点名的那个；同一个仓库第二次照旧要重新确认
+  const shell = path.join(h.work, 'shell'); H.write(path.join(shell, 'CLAUDE.md'), '# 壳子\n');
+  const ra = H.makeRepo(path.join(shell, 'gwjh'), { 'a.js': 'a\n' }); const rb = H.makeRepo(path.join(shell, 'gwjhmq'), { 'b.js': 'b\n' });
+  H.write(path.join(ra, 'a.js'), 'a2\n'); H.write(path.join(rb, 'b.js'), 'b2\n');
+  const sj = (sid, text, id) => ({ cwd: shell, session_id: sid, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), [H.tr.user(text)]), tool_use_id: id });
+  const s1 = sj('multi', '提交', 'c1'); P.capture(s1);
+  H.ok('壳子：一句"提交"，第一个仓库能提交', P.allow(s1, 'commit', ra, 'c1').ok);
+  H.git(ra, ['commit', '-qam', 'fix: a']); P.consume(s1, true);
+  H.ok('壳子：同一句"提交"，第二个仓库也能提交', P.allow(Object.assign({}, s1, { tool_use_id: 'c2' }), 'commit', rb, 'c2').ok);
+  H.ok('壳子：第一个仓库提交成功后再提交要重新确认', !P.allow(Object.assign({}, s1, { tool_use_id: 'c3' }), 'commit', ra, 'c3').ok);
+  const s2 = sj('named', '提交 gwjhmq', 'n1');
+  H.ok('壳子：点名提交 gwjhmq，gwjh 不能借用', !P.allow(s2, 'commit', ra, 'n1').ok && /点名的是 gwjhmq/.test(P.allow(s2, 'commit', ra, 'n1').reason));
+  H.ok('壳子：点名提交 gwjhmq，gwjhmq 能提交', P.allow(s2, 'commit', rb, 'n2').ok);
+  // "改了然后提交"：开口时不登记版本，改完再提交不算"确认后输入发生变化"（#215）
+  const later = H.makeRepo(path.join(h.work, 'later'), { 'a.js': 'a\n' });
+  const lj = { cwd: later, session_id: 'later', transcript_path: H.transcript(path.join(h.root, 'later.jsonl'), [H.tr.user('把 a.js 改成 2，然后提交')]), tool_use_id: 'l1' };
+  P.capture(lj); H.write(path.join(later, 'a.js'), '2\n');
+  H.ok('"然后提交"：改完再提交照样放行', P.allow(lj, 'commit', later, 'l1').ok, P.allow(lj, 'commit', later, 'l1').reason);
+  const nj = { cwd: later, session_id: 'now', transcript_path: H.transcript(path.join(h.root, 'now.jsonl'), [H.tr.user('提交')]), tool_use_id: 'w1' };
+  P.capture(nj); H.write(path.join(later, 'a.js'), '3\n');
+  H.ok('"提交"之后模型又改了代码：照旧要重新确认', !P.allow(nj, 'commit', later, 'w1').ok);
+  // 审查许可按给许可的那次开口记：用过一次，后面提问框再选"缩范围重试"是新的许可（#213）
+  const rv = H.makeRepo(path.join(h.work, 'rv'), { 'a.js': 'a\n' });
+  const answer = (q, a) => H.tr.ran('AskUserQuestion', { questions: [{ question: q }] }, 'User has answered your questions: "' + q + '"="' + a + '"');
+  const rf = path.join(h.root, 'rv.jsonl'); const base = [H.tr.user('审一下代码')];
+  const rj = { cwd: rv, session_id: 'rv', transcript_path: H.transcript(rf, base), tool_use_id: 'r1' };
+  H.ok('审查：说了审一下，第一次能审', P.allow(rj, 'review', rv, 'r1').ok);
+  P.consume(rj, true);
+  H.ok('审查：审过一次，同一句话不能再审', !P.allow(Object.assign({}, rj, { tool_use_id: 'r2' }), 'review', rv, 'r2').ok);
+  H.transcript(rf, base.concat(answer('审查没拿到正文，怎么办？', '缩范围重试（推荐）')));
+  H.ok('审查：提问框又选了"缩范围重试"，能再审', P.allow(Object.assign({}, rj, { tool_use_id: 'r3' }), 'review', rv, 'r3').ok);
   const W = require(path.join(h.kit, 'lib/workspace'));
   const before = W.fingerprint(p, 'code').hash;
   H.write(path.join(p, 'openspec/changes/add-x/tasks.md'), '- [ ] 1.1 实现 a.js；验：node a.js\n');

@@ -239,12 +239,19 @@ function actionIssue(j) {
     return '';
   }
   if (review && /--new-budget\b/.test(cmd) && explicit(j, 'reviewBudget')) return '';
+  let used = '';
   if (explicit(j, review ? 'review' : 'test')) {
     if (!review) return '';
     const permit = require('./permissions').allow(j, 'review', j.cwd, j.tool_use_id);
     if (permit.ok) return '';
+    // 上一次审查已经用掉了这次许可：说清楚，免得模型以为是没认出提问框
+    used = permit.reason ? '（' + permit.reason + '：上一次已经按这次许可审过了，再审要用户再点一次头）' : '';
   }
-  return '人工模式：先用 Ask 询问是否' + (review ? '审查' : '自测或复验') + '及范围，得到用户明确要求后执行。用户放弃就继续，不记录未审查、未测试或待办。';
+  // 说清楚用户怎么答才算（#210、#212：只说"先 Ask"，模型和用户都不知道哪句话算数，去翻套件源码找口令）
+  return '人工模式：先用 Ask 询问是否' + (review ? '审查' : '自测或复验') + '及范围，得到用户明确要求后执行' + used + '。'
+    + (review ? '选项写成"审查（范围）"和"不用"，用户选了审查就直接执行；用户在对话里说"审查""审一下""再审一次"也算。'
+      : '选项写成"自测（范围）"和"不用"，用户选了自测就直接跑；用户在对话里说"自测""跑测试""跑复验""把服务起起来"也算。')
+    + '用户放弃就继续，不记录未审查、未测试或待办。';
 }
 // 人工模式要先 Ask 的"自测"：跑测试、起服务、看页面。编译、类型检查、静态检查算写代码的一部分，直接跑（用户 2026-10-16 定的）。
 function testCommand(cmd, ps) {
