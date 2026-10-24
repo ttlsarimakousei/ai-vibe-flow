@@ -81,6 +81,7 @@ const V1013 = '20261013.1453'; // 1013 非数据库反馈修复
 const V1013B = '20261013.2358'; // 1013 下午清单：业务状态名
 const V1017 = '20261017.0243'; // 两阶段自动、逐点审查、人工模式先问（10-14 至 10-16 决定）
 const V1018 = '20261018.0051'; // 提交方式三档（默认关）、任务只写实现、验收用例写进设计、需求文档一份一份来、自带 OpenSpec、起服务等答 HTTP（10-17 这一批）
+const V1025 = '20261025.0653'; // 1024 这批：提问框答的自测、复验、提交认得出；IDEA 只留普通检查；说推送直接推；产出位置要写目录
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -354,21 +355,21 @@ for (const c of cases) {
   if (c.name === '设计里提到不存在的文件') { c.expect = /Nope\.java 在项目里找不到[\s\S]*\\"## 验收用例\\"一节/; c.since = V1018; }
 }
 // 这一版有意改的（1024 议题第 1 类）：人工模式先问自测、审查的提示里写清用户怎么答才算；提问框的答案、"git add/commit"认得出了
-for (const c of cases) if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*选项写成\\"自测（范围）\\"和\\"不用\\"/; c.since = NEXT; }
+for (const c of cases) if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*选项写成\\"自测（范围）\\"和\\"不用\\"/; c.since = V1025; }
 const said = (command, entries) => (kit) => { const proj = project(kit); const j = base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } }); j.transcript_path = H.transcript(path.join(path.dirname(proj), 'said.jsonl'), entries); return { proj, j }; };
 const asked = (q, a) => H.tr.ran('AskUserQuestion', { questions: [{ question: q }] }, 'User has answered your questions: "' + q + '"="' + a + '". You can now continue with the user\'s answers in mind.');
-add('1024：提问框答"全量自测（推荐）"后跑 mvn test', 'guard-commit', said('mvn -q test', [H.tr.user('改完了'), ...asked('是否要我先自测？范围选哪个？', '全量自测（推荐）')]), /放行，没有输出/, NEXT);
-add('1024：用户说"跑复验"后跑 mvn test', 'guard-commit', said('mvn -q test', [H.tr.user('跑复验')]), /放行，没有输出/, NEXT);
-add('1024：用户说"git add/commit"后提交', 'guard-commit', said('git commit -m "fix: 导出漏了表头"', [H.tr.user('把改动 git add/commit 一下')]), /放行，没有输出/, NEXT);
+add('1024：提问框答"全量自测（推荐）"后跑 mvn test', 'guard-commit', said('mvn -q test', [H.tr.user('改完了'), ...asked('是否要我先自测？范围选哪个？', '全量自测（推荐）')]), /放行，没有输出/, V1025);
+add('1024：用户说"跑复验"后跑 mvn test', 'guard-commit', said('mvn -q test', [H.tr.user('跑复验')]), /放行，没有输出/, V1025);
+add('1024：用户说"git add/commit"后提交', 'guard-commit', said('git commit -m "fix: 导出漏了表头"', [H.tr.user('把改动 git add/commit 一下')]), /放行，没有输出/, V1025);
 // 这一版有意改的（用户 2026-10-25 定的）：IDEA 的工具只走和普通工具一样的检查；说推送就直接推、合并推送才出计划；产出位置提示要求写目录
 for (const c of cases) {
-  if (['IDEA MCP 直接读令牌', 'IDEA MCP 路由读模型配置', 'IDEA MCP 冲突路径不盖过令牌路径'].includes(c.name)) { c.expect = /令牌、模型的 key/; c.since = NEXT; }
-  if (['IDEA MCP 数据库入口保留查库流程', 'IDEA MCP 批量补丁不跳文件检查'].includes(c.name)) { c.expect = /放行，没有输出/; c.since = NEXT; }
-  if (c.name === '反馈1007：全自动时用户当场要求 push') { c.expect = /push留给用户做/; c.since = NEXT; }
-  if (['命令：git push', '命令：git -C "<项目>" push origin main'].includes(c.name)) { c.expect = /用户没说推送/; c.since = NEXT; }
-  if (c.name === '开口：合并push也等预览后的真人确认') { c.expect = /推送预览[\s\S]*plan --dir[\s\S]*另一条真人确认/; c.since = NEXT; }
-  if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git -C <仓库> push/; c.since = NEXT; } // 名字是旧的：现在普通 push 不再出计划
-  if (c.name === '新建报告（产出位置没定）') { c.expect = /选项写实际的目录[\s\S]*不写\\"子项目根目录\\"/; c.since = NEXT; }
+  if (['IDEA MCP 直接读令牌', 'IDEA MCP 路由读模型配置', 'IDEA MCP 冲突路径不盖过令牌路径'].includes(c.name)) { c.expect = /令牌、模型的 key/; c.since = V1025; }
+  if (['IDEA MCP 数据库入口保留查库流程', 'IDEA MCP 批量补丁不跳文件检查'].includes(c.name)) { c.expect = /放行，没有输出/; c.since = V1025; }
+  if (c.name === '反馈1007：全自动时用户当场要求 push') { c.expect = /push留给用户做/; c.since = V1025; }
+  if (['命令：git push', '命令：git -C "<项目>" push origin main'].includes(c.name)) { c.expect = /用户没说推送/; c.since = V1025; }
+  if (c.name === '开口：合并push也等预览后的真人确认') { c.expect = /推送预览[\s\S]*plan --dir[\s\S]*另一条真人确认/; c.since = V1025; }
+  if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git -C <仓库> push/; c.since = V1025; } // 名字是旧的：现在普通 push 不再出计划
+  if (c.name === '新建报告（产出位置没定）') { c.expect = /选项写实际的目录[\s\S]*不写\\"子项目根目录\\"/; c.since = V1025; }
 }
 add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, V1018);
 add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, V1018);
