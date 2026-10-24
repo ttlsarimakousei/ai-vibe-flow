@@ -188,15 +188,31 @@ function askOnce(j, id, signature, turn, text) {
 }
 // quickPending：改了代码、最后一次修改之后还没跑过快检（verify-gate 算）。这时一起问要不要跑快检，不强制（用户 2026-10-16 定的）
 const QUICK_ASK = '跑快检（项目说明里的快检命令，编译级；这个命令本身要跑测试的，问的时候说明）、';
-function stop(j, touched, codeChanged, turn, quickPending) {
+/** 这一份需求文档自己的文件最后一次写入的时间 */
+function writtenAt(dir, point) {
+  const own = pointFiles(dir, point).filter(f => point === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === point + '.md');
+  return Math.max(0, ...own.map(f => { try { return fs.statSync(f).mtimeMs; } catch (e) { return 0; } }));
+}
+// 用户说不要之后（v 是那一次开口），at 这个时间点的改动还在不在那之前：在之前就别再问（#220）
+const stillDeclined = (v, at) => !!v && !(Number(at) > (Number(v.at) || 0));
+/** lastEditAt：这一轮最后一次改代码、页面的时间（收工检查算），用户说不用审、不用测之后又改了才再问 */
+function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   const quick = () => typeof quickPending === 'function' && quickPending() ? QUICK_ASK : '';
   const cfg = S.readConfigFor(j); const out = [];
   // 自动模式快到网关上限不再发审查指令：再起一轮，请求体超了网关直接 413（2026-10-17 审核问题 9）
   if (cfg.autoMode) { const used = S.lastUsageTokens(entriesOf(j)); if (used && S.nearGatewayLimit(used)) return out; }
+  // 这一轮用户最后的表态是不审、不测（提问框选了"就这样定稿""直接写下一份""不用"，或者原话说了不用）：那一份不再问
+  const noReview = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'review');
+  const noTest = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'test');
   const dirs = [...new Set([...touched, ...S.flowChanges(j)].filter(d => fs.existsSync(d)))];
   for (const dir of dirs) {
     const mode = S.flowStage(j) === 'apply' ? 'code' : 'proposal'; const point = cfg.autoMode ? pending(dir, mode) : points(dir, mode).slice().reverse().find(p => !settled(dir, p));
     if (!point) continue;
+    if (!cfg.autoMode && (mode === 'proposal' ? stillDeclined(noReview, writtenAt(dir, point)) : stillDeclined(noReview, lastEditAt) && stillDeclined(noTest, lastEditAt))) {
+      // 记成问过了：同一份内容以后也不再问
+      askOnce(j, key(dir, point), fingerprint(dir, point), turn, '');
+      continue;
+    }
     if (!cfg.autoMode) {
       // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
       const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).replace(/\\/g, '/');
@@ -209,7 +225,7 @@ function stop(j, touched, codeChanged, turn, quickPending) {
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
   }
-  if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test')) {
+  if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test') && !(stillDeclined(noReview, lastEditAt) && stillDeclined(noTest, lastEditAt))) {
     const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用 Ask 询问是否' + q + '审查、是否按验收用例自测；放弃后直接继续，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
   }
   return out;

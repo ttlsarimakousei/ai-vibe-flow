@@ -693,6 +693,30 @@ function autoHandover(j, cfg, entries, wroteHo) {
   return out;
 }
 
+/**
+ * 命令里在做某个变更的 openspec 命令段（openspec status --change x、instructions、new、archive……），返回它们的参数文字。
+ * openspec list、show 是看，cat、grep 读变更目录里的文件也只是看：都不算（#219：参考旧变更的格式 cat 了一下，收工就被要求问旧变更审不审）
+ */
+const OPENSPEC_WORK = /^(?:status|instructions|new|archive|apply|sync|validate|continue|ff)$/i;
+function openspecWork(cmd, ps) {
+  const out = [];
+  try {
+    const G = require('./guard-commit');
+    for (const seg of G.splitCommand(G.preprocess(cmd, ps).s, ps).flat()) {
+      const ws = G.words(G.scanRedirects(seg).rest, ps).map((w) => String(w.text));
+      let k = 0;
+      while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(ws[k] || '')) k++;
+      const base = (w) => path.basename(String(w || '').replace(/\\/g, '/')).replace(/\.(?:cmd|exe|ps1|js)$/i, '').replace(/@[\w.-]+$/, '').toLowerCase();
+      let exe = base(ws[k]);
+      if (exe === 'npx' || exe === 'pnpx') { k++; while (/^-/.test(ws[k] || '')) k++; exe = base(ws[k]); }
+      else if (exe === 'node') { k++; exe = base(ws[k]); }
+      if (exe !== 'openspec') continue;
+      if (OPENSPEC_WORK.test(ws[k + 1] || '')) out.push(ws.slice(k + 1).join(' '));
+    }
+  } catch (e) { /* 拆不了就不算 */ }
+  return out;
+}
+
 async function handle(j) {
   // HTTP 方式下工作线程一直在，上一次读到的项目说明可能已经改过了
   notesCache.clear();
@@ -720,7 +744,8 @@ async function handle(j) {
       for (const c of calls) {
         if (failed(c)) continue;
         if (/^(Edit|Write|MultiEdit)$/.test(c.name)) { const a = artifactOf(String(c.input.file_path || '')); if (a) flowTouch(j, a.dir); continue; }
-        if (/^(Bash|PowerShell)$/.test(c.name) && /\bopenspec\b/i.test(String(c.input.command || ''))) named.push(String(c.input.command || ''));
+        // 只认真的 openspec 命令（status、instructions……）里点了名的：cat、grep 读它的文件不算在做它（#219）
+        if (/^(Bash|PowerShell)$/.test(c.name) && /\bopenspec\b/i.test(String(c.input.command || ''))) named.push(...openspecWork(String(c.input.command || ''), c.name === 'PowerShell'));
         else if (/^(Skill|SlashCommand)$/.test(c.name)) named.push(JSON.stringify(c.input || {}));
       }
       if (named.length) for (const ch of allChanges(cwd)) if (named.some((t) => mentionsChange(t, ch.name))) flowTouch(j, ch.dir);
@@ -807,7 +832,9 @@ async function handle(j) {
     return !roots.every((r) => require('../lib/evidence').commands(r).length > 0);
   };
   // 页面文件（.vue、.html、.css 等）也是代码：人工模式同样问一次是否审查、自测
-  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId, quickPending));
+  // 这一轮最后一次改代码、页面的时间：用户说了不审不测之后又改了，才再问（#220）
+  const lastEditAt = Math.max(0, ...calls.filter((c) => isSource(c, CODE) || isSource(c, PAGE)).map((c) => c.at || 0));
+  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId, quickPending, lastEditAt));
   if (policy.automaticApply(j)) { Object.assign(cfg, readConfigFor(j)); todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；完成整组任务后先审查、自测、修复复验，再进入下一组。'); }
   if (cfg.autoMode && flowState(j).stage === 'plan') {
     for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {

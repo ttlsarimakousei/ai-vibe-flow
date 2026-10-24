@@ -293,7 +293,9 @@ function voiceSays(v, topic, g) {
   }
   if (v.kind === 'command') { const name = v.command.replace(/^\//, ''); return { say: g.command.test(name) || name.toLowerCase() === topic ? 'yes' : '', text: v.text }; }
   if (intent.explicit(v.text, topic)) return { say: 'yes', text: v.text };
-  const no = (intent.has(v.text, topic) && intent.denied(v.text, topic)) || (topic === 'review' && intent.explicit(v.text, 'reviewSkip'));
+  // 对话里回的短话"就这样定稿""直接写下一份""不测了"，和提问框里选的一样算不要（#220）
+  const short = intent.plain(v.text);
+  const no = (intent.has(v.text, topic) && intent.denied(v.text, topic)) || (topic === 'review' && intent.explicit(v.text, 'reviewSkip')) || (short.length <= 30 && !!ANSWER_DECLINE[topic] && ANSWER_DECLINE[topic].test(short));
   return { say: no ? 'no' : '', text: v.text };
 }
 /**
@@ -315,6 +317,17 @@ function userSaid(entries, topic) {
   }
   const d = voiceSays(v, topic, g);
   return { ok: d.say === 'yes', voice: v, text: d.text, targetText: d.target };
+}
+/**
+ * 这一轮里用户最后对这件事的表态是"不要"：返回那一次开口（原话或提问框），没有返回 null。
+ * 收工检查用它别再问刚被拒的那一份（#220：提问框选了"就这样定稿"又问一遍；用户 2026-10-16 定的"说不用之后不再问"）
+ */
+function userDeclined(entries, topic) {
+  const g = SAID[topic];
+  if (!g) return null;
+  let last = null;
+  for (const x of turnVoices(entries)) { const d = voiceSays(x, topic, g); if (d.say) last = d.say === 'no' ? x : null; }
+  return last;
 }
 /** 用户选择本次不提交后，同一份改动可正常收工；后来新增改动再按现有规则确认。 */
 function commitDeclined(j, entries) {
@@ -2426,7 +2439,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
+module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,
