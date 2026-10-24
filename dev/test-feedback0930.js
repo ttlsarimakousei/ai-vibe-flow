@@ -108,7 +108,8 @@ H.section('#2 git -C 的目录写在变量里；新建的仓库第一次入仓')
   H.ok('循环里只加点名的文件：不拦', run('for r in jssslt-app old-svc; do git -C "$r" add pom.xml; done') === null);
   H.ok('用 ls-files 只加没进 git 的文件（议题里的绕法）：不拦', run('git -C "$r" ls-files -o --exclude-standard -z | git -C "$r" add --pathspec-from-file=- --pathspec-file-nul') === null);
   const r6 = run('git -C "$r" push origin main');
-  H.ok('目录在变量里的 push：先预览再确认', r6 && r6.decision === 'block' && /推送前先运行.*plan/.test(H.reasonOf(r6)), r6);
+  // 2026-10-25 起：用户说了推送就直接推；这里用户没说，拦下
+  H.ok('目录在变量里的 push、用户没说推送：拦下', r6 && r6.decision === 'block' && /用户没说推送/.test(H.reasonOf(r6)), r6);
 }
 
 // =============================================================================================

@@ -344,7 +344,8 @@ H.section('命令：注释不是命令；没写变更名时说清查的是谁（
   H.ok('行尾的注释也不算', run('git checkout -- src/main/java/A.java # 之前 node ' + K + ' 查过') === null);
   H.ok('PowerShell 的注释也不算', run('# 看过 ' + K + '\ngit checkout -- src/main/java/A.java', 'PowerShell') === null);
   H.ok('注释里写的 git push 不弹确认', run('git status # 之后再 git push') === null);
-  H.ok('真的 push 要先预览再确认', (run('git status && git push origin main') || {}).decision === 'block' && /推送前先运行.*plan/.test(H.reasonOf(run('git status && git push origin main'))));
+  // 2026-10-25 起：用户说了推送就直接推；没说就拦下
+  H.ok('真的 push、用户没说推送：拦下', (run('git status && git push origin main') || {}).decision === 'block' && /用户没说推送/.test(H.reasonOf(run('git status && git push origin main'))));
   H.ok('引号里的 # 不是注释', (() => { const r = run('echo "#x" > "$HOME/.claude/vibe-kit/config.json"'); return r && r.decision === 'block'; })());
   H.ok('真去改套件的照样拦', (() => { const r = run('rm -rf "$HOME/.claude/vibe-kit/hooks"'); return r && r.decision === 'block' && /不许改/.test(H.reasonOf(r)); })());
   H.ok('列出套件的文件再交给 xargs 删：拦', (() => { const r = run('ls "$HOME/.claude/vibe-kit/hooks" | xargs rm -f'); return r && r.decision === 'block'; })());
@@ -367,7 +368,8 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   R.begin({ session_id: sid, cwd: proj });
   H.transcript(tfile, [H.tr.user('全自动做完')]);
   const push = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git -C . push origin main' } }));
-  H.ok('全自动 push 先预览并等真人确认', push && push.decision === 'block' && /全自动模式/.test(H.reasonOf(push)) && /plan/.test(H.reasonOf(push)) && /等.*确认/.test(H.reasonOf(push)), push);
+  // 2026-10-25 起：用户没说推送就拦，全自动下也一样，提示里说清怎么说才推
+  H.ok('全自动 push、用户没说推送：拦下，提交留在本地', push && push.decision === 'block' && /用户没说推送/.test(H.reasonOf(push)) && /全自动模式也一样/.test(H.reasonOf(push)), push);
   const ask = H.hook(h, 'guard-ask', Object.assign(base(sid), { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出的文件名用哪种格式？', header: '文件名', options: [{ label: '带日期', description: 'x' }, { label: '不带日期', description: 'y' }] }] } }));
   H.ok('自动阶段允许澄清业务问题', ask === null);
   const kit = H.hook(h, 'pre-edit', Object.assign(base(sid), { tool_name: 'Edit', tool_input: { file_path: path.join(h.kit, 'state', 'review-rounds.json'), old_string: 'a', new_string: 'b' } }));
@@ -386,7 +388,7 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   H.setConfig(h, { autoMode: false });
   H.transcript(tfile, [H.tr.user('改好了，提交')]);
   const push2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git push' } }));
-  H.ok('有人在：push 先要求预览', push2 && push2.decision === 'block' && /推送预览/.test(H.reasonOf(push2)), push2);
+  H.ok('有人在：用户说的是提交、没说推送，push 拦下', push2 && push2.decision === 'block' && /用户没说推送/.test(H.reasonOf(push2)), push2);
   const c2 = H.hook(h, 'guard-commit', Object.assign(base('s-man'), { tool_name: 'Bash', tool_input: { command: 'git add src/main/resources/app.properties && git commit -m "feat: 加配置"' } }));
   H.ok('有人在：提交里像有密码也不再弹框（用户说了提交）', c2 === null, c2);
   H.ok('有人在：提问框照常能用', H.hook(h, 'guard-ask', Object.assign(base('s-man'), { tool_name: 'AskUserQuestion', tool_input: { questions: [] } })) === null);
