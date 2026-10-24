@@ -17,4 +17,4 @@
 - 在壳子里干活时（会话开头会提示），壳子和每个子项目各是独立的 git 仓库，各自提交（`git -C <目录>`）：代码在子项目的仓库里提交，openspec 的提案、tasks.md 在壳子的仓库里提交，类型用 `docs`。不管在哪，都不用 `git add -A`、`git add .`、`git add -u`、`git commit -a`。
 - 在当前分支上提交，不要自己建分支、切分支，不要改写已有的提交（不 amend、不 rebase、不 reset）。
 - push 先运行 `tools/merge-push.js plan`，给我看分组和目标。另一次确认后按计划合并推送；普通 push 也一样。
-- 密码、key、token 不写进要提交的文件：配置里用占位符（`${DB_PASSWORD}`）或者本机不提交的配置。提交时查到了会弹确认。
+- 密码、key、token 不写进要提交的文件：配置里用占位符（`${DB_PASSWORD}`）或者本机不提交的配置。
