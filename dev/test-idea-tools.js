@@ -85,7 +85,7 @@ for (const [label, name, input] of [
 H.ok('运行参数覆盖：照自测先问（不是因为参数）', /人工模式/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))) && !/运行参数覆盖/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))));
 H.ok('IDEA 终端的 push 也先检查预览', denied(call('execute_terminal_command', { command: 'git push' })));
 H.transcript(transcript, [H.tr.user('推送')]);
-H.ok('当场说 push 不能跳过 IDEA 终端的预览检查', denied(call('execute_tool', { command: 'execute_terminal_command --command "git push"' })));
+H.ok('当场说 push、仓库没有远端（目标对不上）：IDEA 终端里也不直接放，要确认', call('execute_tool', { command: 'execute_terminal_command --command "git push"' }) !== null);
 H.transcript(transcript, [H.tr.user('改代码')]);
 H.inFlow(h, 'ide-tools', [], 'apply'); H.setConfig(h, { autoMode: true });
 H.ok('全自动时读令牌仍拦', denied(call('read_file', { file_path: secret })));

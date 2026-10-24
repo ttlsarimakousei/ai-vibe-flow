@@ -156,6 +156,66 @@ function apply(p, push) {
   }
   return { ok: true, before: s.commits.length, after: p.groups.length, head, backup, pushed: !!push };
 }
+/**
+ * 合成一条再推（用户 2026-10-25 定的："合并成1条推送"不问，把这个分支所有没推的提交合成一条直接推）。
+ * 新提交的文件内容就是现在 HEAD 的（tree 完全一样），父提交是远端分支；旧提交留备份 ref，不改工作区、不 force。
+ * 远端还没有这个分支（第一次推）不合成：那会把整个历史压成一条。工作区有没提交的改动、远端前进了，照旧停下
+ */
+function squash(root, opts) {
+  const o = opts || {};
+  const s = state(root, true);
+  if (!s.base) throw new Error('远端还没有这个分支：合成一条会把整个历史压成一条。第一次推送先普通 git push -u，以后再合并。');
+  if (!s.commits.length) return { ok: true, before: 0, after: 0, head: s.head, backup: '', pushed: false, msg: '没有没推的提交' };
+  const warnings = s.commits.some((c) => c.protectedHistory) ? ['没推的提交里有 merge、签名或版本标签：合成一条之后签名、标签不跟着走，旧提交在备份 ref 里'] : [];
+  let head = s.head; let backup = '';
+  if (s.commits.length > 1) {
+    const first = s.commits.find((c) => !/审查|复审|review/.test(c.title)) || s.commits[0];
+    const title = String(o.message || '').trim().split(/\r?\n/)[0] || first.title;
+    const message = title + '\n\n合并的本地提交：\n\n' + s.commits.map((c) => c.message.trimEnd()).join('\n\n');
+    const tree = git(s.root, ['rev-parse', s.head + '^{tree}']);
+    const commit = git(s.root, ['commit-tree', tree, '-p', s.base], { env: Object.assign(gitEnv(), { GIT_AUTHOR_NAME: first.author, GIT_AUTHOR_EMAIL: first.email, GIT_AUTHOR_DATE: first.date }), input: message + '\n' });
+    if (git(s.root, ['rev-parse', commit + '^{tree}']) !== tree) throw new Error('合成后的文件内容不一致，原分支没有改。');
+    if (git(s.root, ['status', '--porcelain', '-uall']) || git(s.root, ['rev-parse', 'HEAD']) !== s.head || git(s.root, ['symbolic-ref', '-q', 'HEAD']) !== s.ref) throw new Error('整理时仓库或当前分支有了变化，原分支没有改。');
+    backup = 'refs/vibe-kit/backups/merge-push-' + Date.now() + '-' + process.pid;
+    git(s.root, ['update-ref', backup, s.head, '0'.repeat(s.head.length)]);
+    git(s.root, ['update-ref', '-m', 'vibe-kit 没推的提交合成一条', s.ref, commit, s.head]);
+    head = commit;
+  }
+  if (o.push) {
+    try { git(s.root, ['push', '--set-upstream', s.remote, s.ref + ':' + s.merge]); }
+    catch (e) { return { ok: false, before: s.commits.length, after: 1, head, backup, pushed: false, warnings, msg: '推送失败；合成的提交和旧提交的备份都留在本地。先核对远端，再普通 git push，不强推。' }; }
+  }
+  return { ok: true, before: s.commits.length, after: 1, head, backup, pushed: !!o.push, warnings };
+}
+/**
+ * 普通推送能不能直接推（用户 2026-10-25 定的："推送""push"直接推，几笔提交都一样，不出推送计划）：
+ * 不带 --force、--delete 这类参数（-u 可以），推的是当前分支、到它跟踪的远端分支（没设跟踪的推到同名分支）。
+ * 工作区有没提交的改动不影响 push，这里不要求干净。给用户看过合并计划、还没推的，要按计划推，不走这条
+ */
+function plainAllowed(j, g) {
+  try {
+    if (g.dyn) return false;
+    const args = g.args.map((a) => a.text);
+    if (args.some((a) => a.startsWith('-') && !['-u', '--set-upstream'].includes(a))) return false;
+    const root = git(g.dir, ['rev-parse', '--show-toplevel'], { timeout: 3000 });
+    if (pendingPreview(j, root)) return false;
+    const ref = git(root, ['symbolic-ref', '-q', 'HEAD'], { timeout: 3000 });
+    if (!ref.startsWith('refs/heads/')) return false;
+    const branch = ref.slice(11);
+    const remotes = git(root, ['remote'], { timeout: 3000 }).split('\n').filter(Boolean);
+    const remote = git(root, ['config', '--get', 'branch.' + branch + '.remote'], { timeout: 3000, optional: true }) || (remotes.length === 1 ? remotes[0] : '');
+    const merge = git(root, ['config', '--get', 'branch.' + branch + '.merge'], { timeout: 3000, optional: true }) || ref;
+    const pos = args.filter((a) => !a.startsWith('-'));
+    if (!remote || pos.length > 2) return false;
+    if (pos[0] && pos[0] !== remote) return false;
+    if (pos[1] && ![ref, branch, 'HEAD', ref + ':' + merge, branch + ':' + merge.slice(11), 'HEAD:' + merge, 'HEAD:' + merge.slice(11)].includes(pos[1])) return false;
+    return true;
+  } catch (e) { return false; }
+}
+/** 这个会话给用户看过这个仓库的合并计划、还没推、没过期 */
+function pendingPreview(j, root) {
+  try { const k = receiptKey(j); const v = k && (require('./session').readState(k).roots || {})[norm(root)]; return !!(v && !v.consumed && Date.now() - v.at <= 1800000); } catch (e) { return false; }
+}
 // 完成钩子才登记预览；第一次说 push 只是启动检测，不能借同一句话立即改历史。
 function voiceId(v) { return require('./session').voiceKey(v); }
 function receiptKey(j) { return j.session_id && j.session_id !== 'unknown' ? String(j.session_id) + '-push-preview' : ''; }
@@ -177,7 +237,7 @@ function commandOf(j) {
   // plan 的输出可以截行查看，但必须仍收到完整 JSON。其它管道不猜执行含义。
   if (groups[0].length > 1 && (!['plan', 'apply'].includes(args[0]) || !groups[0].slice(1).every((s) => /^(?:(?:tail|head)(?:\s+(?:-n\s*\d+|-\d+))?|cat|(?:Select-Object|select)\s+-(?:First|Last)\s+\d+|Out-String)$/i.test(s)))) return null;
   const val = (key) => { const n = args.indexOf(key); return n < 0 ? '' : S.expandHome(args[n + 1] || ''); };
-  return { action: args[0], root: path.resolve(j.cwd || process.cwd(), val('--dir') || '.'), file: val('--plan'), confirmed: val('--confirmed'), push: args.includes('--push') };
+  return { action: args[0], root: path.resolve(j.cwd || process.cwd(), val('--dir') || '.'), file: val('--plan'), confirmed: val('--confirmed'), push: args.includes('--push'), message: val('--message') };
 }
 function previewNotice(reason) {
   return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: '[vibe-kit 推送预览] 预览未登记：' + reason + '。用不带管道、重定向或串联命令的 merge-push.js plan --dir <仓库> 重跑，完整展示结果后再让用户确认。' }, systemMessage: '[vibe-kit] 推送预览未登记：' + reason + '。' };
@@ -224,10 +284,12 @@ function previewAllowed(j, root, call) {
   } catch (e) { return { ok: false, reason: '推送预览无法核对：' + require('./redact').clip(e.message, 250) }; }
 }
 // 只认真正执行的脚本参数；反馈正文和提交信息里引用 apply 不触发执行检查。
-function isApplyCommand(j) {
+function runsAction(j, action) {
   const S = require('./session'), parser = require('../hooks/guard-commit');
-  return parser.splitCommand(String(j.tool_input && j.tool_input.command || ''), j.tool_name === 'PowerShell').some((g) => g.some((seg) => { const ws = parser.words(parser.scanRedirects(seg).rest, j.tool_name === 'PowerShell'); return ws.some((w, i) => i > 0 && /(?:^|[\\/])merge-push\.js$/i.test(w.text) && ws[i + 1] && ws[i + 1].text === 'apply' && norm(path.resolve(j.cwd, S.expandHome(w.text))) === norm(path.join(S.KIT, 'tools/merge-push.js'))); }));
+  return parser.splitCommand(String(j.tool_input && j.tool_input.command || ''), j.tool_name === 'PowerShell').some((g) => g.some((seg) => { const ws = parser.words(parser.scanRedirects(seg).rest, j.tool_name === 'PowerShell'); return ws.some((w, i) => i > 0 && /(?:^|[\\/])merge-push\.js$/i.test(w.text) && ws[i + 1] && ws[i + 1].text === action && norm(path.resolve(j.cwd, S.expandHome(w.text))) === norm(path.join(S.KIT, 'tools/merge-push.js'))); }));
 }
+function isApplyCommand(j) { return runsAction(j, 'apply'); }
+function isSquashCommand(j) { return runsAction(j, 'squash'); }
 function simpleAllowed(j, g) {
   try {
     if (!require('./session').userSaid(require('./session').tailEntries(j.transcript_path, 3000000), 'push').ok || g.dyn) return false;
@@ -241,9 +303,9 @@ function simpleAllowed(j, g) {
 function consumePreview(j) {
   const k = receiptKey(j); if (!k) return;
   const call = commandOf(j); const cmd = String(j.tool_input && j.tool_input.command || '');
-  if (!(call && call.action === 'apply' && call.push) && !/\bgit\s+(?:-C\s+(?:"[^"]*"|'[^']*'|\S+)\s+)?push\b/i.test(cmd)) return;
+  if (!(call && (call.action === 'apply' || call.action === 'squash') && call.push) && !/\bgit\s+(?:-C\s+(?:"[^"]*"|'[^']*'|\S+)\s+)?push\b/i.test(cmd)) return;
   if (call) { let r; try { r = JSON.parse(String(j.tool_response && j.tool_response.stdout || '').trim()); } catch (e) { return; } if (!r.ok || !r.pushed) return; }
   const root = call ? call.root : require('./workspace').rootOf(j.cwd || process.cwd());
   require('./session').updateState(k, (s) => { const v = (s.roots || {})[norm(root)]; if (v) { v.consumed = true; v.finished = Date.now(); } });
 }
-module.exports = { plan, apply, eventOf, groupsOf, commandOf, recordPreview, previewAllowed, consumePreview, isApplyCommand, simpleAllowed };
+module.exports = { plan, apply, squash, eventOf, groupsOf, commandOf, recordPreview, previewAllowed, consumePreview, isApplyCommand, isSquashCommand, simpleAllowed, plainAllowed, pendingPreview };

@@ -1736,13 +1736,23 @@ function check(j) {
   // push 不看任何开关，没有当场授权就确认；拆命令没认出来的写法由 pushAnywhere 兜底
   I.phase('命令：发布和推送');
   const publishing = publishAnywhere(cmd, j.cwd);
-  const mergeApply = require('../lib/merge-push').isApplyCommand(j);
+  const merge = require('../lib/merge-push');
+  const mergeApply = merge.isApplyCommand(j);
   let mergeCall = null;
   if (mergeApply) {
-    const merge = require('../lib/merge-push');
     mergeCall = merge.commandOf(j);
     const approved = mergeCall && merge.previewAllowed(j, mergeCall.root, mergeCall);
     if (!approved || !approved.ok) return counted('auto-push', '[vibe-kit 推送预览] ' + (approved ? approved.reason : '执行命令无法核对') + '。先运行 merge-push.js plan --dir <仓库>，列出分组、标题和目标给用户看，等预览后的真人确认再执行；全自动也不能跳过。');
+  }
+  // 推送怎么做看用户怎么说（用户 2026-10-25 定的）："推送""push"直接推；"合并推送"先给推送计划、确认后按计划推；"合并成1条推送"合成一条直接推
+  let pushSaid = { ok: false, text: '' };
+  try { if (j.transcript_path) pushSaid = userSaid(tailEntries(j.transcript_path, 3000000), 'push'); } catch (e) { pushSaid = { ok: false, text: '' }; }
+  const pushStyle = pushSaid.ok ? require('../lib/intent').pushStyle(pushSaid.text) : '';
+  const mergeTool = path.join(KIT, 'tools', 'merge-push.js').replace(/\\/g, '/');
+  let squashCall = null;
+  if (merge.isSquashCommand(j)) {
+    squashCall = merge.commandOf(j);
+    if (!squashCall || pushStyle !== 'squash') return counted('auto-push', '[vibe-kit 推送] 把没推的提交合成一条再推，要用户说了"合并成1条推送"才做。用户说"推送"就直接 git push；说"合并推送"先出推送计划给他看。');
   }
   const publishNotice = '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。';
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
@@ -1759,6 +1769,7 @@ function check(j) {
   analyze(cmd, ps, st, cfg, 0);
   if (st.publishing) st.push = publishNotice;
   else if (mergeCall) st.push = '[vibe-kit] 按已确认推送计划执行。';
+  else if (squashCall) st.push = '[vibe-kit] 按用户说的把没推的提交合成一条再推。';
   else if (!st.push && pushAsk) st.push = pushAsk;
   if (st.block) {
     let tail = '';
@@ -1779,14 +1790,21 @@ function check(j) {
   if (actionIssue) return counted('manual-action', '[vibe-kit] ' + actionIssue);
   // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告；提交里像有密码的放行，记进报告
   // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
-  const simplePush = st.pushes.length === 1 && require('../lib/merge-push').simpleAllowed(j, st.pushes[0]);
-  if (st.push && !st.publishing && !mergeCall && !simplePush) {
-    if (cfg.autoMode) {
-      try { if (report) report.note(j, { kind: 'hand', title: '它想执行 git push，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '先给用户推送预览，等用户确认；全自动不能跳过' }); } catch (e) { /* 记不了也拦 */ }
-    }
-    return counted('auto-push', '[vibe-kit 推送预览] ' + (cfg.autoMode ? '全自动模式也要等用户确认。' : '') + '多笔提交或目标无法核对时，推送前先运行 merge-push.js plan --dir <仓库>，给用户看分组、原记录、标题和目标，确认后用 apply --plan <文件> --confirmed <完整计划编号> --push。仅一笔且目标明确的普通推送可使用已有真人推送许可。此检查不能用放行额度代替推送确认。');
+  // 普通 git push（用户 2026-10-25 定的，问题反馈表第 5 条）：用户说了"推送""push"就直接推，几笔提交都一样，不出推送计划；
+  // 壳子里几个仓库各推一次。强推、删远端分支、推到别的分支在确认框里问；给用户看过合并计划的照计划推
+  const pushes = (st.publishing || mergeCall || squashCall) ? [] : st.pushes;
+  let pushConfirm = false;
+  if (pushes.length) {
+    const noteHand = (detail) => { if (cfg.autoMode) { try { if (report) report.note(j, { kind: 'hand', title: '它想执行 git push，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail }); } catch (e) { /* 记不了也拦 */ } } };
+    if (!pushSaid.ok) { noteHand('用户没说推送'); return counted('auto-push', '[vibe-kit 推送] 这条命令里有 git push，用户没说推送。用户说"推送""push"再推（直接推，不用推送计划）；说"合并推送"先出推送计划给他看。' + (cfg.autoMode ? '全自动模式也一样：提交留在本地，最后的交代里说一句哪些还没推。' : '')); }
+    if (pushStyle === 'squash') return counted('auto-push', '[vibe-kit 推送] 用户要把没推的提交合成一条再推，不用再问：逐个有没推提交的仓库运行 node "' + mergeTool + '" squash --dir <仓库> --push（提交信息默认用第一条的标题，要换就加 --message "类型: 内容"），不要直接 git push。');
+    if (pushStyle === 'plan' || pushes.some((g) => merge.pendingPreview(j, repoRoot(g.dir) || g.dir))) {
+      if (!(pushes.length === 1 && merge.simpleAllowed(j, pushes[0]))) { noteHand('用户要合并推送：先给推送计划'); return counted('auto-push', '[vibe-kit 推送预览] 用户要的是合并推送（或者已经给他看过合并计划）：先运行 node "' + mergeTool + '" plan --dir <仓库>，给用户看分组、原记录、标题和目标，确认后用 apply --plan <文件> --confirmed <完整计划编号> --push。此检查不能用放行额度代替推送确认。'); }
+    } else if (!pushes.every((g) => merge.plainAllowed(j, g))) pushConfirm = true;
   }
-  const pushApproved = st.push && !st.publishing && userSaid(tailEntries(j.transcript_path), 'push').ok && require('../lib/permissions').allow(j, 'push', mergeCall ? mergeCall.root : simplePush ? repoRoot(st.pushes[0].dir) || st.pushes[0].dir : repoRoot(st.dir) || st.dir, j.tool_use_id).ok;
+  if (pushConfirm) st.push = '[vibe-kit] 这条 git push 带了强推、删远端分支这类参数，或者推到的不是当前分支跟踪的那个远端分支，要你确认。';
+  const pushRoots = mergeCall ? [mergeCall.root] : squashCall ? [squashCall.root] : pushes.length ? [...new Set(pushes.map((g) => repoRoot(g.dir) || g.dir))] : [repoRoot(st.dir) || st.dir];
+  const pushApproved = !!st.push && !st.publishing && pushSaid.ok && !pushConfirm && pushRoots.every((r) => require('../lib/permissions').allow(j, 'push', r, j.tool_use_id).ok);
   if (cfg.autoMode) {
     if (st.push && !pushApproved) {
       hookLog('guard-commit 全自动模式不 push：' + cmd.slice(0, 80));

@@ -29,8 +29,9 @@ function preview() {
 function applyCommand(p) { return command('apply --dir "' + repo.replace(/\\/g, '/') + '" --plan "' + String(p.plan || '').replace(/\\/g, '/') + '" --confirmed ' + (p.hash || 'missing') + ' --push'); }
 say('push');
 const note = hook('task-anchor', { hook_event_name: 'UserPromptSubmit', prompt: 'push' });
-H.ok('普通 push 指令提示先预览再等真人确认', /推送预览[\s\S]*merge-push\.js[\s\S]*另一条真人确认/.test(JSON.stringify(note || {})), note);
-H.ok('普通 git push 不能直接跳过预览', blocked(guard('git push')), guard('git push'));
+// 2026-10-25 起（用户定的）：说"push"就直接推，几笔提交都一样；"合并推送"才先出计划（下面的计划流程照旧）
+H.ok('普通 push 指令提示直接推，不出推送计划', /直接 git -C <仓库> push/.test(JSON.stringify(note || {})) && !/merge-push\.js" plan/.test(JSON.stringify(note || {})), note);
+H.ok('说了 push：两笔没推的提交也直接 git push', guard('git push') === null, guard('git push'));
 const first = preview();
 H.ok('预览成功并列出原记录和最终标题', first.r.code === 0 && first.p.before === 2 && first.p.after === 1 && Array.isArray(first.p.groups[0].titles) && first.p.groups[0].titles.length === 2, first.r);
 H.ok('成功完成钩子登记并给用户可见提醒', /等待你看过并确认/.test(JSON.stringify(first.after || {})), first.after);

@@ -459,7 +459,12 @@ async function handle(j) {
   }
   if (th) lines.push(th);
   if (!note && intent.explicit(j.prompt, 'push')) {
-    lines.push('[vibe-kit 推送预览] 用户说 push 后，目标明确且仅一笔未推送提交的普通推送可以直接执行，钩子会核对当前真人许可；其它情况逐个仓库运行 node "' + path.join(KIT, 'tools', 'merge-push.js') + '" plan --dir <仓库>，给用户看原提交、标题、分支和远端，等另一条真人确认后 apply --plan <计划文件> --confirmed <完整计划编号> --push。已有有效预览并获确认就执行，不反复生成。首次空远端会预览全部本地提交并保持原历史。只整理同一事件，不 force，不带未提交改动；失败不换 reset/rebase 硬做。');
+    // 推送怎么做看用户怎么说（用户 2026-10-25 定的，问题反馈表第 5 条）
+    const style = intent.pushStyle(j.prompt);
+    const tool = path.join(KIT, 'tools', 'merge-push.js');
+    if (style === 'squash') lines.push('[vibe-kit 推送] 用户要把没推的提交合成一条再推，不用再问：逐个有没推提交的仓库运行 node "' + tool + '" squash --dir <仓库> --push（提交信息默认用第一条的标题，要换就加 --message "类型: 内容"）。远端还没有这个分支的，先普通 git push -u。不 force，不带未提交的改动；失败不换 reset/rebase 硬做。');
+    else if (style === 'plan') lines.push('[vibe-kit 推送预览] 用户要合并推送：逐个仓库运行 node "' + tool + '" plan --dir <仓库>，给用户看原提交、标题、分支和远端，等另一条真人确认后 apply --plan <计划文件> --confirmed <完整计划编号> --push。已有有效预览并获确认就执行，不反复生成。首次空远端会预览全部本地提交并保持原历史。只整理同一事件，不 force，不带未提交改动；失败不换 reset/rebase 硬做。');
+    else lines.push('[vibe-kit 推送] 用户说了推送：直接 git -C <仓库> push，几笔提交都一样，不用推送计划、不再问确认；壳子里几个子项目有没推的提交就各推一次。不 force、不删远端分支、不推到别的分支。');
   }
   const oh = note || anchored.overLine ? '' : outputHint(j, cfg);
   if (oh) lines.push(oh);

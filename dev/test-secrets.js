@@ -159,7 +159,7 @@ H.section('跑发布脚本：和 push 一样要用户确认');
   H.setConfig(h, { kitLock: true });
   H.ok('项目自己的 publish.js（旁边没有安装包）：不问', !asked(run('Bash', 'node scripts/publish.js', proj)) && !blocked(run('Bash', 'node scripts/publish.js', proj)));
   H.ok('提交信息里提到 publish.js：不问', !asked(run('Bash', 'git log --oneline --grep "publish.js"', proj)));
-  H.ok('git push 先预览再由用户确认', blocked(run('Bash', 'git push origin main', proj)) && /推送预览/.test(H.reasonOf(run('Bash', 'git push origin main', proj))));
+  H.ok('用户没说推送：git push 拦下', blocked(run('Bash', 'git push origin main', proj)) && /推送/.test(H.reasonOf(run('Bash', 'git push origin main', proj))));
 }
 
 H.section('安装器：加"不许读"的权限规则');

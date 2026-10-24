@@ -29,7 +29,10 @@ const PREFIX = '(?:(?:请|帮我|现在|直接|立即|及时|继续|顺便|可�
 const DO = '(?:(?:先|再|重新)?\\s*(?:跑|做|来|走|过|搞)\\s*(?:一下|下|一次|一遍|一轮|次|遍|个|轮)?\\s*)';
 const SCOPE = '(?:(?:全量|全部|完整|整体|单元|集成|接口|后端|前端|页面|回归|冒烟|安装|端到端|e2e|功能|代码|这个范围的?|这几个|这些|(?:按|照|依|用|使用|按照)\\s*[^，,。；;！!?？\\n]{1,30}?)\\s*(?:[+＋、和与及/]\\s*)?)';
 // 提交只补直接写命令的："git commit""git add/commit""git add 然后 git commit"（2026-10-21 定的）
-const GIT_COMMIT = '(?:git\\s+(?:-C\\s+\\S+\\s+)?(?:add\\b[^，,。；;\\n]{0,60}?(?:\\/|然后|再|和|并|&&|;)\\s*(?:git\\s+(?:-C\\s+\\S+\\s+)?)?)?)';// 动作词后面跟着这些词，说的是那件事本身（"审查报告""测试用例"），不是要做。只加不会误伤的词：不加"代码"，"提交代码"是明确要求
+const GIT_COMMIT = '(?:git\\s+(?:-C\\s+\\S+\\s+)?(?:add\\b[^，,。；;\\n]{0,60}?(?:\\/|然后|再|和|并|&&|;)\\s*(?:git\\s+(?:-C\\s+\\S+\\s+)?)?)?)';
+// 把没推的提交合成一条再推（用户 2026-10-25 定的："合并成1条推送""合并成一条 push"不问，直接合成一条推）
+const SQUASH_PUSH = '(?:把\\s*(?:所有|全部|这些|这几条)?\\s*(?:没推的|没推送的|未推送的|本地的)?\\s*(?:提交)?\\s*)?合并成\\s*(?:1|一)\\s*(?:条|个)\\s*(?:提交)?\\s*(?:再|然后|后|并|并且)?\\s*(?:push\\b|推送|推上去|推(?![送上]))';
+// 动作词后面跟着这些词，说的是那件事本身（"审查报告""测试用例"），不是要做。只加不会误伤的词：不加"代码"，"提交代码"是明确要求
 // "推送有问题""审查不对"：在抱怨那件事，不是要做（提问框的答案不要求在句首，靠它排除，2026-10-25）
 const NOUN = '(?:策略|机制|时机|规则|规范|逻辑|检查|权限|功能|提示|失败|报错|问题|有问题|有毛病|不对|不行|出错|出了问题|日志|脚本|命令|配置|结果|状态|记录|成功|完成|被|测试|的|的时候|时|过|了|是不是|怎么样|报告|意见|用例|环境|太慢|很慢|速度)';
 function denied(text, action) {
@@ -52,6 +55,7 @@ function explicit(text, action) {
   if (action !== 'apply' && new RegExp('^(?:请)?(?:把|将)[^，,。；;！!?？\\n]{1,48}' + op + '\\s*(?:吧|一下|一次)?[\\s。！!]*$', 'i').test(s)) return true;
   if (action === 'push' && /(?:^|[，,。；;\n])\s*(?:请|帮我|现在|直接|可以|同意|确认|及时)*\s*提交\s*(?:并|和|后|然后|再)\s*(?:push\b|推送)(?!\s*(?:策略|机制|规则|功能|问题))/i.test(s)) return true;
   if (action === 'push' && /^(?:(?:请|现在|确认|同意|可以)\s*)*(?:合并\s*(?:push|推送)|(?:按(?:照)?|照)(?:这个|刚才的|上面的)?计划\s*(?:合并\s*)?(?:push|推送))[\s。！!]*$/i.test(s)) return true;
+  if (action === 'push' && new RegExp('(?:^|[，,。；;\\n])\\s*(?:(?:请|现在|直接|确认|同意|可以|帮我)\\s*)*' + SQUASH_PUSH + '(?!\\s*' + NOUN + ')', 'i').test(s)) return true;
   // 常见收尾："改好了，提交"；"自测没问题，归档吧"；带前置修改的明确执行指令。
   const then = new RegExp('(?:然后|之后|以后|再|后|并且|并|和)\\s*' + op + '(?!\\s*' + NOUN + ')', 'i');
   if (then.test(s) && !/(?:解释|讲解|举例|讨论|听说|他说|你说|之前说|之前会)/.test(s)) return true;
@@ -63,8 +67,18 @@ function explicit(text, action) {
   }
   return false;
 }
+/**
+ * 用户要的是哪种推送（用户 2026-10-25 定的）：'squash' 合并成一条直接推，不问；'plan' 合并推送，先给推送计划、确认后推；
+ * '' 普通推送，直接推。只在 explicit(text, 'push') 成立时有意义
+ */
+function pushStyle(text) {
+  const s = plain(text);
+  if (new RegExp(SQUASH_PUSH, 'i').test(s)) return 'squash';
+  if (/合并\s*(?:push|推送)|(?:按(?:照)?|照)(?:这个|刚才的|上面的)?计划\s*(?:合并\s*)?(?:push|推送)/i.test(s)) return 'plan';
+  return '';
+}
 /** 话里有没有提到这件事（提问框的问题用）：不管是不是要做 */
 function has(text, action) { const op = TOPIC[action]; return !!op && new RegExp(op, 'i').test(plain(text)); }
 /** 话里有这件事的动作词、而且不是在说那件事本身（"审查报告""测试失败"）：提问框的答案用，不要求在句首 */
 function mentions(text, action) { const op = TOPIC[action]; return !!op && new RegExp(op + '(?!\\s*' + NOUN + ')', 'i').test(plain(text)); }
-module.exports = { plain, explicit, denied, has, mentions };
+module.exports = { plain, explicit, denied, has, mentions, pushStyle };

@@ -1,6 +1,7 @@
 'use strict';
 /*
- * 用户说 push 时先 plan，把原提交和拟合并标题列给用户；另一次确认后 apply --confirmed <编号> --push。
+ * 用户说"合并推送"时先 plan，把原提交和拟合并标题列给用户；另一次确认后 apply --confirmed <编号> --push。
+ * 用户说"合并成1条推送"时 squash --dir <仓库> --push：不问，没推的提交合成一条直接推。说"推送"的直接 git push，不用这个工具（用户 2026-10-25 定的）。
  * guard-commit 检查当前会话的预览和最新真人授权。计划文件只在项目 .vibe/tmp 下。
  */
 const fs = require('fs');
@@ -37,7 +38,12 @@ try {
     const result = M.apply(p, args.includes('--push'));
     console.log(JSON.stringify(result));
     if (!result.ok) process.exitCode = 1;
-  } else throw new Error('用法：merge-push.js plan [--dir 目录]，用户确认后 apply --dir 目录 --plan 文件 --confirmed 编号 --push');
+  } else if (args[0] === 'squash') {
+    // 用户说"合并成1条推送"：不出计划，把没推的提交合成一条直接推（guard-commit 核对用户原话）
+    const result = M.squash(path.resolve(val('--dir') || process.cwd()), { push: args.includes('--push'), message: val('--message') });
+    console.log(JSON.stringify(result));
+    if (!result.ok) process.exitCode = 1;
+  } else throw new Error('用法：merge-push.js plan [--dir 目录]，用户确认后 apply --dir 目录 --plan 文件 --confirmed 编号 --push；用户说"合并成1条推送"时 squash --dir 目录 --push [--message "类型: 内容"]');
 } catch (e) {
   console.log(JSON.stringify({ ok: false, msg: String(e.message || e) }));
   process.exitCode = 1;

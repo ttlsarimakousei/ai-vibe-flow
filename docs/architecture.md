@@ -110,7 +110,7 @@ IDEA MCP 的归属、检查时间和连接状态存在 `state/idea-mcp.json`，�
 
 后台审查以真实启动调用登记 agentId，task-id 通知关联最近调用；通知没有 result 时只读启动结果登记的有限大小输出文件。SendMessage 只续已知审查代理，保留变更与模式；最新结论记账，相同通知去重。
 
-`merge-push.js` 在普通 push 指令时也核对远端并生成预览，按确定事件分组。`after-tool` 只有成功生成实际计划才写会话 `<sid>-push-preview`；`guard-commit` 核对预览后另一条真人确认、计划编号及当前目标指纹。独立 index 重建并比 tree，备份 ref 后原子更新当前分支，再普通 push。含 merge、签名或标签时保留原历史。计划在项目 `.vibe/tmp/merge-push/`，会话预览凭据按会话清理，不恢复跨会话许可；它不修改已推送历史。
+2026-10-25 起（用户定的）推送按用户的说法分三种：`intent.pushStyle` 认"合并成1条推送"（squash）、"合并推送"（plan）和普通"推送"；普通推送由 `merge-push.plainAllowed` 只核对参数和目标（当前分支到它跟踪的远端分支，不要求工作区干净），几笔都直接推、每个仓库一次；squash 用 `merge-push.squash` 以 HEAD 的 tree 和远端分支为父提交建一条新提交、留备份 ref 后换分支再推，远端没有这个分支时不合成。下面是 plan 那一种：`merge-push.js` 核对远端并生成预览，按确定事件分组。`after-tool` 只有成功生成实际计划才写会话 `<sid>-push-preview`；`guard-commit` 核对预览后另一条真人确认、计划编号及当前目标指纹。独立 index 重建并比 tree，备份 ref 后原子更新当前分支，再普通 push。含 merge、签名或标签时保留原历史。计划在项目 `.vibe/tmp/merge-push/`，会话预览凭据按会话清理，不恢复跨会话许可；它不修改已推送历史。
 
 `proposal-files.js` 只检查四个产物引用的临时材料，以及变更内 assets/references 文件的存在、忽略规则和链接归属，不读取材料内容、不自动拷入秘密。guard-spec 查新改行；verify-gate 查触碰变更的完整产物；guard-commit 补查命令写入和暂存区，旧引用仍在 index 时不能提交。相对材料路径以变更目录为准，设计检查同时支持产物所在目录。
 
