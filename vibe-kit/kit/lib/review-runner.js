@@ -154,12 +154,25 @@ function routerUrl() {
   try { const settings = JSON.parse(fs.readFileSync(path.join(S.KIT, '..', 'settings.json'), 'utf8')); for (const groups of Object.values(settings.hooks || {})) for (const g of groups) for (const h of g.hooks || []) if (h.type === 'http' && /^http:\/\/(127\.0\.0\.1|localhost):\d+\/vibe-kit\/hook\//.test(h.url)) return new URL('/v1/messages', h.url).href; } catch (e) { /* 尚无 HTTP 钩子 */ }
   return 'http://127.0.0.1:15730/v1/messages';
 }
+/*
+ * 审查请求的输出上限（#206、#209、#211，旧 #180、#186、#188、#175）：deepseek-flash、MiniMax 这类先思考的模型，以前的 5000 常常
+ * 全花在思考上，正文还没写就停了（只有 thinking 块），整轮 model-empty。改成 16000；只回思考、停在输出上限（或者没给停止原因）的，
+ * 同一批用 32000 再试一次，不占用户的重开预算。思考不是结论，不从思考里抽意见。"请求里关思考"网关认不认没法在这里验证，不加
+ */
+const OUTPUT_TOKENS = 16000;
+const RETRY_TOKENS = 32000;
 function parseReply(text, material) {
-  const fail = (stage, reason, raw) => { const e = new Error(reason + '，未记为完成'); e.diagnostic = { stage, excerpt: R.clip(R.material(raw), 1500) }; throw e; };
+  const fail = (stage, reason, raw, extra) => { const e = new Error(reason + '，未记为完成'); e.diagnostic = Object.assign({ stage, excerpt: R.clip(R.material(raw), 1500) }, extra || {}); throw e; };
   let reply; try { reply = JSON.parse(text); } catch (e) { fail('router-json', '本机路由回复不是有效 JSON', text); }
   if (!reply || !Array.isArray(reply.content)) fail('router-content', '本机路由回复缺少 content 文本', text);
+  // 停止原因、输出用量、实际模型在回复 JSON 的末尾，以前只截开头 1500 字看不到
+  const meta = { stopReason: String(reply.stop_reason || ''), outputTokens: Number(reply.usage && reply.usage.output_tokens) || 0, model: R.clip(String(reply.model || ''), 80), blocks: reply.content.map((x) => (x && x.type) || '').filter(Boolean).slice(0, 12) };
   const body = reply.content.filter((x) => x && x.type === 'text').map((x) => x.text || '').join('\n').trim().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
-  if (!body) fail('model-empty', '未收到审查者正文', text);
+  if (!body) {
+    const thinking = meta.blocks.length > 0 && meta.blocks.every((t) => /thinking/.test(t));
+    const cut = thinking && !/^(?:end_turn|stop_sequence|tool_use)$/.test(meta.stopReason);
+    fail('model-empty', cut ? '模型只输出了思考，到了输出上限还没写结论' : '未收到审查者正文', text, Object.assign(meta, { retry: cut }));
+  }
   let result; try { result = JSON.parse(body); } catch (e) { fail('model-json', '审查者正文不是有效 JSON', body); }
   if (!result || !Array.isArray(result.issues) || result.issues.length > 100 || result.issues.some((x) => !x || typeof x.file !== 'string' || typeof x.problem !== 'string' || typeof x.evidence !== 'string')) fail('issue-structure', '审查问题缺少 file、problem 或 evidence', body);
   const norm = (v) => String(v).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
@@ -171,9 +184,9 @@ function parseReply(text, material) {
   }
   return { issues: R.tree(issues), skipped, summary: R.clip(result.summary || '', 1500) };
 }
-function ask(url, material, mode, ms, cancelled, received) {
+function ask(url, material, mode, ms, cancelled, received, maxTokens) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: 5000, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。', messages: [{ role: 'user', content: '模式：' + mode + '\n本批材料：\n' + JSON.stringify(material) }] });
+    const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: maxTokens || OUTPUT_TOKENS, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。', messages: [{ role: 'user', content: '模式：' + mode + '\n本批材料：\n' + JSON.stringify(material) }] });
     // 每批都新开连接（agent: false）：Node 默认复用空闲连接，路由那头空闲几秒就关了它，或者两批之间路由重启过，
     // 复用到断掉的连接就报 ECONNRESET，这一批白白算失败（2026-10-16 机器忙时测试里遇到）。本机连接，新开几乎不花时间
     const req = http.request(url, { method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
@@ -261,9 +274,18 @@ async function run(opts, progress) {
       const batch = material.batches[i]; result.attemptedBatches++; result.attemptedFiles = [...new Set(result.attemptedFiles.concat(batch.map((x) => x.file)))];
       S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { attemptedBatches: result.attemptedBatches, attemptedFiles: result.attemptedFiles, totalBatches: result.totalBatches }); });
       if (progress) progress('审查 ' + (i + 1) + '/' + material.batches.length + ' 批，本批 ' + new Set(batch.map((x) => x.file)).size + ' 个文件/' + batch.length + ' 个片段，已尝试 ' + result.attemptedFiles.length + ' 个文件，已覆盖 ' + result.covered.length + ' 个文件，剩余预算 ' + Math.max(0, Math.round((deadline - Date.now()) / 1000)) + ' 秒');
-      let reply;
+      let reply; let failure = null;
       try { reply = await ask(routerUrl(), batch, opts.mode, deadline - Date.now(), cancelled, () => result.receivedBatches++); }
-      catch (e) {
+      catch (e) { failure = e; }
+      // 只回思考、停在输出上限：同一批把上限加大再试一次（同一轮，不占用户的重开预算）
+      if (failure && failure.diagnostic && failure.diagnostic.retry && Date.now() < deadline && !cancelled()) {
+        if (progress) progress('第 ' + (i + 1) + ' 批：模型只输出了思考、到了输出上限，上限加到 ' + RETRY_TOKENS + ' 再试一次');
+        result.retriedBatches = (result.retriedBatches || 0) + 1;
+        result.diagnostics.push(Object.assign({ batch: i + 1, retried: true }, failure.diagnostic));
+        try { reply = await ask(routerUrl(), batch, opts.mode, deadline - Date.now(), cancelled, null, RETRY_TOKENS); failure = null; } catch (e) { failure = e; }
+      }
+      if (failure) {
+        const e = failure;
         if (e.diagnostic) result.diagnostics.push(Object.assign({ batch: i + 1 }, e.diagnostic));
         for (const item of batch) result.skipped.push({ file: item.file, part: item.part, reason: '本批失败：' + R.clip(e.message, 300) });
         if (cancelled()) { for (const pending of material.batches.slice(i + 1)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：审查已取消' }); throw e; }
@@ -279,6 +301,9 @@ async function run(opts, progress) {
     else if (result.skipped.length) { result.status = result.completedBatches ? 'partial' : 'failed'; result.reason = '还有失败或未覆盖材料，不能记为完整审查'; }
     else result.status = 'completed';
   } catch (e) { if (e.diagnostic) result.diagnostics.push(e.diagnostic); result.reason = R.clip(e.message, 500); result.status = /取消|迟到|替换/.test(result.reason) ? 'cancelled' : /预算/.test(result.reason) ? 'timed_out' : 'failed'; }
+  // 没拿到正文的：说清是模型只输出了思考，给一句能照着做的话（以前只有"未收到审查者正文"，模型不知道下一步）
+  const empty = result.diagnostics.filter((d) => d.stage === 'model-empty');
+  if (empty.length && result.status !== 'completed') result.hint = '审查模型' + (empty[0].model ? '（' + empty[0].model + '）' : '') + (empty.some((d) => d.retry) ? '只输出了思考，到了输出上限（' + Math.max(...empty.map((d) => d.outputTokens || 0)) + ' token）还没写结论' : '没给出正文') + '：缩小范围再审（按审查点 --point，或者少几个文件），或者在配置页把审查方式改成"原审查代理"、用兼容代理方式审。思考内容不是结论，不要从诊断片段里抽意见。';
   result.issues = result.issues.map((x, i) => Object.assign({ id: 'r' + (i + 1) }, x));
   result.fingerprint = before.hash; result.spentMs = spent + Date.now() - started; result.at = Date.now();
   let valid = false;
