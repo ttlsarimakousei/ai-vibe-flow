@@ -4,13 +4,11 @@
 
 ## 最近一次发版
 
-20261025.0653，已推到 GitHub。内网 GitLab 的发布要仓库主人在维护的那台电脑上做，还没做。
+20261028.1834，已推到 GitHub（main 和标签 v20261028.1834）。包在仓库根目录 `vibe-kit-20261028.1834.zip`，也拷了一份到 C:\WorkSpace\vibe-tools\packages。内网 GitLab 的发布要仓库主人在维护的那台电脑上解压新包、双击发布脚本，还没做（20261025.0653 也还没发，直接发这一版就行）。
 
-## 这一批（1028）已改完、没打包
+这一版带的：2026-10-28 导出的 #225—#234 和问题表第 6—17 条，核对、修复结果、说法冲突审查都在 **docs/feedback-20261028.md**。主要变化：去掉 IDEA MCP 接入和 IDEA 起服务、去掉合并推送工具（用户自己说合并推送照做）、路由不带模型名和 Bearer、审查不截断超时上报、审查和提交同一句许可一轮里多次用、devserver 看日志等起来、认得自己起过的服务（全机登记 state/devserver.json）且热更新的不重启、用量页精简。用户定的写在 docs/decisions.md 2026-10-28。
 
-2026-10-28 导出的 #225—#234 和问题表第 6—17 条，核对、修复结果、说法冲突审查都在 **docs/feedback-20261028.md**；提交 `7c916a8..09a278e`（加后面的文档提交），已推 GitHub。主要变化：去掉 IDEA MCP 接入和 IDEA 起服务、去掉合并推送工具（用户自己说合并推送照做）、路由不带模型名和 Bearer、审查不截断超时上报、审查和提交同一句许可一轮里多次用、devserver 看日志等起来、认得自己起过的服务（全机登记 state/devserver.json）且热更新的不重启、用量页精简。用户定的写在 docs/decisions.md 2026-10-28。
-
-只跑了和改动相关的测试（都过了，钩子对比 262 项对 0653 全过），没跑全量回归，没打包。
+全量回归 81 套：第一遍"服务实际地址""1007"两套没过，都是第 17 条带出来的（同目录同命令的两个服务被认成一个；往上找到 claude.exe 就当自己起的，把测试进程结束了），收紧后（2f36aa3）这两套和所有用到 devserver 的套件补跑全过。验收：0051→1834、0653→1834 两条升级路都过。
 
 ## 没做完的
 
@@ -19,20 +17,19 @@
 
 ## 待仓库主人做的
 
-- 定要不要打包发版（照 docs/release.md：全量回归带 `--since v20261025.0653`、打包、验收）。
-- 内网 GitLab 发布 20261025.0653（或者直接发下一版）。
+- 内网 GitLab 发布 20261028.1834。
+- 以后在对话里提的问题，照 AGENTS.md 只记进 docs/owner-issues.md，让修时再分析。
 
 ## 要注意的
 
-- 新测试 `dev/test-feedback1028.js`（端口 18797）；删了 `test-idea-run.js`、`test-feedback1024-idea.js`、`test-push-preview.js`、`test-feedback1012-push.js`、`probes/idea-devserver.js`；`test-idea-mcp.js` 改成测撤回登记。
+- devserver 认"自己起的"只认往上找得到看管进程（`devserver.js __keep`）的，不认 claude.exe：从 Claude Code 里跑的测试、工具往上也找得到 claude，当成服务会被结束。按命令认同一个服务只用在别的目录起的记录上。
 - `lib/idea-mcp.js` 只剩撤回；`due()`、`sync()` 要留着（自动更新时内存里的旧代码会调）。删掉的库文件靠 `install.js` 的 `DROPPED_FILES` 在装新版时清掉，`hooks/` 下的文件照旧不能删。
-- devserver 认不出日志标志的服务，端口通了 3 秒才发第一次请求，`test-devserver-0929.js` 比以前慢一些。`--port auto` 的起点 2026-10-28 起按运行目录（--cwd）算，带 --cwd 起的服务新挑的端口和以前不同（已有记录的照旧用原端口）。
-- 《更新说明.md》的 `@@VER@@` 必须正好两处（stamp-and-pack.js 会查）。
+- devserver 认不出日志标志的服务，端口通了 3 秒才发第一次请求；`--port auto` 的起点按运行目录（--cwd）算。
+- 拿旧版手工跑会起服务的测试，别用 `timeout` 截断：截断了走不到收尾，服务进程和 `vkt-*` 临时目录会留下。
 - 改提示说法、行为之后先跑 `node dev/stale-asserts.js`。回归跑着时别改被测文件。
-- 手工试探用的假用户目录（`vkt-*`）用完要删。
+- 全量回归时桌面上别处开终端会被记成"冒出窗口"，单独重跑那一套确认。
 
 ## 环境
 
-- IDEA 测试项目：C:\WorkSpace\TestIdea（套件已不用 IDEA 起服务，留着做别的验证）。
 - Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。旧版安装包：C:\WorkSpace\vibe-tools\packages。
-- 这台电脑 8 GB 内存，IDEA 开着时只剩约 1 GB；端到端三路同时跑内存紧，不够就 `--e2e-lanes 2`。
+- 这台电脑 8 GB 内存；IDEA 开着时只剩约 1 GB，端到端用 `--e2e-lanes 2`（这次全量回归 27 分钟）。
