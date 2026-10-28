@@ -483,7 +483,8 @@
         <div class="ctl"><select id="k_reviewExecutor"><option value="direct">独立模型审查</option><option value="agent">原审查代理</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">审查预期用时</div><div class="d">不截断审查：每批都审完。一轮审完超过这个时间，或者有批次没拿到结论，自动记一条问题反馈（总用时、每批用时、重试、输出 token、原因），给维护的人优化审查用。一次审查请求最多让模型输出 16000 token；只回了思考、没写结论的，加到 32000、要求少想再试，还不行就把这一批拆成两半各审一次。</div></div>
+        <div><div class="t">审查预期用时</div><div class="d">不截断审查，每批都审完；审完超过这个时间，自动记一条问题反馈给维护的人优化审查。</div>
+          <details class="more"><summary>细节</summary><ul><li>超时、有批次只回了思考、有批次最后没拿到结论，都记一条：总用时、每批用时、重试、输出多少 token、停在哪、原因，不带材料原文。</li><li>一次审查请求最多让模型输出 16000 token；只回了思考、没写结论的，加到 32000、要求少想再试，还不行就把这一批拆成两半各审一次。</li></ul></details></div>
         <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
       </div>
       <div class="opt">
