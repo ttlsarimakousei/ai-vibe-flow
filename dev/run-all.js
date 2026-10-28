@@ -42,12 +42,11 @@ const suites = [['内网反馈 1007', 'test-feedback1007.js', [rt || 'none']], [
 suites.unshift(['内网反馈 1010、提交和多版本驱动', 'test-feedback1010.js', [rt || 'none']]);
 suites.unshift(['提案材料和相似入口', 'test-proposal-files.js', []]);
 suites.unshift(['1017：任务只写实现、验收用例、一份一份来、自带 OpenSpec', 'test-1017.js', []]);
-suites.unshift(['用 IDEA 的运行配置起服务', 'test-idea-run.js', []]);
 suites.unshift(['1012 推送反馈', 'test-feedback1012-push.js', []], ['1012 流程反馈', 'test-feedback1012-workflow.js', []], ['1012 页面探针', 'test-feedback1012-page.js', []]);
 suites.unshift(['1012 数据库诊断', 'test-feedback1012-db.js', [rt || 'none']]);
 suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'decisions', 'states', 'context'].map((name) => ['1013 反馈 ' + name, 'test-feedback1013-' + name + '.js', []]));
 suites.unshift(['提案审查结果有效性', 'test-proposal-review-state.js', []]);
-suites.unshift(...['apply', 'stop', 'review', 'review-scope', 'review-command', 'budget', 'output', 'idea', 'push'].map((name) => ['1024 反馈 ' + name, 'test-feedback1024-' + name + '.js', []]));
+suites.unshift(...['apply', 'stop', 'review', 'review-scope', 'review-command', 'budget', 'output', 'push'].map((name) => ['1024 反馈 ' + name, 'test-feedback1024-' + name + '.js', []]));
 if (old) suites.push(['旧版复现', 'check-old-repro.js', [old]]);
 if (old0929) suites.push(['旧版复现 0929', 'check-old-repro-0929.js', [old0929]]);
 if (oldNames) suites.push(['改名和并进来的技能', 'test-ttls.js', [oldNames]]);
@@ -60,7 +59,7 @@ for (const c of claudes) suites.push(['端到端（全自动）' + path.basename
 // 不给 --rt 的话查库那几项不测（第三个参数给一个不存在的目录）
 claudes.forEach((c, i) => suites.push(['端到端（0930）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-0930.js', [c, path.basename(path.resolve(c, '../../../../..')), rt || path.join(__dirname, '没有运行环境'), String(18765 + 100 * i)]]));
 
-suites.unshift(['IDEA MCP 自动接入', 'test-idea-mcp.js', claudes.flatMap(c => ['--claude', c])]);
+suites.unshift(['IDEA MCP 接入撤掉', 'test-idea-mcp.js', []]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
 
 suites.unshift(['1014 非数据库反馈', 'test-feedback1014.js', []], ['1014 两阶段工作流', 'test-workflow1014.js', []]);

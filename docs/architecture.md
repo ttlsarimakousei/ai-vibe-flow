@@ -24,7 +24,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | 会话开始（新开、/clear、压缩后、恢复） | `session-start.js`（一直走命令） | 送项目说明、只读就绪摘要和壳子结构；压缩恢复时核对当前事实；不自动续接旧交接许可；记启动目录、核对套件指纹、清过期文件、数使用情况 |
 | 用户开口 | `task-anchor.js`（一直走命令） | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；HTTP 钩子自检 |
 | 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑五道检查：`guard-kit`（套件的文件不许改）→ `guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
-| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add）、按提交方式（关 / 询问 / 自动）管提交、push 核对预览后的真人确认，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver（IDEA 能用时提 `--idea`）、归档门槛（含用户没说归档）；都过了再把 `openspec …` 改成调用自带的 OpenSpec（updatedInput） |
+| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add）、按提交方式（关 / 询问 / 自动）管提交、push 核对预览后的真人确认，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）；都过了再把 `openspec …` 改成调用自带的 OpenSpec（updatedInput） |
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下；IDEA 读取复用相同范围判断 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据、推送预览和消费许可；失败或后台启动不算通过；IDEA 工具的返回原样给模型（2026-10-25 起不再遮口令） |
@@ -54,9 +54,8 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |
 | `usage.js` | 使用情况：每天数次数，第二天传到 GitLab |
 | `pull.js` | 开工前拉代码 |
-| `idea-mcp.js` | 本机 IDEA MCP 身份核验和用户级登记；安装、同步、后台更新共用；只管理自己加的连接；顺带读出 IDEA 开没开 brave mode |
-| `idea-run.js` | 用 IDEA 的运行配置起停服务（`devserver.js --idea` 用）：能不能用（连着、开了 brave mode、目录在 IDEA 项目里，只读本机文件）、列运行配置、调试方式起、列会话、STOP。MCP 客户端开着事件流（IDEA 等不到事件流会丢掉 15 秒以上的调用） |
-| `idea-tools.js` | IDEA 直接工具和工具路由的入口适配；复用终端、读文件、单文件编辑的既有保护；未适配的脚本和数据库入口拦下 |
+| `idea-mcp.js` | 撤回套件以前登记的 IDEA MCP（2026-10-28 起不再登记）：装新版、卸载时删掉套件加的、没被改过的 `vibe-idea-端口`；老版本代码调的 `due`、`sync` 留着（due 恒为假，sync 只撤回） |
+| `idea-tools.js` | 用户自己登记的 IDEA MCP（名字 jetbrains、老的 vibe-idea-端口，或带 IDEA 特有工具名）的入口：终端按 Bash、改文件按 Edit、读令牌照拦；认不出是 IDEA 的 MCP 只查写明的路径读不读令牌 |
 | `hook-host.js`、`hook-worker.js`、`hook-health.js` | HTTP 钩子：路由里跑钩子、自检 |
 
 ## 给模型看的东西（vibe-kit/claude）
@@ -75,13 +74,9 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 
 ## 状态放在哪
 
-IDEA MCP 的归属、检查时间和连接状态存在 `state/idea-mcp.json`，属于跨会话状态。`idea-mcp.lock` 防止同一份套件并发登记，异常遗留锁一分钟后可接手。Claude Code MCP 写在用户目录的 `.claude.json`；显式设置 `CLAUDE_CONFIG_DIR` 时写该目录内部的 `.claude.json`。首次选定的位置保存在归属状态里，后台安装器传配置目录时仍沿用。修改前重新读最新内容，临时文件替换前再次比较原文；无法解析或发现并发变化就保留原文件，状态只返回固定原因，不输出原始配置。
+IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`state/idea-mcp.json` 只剩以前登记时记下的归属（`owned`），装新版、卸载时 `idea-mcp.retract` 按它把套件加的、没被改过的 `vibe-idea-端口` 从 Claude Code 的用户配置（`.claude.json`，设了 `CLAUDE_CONFIG_DIR` 时是那个目录里的）删掉，删完状态记成 `off`；用户配置解析不了或正在变化就不改，归属留着下次再撤。`idea-mcp.lock` 防并发，异常遗留锁一分钟后可接手。不输出原始配置。
 
-安装器和 `--sync` 检查已开启的 IDEA 本机 HTTP MCP；`updater.kick/run` 每五分钟最多触发一次后台检查，更新和上报关闭也照常检查。配置页只展示状态白名单，手动检测由子进程执行，不阻塞路由。只发握手和工具列表请求，不执行项目操作；只探测回环地址，有端口、超时和回复大小上限。IDEA 自身的开关、客户端工具审批、项目运行策略保持各自现有约定。
-
-未安装 IDEA 或未启用 MCP 时，不为这项检测启动后台进程。已有自有登记仍会定期核对。`guard-commit` 的匹配器增加 `mcp__.*`，由 `idea-tools` 识别自有或已发现的 IDEA 登记名及 `jetbrains`；其它 MCP 放行。工具路由先解析为实际操作，终端经过 Bash 和 PowerShell 两种检查，所有路径字段、文件列表和项目路径调用 `guard-read`（读令牌、`.claude.json`），编辑类（含格式化、重构、批量补丁里点到的文件）调用 `pre-edit`。2026-10-25 起只留这几道和普通工具一样的检查（用户定的）：没写项目路径按会话目录算，脚本、表达式、运行参数覆盖、数据库入口、名单外的工具都放行，路由解析不了的只看原文里有没有令牌路径；`after-tool` 不再改写 IDEA 工具的返回。该适配不改变 `verify-gate` 的验证记账。
-
-关闭接入开关但还有自有登记时，后台保留撤回重试；全部撤回后不再为这项功能启动进程。卸载遇到无法解析的客户端配置会提示连接未撤回，不输出原始配置。
+`guard-commit` 的匹配器有 `mcp__.*`。`idea-tools` 认 IDEA：名字 `jetbrains`、老的 `vibe-idea-端口`，或者工具名是 IDEA 特有的（`execute_terminal_command`、`get_file_text_by_path`、`replace_text_in_file` 这类）。认出来的：工具路由先解析为实际操作，终端经过 Bash 和 PowerShell 两种检查，所有路径字段、文件列表和项目路径调用 `guard-read`（读令牌、`.claude.json`），编辑类调用 `pre-edit`；别的不拦（2026-10-25 定的）。认不出的 MCP 只查写明的路径参数读不读令牌（套件不再记登记名，令牌保护不能因此放松）。`after-tool` 不改写 MCP 工具的返回。
 
 | 东西 | 位置 |
 |---|---|

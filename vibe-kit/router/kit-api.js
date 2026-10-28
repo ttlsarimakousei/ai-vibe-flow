@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', ccAutoMode: 'off', ideaMcp: true, contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', ccAutoMode: 'off', contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -100,7 +100,7 @@ function cleanConfig(x, base) {
   // 自动压缩线：用到上下文上限的百分之多少时 Claude Code 自己压缩（写进 settings.json 的 autoCompactWindow）。0 = 不管，照 Claude Code 自己的；别的在 50 到 95 之间
   const acp = Number(x && x.autoCompactPercent); if (x && x.autoCompactPercent !== undefined && x.autoCompactPercent !== '' && (acp === 0 || (acp >= 50 && acp <= 95))) c.autoCompactPercent = Math.round(acp);
   // 状态栏第三行显示今天的请求次数和 token；开工前先拉代码
-  for (const k of ['statusUsage', 'ideaMcp']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
+  for (const k of ['statusUsage']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
   // 使用情况上报：每天一条，只有次数和名字（见套件 lib/usage.js）
   if (x && ['on', 'off'].includes(x.usageReport)) c.usageReport = x.usageReport;
   // Claude Code 自带的自动模式（auto mode）：off = 套件把它关掉（settings.json 的 permissions.disableAutoMode），on = 不管它
@@ -383,9 +383,8 @@ async function handle(method, url, body, kitDir, ctx) {
     if (config.kitLock === false && seal.kitLock !== false) tampered.push('关掉"禁止 Claude 自己改套件"');
     if (config.kitBypass === 'auto' && seal.kitBypass !== 'auto') tampered.push('兜底放行"让它自己放行"');
     for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (config[k] === true && seal[k] === false) tampered.push('打开“' + label + '”');
-    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, ideaMcp: ideaStatus(kitDir), openspec: openspecInfo(kitDir) };
+    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, openspec: openspecInfo(kitDir) };
   }
-  if (method === 'POST' && url === '/api/kit/idea/check') return { ideaMcp: await runKit(kitDir, ['idea-check'], 30000) };
   if (method === 'GET' && url === '/api/kit/hooks') return hookInfo(kitDir);
   if (method === 'GET' && url === '/api/kit/sessions') return { sessions: liveSessions(kitDir) };
   if (method === 'GET' && url === '/api/kit/detect') return inWorker('detect', {}, '自动探测');
@@ -401,7 +400,7 @@ async function handle(method, url, body, kitDir, ctx) {
     try { fs.mkdirSync(path.join(kitDir, 'state'), { recursive: true }); fs.writeFileSync(path.join(kitDir, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass, autoMode: c.autoApply === true, autoApply: c.autoApply === true, autoRequirements: c.autoRequirements === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
     auditLog(kitDir, cur, c);
     const r = await sync(kitDir);
-    return { ok: true, synced: r.ok, output: r.output, config: c, ideaMcp: ideaStatus(kitDir) };
+    return { ok: true, synced: r.ok, output: r.output, config: c };
   }
   // 问题反馈：列表，每条带着上报了没有（对上的议题编号和链接）。2026-10-01 起在"更新和上报"那一页显示；导出汇总、清空去掉了：
   // 问题都自动上报成议题，维护的人在那台电脑上导出议题就行
@@ -571,19 +570,6 @@ function auditLog(kitDir, before, after) {
     const fb = loadFeedback(kitDir);
     if (fb && fb.audit) fb.audit('配置页' + changed.join('、'), '经配置页的接口改的。不是你自己点的，说明有程序调了配置页的接口。');
   } catch (e) { /* 记不了不影响保存 */ }
-}
-/** IDEA 接入状态只返回白名单，不读取其它 MCP 的认证配置。 */
-function ideaStatus(kitDir) {
-  const f = path.join(kitDir, 'lib', 'idea-mcp.js');
-  if (!fs.existsSync(f)) return { status: 'unchecked', connections: [] };
-  try {
-    delete require.cache[require.resolve(f)];
-    const m = require(f);
-    const st = m.status(path.dirname(kitDir));
-    // brave mode 开没开：开着才用 IDEA 的运行配置起服务（lib/idea-run.js）。老版本没有 configs 的不报
-    if (typeof m.configs === 'function') { const c = m.configs(path.dirname(kitDir)).filter((x) => x.enabled).sort((a, b) => (b.at || 0) - (a.at || 0))[0]; st.brave = !!(c && c.brave); }
-    return st;
-  } catch (e) { return { status: 'check-error', connections: [] }; }
 }
 /** 查库、查 redis 的工具用得怎么样：{ stats, hints }。老版本没有的返回空的 */
 function toolUsage(kitDir) {

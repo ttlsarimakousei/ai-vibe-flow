@@ -21,6 +21,8 @@ const FROM_PACKAGE = fs.existsSync(path.join(SRC, 'claude')) && fs.existsSync(pa
 // 不看环境变量——配置页保存时由路由调它，路由可能是登录时拉起来的，那时的环境变量和用户开 Claude Code 的终端不一样
 const CLAUDE = FROM_PACKAGE ? (process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')) : path.dirname(SRC);
 const KIT = path.join(CLAUDE, 'vibe-kit');
+// 新版删掉了的套件文件（相对 vibe-kit 目录）：装新版时把旧版留下的删掉。2026-10-28：IDEA 起服务、合并推送整条去掉
+const DROPPED_FILES = ['lib/idea-run.js'];
 const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。要改请改 ~/.claude/vibe-kit 里的 CLAUDE.md 或 rules/*.md，然后运行 node ~/.claude/vibe-kit/install.js --sync -->';
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
@@ -761,6 +763,8 @@ if (mode === 'install') {
   // 自带的 OpenSpec 整个换新：换版本时不留上一版的旧文件
   removeDirQuiet(path.join(KIT, 'openspec'));
   copyDir(path.join(SRC, 'kit'), KIT, ['VERSION']);
+  // 新版删掉了的文件：拷贝不会删，旧版留下的要清掉（自检会挨个载 lib 下的每个文件）。hooks 下的文件不删（AGENTS.md 硬规矩第 11 条）
+  for (const rel of DROPPED_FILES) { try { fs.unlinkSync(path.join(KIT, rel)); } catch (e) { /* 没有 */ } }
   for (const f of ['install.js', 'settings.fragment.json']) copyFile(path.join(SRC, f), path.join(KIT, f));
   // 路由的程序目录整个换新（数据在 router-data，不在这里），免得留下上一版的旧文件。
   // --no-router 不拷、不动：以前装过的路由原样留着（Claude Code 可能正连着它，删了就用不了），照常运行
@@ -1017,13 +1021,13 @@ if (changed === null) { explainNotUtf8('全局约定没写进去；其余部分�
 else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化') + '；启用的规范：' + (block.rules.length ? block.rules.join('，') : '（无）'));
 // 钩子跑的方式（HTTP / 命令）、自动记忆的开关改了之后，settings.json 里的登记要跟着变
 if (mode === 'sync') mergeSettings(readSettings(), false, true);
-// 只接已开启的 IDEA 本机 MCP，失败不影响安装和更新。新增 MCP 要在新会话里加载。
+// 不再接 IDEA 的 MCP（用户 2026-10-28 定的）：以前套件登记的 vibe-idea-<端口>，没被改过的撤掉；你自己登记的不动。失败不影响安装
 try {
-  const r = await require(path.join(KIT, 'lib', 'idea-mcp.js')).sync({ claudeDir: CLAUDE });
-  const notes = { ready: 'IDEA MCP 已核验并登记，重新打开 Claude Code 后在 /mcp 里查看。', 'no-idea': '没找到 IDEA 的 MCP 设置，之后会在后台再检查。', 'not-enabled': 'IDEA MCP 还没开，在 IDEA 设置的 Tools / MCP Server 里开启并应用。', 'not-running': 'IDEA MCP 没在运行，打开 IDEA 后会在后台再检查。', 'user-changed': '你改过或删过 IDEA MCP 登记，保留你的改动；关掉再打开自动接入可恢复。', 'config-error': 'Claude Code 的用户配置无法解析，没改 MCP 登记。', 'config-busy': 'Claude Code 的用户配置正在变化，这次没改，之后重试。', 'name-conflict': 'IDEA MCP 的登记名已被占用，保留原配置。', 'check-error': 'IDEA MCP 检查没完成，之后重试。' };
-  if (r.busy) console.log('  [!] IDEA MCP 正在由另一个进程检查，这次没有修改登记；之后重试。');
-  else if (r.status !== 'off') console.log('  [' + (r.status === 'ready' ? 'OK' : '!') + '] ' + (notes[r.status] || 'IDEA MCP 检查没完成，之后重试。'));
-} catch (e) { console.log('  [!] IDEA MCP 检查没完成，套件其余部分照常安装。'); }
+  const r = await require(path.join(KIT, 'lib', 'idea-mcp.js')).retract({ claudeDir: CLAUDE });
+  if (r.removed.length) console.log('  [OK] 套件不再接 IDEA 的 MCP，以前登记的 ' + r.removed.join('、') + ' 已撤掉；重新打开 Claude Code 生效。');
+  if (r.kept.length) console.log('  [!] ' + r.kept.join('、') + ' 是套件以前登记的 IDEA MCP，你改过，留着没动；不用了在 Claude Code 里 /mcp 删掉。');
+  if (r.status !== 'off') console.log('  [!] 以前登记的 IDEA MCP 这次没撤成（Claude Code 的用户配置' + (r.status === 'config-error' ? '解析不了' : '正在变化') + '），下次更新再撤。');
+} catch (e) { console.log('  [!] 以前登记的 IDEA MCP 这次没撤成，下次更新再撤；套件其余部分照常安装。'); }
 const tail = () => {
   console.log('');
   console.log('  加规范、改约定：改 ' + KIT + ' 里的 CLAUDE.md 或 rules/*.md（文件名不以下划线开头的才生效），再运行 node "' + path.join(KIT, 'install.js') + '" --sync');

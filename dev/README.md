@@ -105,7 +105,6 @@ node dev/pack.js
 | `test-update.js` | 自动更新和发布：维护的人发布，同事的电脑自己发现、自己装上；装坏了退回；路由忙就等 |
 | `test-issues.js` | 问题上报：用 SSH 申请令牌、装之前攒下的不传、不重复建、又出现；导出（本机不存）、关掉是另一步；使用情况一台电脑一条议题、一天一条补充，导出时汇总在最后 |
 | `test-proposal-files.js` | 提案材料随变更交付；四产物临时引用、忽略材料、暂存区旧内容；普通文档标题不能跳许可；中文事件和归档边界 |
-| `test-idea-run.js [旧套件目录]` | `devserver.js --idea`，对着假 IDEA（`lib/fake-idea.js`）：IDEA 用不了照命令起、没写 --idea 列运行配置、调试方式起要等答 HTTP（上次没等到答 HTTP 的再 start 接着等）、没改直接用、改了重启、用户点 Run 起的改了就结束重起、运行配置名写错、IDEA 不回话、端口被别的程序占着、起服务拦截提示里的 --idea。真的 IDEA 上走一遍用 `probes/idea-devserver.js` |
 | `test-1017.js [旧套件目录]` | 2026-10-17 第二批：任务清单只写实现（[代码审查][测试][用户验收] 拦下）、新设计要有"## 验收用例"、人工模式需求文档一份一份来；自带 OpenSpec 的命令改写、自动建 openspec/、Node 不够时照原命令跑、三种"指令不支持"提示；安装器装用户级 /opsx 命令（用真的 OpenSpec，别的测试只放占位）、备份同名、卸载收回；旧的提交档位升级后按"询问" |
 | `test-secrets.js` | 令牌和模型的 key 不给读；跑发布脚本要确认；安装器加的权限规则 |
 | `ui-update.js` | 配置页"更新和上报"的接口，从页面上点更新（路由会重启）；导出、关掉、使用情况；维护的电脑写死在代码里，测导出时用环境变量 VIBE_KIT_MAINTAINER_HOSTS 把路由装成那台；第二个参数给秒数就留着让人看页面 |
@@ -115,11 +114,11 @@ node dev/pack.js
 | `lib/affected.js` | `run-all.js --since` 用的：按 git 判断独立模块的测试用到的文件从某个标签以来改没改 |
 | `lib/hook-thread.js` | `H.hook` 在工作线程里调钩子用的线程脚本 |
 | `lib/fake-gitlab.js` | 假 GitLab：git 的 http 通道加 issue 的接口 |
-| `lib/fake-idea.js` | 假 IDEA MCP（单独一个进程）：运行配置、调试方式起停、Run 方式起的停不了、不开事件流的慢调用被丢掉、运行配置有错不回话，照真的 IDEA 实测的样子 |
+| `lib/fake-idea.js` | 以前的假 IDEA MCP；现在只用它的 `__service`（先占端口、过一会儿才答 HTTP 的慢服务），给 `test-devserver-0929.js` 用 |
 | `lib/fake-ssh.js` | 假 ssh：拉仓库、推仓库、申请令牌 |
 | `lib/fake-busy.js` | 装成路由，只回答"现在忙不忙" |
-| `test-idea-mcp.js` | 假 IDEA HTTP 和事件流：安装、同步、后台接入、端口变化、多实例、用户修改和删除、卸载、损坏配置、已有凭据保留；给 --claude 时核验 CLI 识别登记；参数可给旧版目录验证失败 |
-| `test-idea-tools.js` | IDEA 直接工具和路由的真实钩子入口：令牌、搜索范围、提交、push、数据库、单文件编辑及未适配操作；不执行 IDE 工具。可给旧版目录验证失败 |
+| `test-idea-mcp.js` | IDEA MCP 接入撤掉（2026-10-28）：装新版、卸载时撤掉套件以前登记的 vibe-idea-<端口>，用户自己的、改过的不动，用户配置坏了不改；不再后台探测、配置页后端不给 IDEA 状态。参数可给旧版目录验证失败 |
+| `test-idea-tools.js` | 用户自己登记的 IDEA MCP 走真实钩子入口：令牌、搜索范围、提交、push、数据库、单文件编辑；认不出是 IDEA 的 MCP 也查路径参数读不读令牌；不执行 IDE 工具。可给旧版目录验证失败 |
 | `lib/watch-windows.ps1` | 盯着桌面，测试跑的时候冒出来的窗口都记下来，一闪就关的也算 |
 | `lib/harness.js` | 公共部分：假用户目录、假会话记录、结尾核对真实文件没变 |
 
@@ -176,11 +175,6 @@ node dev/probes/cc-updated-input.js 2.1.289
 
 `cc-updated-input.js`：PreToolUse 钩子用 `updatedInput` 改写 Bash 命令，实际执行的是不是改写后的（套件集成 OpenSpec 靠它，2026-10-17 三版都实测通过）。
 
-```bash
-node dev/probes/idea-devserver.js
-```
-
-`idea-devserver.js`：拿真的 IDEA 走一遍 `devserver.js --idea`（起、没改直接用、改了重启、停；用户点 Run 起着的改了就结束重起；运行配置名写错）。要开着 IDEA、开了 MCP 和 brave mode，项目用 `C:\WorkSpace\TestIdea`（Spring Boot 的 boot-demo 18081、pom 里配 tomcat7 插件的 mvc-pom 18082）；用假用户目录，改过的源文件最后改回原样。换 IDEA 版本、改 `lib/idea-run.js` 之后跑一次。
 
 测试支架和自带的 OpenSpec（2026-10-17 起）：`H.makeHome` 拷套件时不带任何 `node_modules`，所以假用户目录里默认没有自带的 OpenSpec，钩子不改写 `openspec` 命令（和 Node 版本不够的电脑一样），以前的测试不受影响；要测 OpenSpec 的，第四个参数给 `{ openspec: true }`，拷一份真的进去（约 16MB）。`H.makePackage` 和 `H.stubDeps(dir)` 给安装包放的 OpenSpec 是占位，要求 Node 99，安装器照常装完、只说一句"没装自带的 OpenSpec"。
 

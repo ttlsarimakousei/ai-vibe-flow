@@ -104,8 +104,10 @@ H.ok('路径别名不能盖过任务文件（几个路径字段都按 Edit 查�
 H.setConfig(h, { specGate: false });
 H.ok('惯用 jetbrains 名字有保护', denied(call('read_file', { file_path: secret }, 'jetbrains')));
 H.ok('服务器名连字符转下划线有保护', denied(call('read_file', { file_path: secret }, 'vibe_idea_64342')));
-H.write(path.join(h.kit, 'state/idea-mcp.json'), JSON.stringify({ connections: [{ name: 'my-idea' }] }));
-H.ok('已有的自定义登记名有保护', denied(call('read_file', { file_path: secret }, 'my_idea')));
+// 2026-10-28 起套件不再登记 IDEA，不靠登记名认：IDEA 特有的工具名认得出；认不出的 MCP 也查写明的路径读不读令牌（只能收紧）
+H.ok('自己起名的 IDEA 登记：IDEA 特有工具有保护', denied(call('get_file_text_by_path', { pathInProject: secret }, 'my_idea')));
+H.ok('认不出是 IDEA 的 MCP：路径参数读令牌也拦', denied(call('read_file', { file_path: secret }, 'my_idea')));
+H.ok('认不出是 IDEA 的 MCP：普通路径不拦', call('read_file', { file_path: path.join(repo, 'a.js') }, 'my_idea') === null);
 H.ok('其它 MCP 的同名工具不被接管', call('execute_tool', { command: 'execute_sql_query --query "select 1"' }, 'other') === null);
 
 const ir = H.node(h, path.join(from, 'install.js'), ['--no-router', '--no-open']);

@@ -1,53 +1,22 @@
 # IDEA 接入
 
-IDEA 2025.2 或更新的版本内置 MCP。套件自动把它登记给 Claude Code，让 Claude 能用 IDE 的索引、重构、编译和调试。回到[用户手册](../README.md)。
+2026-10-28 起套件不再接 IDEA 的 MCP，也不再用 IDEA 的运行配置起服务。回到[用户手册](../README.md)。
 
-## 怎么接上
+## 变了什么
 
-1. 在 IDEA 设置的 **Tools / MCP Server** 里开启并应用。套件不下载 IDEA，不替你关工具授权，也不改工具路由选项。
-2. 安装、覆盖更新、保存开关时，套件检测本机 IDEA 的 MCP。安装时 IDEA 没开也没关系：之后会话会触发后台检查，五分钟内不重复查；GitLab 更新和上报都关着也照样查。没装 IDEA、没开 MCP 时不为这件事起后台进程。
-3. 登记好之后重新打开 Claude Code，用 `/mcp` 看 `vibe-idea-端口`。连接走本机回环地址，不经过模型网关。
+- 安装、更新不再把本机 IDEA 的 MCP 登记给 Claude Code，后台也不再探测。配置页"本机环境"里的"IDEA MCP"一节去掉了。
+- 以前套件登记的 `vibe-idea-端口`：装新版时撤掉（重新打开 Claude Code 生效）。你改过那一项的，留着不动，安装时说一句；不用了在 Claude Code 里 `/mcp` 删掉。你自己登记的（比如叫 `jetbrains`）不动。
+- 起服务只走 `tools/devserver.js` 照命令起，见[审查和自测](审查和自测.md)。你在 IDEA 里起着的服务套件不动：端口被它占着时说清是谁，要不要重启问你。以前用 IDEA 起、devserver 记着的那一份，`stop`、`status` 时说一句"到 IDEA 里停"，记录清掉，进程不动。
+- `devserver.js start` 写了 `--idea` 的不报错，照 `--` 后面的命令起。
 
-配置页"本机环境 / IDEA MCP"显示状态，可以关掉自动接入，或者点"重新检测"。
+为什么去掉：要 IDEA 开着、项目在 IDEA 里打开、开了 brave mode、运行配置没错，缺一样就起不来或者挂住；IDEA 的 MCP 停不了普通 Run 起的服务；模型直接调运行配置和走 devserver 两个入口互相拦。用下来被拦、起不来比省下的事多。
 
-- 只查套件所属用户目录下标准的 JetBrains IDEA 设置，以及从 64342 开始的 32 个端口。先核验握手和工具列表，再写用户级的 HTTP 登记，所有项目可用。多个运行中的 IDEA 分别登记；换了端口收回失效的登记。
-- 现成的同地址 HTTP 配置直接用，不接管其中的认证信息。你改过或删过套件的登记，自动补登记暂停；关掉再打开开关恢复。关掉开关和卸载只撤回套件加的、没被改过的登记。
-- 自定义了 IDE 设置目录或端口、检测不到的：用 IDEA 的 Copy HTTP Stream Config 手动登记，名字建议用 `jetbrains`，这样下面的保护也能认出。
+## 自己登记的 IDEA MCP 走哪些检查
 
-## 能做什么
+你自己在 Claude Code 里登记 IDEA 的 MCP 照样能用，套件只做和普通工具一样的检查：
 
-实际工具取决于 IDE 版本和开启的工具，详见 [JetBrains 的说明](https://www.jetbrains.com/help/idea/mcp-server.html)。起服务已经改走 IDEA 的运行配置（见下一节）；编译还是用命令跑快检。
-
-| 套件现在的做法 | IDEA MCP 能补什么 |
-|---|---|
-| 查文件、搜符号和引用 | 项目索引、符号定义、引用和调用层次 |
-| 重命名、格式化 | IDE 的重构和格式化，沿用项目规则 |
-| 命令行编译和代码检查 | `build_project`、IDE 的错误和警告；完整测试仍要运行 |
-| 临时拼启动命令 | 执行 IDEA 已有的运行配置，沿用 JDK、参数和依赖 |
-| 调试 | 断点、变量、调用栈、单步、停止调试会话 |
-
-看页面仍用 `/ttls-see-page`；数据库仍用 `/ttls-db-crud`，开发环境筛选、写入确认和快照照旧。
-
-## 用 IDEA 的运行配置起服务，改完自动重启
-
-IDEA 连着、开了 brave mode、项目在 IDEA 里打开着的时候，起服务自测用你在 IDEA 里配好的运行配置（Spring Boot、Maven 的 `tomcat7:run`、本机 Tomcat 都行），你不用自己重启。套件只用现成的运行配置，不建、不改。
-
-1. **开 brave mode**：IDEA 设置 → 工具 → MCP 服务器 → 勾"不经确认运行命令和运行配置"（brave mode）。不开的话 IDEA 每次都要你点允许，套件就照旧用命令起，不弹框。这个开关管所有连上 IDEA 的 MCP 客户端，开不开你定。
-2. **怎么起**：`devserver.js start --name backend --idea "<运行配置名>" --port <它监听的端口> -- <启动命令>`。不写 `--idea` 时它不起，列出 IDEA 里的运行配置名让它选；前端开发服务器这类没有运行配置的加 `--no-idea`。端口是运行配置自己的（`server.port`、pom 里 tomcat 插件的 `<port>`、Tomcat 运行配置的 HTTP 端口），不能 `auto`。`--` 后面的命令留着：IDEA 用不了时照它起。
-3. **用调试方式起**：IDEA 的调试窗口里看得到，不打断点和 Run 一样用。不用 Run 是因为 Run 起的套件停不了（IDEA 的 MCP 没有停止的工具），再跑一次也不会重启，只会多起一份、端口绑不上，旧的照样用旧代码答话。
-4. **自测前按需重启**：要调接口、看页面、跑验收用例之前再 `start` 一次，起服务之后改过代码就停掉、在 IDEA 里重起，等它真的答话（不只是端口通了）才返回；没改过直接用。
-5. **你自己点 Run 起着的**：代码没改过直接用；改过就结束它（只结束占着这个端口、由 IDEA 起的进程），用调试方式重起，并说一句。占着端口的不是 IDEA 起的，照旧不动它。
-6. **IDEA 没回话**：多半弹出了编辑运行配置的框（运行配置有错）。这个框不关，IDEA 的 MCP 调用全都等着。它会说清去 IDEA 里看，不改用命令起，免得和 IDEA 那边起来的撞上。
-7. 没连上 IDEA、没开 brave mode、目录不在 IDEA 项目里：和以前一样用命令起。套件记着"没连上"时，`start` 会当场再查一次 IDEA，你刚开 IDEA、刚连上的不用等后台下一次检查。
-8. **不多起一份**：模型直接调 IDEA 的 `execute_run_configuration`、`xdebug_start_debugger_session` 起运行配置时，同一个运行配置这个会话里已经起过、还在跑，或者 devserver 记着它在跑，就拦下：先告诉你它已经在跑；要重启用 `devserver.js start --idea "<运行配置名>" --port <端口> --restart`，结束原来那个再用调试方式起。跑完就退出的（测试类的运行配置）、已经停掉的不拦。
-
-## 走哪些保护
-
-2026-10-25 起，IDEA 的工具只走和普通工具一样的检查，别的一律不拦：
-
-- 终端命令（`execute_terminal_command`）按 Bash、PowerShell 的检查走：push 要确认、结束路由、整仓 add、串着 cd 这类，和你在 Bash 里跑一样。
-- 改文件（`replace_text_in_file`、`create_new_file`、格式化、重构、批量补丁里点到的文件）按 Edit、Write 的检查走：不许改套件、不许写坏非 UTF-8 文件、提案和任务清单的门槛、代码之外的产出先问位置。补丁要改 OpenSpec 产物的，改用 Edit、Write（要看改完的文字）。
-- 读套件的令牌文件、模型的 key、Claude Code 的用户配置（`.claude.json`，里面有别的 MCP 的认证信息）照拦。
-- 人工模式下，`build_project`、`get_file_problems`、`lint_files` 算快检，直接跑；`execute_run_configuration` 算自测，先问你。
-- 不再拦：没写 `projectPath`（按会话的目录算）、IDEA 的查库工具、整份运行配置、运行参数覆盖、检查脚本、调试表达式、带表达式的断点、套件没见过的新工具。IDEA 工具返回的内容也不再遮口令。
-- IDEA 的编译结果还不算收工检查认的验证记录，仍要用命令跑一次快检。
+- 终端命令（`execute_terminal_command`）按 Bash、PowerShell 的检查走：push 要确认、结束路由、整仓 add、串着 cd 这类。
+- 改文件（`replace_text_in_file`、`create_new_file`、格式化、重构、批量补丁里点到的文件）按 Edit、Write 的检查走。
+- 读套件的令牌文件、模型的 key、Claude Code 的用户配置（`.claude.json`）照拦。认不出是 IDEA 的 MCP，写明的路径参数读到这些也拦。
+- 人工模式下，`execute_run_configuration` 算自测，先问你；`build_project`、`get_file_problems` 算快检，直接跑。
+- 别的不拦：查库工具、整份运行配置、运行参数、调试表达式、新工具。返回的内容不遮口令。

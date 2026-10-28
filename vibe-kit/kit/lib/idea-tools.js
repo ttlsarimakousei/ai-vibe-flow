@@ -1,13 +1,14 @@
 'use strict';
 /*
  * IDEA MCP 的入口：只留和普通工具一样的检查（用户 2026-10-25 定的，问题反馈表第 1、3、4 条）。
+ * 2026-10-28 起套件不再登记 IDEA 的 MCP、不再用它起服务（用户定的）；用户自己登记的（名字 jetbrains，或者老版本留下的 vibe-idea-<端口>）照下面查。
  *   终端命令按 Bash / PowerShell 查（push 要确认、结束路由、整仓 add 这类，guard-commit）；
  *   改文件按 Edit / Write 查（改套件、编码、提案门槛、产出位置，pre-edit）；
  *   读套件的令牌文件、Claude Code 的用户配置（.claude.json，带别的 MCP 的认证信息）照拦（硬规矩第 6 条）。
  *   别的都不拦：没写 projectPath 的按会话目录算；查库工具、整份运行配置、运行参数覆盖、脚本、批量补丁、带表达式的断点、
  *   名单外的工具都放行（以前一律"这个 IDEA 工具尚未适配套件检查"）。IDEA 工具的返回也不再遮口令（after-tool）。
  *   跑运行配置照旧算自测，人工模式先问（lib/flow-policy.js，和 Bash 跑测试一样）。
- * 只认已登记的 IDEA 和惯用的 jetbrains 名字，不把其它 MCP 的同名工具当成 IDEA。
+ * 只认惯用的 jetbrains 名字和老版本的 vibe-idea-<端口>，不把其它 MCP 的同名工具当成 IDEA。
  */
 const path = require('path');
 const { fileURLToPath } = require('url');
@@ -33,75 +34,24 @@ function denied(msg, j) {
   try { require('./feedback').countBlock('guard-commit', '[vibe-kit IDEA MCP] ' + msg, String(j.session_id || '')); } catch (e) { /* 计数不影响检查 */ }
   return S.blockOut('PreToolUse', '[vibe-kit IDEA MCP] ' + msg);
 }
+// IDEA 内置 MCP 特有的工具名：用户自己登记、名字不叫 jetbrains 的也认得（套件不再记登记名，令牌保护只能收紧，硬规矩第 6 条）
+const IDEA_TOOLS = new Set(['execute_terminal_command', 'get_file_text_by_path', 'replace_text_in_file', 'create_new_file', 'rename_refactoring', 'reformat_file', 'get_file_problems', 'execute_run_configuration', 'get_run_configurations', 'xdebug_start_debugger_session', 'get_project_modules', 'build_project']);
 function isIdea(tool) {
   const m = /^mcp__(.+)__([a-zA-Z_0-9]+)$/.exec(String(tool || '')); if (!m) return false;
-  const st = S.readState('idea-mcp'); const names = ['jetbrains', ...Object.keys(obj(st.owned) ? st.owned : {}), ...(Array.isArray(st.connections) ? st.connections : []).filter(obj).map(c => c.name)];
-  return /^vibe[-_]idea[-_]\d+$/.test(m[1]) || names.some(n => n === m[1] || String(n).replace(/-/g, '_') === m[1]);
+  return /^vibe[-_]idea[-_]\d+$/.test(m[1]) || m[1] === 'jetbrains' || IDEA_TOOLS.has(m[2]);
 }
-function capabilities() { return { supported: ['execute_terminal_command', 'get_file_problems', 'get_file_text_by_path', 'replace_text_in_file', 'execute_run_configuration'], connection: require('./idea-mcp').status().status, limitations: '终端命令按 Bash 查、改文件按 Edit 查、读套件令牌照拦，别的工具不拦。运行配置用 IDEA 里已有的；已经在跑的不再多起一份，要重启用 devserver.js start --idea --restart。' }; }
 // 套件令牌、模型配置、Claude Code 用户配置的路径：解析不了参数时，看原文里有没有点到它们
 const SECRET_MSG = '读的范围里有套件的令牌、模型的 key 或 Claude Code 的用户配置（带别的 MCP 的认证信息），内容不能读进会话。缩小到要看的那个文件或目录；令牌、模型、连接配没配好让用户看配置页或 /mcp。';
 function secretMention(text) { return /secrets\.json|router-data|\.claude\.json/i.test(String(text || '')); }
 const FILE_KEYS = ['file_path', 'pathInProject', 'filePath', 'path'];
-/** 本机这个端口有没有程序在听（另起一个 node 试连，最多等 0.8 秒；钩子里不能同步等网络） */
-function listening(port) {
-  if (!(Number(port) > 0 && Number(port) < 65536)) return false;
-  const script = "const s=require('net').connect(+process.argv[1],'127.0.0.1');s.setTimeout(800);s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));s.on('timeout',()=>process.exit(1));";
-  try { return require('child_process').spawnSync(process.execPath, ['-e', script, String(port)], { windowsHide: true, stdio: 'ignore', timeout: 3000 }).status === 0; } catch (e) { return false; }
-}
-/**
- * 同一个运行配置已经在跑：再起就多一份（用户 2026-10-22 提的，问题反馈表第 2 条）。普通 Run 起的 IDEA 的 MCP 停不了，
- * 再调一次 execute_run_configuration 会起第二份、端口绑不上、旧的照样用旧代码答话（docs/claude-code-facts.md）。
- * 认法：这个会话里用 MCP 起过同名的运行配置、结果不是跑完退出的、之后没停掉它；或者 devserver 记着它在跑、端口在听。
- * 返回要说的话；没在跑返回 ''
- */
-function alreadyRunning(j, name, input, dirs) {
-  const cfgName = String(input.configurationName || input.name || '');
-  if (!cfgName || !['execute_run_configuration', 'xdebug_start_debugger_session'].includes(name)) return '';
-  if (name === 'execute_run_configuration' && String(input.waitForExit) === 'true') return '';
-  let since = 0;
-  try {
-    const es = j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : [];
-    const res = S.toolResults(es);
-    for (const c of S.toolCalls(es, 0)) {
-      const m = /^mcp__(.+)__([a-zA-Z_0-9]+)$/.exec(c.name || ''); if (!m || !isIdea(c.name)) continue;
-      let tool = m[2], inp = obj(c.input) ? c.input : {};
-      if (tool === 'execute_tool') { const r = route(inp.command); if (!r) continue; tool = r.name; inp = r.input; }
-      const nm = String(inp.configurationName || inp.name || inp.sessionId || '');
-      if (nm !== cfgName) continue;
-      if (tool === 'xdebug_control_session' && /stop/i.test(String(inp.action || ''))) { since = 0; continue; }
-      if (tool !== 'execute_run_configuration' && tool !== 'xdebug_start_debugger_session') continue;
-      const r = res.get(c.id);
-      if (!r || r.error) continue;
-      // 跑完退出的（测试类的运行配置、waitForExit）不算在跑
-      if (String(inp.waitForExit) === 'true' || /exit\s*code|exitCode"?\s*:\s*-?\d|Process finished|进程已结束/i.test(r.text)) { since = 0; continue; }
-      since = c.at || Date.now();
-    }
-  } catch (e) { since = 0; }
-  let port = 0;
-  if (!since) {
-    // devserver.js start --idea 起的：记录在 <目录>/.vibe/run/<名字>.json
-    const fs = require('fs');
-    for (const d of dirs) {
-      let names = []; try { names = fs.readdirSync(path.join(d, '.vibe', 'run')).filter(n => /\.json$/.test(n)); } catch (e) { continue; }
-      for (const n of names) {
-        let rec = null; try { rec = JSON.parse(fs.readFileSync(path.join(d, '.vibe', 'run', n), 'utf8')); } catch (e) { continue; }
-        if (rec && rec.mode === 'idea' && rec.config === cfgName && listening(rec.port)) { port = Number(rec.port); since = rec.startedAt || 0; break; }
-      }
-      if (port) break;
-    }
-  }
-  if (!since) return '';
-  const devserver = path.join(S.KIT, 'tools', 'devserver.js').replace(/\\/g, '/');
-  return '运行配置"' + cfgName + '"已经在跑（' + (port ? 'devserver 起的，端口 ' + port : '这个会话里用 IDEA 起过、还没停') + '）。再起会多起一份：普通 Run 起的 IDEA 停不了，第二份端口绑不上，旧的照样用旧代码答话。'
-    + '先告诉用户它已经在跑；要重启就用 node "' + devserver + '" start --idea "' + cfgName + '" --port ' + (port || '<它监听的端口>') + ' --restart：会结束原来那个，再用调试方式起（以后改完代码 start 一次就自动重启）。不要再直接调运行配置。';
-}
 function handle(j) {
   const m = /^mcp__(.+)__([a-zA-Z_0-9]+)$/.exec(String(j.tool_name || ''));
-  if (!m || !isIdea(j.tool_name)) return null;
+  if (!m) return null;
+  // 认不出是 IDEA 的 MCP：只查写明的路径参数读不读套件令牌（以前靠套件的登记名认 IDEA，登记去掉后用户自己起的名字认不出，令牌保护不能因此放松）
+  const ide = isIdea(j.tool_name);
   let name = m[2], input = obj(j.tool_input) ? j.tool_input : {};
   const outer = input.projectPath;
-  if (name === 'execute_tool') {
+  if (ide && name === 'execute_tool') {
     const r = route(input.command);
     // 路由参数解析不了：不拦，只看原文里有没有套件令牌、用户配置的路径
     if (!r) return secretMention(input.command) ? denied(SECRET_MSG, j) : null;
@@ -113,7 +63,7 @@ function handle(j) {
   const cwd = projects[0] || path.resolve(j.cwd || process.cwd());
   const next = (tool, args, dir) => Object.assign({}, j, { cwd: dir || cwd, tool_name: tool, tool_input: args });
   const G = require('../hooks/guard-commit');
-  if (name === 'execute_terminal_command') {
+  if (ide && name === 'execute_terminal_command') {
     // IDEA 的终端可能是 Bash 或 PowerShell，两种解析都检查，任意一种拦下就停止（和普通命令一样的检查）
     const args = { command: String(input.command || '') };
     return G.handle(next('Bash', args)) || G.handle(next('PowerShell', args));
@@ -140,11 +90,9 @@ function handle(j) {
     if (typeof list === 'string') { try { list = JSON.parse(list); } catch (e) { list = [list]; } }
     if (Array.isArray(list)) for (const p of list) addFile(p);
   }
-  for (const p of projects.length ? projects : [cwd]) { const r = checkRead(p); if (r) return r; }
+  for (const p of projects.length ? projects : ide ? [cwd] : []) { const r = checkRead(p); if (r) return r; }
   for (const f of files) { const r = checkRead(f); if (r) return r; }
-  // 同一个运行配置已经在跑：不再多起一份（问题反馈表第 2 条）
-  const running = alreadyRunning(j, name, input, [...new Set([cwd, path.resolve(j.cwd || process.cwd()), S.sessionHome(j)])]);
-  if (running) return denied(running, j);
+  if (!ide) return null;
   // 改文件：和 Edit / Write 一样查（改套件、编码、提案门槛、产出位置）。几个路径字段写得不一样的，每个都查
   if (['create_new_file', 'replace_text_in_file', 'rename_refactoring', 'reformat_file'].includes(name)) {
     for (const f of [...new Set(files)]) {
@@ -167,4 +115,4 @@ function handle(j) {
   }
   return null;
 }
-module.exports = { handle, route, isIdea, capabilities };
+module.exports = { handle, route, isIdea };

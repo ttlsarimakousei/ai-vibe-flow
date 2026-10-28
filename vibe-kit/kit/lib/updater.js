@@ -357,9 +357,7 @@ function kick(why) {
     // 使用情况：有过完了的日子还没传（今天查过、传完了就不再看；传不上去一小时后再试）
     let dueUsage = false;
     if (cfg.usageReport !== 'off') { const u = readState('usage-sync'); const U = require('./usage.js'); const today = U.dayKey(); dueUsage = u.checkedDay !== today && now >= (u.blockedUntil || 0) && now - (u.lastTryAt || 0) >= 3600000 && U.days().some((d) => d < today); }
-    // 开关关掉但还有自有登记时，仍留一次后台撤回机会，避免并发占用后永远遗留。
-    const dueIdea = require('./idea-mcp.js').due();
-    if (!dueUpdate && !dueApply && !dueIssues && !dueUsage && !dueIdea) return false;
+    if (!dueUpdate && !dueApply && !dueIssues && !dueUsage) return false;
     if (now - (st.lastKickAt || 0) < 60000 || lockHeld()) return false;
     setState({ lastKickAt: now, lastKickWhy: String(why || '') });
     return spawnBackground(['run']);
@@ -387,7 +385,6 @@ async function run(opt) {
     // 只是没等到路由空闲、没装成的，照常上报：不然全自动挂着跑、请求不断的那段时间里，问题和使用情况一直传不上去
     if (cfg.issueUpload !== 'off' && !o.noIssues && !installed) { try { out.issues = await require('./issues.js').sync(); } catch (e) { log('上报问题时出错：' + ((e && e.message) || e)); } }
     if (cfg.usageReport !== 'off' && !o.noIssues && !installed) { try { out.usage = await require('./issues.js').syncUsage(); } catch (e) { log('上报使用情况时出错：' + ((e && e.message) || e)); } }
-    if (!installed && require('./idea-mcp.js').due()) out.ideaMcp = await require('./idea-mcp.js').sync({ enabled: cfg.ideaMcp !== false });
   } catch (e) { log('后台更新出错：' + ((e && e.stack) || e)); out.error = String((e && e.message) || e); } finally { unlock(); }
   return out;
 }
@@ -414,7 +411,6 @@ if (require.main === module) {
     else if (cmd === 'issues-close') { const i = process.argv.indexOf('--name'); print(await require('./issues.js').closeExported(String(process.argv[3] || '').split(',').map(Number).filter((x) => x > 0), i > 0 ? process.argv[i + 1] : '')); }
     else if (cmd === 'usage-sync') { let r = { skipped: '已经有一个在跑了' }; if (lock()) { try { r = await require('./issues.js').syncUsage({ force: true }); } finally { unlock(); } } print(r); }
     else if (cmd === 'usage-preview') print(require('./issues.js').usagePreview());
-    else if (cmd === 'idea-check') print(await require('./idea-mcp.js').sync());
     else print(status());
   })().catch((e) => { log('出错：' + ((e && e.stack) || e)); print({ ok: false, error: String((e && e.message) || e) }); process.exitCode = 1; });
 }
