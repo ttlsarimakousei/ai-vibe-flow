@@ -295,6 +295,17 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('vite 改了代码：不重启，直接用', v2.code === 0 && /^已经在跑：web/.test(last(v2)) && /会热更新，改了代码不用重启/.test(last(v2)) && (await pidAt(vport)) === vpid, last(v2));
     const D = require(path.join(h.kit, 'tools', 'devserver.js'));
     H.ok('npm run dev 对应的脚本是 vite：认成热更新；npm run build 不是', D.hotOf('npm run dev -- --port 30001', front) && D.hotOf('npm --prefix web run dev', shell) && !D.hotOf('npm run build', front) && !D.hotOf('mvn spring-boot:run', proj));
+    // 同一个目录、同一条命令、名字不同：是有意起两份（环境变量不同），不认成同一个
+    const a1 = tool(proj, ['start', '--name', 'one', '--port', 'auto', '--', 'node', 'srv.js']);
+    const a2 = tool(proj, ['start', '--name', 'two', '--port', 'auto', '--env', 'X=2', '--', 'node', 'srv.js']);
+    H.ok('同一个目录里名字不同、命令相同：起两份，不认成同一个', a1.code === 0 && a2.code === 0 && portOf(a1) !== portOf(a2) && !/认出来了/.test(a2.out) && fs.existsSync(path.join(proj, '.vibe', 'run', 'one.json')), a2.out.slice(-400));
+    tool(proj, ['stop', '--name', 'one']); tool(proj, ['stop', '--name', 'two']);
+    // 从 Claude Code 里跑的别的程序（这里是测试自己起的进程）占着端口：往上找得到 claude，但不是 devserver 起的，不能当成自己的去结束
+    const holder = require('child_process').spawn(process.execPath, ['-e', "require('http').createServer((q,s)=>s.end('x')).listen(18802,'127.0.0.1')"], { windowsHide: true, stdio: 'ignore' });
+    await H.sleep(800);
+    const busy = tool(proj, ['start', '--name', 'busy', '--port', '18802', '--', 'node', 'srv.js']);
+    H.ok('端口被不是 devserver 起的程序占着：不动它，说清是谁', busy.code === 1 && alive(holder.pid) && !/记录丢了/.test(busy.out), busy.out.slice(-400));
+    try { holder.kill(); } catch (e) { /* 已经退了 */ }
     // 在壳子根 stop --all：各个子项目里起的都停掉
     const st = tool(shell, ['status']);
     H.ok('在壳子根看 status：子项目里起的也列出来', /api：在跑/.test(st.out) && /web：在跑/.test(st.out), st.out.slice(-600));

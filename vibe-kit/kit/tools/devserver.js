@@ -97,13 +97,16 @@ function sameArea(a, b) {
   return !!gx && normPath(gx) === normPath(gy);
 }
 /**
- * 这次要起的服务，是不是之前用 devserver 起过、还在跑的那个（同名记录没找到时用）：运行目录相同、命令（端口代进去）或名字相同；
- * 写了端口的，同一处的、在这个端口上的也算
+ * 这次要起的服务，是不是之前用 devserver 起过、还在跑的那个（同名记录没找到时用）：
+ *   在别的目录跑 devserver 起的（壳子根、子项目），运行目录相同、名字或命令（端口代进去）相同；
+ *   写了端口的，在别的目录起的、同一处的、在这个端口上的也算。
+ *   同一个目录里名字不同的照旧是两个服务（同一条命令起两份、环境变量不同，是有意的）
  */
 function findOurs(name, cwd, port, cmdFor) {
   const key = normPath(cwd);
-  const live = liveReg((e) => normPath(e.cwd) === key || (port > 0 && e.port === port && sameArea(e.cwd, cwd)));
-  return live.find((e) => normPath(e.cwd) === key && (e.cmd === cmdFor(e.port) || e.name === name)) || (port > 0 ? live.find((e) => e.port === port) : null) || null;
+  const elsewhere = (e) => normPath(path.dirname(e.file)) !== normPath(runDir);
+  const live = liveReg((e) => elsewhere(e) && (normPath(e.cwd) === key || (port > 0 && e.port === port && sameArea(e.cwd, cwd))));
+  return live.find((e) => normPath(e.cwd) === key && (e.name === name || e.cmd === cmdFor(e.port))) || (port > 0 ? live.find((e) => e.port === port) : null) || null;
 }
 /** 认下之前起的那个：记录挪到这次的目录和名字下（日志留在原处，记录里是完整路径） */
 function adopt(e, name, why) {
@@ -158,7 +161,7 @@ async function pickPort(name, avoid, rec, where) {
     if (await portOpen(p, 200)) {
       // 这个服务每次都该挑到的第一个端口被 Claude 用 devserver 起的进程占着：多半就是它自己（记录丢了），用这个端口，下面按端口被占的规矩认（先停再起；登记里是别的项目的不动，第 17 条）
       const isFirst = first; first = false;
-      if (isFirst) { try { const t = procTable(); if (listeners(p).map(procInfo).some((i) => whoStarted(i, t) === 'claude')) return p; } catch (e) { /* 认不出就跳过 */ } }
+      if (isFirst) { try { const t = procTable(); if (listeners(p).map(procInfo).some((i) => byKeeper(i, t))) return p; } catch (e) { /* 认不出就跳过 */ } }
       continue;
     }
     return p;
@@ -305,6 +308,21 @@ function whoStarted(info, table) {
  * 记录里的进程还是当初起的那一个吗：Windows 会重用进程号，服务早就退了、号被别的程序拿去了的，不能当成它去停。
  * 看进程的创建时间和记录的启动时间对不对得上（查不到创建时间就只能认进程号）
  */
+/**
+ * 往上找得到 devserver 的看管进程（node devserver.js __keep）：是 Claude 用 devserver 起的（第 17 条：记录丢了也认得，不当成用户的）。
+ * 只认看管进程，不认 claude.exe：从 Claude Code 里跑的别的程序（测试、工具、它自己起的脚本）往上也找得到 claude，不能当成服务去停
+ */
+function byKeeper(info, table) {
+  const at = new Map(table.map((p) => [p.pid, p]));
+  let cur = at.get(info.pid);
+  for (let depth = 0; cur && depth < 20; depth++) {
+    const parent = at.get(cur.ppid);
+    if (!parent || (parent.created && cur.created && parent.created > cur.created + 2000)) return false;
+    if (/^node(\.exe)?$/i.test(parent.name) && /devserver\.js["'\s]+__keep/i.test(procInfo(parent.pid).cmd || '')) return true;
+    cur = parent;
+  }
+  return false;
+}
 function sameProc(rec) {
   if (!rec || !alive(rec.pid)) return false;
   const i = procInfo(rec.pid);
@@ -600,7 +618,7 @@ async function start() {
     const foreign = liveReg((e) => e.port === port && !sameArea(e.cwd, cwd))[0];
     if (foreign) { console.log('端口 ' + port + ' 上是 Claude 在别的项目（' + foreign.cwd + '）用 devserver 起的 ' + foreign.name + '（' + ago(foreign.startedAt) + '起的），没有动它。换个端口（--port auto 会挑别的），或者去那个目录 stop。'); return 1; }
     // 命令行里有这个项目的目录，或者往上找得到 devserver 的看管进程（Claude 起的，第 17 条：以前 vite 这类命令行里没有项目路径，被当成用户起的）
-    const ours = (i) => belongs(i, null) || whoStarted(i, t0) === 'claude';
+    const ours = (i) => belongs(i, null) || byKeeper(i, t0);
     const mine = infos.filter(ours);
     const others = infos.filter((i) => !ours(i));
     if (!pids.length || others.length) {
@@ -610,14 +628,14 @@ async function start() {
     }
     // 这个项目的进程，但没有记录：看是谁起的。Claude Code 起的、没人管的（起它的进程已经不在了）停掉重起；
     // 用户自己在终端、IDE 里起的（带着调试器的也算）不动，除非加了 --takeover（先问过用户）
-    const who = mine.map((i) => ({ i, by: whoStarted(i, t0) }));
+    const who = mine.map((i) => ({ i, by: byKeeper(i, t0) ? 'keeper' : whoStarted(i, t0) }));
     const users = who.filter((x) => x.by === 'user');
     if (users.length && !flag('takeover')) {
       console.log('端口 ' + port + ' 上是用户自己起的这个项目的服务：' + users.map((x) => (x.i.name || '进程') + '（PID ' + x.i.pid + (x.i.created ? '，' + ago(x.i.created) + '起的' : '') + '）' + (x.i.cmd ? '：' + x.i.cmd.slice(0, 160) : '')).join('；') + '。没有动它。\n'
         + '要用就直接拿它测（它跑的可能不是你改过之后的代码：改的是后端的话，先问用户要不要重启它）。确实要由 devserver 接管（结束它、在同一个端口重起），先问用户，同意了再加 --takeover 重跑。全自动模式下用户不在：不要接管，把要重启才能验的那一步留给用户。');
       return 1;
     }
-    console.log('端口 ' + port + ' 被这个项目的进程占着（' + who.map((x) => (x.i.name || '进程') + ' PID ' + x.i.pid + (x.i.created ? '，' + ago(x.i.created) + '起的' : '') + '，' + (x.by === 'claude' ? 'Claude 用 devserver 起的，记录丢了' : x.by === 'orphan' ? '起它的程序已经不在了' : '用户起的，按 --takeover 接管')).join('；') + '）：先停掉，再在这个端口起。');
+    console.log('端口 ' + port + ' 被这个项目的进程占着（' + who.map((x) => (x.i.name || '进程') + ' PID ' + x.i.pid + (x.i.created ? '，' + ago(x.i.created) + '起的' : '') + '，' + (x.by === 'keeper' ? 'Claude 用 devserver 起的，记录丢了' : x.by === 'claude' ? 'Claude Code 起的' : x.by === 'orphan' ? '起它的程序已经不在了' : '用户起的，按 --takeover 接管')).join('；') + '）：先停掉，再在这个端口起。');
     for (const x of who) killTree(x.i.pid);
     if (!(await waitClosed(port, 8000))) { console.log('停不掉占着端口 ' + port + ' 的进程，没有起新的。'); return 1; }
   }
