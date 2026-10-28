@@ -42,7 +42,7 @@ const suites = [['内网反馈 1007', 'test-feedback1007.js', [rt || 'none']], [
 suites.unshift(['内网反馈 1010、提交和多版本驱动', 'test-feedback1010.js', [rt || 'none']]);
 suites.unshift(['提案材料和相似入口', 'test-proposal-files.js', []]);
 suites.unshift(['1017：任务只写实现、验收用例、一份一份来、自带 OpenSpec', 'test-1017.js', []]);
-suites.unshift(['1012 推送反馈', 'test-feedback1012-push.js', []], ['1012 流程反馈', 'test-feedback1012-workflow.js', []], ['1012 页面探针', 'test-feedback1012-page.js', []]);
+suites.unshift(['1012 流程反馈', 'test-feedback1012-workflow.js', []], ['1012 页面探针', 'test-feedback1012-page.js', []]);
 suites.unshift(['1012 数据库诊断', 'test-feedback1012-db.js', [rt || 'none']]);
 suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'decisions', 'states', 'context'].map((name) => ['1013 反馈 ' + name, 'test-feedback1013-' + name + '.js', []]));
 suites.unshift(['提案审查结果有效性', 'test-proposal-review-state.js', []]);
@@ -66,7 +66,6 @@ suites.unshift(['1014 非数据库反馈', 'test-feedback1014.js', []], ['1014 �
 const rows = [];
 suites.unshift(['使用情况匿名标识', 'test-usage-identity.js', []]);
 suites.unshift(['归档解包的临时目录', 'test-archive-extract.js', []]);
-suites.unshift(['推送预览和合并确认', 'test-push-preview.js', []]);
 suites.unshift(['服务实际地址', 'test-service-address.js', []]);
 for (const [name, file] of [['状态并发和恢复', 'test-workflow-state.js'], ['用户意图与许可', 'test-workflow-intent.js'], ['许可与上下文', 'test-workflow-permissions.js'], ['连接生命周期', 'test-connection-lifecycle.js'], ['诊断脱敏', 'test-diagnostic-redaction.js'], ['审查和执行证据', 'test-review-evidence.js'], ['运行流程优化', 'test-optimization-runtime.js'], ['优化边界', 'test-optimization-boundaries.js']]) suites.unshift([name, file, []]);
 // --only a.js,b.js：只跑这几套（日常专项用；发版必须全量，不带它）。e2e 代表全部端到端（每个 --claude 版本），diff 代表新旧钩子对比（每个 --old）

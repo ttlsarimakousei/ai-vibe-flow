@@ -371,6 +371,14 @@ for (const c of cases) {
   if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git -C <仓库> push/; c.since = V1025; } // 名字是旧的：现在普通 push 不再出计划
   if (c.name === '新建报告（产出位置没定）') { c.expect = /选项写实际的目录[\s\S]*不写\\"子项目根目录\\"/; c.since = V1025; }
 }
+// 这一版有意改的（用户 2026-10-28 定的）：合并推送取消，"合并push"也照普通推送直接推，不再记推送预览
+for (const c of cases) {
+  if (['开口：合并push也等预览后的真人确认', '开口：普通push也启动合并预览'].includes(c.name)) { c.expect = /直接 git -C <仓库> push[\s\S]*不再提供合并推送/; c.since = NEXT; }
+  if (c.name === '1012：截断推送预览当场提示') { c.expect = /放行，没有输出/; c.since = NEXT; }
+  if (['命令：git push', '命令：git -C "<项目>" push origin main'].includes(c.name)) { c.expect = /用户没说推送[\s\S]*不用推送计划）。"/; c.since = NEXT; }
+  // IDEA MCP 接入去掉：环境就绪不再写 IDEA 的状态
+  if (c.name === '会话开始：普通项目') { c.expect = /项目说明[\s\S]*环境就绪(?:(?!IDEA)[\s\S])*不代表构建或测试通过/; c.since = NEXT; }
+}
 add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, V1018);
 add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, V1018);
 

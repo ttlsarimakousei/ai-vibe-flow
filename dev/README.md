@@ -75,7 +75,6 @@ node dev/pack.js
 | `test-1007.js` | 1007 这一批：让它出文档、生成文件不算流程里的活（全自动不作数）；公共配置里被 dev 盖掉的库不算开发库；devserver `--port auto` 自动挑端口（范围、避开、同一个服务同一个端口、`{port}` 和环境变量）；自动提交的"按阶段"那一档。第一个参数是端口 |
 | `test-1008.js` | 1008 这一批：归档要用户自测过、说了才做；不走 OpenSpec 的提交要用户点头（开关 plainCommit）；流程分写提案 / 做任务两段，全自动只管做任务那一段，模型自己调 /opsx:apply、提案阶段打勾都拦；开工时告诉用户全自动开没开（systemMessage）；审查过程不进提交；做完的功能上的问题改动小直接改；交接的"不问"只提醒 |
 | `test-feedback1010.js` | 1010 整批反馈：真实确认格式、取消、apply 状态、后台 task-id/输出文件/SendMessage、中文目录归属、多版本驱动和项目选择、各档全自动提交、提案收工提交确认、合并push 的临时裸仓库与拒绝推送。参数 [auto或none] [旧套件目录]；旧版应失败，新测试不碰真实远端 |
-| `test-feedback1012-push.js` | 1012 推送反馈：预览管道、确认选项、限时核对、伴随文档分组；可给旧版目录检出反例 |
 | `test-feedback1012-workflow.js` | 1012 流程反馈：只读计划、产出位置、待提交文件、探针证据和兼容审查诊断；可给旧版目录 |
 | `test-feedback1012-page.js` | 1012 页面探针：系统浏览器读值、断言、同步与异步超时、目录链接边界；可给旧版目录 |
 | `test-feedback1012-db.js` | 1012 数据库诊断：只模拟错误，不连接真实业务库；参数 [auto或none] [旧套件目录] |
@@ -235,7 +234,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 
 ## 20261011 专项与兼容性
 
-新增 test-workflow-state、test-workflow-intent、test-workflow-permissions、test-connection-lifecycle、test-diagnostic-redaction、test-review-evidence、test-optimization-runtime、test-optimization-boundaries、test-service-address 和 test-push-preview。分别覆盖锁崩溃、真人许可、取消、退役连接、假秘密诊断、限时和部分审查、缓存隔离、本地恢复、真实服务地址与推送预览。用最新 baseline 参数再跑，必须检出旧版反例。边界测试还检查旧人工任务、目录联接、二进制材料、重复预算、额外恢复文件和普通开关的脱敏；不能仅断言新模块存在。
+新增 test-workflow-state、test-workflow-intent、test-workflow-permissions、test-connection-lifecycle、test-diagnostic-redaction、test-review-evidence、test-optimization-runtime、test-optimization-boundaries、test-service-address 和 test-push-preview（2026-10-28 合并推送取消后删掉）。分别覆盖锁崩溃、真人许可、取消、退役连接、假秘密诊断、限时和部分审查、缓存隔离、本地恢复、真实服务地址与推送预览。用最新 baseline 参数再跑，必须检出旧版反例。边界测试还检查旧人工任务、目录联接、二进制材料、重复预算、额外恢复文件和普通开关的脱敏；不能仅断言新模块存在。
 
 经验规则的 CLI 端到端保留兼容代理入口，并故意尝试未经用户确认的提交。代码和规则实际生成后，再发送真人提交指令，核对 Git 历史确实改变。默认独立审查执行器由 review-evidence 和 optimization-boundaries 的假网关测试覆盖，不能把兼容代理测试说成默认执行器测试。
 
@@ -253,7 +252,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 
 ## 20261012 反馈专项
 
-`test-feedback1012-push.js [旧套件目录]` 核对临时裸仓库的预览管道、真人选项、取消、固定数量且限时的 Git 查询、伴随文档归组和归档边界。`test-feedback1012-workflow.js [旧套件目录]` 核对只读计划、产出位置、待提交交付文件、探针结果和兼容审查诊断。`test-feedback1012-page.js [旧套件目录]` 用系统无头浏览器实际验证探针读值、失败、异步和同步超时、路径限制。`test-feedback1012-db.js [auto或none] [旧套件目录]` 用模拟错误检查数据库诊断，不连接真实库。四套已加入全回归；与 20261011.1553 对照须检出反例。
+`test-feedback1012-workflow.js [旧套件目录]` 核对只读计划、产出位置、待提交交付文件、探针结果和兼容审查诊断。`test-feedback1012-page.js [旧套件目录]` 用系统无头浏览器实际验证探针读值、失败、异步和同步超时、路径限制。`test-feedback1012-db.js [auto或none] [旧套件目录]` 用模拟错误检查数据库诊断，不连接真实库。四套已加入全回归；与 20261011.1553 对照须检出反例。
 
 ## 20261013 反馈专项
 

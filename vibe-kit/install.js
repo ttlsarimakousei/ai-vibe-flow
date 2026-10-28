@@ -22,7 +22,7 @@ const FROM_PACKAGE = fs.existsSync(path.join(SRC, 'claude')) && fs.existsSync(pa
 const CLAUDE = FROM_PACKAGE ? (process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')) : path.dirname(SRC);
 const KIT = path.join(CLAUDE, 'vibe-kit');
 // 新版删掉了的套件文件（相对 vibe-kit 目录）：装新版时把旧版留下的删掉。2026-10-28：IDEA 起服务、合并推送整条去掉
-const DROPPED_FILES = ['lib/idea-run.js'];
+const DROPPED_FILES = ['lib/idea-run.js', 'lib/merge-push.js', 'tools/merge-push.js'];
 const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。要改请改 ~/.claude/vibe-kit 里的 CLAUDE.md 或 rules/*.md，然后运行 node ~/.claude/vibe-kit/install.js --sync -->';
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;

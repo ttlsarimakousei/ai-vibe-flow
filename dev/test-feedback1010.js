@@ -144,57 +144,7 @@ function jar(file, version) {
   H.node(h, path.join(h.kit, 'tools/drivers.js'), ['remove', 'mysql', '--jar', pool[0] ? pool[0].jar : j1, '--json']);
   const left = JSON.parse(fs.readFileSync(path.join(h.kit, 'drivers.json'))).drivers.mysql;
   H.ok('删一个版本仍保留另一个版本', left && left.versions && left.versions.length === 1);
-  H.section('合并push：只在临时裸仓库测试');
-  const module = path.join(h.kit, 'lib/merge-push.js');
-  if (!fs.existsSync(module)) H.ok('有合并push确定性工具', false);
-  else {
-    const repo = H.makeRepo(path.join(h.work, 'merge-test'), { '.gitignore': '.vibe/\n', 'a.txt': '0\n', 'b.txt': '0\n' });
-    const bare = path.join(h.root, 'remote.git');
-    const git = (args) => H.run(h, 'git', ['-C', repo].concat(args));
-    H.run(h, 'git', ['init', '--bare', bare]); git(['remote', 'add', 'origin', bare]); git(['push', '-u', 'origin', 'HEAD']);
-    const add = (f, t, title) => { H.write(path.join(repo, f), t); git(['add', f]); git(['commit', '-m', title]); };
-    add('a.txt', '1\n', 'feat: 修改 A（源自 event-a 1.1）\n\n需要保留的详细说明。');
-    add('b.txt', '1\n', 'feat: 修改 B（源自 event-b 1.1）');
-    add('a.txt', '2  \n', 'fix: 审查修复 A（源自 event-a 1.1）');
-    const initial = git(['rev-parse', 'HEAD']).out.trim();
-    const mcode = 'const M=require(' + JSON.stringify(module) + ');const p=M.plan(' + JSON.stringify(repo) + ');console.log(JSON.stringify({plan:p,result:M.apply(p,true)}));';
-    const mr = H.run(h, process.execPath, ['-e', mcode], { cwd: repo });
-    let m = {}; try { m = JSON.parse(mr.out); } catch (e) { /* 断言显示输出 */ }
-    H.ok('交错但文件独立的同一事件合成一条', m.result && m.result.before === 3 && m.result.after === 2, mr.out + mr.err);
-    H.ok('文件内容包含尾随空白完全保留', fs.readFileSync(path.join(repo, 'a.txt'), 'utf8') === '2  \n' && git(['diff', initial, 'HEAD']).out.trim() === '');
-    H.ok('合并后的说明保留原修复记录', /审查修复 A/.test(git(['log', '-2', '--format=%B']).out));
-    H.ok('整理提交保留原提交正文', /需要保留的详细说明/.test(git(['log', '-2', '--format=%B']).out));
-    H.ok('保留旧提交备份，普通push到临时远端', m.result && m.result.backup && git(['rev-parse', m.result.backup]).out.trim() === initial && git(['rev-parse', 'HEAD']).out.trim() === git(['rev-parse', '@{u}']).out.trim(), m.result);
-    H.write(path.join(repo, 'a.txt'), 'dirty\n');
-    const dirty = H.run(h, process.execPath, ['-e', 'require(' + JSON.stringify(module) + ').plan(' + JSON.stringify(repo) + ')']);
-    H.ok('未提交改动不会自动stash或改写', dirty.code !== 0 && /先完成提交/.test(dirty.err));
-    git(['restore', 'a.txt']);
-    const units = H.run(h, process.execPath, ['-e', 'const M=require(' + JSON.stringify(module) + ');console.log(JSON.stringify(M.groupsOf([{id:"1",title:"feat: A（源自 a 1.1）",files:["x"]},{id:"2",title:"feat: B（源自 b 1.1）",files:["x"]},{id:"3",title:"fix: 审查 A（源自 a 1.1）",files:["x"]}])));']);
-    H.ok('不同事件改同一文件时不跨事件合并', JSON.parse(units.out).length === 3);
-    add('a.txt', '3\n', 'feat: 修改 A（源自 event-a 1.2）');
-    add('a.txt', '4\n', 'fix: 修复 A（源自 event-a 1.2）');
-    const pcode = 'const M=require(' + JSON.stringify(module) + ');console.log(JSON.stringify(M.plan(' + JSON.stringify(repo) + ')));';
-    const planned = JSON.parse(H.run(h, process.execPath, ['-e', pcode]).out);
-    add('b.txt', '5\n', 'fix: 新的修改');
-    const stale = H.run(h, process.execPath, ['-e', 'require(' + JSON.stringify(module) + ').apply(' + JSON.stringify(planned) + ',false)']);
-    H.ok('计划后又提交就停止，不用过期计划', stale.code !== 0 && /已变化/.test(stale.err));
-    git(['config', 'remote.origin.pushurl', path.join(h.root, 'wrong.git')]);
-    const mismatch = H.run(h, process.execPath, ['-e', pcode]);
-    H.ok('拉取和推送目标不同则不改历史', mismatch.code !== 0 && /推送地址不同/.test(mismatch.err));
-    git(['config', '--unset', 'remote.origin.pushurl']);
-    const saved = path.join(repo, '.vibe/tmp/merge-push/plan.json');
-    const cli = path.join(h.kit, 'tools/merge-push.js');
-    H.ok('命令行能生成受限目录里的计划', H.run(h, process.execPath, [cli, 'plan', '--dir', repo]).code === 0);
-    H.ok('计划文件写在被忽略的项目目录', fs.existsSync(saved) && git(['status', '--porcelain']).out.trim() === '');
-    H.write(path.join(bare, 'hooks/pre-receive'), '#!/bin/sh\nexit 1\n');
-    fs.chmodSync(path.join(bare, 'hooks/pre-receive'), 0o755);
-    const savedPlan = JSON.parse(fs.readFileSync(saved, 'utf8'));
-    const rejected = H.run(h, process.execPath, [cli, 'apply', '--dir', repo, '--plan', saved, '--confirmed', savedPlan.hash, '--push']);
-    let failed = {}; try { failed = JSON.parse(rejected.out); } catch (e) { /* 断言显示输出 */ }
-    H.ok('远端拒绝推送时返回备份和本地结果，不强推', rejected.code !== 0 && failed.ok === false && failed.backup && failed.pushed === false && git(['rev-parse', failed.backup]).code === 0, rejected.out + rejected.err);
-  }
-  H.ok('未经合并授权不能调用改写工具', denied(hook('guard-commit', 'node "' + path.join(h.kit, 'tools/merge-push.js').replace(/\\/g, '/') + '" apply --plan p.json --push', [H.tr.user('推送')])));
-  H.ok('明确合并push也不能跳过预览后的真人确认', denied(hook('guard-commit', 'node "' + path.join(h.kit, 'tools/merge-push.js').replace(/\\/g, '/') + '" apply --plan p.json --push', [H.tr.user('合并push')])));
+  // 合并 push 的工具和预览 2026-10-28 取消（用户定的，问题反馈表第 9 条），那一段测试去掉
   H.ok('整个过程没有新窗口', (await watch.stop()).length === 0);
   H.done('1010反馈、驱动和提交');
 })().catch((e) => { console.error(e); H.ok('测试执行没有异常', false); H.done('1010反馈、驱动和提交'); });

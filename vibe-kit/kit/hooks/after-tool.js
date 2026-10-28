@@ -25,10 +25,6 @@ function handle(j) {
     require('../lib/permissions').consume(j, successful(j));
     if (successful(j)) {
       if (/^(Agent|Task|SendMessage|TaskOutput|TaskResult)$/.test(j.tool_name)) require('../lib/review-runner').syncAgent(j);
-      const merge = require('../lib/merge-push');
-      merge.consumePreview(j);
-      const preview = merge.recordPreview(j);
-      if (preview) return preview;
     }
     // 验证证据与 IDEA 完成结果共用此入口；模块升级不同步时保持原工具结果。
     try { require('../lib/invocation').phase('登记验证证据'); require('../lib/evidence').recordTool(j, successful(j)); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 验证证据', j, e); }

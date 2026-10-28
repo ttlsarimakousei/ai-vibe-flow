@@ -37,11 +37,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const after = runHook('after-tool', { hook_event_name: 'PostToolUseFailure', tool_input: { command: 'openspec instructions proposal --change add-a' }, tool_response: { stderr: 'error: unknown command instructions', exit_code: 1 } });
   // 2026-10-17 起套件自带 OpenSpec；这个假用户目录里没带它（安装不完整），用的是项目自己装的：提示重装套件或升级项目里的
   H.ok('自带的那份不在、指令不支持：提示重装套件或升级项目里的 OpenSpec', /套件自带的那份不在/.test(H.reasonOf(after)) && /升级项目里的 OpenSpec/.test(H.reasonOf(after)) && !/不内置/.test(H.reasonOf(after)), after);
-  const M = require(path.join(h.kit, 'lib/merge-push'));
-  const c = (id, title, files = ['a.js']) => ({ id, title, files });
-  H.ok('不同任务不能按整个变更合并', M.groupsOf([c('1', 'feat: 查询（源自 add-a 1.1）'), c('2', 'feat: 分页（源自 add-a 1.2）')]).length === 2);
-  H.ok('同一任务的修复可合并', M.groupsOf([c('1', 'feat: 查询（源自 add-a 1.1）'), c('2', 'fix: 查询空值（源自 add-a 1.1）')]).length === 1);
-  H.ok('验收节点隔开同任务历史', M.groupsOf([c('1', 'feat: 查询（源自 add-a 1.1）'), c('2', 'docs: 验收 add-a', ['docs/accept.md']), c('3', 'fix: 查询空值（源自 add-a 1.1）')]).length === 3);
+  // 合并推送的分组 2026-10-28 随合并推送一起取消（用户定的）
   const pf = path.join(h.kit, 'lib/flow-policy.js');
   if (!fs.existsSync(pf)) H.ok('独立需求产物与任务组审查策略存在', false);
   else {

@@ -2,8 +2,7 @@
 /*
  * 问题反馈表第 5 条（仓库主人 2026-10-22 提的）：说"推送"就直接推。
  *   推送、push            直接 git push，几笔提交都一样，不出推送计划、不再问确认；壳子里几个子项目各推一次
- *   合并推送、合并 push    先给推送计划，用户确认后按计划推（照旧）
- *   合并成1条推送          不问，把没推的提交合成一条直接推（merge-push.js squash）
+ *   合并推送、合并成1条推送  2026-10-28 起合并推送取消（问题反馈表第 9 条、#233）：也算说了推送，照普通推送直接推，不出计划、不合成
  * 只推到临时目录里的裸仓库。用法：node dev/test-feedback1024-push.js [旧版的 vibe-kit 目录]
  */
 const path = require('path');
@@ -43,26 +42,15 @@ const sa = repo('shell/gwjh', 2); const sb = repo('shell/gwjhmq', 2);
 const both = guard(shell, 'git -C "' + sa.dir.replace(/\\/g, '/') + '" push && git -C "' + sb.dir.replace(/\\/g, '/') + '" push', '推送');
 H.ok('一条命令推两个子项目：放行', both === null, both);
 
-H.section('"合并推送"：照旧先出推送计划');
+H.section('"合并推送""合并成1条推送"（1028 起合并推送取消）：照普通推送直接推');
 const rp = repo('plan', 2);
-H.ok('说了合并推送：直接 git push 拦下，让它先出计划', blocked(guard(rp.dir, 'git push', '合并推送')) && /merge-push\.js" plan/.test(H.reasonOf(guard(rp.dir, 'git push', '合并推送'))));
-H.ok('开口提示：先出推送计划', /推送预览[\s\S]*plan --dir/.test(JSON.stringify(prompt(rp.dir, '合并推送') || {})));
+H.ok('说了合并推送：git push 直接放行（不再要求先出计划）', guard(rp.dir, 'git push', '合并推送') === null, guard(rp.dir, 'git push', '合并推送'));
+H.ok('说了合并成1条推送：git push 直接放行（不合成）', guard(rp.dir, 'git push', '合并成1条推送') === null, guard(rp.dir, 'git push', '合并成1条推送'));
+const ph = JSON.stringify(prompt(rp.dir, '合并推送') || {});
+H.ok('开口提示：直接 git push，不提合并预览、不改写历史', /直接 git -C <仓库> push/.test(ph) && !/merge-push|plan --dir|squash/.test(ph) && /不要改写提交历史/.test(ph), ph);
+H.ok('合并推送的工具不在了', !require('fs').existsSync(tool));
 
-H.section('"合并成1条推送"：不问，合成一条直接推');
-const rs = repo('squash', 3);
-const squashCmd = 'node "' + tool + '" squash --dir "' + rs.dir.replace(/\\/g, '/') + '" --push';
-H.ok('说了合并成1条推送：直接 git push 拦下，让它用 squash', blocked(guard(rs.dir, 'git push', '合并成1条推送')) && /squash --dir/.test(H.reasonOf(guard(rs.dir, 'git push', '合并成1条推送'))));
-H.ok('说了合并成1条推送：squash --push 放行', guard(rs.dir, squashCmd, '合并成1条推送') === null, guard(rs.dir, squashCmd, '合并成1条推送'));
-H.ok('只说了推送：squash 拦下（合成一条要用户说）', blocked(guard(rs.dir, squashCmd, '推送')));
-H.ok('开口提示：合成一条直接推，不用再问', /squash --dir <仓库> --push/.test(JSON.stringify(prompt(rs.dir, '合并成1条推送') || {})));
-const treeBefore = H.git(rs.dir, ['rev-parse', 'HEAD^{tree}']).out.trim();
-const run = H.node(h, path.join(h.kit, 'tools/merge-push.js'), ['squash', '--dir', rs.dir, '--push']);
-let res = {}; try { res = JSON.parse(run.out); } catch (e) { res = {}; }
-H.ok('squash：3 条合成 1 条、推上去了', run.code === 0 && res.before === 3 && res.after === 1 && res.pushed, run.out + run.err);
-H.ok('squash：文件内容和原来一样，远端只多一条提交', H.git(rs.dir, ['rev-parse', 'HEAD^{tree}']).out.trim() === treeBefore && H.run(h, 'git', ['--git-dir', rs.bare, 'rev-list', '--count', 'HEAD']).out.trim() === '2', H.run(h, 'git', ['--git-dir', rs.bare, 'log', '--oneline']).out);
-H.ok('squash：原来三条的说明都留在新提交里，旧提交有备份', /第 1 处[\s\S]*第 2 处[\s\S]*第 3 处/.test(H.git(rs.dir, ['log', '-1', '--format=%B']).out) && !!res.backup && H.git(rs.dir, ['rev-parse', '--verify', res.backup]).code === 0);
-const fresh = H.makeRepo(path.join(h.work, 'fresh'), { 'a.txt': '0\n' });
-const fb = path.join(h.root, 'fresh.git'); H.run(h, 'git', ['init', '--bare', fb]); H.run(h, 'git', ['-C', fresh, 'remote', 'add', 'origin', fb]);
-const first = H.node(h, path.join(h.kit, 'tools/merge-push.js'), ['squash', '--dir', fresh, '--push']);
-H.ok('远端还没有这个分支：不合成（会把整个历史压成一条），让它先普通推送', first.code !== 0 && /第一次推送先普通 git push -u/.test(first.out), first.out);
+H.section('#233 看过合并计划后改主意直推：不再有预览挡着');
+const r19 = repo('front', 19);
+H.ok('19 笔没推的提交，说"推送"：直接放行', guard(r19.dir, 'git push origin HEAD', '不合并了，直接推送') === null, guard(r19.dir, 'git push origin HEAD', '不合并了，直接推送'));
 H.done('1024 反馈：推送');
