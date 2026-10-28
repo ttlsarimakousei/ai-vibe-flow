@@ -28,6 +28,13 @@
  * 输出的最后一行就是结果："起来了：…""没起来：…""停了：…"。用 && 把 stop 和 start 串起来也行：stop 等端口空出来才返回。
  * 模型路由（~/.claude/vibe-kit/router-data/router.pid）无论如何不停。
  *
+ * 认得自己起过的服务（用户 2026-10-28 定的，问题反馈表第 17 条："你总是忘记自己启动过哪个服务"）：
+ *   每个项目的 .vibe/run 按"在哪个目录跑的 devserver、叫什么名字"记，换个目录（壳子根和子项目）、换个名字就找不到，以前会另起一份，
+ *   或者 --port auto 跳过被自己占着的端口另挑一个，或者把自己起的当成用户的。现在另记一份全机的登记（套件 state/devserver.json：端口 → 记录在哪、
+ *   运行目录、命令），start 找不到同名记录时按"运行目录相同、命令或名字相同"（写了端口的再按端口）认出来，接着用原来那个；要重启就在原来的端口先停再起。
+ *   端口上的进程往上找得到 devserver 的看管进程的，就是 Claude 起的，不当成用户的。status、stop 也看这份登记。
+ * 会热更新的不重启（同一天定的：vite 这类改了代码不用重启）：命令里、或者 npm/pnpm/yarn 跑的那个脚本里认得出 vite、webpack dev server、
+ *   vue-cli-service serve、next dev 这类开发服务器，就和写了 --hot 一样，改了代码直接用。
  * 不用 IDEA 起服务（用户 2026-10-28 定的，删掉 2026-10-17 加的 IDEA 运行配置那条线）：只照 -- 后面的命令起；用户在 IDEA 里起的服务不动（端口被占说清是谁）。
  *   老版本留下的 --idea、--no-idea 参数不认也不报错；以前用 IDEA 起、记成 mode: idea 的记录，stop、status 时说清到 IDEA 里停，记录清掉，不动进程。
  */
@@ -56,7 +63,80 @@ const recFile = (name) => path.join(runDir, name.replace(/[^\w.\-一-龥]/g, '_'
 const logFile = (name) => path.join(runDir, name.replace(/[^\w.\-一-龥]/g, '_') + '.log');
 const readRec = (name) => { try { return JSON.parse(fs.readFileSync(recFile(name), 'utf8')); } catch (e) { return null; } };
 const allRecs = () => { try { return fs.readdirSync(runDir).filter((f) => /\.json$/i.test(f)).map((f) => { try { return JSON.parse(fs.readFileSync(path.join(runDir, f), 'utf8')); } catch (e) { return null; } }).filter(Boolean); } catch (e) { return []; } };
-const dropRec = (name) => { try { fs.unlinkSync(recFile(name)); } catch (e) { /* 没有 */ } };
+const dropRec = (name) => { unregister(recFile(name)); try { fs.unlinkSync(recFile(name)); } catch (e) { /* 没有 */ } };
+
+// ---------- 全机的服务登记（问题反馈表第 17 条） ----------
+const REG = path.join(KIT, 'state', 'devserver.json');
+const readReg = () => { try { const o = JSON.parse(fs.readFileSync(REG, 'utf8')); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } };
+function writeReg(fn) {
+  try {
+    const o = readReg(); fn(o);
+    fs.mkdirSync(path.dirname(REG), { recursive: true });
+    const tmp = REG + '.' + process.pid + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(o, null, 2)); fs.renameSync(tmp, REG);
+  } catch (e) { /* 记不了：照旧按项目里的记录认 */ }
+}
+function register(rec, file) { writeReg((o) => { for (const k of Object.keys(o)) if (o[k] && normPath(o[k].file) === normPath(file)) delete o[k]; o[String(rec.port)] = { port: rec.port, name: rec.name, file, cwd: rec.cwd, cmd: rec.cmd, startedAt: rec.startedAt }; }); }
+function unregister(file) { writeReg((o) => { for (const k of Object.keys(o)) if (!o[k] || normPath(o[k].file) === normPath(file)) delete o[k]; }); }
+/** 登记里还活着的（记录文件还在、看管进程还是当初那一个），先用 pick 筛（查进程慢，不相干的不查） */
+function liveReg(pick) {
+  const out = [];
+  for (const e of Object.values(readReg())) {
+    if (!e || !e.file || (pick && !pick(e))) continue;
+    let rec = null; try { rec = JSON.parse(fs.readFileSync(e.file, 'utf8')); } catch (x) { continue; }
+    if (rec && rec.port === e.port && sameProc(rec)) out.push(Object.assign({}, e, { rec }));
+  }
+  return out;
+}
+/** a 和 b 是不是同一处的：一个在另一个下面，或者同一个 git 仓库 */
+function sameArea(a, b) {
+  const x = normPath(a), y = normPath(b);
+  if (!x || !y) return false;
+  if (x === y || x.startsWith(y + '/') || y.startsWith(x + '/')) return true;
+  const gx = gitRootOf(a), gy = gitRootOf(b);
+  return !!gx && normPath(gx) === normPath(gy);
+}
+/**
+ * 这次要起的服务，是不是之前用 devserver 起过、还在跑的那个（同名记录没找到时用）：运行目录相同、命令（端口代进去）或名字相同；
+ * 写了端口的，同一处的、在这个端口上的也算
+ */
+function findOurs(name, cwd, port, cmdFor) {
+  const key = normPath(cwd);
+  const live = liveReg((e) => normPath(e.cwd) === key || (port > 0 && e.port === port && sameArea(e.cwd, cwd)));
+  return live.find((e) => normPath(e.cwd) === key && (e.cmd === cmdFor(e.port) || e.name === name)) || (port > 0 ? live.find((e) => e.port === port) : null) || null;
+}
+/** 认下之前起的那个：记录挪到这次的目录和名字下（日志留在原处，记录里是完整路径） */
+function adopt(e, name, why) {
+  const rec = Object.assign({}, e.rec, { name });
+  const to = recFile(name);
+  if (normPath(e.file) !== normPath(to)) {
+    try { fs.mkdirSync(runDir, { recursive: true }); fs.writeFileSync(to, JSON.stringify(rec, null, 2)); try { fs.unlinkSync(e.file); } catch (x) { /* 删不掉：登记已经指到新的 */ } register(rec, to); } catch (x) { return e.rec; }
+  }
+  console.log('认出来了：端口 ' + rec.port + ' 上是之前用 devserver 起的' + (e.name !== name ? '"' + e.name + '"' : ' ' + name) + '（' + ago(rec.startedAt) + '起的，运行目录 ' + rec.cwd + '）' + (why || '') + '。接着用它，不另起一个' + (e.name !== name ? '；以后叫 ' + name : '') + '。');
+  return rec;
+}
+
+// ---------- 会热更新的开发服务器（问题反馈表第 17 条：vite 这类改了代码不用重启） ----------
+const HOT_RE = /(?:^|[\s/\\"'])(?:vite(?:\.(?:js|mjs|cmd))?(?!\s+(?:build|preview|optimize))(?=\s|$|["'])|vue-cli-service(?:\.js)?\s+serve|webpack-dev-server|webpack(?:\.js)?\s+(?:serve|s)\b|next\s+dev|nuxi?\s+dev|react-scripts\s+start|umi\s+dev|max\s+dev|ng\s+serve|nodemon|ts-node-dev|tsx\s+watch|parcel(?!\s+build)(?=\s|$))/i;
+/** 命令会不会热更新：命令本身认得出，或者 npm/pnpm/yarn 跑的那个脚本（package.json 的 scripts）认得出 */
+function hotOf(command, cwd) {
+  const c = String(command || '');
+  if (HOT_RE.test(c)) return true;
+  const w = (c.match(/"[^"]*"|\S+/g) || []).map((t) => t.replace(/^"|"$/g, ''));
+  const i = w.findIndex((t) => /^(?:npm|pnpm|yarn|cnpm)(?:\.cmd)?$/i.test(t.split(/[\\/]/).pop()));
+  if (i < 0) return false;
+  let pkgDir = cwd || dir, script = '';
+  for (let k = i + 1; k < w.length; k++) {
+    const t = w[k];
+    if (['--prefix', '-C', '--cwd', '--dir'].includes(t)) { pkgDir = path.resolve(cwd || dir, w[k + 1] || '.'); k++; continue; }
+    if (t === '--') break;
+    if (t.startsWith('-') || t === 'run' || t === 'run-script') continue;
+    script = t; break;
+  }
+  if (!script) return false;
+  try { const sc = (JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8')).scripts || {})[script]; return !!sc && HOT_RE.test(' ' + sc); } catch (e) { return false; }
+}
+const hotRec = (r) => !!(r && (r.hot || hotOf(r.cmd, r.cwd)));
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 90 ? s + ' 秒前' : s < 5400 ? Math.round(s / 60) + ' 分钟前' : s < 172800 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 
 // ---------- 自动挑端口 ----------
@@ -64,16 +144,23 @@ const AUTO_LOW = 30000;
 const AUTO_SPAN = 10000;
 const AUTO_GAP = 1000;
 /** 在 30000 到 39999 里挑一个：起点按项目目录和服务名算，往后找第一个空着的；离 avoid 里的端口至少 1000；这个项目别的服务记着的端口也避开 */
-async function pickPort(name, avoid, rec) {
-  const h = require('crypto').createHash('sha1').update(normPath(dir) + '|' + name).digest();
+async function pickPort(name, avoid, rec, where) {
+  // 起点按服务实际运行的目录（--cwd，没写就是项目目录）算：在壳子根加 --cwd 子项目、和在子项目里直接跑，挑到的是同一个端口（第 17 条）
+  const h = require('crypto').createHash('sha1').update(normPath(where || dir) + '|' + name).digest();
   const seed = h.readUInt16BE(0) % AUTO_SPAN;
   const taken = allRecs().filter((r) => r.name !== name && r.port > 0).map((r) => r.port);
+  let first = true;
   for (let k = 0; k < AUTO_SPAN; k++) {
     const p = AUTO_LOW + ((seed + k * 7919) % AUTO_SPAN);   // 7919 和 10000 互质：走一圈每个端口正好过一次
     if (avoid.some((a) => Math.abs(a - p) < AUTO_GAP) || taken.includes(p)) continue;
     // 记着的就是这个端口：是自己上一次起的，老的还在听也不算被占（下面会停掉重起）
     if (rec && rec.port === p) return p;
-    if (await portOpen(p, 200)) continue;
+    if (await portOpen(p, 200)) {
+      // 这个服务每次都该挑到的第一个端口被 Claude 用 devserver 起的进程占着：多半就是它自己（记录丢了），用这个端口，下面按端口被占的规矩认（先停再起；登记里是别的项目的不动，第 17 条）
+      const isFirst = first; first = false;
+      if (isFirst) { try { const t = procTable(); if (listeners(p).map(procInfo).some((i) => whoStarted(i, t) === 'claude')) return p; } catch (e) { /* 认不出就跳过 */ } }
+      continue;
+    }
     return p;
   }
   return 0;
@@ -353,8 +440,9 @@ async function launch(name, port, command, meta) {
     : spawn(command, { shell: true, detached: true, stdio: ['ignore', fd, fd], cwd, env });
   child.unref();
   fs.closeSync(fd);
-  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot'), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl };
+  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot') || hotOf(command, cwd), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl };
   fs.writeFileSync(recFile(name), JSON.stringify(rec, null, 2));
+  register(rec, recFile(name));
   return waitUp(rec, Number(opt('wait')) || 180);
 }
 /** 日志最后一段：先按 UTF-8 解，解不开（cmd、bat 的报错是 GBK）再按 GBK 解 */
@@ -406,7 +494,7 @@ async function waitUp(rec, waitSec) {
     const who = whoListens(rec.port);
     // 这一行放在最后：输出的最后一行就是结果
     console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
-    console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (how ? '，' + how : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
+    console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (how ? '，' + how : '') + (rec.hot ? '。会热更新：改了代码不用重启，再 start 直接用' : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
     return 0;
   };
   while (Date.now() - t0 < waitSec * 1000) {
@@ -465,14 +553,18 @@ async function start() {
   if (!cmdArgs.length) { console.log('要在 -- 后面写启动命令，比如：node devserver.js start --name backend --port auto --avoid 8080 -- mvn spring-boot:run'); return 2; }
   const avoid = String(opt('avoid') || '').split(/[,，\s]+/).map(Number).filter((n) => n > 0 && n < 65536);
   const cwd = path.resolve(dir, opt('cwd') || '.');
-  const rec = readRec(name);
+  // 命令里的 {port} 换成这次用的端口
+  const cmdFor = (p) => (cmdArgs.length === 1 ? cmdArgs[0] : cmdArgs.map(quote).join(' ')).split('{port}').join(String(p)).split('{PORT}').join(String(p));
+  let rec = readRec(name);
+  // 同名记录没找到：看全机登记里有没有之前起的这个服务（换了目录、换了名字的），有就接着用它（第 17 条）
+  if (!rec) { const hit = findOurs(name, cwd, auto ? 0 : port, cmdFor); if (hit) rec = adopt(hit, name); }
   if (auto) {
-    // 记着的服务上次就是自动挑的：还用那个端口，同一个服务每次都是同一个端口（场景文件里写的地址不用改）
-    port = rec && rec.auto && rec.port > 0 && !avoid.some((a) => Math.abs(a - rec.port) < AUTO_GAP) ? rec.port : await pickPort(name, avoid, rec);
+    // 记着的服务：还用那个端口，同一个服务每次都是同一个端口（场景文件里写的地址不用改）
+    port = rec && rec.port > 0 && !avoid.some((a) => Math.abs(a - rec.port) < AUTO_GAP) ? rec.port : await pickPort(name, avoid, rec, cwd);
     if (!port) { console.log('没起来：30000 到 39999 里挑不出空着的端口。'); return 1; }
   }
-  // -- 后面只有一个参数（整条命令加了引号）：原样用，不再包一层引号。命令里的 {port} 换成这次用的端口
-  const command = (cmdArgs.length === 1 ? cmdArgs[0] : cmdArgs.map(quote).join(' ')).split('{port}').join(String(port)).split('{PORT}').join(String(port));
+  // -- 后面只有一个参数（整条命令加了引号）：原样用，不再包一层引号
+  const command = cmdFor(port);
   // 同一个服务：命令、端口、运行目录都一样（同名同端口换了个子项目，不能拿另一个子项目的服务来用）
   const same = (r) => r.cmd === command && r.port === port && normPath(r.cwd || dir) === normPath(cwd);
   const recUp = rec ? await portOpen(rec.port, 500) : false;
@@ -485,10 +577,11 @@ async function start() {
     killTree(rec.pid);
     dropRec(rec.name);
   } else if (rec && recUp && recLive) {
-    const changed = flag('restart') ? ['（要求重启）'] : rec.hot ? [] : changedSince(rec.startedAt, rec.cwd);
+    const hot = hotRec(rec);
+    const changed = flag('restart') ? ['（要求重启）'] : hot ? [] : changedSince(rec.startedAt, rec.cwd);
     if (!changed.length && same(rec)) {
       const who = whoListens(rec.port);
-      console.log('已经在跑：' + name + '（端口 ' + rec.port + '，' + ago(rec.startedAt) + '起的' + (who ? '，听这个端口的是 ' + who : '') + '）' + (rec.hot ? '，会热更新' : '，启动之后代码没改过') + '。直接用，不用再起。要强制重启加 --restart。');
+      console.log('已经在跑：' + name + '（端口 ' + rec.port + '，' + ago(rec.startedAt) + '起的' + (who ? '，听这个端口的是 ' + who : '') + '）' + (hot ? '，会热更新，改了代码不用重启' : '，启动之后代码没改过') + '。直接用，不用再起。要强制重启加 --restart。');
       return 0;
     }
     console.log(name + ' 在跑（端口 ' + rec.port + '，' + ago(rec.startedAt) + '起的），' + (!same(rec) ? '启动命令、端口或运行目录变了' : '但它跑的不是现在的代码（之后改过：' + changed.slice(0, 5).join('、') + (changed.length > 5 ? ' 等 ' + changed.length + ' 个' : '') + '）') + '：停掉，在同一个端口重启。');
@@ -502,8 +595,14 @@ async function start() {
   if (await portOpen(port, 500)) {
     const pids = listeners(port);
     const infos = pids.map(procInfo);
-    const mine = infos.filter((i) => belongs(i, null));
-    const others = infos.filter((i) => !belongs(i, null));
+    const t0 = procTable();
+    // 登记里这个端口是别的项目的服务：不动（Claude 在别处起的，不是这个项目的）
+    const foreign = liveReg((e) => e.port === port && !sameArea(e.cwd, cwd))[0];
+    if (foreign) { console.log('端口 ' + port + ' 上是 Claude 在别的项目（' + foreign.cwd + '）用 devserver 起的 ' + foreign.name + '（' + ago(foreign.startedAt) + '起的），没有动它。换个端口（--port auto 会挑别的），或者去那个目录 stop。'); return 1; }
+    // 命令行里有这个项目的目录，或者往上找得到 devserver 的看管进程（Claude 起的，第 17 条：以前 vite 这类命令行里没有项目路径，被当成用户起的）
+    const ours = (i) => belongs(i, null) || whoStarted(i, t0) === 'claude';
+    const mine = infos.filter(ours);
+    const others = infos.filter((i) => !ours(i));
     if (!pids.length || others.length) {
       const who = others.length ? others.map((i) => (i.name || '进程') + '（PID ' + i.pid + (i.pid === routerPid() ? '，这是模型路由' : '') + '）' + (i.cmd ? '：' + i.cmd.slice(0, 200) : '')).join('；') : '查不到是哪个进程';
       console.log('端口 ' + port + ' 被占着：' + who + '。无法确认它归这个项目（' + dir + '）管，没有动它。可能是用户在 IDEA 或终端里启动的服务；先核实来源和用途，不要直接结束它。');
@@ -511,15 +610,14 @@ async function start() {
     }
     // 这个项目的进程，但没有记录：看是谁起的。Claude Code 起的、没人管的（起它的进程已经不在了）停掉重起；
     // 用户自己在终端、IDE 里起的（带着调试器的也算）不动，除非加了 --takeover（先问过用户）
-    const table = procTable();
-    const who = mine.map((i) => ({ i, by: whoStarted(i, table) }));
+    const who = mine.map((i) => ({ i, by: whoStarted(i, t0) }));
     const users = who.filter((x) => x.by === 'user');
     if (users.length && !flag('takeover')) {
       console.log('端口 ' + port + ' 上是用户自己起的这个项目的服务：' + users.map((x) => (x.i.name || '进程') + '（PID ' + x.i.pid + (x.i.created ? '，' + ago(x.i.created) + '起的' : '') + '）' + (x.i.cmd ? '：' + x.i.cmd.slice(0, 160) : '')).join('；') + '。没有动它。\n'
         + '要用就直接拿它测（它跑的可能不是你改过之后的代码：改的是后端的话，先问用户要不要重启它）。确实要由 devserver 接管（结束它、在同一个端口重起），先问用户，同意了再加 --takeover 重跑。全自动模式下用户不在：不要接管，把要重启才能验的那一步留给用户。');
       return 1;
     }
-    console.log('端口 ' + port + ' 被这个项目的进程占着（' + who.map((x) => (x.i.name || '进程') + ' PID ' + x.i.pid + (x.i.created ? '，' + ago(x.i.created) + '起的' : '') + '，' + (x.by === 'claude' ? 'Claude Code 起的' : x.by === 'orphan' ? '起它的程序已经不在了' : '用户起的，按 --takeover 接管')).join('；') + '）：停掉，重启。');
+    console.log('端口 ' + port + ' 被这个项目的进程占着（' + who.map((x) => (x.i.name || '进程') + ' PID ' + x.i.pid + (x.i.created ? '，' + ago(x.i.created) + '起的' : '') + '，' + (x.by === 'claude' ? 'Claude 用 devserver 起的，记录丢了' : x.by === 'orphan' ? '起它的程序已经不在了' : '用户起的，按 --takeover 接管')).join('；') + '）：先停掉，再在这个端口起。');
     for (const x of who) killTree(x.i.pid);
     if (!(await waitClosed(port, 8000))) { console.log('停不掉占着端口 ' + port + ' 的进程，没有起新的。'); return 1; }
   }
@@ -529,7 +627,17 @@ async function start() {
 /** 老版本用 IDEA 起、记成 mode: idea 的：套件不再管 IDEA 里的服务，不动进程，记录清掉 */
 const ideaGone = (r) => r.name + '：以前用 IDEA 的运行配置"' + (r.config || r.name) + '"起的（端口 ' + r.port + '），套件不再管 IDEA 里的服务，没有动它，记录清掉了。要停到 IDEA 里停；要套件管就停掉它再用 start 照命令起。';
 
+/** 全机登记里、这个目录这一处的（运行目录在它下面，或者同一个 git 仓库）、记录不在这个目录里的：挪过来（第 17 条：换个目录跑 stop、status 也认得） */
+function adoptArea(nameOnly) {
+  const here = new Set(allRecs().map((r) => r.name));
+  for (const e of liveReg((x) => sameArea(x.cwd, dir) && normPath(path.dirname(x.file)) !== normPath(runDir) && (!nameOnly || x.name === nameOnly))) {
+    if (here.has(e.name)) continue;
+    adopt(e, e.name, '（记录在 ' + path.dirname(e.file) + '）');
+    here.add(e.name);
+  }
+}
 async function stop() {
+  try { adoptArea(flag('all') || !opt('name') ? '' : opt('name')); } catch (e) { /* 认不了照旧只看这个目录 */ }
   const recs = flag('all') || !opt('name') ? allRecs() : [readRec(opt('name'))].filter(Boolean);
   if (!recs.length) { console.log(opt('name') ? '没有叫 ' + opt('name') + ' 的服务记录（' + runDir + '）' : '这个项目没有记着在跑的服务（' + runDir + '）'); return 0; }
   let bad = 0;
@@ -544,6 +652,7 @@ async function stop() {
 }
 
 async function status() {
+  try { adoptArea(''); } catch (e) { /* 认不了照旧只看这个目录 */ }
   const recs = allRecs();
   if (!recs.length) { console.log('这个项目没有记着的服务（' + runDir + '）。'); return 0; }
   for (const r of recs) {
@@ -553,14 +662,14 @@ async function status() {
     // 只报告，不结束任何进程：进程在、端口没通的是还在启动
     if (!alive_) { console.log(r.name + '：没在跑（进程已经退了），记录清掉了。\n  命令：' + r.cmd + '\n  日志：' + r.log); dropRec(r.name); continue; }
     if (!open) { console.log(r.name + '：还在启动（进程 ' + r.pid + ' 在，端口 ' + r.port + ' 还没通，' + ago(r.startedAt) + '起的）。等一会儿；start 一次会接着等它。\n  命令：' + r.cmd + '\n  日志：' + r.log); continue; }
-    const changed = !r.hot ? changedSince(r.startedAt, r.cwd) : [];
+    const changed = !hotRec(r) ? changedSince(r.startedAt, r.cwd) : [];
     const who = whoListens(r.port);
-    console.log(r.name + '：在跑，端口 ' + r.port + (r.auto ? '（自动挑的）' : '') + (who ? '，听这个端口的是 ' + who : '') + '，' + ago(r.startedAt) + '起的' + (r.hot ? '，会热更新' : changed.length ? '，之后代码改过（' + changed.slice(0, 3).join('、') + (changed.length > 3 ? ' 等' : '') + '），测之前要 start 一下（会自动重启）' : '，跑的是现在的代码') + '\n  命令：' + r.cmd + '\n  运行目录：' + (r.cwd || dir) + '\n  日志：' + r.log);
+    console.log(r.name + '：在跑，端口 ' + r.port + (r.auto ? '（自动挑的）' : '') + (who ? '，听这个端口的是 ' + who : '') + '，' + ago(r.startedAt) + '起的' + (hotRec(r) ? '，会热更新，改了代码不用重启' : changed.length ? '，之后代码改过（' + changed.slice(0, 3).join('、') + (changed.length > 3 ? ' 等' : '') + '），测之前要 start 一下（会自动重启）' : '，跑的是现在的代码') + '\n  命令：' + r.cmd + '\n  运行目录：' + (r.cwd || dir) + '\n  日志：' + r.log);
   }
   return 0;
 }
 
-module.exports = { changedSince, belongs, whoStarted, listeners, procInfo, sameProc, procTable, descendants };
+module.exports = { changedSince, belongs, whoStarted, listeners, procInfo, sameProc, procTable, descendants, hotOf };
 if (require.main === module && sub === '__keep') keep();
 else if (require.main === module) {
   const f = { start, stop, status }[sub];

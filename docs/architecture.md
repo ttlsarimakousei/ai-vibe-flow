@@ -117,7 +117,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 
 `review-runner.js` 与 `tools/review.js` 管有限材料、独立请求、超出预期用时的上报、取消与意见处理；`readiness.js`、`workflow.js` 提供就绪、交付、提交计划、自测和恢复事实；`work-sessions.js` 提示同变更冲突。`connection-lifecycle.js` 留无凭据退役记录；`redact.js` 统一诊断出口；`local-backup.js` 和 `entry-check.js` 管本地恢复与入口行为自检。
 
-跨会话状态加入 GLOBAL_STATE：evidence、review-jobs、work-baselines、review-local-metrics、work-sessions、readiness、usage-device。许可仍按会话清理。使用情况按持久随机设备标识分组；旧议题复用编号并改名，历史补充保留。审查材料和诊断明细不上传，耗时仅留本机。用户可见行为以 vibe-kit/开发流程.md 为准，旧表中的自动交接和 archive 算 apply 已被这版替代。
+跨会话状态加入 GLOBAL_STATE：evidence、review-jobs、work-baselines、review-local-metrics、work-sessions、readiness、usage-device、devserver（2026-10-28，devserver 的全机服务登记：端口 → 项目里的记录文件、运行目录、命令；start 找不到同名记录时按运行目录和命令认出之前起的服务，status、stop、会话开始的提醒也看它）。许可仍按会话清理。使用情况按持久随机设备标识分组；旧议题复用编号并改名，历史补充保留。审查材料和诊断明细不上传，耗时仅留本机。用户可见行为以 vibe-kit/开发流程.md 为准，旧表中的自动交接和 archive 算 apply 已被这版替代。
 
 `state-store.atomicWrite` 写结构化对象，`atomicText` 写 Markdown 等原文；调用方检查保存结果。`workspace` 的相同只读 Git 查询只在一次钩子调用内复用，下一次调用重新核对。审查读材料前检查真实路径、文件类型和编码，范围外链接与未覆盖材料不会算作完整审查。
 

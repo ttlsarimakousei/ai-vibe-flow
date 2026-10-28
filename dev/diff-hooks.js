@@ -382,6 +382,8 @@ for (const c of cases) {
   if (c.name === '新建报告（产出位置没定）') { c.expect = /不是代码，放哪还没跟用户定过。\\n项目说明的\\"产出位置\\"里没有[\s\S]*选项写实际的目录/; c.since = NEXT; }
   // 第 16 条：这一轮用户已经要求过的复验直接做，不再"复验前另问"
   if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用 Ask 问是否审查[\s\S]*改完的复验：用户这一轮已经要求过的直接做/; c.since = NEXT; }
+  // 第 17 条：起服务提示说 vite 这类热更新的自己认得、换目录换名字也认得之前起过的
+  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /vibe-kit 起服务[\s\S]*vite 这类会热更新的它自己认得[\s\S]*不要另起一个/; c.since = NEXT; }
   // IDEA MCP 接入去掉：环境就绪不再写 IDEA 的状态
   if (c.name === '会话开始：普通项目') { c.expect = /项目说明[\s\S]*环境就绪(?:(?!IDEA)[\s\S])*不代表构建或测试通过/; c.since = NEXT; }
 }

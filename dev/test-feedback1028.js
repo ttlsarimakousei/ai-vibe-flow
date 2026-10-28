@@ -251,6 +251,57 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('（用时参考）', true, Math.round((t1 - t0) / 1000) + ' 秒');
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('第 17 条：认得自己起过的服务（换目录、换名字、记录丢了），重启先停再起，热更新的不重启');
+  {
+    const h = H.makeHome('t1028-own', from);
+    const shell = path.join(h.work, 'shell');
+    const proj = H.makeRepo(path.join(shell, 'api'), { 'pom.xml': '<project/>', 'A.java': 'class A {}\n' });
+    const front = H.makeRepo(path.join(shell, 'web'), { 'package.json': JSON.stringify({ scripts: { dev: 'vite --host 127.0.0.1', build: 'vite build' } }) });
+    const TOOL = path.join(h.kit, 'tools', 'devserver.js');
+    const tool = (cwd, args) => H.node(h, TOOL, args, { cwd, timeout: 120000 });
+    const last = (r) => r.out.trim().split(/\r?\n/).filter(Boolean).pop() || '';
+    const portOf = (r) => Number((/端口 (\d+)/.exec(last(r)) || [])[1]) || 0;
+    // 服务回自己的进程号：看是不是同一个进程
+    const srv = "require('http').createServer((q, s) => s.end(String(process.pid))).listen(Number(process.env.PORT), '127.0.0.1');";
+    H.write(path.join(proj, 'srv.js'), srv);
+    H.write(path.join(front, 'vite.js'), srv);   // 命令写成 node vite.js：认得出是 vite（热更新）
+    const pidAt = (port) => new Promise((resolve) => { http.get({ host: '127.0.0.1', port, path: '/', agent: false, timeout: 3000 }, (r) => { let t = ''; r.on('data', (c) => { t += c; }); r.on('end', () => resolve(Number(t) || 0)); }).on('error', () => resolve(0)); });
+    const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; } };
+
+    const s1 = tool(proj, ['start', '--name', 'api', '--port', 'auto', '--', 'node', 'srv.js']);
+    const port = portOf(s1); const pid1 = await pidAt(port);
+    H.ok('在子项目里起了 api', s1.code === 0 && port > 0 && pid1 > 0, s1.out.slice(-400));
+    // 换到壳子根、换个名字、用 --cwd 指到同一个子项目
+    const s2 = tool(shell, ['start', '--name', 'backend', '--port', 'auto', '--cwd', 'api', '--', 'node', 'srv.js']);
+    H.ok('换到壳子根、换了名字：认出是之前起的那个，直接用，不另起', s2.code === 0 && /认出来了：端口 \d+ 上是之前用 devserver 起的"api"/.test(s2.out) && /^已经在跑：backend（端口 \d+/.test(last(s2)) && portOf(s2) === port && (await pidAt(port)) === pid1, s2.out.slice(-600));
+    // 改了代码：在原来的端口先停再起
+    H.write(path.join(proj, 'A.java'), 'class A { int x; }\n');
+    const s3 = tool(shell, ['start', '--name', 'backend', '--port', 'auto', '--cwd', 'api', '--', 'node', 'srv.js']);
+    const pid3 = await pidAt(port);
+    H.ok('改了代码：在原来的端口重启（先停再起），不换端口', s3.code === 0 && /停掉，在同一个端口重启/.test(s3.out) && portOf(s3) === port && pid3 > 0 && pid3 !== pid1 && !alive(pid1), s3.out.slice(-600));
+    // 记录、登记都丢了（比如以前的版本、手删了 .vibe/run）：端口上是 Claude 用 devserver 起的，不当成用户的，先停再起，不另挑端口
+    for (const d of [path.join(shell, '.vibe', 'run'), path.join(proj, '.vibe', 'run')]) { try { for (const n of fs.readdirSync(d)) if (n.endsWith('.json')) fs.unlinkSync(path.join(d, n)); } catch (e) { /* 没有 */ } }
+    try { fs.unlinkSync(path.join(h.kit, 'state', 'devserver.json')); } catch (e) { /* 没有 */ }
+    const s4 = tool(proj, ['start', '--name', 'api', '--port', 'auto', '--', 'node', 'srv.js']);
+    const pid4 = await pidAt(port);
+    H.ok('记录丢了：认出端口上是 Claude 起的，不说是用户起的，先停再在这个端口起', s4.code === 0 && portOf(s4) === port && /Claude 用 devserver 起的，记录丢了/.test(s4.out) && !/用户自己起的/.test(s4.out) && pid4 > 0 && pid4 !== pid3 && !alive(pid3), s4.out.slice(-600));
+    // 热更新：vite 改了代码不重启
+    const v1 = tool(front, ['start', '--name', 'web', '--port', 'auto', '--', 'node', 'vite.js']);
+    const vport = portOf(v1); const vpid = await pidAt(vport);
+    H.ok('vite 起来了，说会热更新', v1.code === 0 && /会热更新：改了代码不用重启/.test(last(v1)), last(v1));
+    H.write(path.join(front, 'App.vue'), '<template>改了</template>\n');
+    const v2 = tool(front, ['start', '--name', 'web', '--port', 'auto', '--', 'node', 'vite.js']);
+    H.ok('vite 改了代码：不重启，直接用', v2.code === 0 && /^已经在跑：web/.test(last(v2)) && /会热更新，改了代码不用重启/.test(last(v2)) && (await pidAt(vport)) === vpid, last(v2));
+    const D = require(path.join(h.kit, 'tools', 'devserver.js'));
+    H.ok('npm run dev 对应的脚本是 vite：认成热更新；npm run build 不是', D.hotOf('npm run dev -- --port 30001', front) && D.hotOf('npm --prefix web run dev', shell) && !D.hotOf('npm run build', front) && !D.hotOf('mvn spring-boot:run', proj));
+    // 在壳子根 stop --all：各个子项目里起的都停掉
+    const st = tool(shell, ['status']);
+    H.ok('在壳子根看 status：子项目里起的也列出来', /api：在跑/.test(st.out) && /web：在跑/.test(st.out), st.out.slice(-600));
+    const sp = tool(shell, ['stop', '--all']);
+    H.ok('在壳子根 stop --all：都停了', sp.code === 0 && !alive(pid4) && !(await pidAt(vport)), sp.out.slice(-600));
+  }
+
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
   H.done('1028 反馈');

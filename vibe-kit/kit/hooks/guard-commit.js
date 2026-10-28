@@ -1131,7 +1131,7 @@ function serverStart(ws, head, dir) {
 }
 const serverMsg = (what) => '[vibe-kit 起服务] 起服务自测用 devserver.js，不要直接起（' + what + '）：它先查这个项目的服务是不是已经在跑、跑的是不是现在的代码（改过代码就在同一个端口重启），端口被占时查清是谁占着——不会再起一个，也不会换端口。\n'
   + '  node "' + path.join(KIT, 'tools', 'devserver.js').split(path.sep).join('/') + '" start --name <名字> --port auto --avoid <项目说明里记的端口> -- <你原来的命令>\n'
-  + '端口由它在 30000 到 39999 里挑，离项目配置的端口远（用户自己在 IDE 里按配置的端口起的不会撞上）；Spring Boot、Vue CLI、Next、CRA 认环境变量 SERVER_PORT / PORT，命令不用改；Vite、webpack-dev-server 不认，命令写 npm run dev -- --port {port}（{port} 会换成挑到的端口）。起来之后它会说用的是哪个端口，看页面、调接口都用那个。前端开发服务器会热更新的加 --hot；要设环境变量用 --env K=V；服务要在子目录里起的，start 后面加 --cwd <子目录>，不要先 cd。它起好（答了 HTTP）才返回，日志在 .vibe/run/<名字>.log。测完：node "' + path.join(KIT, 'tools', 'devserver.js').split(path.sep).join('/') + '" stop --all';
+  + '端口由它在 30000 到 39999 里挑，离项目配置的端口远（用户自己在 IDE 里按配置的端口起的不会撞上）；Spring Boot、Vue CLI、Next、CRA 认环境变量 SERVER_PORT / PORT，命令不用改；Vite、webpack-dev-server 不认，命令写 npm run dev -- --port {port}（{port} 会换成挑到的端口）。起来之后它会说用的是哪个端口，看页面、调接口都用那个。vite 这类会热更新的它自己认得，改了代码不重启（认不出的加 --hot）；换了目录、换了名字也认得之前起过的，不要另起一个；要设环境变量用 --env K=V；服务要在子目录里起的，start 后面加 --cwd <子目录>，不要先 cd。它起好（答了 HTTP）才返回，日志在 .vibe/run/<名字>.log。测完：node "' + path.join(KIT, 'tools', 'devserver.js').split(path.sep).join('/') + '" stop --all';
 
 // ---------- 过程文件别落在项目里（固定，不做开关） ----------
 /*

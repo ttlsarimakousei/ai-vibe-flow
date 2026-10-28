@@ -206,6 +206,7 @@ async function handle(j) {
     // 以前用 devserver.js 起了、还没关的服务：告诉它，别再起一个（记录在各个项目的 .vibe/run/ 里）。进程和端口都没了的记录顺手清掉
     try {
       const running = [];
+      const seenPorts = new Set();
       for (const r of [cwd].concat(repos)) {
         const rd = path.join(r, '.vibe', 'run');
         let files = [];
@@ -216,10 +217,21 @@ async function handle(j) {
           let pidAlive = false;
           try { process.kill(rec.pid, 0); pidAlive = true; } catch (e) { pidAlive = !!e && e.code === 'EPERM'; }
           const up = pidAlive && await portOpen(rec.port);
-          if (up) running.push((repos.length ? path.basename(r) + ' 的 ' : '') + rec.name + '（端口 ' + rec.port + '，' + new Date(rec.startedAt).toLocaleString('zh-CN', { hour12: false }) + ' 起的）');
+          if (up) { seenPorts.add(rec.port); running.push((repos.length ? path.basename(r) + ' 的 ' : '') + rec.name + '（端口 ' + rec.port + '，' + new Date(rec.startedAt).toLocaleString('zh-CN', { hour12: false }) + ' 起的）'); }
           else if (!pidAlive && !(await portOpen(rec.port))) { try { fs.unlinkSync(path.join(rd, f)); } catch (e) { /* 删不掉就算了 */ } }
         }
       }
+      // devserver 的全机登记（问题反馈表第 17 条）：在别的目录跑 devserver 起的、运行目录在这个项目里的也说出来，免得它以为没起过、另起一个
+      try {
+        const reg = JSON.parse(fs.readFileSync(path.join(KIT, 'state', 'devserver.json'), 'utf8'));
+        const under = (p) => [cwd].concat(repos).some((r) => { const a = path.resolve(p).toLowerCase(), b = path.resolve(r).toLowerCase(); return a === b || a.startsWith(b + path.sep); });
+        for (const e of Object.values(reg || {})) {
+          if (!e || seenPorts.has(e.port) || !e.cwd || !under(e.cwd)) continue;
+          let rec; try { rec = JSON.parse(fs.readFileSync(e.file, 'utf8')); } catch (x) { continue; }
+          let pidAlive = false; try { process.kill(rec.pid, 0); pidAlive = true; } catch (x) { pidAlive = !!x && x.code === 'EPERM'; }
+          if (pidAlive && await portOpen(rec.port)) { seenPorts.add(rec.port); running.push(rec.name + '（端口 ' + rec.port + '，运行目录 ' + rec.cwd + '，' + new Date(rec.startedAt).toLocaleString('zh-CN', { hour12: false }) + ' 起的）'); }
+        }
+      } catch (e) { /* 没有登记 */ }
       if (running.length) out.push('以前起的服务还在跑：' + running.join('、') + '。要测就照样用 node "' + path.join(KIT, 'tools', 'devserver.js') + '" start …（它记着这些服务，跑的不是现在的代码会在同一个端口自动重启），用不着了就 stop --all；不要另起一个、不要换端口。');
     } catch (e) { /* 查不了不影响会话开始 */ }
     cleanState(3);
