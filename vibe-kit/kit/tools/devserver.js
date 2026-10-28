@@ -19,7 +19,7 @@
  *   - 起好才返回：等的时候每 2 秒看一次日志新增的内容（用户 2026-10-28 定的：定时看日志，不要一上来就一直调接口探）。
  *     日志里看到起好了的标志（Started … in … seconds、Server startup in、ready in …）再发 HTTP 确认；看到起不来的标志
  *     （APPLICATION FAILED TO START、BUILD FAILURE、端口被占……）马上停掉自己起的进程、贴日志返回，不干等到超时。
- *     端口只连不发请求；日志里认不出标志的，端口通了之后每 10 秒发一次 HTTP（随便哪个状态码算答了），Tomcat 这类先占端口、后部署应用的，
+ *     端口只连不发请求；日志里认不出标志的，端口通了 3 秒发第一次 HTTP、之后每 10 秒一次（随便哪个状态码算答了），Tomcat 这类先占端口、后部署应用的，
  *     端口一通就返回会让紧接着的请求超时；一直不答 HTTP 的（不是网页服务）端口通了 60 秒也算起来。上一次没等到它答 HTTP（等超时、被打断）的，再 start 接着等。
  *     起不来把日志最后几十行打出来。日志在 .vibe/run/<名字>.log，记录在 .vibe/run/<名字>.json。
  * 停的时候连子进程一起停（mvn → java 这种）；停完端口还被这个项目的进程占着的（Tomcat 的 startup.bat 这类会甩开父进程），也一起停；
@@ -106,18 +106,6 @@ function httpAnswers(port) {
   return ask(['127.0.0.1', '::1']);
 }
 const NO_HTTP_MS = 60000;
-/**
- * 服务起来了没有：端口通了还要答 HTTP。Tomcat（mvn tomcat7:run、catalina run）先占端口、后部署应用，
- * 端口通了请求还会挂着或被断开（实测 tomcat7:run），只看端口就说起来了，模型紧接着调接口会超时，当成服务坏了。
- * 一直不答 HTTP 的（不是网页服务），端口通了 60 秒也算。seen 是这一轮等的时候的记录（端口什么时候通的），每次传同一个。
- * 返回 'http'（答了 HTTP）、'port'（端口通了 60 秒还不答）、''（还没起来）
- */
-async function serving(port, seen) {
-  if (!(await portOpen(port, 400))) return '';
-  if (!seen.openAt) seen.openAt = Date.now();
-  if (await httpAnswers(port)) return 'http';
-  return Date.now() - seen.openAt > NO_HTTP_MS ? 'port' : '';
-}
 const NO_HTTP_NOTE = '，端口通了 60 秒一直没答 HTTP，当它不是网页服务';
 /** 等超时了、端口通着却还没答 HTTP 时怎么说 */
 const noHttpYet = (port, waitSec) => '没起来：端口 ' + port + ' 通了，但 ' + waitSec + ' 秒内一直没答 HTTP（Tomcat 这类先占端口、后部署应用，多半还在部署；不是网页服务的，端口通了 60 秒才算起来）。';
@@ -385,32 +373,81 @@ function whoListens(port) {
   const l = listeners(port).map(procInfo).filter((i) => i.pid);
   return l.length ? l.map((i) => (i.name || '进程').replace(/\.exe$/i, '') + '（PID ' + i.pid + '）').join('、') : '';
 }
-/** 等它起来（端口通了、答了 HTTP，见 serving）。0 = 起来了；1 = 没起来：进程退了就删掉记录，等到超时进程还在就留着记录（多半还在启动，再 start 会接着等） */
+// 日志里认得的"起好了""起不来"（用户 2026-10-28 定的：起服务定时看日志，不要一上来就一直调接口探）。只认常见框架的原话，认不出的照旧靠端口和 HTTP
+const LOG_UP = /Started \S+ in [\d.]+ seconds|Tomcat started on port|Server startup in|Started ServerConnector|Jetty[^\n]*Started|Netty started on port|Undertow started|ready in [\d.]+ ?m?s|Local:\s+https?:\/\/|App running at|Compiled successfully|webpack compiled|Uvicorn running on|Running on https?:\/\/|Listening on port|listening on port|Started @\d+ms/i;
+const LOG_FAIL = /APPLICATION FAILED TO START|BUILD FAILURE|Address already in use|BindException|Port \d+ (?:was )?already in use|EADDRINUSE|npm ERR!|ERR_PNPM|Exception in thread "main"|Error: Cannot find module|Could not find or load main class|Failed to start component|Context initialization failed|Application run failed/i;
+/** 日志从 from 字节往后的新内容（最多 1 MB）。cmd、bat 的报错是 GBK：这里只认英文的标志，按 UTF-8 读就够 */
+function logSince(file, from) {
+  try {
+    const size = fs.statSync(file).size;
+    if (size <= from) return { text: '', end: size < from ? 0 : from };
+    const start = Math.max(from, size - 1024 * 1024);
+    const fd = fs.openSync(file, 'r');
+    try { const buf = Buffer.alloc(size - start); fs.readSync(fd, buf, 0, buf.length, start); return { text: buf.toString('utf8'), end: size }; } finally { fs.closeSync(fd); }
+  } catch (e) { return { text: '', end: from }; }
+}
+const LOG_EVERY = 2000;     // 多久看一次日志、连一次端口（只连不发请求）
+const FIRST_HTTP_MS = 3000; // 日志里认不出"起好了"时，端口通了多久发第一次 HTTP
+const HTTP_EVERY = 10000;   // 之后多久发一次
+/**
+ * 等它起来。0 = 起来了；1 = 没起来：进程退了、日志里报了起不来就删掉记录，等到超时进程还在就留着记录（多半还在启动，再 start 会接着等）。
+ * 每 2 秒：读日志新增的内容、连一次端口。日志说起好了 → 发 HTTP 确认（答了就算起来）；日志报了起不来 → 停掉自己起的进程、贴日志返回；
+ * 都认不出 → 端口通了 3 秒发第一次 HTTP、之后每 10 秒一次，60 秒一直不答也算起来（不是网页服务）
+ */
 async function waitUp(rec, waitSec) {
   const t0 = Date.now();
-  const seen = {};
-  let deadAt = 0;
+  let deadAt = 0, offset = 0, carry = '', sign = '', fail = '', openAt = 0, lastHttp = 0, signAt = 0;
+  const done = async (up, how) => {
+    // 记下它起的每个进程：停的时候一个个清掉。听端口的进程单独说：看进程列表时认的是它，不是看管进程
+    const table = procTable();
+    const tree = descendants(rec.pid, table).map((p) => ({ pid: p.pid, name: p.name, created: p.created }));
+    for (const pid of listeners(rec.port)) { const p = table.find((x) => x.pid === pid); if (p && !tree.some((x) => x.pid === pid) && belongs(procInfo(pid), rec, true)) tree.push({ pid: p.pid, name: p.name, created: p.created }); }
+    try { fs.writeFileSync(recFile(rec.name), JSON.stringify(Object.assign({}, rec, { tree, upAt: Date.now() }), null, 2)); } catch (e) { /* 记不了就按父子关系停 */ }
+    const who = whoListens(rec.port);
+    // 这一行放在最后：输出的最后一行就是结果
+    console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
+    console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (how ? '，' + how : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
+    return 0;
+  };
   while (Date.now() - t0 < waitSec * 1000) {
-    const up = await serving(rec.port, seen);
-    if (up) {
-      // 记下它起的每个进程：停的时候一个个清掉。听端口的进程单独说：看进程列表时认的是它，不是看管进程
-      const table = procTable();
-      const tree = descendants(rec.pid, table).map((p) => ({ pid: p.pid, name: p.name, created: p.created }));
-      for (const pid of listeners(rec.port)) { const p = table.find((x) => x.pid === pid); if (p && !tree.some((x) => x.pid === pid) && belongs(procInfo(pid), rec, true)) tree.push({ pid: p.pid, name: p.name, created: p.created }); }
-      try { fs.writeFileSync(recFile(rec.name), JSON.stringify(Object.assign({}, rec, { tree, upAt: Date.now() }), null, 2)); } catch (e) { /* 记不了就按父子关系停 */ }
-      const who = whoListens(rec.port);
-      // 这一行放在最后：输出的最后一行就是结果
-      console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
-      console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
-      return 0;
+    const got = logSince(rec.log, offset);
+    if (got.end < offset) carry = '';
+    offset = got.end;
+    if (got.text) {
+      const lines = (carry + got.text).split(/\r?\n/); carry = lines.pop().slice(-2000);
+      for (const l of lines) { if (!sign && LOG_UP.test(l)) { sign = l.trim().slice(0, 160); signAt = Date.now(); } if (!fail && LOG_FAIL.test(l)) fail = l.trim().slice(0, 200); }
+    }
+    if (fail) {
+      // 日志里报了起不来：给它 3 秒自己退，还在就停掉自己起的进程（不留半死的服务占着端口）
+      for (let i = 0; i < 6 && alive(rec.pid); i++) await sleep(500);
+      if (alive(rec.pid)) killTree(rec.pid);
+      dropRec(rec.name);
+      console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
+      console.log('没起来：日志里报了 "' + fail + '"，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒。看上面的日志改好再 start；进程已经停了。');
+      return 1;
+    }
+    const open = await portOpen(rec.port, 400);
+    if (open && !openAt) openAt = Date.now();
+    // 日志说起好了就发 HTTP 确认；日志里认不出标志的（别的框架），端口通了 3 秒发第一次，之后每 10 秒一次
+    if (open && (sign || (lastHttp ? Date.now() - lastHttp >= HTTP_EVERY : Date.now() - openAt >= FIRST_HTTP_MS))) {
+      lastHttp = Date.now();
+      if (await httpAnswers(rec.port)) return done('http', sign ? '日志里看到 "' + sign + '"' : '');
+      if (Date.now() - openAt > NO_HTTP_MS) return done('port', sign ? '日志里看到 "' + sign + '"' : '');
+    }
+    // 日志说起好了，端口却一直不通：监听的多半不是这个端口，不干等到超时
+    if (sign && !open && Date.now() - signAt > 15000) {
+      console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
+      console.log('没起来：日志里说起好了（"' + sign + '"），但 15 秒了端口 ' + rec.port + ' 还没通：它实际监听的多半不是这个端口，看上面的日志找它的端口，--port 写那个再 start。进程还在、记录留着。');
+      return 1;
     }
     // 启动命令自己退了（startup.bat 这类把服务甩到后台就走）：服务可能还在起，再等它 15 秒；端口已经通了的是在部署，接着等到超时
-    if (!alive(rec.pid) && !seen.openAt) { if (!deadAt) deadAt = Date.now(); if (Date.now() - deadAt > 15000) break; }
-    await sleep(deadAt ? 500 : 1000);
+    if (!alive(rec.pid) && !openAt) { if (!deadAt) deadAt = Date.now(); if (Date.now() - deadAt > 15000) break; }
+    await sleep(LOG_EVERY);
   }
   const dead = !alive(rec.pid);
   if (dead) dropRec(rec.name);
-  const open = seen.openAt && (await portOpen(rec.port, 400));
+  // 超时这一刻再连一次端口：等得短（--wait 2）时 2 秒一次的检查可能还没赶上端口通
+  const open = await portOpen(rec.port, 400);
   console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
   if (open) console.log(noHttpYet(rec.port, waitSec) + (dead ? '启动命令已经退出了，看上面的日志有没有报错。' : '进程还在、记录留着：过一会儿再 start 一次会接着等它，不会重起；也看看上面的日志有没有报错。'));
   else console.log(dead ? '没起来：' + rec.name + ' 的进程已经退出了，看上面的日志。' : '没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。进程还在、记录留着：多半还在启动（大项目要一两分钟），过一会儿再 start 一次会接着等它，不会重起；也可能它实际监听的不是这个端口，看上面的日志。');

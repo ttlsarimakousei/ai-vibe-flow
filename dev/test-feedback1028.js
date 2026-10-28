@@ -221,6 +221,36 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('这个会话问过用户放哪、模型照答案记进项目说明：放行', asked === null, H.reasonOf(asked));
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('起服务看日志等：日志说起好了才发请求，日志报了起不来马上返回（第 14 条）');
+  {
+    const h = H.makeHome('t1028-dev', from);
+    const proj = H.makeRepo(path.join(h.work, 'svc'), { 'pom.xml': '<project/>' });
+    const TOOL = path.join(h.kit, 'tools', 'devserver.js');
+    const tool = (args) => H.node(h, TOOL, args, { cwd: proj, timeout: 120000 });
+    // 像 Tomcat：一起来就占端口，15 秒后才部署好；没部署好之前来的请求直接断开。每来一个请求记一笔
+    H.write(path.join(proj, 'slow.js'), [
+      "const http = require('http'); const fs = require('fs'); let ready = false;",
+      "http.createServer((q, r) => { fs.appendFileSync(process.argv[2], 'x'); if (ready) r.end('ok'); else q.socket.destroy(); }).listen(Number(process.env.PORT), '127.0.0.1', () => {",
+      "  console.log('booting'); setTimeout(() => { ready = true; console.log('Started Demo in 15.0 seconds (JVM running for 16)'); }, 15000); });",
+    ].join('\n'));
+    // 起不来：报了 Spring Boot 的错，进程却不退
+    H.write(path.join(proj, 'bad.js'), "console.log('***************************\\nAPPLICATION FAILED TO START\\n***************************'); setInterval(() => {}, 1000);");
+    const hits = path.join(h.root, 'hits.txt');
+    const t0 = Date.now();
+    const up = tool(['start', '--name', 'slow', '--port', '18798', '--', 'node', 'slow.js', hits]);
+    const n = (H.read(hits) || '').length;
+    H.ok('起来了，说是日志里看到起好了', up.code === 0 && /日志里看到 "Started Demo/.test(up.out), up.out.slice(-600));
+    H.ok('没部署好的 15 秒里不是每秒去探：一共只发了几次请求（以前每秒一次）', n >= 1 && n <= 4, n);
+    tool(['stop', '--name', 'slow']);
+    const t1 = Date.now();
+    const bad = tool(['start', '--name', 'bad', '--port', '18799', '--', 'node', 'bad.js']);
+    const last = bad.out.trim().split(/\r?\n/).pop() || '';
+    H.ok('日志报了起不来：马上返回，不干等到超时（180 秒）', bad.code === 1 && Date.now() - t1 < 30000 && /日志里报了 "APPLICATION FAILED TO START"/.test(last), [Date.now() - t1, last]);
+    H.ok('起不来的进程停掉了、记录清掉了', !fs.existsSync(path.join(proj, '.vibe', 'run', 'bad.json')), bad.out.slice(-400));
+    H.ok('（用时参考）', true, Math.round((t1 - t0) / 1000) + ' 秒');
+  }
+
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
   H.done('1028 反馈');
