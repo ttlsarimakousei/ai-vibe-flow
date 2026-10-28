@@ -343,9 +343,9 @@
 
   <section id="tab-usage" class="tab hide">
     <div class="pagehead"><h2>用量</h2><p>模型每调用一次工具就是一次请求，这个数涨得比你发的消息快。</p></div>
-    <div class="card"><h2>今天</h2><p class="hint" id="todayHint"></p><div class="bar" id="todayBar"><i style="width:0"></i></div><div id="usageSummary" style="margin-top:12px"></div></div>
-    <div class="card"><h2>最近 14 天</h2><div class="scroll"><table><thead><tr><th>日期</th><th class="num">请求</th><th class="num">失败</th><th class="num">输入</th><th class="num">缓存命中</th><th class="num">输出</th><th>按模型</th></tr></thead><tbody id="days"></tbody></table></div></div>
-    <div class="card"><h2>最近的请求</h2><div class="scroll"><table><thead><tr><th>时间</th><th>请求的模型</th><th>落到</th><th>结果</th><th class="num">首字节</th><th class="num">总耗时</th><th class="num">入 / 出</th><th>说明</th></tr></thead><tbody id="recent"></tbody></table></div></div>
+    <div class="card"><h2>今天</h2><p class="hint" id="todayHint"></p><div class="bar" id="todayBar"><i style="width:0"></i></div><div id="todayModels" class="dim" style="margin-top:10px"></div></div>
+    <div class="card"><div class="row between"><h2>每天</h2><div class="row" id="daysPager"></div></div><div class="scroll"><table><thead><tr><th>日期</th><th class="num">请求</th><th class="num">失败</th><th class="num">输入</th><th class="num">缓存命中</th><th class="num">输出</th></tr></thead><tbody id="days"></tbody></table></div></div>
+    <div class="card"><div class="row between"><h2>最近的请求</h2><div class="row"><label class="dim"><input type="checkbox" id="recentFail"> 只看失败的</label><span id="recentPager" class="row"></span></div></div><div class="scroll"><table><thead><tr><th>时间</th><th>落到</th><th>结果</th><th class="num">总耗时</th><th class="num">入 / 出</th><th>说明</th></tr></thead><tbody id="recent"></tbody></table></div></div>
   </section>
 
   <section id="tab-local" class="tab hide">
@@ -973,32 +973,47 @@
   };
 
   // ---------- 用量页 ----------
+  // 2026-10-28 精简（问题反馈表第 12 条）：去掉按模型的缓存统计表、每天那一行的按模型明细、首字节；每天 7 天一页，最近的请求 20 条一页，能只看失败的
+  const usage = { data: null, daysPage: 0, recentPage: 0 };
+  const DAYS_PER_PAGE = 7, RECENT_PER_PAGE = 20;
+  function pager(el, page, pages, go) {
+    el.innerHTML = pages > 1 ? '<button class="btn" data-p="-1"' + (page <= 0 ? ' disabled' : '') + '>上一页</button><span class="dim" style="margin:0 8px">第 ' + (page + 1) + ' / ' + pages + ' 页</span><button class="btn" data-p="1"' + (page >= pages - 1 ? ' disabled' : '') + '>下一页</button>' : '';
+    el.onclick = (ev) => { const b = ev.target.closest('[data-p]'); if (b && !b.disabled) go(page + Number(b.dataset.p)); };
+  }
+  function renderDays() {
+    const u = usage.data; const keys = Object.keys(u.daily).sort().reverse();
+    const pages = Math.max(1, Math.ceil(keys.length / DAYS_PER_PAGE)); usage.daysPage = Math.min(Math.max(0, usage.daysPage), pages - 1);
+    $('days').innerHTML = keys.slice(usage.daysPage * DAYS_PER_PAGE, (usage.daysPage + 1) * DAYS_PER_PAGE).map((k) => {
+      const day = u.daily[k]; const t = { fail: 0, input: 0, cacheRead: 0, output: 0 };
+      for (const x of Object.values(day.byProvider || {})) { t.fail += x.fail || 0; t.input += (x.input || 0) + (x.cacheWrite || 0); t.cacheRead += x.cacheRead || 0; t.output += x.output || 0; }
+      return '<tr><td>' + esc(k) + '</td><td class="num">' + (day.requests || 0) + '</td><td class="num">' + t.fail + '</td><td class="num">' + fmt(t.input) + '</td><td class="num">' + fmt(t.cacheRead) + (t.input + t.cacheRead ? ' <span class="dim">' + Math.round(t.cacheRead * 100 / (t.input + t.cacheRead)) + '%</span>' : '') + '</td><td class="num">' + fmt(t.output) + '</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="dim">还没有记录。</td></tr>';
+    pager($('daysPager'), usage.daysPage, pages, (p) => { usage.daysPage = p; renderDays(); });
+  }
+  function renderRecent() {
+    // failed：状态码是 200 但其实没成（流里报错、没收全）；cancelled：客户端自己取消的（按了 Esc），不算模型的错
+    const okOf = (r) => !r.failed && !r.cancelled && r.status > 0 && r.status < 400;
+    const list = usage.data.recent.filter((r) => !$('recentFail').checked || (!okOf(r) && !r.cancelled));
+    const pages = Math.max(1, Math.ceil(list.length / RECENT_PER_PAGE)); usage.recentPage = Math.min(Math.max(0, usage.recentPage), pages - 1);
+    $('recent').innerHTML = list.slice(usage.recentPage * RECENT_PER_PAGE, (usage.recentPage + 1) * RECENT_PER_PAGE).map((r) => {
+      const tag = r.cancelled ? '<span class="tag off">取消</span>' : '<span class="tag ' + (okOf(r) ? 'ok' : 'bad') + '">' + (r.status || '断开') + '</span>';
+      return '<tr><td class="mono">' + esc(new Date(r.timestamp).toLocaleTimeString('zh-CN', { hour12: false })) + '</td><td>' + esc(r.provider) + (r.failover ? ' <span class="tag off">换过来的</span>' : '') + '</td><td>' + tag + '</td><td class="num">' + (((r.totalMs || 0) / 1000).toFixed(1)) + ' s</td><td class="num">' + fmt((r.input || 0) + (r.cacheRead || 0) + (r.cacheWrite || 0)) + ' / ' + fmt(r.output) + '</td><td class="dim">' + (r.error ? '<span class="clip"' + (r.error.length > 24 ? ' data-full="' + esc(r.error) + '" title="点开看完整内容"' : '') + '>' + esc(r.error) + '</span>' : '') + '</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="dim">' + ($('recentFail').checked ? '最近没有失败的请求。' : '还没有请求。') + '</td></tr>';
+    pager($('recentPager'), usage.recentPage, pages, (p) => { usage.recentPage = p; renderRecent(); });
+  }
+  $('recentFail').onchange = () => { usage.recentPage = 0; if (usage.data) renderRecent(); };
   async function loadUsage() {
     const u = await api('GET', '/api/usage').catch(() => null); if (!u) return;
-    const keys = Object.keys(u.daily).sort().reverse();
+    usage.data = u;
     const d = new Date(); const today = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    const n = (u.daily[today] || {}).requests || 0;
+    const td = u.daily[today] || { requests: 0, byProvider: {} };
+    const n = td.requests || 0;
     const warn = u.warnAt || 0;
     $('todayHint').textContent = '今天 ' + n + ' 次请求' + (warn ? '，提醒线 ' + warn + ' 次。' : '。') + '一次对话里模型每调用一次工具就是一次请求，所以这个数涨得比你发的消息快得多。';
     $('todayBar').className = 'bar' + (warn && n >= warn ? ' bad' : warn && n >= warn * 0.75 ? ' warn' : '');
     $('todayBar').firstElementChild.style.width = Math.min(100, warn ? n * 100 / warn : 0) + '%';
-    const sm = u.summary || { total: {}, byProvider: {}, days: 0 };
-    const pct = (v) => (v == null ? '—' : v + '%');
-    const row = (n, t, bold) => '<tr><td>' + (bold ? '<b>' + esc(n) + '</b>' : esc(n)) + '</td><td class="num">' + (t.requests || 0) + '</td><td class="num">' + fmt((t.input || 0) + (t.cacheRead || 0) + (t.cacheWrite || 0)) + '</td><td class="num">' + fmt(t.cacheRead || 0) + '</td><td class="num"><b>' + pct(t.hitRate) + '</b></td><td class="num">' + (t.failover || 0) + '</td><td class="num">' + (t.waits || 0) + '</td></tr>';
-    $('usageSummary').innerHTML = '<div class="dim" style="font-size:12px">最近 ' + sm.days + ' 天，按 token 算：缓存命中率 = 缓存命中 ÷ 全部输入。这是模型在回复里报的数；要是一直是 0、而同一个会话的下一条请求又明显比第一条快，说明网关没把这个数传回来，不是没命中。</div>'
-      + '<table style="margin-top:6px"><thead><tr><th>模型</th><th class="num">请求</th><th class="num">全部输入</th><th class="num">缓存命中</th><th class="num">命中率</th><th class="num">换过来的次数</th><th class="num">限流等待次数</th></tr></thead><tbody>'
-      + Object.entries(sm.byProvider).map(([n, t]) => row(n, t, false)).join('') + row('合计', sm.total, true) + '</tbody></table>';
-    $('days').innerHTML = keys.slice(0, 14).map((k) => {
-      const day = u.daily[k]; const s = { fail: 0, input: 0, cacheRead: 0, output: 0 };
-      const by = Object.keys(day.byProvider || {}).map((p) => { const x = day.byProvider[p]; s.fail += x.fail; s.input += x.input + x.cacheWrite; s.cacheRead += x.cacheRead; s.output += x.output; return esc(p) + ' ' + x.requests + (x.failover ? '（换过来 ' + x.failover + '）' : '') + (x.waits ? '（限流等过 ' + x.waits + '）' : ''); });
-      return '<tr><td>' + esc(k) + '</td><td class="num">' + day.requests + '</td><td class="num">' + s.fail + '</td><td class="num">' + fmt(s.input) + '</td><td class="num">' + fmt(s.cacheRead) + (s.input + s.cacheRead ? ' <span class="dim">' + Math.round(s.cacheRead * 100 / (s.input + s.cacheRead)) + '%</span>' : '') + '</td><td class="num">' + fmt(s.output) + '</td><td class="dim">' + by.join('，') + '</td></tr>';
-    }).join('') || '<tr><td colspan="7" class="dim">还没有记录。</td></tr>';
-    $('recent').innerHTML = u.recent.slice(0, 80).map((r) => {
-      // failed：状态码是 200 但其实没成（流里报错、没收全）；cancelled：客户端自己取消的（按了 Esc），不算模型的错
-      const ok = !r.failed && !r.cancelled && r.status > 0 && r.status < 400;
-      const tag = r.cancelled ? '<span class="tag off">取消</span>' : '<span class="tag ' + (ok ? 'ok' : 'bad') + '">' + (r.status || '断开') + '</span>';
-      return '<tr><td class="mono">' + esc(new Date(r.timestamp).toLocaleTimeString('zh-CN', { hour12: false })) + '</td><td class="mono">' + esc(r.model) + '</td><td>' + esc(r.provider) + (r.failover ? ' <span class="tag off">换过来的</span>' : '') + '</td><td>' + tag + '</td><td class="num">' + (r.latencyMs || 0) + ' ms</td><td class="num">' + (((r.totalMs || 0) / 1000).toFixed(1)) + ' s</td><td class="num">' + fmt((r.input || 0) + (r.cacheRead || 0) + (r.cacheWrite || 0)) + ' / ' + fmt(r.output) + '</td><td class="dim">' + (r.error ? '<span class="clip"' + (r.error.length > 24 ? ' data-full="' + esc(r.error) + '" title="点开看完整内容"' : '') + '>' + esc(r.error) + '</span>' : '') + '</td></tr>';
-    }).join('') || '<tr><td colspan="8" class="dim">还没有请求。</td></tr>';
+    $('todayModels').innerHTML = Object.entries(td.byProvider || {}).sort((x, y) => (y[1].requests || 0) - (x[1].requests || 0)).map(([p, x]) => esc(p) + ' ' + (x.requests || 0) + ' 次' + (x.fail ? '（失败 ' + x.fail + '）' : '')).join('，') || '今天还没有请求。';
+    renderDays(); renderRecent();
   }
   $('recent').addEventListener('click', (ev) => { const t = ev.target.closest('[data-full]'); if (t) showText('请求的说明', t.dataset.full); });
   /** 长文本弹窗：表格里只显示一行，点开看全文 */
