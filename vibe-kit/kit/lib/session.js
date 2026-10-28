@@ -1876,8 +1876,7 @@ function reviewsIn(calls, results, changes, notes, archived) {
     const n = c._note || (notes && notes.get(c.id));
     if (n && n.status === 'completed') { issues = reviewIssues(n.text); at = n.at; pos = n.pos; text = n.text; }
     if (issues === null) return;
-    const budget = Math.max(10, Number(readConfig().reviewBudgetSeconds) || 300) * 1000;
-    if (c.at && at && at - c.at > budget) return; // 迟到结论不能补成完整审查。
+    // 审查总预算 2026-10-28 取消（用户定的）：兼容代理的结论晚到也照收；输入变了的照旧由指纹判失效
     const prompt = String(c.input.prompt || '');
     // text 是审查者的原话、source 是出处：自动收审查报的问题时要用（lib/lessons.js 的 autoCollect）
     const change = reviewTargetOf(prompt, changes);
@@ -1904,7 +1903,8 @@ function pendingReviewsIn(calls, results, changes, notes) {
     const r = results.get(c.id);
     if (!r || r.error || !/Async agent launched|working in the background/i.test(r.text)) continue;
     if (notes && notes.has(c.id)) continue;
-    const budget = Math.max(10, Number(readConfig().reviewBudgetSeconds) || 300) * 1000;
+    // 发出去 30 分钟还没回来的不再等（多半是 Claude Code 退出过，子代理跟着没了）。不是审查预算（2026-10-28 取消）
+    const budget = 30 * 60000;
     const prompt = String(c.input.prompt || '');
     const change = reviewTargetOf(prompt, changes);
     const started = c.at || r.at || 0;
@@ -1984,7 +1984,7 @@ function reviewDiagnostics(entries, cwd) {
     const p = pending.find((x) => x.id === c.id);
     const change = r && r.change || reviewTargetOf(String(c.input.prompt || ''), changes);
     const mode = r && r.mode || reviewModeOf(String(c.input.prompt || ''), change);
-    let reason = !change ? '没有识别到当前项目中的变更' : !mode ? '无法识别提案或代码模式' : r ? '已识别完整结论' : p ? (p.expired ? '已超过审查预算，不能登记通过' : '结果尚未送达，检查原任务，不要重复开审查') : '未识别完整结论，或结果失败、迟到；核对原任务的结论格式和送达记录';
+    let reason = !change ? '没有识别到当前项目中的变更' : !mode ? '无法识别提案或代码模式' : r ? '已识别完整结论' : p ? (p.expired ? '发出去 30 分钟还没回结论，多半子代理已经没了，不能登记通过' : '结果尚未送达，检查原任务，不要重复开审查') : '未识别完整结论，或结果失败、迟到；核对原任务的结论格式和送达记录';
     return { call: c.id, change: change ? change.name : '', mode: mode || '', recognized: !!(r && change && mode), reason };
   });
 }

@@ -83,23 +83,19 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
     mode = 'issue'; await R.run(opts);
     H.ok('重新审查不继承上一轮意见处理许可', !S.reviewRecord('code', d).resolved && !S.reviewRecord('code', d).resolvedFingerprint);
     mode = 'hang'; const pending = R.run(opts); await H.sleep(350); R.cancel(opts); const cancelled = await pending; const firstSpent = R.status(opts).spentMs;
-    H.ok('取消审查保留已消耗预算', cancelled.status === 'cancelled' && firstSpent >= 300, firstSpent);
-    const again = R.run(Object.assign({}, opts, { newBudget: false })); await H.sleep(350); R.cancel(opts); await again;
-    H.ok('重复取消仍累计总预算', R.status(opts).spentMs >= firstSpent + 300, R.status(opts).spentMs);
-    const key = R.jobKey(p, 'add-x', 'code'); const interrupted = Object.assign({}, R.status(opts), { id: 'dead-review', status: 'running', pid: 999999, started: Date.now() - 800, deadline: Date.now() + 5000, spentBefore: 250, spentMs: 250 }); S.updateState('review-jobs', (s) => { s[key] = interrupted; });
-    H.ok('退出进程的已用预算仍保留', R.status(opts).status === 'interrupted' && R.status(opts).spentMs >= 1000, R.status(opts));
+    H.ok('取消审查记下用了多久', cancelled.status === 'cancelled' && firstSpent >= 300, firstSpent);
+    const key = R.jobKey(p, 'add-x', 'code'); const interrupted = Object.assign({}, R.status(opts), { id: 'dead-review', status: 'running', pid: 999999, started: Date.now() - 800, deadline: Date.now() + 5000 }); S.updateState('review-jobs', (s) => { s[key] = interrupted; });
+    H.ok('执行进程退出了的审查记成中断', R.status(opts).status === 'interrupted' && R.status(opts).spentMs >= 700, R.status(opts));
+    // 2026-10-28 起没有累计预算（用户定的，问题反馈表第 6 条）：--new-budget 不再单独要许可，照普通审查的规矩走
     const transcript = path.join(h.root, 'budget.jsonl'); const command = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --project "' + p.replace(/\\/g, '/') + '" --change add-x --mode code --base HEAD --new-budget';
     const j = { cwd: p, session_id: 'budget', transcript_path: transcript, tool_name: 'Bash', hook_event_name: 'PreToolUse', tool_input: { command }, tool_use_id: 'budget-run' };
     H.setConfig(h, { kitLock: false });
-    for (const text of ['继续', '不要重开审查预算', '新审查预算有什么用？']) { H.transcript(transcript, [H.tr.user(text)]); H.ok(text + '不授权新预算', !!H.hook(h, 'guard-commit', j)); }
-    H.transcript(transcript, [H.tr.user('重新开启 add-x 的审查预算')]);
-    H.ok('真人明确重开预算可执行', H.hook(h, 'guard-commit', j) === null);
-    H.hook(h, 'after-tool', Object.assign({}, j, { hook_event_name: 'PostToolUse', tool_response: { stdout: JSON.stringify({ status: 'completed', id: 'budget-complete' }), exit_code: 0 } }));
-    H.ok('同一句新预算许可不能重复使用', !!H.hook(h, 'guard-commit', Object.assign({}, j, { tool_use_id: 'budget-again' })));
-    H.transcript(transcript, [H.tr.user('重新开启 add-x 的审查预算')]);
-    const failedRun = Object.assign({}, j, { tool_use_id: 'budget-failed' }); H.hook(h, 'guard-commit', failedRun);
-    H.hook(h, 'after-tool', Object.assign({}, failedRun, { hook_event_name: 'PostToolUseFailure', error: '审查超时', tool_response: { exit_code: 1 } }));
-    H.ok('失败不释放重开预算的一次许可', !!H.hook(h, 'guard-commit', Object.assign({}, j, { tool_use_id: 'budget-failed-retry' })));
+    H.transcript(transcript, [H.tr.user('继续')]);
+    const r1 = H.hook(h, 'guard-commit', j);
+    H.ok('--new-budget 不再报"审查预算"（没说审查照人工模式先问）', !/审查预算/.test(H.reasonOf(r1)) && /人工模式/.test(H.reasonOf(r1)), r1);
+    H.transcript(transcript, [H.tr.user('审查 add-x 的代码')]);
+    const r2 = H.hook(h, 'guard-commit', j);
+    H.ok('用户说了审查：带 --new-budget 的命令照常放行', r2 === null, r2);
   } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
   const cp = require('child_process'); const originalExec = cp.execFileSync; let gitCalls = 0;
   try {

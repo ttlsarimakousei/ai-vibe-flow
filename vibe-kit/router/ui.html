@@ -479,11 +479,11 @@
     <div class="card" id="sec-spec" data-sec="全局：审查与产物">
       <h2>全局：审查与产物</h2>
       <div class="opt">
-        <div><div class="t">审查方式</div><div class="d">人工整套审查用哪种方式。限时独立模型审查：分批发给"模型"页 sonnet 那一条指向的模型，挂了按换模型的顺序换。自动逐点审查固定用这种。超时、只审了一部分不算审完。</div></div>
-        <div class="ctl"><select id="k_reviewExecutor"><option value="direct">限时独立模型审查</option><option value="agent">原审查代理</option></select></div>
+        <div><div class="t">审查方式</div><div class="d">人工整套审查用哪种方式。独立模型审查：分批发给"模型"页 sonnet 那一条指向的模型，挂了按换模型的顺序换。自动逐点审查固定用这种。只审了一部分不算审完。</div></div>
+        <div class="ctl"><select id="k_reviewExecutor"><option value="direct">独立模型审查</option><option value="agent">原审查代理</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">每次审查的时间预算</div><div class="d">一个审查点的一轮最多用这么多时间；材料分批共用本轮预算。文件、批次和审查轮数分开计算。</div></div>
+        <div><div class="t">审查预期用时</div><div class="d">不截断审查：每批都审完。一轮审完超过这个时间，或者有批次没拿到结论，自动记一条问题反馈（总用时、每批用时、重试、输出 token、原因），给维护的人优化审查用。一次审查请求最多让模型输出 16000 token；只回了思考、没写结论的，加到 32000、要求少想再试，还不行就把这一批拆成两半各审一次。</div></div>
         <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
       </div>
       <div class="opt">
@@ -1101,7 +1101,7 @@
   fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fSel('contextStrategy', '连续工作的方式', ['compact', 'handover']);
   fSel('reviewExecutor', '审查方式', ['direct', 'agent']);
-  fNum('reviewBudgetSeconds', '审查总预算', 10, 1800); fNum('reviewMaxFiles', '审查文件上限', 1, 60);
+  fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800); fNum('reviewMaxFiles', '审查文件上限', 1, 60);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('autoOnboard', '后台自动探索'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);

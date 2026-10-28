@@ -277,7 +277,6 @@ function actionIssue(j) {
     }
     return '';
   }
-  if (review && /--new-budget\b/.test(cmd) && explicit(j, 'reviewBudget')) return '';
   let used = '';
   if (explicit(j, review ? 'review' : 'test')) {
     if (!review) return '';

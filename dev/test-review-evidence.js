@@ -25,7 +25,7 @@ const H = require('./lib/harness');
   H.write(path.join(p, 'a.js'), 'const a=3;\n'); H.ok('代码变化使旧验证失效', E.commands(p).length === 0);
   j.tool_use_id = 'test-2'; E.recordTool(j, false); H.ok('失败不能成为通过证据', E.commands(p).length === 0);
   let mode = 'ok'; let calls = 0;
-  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; if (mode === 'hang') return; if (mode === 'stale') H.write(path.join(p, 'a.js'), 'const a=4;\n'); if (mode === 'bad') { res.writeHead(200); return res.end('{bad'); } res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ issues: [], summary: '本批审完' }) }] })); }); });
+  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; if (mode === 'hang') return; if (mode === 'slow') { setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ issues: [], summary: '本批审完' }) }], usage: { output_tokens: 20 } })); }, 10600); return; } if (mode === 'stale') H.write(path.join(p, 'a.js'), 'const a=4;\n'); if (mode === 'bad') { res.writeHead(200); return res.end('{bad'); } res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ issues: [], summary: '本批审完' }) }] })); }); });
   await new Promise((r) => server.listen(0, '127.0.0.1', r)); const oldPort = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
   try {
     const opts = { cwd: p, change: 'add-x', mode: 'code', base: 'HEAD', newBudget: true };
@@ -39,9 +39,10 @@ const H = require('./lib/harness');
     mode = 'bad'; const bad = await R.run(opts); H.ok('不认识的回复不能算审完', bad.status === 'failed');
     mode = 'hang'; const pending = R.run(opts); setTimeout(() => R.cancel(opts), 100); const cancelled = await pending;
     H.ok('取消后迟到结果不记审查', cancelled.status === 'cancelled' && R.status(opts).status === 'cancelled');
-    const start = Date.now(); const timed = await R.run(Object.assign({}, opts, { budgetSeconds: 10 }));
-    H.ok('总预算到点终止等待', timed.status === 'timed_out' && Date.now() - start < 13000, timed.status);
-    H.ok('超时不登记完整审查任务', R.status(opts).status === 'timed_out');
+    // 2026-10-28 起不截断（用户定的，问题反馈表第 6 条）：慢过预期用时也等它审完，审完记一条问题反馈
+    mode = 'slow'; const start = Date.now(); const slow = await R.run(Object.assign({}, opts, { budgetSeconds: 10 }));
+    H.ok('不截断：慢过预期用时也等它审完', slow.status === 'completed' && Date.now() - start >= 10500, slow.status + ' ' + slow.reason);
+    H.ok('超出预期用时：自动记了一条问题反馈', !!slow.reported, slow);
     H.setConfig(h, { reviewMaxFiles: 1 }); H.write(path.join(p, 'b.js'), 'const b=1;\n'); mode = 'ok';
     const partial = await R.run(opts); H.ok('覆盖不足明确为部分结果', partial.status === 'partial' && partial.skipped.length > 0);
     H.ok('没有自主工具或重试请求', calls <= 7, calls);

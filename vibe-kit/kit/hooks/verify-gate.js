@@ -785,7 +785,7 @@ async function handle(j) {
   const pending = pendingReviewsIn(toolCalls(entries, 0), toolResults(entries), allChanges(cwd), taskNotes(entries));
   const busy = (dir, mode) => pending.some((p) => p.mode === mode && p.change && normKey(p.change.dir) === normKey(dir)) || require('../lib/review-runner').stateFor(dir, mode).status === 'running';
   const expired = pending.filter((p) => p.expired);
-  if (expired.length && !j.stop_hook_active) todo.push('兼容审查代理超过总预算：只取消已登记的任务 ' + expired.map((p) => p.id).join('、') + '，交代已覆盖与未覆盖范围。没有完整结论的审查任务保持未勾，不再继续等待或启动替代代理。');
+  if (expired.length && !j.stop_hook_active) todo.push('兼容审查代理发出去 30 分钟还没回结论（多半是 Claude Code 退出过，子代理没了）：只取消已登记的任务 ' + expired.map((p) => p.id).join('、') + '，交代已覆盖与未覆盖范围。没有完整结论的审查任务保持未勾，不再继续等待或启动替代代理。');
 
   // 这一轮的小状态：每件事每轮最多拦一次；续跑里只看"拦下之后又改了代码"
   const gkey = sid + '-gate';

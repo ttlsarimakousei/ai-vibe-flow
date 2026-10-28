@@ -2,6 +2,7 @@
 /*
  * 1028 导出议题和问题反馈表第 6—16 条（docs/feedback-20261028.md）。
  *   路由：发给上游的请求不带模型名、不带 Authorization: Bearer（第 10、11 条）
+ *   审查：不截断；只回思考时少想重试、再拆半批；碰到上限、超时记问题反馈（第 6、7 条，#226）；不带变更的审查能登记决定（#234）
  * 用法：node dev/test-feedback1028.js [路由端口] [旧版的 vibe-kit 目录]（给了旧版就拿旧版跑，看哪些项不过）
  * 全在假用户目录里；假上游只听本机端口，不连真的模型网关。
  */
@@ -78,6 +79,60 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     try { router.kill(); } catch (e) { /* 已经退了 */ }
     up.close();
     await H.sleep(600);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('审查：只回思考时少想重试、再拆半批；碰到输出上限记问题反馈（#226、第 6、7 条）；不带变更也能登记决定（#234）');
+  {
+    const h = H.makeHome('t1028-review', from, { autoVerify: false, autoSeePage: false, autoCrossReview: false, specGate: false, commitMode: 'off' });
+    const p = H.makeRepo(path.join(h.work, 'plain'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'b.js': 'const b=1;\n' });
+    const base = H.git(p, ['rev-parse', 'HEAD']).out.trim();
+    H.write(path.join(p, 'a.js'), 'const a=2;\n'); H.write(path.join(p, 'b.js'), 'const b=2;\n');
+    // 假的本机路由：一批里有两个以上片段就只回思考（停在输出上限），一个片段的才写结论；mode 为 issue 时给 a.js 报一条
+    let mode = 'think'; const asked = [];
+    const server = http.createServer((req, res) => {
+      let raw = ''; req.on('data', (c) => { raw += c; });
+      req.on('end', () => {
+        const body = JSON.parse(raw); const text = body.messages[0].content; let items = []; try { items = JSON.parse(text.slice(text.indexOf('\n本批材料：\n') + 7)); } catch (e) { items = []; }
+        asked.push({ n: items.length, max: body.max_tokens, concise: /少想/.test(body.system) });
+        res.writeHead(200, { 'content-type': 'application/json' });
+        if (mode === 'think' && items.length > 1) return res.end(JSON.stringify({ model: 'deepseek-flash', content: [{ type: 'thinking', thinking: '想了很久……' }], stop_reason: 'max_tokens', usage: { output_tokens: body.max_tokens } }));
+        const issues = mode === 'issue' ? [{ severity: 'P2', file: 'a.js', line: 1, problem: '常量改了没说明', evidence: 'a.js 第 1 行', fix: '补说明' }] : [];
+        res.end(JSON.stringify({ model: 'deepseek-flash', content: [{ type: 'text', text: JSON.stringify({ issues, summary: '审完' }) }], stop_reason: 'end_turn', usage: { output_tokens: 50 } }));
+      });
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const oldPort = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
+    try {
+      const R = require(path.join(h.kit, 'lib/review-runner'));
+      const r = await R.run({ cwd: p, mode: 'code', base });
+      H.ok('两次只回思考之后拆成两半各审一次：审完了', r.status === 'completed' && r.covered.length === 2, r);
+      H.ok('第二次加大到 32000、要求少想', asked.length >= 2 && asked[1].max === 32000 && asked[1].concise && !asked[0].concise, asked);
+      H.ok('第三步是拆开的半批', asked.slice(2).length === 2 && asked.slice(2).every((x) => x.n === 1), asked);
+      const fbDir = path.join(h.kit, 'feedback');
+      const fb = fs.existsSync(fbDir) ? fs.readdirSync(fbDir).filter((n) => n.endsWith('.md')).map((n) => H.read(path.join(fbDir, n))).join('\n') : '';
+      H.ok('碰到输出上限：自动记了一条问题反馈，写了每批用时、输出 token 和原因', !!r.reported && /审查模型把输出上限用在思考上|审查超出预期用时/.test(fb) && /只回思考/.test(fb) && /输出 32000 token/.test(fb), fb.slice(0, 1500));
+      H.ok('问题反馈里没有材料原文', !/const a=2/.test(fb));
+      H.ok('结果里有每批用时', Array.isArray(r.batchTimes) && r.batchTimes.length === 1, r.batchTimes);
+
+      mode = 'issue';
+      const r2 = await R.run({ cwd: p, mode: 'code', base });
+      H.ok('不带变更的审查报了一条', r2.status === 'completed' && r2.issues.length === 1, r2);
+      const dec = path.join(h.root, 'decisions.json');
+      H.write(dec, JSON.stringify({ findings: [{ id: 'r1', action: 'accepted', reason: '用户说这条不改：常量改动在提交信息里说明了' }] }));
+      let res = null; let err = '';
+      try { res = R.resolve({ cwd: p, mode: 'code', decisions: dec }); } catch (e) { err = e.message; }
+      H.ok('#234 不带 --change 的 resolve 能登记决定', !!res && res.status === 'resolved', err || res);
+      const rep = readJson(path.join(p, '.vibe/reviews/plain/code.json'));
+      H.ok('决定记进了 .vibe/reviews/plain/code.json', Array.isArray(rep.decisions) && rep.decisions[0].action === 'accepted', rep.decisions);
+      const tool = path.join(h.kit, 'tools/review.js').replace(/\\/g, '/');
+      const cmd = 'node "' + tool + '" resolve --mode code --project "' + p.replace(/\\/g, '/') + '" --decisions "' + dec.replace(/\\/g, '/') + '"';
+      let seq = 0;
+      const guard = (said) => H.hook(h, 'guard-commit', { session_id: 'plain-' + (++seq), cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'resolve-' + seq, tool_input: { command: cmd }, transcript_path: H.transcript(path.join(h.root, 'r' + seq + '.jsonl'), [H.tr.user(said)]) });
+      const ok = guard('r1 这条不改');
+      H.ok('#234 用户说了"这条不改"：带"接受"的 resolve 不再被"必须绑定有效变更"拦', ok === null || !/必须绑定有效变更/.test(H.reasonOf(ok)), ok);
+      H.ok('#234 用户没表态：带"接受"的 resolve 照旧要用户决定', /需要当前用户明确决定/.test(H.reasonOf(guard('继续'))), H.reasonOf(guard('继续')));
+    } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
   }
 
   const wins = await watch.stop();
