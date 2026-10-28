@@ -26,10 +26,12 @@ function handle(j) {
   const dir = (() => { const d = show(path.dirname(r.file)).replace(/\\/g, '/'); return d === '.' || !d ? './' : d.replace(/\/?$/, '/'); })();
   const how = '用提问框问用户放哪，选项写实际的目录（例：`' + dir + '`；第一个放你推荐的，比如项目里已有的同类目录），不写"子项目根目录""仓库根目录"这种说法；用户选定后，把它记进 ' + show(r.projectMd)
     + ' 的"产出位置"一节（没有这个文件就新建；一类一行，例：`- DDL 脚本：sql/ddl/`），然后写到那里。以后同类产出照着放，不用再问。';
+  // 两种情况第一行一样（#225）：放行按拦截话的第一行认是不是同一条规矩，以前两种话第一行不同，为第一种申请的放行对第二种不算
+  const first = '[vibe-kit 产出位置] 要新建的 ' + show(r.file) + ' 是一份' + r.type + '，不是代码，放哪还没跟用户定过。\n';
   if (r.selfAdded) {
-    return blockOut('PreToolUse', '[vibe-kit 产出位置] 要新建的 ' + show(r.file) + ' 是一份' + r.type + '。项目说明里现在有这个位置，但它是这个会话里自己加的，没问过用户，不算定过（防止自己给自己定位置）。别再改项目说明的写法：\n' + how);
+    return blockOut('PreToolUse', first + '项目说明里现在有这个位置，但它是这个会话里自己加的，不算定过：这个会话里没用提问框问过用户放哪（防止自己给自己定位置）。别再改项目说明的写法：\n' + how);
   }
-  return blockOut('PreToolUse', '[vibe-kit 产出位置] 要新建的 ' + show(r.file) + ' 是一份' + r.type + '，不是代码。这类产出放哪还没跟用户定过：项目说明的"产出位置"里没有，用户这次也没说过。\n先定位置再写：' + how);
+  return blockOut('PreToolUse', first + '项目说明的"产出位置"里没有，用户这次也没说过。先定位置再写：' + how);
 }
 
 module.exports = { handle };

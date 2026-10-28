@@ -189,6 +189,38 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('换了一句话（不是要审查）：照旧先问', !!r3 && /人工模式/.test(H.reasonOf(r3)), H.reasonOf(r3));
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('#225 产出位置：提问框答"项目根目录"认得出；问过位置后记进项目说明的算定过；两种拦截话第一行一样');
+  {
+    const h = H.makeHome('t1028-out', from, { autoVerify: false, autoSeePage: false, autoCrossReview: false, specGate: false, commitMode: 'off' });
+    const p = H.makeRepo(path.join(h.work, 'test-skill'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n' });
+    let seq = 0;
+    const ask = (q, a) => H.tr.ran('AskUserQuestion', { questions: [{ question: q }] }, 'User has answered your questions: "' + q + '"="' + a + '". You can now continue with the user\'s answers in mind.');
+    const write = (sid, file, entries) => H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(p, file), content: '# 使用说明\n' }, transcript_path: H.transcript(path.join(h.root, 'o' + (++seq) + '.jsonl'), entries) });
+    const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'deny'));
+    const doc = 'official-material-使用说明.md';
+    const said = [H.tr.user('写一份使用说明')];
+    H.ok('没问过位置：拦下', blocked(write('o1', doc, said)));
+    const root = write('o2', doc, said.concat(ask('这份使用说明放哪？', '项目根目录')));
+    H.ok('提问框问放哪、答"项目根目录"：根目录下的说明文档放行', root === null, H.reasonOf(root));
+    const sub = write('o3', 'docs/使用说明.md', said.concat(ask('这份使用说明放哪？', '项目根目录')));
+    H.ok('答的是根目录、文件却在 docs/ 下：照旧拦', blocked(sub), H.reasonOf(sub));
+    // 模型在会话里自己把位置记进项目说明：没问过用户不算；问过用户（随便怎么答）、照答案记的算
+    const first = write('o4', 'docs/说明.md', said);
+    // 模型改项目说明之前，pre-edit 先把原来的产出位置记下来（会话里之后加的不算定过）
+    H.hook(h, 'pre-edit', { session_id: 'o4', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(p, '.vibe/project.md'), content: '# 项目说明\n' }, transcript_path: H.transcript(path.join(h.root, 'pm.jsonl'), said) });
+    H.write(path.join(p, '.vibe/project.md'), '# 项目说明\n\n## 产出位置\n\n- 说明文档：docs/\n');
+    const self = write('o4', 'docs/说明.md', said);
+    H.ok('自己加的位置、没问过用户：照旧拦，提示说是自己加的', blocked(self) && /自己加的/.test(H.reasonOf(self)), H.reasonOf(self));
+    const firstLine = (o) => H.reasonOf(o).split('\n')[0];
+    H.ok('两种拦截话第一行一样（放行按第一行认是不是同一条规矩）', firstLine(first) === firstLine(self), [firstLine(first), firstLine(self)]);
+    const F = require(path.join(h.kit, 'lib/feedback'));
+    const target = 'file:' + require(path.join(h.kit, 'lib/session')).normKey(path.join(p, 'docs/说明.md'));
+    H.ok('为第一种申请的放行，对第二种也算', !!F.pickPass([{ hook: 'guard-output', sig: 'x', target, reason: H.reasonOf(first) }], 'guard-output', 'y', target, H.reasonOf(self)));
+    const asked = write('o4', 'docs/说明.md', said.concat(ask('说明文档放在哪个目录？', '放说明文档的那个目录')));
+    H.ok('这个会话问过用户放哪、模型照答案记进项目说明：放行', asked === null, H.reasonOf(asked));
+  }
+
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
   H.done('1028 反馈');

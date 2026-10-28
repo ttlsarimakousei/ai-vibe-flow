@@ -264,6 +264,23 @@ function userTexts(entries) {
   }
   return out;
 }
+/**
+ * 提问框里问的是放哪（问题里有"放哪""位置""目录"这类）、用户答了的：[{ q, a }]。答"不要""取消""未定"的不算（#225）
+ */
+const LOC_Q = /放(?:在|到)?哪|放哪里|位置|目录|存放|保存到|输出到|放到/;
+function locationAnswers(entries) {
+  const out = [];
+  const res = toolResults(entries);
+  for (const c of toolCalls(entries)) if (c.name === 'AskUserQuestion' && res.has(c.id) && !res.get(c.id).error) {
+    const pos = res.get(c.id).pos;
+    const voice = require('./session').lastUserVoice(entries.slice(0, pos + 1));
+    if (voice && voice.kind === 'answer' && voice.pos === pos) for (const a of voice.answers) if (LOC_Q.test(String(a.q || '')) && String(a.a || '').trim() && !/^(?:不要|不放|取消|先别|还没|未定)/.test(String(a.a).trim())) out.push({ q: String(a.q), a: String(a.a) });
+  }
+  return out;
+}
+// 答的是根目录（"项目根目录""仓库根目录""放在根目录"）：#58 定的"根目录 + 文件名"之外，提问框问位置时光答根目录也算（#225）。
+// "子项目根目录""壳子根目录"照旧不认（#196 定的：认不出是哪个，要写实际目录）
+const ROOT_ANSWER = /^(?:放(?:在|到))?\s*(?:项目|仓库|工程)?\s*的?\s*根目录/;
 const normText = (s) => String(s || '').replace(/\\/g, '/').replace(/\/+/g, '/').toLowerCase();
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function mentioned(texts, file, roots) {
@@ -321,11 +338,17 @@ function outputCheck(j, cfg) {
   const pm = nearestProjectMd(path.dirname(f)) || nearestProjectMd(home) || nearestProjectMd(cwd);
   const roots = [root, cwd, home, pm ? path.dirname(path.dirname(pm)) : ''];
   if (mentioned(userTexts(entries), f, roots)) return null;
+  // #225：提问框问了放哪、用户答"项目根目录"，文件就在根目录下的，算定过
+  const answers = locationAnswers(entries);
+  const dirKey = normKey(path.dirname(f));
+  if (answers.some((x) => ROOT_ANSWER.test(x.a.trim())) && roots.filter(Boolean).some((r) => normKey(r) === dirKey)) return null;
   const auto = !!(cfg && cfg.autoMode);
   if (auto && establishedDir(f, root)) return null;
-  // 现在的项目说明里其实有这个位置，只是这个会话里自己加的（没问过用户）：提示里直说，别让模型反复改写法（#218、#196）
+  // 现在的项目说明里其实有这个位置，只是这个会话里自己加的：提示里直说，别让模型反复改写法（#218、#196）
   const selfAdded = files.some((df) => declsOf(df).some((d) => matches(f, d.pattern)));
+  // 这个会话里用提问框问过用户放哪、用户答了，模型照答案记进项目说明的：算定过（#225：以前一律当"自己给自己定位置"）
+  if (selfAdded && answers.length) return null;
   return { type, file: f, root, projectMd: pm || path.join(root, '.vibe', 'project.md'), auto, pending: path.join(root, '.vibe', 'pending', path.basename(f)), cwd, selfAdded, home };
 }
 
-module.exports = { outputTypeOf, exempt, declFiles, parseDecls, declsOf, matches, snapshot, trustedPatterns, userTexts, mentioned, establishedDir, outputCheck, nearestProjectMd };
+module.exports = { outputTypeOf, exempt, declFiles, parseDecls, declsOf, matches, snapshot, trustedPatterns, userTexts, locationAnswers, mentioned, establishedDir, outputCheck, nearestProjectMd };

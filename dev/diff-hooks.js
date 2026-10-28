@@ -378,6 +378,8 @@ for (const c of cases) {
   if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git -C <仓库> push，几笔提交都一样[^"]*不推到别的分支。"/; c.since = V1025; }
   if (c.name === '1012：截断推送预览当场提示') { c.expect = /放行，没有输出/; c.since = NEXT; }
   if (['命令：git push', '命令：git -C "<项目>" push origin main'].includes(c.name)) { c.expect = /用户没说推送[\s\S]*不用推送计划）。"/; c.since = NEXT; }
+  // #225：产出位置两种拦截话第一行统一成"……放哪还没跟用户定过。"，放行对两种都认
+  if (c.name === '新建报告（产出位置没定）') { c.expect = /不是代码，放哪还没跟用户定过。\\n项目说明的\\"产出位置\\"里没有[\s\S]*选项写实际的目录/; c.since = NEXT; }
   // IDEA MCP 接入去掉：环境就绪不再写 IDEA 的状态
   if (c.name === '会话开始：普通项目') { c.expect = /项目说明[\s\S]*环境就绪(?:(?!IDEA)[\s\S])*不代表构建或测试通过/; c.since = NEXT; }
 }
