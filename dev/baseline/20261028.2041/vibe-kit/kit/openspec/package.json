@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@fission-ai/openspec": "1.14.3"
+  },
+  "private": true,
+  "description": "vibe-kit 自带的 OpenSpec（2026-10-17 集成，打包时的最新版）。升级见 docs/release.md"
+}
