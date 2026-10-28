@@ -5,6 +5,9 @@
  * 以前整份记录只认一个开口，换一次开口就把别的动作的许可一起清掉。
  * 提交、推送：同一句许可可以用在几个仓库上，每个仓库一次（壳子里几个子项目都改了，#207）；话里点了子项目名的，只用在点了名的那几个。
  * "改完提交""修好再推送"这种先改后提的，开口时不登记版本，到真正提交、推送时再登记（#215"确认后输入发生变化"）。
+ * 审查、提交：同一句许可在这一轮里能用好几次（用户 2026-10-28 定的，问题反馈表第 16 条："审核、提交之类的经常要确认多遍"）——
+ *   说了"审查"，这一轮里审几个点、改完再复审都算；说了"提交"，按规矩分几次提交都算，中间改过代码也不用再问。
+ *   用户下一次开口（换了一句话）就从头算。推送、归档、接受、跳过照旧一次一用。
  */
 const path = require('path');
 const W = require('./workspace');
@@ -33,6 +36,7 @@ function namedRepos(j, text) {
 }
 // 先改后提："改完提交""修好再推送""审一下然后提交"
 const DEFERRED = /(?:然后|之后|以后|再|完|好)\s*(?:git\s+)?(?:提交|commit|推送|push)/i;
+const REUSABLE = new Set(['review', 'commit']);
 function allow(j, action, target, toolId) {
   const S = require('./session'); const k = keyOf(j);
   if (!k) return { ok: false, reason: '没有可识别的会话许可' };
@@ -56,9 +60,10 @@ function allow(j, action, target, toolId) {
     let old = actions[id];
     // 换了一次开口给的许可：这个动作从头算（别的动作不受影响）
     if (old && old.voice !== vk) { delete actions[id]; old = null; }
-    if (old && old.consumed && !(action === 'reviewBudget' && old.toolId === String(toolId || ''))) { result = { ok: false, reason: '这次许可已用于成功操作，需要重新确认' }; return; }
-    if (old && old.version !== ver) { result = { ok: false, reason: '确认后输入发生变化，需要重新确认当前版本' }; return; }
-    if (!multi && !old && Object.keys(actions).some((n) => n.startsWith(action + '|') && actions[n].consumed && actions[n].voice === vk) && !/全部|所有|各个|分别|批量/.test(said.text)) { result = { ok: false, reason: '这次许可已经用于另一个目标' }; return; }
+    const reusable = REUSABLE.has(action);
+    if (old && old.consumed && !reusable && !(action === 'reviewBudget' && old.toolId === String(toolId || ''))) { result = { ok: false, reason: '这次许可已用于成功操作，需要重新确认' }; return; }
+    if (old && old.version !== ver && !reusable) { result = { ok: false, reason: '确认后输入发生变化，需要重新确认当前版本' }; return; }
+    if (!multi && !reusable && !old && Object.keys(actions).some((n) => n.startsWith(action + '|') && actions[n].consumed && actions[n].voice === vk) && !/全部|所有|各个|分别|批量/.test(said.text)) { result = { ok: false, reason: '这次许可已经用于另一个目标' }; return; }
     actions[id] = Object.assign(old || {}, { action, scope, version: ver, voice: vk, at: Date.now(), consumed: false });
     if (!old) actions[id].head = W.git(W.rootOf(target || j.cwd), ['rev-parse', 'HEAD']).trim();
     if (toolId) actions[id].toolId = String(toolId);

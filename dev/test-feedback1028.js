@@ -135,6 +135,60 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('中途打开 Apply 自动：说"开始实施"也算开工；不算自动时提示写清为什么（第 8 条、#227）');
+  {
+    const h = H.makeHome('t1028-auto', from, { specGate: true, autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false });
+    const S = require(path.join(h.kit, 'lib/session'));
+    const DESIGN = '## Context\n\n- 读过 src/A.java\n\n## Decisions\n\n- 放在 A.java\n\n## 验收用例\n\n| 编号 | 场景 | 前置 | 步骤 | 预期 | 谁来测 | 任务 |\n|---|---|---|---|---|---|---|\n| AC-1 | 导出 | 有数据 | 调接口 | 返回 200 | 人工 | 1 |\n';
+    const p = H.makeRepo(path.join(h.work, 'one'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n',
+      'openspec/changes/feat-019/proposal.md': '## Why\n\n要做。\n\n## What Changes\n\n- 改 src/A.java\n',
+      'openspec/changes/feat-019/specs/x/spec.md': '## ADDED Requirements\n\n### Requirement: 做\n\n系统 SHALL 做。\n\n#### Scenario: 正常\n\n- **WHEN** 调用\n- **THEN** 成功\n',
+      'openspec/changes/feat-019/design.md': DESIGN, 'openspec/changes/feat-019/tasks.md': '- [ ] 1.1 改 src/A.java：加功能\n' });
+    let seq = 0;
+    const tf = (es) => H.transcript(path.join(h.root, 'a' + (++seq) + '.jsonl'), es);
+    const prompt = (sid, text, es) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt: text, transcript_path: tf(es) });
+    let es = [H.tr.user('做一个导出功能，写需求')];
+    prompt('s-auto', '做一个导出功能，写需求', es);
+    es = es.concat([H.tr.say('feat-019 的提案、规格、设计、任务都写完了，能开工吗？')]);
+    H.setConfig(h, { autoApply: true });
+    // 还在需求阶段时去审查：提示写清 Apply 自动开着、为什么这一轮不算
+    const reviewCmd = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --change feat-019 --mode proposal --point design --project "' + p.replace(/\\/g, '/') + '"';
+    const before = H.hook(h, 'guard-commit', { session_id: 's-auto', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'rv-1', tool_input: { command: reviewCmd }, transcript_path: tf(es) });
+    H.ok('不算自动时：提示说配置页开了 Apply 自动、还在需求阶段要说开工', /Apply 自动/.test(H.reasonOf(before)) && /开工|开始实施/.test(H.reasonOf(before)), H.reasonOf(before));
+    es = es.concat([H.tr.user('开始实施 feat-019')]);
+    prompt('s-auto', '开始实施 feat-019', es);
+    H.ok('说"开始实施 feat-019"：进了实施阶段，Apply 自动算数', S.flowState({ session_id: 's-auto' }).stage === 'apply' && S.readConfigFor({ session_id: 's-auto', cwd: p }).autoMode === true, S.flowState({ session_id: 's-auto' }));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('审查、提交：同一句许可这一轮里能用好几次（第 16 条）');
+  {
+    const h = H.makeHome('t1028-perm', from, { autoVerify: false, autoSeePage: false, autoCrossReview: false, commitMode: 'off', specGate: false, kitLock: false });
+    const p = H.makeRepo(path.join(h.work, 'perm'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'b.js': 'const b=1;\n' });
+    let seq = 0;
+    const run = (command, entries) => H.hook(h, 'guard-commit', { session_id: 'perm', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'perm-' + (++seq), tool_input: { command }, transcript_path: H.transcript(path.join(h.root, 'p' + seq + '.jsonl'), entries) });
+    const done = (command, entries) => H.hook(h, 'after-tool', { session_id: 'perm', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_use_id: 'perm-' + seq, tool_input: { command }, tool_response: { exit_code: 0, stdout: 'ok' }, transcript_path: H.transcript(path.join(h.root, 'p' + seq + '.jsonl'), entries) });
+    const said = [H.tr.user('改好了，提交')];
+    H.write(path.join(p, 'a.js'), 'const a=2;\n'); H.git(p, ['add', 'a.js']);
+    const c1 = run('git commit -m "fix: 改 a"', said);
+    H.ok('说了"提交"：第一次提交放行', c1 === null, c1);
+    H.git(p, ['commit', '-m', 'fix: 改 a']); done('git commit -m "fix: 改 a"', said);
+    H.write(path.join(p, 'b.js'), 'const b=2;\n'); H.git(p, ['add', 'b.js']);
+    const c2 = run('git commit -m "fix: 改 b"', said);
+    H.ok('同一句"提交"：按规矩分开的第二次提交也放行，不再问', c2 === null, c2);
+    const reviewCmd = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --mode code --project "' + p.replace(/\\/g, '/') + '" --base HEAD~2';
+    const rs = [H.tr.user('审查一下')];
+    const r1 = run(reviewCmd, rs);
+    H.ok('说了"审查"：第一次审查放行', r1 === null, r1);
+    done(reviewCmd, rs);
+    H.write(path.join(p, 'b.js'), 'const b=3;\n');
+    const r2 = run(reviewCmd, rs);
+    H.ok('同一句"审查"：改完再复审也放行，不再问', r2 === null, r2);
+    const r3 = run(reviewCmd, [H.tr.user('审查一下'), H.tr.say('审完了'), H.tr.user('看看日志')]);
+    H.ok('换了一句话（不是要审查）：照旧先问', !!r3 && /人工模式/.test(H.reasonOf(r3)), H.reasonOf(r3));
+  }
+
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
   H.done('1028 反馈');
