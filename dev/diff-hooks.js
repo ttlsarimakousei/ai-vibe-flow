@@ -82,6 +82,7 @@ const V1013B = '20261013.2358'; // 1013 下午清单：业务状态名
 const V1017 = '20261017.0243'; // 两阶段自动、逐点审查、人工模式先问（10-14 至 10-16 决定）
 const V1018 = '20261018.0051'; // 提交方式三档（默认关）、任务只写实现、验收用例写进设计、需求文档一份一份来、自带 OpenSpec、起服务等答 HTTP（10-17 这一批）
 const V1025 = '20261025.0653'; // 1024 这批：提问框答的自测、复验、提交认得出；IDEA 只留普通检查；说推送直接推；产出位置要写目录
+const V1028 = '20261028.1834'; // 1028 这批：去掉 IDEA 接入和合并推送工具、用户说合并推送照做、复验这一轮说过不再问、产出位置两种拦截话统一、起服务提示热更新和认得之前起过的、环境就绪不写 IDEA
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -374,18 +375,18 @@ for (const c of cases) {
 // 这一版有意改的（用户 2026-10-28 定的）：合并推送取消，"合并push"也照普通推送直接推，不再记推送预览
 for (const c of cases) {
   // 用户自己说合并推送：照他说的用 git 合并没推的提交再推，不拦（用户 2026-10-28 补充）
-  if (c.name === '开口：合并push也等预览后的真人确认') { c.expect = /用户要把没推的提交合并了再推[\s\S]*reset --soft[\s\S]*直接 git push/; c.since = NEXT; }
+  if (c.name === '开口：合并push也等预览后的真人确认') { c.expect = /用户要把没推的提交合并了再推[\s\S]*reset --soft[\s\S]*直接 git push/; c.since = V1028; }
   if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git -C <仓库> push，几笔提交都一样[^"]*不推到别的分支。"/; c.since = V1025; }
-  if (c.name === '1012：截断推送预览当场提示') { c.expect = /放行，没有输出/; c.since = NEXT; }
-  if (['命令：git push', '命令：git -C "<项目>" push origin main'].includes(c.name)) { c.expect = /用户没说推送[\s\S]*不用推送计划）。"/; c.since = NEXT; }
+  if (c.name === '1012：截断推送预览当场提示') { c.expect = /放行，没有输出/; c.since = V1028; }
+  if (['命令：git push', '命令：git -C "<项目>" push origin main'].includes(c.name)) { c.expect = /用户没说推送[\s\S]*不用推送计划）。"/; c.since = V1028; }
   // #225：产出位置两种拦截话第一行统一成"……放哪还没跟用户定过。"，放行对两种都认
-  if (c.name === '新建报告（产出位置没定）') { c.expect = /不是代码，放哪还没跟用户定过。\\n项目说明的\\"产出位置\\"里没有[\s\S]*选项写实际的目录/; c.since = NEXT; }
+  if (c.name === '新建报告（产出位置没定）') { c.expect = /不是代码，放哪还没跟用户定过。\\n项目说明的\\"产出位置\\"里没有[\s\S]*选项写实际的目录/; c.since = V1028; }
   // 第 16 条：这一轮用户已经要求过的复验直接做，不再"复验前另问"
-  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用 Ask 问是否审查[\s\S]*改完的复验：用户这一轮已经要求过的直接做/; c.since = NEXT; }
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用 Ask 问是否审查[\s\S]*改完的复验：用户这一轮已经要求过的直接做/; c.since = V1028; }
   // 第 17 条：起服务提示说 vite 这类热更新的自己认得、换目录换名字也认得之前起过的
-  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /vibe-kit 起服务[\s\S]*vite 这类会热更新的它自己认得[\s\S]*不要另起一个/; c.since = NEXT; }
+  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /vibe-kit 起服务[\s\S]*vite 这类会热更新的它自己认得[\s\S]*不要另起一个/; c.since = V1028; }
   // IDEA MCP 接入去掉：环境就绪不再写 IDEA 的状态
-  if (c.name === '会话开始：普通项目') { c.expect = /项目说明[\s\S]*环境就绪(?:(?!IDEA)[\s\S])*不代表构建或测试通过/; c.since = NEXT; }
+  if (c.name === '会话开始：普通项目') { c.expect = /项目说明[\s\S]*环境就绪(?:(?!IDEA)[\s\S])*不代表构建或测试通过/; c.since = V1028; }
 }
 add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, V1018);
 add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, V1018);
