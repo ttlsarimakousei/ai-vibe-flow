@@ -8,7 +8,7 @@
 
 ## 这一批（1028）已改完、没打包
 
-2026-10-28 导出的 #225—#234 和问题表第 6—16 条，核对、修复结果、说法冲突审查都在 **docs/feedback-20261028.md**；提交 `7c916a8..0bd8556`，已推 GitHub。主要变化：去掉 IDEA MCP 接入和 IDEA 起服务、去掉合并推送工具（用户自己说合并推送照做）、路由不带模型名和 Bearer、审查不截断超时上报、审查和提交同一句许可一轮里多次用、devserver 看日志等起来、用量页精简。用户定的写在 docs/decisions.md 2026-10-28。
+2026-10-28 导出的 #225—#234 和问题表第 6—17 条，核对、修复结果、说法冲突审查都在 **docs/feedback-20261028.md**；提交 `7c916a8..09a278e`（加后面的文档提交），已推 GitHub。主要变化：去掉 IDEA MCP 接入和 IDEA 起服务、去掉合并推送工具（用户自己说合并推送照做）、路由不带模型名和 Bearer、审查不截断超时上报、审查和提交同一句许可一轮里多次用、devserver 看日志等起来、认得自己起过的服务（全机登记 state/devserver.json）且热更新的不重启、用量页精简。用户定的写在 docs/decisions.md 2026-10-28。
 
 只跑了和改动相关的测试（都过了，钩子对比 262 项对 0653 全过），没跑全量回归，没打包。
 
@@ -26,7 +26,7 @@
 
 - 新测试 `dev/test-feedback1028.js`（端口 18797）；删了 `test-idea-run.js`、`test-feedback1024-idea.js`、`test-push-preview.js`、`test-feedback1012-push.js`、`probes/idea-devserver.js`；`test-idea-mcp.js` 改成测撤回登记。
 - `lib/idea-mcp.js` 只剩撤回；`due()`、`sync()` 要留着（自动更新时内存里的旧代码会调）。删掉的库文件靠 `install.js` 的 `DROPPED_FILES` 在装新版时清掉，`hooks/` 下的文件照旧不能删。
-- devserver 认不出日志标志的服务，端口通了 3 秒才发第一次请求，`test-devserver-0929.js` 比以前慢一些。
+- devserver 认不出日志标志的服务，端口通了 3 秒才发第一次请求，`test-devserver-0929.js` 比以前慢一些。`--port auto` 的起点 2026-10-28 起按运行目录（--cwd）算，带 --cwd 起的服务新挑的端口和以前不同（已有记录的照旧用原端口）。
 - 《更新说明.md》的 `@@VER@@` 必须正好两处（stamp-and-pack.js 会查）。
 - 改提示说法、行为之后先跑 `node dev/stale-asserts.js`。回归跑着时别改被测文件。
 - 手工试探用的假用户目录（`vkt-*`）用完要删。
