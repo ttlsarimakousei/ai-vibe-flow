@@ -60,6 +60,7 @@ for (const c of claudes) suites.push(['端到端（全自动）' + path.basename
 claudes.forEach((c, i) => suites.push(['端到端（0930）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-0930.js', [c, path.basename(path.resolve(c, '../../../../..')), rt || path.join(__dirname, '没有运行环境'), String(18765 + 100 * i)]]));
 
 suites.unshift(['IDEA MCP 接入撤掉', 'test-idea-mcp.js', []]);
+suites.unshift(['1028 反馈', 'test-feedback1028.js', ['18797']]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
 
 suites.unshift(['1014 非数据库反馈', 'test-feedback1014.js', []], ['1014 两阶段工作流', 'test-workflow1014.js', []]);
