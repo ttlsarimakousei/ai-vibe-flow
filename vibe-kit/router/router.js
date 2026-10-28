@@ -15,8 +15,9 @@
  *      让它知道没收全、自己重试，不把半截回复装成正常结束。
  *   6. 数 token 之类和对话无关的请求只问一个模型，它的成败不影响模型的状态。
  *   7. 失败时把上游返回的错误内容记进日志，事后能查是限流还是熔断。
- *   8. 发给上游的请求不带模型名、不带 OpenAI 式的 Authorization: Bearer（用户 2026-10-28 定的：指定名称会失败，不用 openai 方式请求）：
- *      请求体里的 model 去掉，key 只放 x-api-key。模型名只在路由里用来分角色、记用量。
+ *   8. 发给上游的请求不带 OpenAI 式的 Authorization: Bearer，key 只放 x-api-key（用户 2026-10-28 定的：不用 openai 方式请求）。
+ *      模型名照原样带着（Claude Code 发来的；配了"换成这个模型名"的换成它）：网关要求必须有 model，20261028.1834 去掉过，更新后报
+ *      "缺少必须的model参数"（问题反馈表第 18 条），照 0653 改回来了。
  * 只用 Node 自带模块。
  */
 const http = require('http');
@@ -51,7 +52,7 @@ const overridePort = argOf('-p') ? parseInt(argOf('-p'), 10) : null;
 const KIT_DIR = process.env.VIBE_KIT_DIR || path.dirname(__dirname);
 
 // 首字节超时要小于 Claude Code 自己的超时（默认 600 秒），不然它先放弃了，换模型就来不及
-const DEFAULT_OPTIONS = { cooldownSec: 300, outageCooldownSec: 1800, firstByteTimeoutSec: 300, rateLimitWaitSec: 20, bigRequestBytes: 300000, stickySession: true, stickyMinutes: 10, dailyRequestWarn: 4000 };
+const DEFAULT_OPTIONS = { cooldownSec: 300, outageCooldownSec: 1800, firstByteTimeoutSec: 300, rateLimitWaitSec: 20, bigRequestBytes: 300000, stickySession: true, stickyMinutes: 10, dailyRequestWarn: 4000, testModel: 'claude-sonnet-4-5' };
 const CONNECT_COOLDOWN_SEC = 60;      // 连接层面的错误：所有模型走同一个网关，多半不是这一个模型的问题，只短暂避开
 const ERROR_BODY_TIMEOUT_MS = 15000;  // 上游回了错误状态码却迟迟不把正文发完
 // 客户端自己断开（绝大多数是用户按了 Esc）不算模型的错，不冷却任何模型，只在用量里记一条"客户端取消"
@@ -86,6 +87,7 @@ function cleanOptions(o) {
     stickySession: src.stickySession === undefined ? DEFAULT_OPTIONS.stickySession : !!src.stickySession,
     stickyMinutes: num('stickyMinutes', 1, 1440),
     dailyRequestWarn: num('dailyRequestWarn', 0, 100000000),
+    testModel: typeof src.testModel === 'string' && src.testModel.trim() ? src.testModel.trim() : DEFAULT_OPTIONS.testModel,
   };
 }
 function normalize(raw) {
@@ -775,8 +777,9 @@ function forward(ctx, list, idx, tried) {
     delete headers['authorization'];
     headers['x-api-key'] = provider.api_key;
     if (!headers['anthropic-version']) headers['anthropic-version'] = '2023-06-01';
-    // 请求体不带模型名：上游按地址和 key 定模型，带了名字它不认就失败（用户 2026-10-28 定的）
-    const sendBody = withoutModel(body, parsed);
+    // 模型名照原样带着，配了"换成这个模型名"的换成它（网关要求必须有 model，问题反馈表第 18 条）
+    let sendBody = body;
+    if (provider.model_override && parsed) sendBody = Buffer.from(JSON.stringify(Object.assign({}, parsed, { model: provider.model_override })), 'utf8');
     if (sendBody.length) headers['content-length'] = String(sendBody.length);
     ctx.sentBytes = sendBody.length;
     // 证书：默认不校验（内网网关常用自签证书，校验了就连不上）；这个模型勾了"校验证书"才校验
@@ -823,13 +826,6 @@ function forward(ctx, list, idx, tried) {
   }
 }
 
-/** 去掉请求体里的 model。不是 JSON、本来就没有 model 的原样发 */
-function withoutModel(body, parsed) {
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Object.prototype.hasOwnProperty.call(parsed, 'model')) return body;
-  const rest = Object.assign({}, parsed); delete rest.model;
-  return Buffer.from(JSON.stringify(rest), 'utf8');
-}
-
 function handleProxy(req, res, body) {
   const isMessages = req.url.startsWith('/v1/messages') && !req.url.startsWith('/v1/messages/count_tokens');
   let parsed = null;
@@ -868,8 +864,8 @@ function testProvider(p) {
       if (prob) return resolve({ ok: false, status: 0, ms: 0, reason: prob });
       const target = new URL(p.base_url);
       const lib = target.protocol === 'https:' ? https : http;
-      // 不带模型名、不带 Bearer：和转发一样（用户 2026-10-28 定的）
-      const body = Buffer.from(JSON.stringify({ max_tokens: 16, messages: [{ role: 'user', content: '只回复一个字：好' }] }));
+      // 带模型名（网关要求必须有 model）、不带 Bearer：和转发一样
+      const body = Buffer.from(JSON.stringify({ model: p.model_override || config.options.testModel, max_tokens: 16, messages: [{ role: 'user', content: '只回复一个字：好' }] }));
       const r = lib.request({ hostname: target.hostname, port: target.port || (target.protocol === 'https:' ? 443 : 80), path: target.pathname.replace(/\/$/, '') + '/v1/messages', method: 'POST', rejectUnauthorized: p.verify_cert === true, timeout: 45000,
         headers: { 'content-type': 'application/json', 'anthropic-version': '2023-06-01', 'x-api-key': p.api_key, 'content-length': String(body.length) } }, (ur) => {
         const parts = [];
@@ -923,7 +919,7 @@ function publicState() {
     options: config.options, routes: config.routes, default: config.default, failover: config.failover,
     providers: config.providers.map((p) => {
       const h = hOf(p.name);
-      return { name: p.name || '', base_url: p.base_url || '', key_masked: mask(p.api_key), enabled: p.enabled !== false, note: p.note || '', verify_cert: p.verify_cert === true, problem: providerProblem(p),
+      return { name: p.name || '', base_url: p.base_url || '', key_masked: mask(p.api_key), model_override: p.model_override || '', enabled: p.enabled !== false, note: p.note || '', verify_cert: p.verify_cert === true, problem: providerProblem(p),
         cooldownLeftSec: Math.max(0, Math.round((h.until - Date.now()) / 1000)), reason: h.until > Date.now() ? h.reason : '', lastOkAt: h.lastOkAt, lastFailAt: h.lastFailAt,
         quota: quotaOut(p.name), until: h.until > Date.now() ? h.until : 0, untilText: h.until > Date.now() ? whenText(h.until) : '',
         today: (day.byProvider || {})[p.name] || { requests: 0, fail: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
@@ -937,6 +933,7 @@ function mergeIncoming(inc) {
   const providers = (Array.isArray(inc.providers) ? inc.providers : []).filter((p) => p && typeof p === 'object').map((p) => {
     const prev = old.get(p.original_name || p.name);
     const out = { name: String(p.name || '').trim(), base_url: cleanUrl(p.base_url), api_key: p.api_key ? cleanKey(p.api_key) : (prev ? prev.api_key : '') };
+    if (p.model_override) out.model_override = String(p.model_override).trim();
     if (p.enabled === false) out.enabled = false;
     if (p.note) out.note = String(p.note);
     // 校验证书：只存 true（默认不校验）。交回来的没带这一项（旧页面、别的调用方），就沿用原来的
@@ -1051,7 +1048,7 @@ async function handleApi(req, res) {
       const key = body.api_key ? cleanKey(body.api_key) : (sameAddr ? saved.api_key : '');
       if (!key) return json(res, 200, { ok: false, reason: saved && !sameAddr ? '地址改过了，要重新填一次 key 才能测（已保存的 key 不会发到新地址）' : '没有填 key' });
       const verifyCert = body.verify_cert === undefined ? !!saved && saved.verify_cert === true : body.verify_cert === true;
-      const r = await testProvider({ base_url: addr, api_key: key, verify_cert: verifyCert });
+      const r = await testProvider({ base_url: addr, api_key: key, model_override: body.model_override || (saved && saved.model_override) || '', verify_cert: verifyCert });
       if (r.ok && saved && sameAddr && !body.api_key) markOk(saved.name);
       return json(res, 200, r);
     }

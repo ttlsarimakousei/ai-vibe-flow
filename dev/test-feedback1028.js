@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 1028 导出议题和问题反馈表第 6—16 条（docs/feedback-20261028.md）。
- *   路由：发给上游的请求不带模型名、不带 Authorization: Bearer（第 10、11 条）
+ *   路由：发给上游的请求不带 Authorization: Bearer（第 11 条）；模型名照带（第 18 条：1834 去掉过，网关报缺少 model）
  *   审查：不截断；只回思考时少想重试、再拆半批；碰到上限、超时记问题反馈（第 6、7 条，#226）；不带变更的审查能登记决定（#234）
  * 用法：node dev/test-feedback1028.js [路由端口] [旧版的 vibe-kit 目录]（给了旧版就拿旧版跑，看哪些项不过）
  * 全在假用户目录里；假上游只听本机端口，不连真的模型网关。
@@ -20,7 +20,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   const watch = await H.watchWindows('t1028');
 
   // ---------------------------------------------------------------------------------------------
-  H.section('路由：转发和测试连接都不带模型名、不带 Bearer（第 10、11 条）');
+  H.section('路由：转发和测试连接不带 Bearer（第 11 条），模型名照带（第 18 条）');
   {
     const h = H.makeHome('t1028-rt', from);
     H.copyDir(path.join(from, 'router'), path.join(h.kit, 'router'));
@@ -37,7 +37,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     });
     await new Promise((r) => up.listen(0, '127.0.0.1', r));
     const upPort = up.address().port;
-    H.write(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [{ name: 'up', base_url: 'http://127.0.0.1:' + upPort, api_key: 'k-test-1028', model_override: 'old-override-name' }], routes: [{ match: ['haiku'], provider: 'up' }], default: { provider: 'up' }, failover: [], options: {} }, null, 2));
+    H.write(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [{ name: 'up', base_url: 'http://127.0.0.1:' + upPort, api_key: 'k-test-1028', model_override: 'override-name' }, { name: 'plain', base_url: 'http://127.0.0.1:' + upPort, api_key: 'k-test-1028' }], routes: [{ match: ['haiku'], provider: 'up' }], default: { provider: 'plain' }, failover: [], options: {} }, null, 2));
     H.write(path.join(h.cfg, 'settings.json'), '{}\n');
     const router = spawn(process.execPath, [path.join(h.kit, 'router', 'router.js'), '-c', path.join(h.kit, 'router-data', 'config.json'), '-p', String(PORT)], { env: H.envFor(h), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let log = '';
@@ -58,24 +58,28 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
       const r = await call('POST', '/v1/messages', cc, { model: 'claude-haiku-4-5', max_tokens: 16, messages: [{ role: 'user', content: 'hi' }] });
       const got = seen.find((x) => x.url === '/v1/messages');
       H.ok('转发成功', r.status === 200, r.text.slice(0, 300) + log.slice(-500));
-      H.ok('转发给上游的请求体里没有 model（配置里留着的旧"换成这个模型名"也不发）', !!got && typeof got.body === 'object' && !Object.prototype.hasOwnProperty.call(got.body, 'model'), got && got.body);
+      H.ok('第 18 条：配了"换成这个模型名"的，带着换过的模型名发出去', !!got && typeof got.body === 'object' && got.body.model === 'override-name', got && got.body);
       H.ok('其余字段原样', !!got && got.body.max_tokens === 16 && got.body.messages[0].content === 'hi', got && got.body);
       H.ok('不带 Authorization: Bearer（OpenAI 的方式），key 只在 x-api-key', !!got && !got.headers.authorization && got.headers['x-api-key'] === 'k-test-1028', got && got.headers);
       H.ok('带着 anthropic-version', !!got && !!got.headers['anthropic-version'], got && got.headers);
       await call('POST', '/v1/messages/count_tokens', cc, { model: 'claude-haiku-4-5', messages: [{ role: 'user', content: 'hi' }] });
       const ct = seen.find((x) => /count_tokens/.test(x.url));
-      H.ok('数 token 的请求也不带 model、不带 Bearer', !!ct && !Object.prototype.hasOwnProperty.call(ct.body, 'model') && !ct.headers.authorization, ct);
+      H.ok('数 token 的请求带模型名（不分角色，走默认模型，原样带 Claude Code 发来的）、不带 Bearer', !!ct && ct.body.model === 'claude-haiku-4-5' && !ct.headers.authorization, ct);
+      seen.length = 0;
+      await call('POST', '/v1/messages', cc, { model: 'claude-opus-5', max_tokens: 16, messages: [{ role: 'user', content: 'hi' }] });
+      const plain = seen.find((x) => x.url === '/v1/messages');
+      H.ok('第 18 条：没配"换成这个模型名"的，原样带着 Claude Code 发来的模型名（网关要求必须有 model）', !!plain && plain.body.model === 'claude-opus-5', plain && plain.body);
       const page = { 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty', 'x-vibe-router': '1', origin: 'http://127.0.0.1:' + PORT };
       seen.length = 0;
       const t = await call('POST', '/api/test', page, { name: 'up' });
       const tg = seen.find((x) => x.url === '/v1/messages');
       H.ok('配置页"测试"：通了', /"ok":true/.test(t.text), t.text.slice(0, 300));
-      H.ok('配置页"测试"：不带模型名、不带 Bearer', !!tg && !Object.prototype.hasOwnProperty.call(tg.body, 'model') && !tg.headers.authorization && tg.headers['x-api-key'] === 'k-test-1028', tg);
+      H.ok('配置页"测试"：带模型名、不带 Bearer', !!tg && tg.body.model === 'override-name' && !tg.headers.authorization && tg.headers['x-api-key'] === 'k-test-1028', tg);
       const st = await call('GET', '/api/state', page);
-      H.ok('配置页拿到的模型信息里没有"换成这个模型名"', st.status === 200 && !/model_override/.test(st.text), st.text.slice(0, 300));
+      H.ok('配置页拿得到"换成这个模型名"', st.status === 200 && /override-name/.test(st.text), st.text.slice(0, 300));
     }
     const ui = H.read(path.join(from, 'router', 'ui.html')) || '';
-    H.ok('配置页没有"换成这个模型名再发出去"一栏', !/model_override|换成这个模型名/.test(ui));
+    H.ok('配置页有"换成这个模型名再发出去"一栏', /换成这个模型名/.test(ui));
     try { router.kill(); } catch (e) { /* 已经退了 */ }
     up.close();
     await H.sleep(600);

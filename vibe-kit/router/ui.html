@@ -734,6 +734,7 @@
   <h2 id="dlgTitle" style="margin-top:0">添加模型</h2>
   <div class="grid">
     <label class="f"><span>名称（自己认得就行）</span><input type="text" id="p_name"></label>
+    <label class="f"><span>换成这个模型名再发出去（可不填）</span><input type="text" id="p_model_override" placeholder="不填就用 Claude Code 发来的模型名"></label>
   </div>
   <label class="f"><span>地址（不带 /v1）</span><input type="text" id="p_base_url"></label>
   <label class="f"><span>key</span><input type="password" id="p_api_key" autocomplete="off"></label>
@@ -807,7 +808,7 @@
         : p.lastOkAt ? '<span class="tag ok">正常</span>' : '<span class="tag off">还没用过</span>';
       const t = p.today;
       const tr = tests[p.name];
-      return '<tr><td><b>' + esc(p.name) + '</b>' + (p.note ? '<div class="dim">' + esc(p.note) + '</div>' : '') + (p.verify_cert ? '<div class="dim">校验证书</div>' : '') + '</td>'
+      return '<tr><td><b>' + esc(p.name) + '</b>' + (p.model_override ? '<div class="dim mono">→ ' + esc(p.model_override) + '</div>' : '') + (p.note ? '<div class="dim">' + esc(p.note) + '</div>' : '') + (p.verify_cert ? '<div class="dim">校验证书</div>' : '') + '</td>'
         + '<td class="mono">' + esc(p.base_url) + '</td><td class="mono">' + esc(p.key_masked) + '</td><td>' + st + '</td>'
         + '<td class="num">' + t.requests + (t.fail ? ' <span class="dim">（失败 ' + t.fail + '）</span>' : '') + '</td><td class="num">' + fmt(t.input + t.cacheRead + t.cacheWrite) + ' / ' + fmt(t.output) + '</td>'
         + '<td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end"><span class="msg clip' + (tr ? (tr.ok ? ' ok' : ' bad') : '') + '" data-msg="' + esc(p.name) + '"' + (tr && tr.text.length > 24 ? ' data-full="' + esc(p.name) + '" title="点开看完整内容"' : '') + '>' + (tr ? esc(tr.text) : '') + '</span><button class="btn" data-test="' + esc(p.name) + '"' + (tr && tr.busy ? ' disabled' : '') + '>测试</button><button class="btn" data-edit="' + esc(p.name) + '">编辑</button><button class="btn danger" data-del="' + esc(p.name) + '">删除</button></div></td></tr>';
@@ -854,7 +855,7 @@
   };
   $('routes').addEventListener('change', (ev) => { const el = ev.target; if (el.dataset.matchsel === undefined) return; const input = document.querySelector('[data-match="' + el.dataset.matchsel + '"]'); input.classList.toggle('hide', el.value !== 'custom'); if (el.value === 'custom') { input.value = ''; input.focus(); } });
   const payload = (providers) => ({ providers, routes: draft.routes, default: draft.default, failover: draft.failover, options: draft.options, baseVersion: draftVersion });
-  const currentProviders = () => state.providers.map((p) => ({ name: p.name, original_name: p.name, base_url: p.base_url, enabled: p.enabled, note: p.note, verify_cert: !!p.verify_cert }));
+  const currentProviders = () => state.providers.map((p) => ({ name: p.name, original_name: p.name, base_url: p.base_url, model_override: p.model_override, enabled: p.enabled, note: p.note, verify_cert: !!p.verify_cert }));
   /** 保存时路由回 409：配置文件在别处改过。刷新成最新的，请用户重做这次修改 */
   async function conflicted(e) { if (!e || e.status !== 409) return false; await refresh(true); loadBackups(); return true; }
 
@@ -921,17 +922,18 @@
     $('p_base_url').value = p ? p.base_url : ((state.providers[0] || {}).base_url || '');
     $('p_api_key').value = '';
     $('p_api_key').placeholder = p ? '不改就留空（现在是 ' + p.key_masked + '）' : '';
+    $('p_model_override').value = p ? p.model_override : '';
     $('p_note').value = p ? p.note : '';
     $('p_enabled').checked = p ? p.enabled : true;
     $('p_verify_cert').checked = p ? !!p.verify_cert : false;
     $('dlgMsg').textContent = '';
     $('dlg').showModal();
   }
-  const dialogValues = () => ({ name: $('p_name').value.trim(), original_name: editing || undefined, base_url: $('p_base_url').value.trim(), api_key: $('p_api_key').value.trim(), note: $('p_note').value.trim(), enabled: $('p_enabled').checked, verify_cert: $('p_verify_cert').checked });
+  const dialogValues = () => ({ name: $('p_name').value.trim(), original_name: editing || undefined, base_url: $('p_base_url').value.trim(), api_key: $('p_api_key').value.trim(), model_override: $('p_model_override').value.trim(), note: $('p_note').value.trim(), enabled: $('p_enabled').checked, verify_cert: $('p_verify_cert').checked });
   async function testDialog() {
     const v = dialogValues();
     say($('dlgMsg'), '测试中…', true);
-    const r = await api('POST', '/api/test', { name: v.name, original_name: editing || undefined, base_url: v.base_url, api_key: v.api_key, verify_cert: v.verify_cert });
+    const r = await api('POST', '/api/test', { name: v.name, original_name: editing || undefined, base_url: v.base_url, api_key: v.api_key, model_override: v.model_override, verify_cert: v.verify_cert });
     say($('dlgMsg'), r.ok ? '通了，' + r.ms + ' ms。' + r.reason : '不通：' + r.reason, r.ok);
     return r;
   }
