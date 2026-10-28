@@ -307,6 +307,7 @@ const PROD_SECRET = 'Prod-绝密-0001';
     H.node(h, path.join(h.kit, 'tools', 'onboard.js'), ['run', '--dir', dir, '--quiet'], { cwd: dir, env: live });
     const t = H.read(path.join(dir, '.vibe', 'project.md')) || '';
     H.ok('前端在子目录里：命令用 --prefix，不写"进到 … 里"', /- 前端全量：npm --prefix web run build（没跑过）/.test(t) && /- 前端类型检查：npm --prefix web run type-check/.test(t) && /- 前端启动：npm --prefix web run dev，端口 5199/.test(t) && !/进到/.test(t), t);
+    H.ok('#228 前端全量写明可能要十几分钟、日常先用开发服务器、要跑放后台', /- 前端全量：[^\n]*十几分钟[^\n]*开发服务器[^\n]*后台/.test(t), t);
   }
 
   H.section('找驱动：不拖住项目说明；没找到的不反复找');

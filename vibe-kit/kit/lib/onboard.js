@@ -33,6 +33,8 @@ const RESCAN_MS = 6 * 3600000;
 const KICK_GAP_MS = 3000;
 const MARK = '<!-- vibe-kit 后台自动探索 -->';
 const NOT_RUN = '（没跑过）';
+// 前端整包构建（npm run build 这类）在内网电脑上可能要十几分钟（#228：vite 构建 13 分 19 秒，压缩、单个大包、杀毒和加密软件拖慢）
+const SLOW_BUILD = '。整包构建可能要十几分钟：日常验证先用开发服务器、/ttls-see-page 看页面；要跑就放后台跑（Bash 的 run_in_background），不要前台干等';
 const SKIP = new Set(['.git', 'node_modules', 'target', 'build', 'dist', 'out', '.idea', '.vscode', '__pycache__', '.vibe', '.claude', 'logs', 'log', '.gradle', '.mvn', 'openspec']);
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -475,8 +477,8 @@ function facts(root) {
     const pre = kind === 'frontend' ? '' : '前端';
     if (kind === 'frontend') {
       add('快检', front.eslint ? 'npx --no-install eslint <改动的文件>' + NOT_RUN : '没有单个文件的检查：靠开发服务器热更新，用 /ttls-see-page 看页面');
-      add('全量', front.build ? 'npm run ' + front.build + NOT_RUN : '');
-    } else if (front.build) add('前端全量', npmRun(front.build) + NOT_RUN);
+      add('全量', front.build ? 'npm run ' + front.build + NOT_RUN + SLOW_BUILD : '');
+    } else if (front.build) add('前端全量', npmRun(front.build) + NOT_RUN + SLOW_BUILD);
     if (front.typeCheck) add(pre + '类型检查', npmRun(front.typeCheck) + NOT_RUN + '。现在就有的错先存成基线，只看新增的');
     if (front.dev) add(pre + '启动', npmRun(front.dev) + (front.port ? '，端口 ' + front.port + (front.portFrom ? '（' + front.portFrom + '）' : '（默认的）') : '') + (front.proxies.length ? '，接口代理到 ' + front.proxies.join('、') : '') + NOT_RUN + '。用 devserver.js 起，加 --hot，--port auto' + (front.port ? ' --avoid ' + front.port : '') + (/^(Vite|webpack)$/.test(front.bundler) ? '，' + front.bundler + ' 不认环境变量 PORT，命令写 ' + npmRun(front.dev) + ' -- --port {port}' : '，它认环境变量 PORT，命令不用改'));
     for (const n of front.notes) notes.push(n);
