@@ -1380,7 +1380,9 @@ function consentIssue(g, st, cfg, docs) {
   try { if (j.transcript_path) es = tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain); } catch (e) { es = []; }
   const permit = userSaid(es, 'commit').ok ? require('../lib/permissions').allow(j, 'commit', repoRoot(g.dir) || g.dir, j.tool_use_id) : { ok: false };
   if (permit.reason && !permit.ok) return '[vibe-kit] ' + permit.reason + '。交代当前改动后重新确认是否提交。';
-  const approved = permit.ok;
+  let approved = permit.ok;
+  // 用户自己说了合并推送（用户 2026-10-28 补充：去掉的是套件的合并推送工具，用户跟 Claude 说合并推送时照做、不拦）：合并时重新提交算在这句话里
+  if (!approved) { try { const ps = userSaid(es, 'push'); if (ps.ok && require('../lib/intent').mergeIntent(ps.text)) approved = true; } catch (e) { /* 认不出照原来的规矩 */ } }
   const fl = flowState(j);
   const files = commitFiles(g, st);
   // 读不出要提交哪些文件：后面按提交方式的判断都做不了，没有用户许可就先问（审核问题 13）

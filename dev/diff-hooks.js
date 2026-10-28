@@ -373,7 +373,9 @@ for (const c of cases) {
 }
 // 这一版有意改的（用户 2026-10-28 定的）：合并推送取消，"合并push"也照普通推送直接推，不再记推送预览
 for (const c of cases) {
-  if (['开口：合并push也等预览后的真人确认', '开口：普通push也启动合并预览'].includes(c.name)) { c.expect = /直接 git -C <仓库> push[\s\S]*不再提供合并推送/; c.since = NEXT; }
+  // 用户自己说合并推送：照他说的用 git 合并没推的提交再推，不拦（用户 2026-10-28 补充）
+  if (c.name === '开口：合并push也等预览后的真人确认') { c.expect = /用户要把没推的提交合并了再推[\s\S]*reset --soft[\s\S]*直接 git push/; c.since = NEXT; }
+  if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git -C <仓库> push，几笔提交都一样[^"]*不推到别的分支。"/; c.since = V1025; }
   if (c.name === '1012：截断推送预览当场提示') { c.expect = /放行，没有输出/; c.since = NEXT; }
   if (['命令：git push', '命令：git -C "<项目>" push origin main'].includes(c.name)) { c.expect = /用户没说推送[\s\S]*不用推送计划）。"/; c.since = NEXT; }
   // IDEA MCP 接入去掉：环境就绪不再写 IDEA 的状态
