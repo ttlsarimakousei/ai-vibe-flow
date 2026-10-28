@@ -217,7 +217,7 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
       // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
       const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).replace(/\\/g, '/');
       const where = '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '') + ' 的 ' + point;
-      const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；复验前另问。';
+      const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；改完的复验：用户这一轮已经要求过的直接做，没要求过的先问。';
       // 需求文档一份一份来（用户 2026-10-17 定的）：写完一份停下给用户看，用户选了才写下一份
       const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => mode === 'code'
         ? where + ' 已完成。用 Ask 问是否' + quick() + '审查、是否按验收用例自测，用户已明确要求的直接执行。' + after
@@ -254,7 +254,7 @@ function reviewRun(j, cmd, ps) {
 }
 function actionIssue(j) {
   const cfg = S.readConfigFor(j); let inp = j.tool_input || {}; let name = String(j.tool_name || '');
-  // IDEA 的 execute_tool 按路由里的实际工具判断：转发的编译、检查同样要人工许可。
+  // IDEA 的 execute_tool 按路由里的实际工具判断（转发的运行配置照样算自测）。
   if (/^mcp__.+__execute_tool$/.test(name)) { const r = require('./idea-tools').route(inp.command); if (r) { name = name.replace(/execute_tool$/, r.name); inp = r.input; } }
   const cmd = String(inp.command || '');
   const runsReview = /^(Bash|PowerShell)$/.test(name) && reviewRun(j, cmd, name === 'PowerShell');
@@ -283,7 +283,8 @@ function actionIssue(j) {
     const permit = require('./permissions').allow(j, 'review', j.cwd, j.tool_use_id);
     if (permit.ok) return '';
     // 上一次审查已经用掉了这次许可：说清楚，免得模型以为是没认出提问框
-    used = permit.reason ? '（' + permit.reason + '：上一次已经按这次许可审过了，再审要用户再点一次头）' : '';
+    // 1028 起同一句"审查"这一轮里能用好几次（问题反馈表第 16 条），走到这里是别的原因（多个变更没点名这类）：原样说
+    used = permit.reason ? '（' + permit.reason + '）' : '';
   }
   // 开关开着、这一轮又不算自动：说清为什么（#227、问题反馈表第 8 条：提示只写"人工模式"，用户和模型都以为套件没读到新开关）
   let why = '';

@@ -1712,7 +1712,7 @@ function plainPush(g) {
 }
 
 function check(j) {
-  // IDEA 的终端、工具路由也走现有检查；其它 MCP 不受这个适配影响。
+  // IDEA 的终端、工具路由也走现有检查；认不出是 IDEA 的 MCP 只查路径参数读不读套件令牌（lib/idea-tools.js）。
   if (/^mcp__/.test(String(j.tool_name || ''))) {
     const out = require('../lib/idea-tools').handle(j); if (out) return out;
     const issue = require('../lib/flow-policy').actionIssue(j);

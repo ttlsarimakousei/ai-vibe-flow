@@ -520,7 +520,7 @@ function localSection() {
  * 人工和自动都用；以前的 autoCommit、plainCommit 并进来了）。改了要重新生成全局约定，配置页保存时会自动做。
  */
 const COMMIT_MODE_TEXT = {
-  off: '- 提交方式是"关"：不自动提交，也不问；用户说了"提交"再提交。',
+  off: '- 提交方式是"关"：不自动提交，也不问；用户说了"提交"再提交，这一轮里分几笔提交都算这一句。',
   ask: '- 提交方式是"询问"：做完一件完整的事（勾完一项任务、审查修复收尾、需求文档定稿、普通修改做完并验证过）用 Ask 问"提交 / 还要改"，用户选了提交再提交；Apply 自动时用户不在，先不提交，记进报告。',
   auto: '- 提交方式是"自动"：做完一件完整的事（快检过了，该看的页面看过了）就提交，一件事一笔；做到一半、审查没收尾不提交。',
 };
@@ -528,7 +528,7 @@ const SEE_PAGE_TEXT = { on: '，页面按已准备的验收场景验证', off: '
 const SEE_PAGE_SPEC_TEXT = { on: '自动阶段按验收用例验证接口和页面；人工阶段先 Ask，用户放弃后继续，不记待办。', off: '页面由用户决定是否验证；人工阶段的接口自测也先 Ask。' };
 const PAGE_VERIFY_TEXT = { on: '<命令或验收场景及预期>', off: '<命令或人工验收步骤及预期>' };
 const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例逐份完善，定稿后按提交方式一起提交一次 docs: 提案 <名字>。两阶段均自动且用户未限定只写需求时，定稿提交后自动 apply；其他情况用 Ask 给出 apply 选项。';
-const COMMIT_RHYTHM_TEXT = PROPOSAL_COMMIT + ' 实施按提交方式提交；归档、验收节点单独保留，push 需要用户确认。';
+const COMMIT_RHYTHM_TEXT = PROPOSAL_COMMIT + ' 实施按提交方式提交；归档、验收节点单独保留，用户说了推送才 push。';
 function kitConfig() {
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t) || {}; } catch (e) { return {}; }
 }
@@ -537,7 +537,7 @@ function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'
 // 两阶段各有独立的审查上限；每个产物、每个整组任务分别计数。
 function reviewModeText() {
   const c = kitConfig();
-  return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 3) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 3) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工每次审查、自测或复验先 Ask；用户主动要求审查不受自动上限限制。';
+  return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 3) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 3) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做；用户主动要求审查不受自动上限限制。';
 }
 const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动逐产物审修；Apply 按已授权范围逐整组任务审修、自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
 const AUTO_TOP_TEXT = '> 需求和 Apply 是两套独立自动模式；以本轮提醒的生效阶段为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
