@@ -1,0 +1,156 @@
+[
+  {
+    "id": "F01",
+    "reproduced": true,
+    "observed": {
+      "markerDeleted": true,
+      "autoCompactPercent": 70,
+      "commitMode": "off",
+      "autoRequirements": false,
+      "autoApply": false
+    }
+  },
+  {
+    "id": "F02",
+    "reproduced": true,
+    "observed": {
+      "recorded": true,
+      "kind": "test",
+      "current": [
+        "node --version"
+      ]
+    }
+  },
+  {
+    "id": "F03",
+    "reproduced": true,
+    "observed": {
+      "identified": [
+        "Maven"
+      ],
+      "maven": false,
+      "missing": [
+        "JDK",
+        "Maven"
+      ]
+    }
+  },
+  {
+    "id": "F04",
+    "reproduced": true,
+    "observed": {
+      "proposalExists": true,
+      "error": "没有可配对的完整审查报告"
+    }
+  },
+  {
+    "id": "F05",
+    "reproduced": true,
+    "observed": {
+      "gitStatus": "D app.js",
+      "changed": []
+    }
+  },
+  {
+    "id": "F06",
+    "reproduced": true,
+    "observed": {
+      "simulatedVersion": "18.20.0",
+      "exitCode": 1,
+      "rejected": true
+    },
+    "level": "只注入 Node 18 版本检查输入，未运行 Node 18 二进制完整兼容回归"
+  },
+  {
+    "id": "F07",
+    "observed": {
+      "normalHttpEnd": true,
+      "hasMessageStop": false,
+      "routerRecordedFailure": true,
+      "reproduced": true
+    },
+    "level": "假网关与真实路由集成；未验证 Claude Code SDK 是否自行拒绝半截事件"
+  },
+  {
+    "id": "F08",
+    "observed": {
+      "clientTimeoutSeconds": 45,
+      "elapsedMs": 52042,
+      "upstreamRequests": 2,
+      "status": 200,
+      "reproduced": true
+    },
+    "level": "假网关与真实路由集成；假客户端故意不自行超时以观察路由总时长"
+  },
+  {
+    "id": "F09",
+    "observed": {
+      "writers": 2,
+      "remainingEntries": 1,
+      "reproduced": true,
+      "method": "原函数受控并发"
+    },
+    "level": "直接执行源码中的 writeReg 函数，屏障控制两进程读取同一旧值；未运行真实服务"
+  },
+  {
+    "id": "F10",
+    "observed": {
+      "code": 2,
+      "declaresRollback": true,
+      "declaresUnknown": false,
+      "method": "Python返回分支注入，未执行JDBC"
+    },
+    "level": "只向 Python 返回分支注入 SQL_ERROR，未运行 JDBC、未制造真实提交异常"
+  },
+  {
+    "id": "F11",
+    "observed": {
+      "consumers": 2,
+      "successfulTakes": 2,
+      "reproduced": true,
+      "method": "原pending_take双进程受控并发"
+    },
+    "level": "原 pending_take 两进程先读取同一值，再依次保存；没有执行数据库 SQL"
+  },
+  {
+    "id": "F12",
+    "observed": {
+      "files": 2001,
+      "scanSeesOld": true,
+      "deleted": 1,
+      "recentFileLost": true
+    },
+    "level": "真实 cleanTmp 仅删除测试支架创建的假目录"
+  },
+  {
+    "id": "F13",
+    "observed": {
+      "code": 0,
+      "pttl": 0,
+      "setArgumentCount": 3,
+      "setsExpiry": false,
+      "ok": true
+    },
+    "level": "真实 Redis CLI 对本机假 RESP 服务；注入 PTTL=0，未连接 Redis 实例"
+  },
+  {
+    "id": "F14",
+    "observed": {
+      "pushExitCode": 1,
+      "branchAdvanced": true,
+      "tagAdvanced": false,
+      "method": "真实临时裸仓库，使用发布脚本相同推送参数"
+    },
+    "level": "Git 在临时裸仓库实际推送；未调用内网发布器、未推送真实远端"
+  },
+  {
+    "id": "F15",
+    "observed": {
+      "status": 200,
+      "failOpen": true,
+      "workerErrors": 1,
+      "feedbackRecords": 0
+    },
+    "level": "只替换假 KIT 中的工作线程为收到消息后退出，真实 hook-host 的错误和反馈路径被执行"
+  }
+]

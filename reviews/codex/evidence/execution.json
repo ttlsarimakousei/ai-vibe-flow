@@ -1,0 +1,35 @@
+{
+  "regression": {
+    "code": 0,
+    "elapsedSeconds": 1440,
+    "command": "node dev/run-all.js --lanes 2"
+  },
+  "desktopWatch": {
+    "started": true,
+    "ended": true,
+    "newEvents": 7,
+    "byProcess": {
+      "ChatGPT": 5,
+      "msedgewebview2": 1,
+      "Widgets": 1
+    },
+    "note": "记录新可见窗口，不等同测试弹窗；未保存标题。回归末尾没有遗留窗口。"
+  },
+  "additionalChecks": {
+    "basicReproductionAssertions": 17,
+    "routerIntegrationAssertions": 14,
+    "supplementalAssertions": 18,
+    "edgeAssertions": 14,
+    "hookFaultAssertions": 12,
+    "pythonSyntaxFiles": 13,
+    "sqlClassifierCases": 83,
+    "pythonOfflineSuites": 3
+  },
+  "missingValidation": [
+    "真实 JDBC/H2 集成：本机缺 Java/JDK",
+    "真实 Claude Code 多版本端到端：本机未发现测试版本",
+    "完整 Node 18/20 运行矩阵",
+    "第三方依赖逐行审计和在线漏洞库核对",
+    "真实公司网关、内网 GitLab、真实数据库、真实 Redis"
+  ]
+}

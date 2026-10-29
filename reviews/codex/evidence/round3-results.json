@@ -1,0 +1,50 @@
+{
+  "observations": [
+    {
+      "id": "G02",
+      "observed": {
+        "recognized": 1,
+        "changed": true,
+        "fingerprintStored": false,
+        "codeReviewed": true,
+        "codeReviewIssue": ""
+      }
+    },
+    {
+      "id": "G03",
+      "observed": {
+        "changed": true,
+        "proposalReviewed": true,
+        "storedCurrentHash": true,
+        "resolveError": "没有可配对的完整审查报告"
+      }
+    },
+    {
+      "id": "G01",
+      "observed": {
+        "ours": true,
+        "version": "other-app-1",
+        "hadPidFile": false,
+        "killedOwnFakeProcess": true,
+        "stopped": true
+      }
+    },
+    {
+      "id": "G04",
+      "observed": {
+        "installerExit": 0,
+        "routerFailureReported": true,
+        "selfCheckOk": true,
+        "routerEntryIsFaultFixture": true
+      }
+    }
+  ],
+  "assertions": 16,
+  "installationAssertions": 13,
+  "limits": [
+    "服务停止仅针对本测试创建且核对 PID 的随机回环端口假服务",
+    "兼容审查使用假会话记录，未运行真实 Claude Code",
+    "安装故障仅验证真实安装器和 updater.selfCheck，未执行完整自动更新仓库链",
+    "harness 的全局进程扫描存在被沙箱拒绝后返回空的路径；自建假服务已直接等待退出，不将扫描返回空作为全机无遗留的证明"
+  ]
+}

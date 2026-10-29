@@ -1,0 +1,2443 @@
+{
+  "summary": {
+    "base": "6c9dfa4d190150337adab005d29f3a911138642e",
+    "node": "v24.21.0",
+    "files": 275,
+    "jsChecked": 177,
+    "syntaxFailures": 0,
+    "ownedSourceLines": 31329,
+    "packages": [
+      {
+        "file": "vibe-kit/kit/openspec/package.json",
+        "dependencies": {
+          "@fission-ai/openspec": "1.14.3"
+        }
+      },
+      {
+        "file": "vibe-kit/kit/openspec/node_modules/@fission-ai/openspec/package.json",
+        "name": "@fission-ai/openspec",
+        "version": "1.14.3",
+        "engines": {
+          "node": ">=20.19.0"
+        },
+        "dependencies": {
+          "@inquirer/core": "^12.0.0",
+          "@inquirer/prompts": "^8.5.2",
+          "brace-expansion": "^5.0.12",
+          "chalk": "^5.6.2",
+          "commander": "^14.0.0",
+          "cross-spawn": "7.0.6",
+          "diff": "^9.0.0",
+          "ora": "^9.4.1",
+          "picomatch": "^4.0.4",
+          "tinyglobby": "^0.2.17",
+          "yaml": "^2.8.3",
+          "zod": "^4.4.3"
+        }
+      },
+      {
+        "file": "vibe-kit/kit/page/node_modules/playwright/package.json",
+        "name": "playwright",
+        "version": "1.62.1",
+        "engines": {
+          "node": ">=20"
+        },
+        "dependencies": {
+          "playwright-core": "1.62.1"
+        }
+      },
+      {
+        "file": "vibe-kit/kit/page/node_modules/pixelmatch/package.json",
+        "name": "pixelmatch",
+        "version": "7.2.0",
+        "dependencies": {
+          "pngjs": "^7.0.0"
+        }
+      },
+      {
+        "file": "vibe-kit/kit/page/node_modules/pngjs/package.json",
+        "name": "pngjs",
+        "version": "7.0.0",
+        "engines": {
+          "node": ">=14.19.0"
+        }
+      }
+    ]
+  },
+  "failures": [],
+  "files": [
+    {
+      "file": "dev/README.md",
+      "bytes": 32635,
+      "lines": 273,
+      "sha256": "75046178f3ab02cc568f869fe7f17057cb8d217099f741166a375d7659a6149b",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/accept-packages.js",
+      "bytes": 13803,
+      "lines": 165,
+      "sha256": "4aee3e6f4f5cf780c5ba091a4a8e47c5e8c259cbc0fa2b0b7319676f32a5babb",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/build-db-runner.js",
+      "bytes": 650,
+      "lines": 11,
+      "sha256": "41950c3d4ad40a82b7a0cf809b711b07530edbbe4fe8d363306c4fd56a805456",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/check-old-repro-0929.js",
+      "bytes": 8473,
+      "lines": 100,
+      "sha256": "25588dbd463447bc4ba9e2f44774fb20968adac83268a58175878b04d19233e6",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/check-old-repro.js",
+      "bytes": 1655,
+      "lines": 20,
+      "sha256": "8e7ebb8799642b998895f40cfcc3d4da62e300b12ce3987f23ace2bd8606407b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/diff-hooks.js",
+      "bytes": 58023,
+      "lines": 423,
+      "sha256": "8dc375e18306b4e274ec38bec57de1765d3aace611c7c708cdb6bf73fbdc82a8",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/docs/ttls-db-crud/一页看懂.md",
+      "bytes": 3974,
+      "lines": 78,
+      "sha256": "2016cde6653ac8d4563efe95ecb22ecc03fc2e58f6b1757b3518a2a901c85fcd",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/docs/ttls-db-crud/使用说明.md",
+      "bytes": 14877,
+      "lines": 295,
+      "sha256": "db656ab4d462c590560f879d52213ad030e90b28a5342cf2ba5637979a68958c",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/docs/ttls-db-crud/维护须知.md",
+      "bytes": 10684,
+      "lines": 140,
+      "sha256": "4263a9de189232428d2de623735ec3dd462617e8f539643da9684af34760dea5",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/docs/ttls-db-crud/设计说明.md",
+      "bytes": 32828,
+      "lines": 541,
+      "sha256": "a1d5aaf478a066c8fca155d705c6546f3769bf7eb048ac186e9c8409cd04f5f3",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/docs/ttls-db-crud/验证记录.md",
+      "bytes": 19075,
+      "lines": 342,
+      "sha256": "514a9c7021899ccf7e5b77181ceb7f9b2435722c1b570fd1cce2cb2e915734db",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/e2e-0930.js",
+      "bytes": 24844,
+      "lines": 273,
+      "sha256": "5d065ac511525b553bf6726b9ddd728d17b3bc4bb6a45317d17fdabc0ad2907e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/e2e-auto-0929.js",
+      "bytes": 22454,
+      "lines": 234,
+      "sha256": "a8d12894b0e3dced964b1a359e4a26db4c22201018066a4c06f3985f4cc1da98",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/e2e-lessons.js",
+      "bytes": 20068,
+      "lines": 207,
+      "sha256": "2da08c3d894c016610210b9b24e13005e255f2ffb9fb4fd164dc2faa0bb3f792",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/e2e-update.js",
+      "bytes": 15994,
+      "lines": 198,
+      "sha256": "ef3e45ce0cf3501a8a584e083473122a9427ee1ffd3b4d08fcd286b75fdde743",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/fixtures/intent-phrases.json",
+      "bytes": 3831,
+      "lines": 44,
+      "sha256": "08b79f4173bfa1c82e5c4c8a3840453823ad065f751d1041621d51aa985ac569",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/lib/affected.js",
+      "bytes": 8400,
+      "lines": 124,
+      "sha256": "b7ae7fbc4ee4f1455b158ff724ea8f2573e1321a59acdf4ca03337d52b52824e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/fake-busy.js",
+      "bytes": 741,
+      "lines": 18,
+      "sha256": "6cb8447693f04a80c307b5e4edfd2c86ca377a0371a89302584278be75708e2a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/fake-gitlab.js",
+      "bytes": 10656,
+      "lines": 173,
+      "sha256": "c843e00694ea23ac56fc933c0c3451d57a6fa684d88dea672ba89522a4da1f4e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/fake-idea.js",
+      "bytes": 6153,
+      "lines": 92,
+      "sha256": "fba8e5a7eab23b006d0de4904385e9dc57816c492149fc1661270a285a032815",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/fake-redis.js",
+      "bytes": 7639,
+      "lines": 137,
+      "sha256": "6342c6210d7b02edbc6742dfcc09ae3e6cf04ae0e4bd6b9793fe07591294a788",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/fake-site.js",
+      "bytes": 4084,
+      "lines": 48,
+      "sha256": "e6068299ad6a53ac69917817b2566c57f38e15756e9412b827288ec1552dd201",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/fake-ssh.js",
+      "bytes": 4904,
+      "lines": 71,
+      "sha256": "97701d2fd31c7a2489038e92b850f430098cb38688b8bee37413f21a766aca2c",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/harness.js",
+      "bytes": 31593,
+      "lines": 447,
+      "sha256": "81138326256ffb2ce174401398f7f3493b803d05a6cda6952e720610d0dc70a8",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/hook-thread.js",
+      "bytes": 3875,
+      "lines": 56,
+      "sha256": "3405cd3a02efda8a6b9831a920dab504b04240d3d5f08c0f7f07078747833da1",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/unzip.js",
+      "bytes": 1627,
+      "lines": 21,
+      "sha256": "a3b9648ae0a066e0006ac2805f296295d4bca145bc997a848722621aa2fa27c3",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/lib/watch-windows.ps1",
+      "bytes": 2644,
+      "lines": 51,
+      "sha256": "a29fef65612f48cf3f0f1a9c024adf4915295530bfb54989742a245ad4cf54bb",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/pack.js",
+      "bytes": 13795,
+      "lines": 156,
+      "sha256": "5633a95a20639b1429a3c631686268c658ff6a5688bce31025cd1ef36c1792f2",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/cc-automode.js",
+      "bytes": 7052,
+      "lines": 84,
+      "sha256": "09ee2684ef440f98aee0ed5a6b51eafcf8edd917828ed137656c12ec5440add0",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/cc-compact.js",
+      "bytes": 5914,
+      "lines": 68,
+      "sha256": "c91bb73e7b43e774853533dee359bf8636f9b1aae0d5b999405a99473a3aeba3",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/cc-http-hooks.js",
+      "bytes": 4530,
+      "lines": 63,
+      "sha256": "e59f39a793a27301eba6cf474980df263bd47b99d70011d6cd37f8b2033f7501",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/cc-post-tool.js",
+      "bytes": 2384,
+      "lines": 21,
+      "sha256": "a12571d86be37a3fbdd49f8ebcdb7570ff62d44563841965b5ed683b32f3cfcc",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/cc-statusline.js",
+      "bytes": 6998,
+      "lines": 77,
+      "sha256": "5e6dc0260187c805a4507b11af7c03bb6380b1fa597e9077a055df080e73b5aa",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/cc-system-message.js",
+      "bytes": 5310,
+      "lines": 63,
+      "sha256": "aa8deaf7dab0b3486f264e4b2b1aeec78abb7c1eea3aa5137da8958f0d689928",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/cc-updated-input.js",
+      "bytes": 4164,
+      "lines": 36,
+      "sha256": "02928d9263f126738e79b7bec800a1a3435ceb98ea0cdcef85a3e17f099116cc",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/probes/common.js",
+      "bytes": 7192,
+      "lines": 89,
+      "sha256": "32a771b28db157815e1d21112661f1beb7a48a0fff701aef2a81a413d3f0993e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/run-all.js",
+      "bytes": 17520,
+      "lines": 172,
+      "sha256": "21361aa373b1bef820d5cd3cc5fe7ece1a99939c0fb4bca3770238879ccaa990",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/stale-asserts.js",
+      "bytes": 5813,
+      "lines": 84,
+      "sha256": "3b88b751512247ab69e47301399f4a7edcd18753b4dcb3ee870e30442ced71da",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/stamp-and-pack.js",
+      "bytes": 1381,
+      "lines": 25,
+      "sha256": "e3a836b078bff15b34fcf2ce1d6c338040aac3cc97a3855679a1bc139aa567f0",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-1001.js",
+      "bytes": 21656,
+      "lines": 221,
+      "sha256": "7a907cf4fbf69be577796ed9f442e8bb3d59a17625579ecc2654771386365f4a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-1005.js",
+      "bytes": 24484,
+      "lines": 282,
+      "sha256": "ef57f0a1fcf839f08c1b14766477ce44677ebe41de6f00478eb00a096e6c3c94",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-1007.js",
+      "bytes": 16819,
+      "lines": 191,
+      "sha256": "e39f6ab97243396b4e3f2aa87ed3e63a451a86c32be15a19c7c1d7f274385093",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-1008.js",
+      "bytes": 39248,
+      "lines": 344,
+      "sha256": "97b2d0893e09dac0dea1f924d38fbf4cd1955d8d011e3f0b94f3ffc1d93f2958",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-1017.js",
+      "bytes": 20851,
+      "lines": 189,
+      "sha256": "57f01713a96cf2e2f16c6dcc62652dd59d94d5215bd5be64e12abd7c6ea5b733",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-archive-extract.js",
+      "bytes": 14791,
+      "lines": 180,
+      "sha256": "152967932c0177bca7487fc4a2a9368f7cf2b1d01127261a748635db9f05b665",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-auto-0930.js",
+      "bytes": 37424,
+      "lines": 347,
+      "sha256": "659b34adb2b72e168cc4d6bcb293abcfe41027cbe730302473c931bb57f0b873",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-connection-lifecycle.js",
+      "bytes": 4163,
+      "lines": 60,
+      "sha256": "816079c9529f327079270ab94d01864d8c1adb69ddc8f2dde8140417ab2562fc",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-dbcrud.js",
+      "bytes": 58773,
+      "lines": 546,
+      "sha256": "876942f26c466ce0d95f0b7ffaa50629ba02a0d4d41864fd05cfdac317984a71",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-devserver-0929.js",
+      "bytes": 14108,
+      "lines": 169,
+      "sha256": "c23310e8dc3aba86b31984f764bad456e5ccb21da839ee63da94264126545fb7",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-diagnostic-redaction.js",
+      "bytes": 5749,
+      "lines": 50,
+      "sha256": "f98aa9aca7b735485d3c244f316bc9b3cd82d284a6071cce98a96ad64de73c7d",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback0928.js",
+      "bytes": 11069,
+      "lines": 119,
+      "sha256": "322ebcb93c9b01e823a4c9680150bc7b656d8ed8cf404c08d0593b7384b6ca60",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback0929.js",
+      "bytes": 56272,
+      "lines": 552,
+      "sha256": "0d42ea692aa63ba5cac0f614d055a3836a30dbc99b405bf3f8c7ed8ac2bc79c7",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback0930.js",
+      "bytes": 61585,
+      "lines": 584,
+      "sha256": "651b0ed0c6e630b74ef4c60d4ac135c88fb4beb5e5bc0992dfdc546f9137280c",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1007.js",
+      "bytes": 12094,
+      "lines": 122,
+      "sha256": "1d14a108055f8edb8f41dfa81080d7eaa80bf9851ab63cf012062af5710c6fa3",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1010.js",
+      "bytes": 19388,
+      "lines": 151,
+      "sha256": "1b8eb92597803c8083426364d7526ecd5e13920fd9d0e67ef38536ab02442195",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1012-db.js",
+      "bytes": 2161,
+      "lines": 23,
+      "sha256": "9a44b7e0807d1e5bb3e295fd98a13f67f1e33218f6dfca54bdca677fe9ce5295",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1012-page.js",
+      "bytes": 2961,
+      "lines": 34,
+      "sha256": "8681573121c44181d1241baf6ecac9e0a7dd02ad1d088388145d54a3dc6ce46b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1012-workflow.js",
+      "bytes": 9474,
+      "lines": 76,
+      "sha256": "95de822b241f7997ca4d052c215d471c2124a44d8c5c4b132ca3aae737c6f287",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-context.js",
+      "bytes": 4909,
+      "lines": 56,
+      "sha256": "557894482640bba39d3a17ab75a152de2d129d4b09149cbed8f96d75bd2ef6fc",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-decisions.js",
+      "bytes": 3515,
+      "lines": 31,
+      "sha256": "44cee8b9c4b44bb81f9c39b56c7effcdf435ce0b867ce471d23159d55616fe40",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-diagnostics.js",
+      "bytes": 2178,
+      "lines": 24,
+      "sha256": "5ef6065814c42e7025fe1dae1eda2a5e442c9924d2dfc63bcc77a2a062436998",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-feedback.js",
+      "bytes": 2317,
+      "lines": 28,
+      "sha256": "e8a0358f50c910a0d23bdcf9236bca3c295b97b54c6aec4e05289b025c4704e0",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-push.js",
+      "bytes": 2594,
+      "lines": 26,
+      "sha256": "27032fab144db47cf33e8452fa205491ad0593c54615550d486f9166f905d07b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-review.js",
+      "bytes": 6689,
+      "lines": 62,
+      "sha256": "9e563742e49c907a73118ab6891591bb8bdfc6b5a484728832f016e142be31d1",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-states.js",
+      "bytes": 2195,
+      "lines": 23,
+      "sha256": "6a73b187813abecf3304b98b5fa43f9a37ee6c7b05b23fc7e6be6e0e056a5c31",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1013-workflow.js",
+      "bytes": 7094,
+      "lines": 74,
+      "sha256": "2af44a5fe95d5e42582204ae07a95694fa647a0848316e271afaba1bd6b6e5a8",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1014.js",
+      "bytes": 4667,
+      "lines": 33,
+      "sha256": "1de915276d6b15d1e85943925fc49a88599a0029df9757c66b9fca3760505b86",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-apply.js",
+      "bytes": 9652,
+      "lines": 106,
+      "sha256": "0adb987901f2a7885b017898ee15570f39f9d57093890a4686eb1567977422e9",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-budget.js",
+      "bytes": 3936,
+      "lines": 49,
+      "sha256": "4cd89127566727e32627ee9d0eb1fc03a2af02bbcfe8f5d265dd96ca9c520ac2",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-output.js",
+      "bytes": 4671,
+      "lines": 50,
+      "sha256": "9efbe5fc0c98c0a1ee660a7fc2cfcab06f4b4fd2d84f5a616a0613ec6eb5271d",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-push.js",
+      "bytes": 6061,
+      "lines": 63,
+      "sha256": "0db09c423fd565d4f4b03fddadb09ae94554f464d2fb72c2966b856b58614ca0",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-review-command.js",
+      "bytes": 2047,
+      "lines": 29,
+      "sha256": "cd7e2f26700fa4a2f390b35707e02b8879194e4acec4faa3ae21902b88b789a0",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-review-scope.js",
+      "bytes": 5802,
+      "lines": 69,
+      "sha256": "1691f0fb7af3a27afdddb99a28348b7ce2b0a480ce96b29820bc72d478098200",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-review.js",
+      "bytes": 4378,
+      "lines": 56,
+      "sha256": "b0b0f596ff7d1e388f7cf756f7c816ad8621a7b29b69b96da89dfe23668352d3",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1024-stop.js",
+      "bytes": 8112,
+      "lines": 96,
+      "sha256": "944c3ee253e2c45463182508419bd135361474195e562bf8808131cdd8223ee0",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-feedback1028.js",
+      "bytes": 31156,
+      "lines": 324,
+      "sha256": "27f3719f14b2a47c2a33a8eaf9822d608abff3edf89271c3a47fc29afe26d633",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-guard-0930.js",
+      "bytes": 22059,
+      "lines": 255,
+      "sha256": "394a0b6ea9b2a253f6a6d1e8b972fc6a750bbc8db71904970eafdf00ad6ac42a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-http-hooks.js",
+      "bytes": 7247,
+      "lines": 79,
+      "sha256": "fd9ae22dc8392f1e269fb3ce96162da5008deaf6d298620b4ee1a497e3d84c12",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-idea-mcp.js",
+      "bytes": 6966,
+      "lines": 114,
+      "sha256": "4c8357ea15d4fffad13e2c053406864b9a99469bb3bee19e37e799d566c9eb5a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-idea-tools.js",
+      "bytes": 12155,
+      "lines": 122,
+      "sha256": "b311b9fd09aefab7279556269780f626d9f8e414cab7c7db1a3e8baf4d85469e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-install-0928.js",
+      "bytes": 9530,
+      "lines": 127,
+      "sha256": "2025180634cc3ec4f983f8a97854a3c4484d8bcc1daa13a5b7016f2da107a178",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-issues.js",
+      "bytes": 30363,
+      "lines": 326,
+      "sha256": "b009df01b74654ebc851221830f0cfee18f79fc9bbe95e41328a14a7b92f187b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-lessons.js",
+      "bytes": 25117,
+      "lines": 323,
+      "sha256": "24ffba726a146cd0b42f0263056d03c29d5e8ffe66a2360d133de1419be60f9a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-onboard.js",
+      "bytes": 61265,
+      "lines": 509,
+      "sha256": "09ba723dc5c263d73546f68321ef275e336ed326f5b948acf9859140caeab15b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-optimization-boundaries.js",
+      "bytes": 12262,
+      "lines": 113,
+      "sha256": "5192e42609e456f01b6dcffba7318bfac9893672d9e1a899e54db3ffe40d15d2",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-optimization-runtime.js",
+      "bytes": 7075,
+      "lines": 47,
+      "sha256": "255cc5f092bcee39e32996fda70e76b4f7af89451bf2b9f948d814b593d92ef5",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-page-0929.js",
+      "bytes": 13126,
+      "lines": 148,
+      "sha256": "5172850e70b830c3709c9563cb0ee89863b090b047645058509914e6ae8497df",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-proposal-files.js",
+      "bytes": 7453,
+      "lines": 71,
+      "sha256": "fa3ebf78e8827e04c5aee72ce669d977ea0288ee7fc3134710506cfd404815c3",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-proposal-review-state.js",
+      "bytes": 3034,
+      "lines": 29,
+      "sha256": "9fa3a2e221e5d3ec225772033f8aa492e6a0f0843da64a97c732b77daa5595b5",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-redis.js",
+      "bytes": 20349,
+      "lines": 228,
+      "sha256": "356e1a4c9c4431c41e0c67a0658dc7f0f91652eba4250e3dd282538e20b6d89a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-review-0930.js",
+      "bytes": 10050,
+      "lines": 110,
+      "sha256": "a3cfb6d6768a77c50bb0c82abddafa4137479c1307b734757ac225195dd71ed7",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-review-evidence.js",
+      "bytes": 6811,
+      "lines": 56,
+      "sha256": "4fbcc2f5c9afe72ceabd08fb80c35e9d0992ac5e6202fee7d71f99dc8745fafd",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-secrets.js",
+      "bytes": 14139,
+      "lines": 200,
+      "sha256": "911755c18c122b56f4f0a1ee89c92c48f25591d69f5c727c189b00f5f9b9151f",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-service-address.js",
+      "bytes": 4000,
+      "lines": 37,
+      "sha256": "a1db61f48e48b81a9831d4a2d4737d7875fefa87b5a35d43d0e324eff2fbf1ef",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-ttls.js",
+      "bytes": 16657,
+      "lines": 152,
+      "sha256": "35c1d17b921b9aea16c319ca78675dbeef155152666972d3e6d696be0d1227b4",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-update.js",
+      "bytes": 31845,
+      "lines": 370,
+      "sha256": "850f4e59db1d1119d21dcd0f88fa861a0b239bea0440b4932cac833294ced69a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-usage-identity.js",
+      "bytes": 5002,
+      "lines": 65,
+      "sha256": "9192186dba05486657df581dc07cfcdc03f9a0393777558d420bc3db225d9776",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-workflow-intent.js",
+      "bytes": 7253,
+      "lines": 65,
+      "sha256": "f493f3644e5423d8a5ccfb4a37e11309e7dacb086e17fdfe209b1eec90c87284",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-workflow-permissions.js",
+      "bytes": 7706,
+      "lines": 76,
+      "sha256": "dada3db6fa31860b8d9d65f0837010bd3a8313ccddf6d0fb9d2a89c54798e933",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-workflow-state.js",
+      "bytes": 3667,
+      "lines": 56,
+      "sha256": "cd390ac149733bd25e5b330e0a071476f956163ac40533d1883471c5ff505920",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/test-workflow1014.js",
+      "bytes": 26915,
+      "lines": 219,
+      "sha256": "3785a37d3ae2903b6377aacda890a9ba2d16c07e136eabc864ddecf0c6416a34",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/testbed/ttls-db-crud/smoke/README.md",
+      "bytes": 1808,
+      "lines": 34,
+      "sha256": "7990a8e497db9deb154c4d96ecccaa71d479fb0a1c9d91313ac02a34d1db4831",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/testbed/ttls-db-crud/smoke/expected.json",
+      "bytes": 6156,
+      "lines": 240,
+      "sha256": "b9ec94f02ade59fdf0c9532384f3a2a7fc11408cbe93beaa4748b9473ad497e1",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "dev/ui-data-0930.js",
+      "bytes": 21121,
+      "lines": 209,
+      "sha256": "17b46c904259e49fda7d232c591e93c9243d72fc03bce60dcb4a0bf864a0e376",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/ui-kit-0929.js",
+      "bytes": 19438,
+      "lines": 217,
+      "sha256": "2bca5c0b037b1b69f06ddda2d61e95a3652073b5a0cf553cc66ea7f9da843bbe",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/ui-lessons.js",
+      "bytes": 11277,
+      "lines": 119,
+      "sha256": "608328abb511db54221e61ab537d83e72d5711602395d7b9bd593963db4007a5",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "dev/ui-update.js",
+      "bytes": 22518,
+      "lines": 220,
+      "sha256": "c9dd5eaa45a07aa56cae5a67bda796c7e36ad1f4f9d7b3d8392c193f800aa12b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "docs/README.md",
+      "bytes": 2681,
+      "lines": 27,
+      "sha256": "2ca6c80cbf8f964fbbcbff44070e3ef270c1e89eca4df0fbfb65632f042723f2",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/architecture.md",
+      "bytes": 28949,
+      "lines": 184,
+      "sha256": "7ea2153b605b04084a5f5236672ce084496b94cebd3f2951f58385281c7caf4a",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/claude-code-facts.md",
+      "bytes": 19149,
+      "lines": 122,
+      "sha256": "e0297683ff8ce71cbb0783c3a2c376615f40d0e61d21fab2af8445682f10c71d",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/conventions.md",
+      "bytes": 5706,
+      "lines": 59,
+      "sha256": "c5de0ed2cd0323e1502aee120b89b55aaaca238f085e1927437bd4d42be1303c",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/decisions.md",
+      "bytes": 40106,
+      "lines": 219,
+      "sha256": "5683700e95d0ec37bf2af68c2dd3162861be11bc540b44164c2262c3dc4c1b84",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/development.md",
+      "bytes": 4919,
+      "lines": 65,
+      "sha256": "beb7099a10cc6e76fc5455c5fa088e88cf5ad9a5daf0ddddcd830f2dfde00b36",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/feedback-20261012.md",
+      "bytes": 6873,
+      "lines": 52,
+      "sha256": "888e867a2893cb15d9ad7c84ddf09b79be9ed2e5cc855e6654a5ec3381db5f1a",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/feedback-20261013-1521.md",
+      "bytes": 5849,
+      "lines": 46,
+      "sha256": "5c6174591383df8e2dfffe5dbf10ea0459e89914f194e46f900fe5a0b3779e01",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/feedback-20261013.md",
+      "bytes": 7874,
+      "lines": 59,
+      "sha256": "85473501c8afea125216f1136ed0926c4c8a7967fabaded61d720289ea62ffb5",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/feedback-20261021.md",
+      "bytes": 26224,
+      "lines": 306,
+      "sha256": "7c0c1393a6ca80bf6c20d8ac0d5b0c923af8ceb8f4794e86ad041808d3e9a6c2",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/feedback-20261024.md",
+      "bytes": 20014,
+      "lines": 184,
+      "sha256": "2cc69ea37ac38834447737e55ba465c1bd8c43823840bc745323418ded063962",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/feedback-20261028.md",
+      "bytes": 19138,
+      "lines": 154,
+      "sha256": "1ae813f098033c4416dc0c454b19025e598d862af2708ee6dc0ef8df0afbd157",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/glossary.md",
+      "bytes": 5208,
+      "lines": 42,
+      "sha256": "cb2b01e46ae5809c287735076c25fff394534a3a1f677800536ca994ba8c6a92",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/guide-20261016.md",
+      "bytes": 14011,
+      "lines": 124,
+      "sha256": "61d7717bb8d29e1c312e4c141d2100f55706b41e1a6afcbda6fb1da4ecd31745",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/guide-20261017-cleanup.md",
+      "bytes": 4123,
+      "lines": 43,
+      "sha256": "449ed44d667a53a203704767cbff29e1bcdca6720999f1dcb3d9886f851e7bfe",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/guide-20261017-intent-phrases.md",
+      "bytes": 3680,
+      "lines": 50,
+      "sha256": "84f2046db7255d09a7a9943b4ea5faf4240d606abc4ce98582f3818f910616aa",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/guide-20261017-release-speed.md",
+      "bytes": 4450,
+      "lines": 66,
+      "sha256": "dc29f885547acda3f99f1afff03aa8b09b4a26a633d4aec8dfce90526e31fd32",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/guide-20261017-review-records.md",
+      "bytes": 6022,
+      "lines": 66,
+      "sha256": "159654c45e8da65d6a6e5a14fe9474ab1d752f8082a69038da3984e72e3e3cc3",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/handoff-20261015.md",
+      "bytes": 26415,
+      "lines": 231,
+      "sha256": "3484ea9015e26facd2859dbfb9e4439e7db11f162e0c2aec637567868ba68903",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/handoff.md",
+      "bytes": 2983,
+      "lines": 37,
+      "sha256": "a91c228ca2216fe3c62661be0c56c3387ccb95df998765c7e409443279d5a082",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/README.md",
+      "bytes": 1468,
+      "lines": 15,
+      "sha256": "0a940c027334e2a30314ea7911660d996d2d0b95f2d17b656b51e7e486527ac4",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/tier25_sample-f-vue_result.md",
+      "bytes": 2902,
+      "lines": 48,
+      "sha256": "48bdbad31dd84280073a35bf69b315c1974c5d07b1743d68c5ff14e432443a73",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/vibe-kit修改方案-20260924.md",
+      "bytes": 13298,
+      "lines": 128,
+      "sha256": "175d470e7fb54285fc5179e88af1400945f805c78d37c8506012443b84b5afab",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/vibe-kit审查报告-20260924.md",
+      "bytes": 17957,
+      "lines": 180,
+      "sha256": "176d18bca7d03614dace99617ef7c7fba85637a0c98e732be6f93d8140d54cab",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/vibe-kit审查报告-20260925.md",
+      "bytes": 26144,
+      "lines": 166,
+      "sha256": "55b644ba4aa41709d5d7274e03f390f682be052f54bb923be98da1b8a567afb6",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/vibe-kit经验沉淀方案-20260928.md",
+      "bytes": 16509,
+      "lines": 252,
+      "sha256": "053d4a365422657d2b907fe3089112614aa1792f931655befc696c7689c3e687",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/vibe-kit自动更新和反馈收集方案-20260928.md",
+      "bytes": 13203,
+      "lines": 234,
+      "sha256": "a34454dccde598e605afbd23c41dd44710a30cb9b22290db4581cf624a5fd53b",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/内网测试说明.md",
+      "bytes": 4791,
+      "lines": 75,
+      "sha256": "9e09c54013c404be681c269203e0f2746c11bcb661c6cbdf2f250120ef565799",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/history/浏览器体检报告-20260905-194254.md",
+      "bytes": 7177,
+      "lines": 79,
+      "sha256": "c816e93586f1d0732d705a7cee7c9af43ebc4259114f503406ddcc045274b194",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/issue-batch-20261007.md",
+      "bytes": 4115,
+      "lines": 40,
+      "sha256": "9fce73829e4f9d82a29716e7850703845fc46c490a549a4a5f005a94b8ab412f",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/issues-20261010.md",
+      "bytes": 11592,
+      "lines": 116,
+      "sha256": "c1703ea3f8c7ed1287782f4bd9d24390c19e7b8d0a7572cdad5a08aff41368b2",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/owner-issues.md",
+      "bytes": 13483,
+      "lines": 149,
+      "sha256": "a3fec0f05eddcb091e4828637c0195124fa47188fb82603f8852729adbea51db",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/plans/20261011-implementation-progress.md",
+      "bytes": 7578,
+      "lines": 67,
+      "sha256": "e895ade97d13c54fc0101a84fa31190567d09abcac7576cad9ecfeb35ce0b873",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/plans/20261011-vibe-kit-development-optimization.md",
+      "bytes": 46299,
+      "lines": 463,
+      "sha256": "68693d4281c54f38f652c20e12216aa3b9a7fee65e539e47707d626f18aad442",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/release-timing.md",
+      "bytes": 18932,
+      "lines": 122,
+      "sha256": "f12341bb2b3153f29647fa56f78afd5e2c5373df368c816e21a3a6c45305ac26",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/release.md",
+      "bytes": 7579,
+      "lines": 105,
+      "sha256": "8444a663de654c5b42aec69742703a2408c110c1d34f159b11991038b6c5bed7",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/review-codex-20261017.md",
+      "bytes": 27860,
+      "lines": 212,
+      "sha256": "9701a96e298580dba191d7f8e3642e9d8398971129a0cd5f70e1bd25bd47dfe8",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/reviews/20261011-archive-inspection-verification.md",
+      "bytes": 4287,
+      "lines": 55,
+      "sha256": "278e6c29a287f0351de7c815fc5d5b58be7079f33f759fc5794a7f1a8122245c",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/reviews/20261011-vibe-kit-neutral-review.md",
+      "bytes": 18070,
+      "lines": 224,
+      "sha256": "3170acfdd21f19f235a6970bdc1958e7416c4afba29a9eaf75469b17a876e36e",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "docs/workflow-20261014.md",
+      "bytes": 9303,
+      "lines": 122,
+      "sha256": "3df1d1a255bcacf1f133551d1b12173dfa21482b7f92ce16da55dfc067d021a2",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/README.md",
+      "bytes": 18562,
+      "lines": 177,
+      "sha256": "0d640acf3ef249f03ecdf9531b6a3a525a5430783e7420da815f7ddce9bb85a8",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/CLAUDE.md",
+      "bytes": 5359,
+      "lines": 50,
+      "sha256": "82626980f701f0b41fc7f0e85d628c04831a90edff2946ab816d8fd3006565ae",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/agents/ttls-reviewer.md",
+      "bytes": 7989,
+      "lines": 77,
+      "sha256": "344bfbf315c3f536b14ac0e2b7b78709b7dda85057a464138bf1d8d7d4dca147",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/rules/10-openspec.md",
+      "bytes": 4771,
+      "lines": 35,
+      "sha256": "00cd6e1769e9f60e21c38b942bb9f45fb918c4ae9aba39f4c3f32054a05b0b56",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/rules/20-git-commit.md",
+      "bytes": 2323,
+      "lines": 21,
+      "sha256": "2f3ad4db259ab656e091908a81d6d15185e2e5916ffaa0a9c08e6c23dddd815d",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-cross-review/SKILL.md",
+      "bytes": 7916,
+      "lines": 59,
+      "sha256": "e8b2e12144a1ada1b3b09a021e7575856ddb36ce9fe95c636e8cba77e151c574",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/CHANGELOG.md",
+      "bytes": 27431,
+      "lines": 419,
+      "sha256": "4005dca921f73c19cc355048a44c7daab39cd2ea065b709d9e4aed491c60b5a2",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/SKILL.md",
+      "bytes": 16984,
+      "lines": 252,
+      "sha256": "5ff0e0df8a51535e3e7190894c81ab9f22d37a3d733a1afc6219a63d8ef5d07a",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/references/连接配置.md",
+      "bytes": 9215,
+      "lines": 171,
+      "sha256": "23f95ea3fe73c57660584cda8f4cdc275d7a8693a4c9f44cbe0290c27bb92030",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/daemon.py",
+      "bytes": 9869,
+      "lines": 267,
+      "sha256": "db1db6c7d21d2aaf8456814ae038631b859e13884081427b74c0cdc76bb6ab6f",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/db.py",
+      "bytes": 111640,
+      "lines": 2361,
+      "sha256": "3f3a12bbe63fa1b989d9e3ee2257905be1cebd9fc490052f347ce091f524f6a1",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/dbconf.py",
+      "bytes": 30103,
+      "lines": 730,
+      "sha256": "0335754c4fba3ec26b21b52ecee079a62c43b7700e59ffe9777c652703397f42",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/discover.py",
+      "bytes": 22784,
+      "lines": 608,
+      "sha256": "34370ed34347cfb670f624f30578bd384c53a2e60f0985dc826421641e2af3e4",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/discover_selftest.py",
+      "bytes": 6507,
+      "lines": 166,
+      "sha256": "92a376b438910ec3c64e9f0254f16419089df930f48cf388e528ce035d6d4425",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/journal.py",
+      "bytes": 14786,
+      "lines": 344,
+      "sha256": "ad3998c2718fff048c9019496b9a3e5952d20c998858faf5acb83da2b5c390d6",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/metacache.py",
+      "bytes": 3852,
+      "lines": 98,
+      "sha256": "78fdcb35bef1ae0bee437af4ef88e84f539b374e11fd4c7be45d6dafdb206ec7",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/notes.py",
+      "bytes": 6894,
+      "lines": 205,
+      "sha256": "b3a66698bcbf03dddf7a0fa16af75767269df2c6c6afe89e14e5bc39ce419b20",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/notes_selftest.py",
+      "bytes": 6351,
+      "lines": 143,
+      "sha256": "e987c83883240db367445719d8000423200ff6da025b62e31c7a07f75c88361d",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/runner/DbRunner.java",
+      "bytes": 94326,
+      "lines": 2222,
+      "sha256": "22b9f9a12b07f2ec04099afad6bbc2eade5df3bdb7f2ac45cecb2d79f1e204b6",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/sqlguard.py",
+      "bytes": 27387,
+      "lines": 714,
+      "sha256": "4ff89c4cb1f51e5ea1640b7112445bcc647ed9ee64d6fb1bca8112b12a3ca39a",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/sqlguard_selftest.py",
+      "bytes": 13660,
+      "lines": 227,
+      "sha256": "6fab81d9672ca7c9cc75039b345cb68ee2da00a25d2705bab0c5a1ce382381f3",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/stats.py",
+      "bytes": 4594,
+      "lines": 123,
+      "sha256": "efdf089fdab8958fad0f2916e8f65f074d44193fca662e8b50b1208635276e88",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-db-crud/scripts/vibe.py",
+      "bytes": 10164,
+      "lines": 287,
+      "sha256": "3650284f62063e47ed79b39ace3a27639063d21d120ffef936075cf08bea88b9",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-handover/SKILL.md",
+      "bytes": 1276,
+      "lines": 15,
+      "sha256": "23a0c64ac2a180c12c24eb00961b9e55b2b74d62fb22ab97a2b745afab8e3f67",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-onboard/SKILL.md",
+      "bytes": 13782,
+      "lines": 140,
+      "sha256": "faabf6b5b88530323228ef86dc047b929093bab1e5b21b3b500033fa275b5ade",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-onboard/recipes.md",
+      "bytes": 9232,
+      "lines": 89,
+      "sha256": "1d07a6afe11a479e2d0ab1e29bd656137fa3e530906969dc4afb90d3bc92d732",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-redis/CHANGELOG.md",
+      "bytes": 6167,
+      "lines": 54,
+      "sha256": "7e243751bbdd5fd08afbb1fe1080743ad1f5913ad07e552f3453780aaf6fd058",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-redis/SKILL.md",
+      "bytes": 5878,
+      "lines": 85,
+      "sha256": "ab7c6b525c3c9c5616e3a10414d1fa2bc08c00798cfd96171f2a0503372b18e3",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-redis/scripts/redis.js",
+      "bytes": 32874,
+      "lines": 617,
+      "sha256": "724718e68f93a267fcd831a26938e73fb55f05d9f96d0a85f08c81b3cb3fcbd4",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-see-page/SKILL.md",
+      "bytes": 9355,
+      "lines": 82,
+      "sha256": "694c173ce135b12e846004c91839e01d044b292089288efed4df030e1810556e",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/claude/skills/ttls-see-page/scenario-format.md",
+      "bytes": 10566,
+      "lines": 139,
+      "sha256": "4944b61baa277ef96d870f1a3226d90e3bbc21fbae442bcc928c8ecbadaa373a",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/install.js",
+      "bytes": 84926,
+      "lines": 1041,
+      "sha256": "7f32b5d2486cdf79c979d5862b9a9b35b25fc9bd8cbda4ae5b2d754992f25e4b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/after-tool.js",
+      "bytes": 3869,
+      "lines": 41,
+      "sha256": "8d07b4f1abeedaa07db0435f78d40e4713d5c5132cdb86145dc326699bff873b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-ask.js",
+      "bytes": 5118,
+      "lines": 65,
+      "sha256": "f1221c6b2ad77252e1ee00f77aaaee6581c33c80d402ae475b9b217c4426ad82",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-commit.js",
+      "bytes": 136097,
+      "lines": 1849,
+      "sha256": "c451da2be61a9bda8dd4bb7448e95f6f63c9c8ea28470d6e7acfc62edf0b2d8d",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-encoding.js",
+      "bytes": 11419,
+      "lines": 190,
+      "sha256": "639025573dc0ec56796abd4d5278b043a1b98a2b9134d493ae06feab87907e1e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-kit.js",
+      "bytes": 3585,
+      "lines": 45,
+      "sha256": "becf57514afc5551d2879c1259c01fde6ee90189230f0c5b7dca89dc0d1a202a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-output.js",
+      "bytes": 3470,
+      "lines": 39,
+      "sha256": "ab9c1bab19d09e6cc51469e103c0a8afb9f659922c3404345b2bd56023a9cee5",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-read.js",
+      "bytes": 3020,
+      "lines": 45,
+      "sha256": "3ede80d94fcf1198915e5d01352750d28abbfd465086351d79e43e98d175fa2d",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-spec.js",
+      "bytes": 21218,
+      "lines": 246,
+      "sha256": "2f5c2d15f95ea73db1e310a78b2a5fda9548106c420018fd525d63c0f2033fce",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/guard-vibe.js",
+      "bytes": 1266,
+      "lines": 22,
+      "sha256": "1198deceb7a6b4b6a6fd723e437818880b28967557b466f644a093f715d2d4d0",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/pre-edit.js",
+      "bytes": 6679,
+      "lines": 92,
+      "sha256": "d5628eea5af3252112b8ec1331a34bffe3d9f8ea4ada77fa62a1904bf80a88a5",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/session-start.js",
+      "bytes": 22466,
+      "lines": 254,
+      "sha256": "e8af67f9d13eaf786802cea2342830784930a5b883c9cabd9357cde945ba174a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/source-hint.js",
+      "bytes": 958,
+      "lines": 16,
+      "sha256": "c8047a070068872aebd1429f1f77218fb07705f4c5acf236662fa1d5df45e9b7",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/task-anchor.js",
+      "bytes": 41042,
+      "lines": 479,
+      "sha256": "842c07c9e1262abf37536b51605223dc614d495c9bb2bcca81a191b59723b0b6",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/hooks/verify-gate.js",
+      "bytes": 75460,
+      "lines": 952,
+      "sha256": "f39204684477be0bd3e80b8b3d86aa163d49a7b9060441b69c8189511aa36230",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/apply-scope.js",
+      "bytes": 7415,
+      "lines": 88,
+      "sha256": "3792c9a9dc7414cb87f13cacc8ece32bd691f2e6d78c7f8a75f0397992a9754d",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/archive-extract.js",
+      "bytes": 9746,
+      "lines": 171,
+      "sha256": "f8d41449e4e1c1f4d41ab22aeb5ba81a30fd6ce8268fd49c6b4308b61a814de5",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/connection-lifecycle.js",
+      "bytes": 1207,
+      "lines": 21,
+      "sha256": "b10ae6a954ac10143c24f12d5627377b41a8217ddcb9e05b9b620379e2b16dc4",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/discover.js",
+      "bytes": 37325,
+      "lines": 691,
+      "sha256": "fba3c02e1385c719d964bf213db35a42f4479a425faca12d7809b1b0b047bbd4",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/drivers.js",
+      "bytes": 26218,
+      "lines": 441,
+      "sha256": "c089d5d66a3e74a71a04fb9836aab5ee942343f5f5e58b8487ce902bed4e9521",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/entry-check.js",
+      "bytes": 977,
+      "lines": 14,
+      "sha256": "ca3f8e1bd3c00ace4c9b092d4d9b47327eb6d66d15edac234b1f5818b76780ea",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/evidence.js",
+      "bytes": 4873,
+      "lines": 56,
+      "sha256": "54092a4ae94775d5fd705c325462933471e03f77c166c5a7412fb4396e8f2d0e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/feedback.js",
+      "bytes": 36363,
+      "lines": 479,
+      "sha256": "6ff92c6d224590aa8a1fc1b7bec3c941fd3f53c613ad4018e81f347238ff938e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/flow-policy.js",
+      "bytes": 30965,
+      "lines": 373,
+      "sha256": "be244f09848e74e0afd3d062b7414c8a3c5a831800268183e024290baaa2f75b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/gitlab.js",
+      "bytes": 30693,
+      "lines": 436,
+      "sha256": "5f9c1d106c91cf4c94e1552a069c7f1ce3bde787e47d9d7b299d79895d330001",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/hook-health.js",
+      "bytes": 9008,
+      "lines": 144,
+      "sha256": "210685f9d150118195e0b5f223831f0aaab6f52a3db4d01447e82ffbd9d27647",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/hook-host.js",
+      "bytes": 9349,
+      "lines": 169,
+      "sha256": "799ac0448921dbf2a9dad1a7f0ffcab1f30c7143b448eda7f3c0fdfbe65e35c6",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/hook-worker.js",
+      "bytes": 1774,
+      "lines": 32,
+      "sha256": "70c2cb9f1e692328846b1342f6f43eb4169954a764edd3c4f42f52cf6158f5bd",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/idea-mcp.js",
+      "bytes": 5504,
+      "lines": 81,
+      "sha256": "f9b9de7e4d7bd7f37db938729d0c23c4eecf8415866f20ce77ff3a57f40d787c",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/idea-tools.js",
+      "bytes": 8557,
+      "lines": 119,
+      "sha256": "690f26d70c1a31457d66de1d8363c749cae68e6017ed1dd3eb82bf62ad039502",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/intent.js",
+      "bytes": 10437,
+      "lines": 84,
+      "sha256": "fca229aee4cd93b304e3da4914f810e2b5e20407a4e1e9e75be756696917d195",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/invocation.js",
+      "bytes": 1867,
+      "lines": 18,
+      "sha256": "24dd29a5f681b041925b9a53cbad23391ab9657cb1f58272f20e03d35a719083",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/issues.js",
+      "bytes": 32466,
+      "lines": 495,
+      "sha256": "81917c1546e3a7aa0bb026342501f0431d825aed471e6b37e4e53af03b8042ef",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/lessons.js",
+      "bytes": 69104,
+      "lines": 1056,
+      "sha256": "cf6352a976b087dadc0573a685a468931a3118b8e5c09dbc22420baa84109493",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/local-backup.js",
+      "bytes": 4175,
+      "lines": 45,
+      "sha256": "5fe23ee86d4179d56dbe4e78bf74792a229d39a6d7c27c018279bd9cd38e5481",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/onboard.js",
+      "bytes": 69075,
+      "lines": 1040,
+      "sha256": "f6b775027329e9848b2bd62a8d93127b358e225f604e0d6415230781364008ed",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/openspec.js",
+      "bytes": 7491,
+      "lines": 111,
+      "sha256": "77e4331905a6a3c2b9927bb44fc986ac210b98c583b5d2e7ac5398f5c1b92ade",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/outputs.js",
+      "bytes": 21581,
+      "lines": 355,
+      "sha256": "d63df0376b5135eabdab40e0940fddcb480129f0b174998b39af19fcb5927616",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/permissions.js",
+      "bytes": 7783,
+      "lines": 92,
+      "sha256": "9fe4c2b96ccd7cfef20c812a07e7afc7f1c05d1fca634e0e7ea4c79553f65564",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/proposal-files.js",
+      "bytes": 3968,
+      "lines": 54,
+      "sha256": "cfadb69bd3dd324d8203d075a81f758826ada8428e4a85ce8d43e8b58cb9a55b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/pull.js",
+      "bytes": 18891,
+      "lines": 247,
+      "sha256": "d384ba647bb9c0a895f4c6059628f7c048bae4a59a4ac1e61d09cad12baa142d",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/readiness.js",
+      "bytes": 5227,
+      "lines": 34,
+      "sha256": "a9e4ed2f9a2b06ada2facf56581197e71ad9003f61bf9da9f11bb4c85ba1b5d2",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/redact.js",
+      "bytes": 4112,
+      "lines": 51,
+      "sha256": "0632e4b784669a4cfbb12558b20d075d1458c65093ee9b6c7f790691340e3bdc",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/report.js",
+      "bytes": 26011,
+      "lines": 357,
+      "sha256": "d47e73d2f832471c247e7fb4ee21e9041b8710a4c2d760bfc1eb13fc9e5190fd",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/review-runner.js",
+      "bytes": 48304,
+      "lines": 460,
+      "sha256": "780adb69651cc148f65673f69d5dee4d29316f93eadaec06179d1122cecc4e9f",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/session.js",
+      "bytes": 171631,
+      "lines": 2452,
+      "sha256": "89034b01eddbd7c273584111a7589664d21123ccba623f9c4ce56569aefe3440",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/state-store.js",
+      "bytes": 5324,
+      "lines": 108,
+      "sha256": "7f00a0c54138c5a9f20cdf7bc35734c22e668655c3915935e7fcc6aa46f4f2e4",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/task-types.js",
+      "bytes": 2983,
+      "lines": 37,
+      "sha256": "c4d267833b4e940eb76b72e0f3fbc77885c69f57aee1b3e8cb29eb3ea234778e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/tidy.js",
+      "bytes": 19964,
+      "lines": 303,
+      "sha256": "d19b27a5caac13ea8a10424b5015403476e29fd424fd1ac6c84c4a628326f42a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/toolstats.js",
+      "bytes": 19175,
+      "lines": 276,
+      "sha256": "50c6042c74e4545154f6d619d715b500ae7a3a8ec9f3da8ffebaa3361dd35328",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/updater.js",
+      "bytes": 30491,
+      "lines": 417,
+      "sha256": "a1622a8875f7cb8b77dbc4a3661f08cb9b56ae97d9e1ced5edcc4a7c5b565e87",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/usage.js",
+      "bytes": 17833,
+      "lines": 244,
+      "sha256": "e00498033b694ba356df4fff16f390d7d0dee84d6231e83199dc64463408473d",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/work-sessions.js",
+      "bytes": 1627,
+      "lines": 23,
+      "sha256": "3ab3599a0442791b8487c4939519af5d487ff6dcfcb23a163015fcb26ee4da4c",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/workflow.js",
+      "bytes": 6741,
+      "lines": 39,
+      "sha256": "4e2d078a0c5809651c63343a4f15c3c06120ed9dcbd40501ebcbc5485ebe9710",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/lib/workspace.js",
+      "bytes": 6977,
+      "lines": 77,
+      "sha256": "0584ad3f991e13464d3d11b1646ff5f109b113826167d3d08f8bb5273a05df34",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/openspec/package-lock.json",
+      "bytes": 28629,
+      "lines": 845,
+      "sha256": "00ec79cac14663bb4234ef3fdff6633740b080afa3b1f87aee881afa0a7f8059",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/kit/openspec/package.json",
+      "bytes": 207,
+      "lines": 8,
+      "sha256": "45d147796cf868d920da2af9b84ffba00042ba1c26cbabba97ccec9c8b0f338c",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/kit/page/browser.js",
+      "bytes": 2900,
+      "lines": 63,
+      "sha256": "8ad9f22071e7c83f90a64ad7fe300feda193793a182c23088a52ce2cc12827ae",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/page/layout-tree.js",
+      "bytes": 5068,
+      "lines": 118,
+      "sha256": "1343dd4ac63fbd324796d5603c1c54593cf10b5c10c00a88608d9bdd9503c4ea",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/page/pixel-diff.js",
+      "bytes": 7727,
+      "lines": 165,
+      "sha256": "00ebbf4eda1cccbde0691bf4e76a163d18b4493323854cdc49299a70b33b3332",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/page/probe-run.js",
+      "bytes": 3973,
+      "lines": 65,
+      "sha256": "0f8cc5711e0a73d5be8aa9810b60e248a68759d1701ce205dc78d4a3225e8b12",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/page/scenario-run.js",
+      "bytes": 39773,
+      "lines": 582,
+      "sha256": "44904b9992135f01697bb81e2076ff7679a914015d3c0cb63818f70f83880ebc",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/statusline.js",
+      "bytes": 12647,
+      "lines": 178,
+      "sha256": "c4c2d8ff0b4990fbe61443c85eaaaad19529143283097aeeb2e5a9db66427c9c",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/devserver.js",
+      "bytes": 54177,
+      "lines": 697,
+      "sha256": "6f1da82131eb0fcc619d986a54275b2182ca10671ea5cc8f6a350e53b72a2bf1",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/diagnose.js",
+      "bytes": 1115,
+      "lines": 12,
+      "sha256": "b65967ee05afc1283f7ad630b63a5d4ef96a876b940e04ca807e1a8720562928",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/drivers.js",
+      "bytes": 6457,
+      "lines": 93,
+      "sha256": "f41c61f314c860aeb5de3dc5a1793bd0e2d1b9c1f2ccbac11b3dcba0177d4d4c",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/feedback.js",
+      "bytes": 10649,
+      "lines": 150,
+      "sha256": "761e0d6d53752ea47e5329b1544841f0434e9854840cb3f2c4bf18a80462d181",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/lesson.js",
+      "bytes": 8524,
+      "lines": 131,
+      "sha256": "858169ef0ad76751f509c568cfddb67a65e743acad995fb5cfd6efcb25d7d649",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/onboard.js",
+      "bytes": 4212,
+      "lines": 59,
+      "sha256": "4e536468f5e77599d9e1d9d3eccb9378c5c0cbd78258cf8659f67b37dafa28a1",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/plan.js",
+      "bytes": 2141,
+      "lines": 26,
+      "sha256": "d526ef462da9d4f387419d91cf48ebab99bd39d08a8f2577e06bcb47005e6f3b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/review.js",
+      "bytes": 4110,
+      "lines": 40,
+      "sha256": "a63ba2827dc817d576278e8be5dc67743b8dbf60b9b653608ca4a7a4779a627b",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/skills-check.js",
+      "bytes": 15177,
+      "lines": 194,
+      "sha256": "104dbd22fcdd7798a914ca7b0415b8e343d51f5725c7209e8b4760dda82ca57e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/to-utf8.js",
+      "bytes": 2265,
+      "lines": 41,
+      "sha256": "84a855b7d99d1eb790520f071b12a8fe2d78ca9064e06170ca44001a310bcd6e",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/trace.js",
+      "bytes": 10031,
+      "lines": 156,
+      "sha256": "3621850d63d9b9536ffe1cd4b3742e21ab56d8139e6ccd301ab7cb4dfd8eba5a",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/vibe-tidy.js",
+      "bytes": 2420,
+      "lines": 43,
+      "sha256": "eb543f2bbfb3d200612c5b1b67d76982d053cc0ce8f5d3d7ff5447858b8a8d4f",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/kit/tools/workflow.js",
+      "bytes": 1172,
+      "lines": 7,
+      "sha256": "a36fa340cf9ba8e87ce8d832e01c78bbaf92260eab9aabc2b20d11ea27a62b01",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/publish.js",
+      "bytes": 16510,
+      "lines": 205,
+      "sha256": "0fe32a0d3488c3977429c4c2745034b0428049e47d410018e4ee8d349f9e338c",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/router/kit-api.js",
+      "bytes": 49607,
+      "lines": 601,
+      "sha256": "505d0f52993fd03d7896033f2b73b3b25bac8049955c32425aab6da6b0f1f3fc",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/router/kit-worker.js",
+      "bytes": 734,
+      "lines": 17,
+      "sha256": "81955b8c7c1fc7f64bf06753b1e0e2ac52f88564a01f033d786e22243faffb09",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/router/router.js",
+      "bytes": 83377,
+      "lines": 1148,
+      "sha256": "5a031b974b77d71d4534e3e5e22e4ff700e2f814357dec262cc7011d5a97c501",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/router/service.js",
+      "bytes": 16073,
+      "lines": 260,
+      "sha256": "4c5cd64c85be188b6b66d341b3ee10f91e5494bce39b787a6c5b6eee4e4939fd",
+      "utf8": true,
+      "bom": false,
+      "syntax": true
+    },
+    {
+      "file": "vibe-kit/router/ui.html",
+      "bytes": 172264,
+      "lines": 1694,
+      "sha256": "d3659d2acf3d59b91ef110148ecdfca4669675fea2a3839418403ec7c83bd3e7",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/settings.fragment.json",
+      "bytes": 352,
+      "lines": 12,
+      "sha256": "138db89ed8800fa133f78f01e7bcecbeddf2e8e000cb202c134c68d1824ee3d5",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/发布到 GitLab（双击我）.bat",
+      "bytes": 825,
+      "lines": 33,
+      "sha256": "48e6d5777bcd40bf78d4bb0edb539b9d4201ced6bf27fda8e396234f97c15673"
+    },
+    {
+      "file": "vibe-kit/安装（双击我）.bat",
+      "bytes": 509,
+      "lines": 22,
+      "sha256": "69353f40157a78df239331765ad462e3185887c64207b274a95e6df2e848db6d"
+    },
+    {
+      "file": "vibe-kit/开发流程.md",
+      "bytes": 10595,
+      "lines": 116,
+      "sha256": "a679074bd7a1dec5ed83da4e8cb6d238333723b8cb387d1099dc979d34d709de",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/IDEA接入.md",
+      "bytes": 2188,
+      "lines": 23,
+      "sha256": "4894ee880eb1cf44e30cc61f66cfa2e272d362fccfb7687f7c3422c180968e66",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/上下文和token.md",
+      "bytes": 7380,
+      "lines": 68,
+      "sha256": "ada3eb8e0267b65ec72a7207831dbd1a32cbcc09a9cf03fa91f8dfda2f2b7ff4",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/保护和放行.md",
+      "bytes": 11450,
+      "lines": 109,
+      "sha256": "e8457342b278a379b9fb0274eb1e17e3e544c1703010ed93391fbf705f548a07",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/审查和自测.md",
+      "bytes": 16253,
+      "lines": 127,
+      "sha256": "d23bdca5a8dcf47a47a50e0c7500f362699324a72a6fa2eafa1e5768fbb85b01",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/提交推送和合并推送.md",
+      "bytes": 3834,
+      "lines": 48,
+      "sha256": "030d0c7847c1f9eb8ab1cd9d574b7ce0b33e14972882d8e2249e242fe87913a8",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/查库和redis.md",
+      "bytes": 5619,
+      "lines": 68,
+      "sha256": "ca9455878e3b47627fb8589063c5b2edb76368e602f5b7b9511dca5ee3966739",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/模型路由和配置.md",
+      "bytes": 8962,
+      "lines": 82,
+      "sha256": "ba6fbf072bccd446e88d99bc0bd4d94c9955d8050d37ee9c1996d7b7a7c45033",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/自动更新和上报.md",
+      "bytes": 9431,
+      "lines": 112,
+      "sha256": "993fa764d9714f923b644fcb307a35cb636cdb435214de4e2bc3d0548bdda1d4",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/手册/项目说明和自动探索.md",
+      "bytes": 5566,
+      "lines": 65,
+      "sha256": "b409fc64df702ec0c8dbe8fbf0552a2397c07739c93b9cf71d6d1c4cd4c20037",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/更新说明.md",
+      "bytes": 138589,
+      "lines": 1315,
+      "sha256": "acaba7e6d780ea0cd841177bc00f13bfd6ae4291cdd19b868d362f9b3e17f6b6",
+      "utf8": true,
+      "bom": false
+    },
+    {
+      "file": "vibe-kit/验收清单.md",
+      "bytes": 3568,
+      "lines": 37,
+      "sha256": "3283e3bd5064fadf35e9dad4c9056b2affd4f1dbca30cf897fc59d8292660b2a",
+      "utf8": true,
+      "bom": false
+    }
+  ]
+}

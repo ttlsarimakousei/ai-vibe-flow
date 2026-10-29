@@ -1,0 +1,61 @@
+'use strict';
+// 第三轮核验：所有待测模块均来自 harness 假用户目录，假服务只绑定随机回环端口。
+const fs = require('fs');
+const path = require('path');
+const H = require('../../dev/lib/harness');
+const h = H.makeHome('codex-round3');
+H.makeRepo(h.work, { 'src/app.js': 'module.exports = 1;\n' });
+const change = path.join(h.work, 'openspec/changes/check');
+H.write(path.join(change, 'proposal.md'), '# 需求\n\n最初的需求。\n');
+H.write(path.join(change, 'tasks.md'), '- [x] 1.1 修改 src/app.js\n');
+const entries = [H.tr.user('审查'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：check' }, '结论：问题 0 条')].flat();
+const proposalEntries = [H.tr.user('审查提案'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：提案\n变更：check' }, '结论：问题 1 条')].flat();
+const inspect = `const fs=require('fs'),path=require('path');
+const S=require(${JSON.stringify(path.join(h.kit, 'lib/session'))});
+const W=require(${JSON.stringify(path.join(h.kit, 'lib/workspace'))});
+const R=require(${JSON.stringify(path.join(h.kit, 'lib/review-runner'))});
+const d=${JSON.stringify(change)};
+const found=S.syncReviews(${JSON.stringify(entries)},process.cwd());
+const prior=W.fingerprint(process.cwd(),'code').hash;
+fs.writeFileSync('src/app.js','module.exports = 2;\\n');
+const after=W.fingerprint(process.cwd(),'code').hash;
+const rec=S.reviewRecord('code',d);
+console.log('G02 '+JSON.stringify({recognized:found.length,changed:prior!==after,fingerprintStored:!!rec.fingerprint,codeReviewed:S.codeReviewed(d),codeReviewIssue:S.codeReviewIssue(d)}));
+S.updateState('reviewed',o=>{delete o[S.normKey(d)];});
+const old=require(${JSON.stringify(path.join(h.kit, 'lib/apply-scope'))}).planHash(d);
+fs.writeFileSync(path.join(d,'proposal.md'),'# 需求\\n\\n结果回来之前已改成另外的需求。\\n');
+S.syncReviews(${JSON.stringify(proposalEntries)},process.cwd());
+const now=require(${JSON.stringify(path.join(h.kit, 'lib/apply-scope'))}).planHash(d);
+const decisions=path.join(process.cwd(),'.vibe/tmp/check/decisions.json');fs.mkdirSync(path.dirname(decisions),{recursive:true});fs.writeFileSync(decisions,JSON.stringify({findings:[{id:'r1',action:'rejected',reason:'该意见与当前需求的事实不符，此处仅测试流程配对'}]}));
+let resolveError='';try{R.resolve({cwd:process.cwd(),change:'check',mode:'proposal',decisions});}catch(e){resolveError=e.message;}
+console.log('G03 '+JSON.stringify({changed:old!==now,proposalReviewed:S.proposalReviewed(d),storedCurrentHash:S.reviewRecord('proposal',d).proposalHash===now,resolveError}));`;
+const a = H.node(h, '-e', [inspect], { cwd: h.work });
+process.stdout.write(a.out); H.ok('兼容审查核验进程正常结束', a.code === 0, a.err);
+const g2 = JSON.parse(a.out.split(/\r?\n/).find(s => s.startsWith('G02 ')).slice(4));
+const g3 = JSON.parse(a.out.split(/\r?\n/).find(s => s.startsWith('G03 ')).slice(4));
+H.ok('G02 兼容代码审查后修改已勾任务的源码仍判审过', g2.recognized === 1 && g2.changed && !g2.fingerprintStored && g2.codeReviewed, g2);
+H.ok('G03 兼容提案迟到结论取当前材料哈希且 resolve 错取代码记录', g3.changed && g3.proposalReviewed && g3.storedCurrentHash && /没有可配对/.test(g3.resolveError), g3);
+H.copyDir(path.join(H.SRC, 'router'), path.join(h.kit, 'router'));
+const fake = path.join(h.work, 'fake-version.cjs');
+H.write(fake, "const http=require('http'); const s=http.createServer((q,r)=>{r.setHeader('content-type','application/json');r.end(JSON.stringify(q.url==='/version'?{version:'other-app-1'}:{configPath:__filename}));});s.listen(0,'127.0.0.1',()=>process.send({port:s.address().port}));setTimeout(()=>s.close(()=>process.exit(0)),15000).unref();\n");
+const own = path.join(h.work, 'ownership.cjs');
+H.write(own, `const fs=require('fs'),path=require('path'),{spawn}=require('child_process');
+const svc=require(${JSON.stringify(path.join(h.kit, 'router/service'))});
+(async()=>{
+ let p;
+ try{
+  p=spawn(process.execPath,[${JSON.stringify(fake)}],{windowsHide:true,stdio:['ignore','ignore','ignore','ipc']});
+  const exited=new Promise(resolve=>p.once('exit',resolve));
+  const msg=await new Promise((resolve,reject)=>{p.once('message',resolve);p.once('error',reject);p.once('exit',()=>reject(new Error('假服务提前退出')));});
+  fs.mkdirSync(path.dirname(svc.CONFIG),{recursive:true});fs.writeFileSync(svc.CONFIG,JSON.stringify({listen:{host:'127.0.0.1',port:msg.port}}));
+  const pid=svc.pidOnPort(msg.port,'127.0.0.1');if(pid!==p.pid)throw new Error('端口不属于本次假服务，不执行停止');
+  const probe=await svc.probe(msg.port);const hadPidFile=fs.existsSync(svc.PID_FILE);
+  const result=await svc.stop();await exited;
+  console.log('G01 '+JSON.stringify({ours:probe.ours,version:probe.version,hadPidFile,killedOwnFakeProcess:result.killed===pid,stopped:result.wasRunning}));
+ }finally{if(p&&p.exitCode===null&&p.signalCode===null){const end=new Promise(r=>p.once('exit',r));p.kill();await end;}}
+})().catch(e=>{console.error(e.stack);process.exitCode=1;});`);
+const b = H.node(h, own, [], { cwd: h.work, timeout: 30000 });
+process.stdout.write(b.out); H.ok('服务归属核验进程正常结束', b.code === 0, b.err);
+const g1 = JSON.parse(b.out.split(/\r?\n/).find(s => s.startsWith('G01 ')).slice(4));
+H.ok('G01 没有本安装 pid 文件仍停止返回 version 的外部假服务', g1.ours && !g1.hadPidFile && g1.killedOwnFakeProcess && g1.stopped, g1);
+H.done('第三轮受控核验');

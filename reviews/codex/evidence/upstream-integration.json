@@ -1,0 +1,18 @@
+{
+  "auditBase": "6c9dfa4d190150337adab005d29f3a911138642e",
+  "reportParentCommit": "8013ef45bb4943d960fe3a09514d9f5533b7a223",
+  "productSourcesChanged": false,
+  "upstreamChanges": [
+    {
+      "file": "AGENTS.md",
+      "before": "dae9a232b494d00d44268e3426846f66383bd5d2de86755738857f783808490a",
+      "after": "3d87647d80c5b2109057f7ed444a65c61352876142159e98380a67a0c1fdbab2"
+    },
+    {
+      "file": "docs/decisions.md",
+      "before": "5683700e95d0ec37bf2af68c2dd3162861be11bc540b44164c2262c3dc4c1b84",
+      "after": "6df78b2ac7f831ad7a7b9f793f6746c5bdbdb784a21bf135ce5ed1b9075a2c0f"
+    }
+  ],
+  "note": "远端仅补充 reviews/<审查者>/ 及日期主题命名规范，已核对差异。套件源码和测试未变化，审核基线不变。"
+}
