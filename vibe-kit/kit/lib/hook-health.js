@@ -33,7 +33,8 @@ function ourHooks(s) {
       for (const h of g && Array.isArray(g.hooks) ? g.hooks : []) {
         if (!h || typeof h !== 'object') continue;
         if (h.type === 'http' && HOOK_URL.test(String(h.url || ''))) out.push({ ev, kind: 'http', url: String(h.url) });
-        else if (String(h.command || '').includes('vibe-kit/hooks/')) out.push({ ev, kind: 'command', url: '' });
+        // guard-push 是 HTTP 方式下另加的 push 兜底（一直是命令方式），不算"混着两种"
+        else if (String(h.command || '').includes('vibe-kit/hooks/')) out.push({ ev, kind: 'command', url: '', pushGuard: /guard-push\.js/.test(String(h.command)) });
       }
     }
   }
@@ -45,7 +46,7 @@ function registeredTransport(claudeDir) {
   const hs = ourHooks(readSettings(claudeDir));
   const http = hs.some((h) => h.kind === 'http');
   // 会话开始、用户开口两个钩子一直是命令方式，不算"混着"
-  const cmd = hs.some((h) => h.kind === 'command' && /^(PreToolUse|PostToolUse|Stop)$/.test(h.ev));
+  const cmd = hs.some((h) => h.kind === 'command' && !h.pushGuard && /^(PreToolUse|PostToolUse|Stop)$/.test(h.ev));
   return http && cmd ? 'mixed' : http ? 'http' : hs.length ? 'command' : 'none';
 }
 /** HTTP 钩子打的端口 */

@@ -8,7 +8,10 @@
  *     会话开始、用户开口两个钩子一直走命令方式：它们负责把路由拉起来、检查 HTTP 钩子有没有生效
  *   - 最多 3 个工作线程：一个钩子慢（收工检查要跑 git status），别的会话改文件不用排队等它
  *   - 钩子文件更新了（装了新版），下一次调用换新线程、用新代码；旧线程手上的做完再退
- *   - 25 秒没结果当放行（和命令方式出错、超时时一样），结束那个线程，下次重建
+ *   - 25 秒没结果当放行（和命令方式出错、超时时一样），结束那个线程，下次重建；同一个线程上排着队、被它连累的调用换个线程重跑一次（审核 P10）
+ *   - 没跑成（超时、线程出错、退出）都记一条问题反馈，同一个钩子一分钟最多记一条（Codex C19：以前只有超时记）
+ *   - 例外：跑命令的检查（guard-commit）没跑成、命令里有 push、发布字样的，回"要你确认"，不放行。push 只留钩子这一道确认（用户 2026-10-30 定的），
+ *     放行了就推出去了。路由整个不在的情况由另登记的命令钩子 guard-push 兜底
  *   - 每次调用记进 state/hook-stats.json：配置页显示"最近一次收到钩子调用"，用户开口时的自检（hook-health.js）也看它
  * 只由路由（router.js）载入。
  */
@@ -31,6 +34,17 @@ function createHost(opts) {
   let stamp = '';
   let stampAt = 0;
   const lastErrLog = {};
+  const lastFeedback = {};
+  // 和登记 guard-push 用的 if 条件一致：命令里有这些字样就当可能要推送
+  const pushLike = (input) => /push|publish|发布到/i.test(String((input && input.tool_input && input.tool_input.command) || ''));
+  const pushAsk = (why) => ({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: '[vibe-kit] 推送的检查这次没跑成（' + String(why || '').split('\n')[0].slice(0, 120) + '），推到远端要你确认。' } });
+  /** 没跑成：记一条问题反馈（每次现读 feedback.js，装了新版不用重启路由）。同一个钩子一分钟最多一条 */
+  function noteFailure(name, input, why) {
+    const now = Date.now();
+    if (lastFeedback[name] && now - lastFeedback[name] < 60000) return;
+    lastFeedback[name] = now;
+    try { const f = path.join(kitDir, 'lib', 'feedback.js'); delete require.cache[require.resolve(f)]; require(f).recordHookError(name, input, new Error('HTTP 方式下检查没跑成，这次' + (name === 'guard-commit' && pushLike(input) ? '按要确认回' : '当放行') + '：' + String(why || '').split('\n')[0])); } catch (e) { /* 记不了也照样回 */ }
+  }
 
   // ---------- 代码有没有更新：hooks/、lib/ 里文件的修改时间和大小，一秒最多看一次 ----------
   // pristine/ 下的技能、代理的清单也算：工作线程里记着"哪些是套件装的技能"（不许改的范围），只增删了技能、代码没变时也要换线程
@@ -64,7 +78,8 @@ function createHost(opts) {
   function broken(x, why) {
     if (!workers.includes(x)) return;
     end(x);
-    for (const [, c] of x.inflight) { clearTimeout(c.timer); c.resolve({ ok: false, error: why }); }
+    // 排着队、被连累的调用：标上 retry，换个线程重跑一次（审核 P10：以前跟着一起放行）
+    for (const [, c] of x.inflight) { clearTimeout(c.timer); c.resolve({ ok: false, error: why, retry: true }); }
     x.inflight.clear();
   }
   function spawn() {
@@ -132,7 +147,7 @@ function createHost(opts) {
   }
 
   /** 跑一个钩子。返回 { status, out }：status 404 = 不认这个名字；out 为 null 表示放行 */
-  function run(name, input) {
+  function run(name, input, attempt) {
     if (!NAMES.has(name)) return Promise.resolve({ status: 404, out: null });
     if (!fs.existsSync(path.join(kitDir, 'hooks', name + '.js'))) return Promise.resolve({ status: 404, out: null });
     refreshCode();
@@ -147,15 +162,18 @@ function createHost(opts) {
         x.inflight.delete(id);
         resolve({ ok: false, error: '25 秒没有结果；最后阶段：' + phase });
         log('钩子 ' + name + ' 25 秒没有结果，这次当放行；结束这个工作线程');
-        // 卡住当放行，用户和模型都看不到：记进问题反馈（每次现读，装了新版不用重启路由）
-        try { const f = path.join(kitDir, 'lib', 'feedback.js'); delete require.cache[require.resolve(f)]; require(f).recordHookError(name, input, new Error('HTTP 方式下 25 秒没有结果，这次当放行；最后阶段：' + phase)); } catch (e) { /* 记不了就算了 */ }
+        // 问题反馈在下面统一记（noteFailure），超时、线程出错、退出都记
         broken(x, '前面的钩子卡住了');
       }, CALL_TIMEOUT_MS);
       x.inflight.set(id, { resolve, timer });
       try { x.w.postMessage({ id, name, input }); } catch (e) { x.inflight.delete(id); clearTimeout(timer); resolve({ ok: false, error: '交不给工作线程：' + e.message }); }
     }).then((m) => {
+      if (!m.ok && m.retry && !attempt) return run(name, input, 1);
       record(name, input, m, Date.now() - started);
-      return { status: 200, out: m.ok ? m.out : null };
+      if (m.ok) return { status: 200, out: m.out };
+      noteFailure(name, input, m.error);
+      if (name === 'guard-commit' && pushLike(input)) return { status: 200, out: pushAsk(m.error) };
+      return { status: 200, out: null };
     });
   }
   function close() {

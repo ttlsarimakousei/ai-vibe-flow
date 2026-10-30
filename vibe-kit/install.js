@@ -373,12 +373,18 @@ function mergeSettings(s, remove, hooksOnly) {
   const hook = (file) => ({ type: 'command', command: 'node "' + kitPath('hooks/' + file) + '"' });
   const transport = hookTransport();
   const port = routerPort();
-  const fast = (name) => (transport === 'http' ? { type: 'http', url: 'http://127.0.0.1:' + port + '/vibe-kit/hook/' + name } : hook(name + '.js'));
+  // HTTP 钩子写明等 30 秒：不写是 600 秒，端口被一个只收连接不回话的程序占着时，每次调工具都要卡 10 分钟（审核 P37）。
+  // 路由那边一个检查最多 25 秒（lib/hook-host.js），30 秒内一定有回话
+  const fast = (name) => (transport === 'http' ? { type: 'http', url: 'http://127.0.0.1:' + port + '/vibe-kit/hook/' + name, timeout: 30 } : hook(name + '.js'));
+  // push 的兜底（用户 2026-10-30 定的：push 只留钩子这一道确认）：钩子走路由时，路由不在 Claude Code 就当放行。
+  // 另登记一个命令方式的 guard-push，带 if：命令里有 push、发布字样才起进程（实测见 docs/claude-code-facts.md），路由不在时由它来查
+  const pushGuard = (rule) => Object.assign(hook('guard-push.js'), { command: hook('guard-push.js').command + ' ' + port, if: rule, timeout: 60 });
+  const PUSH_RULES = ['Bash(*push*)', 'Bash(*publish*)', 'Bash(*发布到*)', 'PowerShell(*push*)', 'PowerShell(*publish*)', 'PowerShell(*发布到*)'];
   const OURS = {
     // 改文件的三个检查（套件文件不许改、编码保护、OpenSpec 门槛）合成一个入口 pre-edit：一次编辑只起一个进程（或只发一次请求）
     PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand|Agent|Task', hooks: [fast('guard-ask')] },
       // 搜文件内容：范围里有放令牌、放模型 key 的地方就拦（权限规则管不到"对着上级目录搜"）
-      { matcher: 'Grep', hooks: [fast('guard-read')] }],
+      { matcher: 'Grep', hooks: [fast('guard-read')] }].concat(transport === 'http' ? [{ matcher: 'Bash|PowerShell', hooks: PUSH_RULES.map(pushGuard) }] : []),
     // 读文件时提醒（提示规则）2026-09-30 去掉了，不再登记；这一项留着空的，是为了把以前登记过的摘掉
     PostToolUse: [],
     // 用户开口的钩子，Claude Code 默认只等 30 秒（官方文档：UserPromptSubmit 上命令钩子的默认超时从 600 秒降到了 30 秒），到点就结束它、丢掉输出。

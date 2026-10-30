@@ -32,7 +32,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
 
-**HTTP 方式**：装了路由时，改文件、跑命令、提问框、搜文件、收工这五个高频钩子登记成 `type: "http"`，打到路由的 `/vibe-kit/hook/<名字>`，在路由的工作线程里跑（最多 3 个线程，一次几毫秒；命令方式一次 0.3 到 0.9 秒）。25 秒没结果当放行。用户开口时 `hook-health.js` 自检：上一轮改过文件、跑过命令，路由却没收到调用，就把路由拉起来，还不行就切回命令方式。开关 `hookTransport`。
+**HTTP 方式**：装了路由时，改文件、跑命令、提问框、搜文件、收工这五个高频钩子登记成 `type: "http"`，打到路由的 `/vibe-kit/hook/<名字>`，在路由的工作线程里跑（最多 3 个线程，一次几毫秒；命令方式一次 0.3 到 0.9 秒）。25 秒没结果当放行，记问题反馈，同线程排队的换线程重跑一次；例外：guard-commit 没跑成、命令里有 push / publish / 发布到 字样的回 ask（2026-10-30，push 只留钩子一道确认）。路由整个不在时 Claude Code 当放行，所以 HTTP 方式另登记命令钩子 `guard-push.js <端口>`，带 `if`（`Bash(*push*)` 等六条，实测见 claude-code-facts.md）：`/version` 不答话就自己跑一遍 guard-commit，出错回 ask。HTTP 钩子写 `timeout: 30`。用户开口时 `hook-health.js` 自检：上一轮改过文件、跑过命令，路由却没收到调用，就把路由拉起来，还不行就切回命令方式。开关 `hookTransport`。
 
 **兜底放行**：流程类的检查拦下时，提示末尾带〔拦截编号〕。模型确信是套件拦错了，用 `tools/feedback.js bypass <编号> --why "…"` 申请，再做一次那一步时弹确认框（全自动模式下直接放行并记进报告）。改套件、读令牌、关钩子、结束路由、非 UTF-8 文件、整仓 add、push 没有编号，什么模式都不能放行。见 `lib/feedback.js` 开头。
 
