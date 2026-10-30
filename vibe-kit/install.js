@@ -452,6 +452,8 @@ function mergeSettings(s, remove, hooksOnly) {
         have = have.filter((x) => !drop.includes(x));
         if (have.length) perms[k] = have; else delete perms[k];
         s.permissions = perms;
+        // 是套件收回的，不是你删的：从"装过的"记录里也去掉。装回老版本时（它还没有 guard-push）照它的规矩重新加上（复审 S6）
+        man.known[k] = man.known[k].filter((x) => !drop.includes(x));
         console.log('  [OK] 收回了套件以前加的权限规则：' + drop.join('、') + (drop.includes('Bash(git push:*)') ? '（推送只留套件这一道确认，说了推送不再弹 Claude Code 的确认框）' : ''));
       }
       // 以前装过的条目现在不在了，是你删掉或挪走的（比如把 push 的确认挪到了 deny），不再补；已经写在别的列表里的也不加。只加新版新增的
