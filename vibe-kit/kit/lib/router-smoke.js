@@ -61,7 +61,9 @@ async function run() {
     await new Promise((r) => probe.close(r));
     const cfg = path.join(dir, 'config.json');
     fs.writeFileSync(cfg, JSON.stringify({ listen: { host: '127.0.0.1', port }, providers: [{ name: 'smoke', base_url: 'http://127.0.0.1:' + gwPort, api_key: FAKE_KEY }], default: { provider: 'smoke' }, routes: [], failover: [] }));
-    router = spawn(process.execPath, [ROUTER, '-c', cfg], { windowsHide: true, stdio: 'ignore' });
+    // -p：路由认它是临时换端口跑的，不去对 settings.json 里钩子登记的端口（不带的话 1.5 秒后会跑 install --sync，
+    // 把用户真的钩子改到这个临时端口上，复审 S4）
+    router = spawn(process.execPath, [ROUTER, '-c', cfg, '-p', String(port)], { windowsHide: true, stdio: 'ignore' });
     let up = false;
     for (let i = 0; i < 100 && !up; i++) { try { up = (await request(port, '/version', null, {}, 1000)).status === 200; } catch (e) { /* 还没起来 */ } if (!up) await wait(100); }
     if (!up) return { ok: false, why: '新路由 10 秒内没起来（/version 不回话）' };
@@ -72,8 +74,14 @@ async function run() {
     if (!got.body.model) return { ok: false, why: '转给网关的请求没带模型名（网关要求必须有 model）' };
     if (got.headers['x-api-key'] !== FAKE_KEY) return { ok: false, why: '转给网关的请求 key 不在 x-api-key 里' };
     if (got.headers.authorization) return { ok: false, why: '转给网关的请求带了 Authorization（只该用 x-api-key）' };
-    const hk = await request(port, '/vibe-kit/hook/guard-read', { session_id: '', hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: path.join(dir, 'x.txt') }, cwd: dir }, {}, 30000);
+    // 钩子真跑起来了：让跑命令的检查看一条没人说过推送的 git push，要回它自己的"用户没说推送"。
+    // 只看 200 不够：钩子宿主载不进来时路由照样回 200（复审 S4），像推送的回的是"检查没跑成，要确认"
+    const hk = await request(port, '/vibe-kit/hook/guard-commit', { session_id: '', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git push' }, cwd: dir }, {}, 30000);
     if (hk.status !== 200) return { ok: false, why: 'HTTP 钩子返回 ' + hk.status };
+    let out = {};
+    try { out = JSON.parse(hk.body || '{}'); } catch (e) { out = {}; }
+    const text = JSON.stringify(out);
+    if (!/用户没说推送/.test(text)) return { ok: false, why: '路由里的检查没真跑起来（git push 没被检查拦下）：' + text.slice(0, 160) };
     return { ok: true };
   } catch (e) {
     return { ok: false, why: String((e && e.message) || e).split('\n')[0] };
