@@ -164,5 +164,33 @@ const stop = (p) => new Promise((r) => { if (!p || p.exitCode !== null) return r
     }
   }
 
+  H.section('B4 去掉 Claude Code 的 push 确认规则：套件以前加的收回，你自己加的不动');
+  {
+    const BASE = process.env.VKT_BASE_2041;
+    const newPkg = (() => { if (!FROM) return H.makePackage('tpg-b4-new', '20261030.1400'); const d = path.join(H.tempDir('tpg-b4-new'), 'vibe-kit'); H.copyDir(FROM, d, (n) => n === 'node_modules' || n === '.git'); H.stubDeps(d); return d; })();
+    const frag = json(H.read(path.join(newPkg, 'settings.fragment.json'))) || {};
+    H.ok('新包的权限片段里没有 push 的确认规则', !(((frag.permissions || {}).ask) || []).includes('Bash(git push:*)'), frag.permissions);
+    if (BASE && fs.existsSync(path.join(BASE, 'install.js'))) {
+      const oldPkg = path.join(H.tempDir('tpg-b4-old'), 'vibe-kit');
+      H.copyDir(BASE, oldPkg, (n) => n === 'node_modules' || n === '.git');
+      H.stubDeps(oldPkg);
+      const ask = (u) => (((json(H.read(path.join(u.cfg, 'settings.json'))) || {}).permissions || {}).ask) || [];
+      // 1. 2041 装的（套件加了这条，清单里记着）→ 升到新版：收回
+      const u = H.freshHome('tpg-b4-up');
+      const i1 = H.node(u, path.join(oldPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+      H.ok('2041 装上了，带着 push 的确认规则', i1.code === 0 && ask(u).includes('Bash(git push:*)'), ask(u));
+      const i2 = H.node(u, path.join(newPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+      H.ok('升到新版：套件加的 push 确认规则收回了，说清楚了', i2.code === 0 && !ask(u).includes('Bash(git push:*)') && /收回了套件以前加的权限规则：Bash\(git push:\*\)/.test(i2.out), [ask(u), i2.out.slice(-500)]);
+      const i3 = H.node(u, path.join(newPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+      H.ok('再装一次：不会又加回来', i3.code === 0 && !ask(u).includes('Bash(git push:*)'), ask(u));
+      // 2. 你自己在装套件之前就写着这条：不是套件加的，不动
+      const v = H.freshHome('tpg-b4-own');
+      H.write(path.join(v.cfg, 'settings.json'), JSON.stringify({ permissions: { ask: ['Bash(git push:*)'] } }, null, 2));
+      H.node(v, path.join(oldPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: v.root, timeout: 240000 });
+      const j2 = H.node(v, path.join(newPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: v.root, timeout: 240000 });
+      H.ok('你自己写的 push 确认规则：升级后照旧留着', j2.code === 0 && ask(v).includes('Bash(git push:*)'), ask(v));
+    } else console.log('  （没给 VKT_BASE_2041=<20261028.2041 的 vibe-kit 目录>，跳过从 2041 升级的两项）');
+  }
+
   H.done('push 只留钩子一道（B 批）');
 })();

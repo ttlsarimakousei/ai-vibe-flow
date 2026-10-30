@@ -390,6 +390,10 @@ for (const c of cases) {
 }
 add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/add-export/tasks.md', 'Edit', { old_string: '- [ ] 1.2', new_string: '- [ ] 1.3 [代码审查] 审查 src/main/java/com/x/B.java\n- [ ] 1.2' }), /是测试、审查或验收，不写进任务清单/, V1018);
 add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, V1018);
+// 这一版有意改的（用户 2026-10-30 定的）：push 只留钩子这一道确认，settings 里的 Bash(git push:*) 去掉了；开口提示直接写 git push（不再为了躲确认框写 git -C）
+for (const c of cases) {
+  if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git push，几笔提交都一样[^"]*不推到别的分支。"/; c.since = NEXT; }
+}
 
 let same = 0;
 let changed = 0;

@@ -61,7 +61,7 @@ Claude Code 用户级 MCP 在 `~/.claude.json` 顶层 `mcpServers`；设置 `CLA
 ## 权限
 
 - 开着跳过权限模式（`--dangerously-skip-permissions`），**Bash 里 cd 和别的命令串在一条里照样弹确认框**（用户实测确认）。所以套件拦下这种命令，给出不用 cd 的写法（`git -C`、`mvn -f`、`npm --prefix`、写完整路径）。
-- 权限规则 `Bash(git push:*)` 按前缀匹配，`git -C 子项目 push` 绕得过去，所以 push 的确认由钩子来做。
+- 权限规则 `Bash(git push:*)` 按前缀匹配，`git -C 子项目 push` 绕得过去，所以 push 的确认由钩子来做。2026-10-30 起套件不再登记这条规则（用户定的：push 只留钩子一道确认，免得说了推送还弹框）。
 - 项目里写 `.claude/settings.local.json` 的 `{"disableAllHooks": true}` 能让所有钩子失效，套件的 `guard-kit` 拦这种写入。
 - 2.1.120、2.1.259 都认用户 settings.json 里的 `permissions.defaultMode: "bypassPermissions"`；2.1.259 不认项目、local 设置里写的。
 

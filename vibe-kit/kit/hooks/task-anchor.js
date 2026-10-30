@@ -463,7 +463,8 @@ async function handle(j) {
     // 推送怎么做（用户 2026-10-25 定的，问题反馈表第 5 条）：说了推送就直接推。套件的合并推送工具 2026-10-28 去掉了（用户定的）；
     // 用户自己说要合并的，照他说的用 git 合并没推的提交再推，不拦（用户 2026-10-28 补充）
     if (intent.mergeIntent(j.prompt)) lines.push('[vibe-kit 推送] 用户要把没推的提交合并了再推：照他说的用 git 自己合（例：git -C <仓库> reset --soft <远端分支>，再 git commit 写一条概括的说明；或者 git rebase），合完直接 git push，不用推送计划、不再问确认。只动还没推上去的提交，不 force、不删远端分支、不推到别的分支；套件不再有合并推送的工具。');
-    else lines.push('[vibe-kit 推送] 用户说了推送：直接 git -C <仓库> push，几笔提交都一样，不用推送计划、不再问确认；壳子里几个子项目有没推的提交就各推一次。不 force、不删远端分支、不推到别的分支。');
+    // 20261030 起 push 只留套件这一道确认（用户定的），settings 里不再有 Bash(git push:*) 的确认规则：写 git push 就行，不用为了躲确认框改写成 git -C
+    else lines.push('[vibe-kit 推送] 用户说了推送：直接 git push，几笔提交都一样，不用推送计划、不再问确认；壳子里几个子项目有没推的提交，用 git -C <子项目> push 各推一次。不 force、不删远端分支、不推到别的分支。');
   }
   const oh = note || anchored.overLine ? '' : outputHint(j, cfg);
   if (oh) lines.push(oh);

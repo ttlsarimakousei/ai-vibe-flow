@@ -444,7 +444,16 @@ function mergeSettings(s, remove, hooksOnly) {
     const listed = (x) => ['allow', 'ask', 'deny'].some((k) => Array.isArray(perms[k]) && perms[k].includes(x));
     for (const k of ['allow', 'ask']) {
       const want = (isObj(frag.permissions) && Array.isArray(frag.permissions[k])) ? frag.permissions[k] : [];
-      const have = Array.isArray(perms[k]) ? perms[k] : [];
+      let have = Array.isArray(perms[k]) ? perms[k] : [];
+      // 新版不要了、清单里记着是套件自己加的、现在还在的：收回。20261030 起去掉了 push 的确认规则 Bash(git push:*)
+      // （用户 2026-10-30 定的：push 只留钩子这一道确认，不再说了推送还弹 Claude Code 的确认框）。你自己加回来的、挪到别处的不在清单里，不动
+      const drop = man[k].filter((x) => !want.includes(x) && have.includes(x));
+      if (drop.length) {
+        have = have.filter((x) => !drop.includes(x));
+        if (have.length) perms[k] = have; else delete perms[k];
+        s.permissions = perms;
+        console.log('  [OK] 收回了套件以前加的权限规则：' + drop.join('、') + (drop.includes('Bash(git push:*)') ? '（推送只留套件这一道确认，说了推送不再弹 Claude Code 的确认框）' : ''));
+      }
       // 以前装过的条目现在不在了，是你删掉或挪走的（比如把 push 的确认挪到了 deny），不再补；已经写在别的列表里的也不加。只加新版新增的
       const add = want.filter((x) => !have.includes(x) && !man.known[k].includes(x) && !man[k].includes(x) && !listed(x));
       if (add.length) { perms[k] = have.concat(add); s.permissions = perms; }

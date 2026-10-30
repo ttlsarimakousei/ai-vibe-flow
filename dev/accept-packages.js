@@ -133,7 +133,9 @@ function unzip(zip, name) {
     const md = H.read(path.join(u.cfg, 'CLAUDE.md')) || '';
     H.ok('全局约定里的斜杠命令换成了新名字', /\/ttls-see-page/.test(md) && /\/ttls-handover/.test(md) && !/(^|[^\w.\\/-])\/(cross-review|see-page|handover|onboard)\b/.test(md), (md.match(/[^\n]*\/(cross-review|see-page|handover|onboard)\b[^\n]*/g) || []).slice(0, 3));
     const perm = (readJson(path.join(u.cfg, 'settings.json')).permissions || {});
-    H.ok('自动更新之后：放行里补上了 PowerShell，push 的确认还在', (perm.allow || []).includes('PowerShell') && (perm.ask || []).includes('Bash(git push:*)'), perm);
+    // 20261030 起 push 只留钩子这一道确认（用户定的）：升到之后的版本，套件以前加的 Bash(git push:*) 收回
+    const pushRule = (perm.ask || []).includes('Bash(git push:*)');
+    H.ok('自动更新之后：放行里补上了 PowerShell，' + (V2 > '20261028.2041' ? 'push 的确认规则收回了' : 'push 的确认还在'), (perm.allow || []).includes('PowerShell') && (V2 > '20261028.2041' ? !pushRule : pushRule), perm);
     H.ok('包里、装好的套件里都没有 jar（驱动不随包带）', !Object.keys(b).some((k) => /\.jar$/i.test(k) && !/node_modules\//.test(k)) && !fs.existsSync(path.join(u.kit, 'drivers')), Object.keys(b).filter((k) => /\.jar$/i.test(k)));
     if (RENAMED) {
       const log = H.read(path.join(u.kit, 'update', 'update.log')) || '';

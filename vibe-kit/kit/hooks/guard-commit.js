@@ -3,7 +3,8 @@
  * PreToolUse 钩子（Bash / PowerShell）：看模型要跑的命令。
  *   1. git push 要用户确认：任何写法（git -C x push、cd x && git push、cmd /c、bash -c、powershell -Command 里的）都检查。
  *      用户说了"推送""push"就直接推（用户 2026-10-25 定的）；合并推送 2026-10-28 取消了（用户定的），"合并推送"也按普通推送走。取消、问句、后台通知不算。
- *      权限规则 Bash(git push:*) 按前缀匹配，实测 2.1.259 上 git -C sub push 能绕过它；这一道不看任何开关。
+ *      20261030 起 push 只留这一道确认（用户定的）：settings 里的 Bash(git push:*) 确认规则去掉了（它按前缀匹配，git -C sub push 本来就绕得过）。
+ *      这一道不看任何开关；钩子走路由时，路由不在由命令钩子 guard-push 兜底，路由里没跑成时带 push 的要确认（lib/hook-host.js）。
  *   2. 提交信息要符合公司规范："类型: 内容"（例：feat: 新增修改页面）。heredoc、here-string、-m"x"、-mx 这些写法都认。
  *   3. 不许把原来就有的改动带进提交：git add -A / --all / . / :/ / -u、git commit -a 一律拦；
  *      仓库下面套着别的 git 仓库（壳子）时，add 子项目目录也拦（会被提交成 gitlink，公司红线）。登记成子模块的不算。

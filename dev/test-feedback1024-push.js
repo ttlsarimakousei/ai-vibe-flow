@@ -31,7 +31,8 @@ const plain = guard(r3.dir, 'git push', '推送');
 H.ok('说了推送：git push 放行（不拦、不弹确认）', plain === null, plain);
 H.ok('说了 push：git -C <仓库> push origin <分支> 放行', guard(r3.dir, 'git -C "' + r3.dir.replace(/\\/g, '/') + '" push origin HEAD', 'push') === null);
 const hint = prompt(r3.dir, '推送');
-H.ok('开口提示：直接 git push，不用推送计划', /直接 git -C <仓库> push/.test(H.reasonOf(hint) || JSON.stringify(hint || {})) && !/merge-push\.js" plan/.test(JSON.stringify(hint || {})), hint);
+// 20261030 起提示直接写 git push（push 只留钩子一道确认，不再为了躲 Claude Code 的确认框写 git -C）
+H.ok('开口提示：直接 git push，不用推送计划', /直接 git push，/.test(H.reasonOf(hint) || JSON.stringify(hint || {})) && !/merge-push\.js" plan/.test(JSON.stringify(hint || {})), hint);
 H.ok('没说推送：git push 拦下', blocked(guard(r3.dir, 'git push', '继续')));
 H.ok('说了推送但要强推：弹确认，不直接放', asks(guard(r3.dir, 'git push --force', '推送')), guard(r3.dir, 'git push --force', '推送'));
 H.ok('说了推送但推到别的分支：弹确认', asks(guard(r3.dir, 'git push origin HEAD:other', '推送')));
@@ -49,7 +50,7 @@ H.ok('说了合并成1条推送：git push 直接放行（不合成）', guard(r
 const ph = JSON.stringify(prompt(rp.dir, '合并推送') || {});
 // 用户 2026-10-28 补充：去掉的是套件的合并推送工具；用户自己说合并推送时照他说的用 git 合并再推，不拦
 H.ok('开口提示：照用户说的用 git 自己合并没推的提交再推，不提套件的合并工具', /用户要把没推的提交合并了再推/.test(ph) && /reset --soft/.test(ph) && !/merge-push|plan --dir|squash --dir/.test(ph), ph);
-H.ok('只说推送的开口提示：直接推，不提合并', /直接 git -C <仓库> push/.test(JSON.stringify(prompt(rp.dir, '推送') || {})) && !/合并/.test(JSON.stringify(prompt(rp.dir, '推送') || {})));
+H.ok('只说推送的开口提示：直接推，不提合并', /直接 git push，/.test(JSON.stringify(prompt(rp.dir, '推送') || {})) && !/合并/.test(JSON.stringify(prompt(rp.dir, '推送') || {})));
 H.ok('合并推送的工具不在了', !require('fs').existsSync(tool));
 // 提交方式"关"（这个假目录的设置）：用户说了合并成1条推送，合并时的 reset --soft 和重新提交都不拦
 H.ok('说了合并成1条推送：git reset --soft 到远端分支不拦', guard(rp.dir, 'git reset --soft origin/HEAD', '合并成1条推送') === null, guard(rp.dir, 'git reset --soft origin/HEAD', '合并成1条推送'));
