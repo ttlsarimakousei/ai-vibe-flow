@@ -213,23 +213,27 @@ function processCheck(j) {
   return processMsg(p.show);
 }
 
-/** 目录里最新的一个文件的修改时间（最多看 2000 个） */
-function newestMtime(dir) {
-  let newest = 0; let n = 0;
+/**
+ * 目录里最新的一个文件的修改时间（最多看 2000 个、8 层）。complete 为假：没看全（超了上限、读不了的子目录），
+ * 最新的那个可能在没看到的地方，按它删整个目录会把刚改的文件一起删掉（Codex C14：2001 个文件里刚改的最后一个被删了）
+ */
+function scanNewest(dir) {
+  let newest = 0; let n = 0; let complete = true;
   const walk = (d, depth) => {
     let es = [];
-    try { es = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
+    try { es = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { complete = false; return; }
     for (const e of es) {
-      if (++n > 2000) return;
+      if (++n > 2000) { complete = false; return; }
       const p = path.join(d, e.name);
       try { const st = fs.statSync(p); if (st.mtimeMs > newest) newest = st.mtimeMs; } catch (err) { /* 刚被删 */ }
-      if (e.isDirectory() && depth < 8) walk(p, depth + 1);
+      if (e.isDirectory()) { if (depth < 8) walk(p, depth + 1); else complete = false; }
     }
   };
-  try { newest = fs.statSync(dir).mtimeMs; } catch (e) { return 0; }
+  try { newest = fs.statSync(dir).mtimeMs; } catch (e) { return { newest: 0, complete: false }; }
   walk(dir, 0);
-  return newest;
+  return { newest, complete };
 }
+function newestMtime(dir) { return scanNewest(dir).newest; }
 /**
  * 这个过程文件目录是哪个变更的：名字就是变更名，或者以"变更名-""变更名_""变更名."开头（add-x-sm2 是 add-x 的）。
  * names 是变更名（小写）。几个都对得上取最长的那个：add-x 和 add-x-excel 两个变更，add-x-excel-测试 是后一个的
@@ -269,13 +273,14 @@ function cleanTmp(roots, keepDays, archivedNames, activeNames, since) {
         const done = changeOwner(e.name, archived);
         if (mine && mine.length >= done.length) continue;
         let why = '';
-        let mtime = -1;
+        let scan = null;
+        const look = () => scan || (scan = scanNewest(d));
         if (done) {
           const at = since ? Number(since[done]) || 0 : 0;
-          if (at) mtime = newestMtime(d);
-          if (!at || mtime <= at + 60000) why = '变更 ' + (e.name.toLowerCase() === done ? e.name : done) + ' 已归档';
+          if (!at || (look().complete && look().newest <= at + 60000)) why = '变更 ' + (e.name.toLowerCase() === done ? e.name : done) + ' 已归档';
         }
-        if (!why && top === 'tmp' && dead && (mtime >= 0 ? mtime : newestMtime(d)) < dead) why = days + ' 天没动过';
+        // 按天数清：要看全了、最新的也够旧才删；没看全的不删（最新的可能在没看到的地方）
+        if (!why && top === 'tmp' && dead && look().complete && look().newest < dead) why = days + ' 天没动过';
         if (!why) continue;
         try { fs.rmSync(d, { recursive: true, force: true }); out.push({ dir: d, why }); } catch (err) { /* 有文件被占用，下次再清 */ }
       }
@@ -299,4 +304,4 @@ function clutter(root) {
   return out;
 }
 
-module.exports = { vibePart, misplaced, vibeCheck, cleanTmp, changeOwner, clutter, newestMtime, PROCESS_NAME, isProcessName, isProcessFile, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };
+module.exports = { vibePart, misplaced, vibeCheck, cleanTmp, changeOwner, clutter, newestMtime, scanNewest, PROCESS_NAME, isProcessName, isProcessFile, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };
