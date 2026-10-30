@@ -109,7 +109,10 @@ node dev/pack.js
 | `test-confirm-once.js [旧套件目录]` | 问题表第 19 条（2026-10-30）：同一件事说过一次不再确认第二遍。提交、推送、归档认本轮最后一次明确表态，中间答别的提问框不作废，明说"先别"的收回，下一次开口从头算 |
 | `test-db-guards.js [旧套件目录]` | 查库、redis 的保护（2026-10-30，Codex 审核）：确认串只能执行一次；提交那一步出错报"结果不明"（H2 加代理连接模拟提交后断开，要 Java 和 H2）；redis 改值保留过期时间（假 redis，含 6 以前不认 KEEPTTL 的） |
 | `test-devserver-encoding.js [旧套件目录]` | 问题表第 23 条（2026-10-30）：devserver 起外部 Tomcat 的老项目，静态页面、js、接口、日志里的中文。自己写一个强制 UTF-8 的过滤器（等同 Spring 的 CharacterEncodingFilter forceEncoding）和中文接口，UTF-8、GBK 两种项目各起一次；命令里自己写了 `-Dfile.encoding` 的不再加。要 JDK 17 以下和 Tomcat 9（`%LOCALAPPDATA%\Programs\apache-tomcat-9.*` 或 `VIBE_TEST_TOMCAT`），没有就跳过 |
+| `test-devserver-speed.js [旧套件目录]` | devserver 提速和验证证据（2026-10-30，C 批 C1—C3）："改过没有"按内容算（md、openspec、src/test、日志不算，只是提交不算，删文件算）；一次调用只起一个 PowerShell 查进程；证据只算命令针对的仓库、版本查询和 curl 不记、分类和手册一致、环境指纹不含 PATH |
 | `test-auto-session.js [旧套件目录]` | 问题表第 24—28 条（2026-10-31）：/vk-auto 按会话开关自动、升级清掉配置里的两个开关；会话开着自动时等验收照样自动、改了需求重定范围；任务全勾完后改 bug 能自动提交；审查轮数处理完不清零、到上限不挡提交；"我要看看系统"算让它起服务 |
+| `test-perf.js [旧套件目录]` | 耗时异常自动上报（问题表第 20 条，C7）：命令签名不带路径和参数值；样本够 3 次、慢到 2 倍且多 60 秒才算慢；下依赖、内存只记本机；开关 local、off；同一类 24 小时一次、每天最多 3 条；反馈里没有项目路径 |
+| `test-fixes-1031.js [旧套件目录]` | 10-30 那一批里的零散修复：清理过程文件扫不完整不删（F7）；路由改网关地址不带新 key 不保存（E4，起一份临时路由）；会话记录 3 MB 里找不到用户那句话往前读（H3） |
 | `test-intent-corpus.js [旧套件目录]` | 认用户说法的语料：每种动作"应认 / 不应认"各一串。加新说法先在这里加一行，再改 `kit/lib/intent.js` |
 | `test-push-gate.js [旧套件目录]` | push 只留钩子一道（2026-10-30）：引号里的 `$(…)`、反引号、`bash -c` 里的 push 都认；guard-push 路由不在时自己查、自己出错时问；路由里检查没跑成时带 push 的要确认并记反馈；HTTP 方式登记 guard-push（带 if）和 30 秒超时；安装器退出码（没动手 4、路由起不来 3）；路由冒烟能拦下转发不带模型名的版本 |
 | `test-secrets.js` | 令牌和模型的 key 不给读；跑发布脚本要确认；安装器加的权限规则 |

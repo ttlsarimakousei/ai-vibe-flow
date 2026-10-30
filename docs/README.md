@@ -19,7 +19,6 @@
 别处的文档：
 
 - [../vibe-kit/README.md](../vibe-kit/README.md)：用户手册（短手册），也是套件行为的说明书；细节在 [../vibe-kit/手册/](../vibe-kit/手册/) 的附录里，一件事一份。
-- [../vibe-kit/开发流程.md](../vibe-kit/开发流程.md)：新版阶段与许可、任务证据、独立审查、推送预览和恢复的使用说明。
 - [../vibe-kit/更新说明.md](../vibe-kit/更新说明.md)：每一版改了什么。
 - [../dev/README.md](../dev/README.md)：测试、打包、测试的规矩。
 - [../dev/docs/ttls-db-crud/](../dev/docs/ttls-db-crud/)：查库技能的设计说明、维护须知、验证记录。
