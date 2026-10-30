@@ -39,7 +39,8 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     H.ok('装的时候写了 permissions.disableAutoMode，记成自己加的', r.code === 0 && perm(h).disableAutoMode === 'disable' && man(h).disableAutoMode === 'disable', [r.out.slice(-800), perm(h), man(h).disableAutoMode]);
     H.ok('没有替用户定 defaultMode', perm(h).defaultMode === undefined, perm(h));
     H.ok('说了关掉的是什么、在哪改回来', /Claude Code 自带的"自动模式"已关掉/.test(r.out) && /配置页"保护"/.test(r.out), r.out.slice(-1200));
-    H.ok('套件装的那几条权限还在', (perm(h).allow || []).includes('Bash') && (perm(h).ask || []).some((x) => /git push/.test(x)), perm(h));
+    // 20261030 起 push 只留钩子这一道确认（用户定的），套件不再装 Bash(git push:*) 的确认规则
+    H.ok('套件装的那几条权限还在（push 的确认规则 20261030 起不装了）', (perm(h).allow || []).includes('Bash') && !(perm(h).ask || []).some((x) => /git push/.test(x)), perm(h));
     const again = install(h, H.SRC);
     H.ok('再装一次：不重复说，设置不变', again.code === 0 && !/自动模式"已关掉/.test(again.out) && perm(h).disableAutoMode === 'disable', again.out.slice(-600));
     H.setConfig(h, { ccAutoMode: 'on' });
