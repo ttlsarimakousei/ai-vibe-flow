@@ -1,29 +1,22 @@
 # 交接：现在的状态
 
-更新于 2026-10-30。只写现在的状态，做完的事看 git log 和 docs/ 里对应的文档。
+更新于 2026-10-30。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)。
 
 ## 最近一次发版
 
 20261028.2041，已推到 GitHub（main 和标签 v20261028.2041）。包在仓库根目录 `vibe-kit-20261028.2041.zip`，也拷了一份到 C:\WorkSpace\vibe-tools\packages。内网 GitLab 的发布要仓库主人在维护的那台电脑上做。20261028.1834 不能用（转发去掉了 model，网关报 400），别发。
 
-## 正在做的
+## 在做的：统一修改
 
-- 整体审核已提交：`reviews/claude/20261029-vibe-kit-整体审核.md`。第一轮 Sonnet、Haiku，第二轮 Opus 5.5 全量复审，重点是"拦得多、确认再确认"和 devserver 慢。Codex 的审核写 `reviews/codex/`（AGENTS.md"审查报告放哪"，10-29 用户定的）。
-- 问题表第 19—22 条（流程不顺、devserver 慢要自动报耗时异常、数据库驱动多配自动换、自动模式不自动）按原话记了，状态待修。报告里的 R1—R5、第六节、P33、P01 和它们对应。
-- 仓库根目录出现过 `tmx.epoch`（仓库主人看到的，现在不在）。仓库代码、Claude/Codex 的程序和日志、shell 启动脚本、git 钩子都查不到来源。10-30 03:00—06:00 只读监视了根目录：前 7 分钟本会话跑过 git status、grep、写报告，之后空闲近 3 小时，根目录没有任何新建、删除、改名，所以不是常驻进程定时写的。再出现时记下时间和当时在跑的命令再查。
-
-## 没做完的
-
-- 审核报告里的问题、问题表第 19—22 条都还没修，等仓库主人说修。报告第十节的 10 项 10-30 已定（都选了推荐做法），修的时候照 docs/decisions.md 的 2026-10-30 做；标"未复核"的，修之前先核对。修第 22 条时先核对 P01（更新时两个自动模式被关掉）。
-- 硬规矩第 7 条 AGENTS.md 已改措辞，`vibe-kit/手册/查库和redis.md` 里"口令不经过模型"那句修的时候一起改。
-- #229—#232（神通 SQL 报错、找不到神通驱动）证据不足，没动；要在出错的电脑上跑 `tools/diagnose.js`。
-- 以前的 #221—#224、#220、feedback-20261021.md 末尾那批旧议题照旧没再核。
+- 计划和核对：[feedback-20261030.md](feedback-20261030.md)。来源是问题表第 19—22 条、Claude 审核（P）、Codex 三轮审核（C），分 A—L 批；"商量结果"一节和 decisions.md 2026-10-30 是仓库主人定的。
+- 做到：L（本仓库规范：问题、审查、修复怎么记，交接，未结清单）已改。下一步 A1、A2（第 22 条的确定原因：迁移标记 3 天后被清、hook-health 读配置失败写回空配置），再 A3（中途只有改需求才退回人工）。
+- 做法：每项先写测试，拿 20261028.2041 跑应当不过；一项一笔提交；不跑全量回归、不打包，全做完问仓库主人要不要发版。改了钩子、路由的批次提交前另请别的模型复审，报告放 reviews/claude/。
+- K（结构性大改、新机制）这次一起做，排在正确性问题后面。
+- 口令明文相关的（P24、P25、P26 的手册）、本机接口（P21）仓库主人定了不改。
 
 ## 待仓库主人做的
 
 - 内网 GitLab 发布 20261028.2041。
-- 问题表第 10 条（"所有模型请求不要带模型名称"）的本意要问清。
-- 说修审核报告的问题和问题表第 19—22 条；修完问要不要打包发版。
 
 ## 要注意的
 
@@ -33,8 +26,10 @@
 - 改提示说法、行为之后，先跑 `node dev/stale-asserts.js`。回归跑着的时候别改被测文件。
 - 全量回归时桌面上别处开终端会被记成"冒出窗口"，单独重跑那一套确认。
 - 这台电脑没装 vibe-kit（`~/.claude/vibe-kit` 不存在），看不到真实的拦截和耗时统计。
+- Codex 的复现脚本在 `reviews/codex/*.cjs`，只用假用户目录，可以直接重跑；`supplemental.cjs` 要传 Python 路径。
 
 ## 环境
 
-- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。最新的 2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI（10-29 核过校验值和签名）。旧版安装包：C:\WorkSpace\vibe-tools\packages。
+- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI。旧版安装包：C:\WorkSpace\vibe-tools\packages。
+- Python：%LOCALAPPDATA%\Programs\Python\Python312；JDK 17：%LOCALAPPDATA%\Programs\Eclipse Adoptium\jdk-17.0.20.1-hotspot；H2 在 ~/.m2。
 - 这台电脑 8 GB 内存；IDEA 开着时只剩约 1 GB，端到端测试用 `--e2e-lanes 2`。
