@@ -56,7 +56,7 @@ function looksLikeRequirement(p) {
 const CONTINUE_WORDS = /^(继续|接着|接着做|继续做|往下做|下一步|好|好的|嗯|行|可以|ok|okay|go on|continue|next|做吧|开始吧)[\s。！!，,.~～]*$/i;
 // 流程里会用到的那几个技能（审查、看页面、交接）：用户自己敲它们，不算进流程也不算出流程，跟上一轮一样
 // 套件的许可命令（/vk-commit、/vk-push、/vk-archive、/vk-review、/vk-test，用户 2026-10-30 定的）也跟上一轮一样：在流程里就还在
-const SAME_SLASH = /^\s*\/(?:(ttls-)?(cross-review|see-page|handover)|vk-(?:commit|push|archive|review|test))(\s|$)/i;
+const SAME_SLASH = /^\s*\/(?:(ttls-)?(cross-review|see-page|handover)|vk-(?:commit|push|archive|review|test|auto))(\s|$)/i;
 // 敲的是 /opsx:apply（不是 archive、verify 这些）；或者在说归档的事（点了名让它归档，不算开工）
 const APPLY_CMD = /^\s*\/(opsx:|openspec[-:])apply\b|<command-name>\s*\/?(opsx:|openspec[-:])apply\b/i;
 const ARCHIVE_TALK = /^\s*\/(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b|<command-name>\s*\/?(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b|归档|archive/i;
@@ -154,7 +154,7 @@ function requirementHint(j, cfg) {
   if (!looksLikeRequirement(p)) return '';
   // 全自动只管 apply 之后：提需求、探索、写提案这一段用户在，照有人在的说法（这时 cfg.autoMode 本来就是 false）
   return '这像一条需求。要走提案的（新功能、改行为、改接口、改表结构）先探索再提案：用 /opsx:explore 的方式在项目里读会碰到的代码、表结构（有查库的技能就用它）、接口、配置，把现状写下来（读了什么、发现什么、和需求对不上的地方、还不知道什么）给我看，明确范围后按当前需求自动条件逐产物生成；不要凭印象直接写提案或改代码。不用提案的小改动直接改。'
-    + (cfg && cfg.autoSwitch ? '先探索并明确需求；需求自动与 Apply 自动分别生效。只有两者都开且整套文档定稿提交后才自动 apply，其余情况用提问框问能不能开工（选项写"开工""还要改""先不做"）。' : '');
+    + (cfg && cfg.autoSwitch ? '这个会话开着自动：先探索并和用户确认范围、疑问（qualify 过了）才开始自动，之后整套文档审修定稿提交后自动开工；只写需求的不开工。' : '');
 }
 
 /**
@@ -383,8 +383,22 @@ function anchorLines(j, cfg, note) {
     return lines;
 }
 
+/** 会话自动模式开了：送一次怎么做（问题表第 28 条，用户 2026-10-31 定的）。不写进每个请求都带的全局约定（硬规矩 8） */
+const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。先把探索做完：读相关代码和现状，和用户确认目标、范围、验收标准和疑问，写评估并用 workflow.js qualify 过了才开始自动；'
+  + '之后自动逐份写需求文档、审修、定稿、开工，每整组任务做完先审查、按验收用例自测、修改、复验，再做下一组，按提交方式提交，收工交报告。'
+  + '只做用户的描述和材料里有的，不自己加需求（"这里加个按钮更好"这种不加）；做法上的取舍自己定，记进 revisions.md（起因：自动模式决定），不停下来问；'
+  + '用户中途报的问题、改的需求照改，记进 revisions.md，接着自动做。只有用户的描述或材料让你完全走不下去时，先自己探索，还不行再问。归档、push、改库里的数据照旧要用户点头。';
+const AUTO_OFF_TEXT = '这个会话的自动模式关了（用户刚说的）：照人工来，审查、自测、复验先问用户。';
 async function handle(j) {
-  const cfg = readConfig();
+  // 用户开、关这个会话的自动模式（/vk-auto、"这个需求自动做"、"别自动了"）：先记下，下面按新的开关算。后台任务的通知不算用户的话
+  let autoSaid = '';
+  if (!isTaskNotePrompt(j.prompt)) {
+    try { const S0 = require('../lib/session'); autoSaid = S0.autoSwitchSaid(j.prompt); if (autoSaid) { S0.setSessionAuto(j, autoSaid === 'on', String(j.prompt || '').slice(0, 120)); S0.hookLog('自动模式 会话 ' + j.session_id + (autoSaid === 'on' ? ' 用户打开了' : ' 用户关了')); } } catch (e) { autoSaid = ''; }
+    // /vk-auto 后面带着的话（"/vk-auto 做一个订单导出"）当成这一句话本身：照它认需求、定流程
+    const m = /^\s*\/vk-auto(?:\s+(?:on|off|开启|关闭|开|关)(?=\s|$))?\s*([\s\S]*)$/i.exec(String(j.prompt || ''));
+    if (m && m[1].trim()) j = Object.assign({}, j, { prompt: m[1].trim() });
+  }
+  const cfg = readConfig(j);
   // 记下这个会话在哪个目录、会话记录在哪：记问题反馈的工具（tools/feedback.js）拿不到会话号，靠这个找
   try { require('../lib/feedback.js').noteSession(j); } catch (e) { /* 记不了不影响对话 */ }
   // 下面都是项目级的事（探索、进行中的变更、交接记录）：照会话的启动目录来，不照现在所在的目录（模型单独 cd 过就变了）
@@ -437,7 +451,9 @@ async function handle(j) {
   const slash = /^\s*\//.test(String(j.prompt || ''));
   const anchored = slash ? [] : anchorLines(j, cfg, note);
   const lines = [...anchored];
-  if (!note && on && stage === 'plan' && cfg.autoRequirements && !flowState(j).planReady) lines.push('需求自动已开启，但先探索并沟通目标、范围、验收与疑问；条件明确后把 description、scope、acceptance、unresolved（未解问题数组）、onlyPlan 写入本机 .vibe/tmp/<事由>/评估.json，再运行 workflow.js qualify --session ' + j.session_id + ' --transcript <当前会话记录> --assessment <评估文件>。有疑问必须 Ask，不能因为开关开启而猜需求。');
+  if (autoSaid === 'on') lines.unshift(AUTO_ON_TEXT);
+  else if (autoSaid === 'off') lines.unshift(AUTO_OFF_TEXT);
+  if (!note && on && stage === 'plan' && cfg.autoRequirements && !flowState(j).planReady) lines.push('自动模式开着，但先探索并沟通目标、范围、验收与疑问；条件明确后把 description、scope、acceptance、unresolved（未解问题数组）、onlyPlan 写入本机 .vibe/tmp/<事由>/评估.json，再运行 workflow.js qualify --session ' + j.session_id + ' --transcript <当前会话记录> --assessment <评估文件>。有疑问必须 Ask，不能因为开关开启而猜需求。');
   if (!note) { try { const conflicts = require('../lib/work-sessions').touch(j); if (conflicts.length) lines.push('同一变更还有活跃实施会话：' + conflicts.join('、') + '。先核对各自负责的文件，避免覆盖；检索照常。共享工作区未被隔离。'); } catch (e) { /* 冲突记录失败不阻断工作 */ } }
   // 放松保护的开关被绕开配置页改了：没按它来，告诉它；每个会话记一次问题反馈
   if (cfg._tampered) {

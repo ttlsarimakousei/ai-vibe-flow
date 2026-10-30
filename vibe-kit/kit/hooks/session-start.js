@@ -99,8 +99,8 @@ async function handle(j) {
     } catch (e) { /* 比不了不影响会话开始 */ }
 
     // 全自动模式只在走 OpenSpec 流程时算数：会话刚开始还不知道这个会话要干什么，先把这条界线说清
-    const modes = readConfig();
-    if (modes.autoRequirements || modes.autoApply) out.push('需求自动' + (modes.autoRequirements ? '开' : '关') + '，Apply 自动' + (modes.autoApply ? '开' : '关') + '。需求先探索并澄清疑问，具备条件才逐产物自动审修；Apply 仅执行当前已确认范围，整组完成先审修再下一组。做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask。双自动且文档定稿提交后可衔接 apply；用户只要文档时不开工。人工审查、自测、复验先 Ask。归档和 push 由用户决定，不推进别的会话的变更。');
+    const modes = readConfig(j);
+    if (modes.autoRequirements || modes.autoApply) out.push((modes.autoSession ? '这个会话开着自动模式（用户用 /vk-auto 开的）。' : '') + '需求自动' + (modes.autoRequirements ? '开' : '关') + '，Apply 自动' + (modes.autoApply ? '开' : '关') + '。需求先探索并澄清疑问，具备条件才逐产物自动审修；Apply 仅执行当前已确认范围，整组完成先审修再下一组。做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask。双自动且文档定稿提交后可衔接 apply；用户只要文档时不开工。人工审查、自测、复验先 Ask。归档和 push 由用户决定，不推进别的会话的变更。');
 
     // 后台自动探索：没探索过、依据的文件改了，就甩一个后台进程去查（不用模型）。几秒钟就好，结果在用户开口时带给模型
     let OB = null;

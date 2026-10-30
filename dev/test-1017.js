@@ -156,7 +156,7 @@ const DESIGN_OK = ['## Context', '', '- 读过 src/A.java：现在只有查询',
     const marker = path.join(u.kit, 'state', 'defaults-1017-migration.json');
     const i1 = install();
     const c1 = cfgOf();
-    H.ok('新装：默认值就是新的（压缩线 70、交接线之后 off、提交方式 off、没有 autoResume）', i1.code === 0 && c1.autoCompactPercent === 70 && c1.handoverAsk === 'off' && c1.commitMode === 'off' && !('autoResume' in c1) && c1.autoApply === false, [i1.out.slice(-600), c1]);
+    H.ok('新装：默认值就是新的（压缩线 70、交接线之后 off、提交方式 off、没有 autoResume）', i1.code === 0 && c1.autoCompactPercent === 70 && c1.handoverAsk === 'off' && c1.commitMode === 'off' && !('autoResume' in c1) && c1.autoApply !== true, [i1.out.slice(-600), c1]);
     const settings = () => { try { return JSON.parse(H.read(path.join(u.cfg, 'settings.json'))) || {}; } catch (e) { return {}; } };
     H.ok('压缩窗口跟着写成 73.3 万（上限 100 万 × 70% + 3.3 万）', settings().autoCompactWindow === 733000, settings().autoCompactWindow);
     // 装好之后用户自己改了：之后的更新不再动
@@ -179,7 +179,7 @@ const DESIGN_OK = ['## Context', '', '- 读过 src/A.java：现在只有查询',
     setCfg({ commitMode: 'ask' });
     const i4 = install();
     const c4 = cfgOf();
-    H.ok('下次没在跑自动的时候：只补关两个自动，别的不再改', i4.code === 0 && c4.autoApply === false && c4.autoRequirements === false && c4.autoMode === false && c4.commitMode === 'ask' && /需求自动和 Apply 自动关闭/.test(i4.out), [c4, i4.out.slice(-600)]);
+    H.ok('下次没在跑自动的时候：只补关两个自动，别的不再改', i4.code === 0 && c4.autoApply !== true && c4.autoRequirements !== true && c4.autoMode !== true && c4.commitMode === 'ask' && /需求自动和 Apply 自动关闭/.test(i4.out), [c4, i4.out.slice(-600)]);
     const i5 = install();
     H.ok('都改过了：再更新一个字都不说', i5.code === 0 && !/改回了新的默认值/.test(i5.out) && cfgOf().commitMode === 'ask');
     H.ok('配置页上没有 autoResume 了，存也存不进去', !/k_autoResume/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || '') && !('autoResume' in require(path.join(H.SRC, 'router', 'kit-api.js')).cleanConfig({ autoResume: true })));

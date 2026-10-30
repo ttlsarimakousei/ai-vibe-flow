@@ -563,7 +563,7 @@ function reviewModeText() {
   return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 3) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 3) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做；用户主动要求审查不受自动上限限制。';
 }
 const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动逐产物审修；Apply 按已授权范围逐整组任务审修、自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
-const AUTO_TOP_TEXT = '> 需求和 Apply 是两套独立自动模式；以本轮提醒的生效阶段为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
+const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
 /** 约定和规范里的占位符换成按开关生成的文字 */
 function fill(text) {
   const c = kitConfig();
@@ -885,6 +885,38 @@ if (mode === 'install') {
       fs.mkdirSync(path.dirname(forceFile), { recursive: true });
       fs.writeFileSync(forceFile, JSON.stringify(forced));
       if (said.length) console.log('  [OK] 这一版把几项开关改回了新的默认值：' + said.join('；') + '。要别的在配置页改，之后的更新不再动');
+    }
+  }
+  // 2026-10-31（用户定的，问题表第 28 条）：自动模式改成每个会话一个开关（/vk-auto），配置里旧的两个开关（需求自动、Apply 自动）清掉一次。
+  // 升级这一刻正在走流程的会话（一天之内动过）原来开着自动的：给它补一个会话开关（开），升级不打断正在自动干活的会话
+  {
+    const f31 = path.join(KIT, 'state', 'auto-session-migration.json');
+    if (!fs.existsSync(f31)) {
+      let cur = null;
+      try { cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^﻿/, '')); if (!cur || typeof cur !== 'object' || Array.isArray(cur)) cur = null; } catch (e) { cur = null; }
+      if (cur) {
+        const was = cur.autoApply === true || cur.autoRequirements === true || (cur.autoMode === true && cur.autoApply === undefined);
+        let carried = 0;
+        if (was) {
+          const sd = path.join(KIT, 'state');
+          let names = []; try { names = fs.readdirSync(sd).filter((n) => /-flow\.json$/.test(n)); } catch (e) { names = []; }
+          for (const n of names) {
+            try {
+              const st = JSON.parse(fs.readFileSync(path.join(sd, n), 'utf8'));
+              if (!st || !st.on || Date.now() - (Number(st.at) || 0) > 86400000) continue;
+              const sw = path.join(sd, n.replace(/-flow\.json$/, '-auto-switch.json'));
+              if (!fs.existsSync(sw)) { fs.writeFileSync(sw, JSON.stringify({ on: true, at: Date.now(), by: '升级前配置里开着自动' })); carried++; }
+            } catch (e) { /* 读不懂的会话不管 */ }
+          }
+        }
+        if ('autoApply' in cur || 'autoRequirements' in cur || 'autoMode' in cur) {
+          delete cur.autoApply; delete cur.autoRequirements; delete cur.autoMode;
+          try { fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2) + '\n'); } catch (e) { /* 写不了：下次更新再清 */ }
+        }
+        try { fs.mkdirSync(path.dirname(f31), { recursive: true }); fs.writeFileSync(f31, JSON.stringify({ at: Date.now(), was, carried })); } catch (e) { /* 写不了：下次再做一遍，结果一样 */ }
+        console.log('  [OK] 自动模式改成每个会话一个开关：要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），/vk-auto off 关；配置页上不再有两个自动开关'
+          + (carried ? '。正在自动干活的 ' + carried + ' 个会话照旧开着' : ''));
+      }
     }
   }
   // 问题上报从什么时候算起：头一回装上带问题上报的版本的这一刻，以前攒下的不传（20260929 起去掉了存量推送）。

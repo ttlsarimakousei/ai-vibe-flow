@@ -101,7 +101,7 @@ function noteResult(dir, point, result, inputHash) {
 }
 function qualify(j, assessment) {
   if (!j.session_id || j.session_id === 'unknown') throw new Error('自动条件评估需要当前会话编号');
-  const cfg = S.readConfig(); if (!cfg.autoRequirements) throw new Error('需求自动模式未开启');
+  const cfg = S.readConfig(j); if (!cfg.autoRequirements) throw new Error('这个会话没开自动模式（用户敲 /vk-auto 或说"这个需求自动做"才开）');
   const a = assessment || {}; const fields = ['description', 'scope', 'acceptance'];
   if (fields.some(k => typeof a[k] !== 'string' || a[k].trim().length < 6) || !Array.isArray(a.unresolved)) throw new Error('自动条件评估需要 description、scope、acceptance 和 unresolved；先探索并明确用户要求');
   const entries = j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : [];
@@ -125,7 +125,7 @@ function openQuestion(entries) {
   return '';
 }
 function automaticApply(j) {
-  const cfg = S.readConfig(); const st = S.flowState(j);
+  const cfg = S.readConfig(j); const st = S.flowState(j);
   if (!cfg.autoRequirements || !cfg.autoApply || !st.planReady || st.stage !== 'plan' || st.waiting || st.planAssessment && st.planAssessment.onlyPlan) return false;
   const changes = S.allChanges(j.cwd).filter(c => S.flowChanges(j).includes(S.normKey(c.dir)));
   if (changes.length !== 1) return false;
@@ -338,8 +338,8 @@ function actionIssue(j) {
   if (cfg.autoApply || cfg.autoRequirements) {
     try {
       const v = S.flowView(j);
-      why = '（配置页开了' + [cfg.autoRequirements ? '需求自动' : '', cfg.autoApply ? 'Apply 自动' : ''].filter(Boolean).join('、') + '，开关是现读的，但这一轮不算自动：'
-        + (v.waiting ? v.waiting : v.phase === '需求与提案' ? (cfg.autoApply && !cfg.autoRequirements ? '这个会话还在需求与提案阶段，Apply 自动要用户说"开工"（或"开始实施"、敲 /vk-go、/opsx:apply）之后才算' : '需求文档还没写到能自动审修的那一步') : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
+      why = '（' + (cfg.autoSession ? '这个会话开着自动' : '配置开了' + [cfg.autoRequirements ? '需求自动' : '', cfg.autoApply ? 'Apply 自动' : ''].filter(Boolean).join('、')) + '，但这一轮不算自动：'
+        + (v.waiting ? v.waiting : v.phase === '需求与提案' ? (cfg.autoApply && !cfg.autoRequirements ? '这个会话还在需求与提案阶段，Apply 自动要用户说"开工"（或"开始实施"、敲 /vk-go、/opsx:apply）之后才算' : '探索还没做完、范围还没确认（workflow.js qualify 还没过），或者需求文档还没写到能自动审修的那一步') : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
     } catch (e) { why = ''; }
   }
   // 说清楚用户怎么答才算（#210、#212：只说"先 Ask"，模型和用户都不知道哪句话算数，去翻套件源码找口令）

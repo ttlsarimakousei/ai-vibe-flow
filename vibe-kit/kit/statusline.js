@@ -131,9 +131,9 @@ process.stdin.on('end', () => {
   const drift = readState('kit-drift');
   if (Array.isArray(drift.list) && drift.list.length) line1.unshift(C.red + '⚠ 套件代码被改过（' + drift.list.length + ' 个文件），重新安装能恢复' + C.reset);
 
-  // 两个开关与当前生效阶段分开显示。
+  // 自动模式按会话开（问题表第 28 条，2026-10-31）：开关和当前生效阶段分开显示；关着的提示怎么开
   const fl = require('./lib/session').flowView({ session_id: j.session_id, cwd });
-  line2.push(C.dim + '需求自动 ' + (cfg.autoRequirements ? '开' : '关') + ' · Apply 自动 ' + (cfg.autoApply ? '开' : '关') + C.reset);
+  line2.push(fl.switchOn ? C.yellow + '自动 开（本会话，/vk-auto off 关）' + C.reset : C.dim + '自动 关（/vk-auto 开）' + C.reset);
   if (fl.effective) line2.push(C.yellow + fl.phase + '，当前生效' + C.reset);
   // 这个会话做的变更都归档了：明说照常，不再像在做任务（用户 2026-10-07 反馈）
   else if (fl.archived) line2.push(C.dim + fl.phase + '，照常，变更已归档' + C.reset);

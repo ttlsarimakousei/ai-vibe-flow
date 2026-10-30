@@ -140,7 +140,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const installer = path.resolve(process.argv[2] || H.SRC, 'install.js');
   const installed = H.node(h, installer, ['--no-router', '--no-open'], { timeout: 180000 });
   const migrated = JSON.parse(H.read(path.join(h.kit, 'config.json')));
-  H.ok('安装升级关闭两模式并保存一次迁移标记', installed.code === 0 && migrated.autoApply === false && migrated.autoRequirements === false && fs.existsSync(migration), installed.err);
+  H.ok('安装升级关闭两模式并保存一次迁移标记', installed.code === 0 && migrated.autoApply !== true && migrated.autoRequirements !== true && fs.existsSync(migration), installed.err);
   const freshS = require(path.join(h.kit, 'lib/session')); migrated.autoApply = true; H.write(path.join(h.kit, 'config.json'), JSON.stringify(migrated)); freshS.sealConfig(h.kit, migrated);
   H.node(h, installer, ['--no-router', '--no-open'], { timeout: 180000 });
   H.ok('后续再次安装不覆盖用户重新开启的选择', JSON.parse(H.read(path.join(h.kit, 'config.json'))).autoApply === true);

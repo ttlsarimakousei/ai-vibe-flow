@@ -61,7 +61,7 @@ claudes.forEach((c, i) => suites.push(['端到端（0930）' + path.basename(pat
 
 suites.unshift(['IDEA MCP 接入撤掉', 'test-idea-mcp.js', []]);
 // 2026-10-30 统一修改（docs/feedback-20261030.md）加的几套；复审 S8：以前没进清单，全量回归不跑
-suites.unshift(['自动模式不会被悄悄关掉', 'test-auto-mode-kept.js', []], ['push 只留钩子一道', 'test-push-gate.js', []], ['同一件事不再确认第二遍', 'test-confirm-once.js', []], ['认用户说法的语料', 'test-intent-corpus.js', []], ['查库、redis 的保护', 'test-db-guards.js', []], ['devserver 起 Tomcat 的中文', 'test-devserver-encoding.js', []]);
+suites.unshift(['自动模式不会被悄悄关掉', 'test-auto-mode-kept.js', []], ['push 只留钩子一道', 'test-push-gate.js', []], ['同一件事不再确认第二遍', 'test-confirm-once.js', []], ['认用户说法的语料', 'test-intent-corpus.js', []], ['查库、redis 的保护', 'test-db-guards.js', []], ['devserver 起 Tomcat 的中文', 'test-devserver-encoding.js', []], ['devserver 提速', 'test-devserver-speed.js', []], ['自动模式按会话开', 'test-auto-session.js', []]);
 suites.unshift(['1028 反馈', 'test-feedback1028.js', ['18797']]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
 

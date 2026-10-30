@@ -17,7 +17,41 @@ const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: t
  * （状态栏、用户开口时提醒，记进问题反馈）。收紧（打开禁改、不许放行、关掉全自动）怎么改都认。
  * 全自动模式从 20260929 这一版起算放松保护的（它开着时放行不等用户）：老版本的封条里没有这一项，没有就认文件里的
  */
-function readConfig() {
+/*
+ * 自动模式按会话开（问题表第 28 条，用户 2026-10-31 定的，替代 10-14、10-17 的"需求自动、Apply 自动两个配置开关"）：
+ * 用户自己敲 /vk-auto（或者说"这个需求自动做""开自动"）打开，/vk-auto off（"别自动了""关掉自动"）关，只对这个会话有效，
+ * 记在 state/<会话>-auto-switch.json，由开口钩子（task-anchor）按用户的原话写，模型写不了（~/.claude 禁改）。
+ * 打开时需求、实施两段都算开（cfg.autoRequirements、cfg.autoApply 都为真），照旧要先探索、范围确认（qualify）才自动写需求。
+ * 配置文件里旧的 autoApply、autoRequirements 不再出现在配置页，升级时清掉；还在的（测试、没升级的老配置）当作所有会话的默认值，会话里开过、关过的以会话为准
+ */
+const AUTO_SWITCH = (sid) => String(sid) + '-auto-switch';
+/** 这个会话的自动开关：true 开、false 关、null 没动过（按配置的默认值） */
+function sessionAuto(j) {
+  const sid = j && j.session_id;
+  if (!sid || sid === 'unknown') return null;
+  const s = readState(AUTO_SWITCH(sid));
+  return typeof s.on === 'boolean' ? s.on : null;
+}
+function setSessionAuto(j, on, by) {
+  const sid = j && j.session_id;
+  if (!sid || sid === 'unknown') return false;
+  writeState(AUTO_SWITCH(sid), { on: !!on, at: Date.now(), by: String(by || '').slice(0, 200) });
+  return true;
+}
+/**
+ * 用户这句话是不是在开、关这个会话的自动模式：'on'、'off'、''。只认用户自己的话，问句不算（"能自动做吗？"）。
+ * "自动提交""自动测试"这类说的是别的开关，不算
+ */
+const AUTO_ON = /^\s*\/vk-auto(?:\s+(?:on|开|开启)\b)?(?!\s*(?:off|关|关闭)\b)|(?:^|[，,。；;\n])\s*(?:请|那就|那|就|帮我)?\s*(?:开(?:启|一下)?\s*自动(?:模式)?|自动模式\s*(?:打开|开启|开起来|开一下)|(?:这个|这些|下面的?|接下来的?|剩下的?)?\s*(?:需求|变更|任务)?\s*(?:你)?\s*(?:全)?自动(?:地)?\s*(?:做|完成|跑完|搞定|做完|推进)(?!\s*(?:的|吗|么|不|没)))/;
+const AUTO_OFF = /^\s*\/vk-auto\s+(?:off|关|关闭)\b|(?:关(?:掉|闭|一下)?\s*自动(?:模式)?|自动(?:模式)?\s*(?:关(?:掉|闭|了)?|停(?:掉|了|下)?)|别(?:再)?\s*自动(?:了|做了?)?|停止自动|不要(?:再)?自动(?:做|了)?|退出自动)/;
+function autoSwitchSaid(text) {
+  const s = intent.plain(text);
+  if (!s) return '';
+  if (AUTO_OFF.test(s)) return 'off';
+  if (/[？?]|[吗么]\s*$/.test(s) && !/^\s*\/vk-auto/.test(s)) return '';
+  return AUTO_ON.test(s) ? 'on' : '';
+}
+function readConfig(j) {
   let raw = {};
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); raw = JSON.parse(t) || {}; } catch (e) { raw = {}; }
   const c = Object.assign({}, DEFAULT_CONFIG, raw);
@@ -37,6 +71,9 @@ function readConfig() {
     if (bad.includes('autoRequirements')) c.autoRequirements = false;
     if (bad.length) c._tampered = bad;
   }
+  // 会话里开过、关过自动的，以会话为准（两段一起开、一起关）
+  const sa = j ? sessionAuto(j) : null;
+  if (sa !== null) { c.autoApply = sa; c.autoRequirements = sa; c.autoMode = sa; c.autoSession = sa; }
   return c;
 }
 /** 配置页、安装器写完配置后调：记下三个放松保护的开关现在的值（封条） */
@@ -477,7 +514,7 @@ function flowAdopt(j) {
 function commitModeOf(cfg) { return ['off', 'ask', 'auto'].includes(cfg && cfg.commitMode) ? cfg.commitMode : 'off'; }
 /** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */
 function readConfigFor(j) {
-  const c = readConfig(); c.autoSwitch = c.autoApply || c.autoRequirements;
+  const c = readConfig(j); c.autoSwitch = c.autoApply || c.autoRequirements;
   // 算流程状态要读任务、算指纹、调 git，出错不能让调用的钩子整道放行（2026-10-17 审核问题 14）：按人工模式算，更严
   let view; try { view = flowView(j); } catch (e) { hookLog('readConfigFor 算流程状态出错，按人工模式算：' + ((e && e.message) || e)); view = { effective: false, phase: '普通任务' }; }
   c.autoMode = !!view.effective;
@@ -487,14 +524,16 @@ function readConfigFor(j) {
 }
 /** 展示和执行共用结果，需求改变、等待验收或归档后不能显示为自动实施。 */
 function flowView(j) {
-  const cfg = readConfig(); const st = flowState(j); const over = st.on && flowDone(j);
+  const cfg = readConfig(j); const st = flowState(j); const over = st.on && flowDone(j);
   const scope = st.on && st.stage === 'apply' ? require('./apply-scope').valid(j) : { ok: true };
   const typed = require('./task-types'); const dirs = flowChanges(j).filter((d) => fs.existsSync(d));
   // 用户验收不靠打勾（用户 2026-10-17 定的）：任务全打勾、代码审查都过了，就是等用户按验收用例自测。老变更里没勾的 [用户验收] 不算自动能做的，结果一样
   const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code'));
-  const waiting = st.waiting || (!scope.ok ? '范围变化，等用户确认' : userWait ? '等用户自测验收' : '');
-  // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。自动不再生效，但收工还要交这一轮的报告。
-  return { switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!((st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && st.planReady) && st.on === true && !over && !waiting), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
+  // 会话里开了自动（问题表第 24 条，2026-10-31）：任务做完、等用户验收时照样算自动，用户报的问题自动改、审、测，归档照旧等用户说。
+  // 用户改了需求（范围变化）在 apply-scope.valid 里按用户的话重定范围，不退回人工
+  const waiting = st.waiting || (!scope.ok ? '范围变化，等用户确认' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
+  // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。配置开关开着时自动不再生效，但收工还要交这一轮的报告；会话开关开着时照样自动
+  return { session: cfg.autoSession === true, switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!((st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && st.planReady) && st.on === true && !over && !waiting), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
 }
 
 /**
@@ -856,7 +895,7 @@ function hookLog(line) {
   } catch (e) { /* 记不了就算了 */ }
 }
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-points|workflow-v2-migration|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(auto-session-migration|reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-points|workflow-v2-migration|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
 /**
  * 可以按文件时间清掉的固定名字（去重缓存、限时的放行、近期的拦截、节流、日志）：清了只是少一次去重或从头再记。
  * 新加一个固定名字的状态文件，要么进上面的 GLOBAL_STATE，要么进这里（dev/test-auto-mode-kept.js 会扫代码查）。
@@ -2497,7 +2536,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, pushFailOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE, DISPOSABLE_STATE,
+module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, sessionAuto, setSessionAuto, autoSwitchSaid, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, pushFailOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE, DISPOSABLE_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,

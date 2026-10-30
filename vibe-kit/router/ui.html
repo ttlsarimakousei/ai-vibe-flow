@@ -225,22 +225,23 @@
     </div>
     <div class="card" id="sec-guide-flow" data-sec="人工和自动">
       <h2>人工和自动怎么走</h2>
-      <p class="hint">"套件开关"页里两个开关都关就是人工模式。只开"需求自动"：写需求那段自动，开工后照人工。两个都开：定稿后可以自动开工，一路做下去。中间横跨两栏的是两种模式一样的步骤。</p>
+      <p class="hint">自动模式按会话开：在要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），只对那个会话有效，/vk-auto off 关；没开就是人工模式。中间横跨两栏的是两种模式一样的步骤。</p>
       <div class="g-lanes">
         <div class="g-head g-mute">人工模式</div><div class="g-head g-acc">自动模式</div>
-        <div class="g-phase">需求阶段（右栏看"需求自动"）</div>
+        <div class="g-phase">需求阶段</div>
         <div class="g-both">你提需求 → 套件认出你要做什么；否定、提问、引用不算许可</div>
         <div class="g-both">先探索代码、问清业务；没初始化 OpenSpec 的项目，第一次用时自动建 openspec/</div>
         <div class="g-step">一份一份写：proposal → specs → design → tasks。每写完一份停下给你看，你选"审一下 / 直接写下一份 / 我要改"</div><div class="g-step g-a">范围和验收都明确、你没有未答的问题，才自动逐份写；每份自动审查、修改、复审，过了才写下一份；到轮数上限还没过就停下报告</div>
         <div class="g-both">design.md 里写"验收用例"：对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。tasks.md 只写要做的实现</div>
-        <div class="g-step">四份定稿后按提交方式提交（询问就问你），再问你：开工 / 继续修改 / 暂不执行</div><div class="g-step g-a">按提交方式提交；两个自动都开就自动开工，只开需求自动就照人工问你</div>
-        <div class="g-phase">实施阶段（右栏看"Apply 自动"）</div>
+        <div class="g-step">四份定稿后按提交方式提交（询问就问你），再问你：开工 / 继续修改 / 暂不执行</div><div class="g-step g-a">按提交方式提交，自动开工；你只让它写需求的不开工</div>
+        <div class="g-phase">实施阶段</div>
         <div class="g-both">按 1.1、1.2 做，做完打勾；没说开工不能打勾</div>
         <div class="g-step">编译、类型检查直接跑；跑测试、起服务、看页面先问你</div><div class="g-step g-a">每组做完先跑这一组的验收用例（"自动自测"开着时），再自动审修，过了才进下一组；全部做完把能自动跑的用例全跑一遍</div>
         <div class="g-step">每组做完，问你要不要审查、自测（同一个要求只问一次）</div><div class="g-step g-a">到轮数上限还没过就停下报告；业务上拿不准的仍然问你；快到网关上限停下交报告</div>
         <div class="g-step">每轮收工：没快检、没审、没测、没提交的，在一个提问里问你，不强制</div><div class="g-step g-a">每轮收工：有下一项接着做；做完或卡住写全自动报告</div>
         <div class="g-both">提交按"提交方式"：询问 / 自动 / 关。推送、发内网都要你亲口说，自动模式不能代替</div>
         <div class="g-both">任务全打勾、代码审过，就是等你照验收用例自测；你说"自测通过""归档"才归档</div>
+        <div class="g-step">你测出问题、改了需求：照改，审查、自测先问你</div><div class="g-step g-a">你测出问题、改了需求：照改、记修订，接着自动审、测、提交，不退回人工；不加你没说的需求</div>
       </div>
     </div>
     <div class="card" id="sec-guide-fixed" data-sec="固定的规矩">
@@ -443,7 +444,7 @@
 
     <div class="card" id="sec-status" data-sec="状态栏">
       <h2>状态栏</h2>
-      <p class="hint">Claude Code 底下的状态栏最多三行。第一行：警告、模型、目录和分支、上下文、进行中的变更。第二行：需求和 Apply 自动是否生效、用到多少自动压缩、放松了的保护、经验待确认、更新。第三行是下面这一项。没有新消息时每 30 秒刷新一次。</p>
+      <p class="hint">Claude Code 底下的状态栏最多三行。第一行：警告、模型、目录和分支、上下文、进行中的变更。第二行：这个会话开没开自动、在哪一段生效、用到多少自动压缩、放松了的保护、经验待确认、更新。第三行是下面这一项。没有新消息时每 30 秒刷新一次。</p>
       <div class="opt">
         <div><div class="t">显示今天的用量</div><div class="d">开着：第三行显示今天经过路由的请求次数、token，和用得最多的三个模型各自的次数、token。次数到公司提醒线的 75% 变黄，到了变红。保存后下一次刷新就变。</div></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_statusUsage"><i></i></label></div>
@@ -497,7 +498,7 @@
           <details class="more"><summary>细节</summary><ul>
             <li><b>写提案</b>：没在项目里读过代码不让写。不许写"待定、后续完善、视情况"，拿不准的写成决策项。设计里提到的文件要真的存在。</li>
             <li><b>一份一份写</b>：proposal → specs → design → tasks，上一份审完（人工模式是你看过、说了写下一份）才写下一份。</li><li><b>写设计</b>：要有"## 验收用例"一节，每条写对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。</li><li><b>写任务</b>：只写要做的实现，每项写改哪个文件；不写"验："，不写测试、审查、用户验收任务（新写的会被拦下）。</li>
-            <li><b>打勾</b>：不查验法。还没说开工不能打勾（不能申请放行）。Apply 自动时，后面一组的任务要等前面一组做完、审修过才能打勾。</li>
+            <li><b>打勾</b>：不查验法。还没说开工不能打勾（不能申请放行）。自动模式时，后面一组的任务要等前面一组做完、审修过才能打勾。</li>
             <li><b>改产物</b>：要在 revisions.md 记原因。</li>
             <li><b>归档</b>：任务全部打勾，你说了归档才归档；人工模式不要求先审查，提示照实说审过没有。归档之后主规格里没有这个变更的需求会提醒。</li>
             <li>只查这次新加、改过的行，老内容不追究。</li>
@@ -508,20 +509,18 @@
 
     </div>
 
-    <div class="card" id="sec-requirements" data-sec="需求自动模式">
-      <h2>需求自动模式</h2>
-      <p class="hint">先有描述、探索代码、沟通业务疑问。条件具备后，逐个完成提案、规格、设计和任务，审修当前产物后再写下一个。同一套文档定稿提交一次。</p>
-      <div class="opt"><div><div class="t">自动完善需求</div><div class="d">本次安装和升级默认关闭。开启后仍先明确范围、业务规则和验收标准；有疑问就问你。</div></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_autoRequirements"><i></i></label></div></div>
-      <div class="opt"><div><div class="t">每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_requirementsReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
+    <div class="card" id="sec-requirements" data-sec="自动模式：需求">
+      <h2>自动模式（每个会话自己开）</h2>
+      <p class="hint">自动模式不在这里开：在要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），只对那个会话有效，/vk-auto off 关，状态栏第二行看得到。开了以后先探索、和你确认范围和疑问，之后自动写需求文档、审修、定稿、开工，每组做完审查、自测、修改，按提交方式提交，收工交报告。不加你没说的需求；你中途报的问题、改的需求照改，接着自动做。归档、push、改库照旧要你点头。</p>
+      <div class="opt"><div><div class="t">需求文档每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_requirementsReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
       <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档写多长都行，复杂的关系画图。两种自动都开时定稿提交后自动 apply；只要求写需求时不会自行开工。</p>
     </div>
-    <div class="card" id="sec-auto" data-sec="Apply 自动模式">
-      <h2>Apply 自动模式</h2>
-      <p class="hint">只执行已明确的变更范围。整组 1.x 做完后先审查、核验、修改和复验，再做下一组。关闭时，审查、自测和复验都先用 Ask 问你；放弃就继续，不记待办。</p>
-      <div class="opt"><div><div class="t">自动完成 Apply</div><div class="d">本次安装和升级默认关闭。提交按"提交"卡片里的提交方式；归档与 push 仍需确认。</div></div><div class="ctl"><label class="switch"><input type="checkbox" id="k_autoApply"><i></i></label></div></div>
-      <div class="opt"><div><div class="t">每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_applyReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
+    <div class="card" id="sec-auto" data-sec="自动模式：实施">
+      <h2>自动模式：实施</h2>
+      <p class="hint">整组 1.x 做完后先审查、核验、修改和复验，再做下一组。没开自动的会话，审查、自测和复验都先用 Ask 问你；放弃就继续，不记待办。</p>
+      <div class="opt"><div><div class="t">每组任务审查的轮数上限</div><div class="d">1 到 20 轮，每组独立计数，零问题通过才重数。到上限不再自动审、不挡提交，报告里写着没通过。</div></div><div class="ctl"><input type="number" id="k_applyReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
       <div class="opt">
-        <div><div class="t">自动自测</div><div class="d">Apply 自动生效时，每组任务做完先跑 design.md "验收用例"里这一组的、Claude 能自动跑的用例，全部做完再全跑一遍；改了代码还要跑过快检。人工模式先 Ask。</div>
+        <div><div class="t">自动自测</div><div class="d">自动模式生效时，每组任务做完先跑 design.md "验收用例"里这一组的、Claude 能自动跑的用例，全部做完再全跑一遍；改了代码还要跑过快检。人工模式先 Ask。</div>
           <details class="more"><summary>细节</summary><ul><li>验不了的，它说明"没验证"和原因就放行。</li><li>快检：项目说明（.vibe/project.md）里记的那条编译级命令，比如 <span class="mono">mvn -q compile</span>，后台探索时找出来的。标了"快检：不适用"的项目不查。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoVerify"><i></i></label></div>
       </div>
@@ -531,7 +530,7 @@
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoSeePage"><i></i></label></div>
       </div>
       <div class="opt sub">
-        <div><div class="t">到交接线先写交接记录</div><div class="d">只在“连续工作的方式”选了按交接线提醒、而且 Apply 自动正在生效时起作用：到了交接线先写一份交接记录再接着做。关着：不写。默认的自动压缩方式下这一项不起作用。</div></div>
+        <div><div class="t">到交接线先写交接记录</div><div class="d">只在“连续工作的方式”选了按交接线提醒、而且这个会话的自动模式正在生效时起作用：到了交接线先写一份交接记录再接着做。关着：不写。默认的自动压缩方式下这一项不起作用。</div></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoHandover"><i></i></label></div>
       </div>
     </div>
@@ -542,7 +541,7 @@
 
       <div class="opt">
         <div><div class="t">提交方式</div><div class="d">人工、自动都用。做完一件完整的事时：<b>询问</b>交代改了什么、怎么验的，问你"提交 / 还要改"；<b>自动</b>直接提交；<b>关</b>不问也不提交，你说"提交"才提交。</div>
-          <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>Apply 自动时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾（到了轮数上限没通过的不挡）；任务都勾完以后，改完你报的一处问题；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>自动模式时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
         <div class="ctl"><select id="k_commitMode"><option value="ask">询问：到了时机问我</option><option value="auto">自动：到了时机直接提交</option><option value="off">关：不问也不提交，我说了才提交</option></select></div>
       </div>
       <div class="opt">
@@ -1112,7 +1111,7 @@
   }, set: (v) => { $('k_' + key).value = v === undefined || v === null ? '' : v; } }; };
   fBool('autoVerify', '改了代码要验证'); fBool('autoSeePage', '改了页面要看页面'); fBool('specGate', '提案、打勾、归档的门槛');
   
-  fBool('autoRequirements', '需求自动模式'); fBool('autoApply', 'Apply 自动模式'); fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
+  fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
   fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('requirementsReviewMaxRounds', '需求每点审查上限', 1, 20); fNum('applyReviewMaxRounds', 'Apply 每组审查上限', 1, 20);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);

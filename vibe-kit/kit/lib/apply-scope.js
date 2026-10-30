@@ -70,12 +70,23 @@ function refusal(j) {
 }
 function valid(j) {
   const S = require('./session'); const st = S.flowState(j); if (!st.applyScope) return { ok: st.stage === 'apply' };
+  const changed = [];
   for (const [dir, p] of Object.entries(st.applyScope.dirs || {})) {
     if (!fs.existsSync(dir)) return { ok: false, reason: '变更目录没了，先沟通新范围，再明确 apply' };
     // 20261030 以前登记的范围没有 req，照旧按整套文档比
-    if (p.req ? requirementHash(dir) !== p.req : planHash(dir) !== p.hash) return { ok: false, reason: p.req ? '需求本身（proposal.md、specs 里的要求）改了，先和用户沟通新范围，再明确 apply' : '需求、设计或任务验法已变化，先沟通新范围，再明确 apply' };
+    if (p.req ? requirementHash(dir) !== p.req : planHash(dir) !== p.hash) changed.push([dir, p]);
   }
-  return { ok: true };
+  if (!changed.length) return { ok: true };
+  // 会话里开了自动（问题表第 24 条，用户 2026-10-31 定的）：用户测试时报的需求变更照改，按改后的需求重定范围、接着自动，
+  // 不退回人工等用户再说一遍开工。改了什么、因为用户哪句话，revisions.md 里要写（收工检查查），收工报告里列出来
+  if (S.sessionAuto(j) === true) {
+    S.updateState(j.session_id + '-flow', (s) => { if (!s.applyScope) return; for (const [dir] of changed) if (s.applyScope.dirs[dir]) s.applyScope.dirs[dir] = { hash: planHash(dir), req: requirementHash(dir) }; s.waiting = ''; });
+    for (const [dir] of changed) { try { require('./report').note(j, { kind: 'docEdit', title: '做任务时需求文档（proposal、specs）改了：' + path.basename(dir) + '，按改后的需求接着自动做（会话开着自动）', change: path.basename(dir) }); } catch (e) { /* 记不了不影响 */ } }
+    S.hookLog('自动模式 需求改了，按改后的需求重定开工范围：' + changed.map(([d]) => path.basename(d)).join('、'));
+    return { ok: true, rebased: true };
+  }
+  const p = changed[0][1];
+  return { ok: false, reason: p.req ? '需求本身（proposal.md、specs 里的要求）改了，先和用户沟通新范围，再明确 apply' : '需求、设计或任务验法已变化，先沟通新范围，再明确 apply' };
 }
 function check(j, target) {
   const S = require('./session'); const st = S.flowState(j);
@@ -98,7 +109,8 @@ function prepareEdit(j, target) {
     ticking = S.tickedLines(old, next).length > 0;
   }
   if (ticking) return;
-  if (valid(j).ok && st.applyScope.dirs[S.normKey(a.dir)]) {
+  // 会话开着自动：改需求文档不退回提案阶段（valid 里按改后的内容重定范围）
+  if ((valid(j).ok || S.sessionAuto(j) === true) && st.applyScope.dirs[S.normKey(a.dir)]) {
     // 做任务时改 design、tasks、修订记录：不退出自动，收工报告里列出来（改 proposal、specs 的，改完 valid 就不过了，下一次改需求文档时退回提案阶段）
     if (a.kind !== 'proposal' && a.kind !== 'spec') { try { require('./report').note(j, { kind: 'docEdit', title: '做任务时改了 ' + a.name + '/' + a.rel + '（需求本身没变，没退出自动）', change: a.name }); } catch (e) { /* 记不了不影响改文件 */ } }
     return;

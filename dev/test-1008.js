@@ -147,7 +147,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const skill = (sid, name) => H.hook(h, 'guard-ask', { session_id: sid, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: name } });
     const r1 = say('p1', '做一个导出订单的功能');
     H.ok('提了需求：在流程里，写提案那一段', flow('p1').on === true && flow('p1').stage === 'plan', flow('p1'));
-    H.ok('需求提醒区分两自动阶段', /先探索/.test(r1) && /需求自动与 Apply 自动分别生效/.test(r1));
+    H.ok("需求提醒说先探索、确认范围才自动", /先探索/.test(r1) && /先探索并和用户确认范围/.test(r1));
     H.ok('写提案那一段：提问框能用（全自动不算数）', ask('p1') === null, ask('p1'));
     say('p2', '/opsx:propose add-y');
     H.ok('敲 /opsx:propose：写提案那一段', flow('p2').stage === 'plan', flow('p2'));
@@ -214,12 +214,12 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('历史 apply 调用不补造开工许可', !flow('p10').on);
     // 状态栏
     const sl = (sid) => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
-    H.ok('状态栏分开显示两开关，不猜历史阶段', /需求自动 关 · Apply 自动 开/.test(sl('p2')) && !/实施，当前生效/.test(sl('p9')));
-    H.ok('状态栏显示当前实施阶段实际生效', /Apply 自动 开/.test(sl('p1')) && /实施，当前生效/.test(sl('p1')));
+    H.ok('状态栏分开显示两开关，不猜历史阶段', /自动 开/.test(sl('p2')) && !/实施，当前生效/.test(sl('p9')));
+    H.ok('状态栏显示当前实施阶段实际生效', /自动 开/.test(sl('p1')) && /实施，当前生效/.test(sl('p1')));
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /两套独立自动模式/.test(md) && /按对应规则确认：git push[^。\n]*归档/.test(md));
+    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /自动模式按会话开/.test(md) && /按对应规则确认：git push[^。\n]*归档/.test(md));
     H.ok('提交那一节：默认是关，用户说了提交才提交', /提交方式是"关"：不自动提交，也不问/.test(md), md.slice(0, 300));
     H.ok('约定说明双自动条件外先 Ask，归档由用户决定', /其他情况用 Ask 给出 apply 选项/.test(md) && /归档.*用户/.test(md));
     H.setConfig(h, { commitMode: 'auto' });

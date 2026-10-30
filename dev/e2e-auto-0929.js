@@ -156,7 +156,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   const sync = H.node(h, path.join(kit, 'install.js'), ['--sync'], { cwd: root, timeout: 180000 });
   const md = H.read(path.join(cfg, 'CLAUDE.md')) || '';
   // 2026-10-14 起：需求自动和 Apply 自动两套，约定最前面说以本轮提醒的生效阶段为准，开着自动时带"自动执行范围"一节
-  H.ok('全局约定里有自动执行范围那一节，最前面说了以生效阶段为准', sync.code === 0 && /### 自动执行范围/.test(md) && /两套独立自动模式/.test(md) && /以本轮提醒的生效阶段为准/.test(md), sync.out + sync.err);
+  H.ok('全局约定里有自动执行范围那一节，最前面说了以生效阶段为准', sync.code === 0 && /### 自动执行范围/.test(md) && /自动模式按会话开/.test(md) && /以本轮提醒为准/.test(md), sync.out + sync.err);
   const st = JSON.parse(H.read(path.join(cfg, 'settings.json')));
   H.ok('环境变量里关掉了 OpenSpec 的遥测和更新检查', st.env && st.env.OPENSPEC_TELEMETRY === '0' && st.env.OPENSPEC_NO_UPDATE_CHECK === '1', st.env);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
