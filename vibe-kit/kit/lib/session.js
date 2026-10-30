@@ -904,7 +904,7 @@ function hookLog(line) {
   } catch (e) { /* 记不了就算了 */ }
 }
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(auto-session-migration|reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-points|workflow-v2-migration|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(auto-session-migration|perf-baseline|perf-report|reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-points|workflow-v2-migration|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
 /**
  * 可以按文件时间清掉的固定名字（去重缓存、限时的放行、近期的拦截、节流、日志）：清了只是少一次去重或从头再记。
  * 新加一个固定名字的状态文件，要么进上面的 GLOBAL_STATE，要么进这里（dev/test-auto-mode-kept.js 会扫代码查）。
