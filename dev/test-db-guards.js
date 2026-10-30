@@ -126,4 +126,40 @@ H.section('D4 redis 改值保留过期时间：一条 SET 带上 KEEPTTL；老�
   H.ok('原来就没有过期时间：照原样只 SET', d.ok && (d.sets || []).length === 1 && last(d).length === 3, d);
 }
 
+H.section('D3 驱动登记表：两个进程同时登记，后写的不盖掉先写的（Codex C10）');
+{
+  const h = H.makeHome('tdg-d3', FROM);
+  // 一个最小的 MySQL 驱动 jar（只有驱动类和清单，不压缩）
+  const jar = path.join(h.root, 'mysql-connector-j-8.0.33.jar');
+  const entries = { 'com/mysql/cj/jdbc/Driver.class': Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 52, 0]), 'META-INF/MANIFEST.MF': Buffer.from('Implementation-Version: 8.0.33\n') };
+  const locals = []; const centrals = []; let off = 0;
+  for (const [name, data] of Object.entries(entries)) {
+    const n = Buffer.from(name); const l = Buffer.alloc(30); l.writeUInt32LE(0x04034b50); l.writeUInt32LE(data.length, 18); l.writeUInt32LE(data.length, 22); l.writeUInt16LE(n.length, 26);
+    locals.push(l, n, data);
+    const c = Buffer.alloc(46); c.writeUInt32LE(0x02014b50); c.writeUInt32LE(data.length, 20); c.writeUInt32LE(data.length, 24); c.writeUInt16LE(n.length, 28); c.writeUInt32LE(off, 42); centrals.push(c, n); off += l.length + n.length + data.length;
+  }
+  const central = Buffer.concat(centrals); const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50); end.writeUInt16LE(2, 8); end.writeUInt16LE(2, 10); end.writeUInt32LE(central.length, 12); end.writeUInt32LE(off, 16);
+  H.write(jar, Buffer.concat([...locals, central, end]));
+  // 这个进程（像配置页）读了登记表、还没写回时，另一个进程（像后台探索）登记 MySQL 驱动；这个进程再把它改的写回去
+  const script = path.join(h.root, 'd3.js');
+  H.write(script, [
+    "const fs = require('fs'), { spawn } = require('child_process');",
+    'const D = require(' + JSON.stringify(path.join(h.kit, 'lib', 'drivers.js')) + ');',
+    'const SS = require(' + JSON.stringify(path.join(h.kit, 'lib', 'state-store.js')) + ');',
+    "const lock = SS.acquire(D.REGISTRY + '.lock', { waitMs: 2000 });",
+    'const stale = D.readRegistry();',
+    "const child = spawn(process.execPath, ['-e', 'require(' + JSON.stringify(" + JSON.stringify(path.join(h.kit, 'lib', 'drivers.js')) + ") + ').use(' + JSON.stringify(" + JSON.stringify(jar) + ") + \")\"], { windowsHide: true, stdio: 'ignore' });",
+    'setTimeout(() => {',
+    "  stale.dm = { jar: 'C:/x/DmJdbcDriver18.jar', from: 'manual', version: '8.1.3.140' };",
+    "  fs.writeFileSync(D.REGISTRY, JSON.stringify({ version: 2, drivers: stale, removed: {} }));",
+    '  if (lock) lock.release();',
+    "  child.on('exit', () => console.log(JSON.stringify(Object.keys(D.readRegistry()).sort())));",
+    '  if (child.exitCode !== null) console.log(JSON.stringify(Object.keys(D.readRegistry()).sort()));',
+    '}, 2500);',
+  ].join('\n') + '\n');
+  const r = H.node(h, script, [], { cwd: h.root, timeout: 60000 });
+  const keys = json(r.out) || [];
+  H.ok('两边登记的都在（达梦、MySQL）', keys.includes('dm') && keys.includes('mysql'), r.out + r.err);
+}
+
 H.done('查库、redis 的保护（D 批）');

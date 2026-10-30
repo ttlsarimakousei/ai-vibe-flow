@@ -158,6 +158,16 @@ function writeRegistry(drivers, removed) {
   fs.writeFileSync(tmp, JSON.stringify({ version: 2, note: '每种数据库可登记多个版本；jar 是默认，项目声明版本时按项目选择。', drivers, removed: keep }, null, 2) + '\n');
   try { fs.renameSync(tmp, REGISTRY); } catch (e) { fs.writeFileSync(REGISTRY, fs.readFileSync(tmp)); try { fs.unlinkSync(tmp); } catch (e2) { /* 忽略 */ } }
 }
+/**
+ * 读登记表、改、写回这一段独占着做（Codex 审核 C10）：配置页、后台探索、命令行几个进程同时登记时，以前各读各的旧表再写回，
+ * 后写的盖掉先写的，登记的版本、默认版本、"用户去掉过"的标记会丢。锁 5 秒拿不到照旧做（不能因为锁把登记卡死），记一行日志
+ */
+function locked(fn) {
+  let lock = null;
+  try { lock = require('./state-store').acquire(REGISTRY + '.lock', { waitMs: 5000 }); } catch (e) { lock = null; }
+  if (!lock) { try { require('./session').hookLog('drivers 登记表的锁 5 秒没拿到，照旧写'); } catch (e) { /* 记不了就算了 */ } }
+  try { return fn(); } finally { if (lock) lock.release(); }
+}
 const sha1 = (f) => crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex');
 
 /**
@@ -178,19 +188,22 @@ function use(jar, o) {
     if (fs.existsSync(dst) && sha1(dst) !== sha1(abs)) dst = path.join(STORE, path.basename(abs, '.jar') + '-' + sha1(abs).slice(0, 8) + '.jar');
     if (!fs.existsSync(dst)) fs.copyFileSync(abs, dst);
   }
-  const reg = readRegistry();
   const entry = { jar: dst, from: opt.from || 'manual', source: abs, version: info.version, driverClass: info.driverClass, size: info.size, java: info.java || 0, at: Date.now() };
-  const list = variants(reg[info.dialect]).filter((x) => !samePath(x.jar, dst));
-  list.push(entry);
-  const def = opt.keepDefault && reg[info.dialect] ? Object.assign({}, reg[info.dialect]) : entry;
-  reg[info.dialect] = Object.assign({}, def, { versions: list });
-  writeRegistry(reg);
+  locked(() => {
+    const reg = readRegistry();
+    const list = variants(reg[info.dialect]).filter((x) => !samePath(x.jar, dst));
+    list.push(entry);
+    const def = opt.keepDefault && reg[info.dialect] ? Object.assign({}, reg[info.dialect]) : entry;
+    reg[info.dialect] = Object.assign({}, def, { versions: list });
+    writeRegistry(reg);
+  });
   const jdk = jdkMajor();
   const warn = info.java && jdk && info.java > jdk ? '。★ 这个驱动要 Java ' + info.java + ' 以上，"本机环境"里默认的 JDK 是 ' + jdk + '：查库会加载不了它，换一个老一点的驱动，或者把默认的 JDK 换成新的' : '';
   return { ok: true, dialect: info.dialect, name: DIALECTS[info.dialect].name, jar: dst, version: info.version, java: info.java || 0, msg: DIALECTS[info.dialect].name + '的驱动登记好了：' + path.basename(dst) + (info.version ? '（' + info.version + '）' : '') + warn };
 }
 /** 不用了：从登记表里去掉，并记下"用户去掉过"。jar 留在驱动目录里不删（别的数据库没登记它、你想删就自己删） */
-function remove(dialect, jar) {
+function remove(dialect, jar) { return locked(() => removeLocked(dialect, jar)); }
+function removeLocked(dialect, jar) {
   const reg = readRegistry();
   if (!reg[dialect]) return { ok: false, msg: '这种数据库没有登记驱动：' + dialect };
   if (jar) {
