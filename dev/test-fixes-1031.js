@@ -115,5 +115,18 @@ const SRCV = FROM || H.SRC;
     H.ok('配置页接口：status().broken 写着坏的版本和上一版', !!b && b.version === '20261031.0900' && b.from === '20261028.2041', st.out + st.err);
   }
 
+  H.section('F9 就绪检查：本机环境里登记的 Maven（写的是 home）认得，PATH 里没有 mvn 也不报缺');
+  {
+    const h = H.makeHome('tfx-f9', FROM);
+    const mvnHome = path.join(h.root, 'apache-maven-3.9.9');
+    H.write(path.join(mvnHome, 'bin', process.platform === 'win32' ? 'mvn.cmd' : 'mvn'), '@echo off\n');
+    H.write(path.join(h.kit, 'local.json'), JSON.stringify({ jdks: [], mavens: [{ name: '3.9', home: mvnHome }], defaultMaven: '3.9' }));
+    const proj = H.makeRepo(path.join(h.work, 'p9'), { 'pom.xml': '<project/>\n' });
+    const code = 'process.env.PATH = ' + JSON.stringify(path.dirname(process.execPath)) + '; const R = require(' + JSON.stringify(path.join(h.kit, 'lib', 'readiness.js')) + '); console.log(JSON.stringify(R.inspect(process.argv[1]).tools));';
+    const r = H.node(h, '-e', [code, proj], { cwd: proj, timeout: 60000 });
+    let t = {}; try { t = JSON.parse(r.out.trim().split(/\r?\n/).pop()); } catch (e) { t = {}; }
+    H.ok('登记的 Maven 认得', t.Maven === true, r.out + r.err);
+  }
+
   H.done('10-31 零散修复（E、F、G、H、I、J 批）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

@@ -5,13 +5,15 @@ const path = require('path');
 const S = require('./session');
 const W = require('./workspace');
 function read(f) { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return ''; } }
+// 本机环境里登记的 JDK 写 path、Maven 写 home（配置页的字段，Codex C13）：一个函数取，以前就绪检查只认 path，登记了 Maven 还报缺
+const homeOf = (v) => String((v && (v.path || v.home)) || '');
 function executable(name, dirs) { const ext = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : ['']; return dirs.filter(Boolean).some((d) => ext.some((e) => fs.existsSync(path.join(d, name + e)))); }
 function inspect(root) {
   root = path.resolve(root); const notes = read(path.join(root, '.vibe', 'project.md')); const localText = read(path.join(S.KIT, 'local.json')); let local = {};
   try { local = JSON.parse(localText); } catch (e) { /* 缺环境设置 */ }
   const roots = S.isShell(root) ? S.nestedRepos(root) : [root]; const marks = [];
   for (const r of roots) for (const f of ['pom.xml', 'build.gradle', 'package.json', 'pyproject.toml', '.vibe/project.md']) if (fs.existsSync(path.join(r, f))) marks.push([path.relative(root, path.join(r, f)), W.hash(read(path.join(r, f)))]);
-  const paths = String(process.env.PATH || '').split(path.delimiter).concat(...['jdks', 'mavens'].map((k) => (Array.isArray(local[k]) ? local[k] : []).map((v) => path.join(v.path || '', 'bin'))));
+  const paths = String(process.env.PATH || '').split(path.delimiter).concat(...['jdks', 'mavens'].map((k) => (Array.isArray(local[k]) ? local[k] : []).map((v) => path.join(homeOf(v), 'bin'))));
   const toolStats = []; for (const d of paths.filter(Boolean)) for (const n of ['javac', 'mvn', 'node', 'python', 'gradle']) for (const ext of process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : ['']) try { const st = fs.statSync(path.join(d, n + ext)); toolStats.push([d, n + ext, st.size, st.mtimeMs]); } catch (e) { /* 不存在的工具不记为就绪 */ }
   const dependencyState = roots.map((r) => [r, fs.existsSync(path.join(r, 'node_modules')), fs.existsSync(path.join(r, 'gradlew')), fs.existsSync(path.join(r, 'gradlew.bat'))]);
   const drivers = require('./drivers').readRegistry();
@@ -20,7 +22,7 @@ function inspect(root) {
   const cached = S.readState('readiness')[S.normKey(root)]; if (cached && cached.fingerprint === fingerprint) return cached;
   const identified = [...new Set(marks.map(([f]) => /pom\.xml$/.test(f) ? 'Maven' : /build\.gradle$/.test(f) ? 'Gradle' : /package\.json$/.test(f) ? 'Node' : /pyproject\.toml$/.test(f) ? 'Python' : '').filter(Boolean))];
   const dirs = String(process.env.PATH || '').split(path.delimiter);
-  const configured = (k) => (Array.isArray(local[k]) ? local[k] : []).map((x) => path.join(x.path || '', 'bin'));
+  const configured = (k) => (Array.isArray(local[k]) ? local[k] : []).map((x) => path.join(homeOf(x), 'bin'));
   const tools = { Node: executable('node', dirs), JDK: executable('javac', configured('jdks').concat(dirs)), Maven: executable('mvn', configured('mavens').concat(dirs)), Python: executable('python', dirs) || executable('python3', dirs), Gradle: roots.some((r) => fs.existsSync(path.join(r, 'gradlew')) || fs.existsSync(path.join(r, 'gradlew.bat'))) || executable('gradle', dirs) };
   const required = [...new Set(identified.flatMap((x) => x === 'Maven' ? ['JDK', 'Maven'] : x === 'Gradle' ? ['JDK', 'Gradle'] : [x]))];
   const requested = roots.flatMap((r) => require('./drivers').projectDrivers(r));
