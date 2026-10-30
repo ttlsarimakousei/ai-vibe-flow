@@ -139,5 +139,23 @@ const SRCV = FROM || H.SRC;
     H.ok('对照：openspec list 照旧建（说明自带的 OpenSpec 在这台电脑上用得上）', fs.existsSync(path.join(p, 'openspec')), out2);
   }
 
+  H.section('H5 没跟踪的大文件（8 MB 以上）按大小和修改时间算指纹，不读内容');
+  {
+    const h = H.makeHome('tfx-h5', FROM);
+    const p = H.makeRepo(path.join(h.work, 'p5'), { 'a.js': 'x\n' });
+    const big = path.join(p, 'dump.log');
+    fs.writeFileSync(big, Buffer.alloc(9 * 1024 * 1024, 97));
+    const t = new Date(Date.now() - 3600000); fs.utimesSync(big, t, t);
+    const W = require(path.join(h.kit, 'lib', 'workspace.js'));
+    const a = W.fingerprint(p, 'code').hash;
+    const fd = fs.openSync(big, 'r+'); fs.writeSync(fd, Buffer.from('b'), 0, 1, 100); fs.closeSync(fd); fs.utimesSync(big, t, t);
+    const b = W.fingerprint(p, 'code').hash;
+    H.ok('内容变了、大小和修改时间没变：指纹不变（没读内容）', a === b);
+    fs.appendFileSync(big, 'more');
+    H.ok('大小变了：指纹跟着变', W.fingerprint(p, 'code').hash !== b);
+    H.write(path.join(p, 'b.js'), 'y\n');
+    H.ok('小文件照旧按内容算', W.fingerprint(p, 'code').hash !== b);
+  }
+
   H.done('10-31 零散修复（E、F、G、H、I、J 批）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

@@ -54,6 +54,8 @@ function fingerprintOne(dir, kind) {
       if (!checked.safe) { rows.push([n, checked.link ? '链接:' + fs.readlinkSync(f) : '范围外或特殊文件']); continue; }
       if (checked.missing) { rows.push([n, '缺失']); continue; }
       if (index.has(n) && !changed.has(n) && !progress) { rows.push([n, index.get(n)]); continue; }
+      // 大文件（8 MB 以上，多半是没忽略的日志、数据库文件、安装包）不读内容，按大小和修改时间算（审核 P18：以前整个读进来，每条命令都慢）
+      if (!progress && checked.stat && checked.stat.size > 8 * 1024 * 1024) { rows.push([n, '大文件:' + checked.stat.size + ':' + Math.floor(checked.stat.mtimeMs)]); continue; }
       let b = fs.readFileSync(f);
       if (progress) b = Buffer.from(progressText(b.toString('utf8')));
       else if (normalize && !b.includes(0)) b = Buffer.from(b.toString('utf8').replace(/\r\n/g, '\n'));
