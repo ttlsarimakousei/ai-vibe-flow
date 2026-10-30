@@ -1333,6 +1333,9 @@ public final class DbRunner {
         long t0 = System.currentTimeMillis();
         StringBuilder sb = new StringBuilder();
         sb.append("{\"ok\":true,\"mode\":\"apply\"");
+        // 进了提交这一步：这时出错，库那边可能已经提交了、只是回话丢了（连接断了、超时）。不能说"已经回滚、数据没变"，
+        // 要报 UNKNOWN_OUTCOME，让上面提示"结果不明，先查再说，不要重跑"（Codex C02）
+        boolean committing = false;
         try {
             if (!empty(countSql)) {
                 long n = -1;
@@ -1401,10 +1404,12 @@ public final class DbRunner {
                 return;
             }
             sb.append(",\"affected_rows\":").append(affected);
+            committing = true;
             conn.commit();
             sb.append(",\"committed\":true");
         } catch (SQLException e) {
             rollbackQuietly(conn);
+            if (committing) { fail("UNKNOWN_OUTCOME", "提交的时候出错了，库那边可能已经提交，也可能没有：" + e.getMessage(), e); return; }
             fail("SQL_ERROR", e.getMessage(), e);
             return;
         } catch (IOException e) {
@@ -1413,6 +1418,7 @@ public final class DbRunner {
             return;
         } catch (Throwable t) {
             rollbackQuietly(conn);
+            if (committing) { fail("UNKNOWN_OUTCOME", "提交的时候出错了，库那边可能已经提交，也可能没有：" + t.getMessage(), null); return; }
             fail("RUNNER_ERROR", String.valueOf(t.getMessage()), null);
             return;
         }
