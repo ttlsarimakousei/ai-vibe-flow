@@ -1026,8 +1026,11 @@ function routerApiIssue(cmd, ps, cwd) {
   while ((m = re.exec(text))) { const p = /^0x/i.test(m[1]) ? parseInt(m[1], 16) : parseInt(m[1], 10); if (p === port) return msg; }
   return '';
 }
+/** 某一道检查自己出错了：照常放行（硬规矩 2），但记一条问题反馈（审核 P13：以前这几处静默跳过，读令牌、改套件、提交许可这几道检查没跑也没人知道） */
+function checkFailed(what, j, e) { try { if (feedback && feedback.recordHookError) feedback.recordHookError('guard-commit（' + what + '）', j || {}, e); } catch (err) { /* 记不了就算了 */ } }
 /** 整条命令都是只读的（每一段的命令名都在只读名单里、没有往文件写的重定向、没有包着别的命令） */
-function readOnlyCommand(cmd, ps) {
+/** cwd：命令在哪个目录跑（审核 P12：HTTP 方式下 process.cwd() 是路由的数据目录，不是项目目录，脚本路径会解析错） */
+function readOnlyCommand(cmd, ps, cwd) {
   const { s, docs } = preprocess(cmd, ps);
   for (const group of splitCommand(s, ps)) {
     for (const seg of group) {
@@ -1036,7 +1039,7 @@ function readOnlyCommand(cmd, ps) {
       const ws = words(r.rest, ps);
       if (!ws.length) continue;
       const h = headOf(ws);
-      if (!READ_ONLY.has(h.name) || destructiveSeg({ ws }, h) || innerCommand(ws, h, process.cwd(), docs)) return false;
+      if (!READ_ONLY.has(h.name) || destructiveSeg({ ws }, h) || innerCommand(ws, h, cwd || process.cwd(), docs)) return false;
       if ((h.name === 'sed' || h.name === 'perl') && ws.some((w) => /^-[a-zA-Z]*i/.test(w.text))) return false;
     }
   }
@@ -1467,7 +1470,7 @@ function setBlock(st, kind, msg, target) {
   st.target = t;
 }
 /** 这条命令（连同包在里面的）有没有会把文件内容读出来的命令 */
-function hasReaderIn(cmd, ps, depth) {
+function hasReaderIn(cmd, ps, depth, cwd) {
   const { s, docs } = preprocess(cmd, ps);
   for (const group of splitCommand(s, ps)) {
     for (const seg of group) {
@@ -1475,8 +1478,8 @@ function hasReaderIn(cmd, ps, depth) {
       if (!ws.length) continue;
       const h = headOf(ws);
       if (READERS.has(h.name) || /^(cat|type)$/.test(h.name)) return true;
-      const inner = depth < 3 ? innerCommand(ws, h, process.cwd(), docs) : null;
-      if (inner && hasReaderIn(inner.cmd, inner.ps, depth + 1)) return true;
+      const inner = depth < 3 ? innerCommand(ws, h, cwd || process.cwd(), docs) : null;
+      if (inner && hasReaderIn(inner.cmd, inner.ps, depth + 1, inner.dir || cwd)) return true;
     }
   }
   return false;
@@ -1489,7 +1492,7 @@ function analyze(cmd, ps, st, cfg, depth) {
   if (publishAnywhere(cmd, st.dir)) st.publishing = true;
   const { s, docs } = preprocess(cmd, ps);
   if (st.easy === undefined) st.easy = easyListing(cmd, ps);
-  if (st.hasReader === undefined) st.hasReader = st.easy ? false : hasReaderIn(cmd, ps, 0);
+  if (st.hasReader === undefined) st.hasReader = st.easy ? false : hasReaderIn(cmd, ps, 0, st.dir);
   // 括号里的 cd 只在括号里管用；pushd / popd 按栈来
   const dirs = [];
   for (const group of splitCommand(s, ps, true)) {
@@ -1507,9 +1510,9 @@ function analyze(cmd, ps, st, cfg, depth) {
     }
     if (!st.block) { const k = killIssue(segs); if (k) setBlock(st, 'kill', k); }
     if (cfg.kitLock !== false && !st.block) { const k = kitIssue(segs, st.dir, docs); if (k) setBlock(st, 'kit', k); }
-    if (cfg.kitLock !== false && !st.block) { let k = ''; try { k = lessonIssue(segs, st.dir, docs); } catch (e) { k = ''; } if (k) setBlock(st, 'kit', k); }
+    if (cfg.kitLock !== false && !st.block) { let k = ''; try { k = lessonIssue(segs, st.dir, docs); } catch (e) { k = ''; checkFailed('改经验规则', st.j, e); } if (k) setBlock(st, 'kit', k); }
     // 令牌和模型的 key：不看"禁止改套件"那个开关，什么时候都不给读
-    if (!st.block) { let k = ''; try { k = keyFileIssue(segs, st.dir, st.hasReader, st.easy); } catch (e) { k = ''; } if (k) setBlock(st, 'kit', k); }
+    if (!st.block) { let k = ''; try { k = keyFileIssue(segs, st.dir, st.hasReader, st.easy); } catch (e) { k = ''; checkFailed('读令牌和 key', st.j, e); } if (k) setBlock(st, 'kit', k); }
     const archiveStream = segs.some(x => { const h = headOf(x.ws); return archiveExtract.isArchive(h.name, x.ws.slice(h.i + 1)); });
     for (const x of segs) {
       const ws = x.ws;
@@ -1551,7 +1554,7 @@ function analyze(cmd, ps, st, cfg, depth) {
         const p = archiveExtract.issue(head.name, ws.slice(head.i + 1), st.dir, outputs);
         if (p) setBlock(st, 'process', p.message, 'extract:' + p.key);
       }
-      if (tidy && !st.block) { let k = ''; try { k = keepIssue(x, head, st.dir, st, cfg); } catch (e) { k = ''; } if (k) setBlock(st, 'keep', k); }
+      if (tidy && !st.block) { let k = ''; try { k = keepIssue(x, head, st.dir, st, cfg); } catch (e) { k = ''; checkFailed('留过程文件', st.j, e); } if (k) setBlock(st, 'keep', k); }
       if (cfg.specGate !== false && !st.block) { const t = archiveTarget(ws, head, st.dir); if (t) { const a = archiveIssue(t, st.dir, st.j); if (a) setBlock(st, a.noBypass ? 'archive-ok' : 'archive', a.msg, 'archive:' + a.name.toLowerCase()); } }
       const g0 = parseGit(ws, st.dir);
       if (!g0) continue;
@@ -1605,7 +1608,7 @@ function analyze(cmd, ps, st, cfg, depth) {
         } catch (e) { /* 检查出错照常放行，由收工再次核对 */ }
       }
       // 按提交方式判断能不能提交（consentIssue）。不能放行
-      if (g.sub === 'commit' && !st.block && !commitAll(g.args)) { let c = ''; try { c = consentIssue(g, st, cfg, docs); } catch (e) { c = ''; } if (c) setBlock(st, 'commit-ok', c); }
+      if (g.sub === 'commit' && !st.block && !commitAll(g.args)) { let c = ''; try { c = consentIssue(g, st, cfg, docs); } catch (e) { c = ''; checkFailed('提交许可', st.j, e); } if (c) setBlock(st, 'commit-ok', c); }
       // 下面两道要去那个仓库里看：目录算不出来的不查
       if (g.dyn) continue;
       if (g.sub === 'commit' && cfg.commitCheck && !st.block && !commitAll(g.args)) { const n = newFilesIssue(g, st); if (n) setBlock(st, 'new-files', n); }
@@ -1779,7 +1782,7 @@ function check(j) {
   I.phase('命令：改套件和路由接口');
   if (cfg.kitLock !== false) {
     // disableAllHooks 会把套件的检查一起关掉：只在命令要写东西的时候拦。只读的命令（grep 排查、cat）、提交信息、文档里提到这个词不拦
-    if (/disableAllHooks/i.test(cmd) && !readOnlyCommand(cmd, ps) && (/settings[\w.-]*\.json/i.test(cmd) || /(>|\b(set-content|sc|out-file|add-content|ac|tee|tee-object)\b|sed\s+-i|writefile|write_text|\.write\s*\(|\bnode(\.exe)?\s+-e\b|\bpython3?(\.exe)?\s+-c\b)/i.test(cmd))) return counted('kit', '[vibe-kit] 不许写 disableAllHooks：它会把套件的所有检查一起关掉。钩子拦错了就把原因告诉用户，由用户来定；不要绕过。');
+    if (/disableAllHooks/i.test(cmd) && !readOnlyCommand(cmd, ps, j.cwd) && (/settings[\w.-]*\.json/i.test(cmd) || /(>|\b(set-content|sc|out-file|add-content|ac|tee|tee-object)\b|sed\s+-i|writefile|write_text|\.write\s*\(|\bnode(\.exe)?\s+-e\b|\bpython3?(\.exe)?\s+-c\b)/i.test(cmd))) return counted('kit', '[vibe-kit] 不许写 disableAllHooks：它会把套件的所有检查一起关掉。钩子拦错了就把原因告诉用户，由用户来定；不要绕过。');
     const api = routerApiIssue(cmd, ps, j.cwd);
     if (api) return counted('kit', api);
   }
