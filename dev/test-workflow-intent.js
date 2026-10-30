@@ -55,7 +55,7 @@ H.ok('本轮：原话说自测、之后提问框选审查、再答别的：审�
 H.ok('本轮：后面的提问框说先不用审查：前面的审查许可不算', !S.userSaid([H.tr.user('审一下代码'), ...answer('要审查吗？', '先不用审查')], 'review').ok);
 H.ok('本轮：提问框选了自测和审查，用户又打一句"自测"（新一轮）：审查不算', !S.userSaid([H.tr.user('改一下'), ...answer('接下来？', '自测（推荐）, 审查（推荐）'), H.tr.user('自测')], 'review').ok);
 H.ok('上一轮的审查许可不带到这一轮', !S.userSaid([H.tr.user('审一下代码'), H.tr.say('审完了'), H.tr.user('继续')], 'review').ok);
-H.ok('提交只看最后一句：原话"改完提交"、后面答了别的提问框，不算', !S.userSaid([H.tr.user('改完提交'), ...answer('发布方式？', 'A 方案')], 'commit').ok);
+H.ok('提交认本轮最后一次明确表态（10-30 起，替代"只看最后一句"）：原话"改完提交"、后面答了别的提问框，照旧算', S.userSaid([H.tr.user('改完提交'), ...answer('发布方式？', 'A 方案')], 'commit').ok);
 const p = H.makeRepo(path.join(h.work, 'project'), { 'pom.xml': '<project/>', 'openspec/changes/add-x/tasks.md': '- [ ] 1.1 修改 src/A.java；验：mvn compile\n' });
 S.setFlow({ session_id: 'negative' }, true, '提案', 'plan');
 const tf = H.transcript(path.join(h.root, 'a.jsonl'), [H.tr.user('不要执行 apply')]);
