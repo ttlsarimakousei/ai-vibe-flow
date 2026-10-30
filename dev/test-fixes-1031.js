@@ -185,6 +185,60 @@ const SRCV = FROM || H.SRC;
     H.ok('登记的 Maven 认得', t.Maven === true, r.out + r.err);
   }
 
+  H.section('G2、G3 审查：JSON 包在代码块里、前后带话也认；回的不是 JSON 再审一次；整套提案审查按提案的记录登记；有"修了"的要复审');
+  {
+    const h = H.makeHome('tfx-g', FROM, { specGate: true, commitMode: 'off', lessons: 'off', autoVerify: false, autoSeePage: false });
+    const plain = H.makeRepo(path.join(h.work, 'plain'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n' });
+    const base = H.git(plain, ['rev-parse', 'HEAD']).out.trim();
+    H.write(path.join(plain, 'a.js'), 'const a=2;\n');
+    const q = H.makeRepo(path.join(h.work, 'spec'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n',
+      'openspec/changes/add-a/proposal.md': '# add-a\n\n## Why\n要加 a\n\n## What Changes\n- 加 a\n',
+      'openspec/changes/add-a/tasks.md': '## 1. 实现\n- [ ] 1.1 加 a\n',
+      'openspec/changes/add-a/specs/a/spec.md': '## ADDED Requirements\n### Requirement: A\n系统 SHALL 有 a。\n\n#### Scenario: 有 a\n- **WHEN** 调用\n- **THEN** 返回 a\n' });
+    let mode = 'fenced'; let calls = 0;
+    const server = http.createServer((req, res) => {
+      let raw = ''; req.on('data', (c) => { raw += c; });
+      req.on('end', () => {
+        calls++;
+        const issues = mode === 'issue' ? [{ severity: 'P2', file: 'proposal.md', line: 3, problem: '为什么写得太短', evidence: 'proposal.md 第 3 行只有一句', fix: '补上' }] : [];
+        const json = JSON.stringify({ issues, summary: '审完' });
+        let text = json;
+        if (mode === 'fenced') text = '审完了，结果如下：\n```json\n' + json + '\n```\n以上。';
+        if (mode === 'garbage' && calls === 1) text = '好的，我先看一下这些文件，稍后给出结论。';
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ model: 'm', content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { output_tokens: 20 } }));
+      });
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const oldPort = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
+    try {
+      const R = require(path.join(h.kit, 'lib', 'review-runner.js'));
+      const S = require(path.join(h.kit, 'lib', 'session.js'));
+      const E = require(path.join(h.kit, 'lib', 'evidence.js'));
+      const r1 = await R.run({ cwd: plain, mode: 'code', base });
+      H.ok('G3 回的 JSON 包在 ```json 里、前后带话：照样认，审完', r1.status === 'completed', { status: r1.status, reason: r1.reason, diag: r1.diagnostics });
+      mode = 'garbage'; calls = 0;
+      const r2 = await R.run({ cwd: plain, mode: 'code', base });
+      H.ok('G3 第一次回的不是 JSON：同一批再审一次，审完', r2.status === 'completed' && calls === 2, { status: r2.status, calls, reason: r2.reason });
+      mode = 'issue';
+      const dir = path.join(q, 'openspec', 'changes', 'add-a');
+      const r3 = await R.run({ cwd: q, change: 'add-a', mode: 'proposal' });
+      const dec = path.join(h.root, 'dec.json');
+      H.write(dec, JSON.stringify({ findings: [{ id: 'r1', action: 'accepted', reason: '用户说这条不改：为什么已经写在 design 里了' }] }));
+      let res = null; let err = '';
+      try { res = R.resolve({ cwd: q, change: 'add-a', mode: 'proposal', decisions: dec }); } catch (e) { err = e.message; }
+      const recA = S.reviewRecord('proposal', dir);
+      H.ok('G2 整套提案审查的意见：按提案的记录登记，记成已处理', r3.status === 'completed' && !!res && res.status === 'resolved' && !!recA && recA.resolved === true, err || { r3: [r3.status, r3.reason, r3.skipped], res, recA });
+      const r4 = await R.run({ cwd: q, change: 'add-a', mode: 'proposal' });
+      E.recordTool({ session_id: 'g3', tool_use_id: 'g3-1', tool_name: 'Bash', cwd: q, tool_input: { command: 'npm test' }, tool_response: { stdout: '1 passing' } }, true);
+      H.write(dec, JSON.stringify({ findings: [{ id: 'r1', action: 'fixed', reason: '补了为什么，见 proposal.md 第 3 行' }] }));
+      res = null; err = '';
+      try { res = R.resolve({ cwd: q, change: 'add-a', mode: 'proposal', decisions: dec }); } catch (e) { err = e.message; }
+      const recF = S.reviewRecord('proposal', dir);
+      H.ok('G3 有"修了"的：要复审，不记成已处理', r4.status === 'completed' && !!res && res.status === 'needs_review' && !!recF && recF.resolved === false, err || { r4: r4.status, res, recF });
+    } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
+  }
+
   H.section('H4 openspec --version 只查版本：不在项目里建 openspec/');
   {
     const h = H.makeHome('tfx-h4', FROM, {}, { openspec: true });

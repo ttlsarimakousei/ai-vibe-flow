@@ -207,7 +207,15 @@ function parseReply(text, material) {
     const cut = thinking && !/^(?:end_turn|stop_sequence|tool_use)$/.test(meta.stopReason);
     fail('model-empty', cut ? '模型只输出了思考，到了输出上限还没写结论' : '未收到审查者正文', text, Object.assign(meta, { retry: cut }));
   }
-  let result; try { result = JSON.parse(body); } catch (e) { fail('model-json', '审查者正文不是有效 JSON', body); }
+  // 模型常把 JSON 包在 ```json 代码块里、前后带一句话：剥掉再解析（审核 P34：以前直接算失败、也不重试）
+  const parseLoose = (t) => {
+    try { return JSON.parse(t); } catch (e) { /* 往下试 */ }
+    const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(t); if (fence) { try { return JSON.parse(fence[1]); } catch (e) { /* 往下试 */ } }
+    const i = t.indexOf('{'); const j = t.lastIndexOf('}'); if (i >= 0 && j > i) { try { return JSON.parse(t.slice(i, j + 1)); } catch (e) { /* 不是 */ } }
+    return undefined;
+  };
+  let result = parseLoose(body);
+  if (result === undefined) fail('model-json', '审查者正文不是有效 JSON（stop_reason：' + (meta.stopReason || '没有') + '）', body, Object.assign(meta, { jsonRetry: true }));
   if (!result || !Array.isArray(result.issues) || result.issues.length > 100 || result.issues.some((x) => !x || typeof x.file !== 'string' || typeof x.problem !== 'string' || typeof x.evidence !== 'string')) fail('issue-structure', '审查问题缺少 file、problem 或 evidence', body);
   const norm = (v) => String(v).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
   const issues = [], skipped = [];
@@ -282,6 +290,12 @@ async function reviewBatch(batch, no, opts, cancelled, received, progress) {
   const out = { done: [], failed: [], issues: [], skipped: [], diagnostics: [], stat };
   const take = (items, x) => { if (x.r) { out.done.push(...items); out.issues.push(...x.r.issues); out.skipped.push(...x.r.skipped); } else { out.failed.push({ items, error: x.e }); if (x.e.diagnostic) out.diagnostics.push(Object.assign({ batch: no }, x.e.diagnostic)); } };
   let x = await once(batch, OUTPUT_TOKENS, false, '第一次');
+  // 回的不是 JSON（剥了代码块也解析不了）：原样再审一次（审核 P34：以前直接算这一批失败）
+  if (x.e && x.e.diagnostic && x.e.diagnostic.jsonRetry && !cancelled()) {
+    if (progress) progress('第 ' + no + ' 批：审查者回的不是 JSON，再审一次');
+    out.diagnostics.push(Object.assign({ batch: no, retried: true }, x.e.diagnostic));
+    x = await once(batch, OUTPUT_TOKENS, false, '回的不是 JSON，再来一次');
+  }
   if (thinkingOnly(x) && !cancelled()) {
     if (progress) progress('第 ' + no + ' 批：模型只输出了思考、到了输出上限，上限加到 ' + RETRY_TOKENS + '、要求少想直接给结论再试一次');
     out.diagnostics.push(Object.assign({ batch: no, retried: true }, x.e.diagnostic));
@@ -356,7 +370,9 @@ async function run(opts, progress) {
       const batch = material.batches[i]; result.attemptedBatches++; result.attemptedFiles = [...new Set(result.attemptedFiles.concat(batch.map((x) => x.file)))];
       S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { attemptedBatches: result.attemptedBatches, attemptedFiles: result.attemptedFiles, totalBatches: result.totalBatches }); });
       if (progress) progress('审查 ' + (i + 1) + '/' + material.batches.length + ' 批，本批 ' + new Set(batch.map((x) => x.file)).size + ' 个文件/' + batch.length + ' 个片段，已尝试 ' + result.attemptedFiles.length + ' 个文件，已覆盖 ' + result.covered.length + ' 个文件，已用 ' + Math.round((Date.now() - started) / 1000) + ' 秒（预期 ' + expectMs / 1000 + ' 秒）');
-      const out = await reviewBatch(batch, i + 1, opts, cancelled, () => result.receivedBatches++, progress);
+      // 一批里重试、拆半批会收到好几次回复：只算这一批收到过（"已收到"数的是批，和"已尝试""总批数"对得上）
+      let got = false;
+      const out = await reviewBatch(batch, i + 1, opts, cancelled, () => { if (!got) { got = true; result.receivedBatches++; } }, progress);
       stats.push(out.stat); result.diagnostics.push(...out.diagnostics);
       if (out.stat.attempts.length > 1) result.retriedBatches = (result.retriedBatches || 0) + 1;
       result.issues.push(...out.issues); result.skipped.push(...out.skipped);
@@ -402,7 +418,9 @@ function resolve(opts) {
   const pointRec = opts.point && policy.record(change.dir, opts.point);
   // 失败、部分覆盖、超时、取消的结果没有审完全部材料，处理其中的意见也不能把这个点记成已处理。
   if (pointRec && pointRec.status !== 'completed') throw new Error('审查点 ' + opts.point + ' 没有完整完成的审查结果（当前：' + (pointRec.status || '未审查') + '），不能登记处理；先重新审查这个点');
-  const r = pointRec ? Object.assign({}, pointRec, { reportFile: pointRec.report }) : S.reviewRecord('code', change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
+  // 不带审查点的整套审查：按 --mode 读提案或代码的记录（Codex C20：以前固定读代码的，整套提案审查的意见配不上报告）
+  const kind = opts.mode === 'proposal' ? 'proposal' : 'code';
+  const r = pointRec ? Object.assign({}, pointRec, { reportFile: pointRec.report }) : S.reviewRecord(kind, change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
   const report = r.reportFile ? JSON.parse(fs.readFileSync(r.reportFile, 'utf8')) : { id: r.key, fingerprint: r.fingerprint || W.fingerprint(opts.cwd, 'code').hash, issues: Array.from({ length: Number(r.issues) || 0 }, (_, i) => ({ id: 'r' + (i + 1) })) }; const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
   for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected', 'accepted'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
@@ -418,8 +436,10 @@ function resolve(opts) {
     S.updateState('review-points', o => { const rec = o[S.normKey(change.dir) + '|' + opts.point]; if (rec && rec.key === r.key) { rec.decisions = decisions.findings; rec.status = fixed ? 'needs_review' : 'resolved'; rec.resolvedFingerprint = policy.fingerprint(change.dir, opts.point); } });
     return { status: fixed ? 'needs_review' : 'resolved', count: report.issues.length };
   }
-  S.updateState('reviewed', (o) => { const rec = o[S.normKey(change.dir)]; if (rec && rec.key === r.key) { rec.resolved = true; rec.resolvedAt = Date.now(); rec.resolvedFingerprint = fingerprint; rec.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) })); } });
-  return { status: 'resolved', count: report.issues.length };
+  // 有"修了"的：和带审查点的一样要复审改过的地方，不直接算解决（审核 P34：以前有一条修了就记成已解决）
+  const fixedAny = decisions.findings.some((x) => x.action === 'fixed');
+  S.updateState(kind === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const rec = o[S.normKey(change.dir)]; if (rec && rec.key === r.key) { rec.resolved = !fixedAny; rec.needsReview = fixedAny; rec.resolvedAt = Date.now(); if (fixedAny) delete rec.resolvedFingerprint; else rec.resolvedFingerprint = fingerprint; rec.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) })); } });
+  return { status: fixedAny ? 'needs_review' : 'resolved', count: report.issues.length };
 }
 /**
  * 不走 OpenSpec 的审查（run 不带 --change，结果在 .vibe/reviews/plain/<模式>.json）登记用户的决定（#234：以前一律要变更，决定只能留在会话里）。
