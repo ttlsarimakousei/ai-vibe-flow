@@ -20,7 +20,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { readState, writeState, updateState, normKey, hookLog, listChanges, changeRoots, nestedRepos, proposalReviewed, reviewAllowed, codeReviewIssue, reviewRecord, TASK_LINE, taskKey, syncTicks, readConfig, verifyPartOf, isDeferredTask, ensureVibeIgnored, sessionHome } = require('./session');
 
-const TITLES = { hand: '留给你做的', db: '库里改过的', ask: '它想问你、没问成的', unverified: '没验证的', bypass: '放行的检查', secret: '提交里像密码的内容', decision: '它自己定的事' };
+const TITLES = { hand: '留给你做的', db: '库里改过的', ask: '它想问你、没问成的', unverified: '没验证的', bypass: '放行的检查', secret: '提交里像密码的内容', decision: '它自己定的事', docEdit: '做任务时改过的需求文档' };
 const MAX_ITEMS = 200;
 const pad = (n) => String(n).padStart(2, '0');
 const stamp = (t) => { const d = new Date(t || Date.now()); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
@@ -252,6 +252,8 @@ function build(j, cfg, mine) {
   const secrets = by('secret').map((x) => x.title + (x.detail ? '：' + x.detail : ''));
   const decisions = [];
   for (const c of changes.concat(archived)) for (const d of c.decisions || []) decisions.push('（' + c.name + '）' + d.head + (d.why ? '。起因：' + d.why : '') + (d.did ? '。改了：' + d.did : ''));
+  // 做任务时改了 design、tasks、修订记录（需求本身没变，没退出自动，用户 2026-10-30 定的）：算它自己定的事，列给用户看
+  for (const x of by('docEdit')) decisions.push(x.title + (x.times > 1 ? '（改了 ' + x.times + ' 次）' : ''));
   // 这一轮没有新定的、以前几轮定过的：说清楚，不能写成"revisions.md 里没有"（议题 #7：文件里明明有 7 条，是上一轮记的）
   const earlier = changes.filter((c) => (c.decisionsAll || 0) > (c.decisions || []).length).map((c) => c.name + ' ' + (c.decisionsAll - (c.decisions || []).length) + ' 条');
   const noDecision = earlier.length ? '这一轮没有新定的。以前几轮定过的还在各自的 revisions.md 里（起因：自动模式决定）：' + earlier.join('、') + '。' : '没有（revisions.md 里没有"起因：自动模式决定"的条目）。';

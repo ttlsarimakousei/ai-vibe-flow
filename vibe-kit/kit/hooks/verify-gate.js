@@ -577,7 +577,7 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
     if (!remaining.length) continue;
     const signature = remaining.map(t => t.text).join('\n') + policy.groups(c.dir).map(g => g.id + ':' + g.done).join('|');
     let fresh = false; updateState(j.session_id + '-auto', o => { const k = normKey(c.dir); if (o[k] !== signature) { o[k] = signature; fresh = true; } });
-    if (fresh) return ['Apply 自动模式：继续当前范围的下一项 ' + remaining[0].text + '。整组 1.x 做完先审修再进入下一组；业务疑问先 Ask，服务起停、测试执行和诊断只记本机。'];
+    if (fresh) return ['Apply 自动模式：继续当前范围的下一项 ' + remaining[0].text + '。整组 1.x 做完先审修再进入下一组；做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask；服务起停、测试执行和诊断只记本机。'];
   }
   return [];
 }

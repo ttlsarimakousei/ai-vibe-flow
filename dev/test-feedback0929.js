@@ -472,7 +472,8 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
   // 还有能做的任务：催它接着做，说的是能做的那一项，不是留给用户的那一项
   const r1 = stop(talk.concat([H.tr.say('3.1 做完了')]), '3.1 做完了');
   H.ok('还有能做的：催下一项，是 3.2', /继续当前范围的下一项 3\.2/.test(H.reasonOf(r1)));
-  H.ok('业务疑问先问，套件执行安排只记本机', /业务疑问先 Ask/.test(H.reasonOf(r1)) && /只记本机/.test(H.reasonOf(r1)));
+  // 2026-10-30 起：做法上的取舍自己定、记进 revisions.md，需求本身有疑问才问（问题表第 22 条）
+  H.ok('做法自己定、需求疑问才问，套件执行安排只记本机', /做法上的取舍自己定/.test(H.reasonOf(r1)) && /需求本身有疑问才 Ask/.test(H.reasonOf(r1)) && /只记本机/.test(H.reasonOf(r1)));
   // 3.2 做完了（验法里有一部分本次不做），只剩留给用户的 3.3
   fs.writeFileSync(tasks, fs.readFileSync(tasks, 'utf8').replace('- [ ] 3.2', '- [x] 3.2').replace('对照场景 `checklist_role_compare.json`', '对照场景 `checklist_role_compare.json` 本次不做（要先执行 3.3 备号）'));
   R.note({ session_id: sid, cwd: proj }, { kind: 'unverified', title: '任务（miping）3.2 审核接口角色', detail: '验法里写了不做：对照场景 checklist_role_compare.json 本次不做（要先执行 3.3 备号）' });

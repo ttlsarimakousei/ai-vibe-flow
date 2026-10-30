@@ -9,6 +9,19 @@ function planHash(dir) {
   return W.hash(JSON.stringify(rows));
 }
 /**
+ * 需求本身（proposal.md、specs 下的规格）的指纹。做任务时只有它变了才算"范围变了"、退回人工等用户重新说开工；
+ * design 补说明、tasks 改措辞或拆子任务、修订记录不算，照旧自动，收工报告里列出改了哪些（用户 2026-10-30 定的，问题表第 22 条：
+ * 以前改了任何一份需求文档开工范围就作废，Apply 自动中途掉回人工、每组都问）。planHash 照旧管提案审查的指纹
+ */
+function requirementHash(dir) {
+  const S = require('./session'); const rows = [];
+  for (const f of S.artifactFiles(dir)) {
+    const a = S.artifactOf(f); if (!a || (a.kind !== 'proposal' && a.kind !== 'spec')) continue;
+    try { rows.push([path.relative(dir, f), W.hash(fs.readFileSync(f, 'utf8'))]); } catch (e) { rows.push([f, '缺失']); }
+  }
+  return W.hash(JSON.stringify(rows));
+}
+/**
  * 登记开工范围。text 是用户的话（或提问框的答案）；context 是提问框的问题；
  * opts.said 是模型在用户这句话之前最后说的那段话、opts.hint 是这一步要改的文件或变更目录：
  * 用户只说"开工"、有好几个变更时（#214：两个没归档的变更，"开工"、/opsx:apply 都认不出开哪个），
@@ -30,7 +43,7 @@ function grant(j, text, context, opts) {
   const targets = named.length ? named : argued.length === 1 ? argued : asked.length === 1 ? asked : all.length === 1 ? all : touched.length === 1 ? touched : spoken.length === 1 ? spoken : hinted.length === 1 ? hinted : [];
   if (!targets.length) return refuse(j, all.length ? '有 ' + all.map((c) => c.name).slice(0, 5).join('、') + ' 几个变更，用户说开工时没点名：让用户说"开工 ' + all[0].name + '"这样带上变更名，或者在提问框的选项里写明' : '没有当前变更，按普通任务沟通', all);
   const scope = { at: Date.now(), dirs: {}, roots: [] };
-  for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
+  for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir), req: requirementHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
   const voice = j.transcript_path && S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
   const saved = S.updateState(j.session_id + '-flow', (s) => { delete s.applyRefused; s.applyScope = scope; s.waiting = ''; s.lastApplyAt = scope.at; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: scope.at }; if (voice) { s.applyVoice = S.voiceKey(voice); s.applyVoiceSchema = 2; } });
   if (!saved) return { ok: false, reason: '开工范围暂时不能保存，请重试' };
@@ -57,7 +70,11 @@ function refusal(j) {
 }
 function valid(j) {
   const S = require('./session'); const st = S.flowState(j); if (!st.applyScope) return { ok: st.stage === 'apply' };
-  for (const [dir, p] of Object.entries(st.applyScope.dirs || {})) if (!fs.existsSync(dir) || planHash(dir) !== p.hash) return { ok: false, reason: '需求、设计或任务验法已变化，先沟通新范围，再明确 apply' };
+  for (const [dir, p] of Object.entries(st.applyScope.dirs || {})) {
+    if (!fs.existsSync(dir)) return { ok: false, reason: '变更目录没了，先沟通新范围，再明确 apply' };
+    // 20261030 以前登记的范围没有 req，照旧按整套文档比
+    if (p.req ? requirementHash(dir) !== p.req : planHash(dir) !== p.hash) return { ok: false, reason: p.req ? '需求本身（proposal.md、specs 里的要求）改了，先和用户沟通新范围，再明确 apply' : '需求、设计或任务验法已变化，先沟通新范围，再明确 apply' };
+  }
   return { ok: true };
 }
 function check(j, target) {
@@ -80,8 +97,13 @@ function prepareEdit(j, target) {
     const next = input.content !== undefined ? String(input.content) : input.edits ? input.edits.reduce((s, e) => s.replace(String(e.old_string || ''), String(e.new_string || '')), old) : old.replace(String(input.old_string || ''), String(input.new_string || ''));
     ticking = S.tickedLines(old, next).length > 0;
   }
-  if (ticking || valid(j).ok && st.applyScope.dirs[S.normKey(a.dir)]) return;
+  if (ticking) return;
+  if (valid(j).ok && st.applyScope.dirs[S.normKey(a.dir)]) {
+    // 做任务时改 design、tasks、修订记录：不退出自动，收工报告里列出来（改 proposal、specs 的，改完 valid 就不过了，下一次改需求文档时退回提案阶段）
+    if (a.kind !== 'proposal' && a.kind !== 'spec') { try { require('./report').note(j, { kind: 'docEdit', title: '做任务时改了 ' + a.name + '/' + a.rel + '（需求本身没变，没退出自动）', change: a.name }); } catch (e) { /* 记不了不影响改文件 */ } }
+    return;
+  }
   S.updateState(j.session_id + '-flow', (s) => { s.stage = 'plan'; s.waiting = 'scope'; s.why = '修订提案，旧开工范围失效'; delete s.applyScope; });
   S.hookLog('范围回到提案阶段：' + a.name);
 }
-module.exports = { grant, refusal, valid, check, planHash, prepareEdit };
+module.exports = { grant, refusal, valid, check, planHash, requirementHash, prepareEdit };

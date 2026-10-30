@@ -56,7 +56,7 @@ function handle(j) {
     } catch (e) { out = null; /* 记不了不影响调技能 */ }
     return out;
   }
-  // 自动阶段仍允许 Ask 澄清，不能把业务疑问变成模型自行决定。
+  // 自动阶段仍允许 Ask 澄清需求本身的疑问。做法上的取舍按用户 2026-10-30 定的自己定、记进 revisions.md（开工、收工的提示里说，这里不拦提问框）。
   return null;
 }
 

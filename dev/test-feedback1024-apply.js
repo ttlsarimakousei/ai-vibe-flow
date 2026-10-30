@@ -97,9 +97,14 @@ H.section('旧第 2 类：提案修订后提问框选开工，改业务代码放
   S2.setFlow(j2, true, '开工', 'apply'); A.grant(j2, '开工 feat-019');
   H.write(path.join(p, 'openspec/changes/feat-019/design.md'), DESIGN + '\n- 导出放在 B.java\n');
   const code2 = (entries) => H.hook(h, 'pre-edit', { session_id: sid2, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src/A.java'), old_string: 'class A {}', new_string: 'class A { int y; }' }, transcript_path: tf(entries) });
-  const stale = code2([u0, H.tr.say('设计改好了')]);
-  H.ok('需求改了、旧开工范围失效：改代码拦下', blocked(stale) && /需求、设计或任务验法已变化/.test(H.reasonOf(stale)), H.reasonOf(stale));
-  const again = code2([u0, H.tr.say('设计改好了'), ...ask('设计改了，feat-019 能接着开工吗？', '开工')]);
+  // 2026-10-30 起（问题表第 22 条）：只补了 design，需求本身没变，开工范围照旧有效
+  const designOnly = code2([u0, H.tr.say('设计补好了')]);
+  H.ok('只补了 design：开工范围照旧，改代码放行', !blocked(designOnly), H.reasonOf(designOnly));
+  const prop = path.join(p, 'openspec/changes/feat-019/proposal.md');
+  H.write(prop, H.read(prop) + '- 还要能按日期筛选\n');
+  const stale = code2([u0, H.tr.say('需求改好了')]);
+  H.ok('需求本身改了、旧开工范围失效：改代码拦下', blocked(stale) && /需求本身/.test(H.reasonOf(stale)), H.reasonOf(stale));
+  const again = code2([u0, H.tr.say('需求改好了'), ...ask('需求改了，feat-019 能接着开工吗？', '开工')]);
   H.ok('提问框又选了开工：重新开工，改代码放行', !blocked(again), H.reasonOf(again));
 }
 H.done('1024 反馈：开工许可');

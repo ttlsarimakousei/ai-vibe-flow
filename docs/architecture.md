@@ -82,7 +82,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 |---|---|
 | 开关 | `~/.claude/vibe-kit/config.json`（放松保护的三个开关另有封条 `state/config-seal.json`） |
 | 本机环境（JDK、Maven、Tomcat） | `~/.claude/vibe-kit/local.json`，sync 后生成到全局约定的"本机环境"一节 |
-| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`（在不在流程里、写提案还是做任务）、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里 |
+| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`（在不在流程里、写提案还是做任务）、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里，可以按时间清的固定名字在 `DISPOSABLE_STATE` 里。代码里每个固定名字都要落在这两份之一（`dev/test-auto-mode-kept.js` 扫代码查）：2026-10-30 以前迁移标记 `defaults-1017-migration` 两边都不在，3 天后被删，之后每次更新都把用户的开关改回默认 |
 | 钩子流水账 | `state/hooks.log`（出问题先看它） |
 | 问题反馈 | `~/.claude/vibe-kit/feedback/`（装新版、卸载都不删），对应的议题记在 `feedback/issues.json` |
 | 安装清单 | `~/.claude/vibe-kit/installed.json`：套件往 settings.json 里加了什么，卸载时只收回这些 |
@@ -157,7 +157,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 
 `flowView` 另给 `awaitingUser`：Apply 自动开着、任务都打勾且代码审查点都过了，就是等用户按验收用例自测（2026-10-17 起不再要求有一条没勾的用户验收任务）。此时自动不再生效（`effective` 为假），但 `verify-gate` 仍为本会话跑过的那一轮交一次全自动报告；交过之后不重复交，也不覆盖已接上的最后交代。
 
-`workflow-v2-migration.json` 是一次安装迁移标记，关闭旧自动和两个新自动开关，不清理任务进度。以上两类状态在 `GLOBAL_STATE` 中保留。`<会话>-workflow-prompts.json` 只用于提示去重，随会话清理，不存放弃待办。人工模式的提示记 `{ sig: 内容指纹, turn: 用户消息编号 }`：同一个用户要求里不再问，只把指纹跟到最新；新要求时指纹变了才再问（2026-10-16）。自动模式的提示仍按"指纹 + 轮数"记。人工模式问审查、自测时，`verify-gate` 另算"改了代码、最后一次修改后还没跑过快检"，成立就在同一问里加上要不要跑快检，只在真要发提示时才去查证据。完整流程图和验收用例见 [流程与验收依据](workflow-20261014.md)。
+`workflow-v2-migration.json` 是一次安装迁移标记，关闭旧自动和两个新自动开关，不清理任务进度。`defaults-1017-migration.json` 是 1017 强制默认值的迁移标记；标记丢了、装之前的版本已经是 20261018.0051 或更新的，安装器补写标记、不再改配置。以上状态在 `GLOBAL_STATE` 中保留。开工范围（`<会话>-flow.json` 的 `applyScope`）记两个指纹：`hash` 是整套文档的（提案审查也用它），`req` 只算 proposal.md 和 specs；做任务时只有 `req` 变了才退回提案阶段，改 design、tasks 记进全自动报告（2026-10-30）。`<会话>-workflow-prompts.json` 只用于提示去重，随会话清理，不存放弃待办。人工模式的提示记 `{ sig: 内容指纹, turn: 用户消息编号 }`：同一个用户要求里不再问，只把指纹跟到最新；新要求时指纹变了才再问（2026-10-16）。自动模式的提示仍按"指纹 + 轮数"记。人工模式问审查、自测时，`verify-gate` 另算"改了代码、最后一次修改后还没跑过快检"，成立就在同一问里加上要不要跑快检，只在真要发提示时才去查证据。完整流程图和验收用例见 [流程与验收依据](workflow-20261014.md)。
 
 普通推送支持空远端及新分支（`-u` 照常放行）。放行额度按检查、目标和理由去重；重现信息另记最近版本和项目，最多保留二十条四千字补充。
 
