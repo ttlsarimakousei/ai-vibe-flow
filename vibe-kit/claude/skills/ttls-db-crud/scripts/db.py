@@ -1175,10 +1175,10 @@ def cmd_doctor(args, project_root):
 
     try:
         java = dbconf.find_java(ENV)
-        v = subprocess.run([java, "-version"], capture_output=True, **vibe.no_window())
+        v = subprocess.run([java, "-version"], capture_output=True, timeout=30, **vibe.no_window())
         ver = (v.stderr or v.stdout).decode("utf-8", "replace").splitlines()
         line(True, "java", "%s　%s" % (ver[0].strip() if ver else "", java))
-    except (dbconf.ConfError, OSError) as e:
+    except (dbconf.ConfError, OSError, subprocess.SubprocessError) as e:
         line(False, "java", str(e).splitlines()[0])
 
     cls = RUNNER_DIR / (RUNNER_CLASS + ".class")

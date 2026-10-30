@@ -190,7 +190,7 @@ const PROD_SECRET = 'Prod-绝密-0001';
   H.ok('后端：认出了工程', /- 类型：代码工程。Maven 多模块（2 个模块），Spring Boot 2\.7\.18，Java 8；能跑起来的模块：app-admin/.test(tb), tb);
   H.ok('后端：JDK 用本机环境里对得上的那个', /- 环境：JDK 用"本机环境"里的 8（不是默认的那个/.test(tb), tb);
   H.ok('后端：命令标着没跑过', /- 快检：mvn -q -o compile（没跑过）/.test(tb) && /- 全量：mvn -q -DskipTests compile（没跑过）/.test(tb), tb);
-  H.ok('后端：启动命令带模块、端口、上下文路径', /- 启动：mvn spring-boot:run -pl app-admin -am（在根目录执行），端口 8081（application-dev\.yml 里的 server\.port），上下文路径 \/admin/.test(tb), tb);
+  H.ok('后端：启动命令带模块、端口、上下文路径', /- 启动：mvn -o spring-boot:run -Dmaven.test.skip=true -pl app-admin -am（在根目录执行）（离线起不来 devserver 会自己去掉 -o 再起一次），端口 8081（application-dev\.yml 里的 server\.port），上下文路径 \/admin/.test(tb), tb);
   H.ok('后端：编码里点了那个 GBK 文件', /- 编码：UTF-8；这 1 个不是 UTF-8[^\n]*old\/Gbk\.java/.test(tb), tb);
   H.ok('后端：数据库、redis 的连接名', /- 数据库：连接 \w+（达梦，jdbc:dm:\/\/10\.0\.0\.5:5236，来自 app-admin\/src\/main\/resources\/application-dev\.yml）。[^\n]*\/ttls-db-crud[^\n]*测试、生产环境的连接没有配进来/.test(tb) && /- redis：连接 dev（10\.0\.0\.6:6379，库 1，/.test(tb), tb);
   H.ok('后端：坑里有"当前环境是 dev"', /- 坑：[^\n]*当前环境是 dev/.test(tb), tb);

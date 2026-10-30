@@ -116,4 +116,35 @@ H.section('C3 命令跑完记证据：只算命令针对的仓库；版本查询
   H.ok('PATH 不一样，环境指纹一样（命令方式和 HTTP 方式的钩子 PATH 不同）', !!o.env && o.env === o2.env, [o.env, o2.env]);
 }
 
+H.section('C5、C6 devserver：离线缺依赖去掉 -o 再起；--cwd 不在；startup.bat 那种起完就退的服务不当没人管的停掉');
+{
+  const h = H.makeHome('tds-c56', FROM);
+  const dev = path.join(h.kit, 'tools', 'devserver.js');
+  const proj = H.makeRepo(path.join(h.work, 'proj'), { 'pom.xml': '<project/>\n', '.gitignore': '.vibe/\n' });
+  // 假的 mvn：带 -o 时像 Maven 离线缺依赖那样报错退出；不带 -o 就起一个答 HTTP 的服务（端口从 PORT 拿）
+  const fake = path.join(proj, 'fake-mvn.js');
+  H.write(fake, [
+    "if (process.argv.includes('-o')) { console.log('[ERROR] Failed to execute goal on project demo: Could not resolve dependencies: Cannot access nexus (http://nexus/repo) in offline mode and the artifact com.x:parent:pom:1.0 has not been downloaded from it before.'); console.log('[INFO] BUILD FAILURE'); process.exit(1); }",
+    "require('http').createServer((q, s) => s.end('ok')).listen(Number(process.env.PORT), '127.0.0.1', () => console.log('Started Demo in 0.5 seconds'));",
+  ].join('\n') + '\n');
+  const port = 31000 + Math.floor(Math.random() * 800);
+  const s1 = H.node(h, dev, ['start', '--name', 'off', '--port', String(port), '--wait', '40', '--', 'node', fake, '-o'], { cwd: proj, timeout: 120000 });
+  H.ok('离线（-o）缺依赖：去掉 -o 再起一次，起来了', s1.code === 0 && /去掉 -o 再起一次/.test(s1.out) && /起来了/.test(s1.out), s1.out.slice(-800));
+  H.node(h, dev, ['stop', '--all'], { cwd: proj, timeout: 60000 });
+  const s2 = H.node(h, dev, ['start', '--name', 'nocwd', '--port', 'auto', '--cwd', 'no-such-dir', '--', 'node', fake], { cwd: proj, timeout: 60000 });
+  H.ok('--cwd 指的目录不在：说清楚、退出码 1、不留记录', s2.code === 1 && /运行目录不在/.test(s2.out) && !fs.existsSync(path.join(proj, '.vibe', 'run', 'nocwd.json')), s2.out.slice(-400));
+  // startup.bat 那种：一个中间进程把服务甩到后台就退（服务的父进程不在了），也没有 devserver 的记录和登记
+  const srv = path.join(proj, 'tomcat-like.js');
+  H.write(srv, "require('http').createServer((q, s) => s.end('ok')).listen(Number(process.argv[2]), '127.0.0.1');\n");
+  const p2 = port + 1;
+  const launcher = "const { spawn } = require('child_process'); spawn(process.execPath, [" + JSON.stringify(srv) + ", '" + p2 + "'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();";
+  H.node(h, '-e', [launcher], { cwd: proj, timeout: 30000 });
+  let up = false; for (let i = 0; i < 40 && !up; i++) { up = H.node(h, '-e', ["require('net').connect(" + p2 + ", '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"], { timeout: 5000 }).code === 0; if (!up) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250); }
+  const s3 = H.node(h, dev, ['start', '--name', 'mine', '--port', String(p2), '--', 'node', fake], { cwd: proj, timeout: 60000 });
+  const still = H.node(h, '-e', ["require('net').connect(" + p2 + ", '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"], { timeout: 5000 }).code === 0;
+  H.ok('起完就退的父进程（找不到 devserver 痕迹）：当用户自己起的，不停它', up && s3.code === 1 && /用户自己起的/.test(s3.out) && still, s3.out.slice(-500));
+  // 收尾：把甩到后台的那个停掉
+  H.node(h, '-e', ["const cp=require('child_process');const t=cp.execFileSync('netstat',['-ano'],{encoding:'utf8',windowsHide:true});for(const l of t.split(/\\r?\\n/)){const m=l.trim().split(/\\s+/);if(m[1]&&m[1].endsWith(':" + p2 + "')&&/LISTEN/i.test(m[3]||'')){try{process.kill(Number(m[4]))}catch(e){}}}"], { timeout: 20000 });
+}
+
 H.done('devserver 提速（C 批）');

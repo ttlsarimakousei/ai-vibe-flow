@@ -97,7 +97,10 @@ const startArgs = ['start', '--name', 'app', '--port', String(PORT), '--hot', '-
   await waitOpen(true);
   const orphan = pids();
   const o1 = tool(startArgs);
-  H.ok('起它的程序已经不在了：停掉重起', o1.code === 0 && /起它的程序已经不在了/.test(o1.out) && !alive(orphan.srv) && /^起来了：app/.test(lastLine(o1)), [o1.out, orphan]);
+  // 2026-10-31 改了（审核 P29）：起它的程序不在了、又找不到 devserver 起过它的痕迹（全机登记里没有这个端口），当成用户自己起的
+  // （双击 startup.bat 起的 Tomcat 就是这样），不停；以前直接停掉重起
+  H.ok('起它的程序已经不在了、没有 devserver 痕迹：当用户自己起的，不停它', o1.code === 1 && /用户自己起的/.test(o1.out) && alive(orphan.srv), [o1.out, orphan]);
+  for (const p of [orphan.srv, orphan.helper]) { try { process.kill(p); } catch (e) { /* 已经没了 */ } }
   tool(['stop', '--all']);
   await waitOpen(false);
   // 用户自己起的：这里拿带调试器参数的进程代替（带 -agentlib:jdwp 的一律算用户的，IDE 的调试会话不能断）

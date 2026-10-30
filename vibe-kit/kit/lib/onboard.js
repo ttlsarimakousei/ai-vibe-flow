@@ -403,7 +403,10 @@ function facts(root) {
     const sf = springFacts(runMod ? runMod.dir : root, tracked);
     if (usesBoot) {
       const port = sf.port || '8080';
-      add('启动', 'mvn spring-boot:run' + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + port + '，它认环境变量 SERVER_PORT，命令不用改');
+      // 启动快一点（问题表第 20 条、审核第五节，用户 2026-10-30 定的）：-o 不去私服查 SNAPSHOT，-Dmaven.test.skip=true 不编测试代码。
+      // 有模块依赖别的模块的 test-jar 的不能跳过测试编译；离线起不来（父 pom、内部依赖只在私服上），devserver 自己去掉 -o 再起一次
+      const testJar = [pomFile].concat(mods.map((m) => path.join(m.dir, 'pom.xml'))).some((f) => /<type>\s*test-jar\s*<\/type>|<classifier>\s*tests\s*<\/classifier>/.test(stripXmlComments(readText(f))));
+      add('启动', 'mvn -o spring-boot:run' + (testJar ? '' : ' -Dmaven.test.skip=true') + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '（离线起不来 devserver 会自己去掉 -o 再起一次）' + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + port + '，它认环境变量 SERVER_PORT，命令不用改');
       if (sf.active) notes.push('配置里写的当前环境是 ' + sf.active);
     } else if ((pom && pom.war) || mods.some((m) => m.war)) add('启动', '打成 war 放进 Tomcat，或者在 IDE 里启动' + NOT_RUN);
     else add('启动', '没认出怎么启动（不是 Spring Boot，也不是 war）：用到的时候问我');
@@ -900,12 +903,21 @@ function run(cwd, force) {
   for (const root of targetsOf(cwd)) {
     const why = force ? '手动' : due(root);
     if (!why || locked(root)) continue;
+    // 锁用 wx 建（审核 P33）：两个后台进程同时到，以前都能写下锁、都去探索；过期的、主人不在了的先删掉再抢
+    try { fs.mkdirSync(path.join(root, '.vibe'), { recursive: true }); } catch (e) { /* 建不了下面照样报错 */ }
+    const token = process.pid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    try { if (fs.existsSync(lockFile(root)) && !locked(root)) fs.unlinkSync(lockFile(root)); } catch (e) { /* 别人刚删了 */ }
+    try { fs.writeFileSync(lockFile(root), JSON.stringify({ pid: process.pid, at: Date.now(), token }), { flag: 'wx' }); } catch (e) {
+      if (e && e.code === 'EEXIST') continue;   // 别的进程刚拿到锁
+      log('探索 ' + root + ' 出错：' + ((e && e.stack) || e)); out.push({ root, error: String((e && e.message) || e) }); noteFail(root, false); continue;
+    }
     try {
-      fs.mkdirSync(path.join(root, '.vibe'), { recursive: true });
-      fs.writeFileSync(lockFile(root), JSON.stringify({ pid: process.pid, at: Date.now() }));
       out.push(explore(root, why));
       noteFail(root, true);
-    } catch (e) { log('探索 ' + root + ' 出错：' + ((e && e.stack) || e)); out.push({ root, error: String((e && e.message) || e) }); noteFail(root, false); } finally { try { fs.unlinkSync(lockFile(root)); } catch (e) { /* 没有锁 */ } }
+    } catch (e) { log('探索 ' + root + ' 出错：' + ((e && e.stack) || e)); out.push({ root, error: String((e && e.message) || e) }); noteFail(root, false); } finally {
+      // 只删自己的锁：探索太久、锁过期被别的进程接过去的，不删人家的
+      try { const l = JSON.parse(fs.readFileSync(lockFile(root), 'utf8')); if (l && l.token === token) fs.unlinkSync(lockFile(root)); } catch (e) { /* 没有锁 */ }
+    }
   }
   return out;
 }
