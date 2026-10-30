@@ -134,6 +134,20 @@ function applyNotice(cfg) {
       + '提案提交许可和 apply 开工许可分别判断；没有明确提交许可时不在开工节点补提案提交。',
   };
 }
+/**
+ * 会被拦的规矩提前说（用户 2026-10-30 定的，审核 R4、M02）：以前这些都是拦下以后才告诉模型，模型总要先被拦一次。
+ * 进写需求、做任务这两段时各送一次（每个会话每段一次，记在 <会话>-stage-rules.json），不写进每个请求都带的全局约定（硬规矩 8）
+ */
+function stageRules(j, stage) {
+  const sid = String((j && j.session_id) || '');
+  if (!sid || sid === 'unknown') return '';
+  const k = sid + '-stage-rules';
+  if (readState(k)[stage]) return '';
+  writeState(k, Object.assign({}, readState(k), { [stage]: Date.now() }));
+  const tool = (n) => 'node "' + path.join(require('../lib/session').KIT, 'tools', n).split(path.sep).join('/') + '"';
+  if (stage === 'plan') return '写需求这一段的规矩（照做就不会被拦）：需求文档一份一份写，写完一份停下给用户看，用户说了再写下一份（/opsx:continue）；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；审查带审查点：' + tool('review.js') + ' run --change <变更名> --mode proposal --point <proposal|specs|design|tasks>。';
+  return '做任务这一段的规矩（照做就不会被拦）：起服务自测走 ' + tool('devserver.js') + ' start --name <名字> --port auto -- <原来的命令>，不直接跑 mvn spring-boot:run、npm run dev、catalina；新建的文件提交前要 git add，只 add 这次改的（不用 git add -A、git add .）；命令里不串 cd，用 git -C <目录>、mvn -f <目录>/pom.xml、npm --prefix <目录>；审查带审查点：' + tool('review.js') + ' run --change <变更名> --mode code --point group-<组号>。';
+}
 function requirementHint(j, cfg) {
   const p = String(j.prompt || '').trim();
   if (!looksLikeRequirement(p)) return '';
@@ -447,11 +461,13 @@ async function handle(j) {
   try { const hh = await hookHealth(j, cfg); if (hh) lines.unshift(hh); } catch (e) { /* 自检失败不影响对话 */ }
   // 报的是做完的功能上的问题：先溯源再修（这时就不提"先探索再提案"，修 bug 不用提案）
   const th = note ? '' : traceHint(j, cfg);
+  let rhSent = false;
   if (cfg.specGate !== false && !note) {
     // 用户开口这一刻，把各个变更产物的指纹记下来：收工时比对，改了产物没在 revisions.md 记录就拦
     writeState(String(j.session_id || 'unknown') + '-artifacts', { at: Date.now(), files: snapshotArtifacts(j.cwd || process.cwd()) });
     // 过了交接线还提新需求：不再提"先探索再提案"，新需求留给新会话
     const rh = slash || anchored.overLine || th ? '' : requirementHint(j, cfg);
+    rhSent = !!rh;
     if (rh) {
       lines.push(rh);
       // 提需求的时刻：写提案时"先探索再提案"只认这之后的探索（会话里更早读过的不相干的文件不算）
@@ -470,6 +486,11 @@ async function handle(j) {
   if (oh) lines.push(oh);
   // 开工了：告诉用户这次全自动开没开（systemMessage 给人看，additionalContext 给模型）
   const notice = applyStart ? applyNotice(cfg) : null;
+  // 规矩提前说：开工时送做任务这一段的；提需求、敲 /opsx:propose、explore、new、continue 时送写需求这一段的
+  try {
+    const sr = applyStart ? stageRules(j, 'apply') : (rhSent || /^\s*\/(?:opsx:|openspec-)(?:propose|explore|new|continue)\b/i.test(String(j.prompt || ''))) ? stageRules(j, 'plan') : '';
+    if (sr) lines.push(sr);
+  } catch (e) { /* 送不了不影响开口 */ }
   if (notice) lines.unshift(notice.model);
   const text = lines.length ? '[vibe-kit 提醒] ' + lines.join('\n') + '\n' : null;
   if (notice) return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text }, systemMessage: notice.user };
