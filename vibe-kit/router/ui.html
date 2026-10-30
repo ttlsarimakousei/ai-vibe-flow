@@ -567,7 +567,7 @@
       </div>
       <div class="opt">
         <div><div class="t">检查在哪里跑</div><div class="d">套件的检查（钩子）在哪里执行。路由里跑每次几十毫秒，路由停了就查不了；用命令跑每次零点几秒，不依赖路由。"自动"：路由在用路由，不在退回命令。</div>
-          <details class="more"><summary>细节</summary><ul><li>管的是五个检查：改文件、跑命令、提问框和调技能、搜文件内容、收工检查。会话开始、你发消息时的两个一直用命令。</li><li>在路由里跑时，路由没在跑这几个检查会被跳过。所以你每次发消息会自检一次：收不到就把路由拉起来，还不行就自动切回命令方式。</li></ul></details>
+          <details class="more"><summary>细节</summary><ul><li>管的是五个检查：改文件、跑命令、提问框和调技能、搜文件内容、收工检查。会话开始、你发消息时的两个一直用命令。</li><li>在路由里跑时，路由没在跑这几个检查会被跳过。所以你每次发消息会自检一次：收不到就把路由拉起来；拉不起来、或者路由在跑却连着两轮收不到，自动切回命令方式。</li></ul></details>
           <div class="d" id="hookStatus" style="margin-top:4px"></div></div>
         <div class="ctl"><select id="k_hookTransport"><option value="auto">自动：装了路由就在路由里跑</option><option value="http">在路由里跑</option><option value="command">用命令跑</option></select></div>
       </div>

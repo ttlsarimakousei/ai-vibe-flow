@@ -393,9 +393,15 @@ async function handle(method, url, body, kitDir, ctx) {
   // 别的开关不会被页面打开时的旧值改回去。有的开关要重新生成全局约定、重新登记钩子才生效（全自动模式、钩子跑的方式、自动记忆），所以保存后同步一次
   if (method === 'POST' && url === '/api/kit/config') {
     const inc = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
-    const cur = cleanConfig(readJson(configFile, DEFAULT_CONFIG));
-    const c = cleanConfig(Object.assign({}, cur, inc), cur);
-    writeJson(configFile, c);
+    // 和钩子自检切回命令方式（lib/hook-health.js）用同一把锁：两边同时写会互相盖掉。拿不到锁照样写（老版本的套件没有 state-store）
+    let lock = null;
+    try { lock = require(path.join(kitDir, 'lib', 'state-store.js')).acquire(configFile + '.lock', { waitMs: 3000 }); } catch (e) { lock = null; }
+    let cur, c;
+    try {
+      cur = cleanConfig(readJson(configFile, DEFAULT_CONFIG));
+      c = cleanConfig(Object.assign({}, cur, inc), cur);
+      writeJson(configFile, c);
+    } finally { if (lock) lock.release(); }
     // 封条：三个放松保护的开关（关掉禁改、自动放行、全自动模式）只认这里和安装器改的，钩子拿它对照（见套件 lib/session.js 的 readConfig）
     try { fs.mkdirSync(path.join(kitDir, 'state'), { recursive: true }); fs.writeFileSync(path.join(kitDir, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass, autoMode: c.autoApply === true, autoApply: c.autoApply === true, autoRequirements: c.autoRequirements === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
     auditLog(kitDir, cur, c);

@@ -6,8 +6,9 @@
  * 就这样悄悄失效了。所以用户每次开口时（task-anchor，命令方式，一定会跑）查一下：
  *   上一轮改过文件或跑过命令，路由却没记到这个会话的钩子调用 →
  *     钩子登记的端口和路由的端口对不上：重新登记
- *     路由没在跑：在后台拉起来
- *     路由在跑也收不到：切回命令方式（config.json 的 hookTransport 改成 command，重新登记钩子）
+ *     路由没在跑：在后台拉起来，等端口真的通了才算；拉不起来就切回命令方式
+ *     路由在跑也收不到：第一轮重新登记，连着两轮收不到再切回命令方式（config.json 的 hookTransport 改成 command，重新登记钩子；
+ *     config.json 读不懂就不写，免得把用户的开关写没了）
  *   并告诉模型：上一轮的改动没经过检查，自己核对一遍。
  */
 const fs = require('fs');
@@ -72,6 +73,37 @@ function portOpen(port, ms) {
   });
 }
 const AFTERMATH = '上一轮的改动没经过套件的检查：自己核对一遍——改过的文件中文有没有写坏（GBK 的老文件尤其要看），有没有用 git add -A、git add .、git commit -a，改了代码有没有跑过验证。';
+const HAND_SWITCH = '请用户把 ~/.claude/vibe-kit/config.json 里的 hookTransport 改成 "command"，再运行 node ~/.claude/vibe-kit/install.js --sync';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 切回命令方式。config.json 读得懂才改：以前读不懂就拿空对象写回去，用户的开关（两个自动模式、提交方式……）全没了（审核 P11）。
+ * 和配置页保存用同一把锁（config.json.lock），免得两边同时写、互相盖掉
+ */
+function switchToCommand() {
+  const cfgFile = path.join(KIT, 'config.json');
+  const store = require('./state-store');
+  const lock = store.acquire(cfgFile + '.lock', { waitMs: 2000 });
+  if (!lock) return { ok: false, why: 'config.json 正被别的程序写' };
+  try {
+    let cur = {};
+    if (fs.existsSync(cfgFile)) {
+      let t = fs.readFileSync(cfgFile, 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
+      try { cur = JSON.parse(t); } catch (e) { cur = null; }
+      if (!cur || typeof cur !== 'object' || Array.isArray(cur)) return { ok: false, why: 'config.json 读不懂，没敢改' };
+    }
+    cur.hookTransport = 'command';
+    if (!store.atomicText(cfgFile, JSON.stringify(cur, null, 2) + '\n')) return { ok: false, why: '写不进 config.json' };
+  } catch (e) { return { ok: false, why: String((e && e.message) || e) }; }
+  finally { lock.release(); }
+  return resync() ? { ok: true, why: '' } : { ok: false, why: '重新登记钩子没成功' };
+}
+/** 这个会话连着几轮没收到钩子调用（收到了就清零）。只记次数，清了也就是从头数 */
+function misses(S, sid, bump) {
+  let n = 0;
+  try { S.updateState('hook-miss', (o) => { if (bump) o[sid] = { n: ((o[sid] && o[sid].n) || 0) + 1, at: Date.now() }; else delete o[sid]; n = bump ? o[sid].n : 0; }); } catch (e) { n = bump ? 1 : 0; }
+  return n;
+}
 
 /**
  * 用户开口时的自检。j 是 UserPromptSubmit 的输入。返回要带给模型的话，没事返回空串。
@@ -81,7 +113,8 @@ async function check(j) {
   const s = readSettings();
   if (!ourHooks(s).some((h) => h.kind === 'http')) return '';
   if (!j || !j.transcript_path || !j.session_id) return '';
-  const { tailEntries, isUserTurn, textOf, toolCalls, toolResults, hookLog } = require('./session');
+  const S = require('./session');
+  const { tailEntries, isUserTurn, textOf, toolCalls, toolResults, hookLog } = S;
   const entries = tailEntries(j.transcript_path, 300000);
   // 上一轮：最后一条用户消息（不是现在这一条）之后的工具调用
   let start = -1;
@@ -105,7 +138,7 @@ async function check(j) {
   if (settingsAt > firstAt - 2000) return '';
   const stats = readStats();
   const seen = Number((stats.sessions || {})[j.session_id]) || 0;
-  if (seen >= firstAt - 5000) return '';
+  if (seen >= firstAt - 5000) { if ((S.readState('hook-miss')[j.session_id] || {}).n) misses(S, j.session_id, false); return ''; }
 
   // 上一轮的检查没生效。看是哪种情况
   const svcFile = path.join(KIT, 'router', 'service.js');
@@ -119,25 +152,27 @@ async function check(j) {
     return '[vibe-kit 自检] 钩子登记的端口（' + ports.join('、') + '）和模型路由的端口（' + port + '）对不上，上一轮改文件、跑命令的检查都没生效；' + (ok ? '已经重新登记。' : '重新登记没成功，请用户在配置页"套件开关"里把钩子运行方式改成"命令"。') + AFTERMATH;
   }
   if (!(await portOpen(port, 400))) {
-    let started = false;
-    try { if (svc && typeof svc.ensureRunning === 'function') { await svc.ensureRunning(); started = true; } } catch (e) { started = false; }
-    hookLog('hook-health router down port=' + port + ' restarted=' + started);
-    return '[vibe-kit 自检] 模型路由刚才没在跑，上一轮改文件、跑命令的检查（它们在路由里跑）都没生效；' + (started ? '已经在后台把路由拉起来了。' : '拉不起来，请用户看一下路由（配置页 http://127.0.0.1:' + port + '/ui），或者在"套件开关"里把钩子运行方式改成"命令"。') + AFTERMATH;
+    // ensureRunning 不抛错：起不来时返回 absent / error。以前只要它没抛错就当拉起来了，新版路由一启动就崩时 HTTP 钩子一直放行（审核 P36）
+    let how = 'error';
+    try { if (svc && typeof svc.ensureRunning === 'function') how = await svc.ensureRunning(); } catch (e) { how = 'error'; }
+    let up = false;
+    if (how === 'started' || how === 'running') for (let i = 0; i < 10 && !up; i++) { up = await portOpen(port, 300); if (!up) await sleep(300); }
+    hookLog('hook-health router down port=' + port + ' ensure=' + how + ' up=' + up);
+    if (up) return '[vibe-kit 自检] 模型路由刚才没在跑，上一轮改文件、跑命令的检查（它们在路由里跑）都没生效；已经在后台把路由拉起来了。' + AFTERMATH;
+    const sw = switchToCommand();
+    hookLog('hook-health router not up, switch to command ok=' + sw.ok + (sw.why ? ' ' + sw.why : ''));
+    return '[vibe-kit 自检] 模型路由没在跑、也拉不起来，上一轮改文件、跑命令的检查（它们在路由里跑）都没生效；' + (sw.ok ? '已经把钩子切回命令方式（每次检查慢零点几秒，但不依赖路由）。路由好了以后，用户可以在配置页"套件开关"里改回来。' : '切回命令方式也没成功（' + sw.why + '），' + HAND_SWITCH + '。') + AFTERMATH;
   }
-  // 路由在跑，钩子却没到：切回命令方式，不依赖路由
-  let switched = false;
-  try {
-    const cfgFile = path.join(KIT, 'config.json');
-    let cur = {};
-    try { let t = fs.readFileSync(cfgFile, 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); cur = JSON.parse(t) || {}; } catch (e) { cur = {}; }
-    cur.hookTransport = 'command';
-    const tmp = cfgFile + '.' + process.pid + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(cur, null, 2) + '\n');
-    fs.renameSync(tmp, cfgFile);
-    switched = resync();
-  } catch (e) { switched = false; }
-  hookLog('hook-health no calls while router up port=' + port + ' switched=' + switched);
-  return '[vibe-kit 自检] 模型路由在跑，但上一轮改文件、跑命令时它没收到钩子调用，检查没生效；' + (switched ? '已经把钩子切回命令方式（每次检查慢零点几秒，但不依赖路由）。用户可以在配置页"套件开关"里看到、改回来。' : '切回命令方式没成功，请用户在配置页"套件开关"里把钩子运行方式改成"命令"。') + AFTERMATH;
+  // 路由在跑，钩子却没到：第一轮先重新登记（装新版、改端口之后常见），连着两轮都没到再切回命令方式，不依赖路由
+  const n = misses(S, j.session_id, true);
+  if (n < 2) {
+    const ok = resync();
+    hookLog('hook-health no calls while router up port=' + port + ' resync=' + ok + ' miss=' + n);
+    return '[vibe-kit 自检] 模型路由在跑，但上一轮改文件、跑命令时它没收到钩子调用，检查没生效；' + (ok ? '已经重新登记钩子，下一轮还收不到就切回命令方式。' : '重新登记没成功，下一轮还收不到就切回命令方式。') + AFTERMATH;
+  }
+  const sw = switchToCommand();
+  hookLog('hook-health no calls while router up port=' + port + ' miss=' + n + ' switched=' + sw.ok + (sw.why ? ' ' + sw.why : ''));
+  return '[vibe-kit 自检] 模型路由在跑，但连着两轮都没收到钩子调用，检查没生效；' + (sw.ok ? '已经把钩子切回命令方式（每次检查慢零点几秒，但不依赖路由）。用户可以在配置页"套件开关"里看到、改回来。' : '切回命令方式没成功（' + sw.why + '），请用户在配置页"套件开关"里把钩子运行方式改成"命令"。') + AFTERMATH;
 }
 
-module.exports = { check, ourHooks, isOurHttpHook, registeredTransport, registeredHookPorts, httpRegistered, HOOK_URL };
+module.exports = { check, switchToCommand, ourHooks, isOurHttpHook, registeredTransport, registeredHookPorts, httpRegistered, HOOK_URL };
