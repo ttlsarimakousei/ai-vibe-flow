@@ -1435,12 +1435,16 @@ function consentIssue(g, st, cfg, docs) {
   const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
   if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
   const rounds = syncReviewRounds(es, syncReviews(es, st.cwd0));
-  const open = current.some(c => P.points(c.dir, 'code').some(p => { const r = P.record(c.dir, p); return r.rounds && !P.settled(c.dir, p); })) || current.some(c => { const r = readState('review-rounds')['code|' + normKey(c.dir)]; return r && r.pendingFix && !r.done; });
+  // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、到了自动审查上限的不算，以前它们一直挡着，自动提交就永远提交不了
+  const open = current.some(c => P.points(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg))) || current.some(c => { const r = readState('review-rounds')['code|' + normKey(c.dir)]; return r && r.pendingFix && !r.done; });
   if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
   if (S.pendingReviewsIn(toolCalls(es, 0), toolResults(es), current, S.taskNotes(es)).length) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
   const since = require('./verify-gate').lastCommitAt(root);
   const reviewReady = rounds.some((x) => x.key.startsWith('code|') && current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && (x.rec.done || (!cfg.reviewLoop && x.fixed)) && x.rec.at > since);
-  const ready = reviewReady || current.some((c) => Object.values(S.syncTicks(c.dir)).some((tick) => tick > since));
+  // 任务都勾完了（等用户验收、用户报了问题在改）：改完一处就算做完一件事（问题表第 25 条，2026-10-31）。
+  // 以前只认"上次提交之后有新勾的任务或刚收尾的审查"，任务全勾完以后改 bug 永远凑不出来，提交方式选了自动也一直攒着
+  const allTicked = current.some((c) => { try { return require('../lib/task-types').automatedLeft(c.dir).length === 0; } catch (e) { return false; } });
+  const ready = reviewReady || allTicked || current.some((c) => Object.values(S.syncTicks(c.dir)).some((tick) => tick > since));
   if (!ready) return '[vibe-kit] 提交方式是"自动"，但还没做完一件事：上次提交之后还没有新勾完的任务，也没有刚收尾的审查修复。做完、勾上再提交。';
   return '';
 }
