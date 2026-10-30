@@ -276,6 +276,11 @@ function answerSays(x, topic, g) {
   const asked = topic === 'push' ? /推送|\bpush\b/i.test(x.q) : g.yes.test(x.q) || intent.has(x.q, topic);
   if (intent.explicit(a, topic)) return 'yes';
   if (WIDE.includes(topic)) {
+    // 审查意见那一问（"第 1 条意见改不改？"）：答"不改"是这条意见不改，不是不审——以前把审查许可作废了（审核第四节第 3 条）；
+    // 答"改"就算准了这一点改完的自测、复验，不再另问（第 4 条，用户 2026-10-30 定的）
+    const finding = /(?:意见|问题|第\s*\d+\s*条|这一?条)/.test(x.q);
+    if (finding && topic === 'review' && /^不改/.test(a.trim())) return '';
+    if (finding && topic === 'test' && /^改(?!天|日|成|为)/.test(a.trim())) return 'yes';
     if (intent.mentions(a, topic) && !intent.denied(a, topic) && !(g.no && g.no.test(a))) return 'yes';
     if (asked && !ANSWER_NO.test(a) && (YES_SHORT.test(a) || (ANSWER_DO[topic] && ANSWER_DO[topic].test(a)))) return 'yes';
     if (asked && (ANSWER_NO.test(a) || (ANSWER_DECLINE[topic] && ANSWER_DECLINE[topic].test(a)))) return 'no';

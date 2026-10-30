@@ -230,11 +230,13 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
       askOnce(j, key(dir, point), fingerprint(dir, point), turn, '');
       continue;
     }
+    // 代码审查点：这一轮用户已经说了审查、自测，收工不再提示去问（审核第四节第 2 条）；没做的由用户的原话管，不靠这里催
+    if (!cfg.autoMode && mode === 'code' && S.userSaid(entriesOf(j), 'review').ok && S.userSaid(entriesOf(j), 'test').ok) continue;
     if (!cfg.autoMode) {
       // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
       const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).replace(/\\/g, '/');
       const where = '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '') + ' 的 ' + point;
-      const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再逐条 Ask：改（推荐）/不改/自行输入；改完的复验：用户这一轮已经要求过的直接做，没要求过的先问。';
+      const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再用一个提问框逐条选（一条一个问题，一框最多 4 条，多了分几框）：改（推荐）/不改/自行输入；用户选了"改"的，改完直接复验，不再问；没选"改"的复验，这一轮用户已经要求过的直接做，没要求过的先问。';
       // 需求文档一份一份来（用户 2026-10-17 定的）：写完一份停下给用户看，用户选了才写下一份
       const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => mode === 'code'
         ? where + ' 已完成。用 Ask 问是否' + quick() + '审查、是否按验收用例自测，用户已明确要求的直接执行。' + after

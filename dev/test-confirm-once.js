@@ -99,6 +99,27 @@ H.section('A8 人工模式改完代码：问一次审查、自测，答了不用
   H.ok('下一轮又改了代码：这个会话里不再问', !/询问是否/.test(s3), s3);
 }
 
+H.section('A9 审查意见：答"不改"不作废审查许可；答"改"算准了复验；这一轮说过审查、自测的，收工不再提示去问');
+{
+  const h = H.makeHome('tco-a9', FROM, QUIET);
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  const F = require(path.join(h.kit, 'lib', 'flow-policy.js'));
+  let n = 0;
+  const es = (entries) => S.tailEntries(H.transcript(path.join(h.root, 'a9-' + (++n) + '.jsonl'), entries), 3000000);
+  const r1 = S.userSaid(es([H.tr.user('审一下 feat-019 的代码'), H.tr.say('审完了，有 2 条'), ...ask('审查意见第 1 条：日志里打了手机号，改不改？', '不改')]), 'review');
+  H.ok('对一条审查意见答"不改"：审查许可照旧有效', r1.ok, r1);
+  const r2 = S.userSaid(es([H.tr.user('审一下 feat-019 的代码'), H.tr.say('审完了'), ...ask('第 1 条意见：空指针，改不改？', '改（推荐）')]), 'test');
+  H.ok('对一条审查意见答"改"：改完的自测、复验算准了', r2.ok, r2);
+  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE, { 'openspec/changes/feat-019/tasks.md': '## 1. 导出\n\n- [x] 1.1 改 src/A.java：加导出\n' }));
+  const dir = path.join(p, 'openspec', 'changes', 'feat-019');
+  const stop = (sid, entries) => { H.inFlow(h, sid, [dir], true, 'apply'); return (F.stop({ session_id: sid, cwd: p, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }, [dir], true, 1, null, Date.now()) || []).join('\n'); };
+  const edit = H.tr.ran('Edit', { file_path: path.join(p, 'src', 'A.java'), old_string: 'a', new_string: 'b' }, 'ok');
+  const s1 = stop('s-a9-1', [H.tr.user('做 1.1'), edit, H.tr.say('1.1 做完了')]);
+  H.ok('没说审查、自测：第 1 组做完，提示去问', /Ask 问是否/.test(s1), s1);
+  const s2 = stop('s-a9-2', [H.tr.user('做 1.1，做完审查并自测'), edit, H.tr.say('1.1 做完了')]);
+  H.ok('这一轮说了审查、自测：收工不再提示去问', !/Ask 问是否/.test(s2), s2);
+}
+
 H.section('A12 /opsx:propose 装好后先说套件的规矩：只写 proposal 就停，一份一份来（不照原文一步全写）');
 {
   const h = H.makeHome('tco-a12', FROM, QUIET, { openspec: true });
