@@ -395,14 +395,29 @@ function pushAnywhere(cmd, ps) {
   // 引号里的换成一个占位词：提交信息里写的"git push"不算，git -C "$d" push 的目录参数还在
   const bare = s.replace(/"(?:[^"\\`]|\\.|`.)*"|'[^']*'/g, ' Q ');
   if (PUSH_WORD.test(bare)) return true;
-  // 双引号里的命令替换照样会执行：bash 的 $(…) 和 `…`，PowerShell 的 $(…)。以前整段引号当成文字，
-  // echo "r $(git push)"、x=`git push` 都放行了（审核 P08）。单引号里的不展开，不算
-  for (const m of s.matchAll(/"((?:[^"\\`]|\\.|`.)*)"/g)) {
-    for (const sub of m[1].matchAll(/\$\(((?:[^()]|\([^()]*\))*)\)/g)) if (PUSH_WORD.test(sub[1])) return true;
-    if (!ps) for (const sub of m[1].matchAll(/`([^`]*)`/g)) if (PUSH_WORD.test(sub[1])) return true;
-  }
-  if (!ps) for (const sub of bare.matchAll(/`([^`]*)`/g)) if (PUSH_WORD.test(sub[1])) return true;
+  // 命令替换照样会执行：bash 的 $(…) 和 `…`，PowerShell 的 $(…)，在双引号里也一样。以前整段引号当成文字，
+  // echo "r $(git push)"、x=`git push` 都放行了（审核 P08）；里面再套引号（echo "$(git -C "$d" push)"）也要认（复审 S2）。
+  // 按括号配对取出每一段替换的内容，当一条命令再查一遍
+  for (const body of substitutions(s, ps)) if (pushAnywhere(body, ps)) return true;
   return false;
+}
+/** 命令里每一段命令替换的内容：$( … ) 按括号配对（跳过里面引号中的括号），bash 还有成对的反引号 */
+function substitutions(s, ps) {
+  const out = [];
+  for (let i = 0; i < s.length - 1; i++) {
+    if (s[i] !== '$' || s[i + 1] !== '(') continue;
+    let depth = 0; let q = ''; let j = i + 1;
+    for (; j < s.length; j++) {
+      const ch = s[j];
+      if (q) { if (ch === q) q = ''; else if (!ps && ch === '\\' && q === '"') j++; continue; }
+      if (ch === '"' || ch === "'") { q = ch; continue; }
+      if (ch === '(') depth++;
+      else if (ch === ')' && --depth === 0) break;
+    }
+    if (depth === 0 && j < s.length) out.push(s.slice(i + 2, j));
+  }
+  if (!ps) for (const m of s.matchAll(/`([^`]*)`/g)) out.push(m[1]);
+  return out;
 }
 /**
  * 跑套件的发布脚本（安装包里的 publish.js、"发布到 GitLab"那个 bat）：它会把安装包 git push 到团队的仓库，
@@ -1815,7 +1830,8 @@ function check(j) {
   }
   if (pushConfirm) st.push = '[vibe-kit] 这条 git push 带了强推、删远端分支这类参数，或者推到的不是当前分支跟踪的那个远端分支，要你确认。';
   const pushRoots = pushes.length ? [...new Set(pushes.map((g) => repoRoot(g.dir) || g.dir))] : [repoRoot(st.dir) || st.dir];
-  const pushApproved = !!st.push && !st.publishing && pushSaid.ok && !pushConfirm && pushRoots.every((r) => require('../lib/permissions').allow(j, 'push', r, j.tool_use_id).ok);
+  // 只在引号、命令替换里认出来的 push（拆不出是哪条 git push）：查不了推到哪、是不是强推，用户说过推送也要确认（复审 S1）
+  const pushApproved = !!st.push && !st.publishing && pushSaid.ok && !pushConfirm && pushes.length > 0 && pushRoots.every((r) => require('../lib/permissions').allow(j, 'push', r, j.tool_use_id).ok);
   if (cfg.autoMode) {
     if (st.push && !pushApproved) {
       hookLog('guard-commit 全自动模式不 push：' + cmd.slice(0, 80));
@@ -1855,4 +1871,5 @@ function handle(j) {
 }
 
 module.exports = { handle, preprocess, stripComments, splitCommand, words, scanRedirects, parseGit, messageOf };
-if (require.main === module) cli(handle);
+// 命令方式下出错、超出 12 秒预算：别的检查照旧放行，像推送的不放行（push 只留钩子这一道确认，复审 S3）
+if (require.main === module) cli(handle, { onError: (j, e) => require('../lib/session').pushFailOut(j, (e && e.message) || e) });

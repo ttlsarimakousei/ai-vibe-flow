@@ -45,7 +45,11 @@ if (require.main === module) {
   };
   const fail = (j, e) => {
     try { require('../lib/feedback').recordHookError('guard-push', j, e); } catch (x) { /* 记不了也照样问 */ }
-    finish(ask(String((e && e.message) || e).split('\n')[0].slice(0, 120)));
+    const why = String((e && e.message) || e).split('\n')[0].slice(0, 120);
+    // 全自动模式没人点确认框：拦下、留给用户（复审 S7）；session.js 也载不进来时直接问
+    let out = null;
+    try { out = require('../lib/session').pushFailOut(j, why); } catch (x) { out = null; }
+    finish(out || ask(why));
   };
   // 不走 session.js 的 cli()：那里出错、超出预算一律放行，这里出错要问
   process.stdin.setEncoding('utf8');

@@ -999,18 +999,29 @@ function hookRequestRejected(req) {
   for (const k of ['sec-fetch-site', 'sec-fetch-dest', 'sec-fetch-user']) if (h[k] !== undefined) return '请求带了 ' + k + ' 头（是浏览器发的）';
   return '';
 }
+/**
+ * 钩子宿主载不进来、出错时回什么：别的检查当放行；跑命令的检查（guard-commit）里像推送的不放行——push 只留钩子这一道确认
+ * （用户 2026-10-30 定的，复审 S4）。人工要确认、全自动拦下（套件的 pushFailOut）；套件的库也载不进来时直接问
+ */
+function hookFailOut(name, input, why) {
+  if (name !== 'guard-commit') return {};
+  const cmd = String((input && input.tool_input && input.tool_input.command) || '');
+  if (!/push|publish|发布到/i.test(cmd)) return {};
+  try { const out = require(path.join(KIT_DIR, 'lib', 'session.js')).pushFailOut(input, why); if (out) return out; } catch (e) { /* 套件的库也坏了 */ }
+  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: '[vibe-kit] 推送的检查这次没跑成（' + String(why || '').slice(0, 120) + '），推到远端要你确认。' } };
+}
 async function handleHook(req, res, name) {
   const why = hookRequestRejected(req);
   if (why) { req.resume(); return json(res, 403, { error: why }); }
   let input;
   try { input = JSON.parse((await readBody(req, 64 * 1024 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, 200, {}); }
   const host = getHookHost();
-  if (!host) return json(res, 200, {});
+  if (!host) return json(res, 200, hookFailOut(name, input, '路由里的检查载不进来'));
   try {
     const r = await host.run(name, input && typeof input === 'object' ? input : {});
     if (r.status === 404) return json(res, 404, { error: '没有这个钩子：' + name });
     return json(res, 200, r.out == null ? {} : r.out);
-  } catch (e) { log('钩子 ' + name + ' 出错（这次当放行）：' + e.message); return json(res, 200, {}); }
+  } catch (e) { log('钩子 ' + name + ' 出错（这次当放行）：' + e.message); return json(res, 200, hookFailOut(name, input, e.message)); }
 }
 /**
  * settings.json 里登记的 HTTP 钩子打的端口和路由现在的端口对不上（手改了配置里的端口）：重新登记一次，不然钩子全打空、一律放行。

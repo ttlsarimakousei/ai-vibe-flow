@@ -172,7 +172,12 @@ function createHost(opts) {
       record(name, input, m, Date.now() - started);
       if (m.ok) return { status: 200, out: m.out };
       noteFailure(name, input, m.error);
-      if (name === 'guard-commit' && pushLike(input)) return { status: 200, out: pushAsk(m.error) };
+      if (name === 'guard-commit' && pushLike(input)) {
+        // 全自动模式没人点确认框：拦下、留给用户（复审 S7）；session.js 也载不进来时退回直接问
+        let out = null;
+        try { out = require(path.join(kitDir, 'lib', 'session.js')).pushFailOut(input, m.error); } catch (e) { out = null; }
+        return { status: 200, out: out || pushAsk(m.error) };
+      }
       return { status: 200, out: null };
     });
   }

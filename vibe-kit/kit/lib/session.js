@@ -530,21 +530,41 @@ function blockOut(event, reason) {
 function askOut(reason) {
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: reason } };
 }
-/** 作为命令运行：读标准输入 → handle → 打印结果 → 退出码 0。任何异常都放行，但记进问题反馈（放行了用户看不到，只有那里有） */
-function cli(handle) {
+/**
+ * 跑命令的检查没跑成（出错、超出预算、路由里的检查载不进来）时，命令里像推送的怎么回（用户 2026-10-30 定的：push 只留钩子这一道确认，
+ * 是"钩子出错一律放行"的例外）：人工模式要用户确认；全自动模式没人点确认框，拦下、留给用户（和 guard-commit 全自动时不 push 一样）。
+ * 不像推送的返回 null，照旧放行。字样和登记 guard-push 的 if 条件一致
+ */
+const PUSH_LIKE = /push|publish|发布到/i;
+function pushFailOut(j, why) {
+  const cmd = String((j && j.tool_input && j.tool_input.command) || '');
+  if (!PUSH_LIKE.test(cmd)) return null;
+  const reason = '[vibe-kit] 推送的检查这次没跑成（' + String(why || '').split('\n')[0].slice(0, 120) + '）';
+  let auto = false;
+  try { auto = !!readConfigFor(j).autoMode; } catch (e) { auto = false; }
+  if (auto) return blockOut('PreToolUse', reason + '。全自动模式：推送留给用户，这一步不要做，写进最后的交代，接着做别的。');
+  return askOut(reason + '，推到远端要你确认。');
+}
+/**
+ * 作为命令运行：读标准输入 → handle → 打印结果 → 退出码 0。任何异常都放行，但记进问题反馈（放行了用户看不到，只有那里有）。
+ * opts.onError(j, e)：出错、超出预算时要回的话（跑命令的检查用它：像推送的不放行，见 pushFailOut）
+ */
+function cli(handle, opts) {
   let raw = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', (c) => { raw += c; });
   process.stdin.on('end', () => {
     let j = {};
     try { j = JSON.parse(raw || '{}'); } catch (e) { process.exit(0); }
-    Promise.resolve().then(() => require('./invocation').run(() => handle(j), { budgetMs: 12000 })).then((out) => {
+    const print = (out) => {
       if (out == null || out === '') return;
       const text = typeof out === 'string' ? out : JSON.stringify(out);
       try { fs.writeSync(1, text); } catch (e) { process.stdout.write(text); }
-    }).catch((e) => {
+    };
+    Promise.resolve().then(() => require('./invocation').run(() => handle(j), { budgetMs: 12000 })).then(print).catch((e) => {
       // 判断不了就放行
       try { require('./feedback').recordHookError(path.basename(process.argv[1] || 'hook', '.js'), j, e); } catch (err) { /* 记不了就算了 */ }
+      try { if (opts && typeof opts.onError === 'function') print(opts.onError(j, e)); } catch (err) { /* 替代输出也出错：放行 */ }
     }).then(() => process.exit(0));
   });
 }
@@ -2471,7 +2491,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE, DISPOSABLE_STATE,
+module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, pushFailOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE, DISPOSABLE_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,
