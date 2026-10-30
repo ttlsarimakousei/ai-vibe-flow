@@ -79,7 +79,7 @@
 4. **用户目录按代码自己的位置推**（`__dirname`），不靠 `os.homedir()` 和环境变量。测试用的覆盖变量单独命名（`VIBE_KIT_DIR`、`VIBE_KIT_STARTUP_DIR` 这类）。
 5. **后台起进程一律 `windowsHide: true`**，输出走管道或 ignore，不在桌面弹窗口。
 6. **令牌和模型的 key 模型读不到**：`secrets.json`、`router-data/` 由权限规则、`guard-read`、`guard-commit` 三道挡着。不许打印、不许写进日志和问题反馈、不许打进安装包。状态栏不读 `router-data/config.json`。令牌保护只能收紧，不能再放宽。
-7. **数据库、redis 的口令不经过模型、不上命令行**。厂商的 JDBC 驱动不进安装包（`pack.js` 会查 jar）。
+7. **查库、连 redis 由工具自己读连接配置，口令不上命令行、不写进提示**（2026-10-30 用户定的措辞：项目里的口令 10-25 起对模型放开，`.vibe/` 里的连接配置模型能读）。厂商的 JDBC 驱动不进安装包（`pack.js` 会查 jar）。
 8. **全局约定（`vibe-kit/claude/CLAUDE.md`）每个请求都带着**。加一个字都是每个请求的成本：能放进钩子在对应时机送的，就不往约定里加。
 9. **套件的流程里不新开子代理**。独立审查默认用有限材料的单独请求；明确选择兼容方式时才用现有审查代理，每个变更提案、代码各一次。
 10. **默认开关只写在 `kit/lib/session.js` 的 `DEFAULT_CONFIG`**，`router/kit-api.js` 里那份必须和它一样（测试会比）。新开关要同时改：两份默认值、`kit-api.js` 的 `cleanConfig`、配置页 `ui.html`、`vibe-kit/README.md`、`更新说明.md` 的开关表。
