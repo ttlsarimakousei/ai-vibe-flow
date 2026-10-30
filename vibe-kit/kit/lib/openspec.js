@@ -78,6 +78,14 @@ function ensureRoot(cwd) {
  * 用自带的这份生成 Claude 的命令和技能，装进 claudeDir（~/.claude）。在临时目录里跑 init，家目录指到临时的，
  * OpenSpec 自己的全局配置写成 custom + 我们要的几个命令。返回装了哪些文件（相对 claudeDir），卸载时按它收回
  */
+const PROPOSE_FILE = /(?:^|\/)(?:openspec-propose\/SKILL\.md|opsx\/propose\.md)$/i;
+const KIT_PROPOSE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：需求文档一份一份写。这个命令只建变更、写 proposal.md，写完停下给用户看；'
+  + '用户说了再用 /opsx:continue 写下一份（specs、design、tasks），每份写完都停。下面原文里"一步生成全部"的部分不照做（用户 2026-10-17 定的"一份一份来"）。\n\n';
+/** 在命令、技能文件的 frontmatter 后面插套件的规矩；没有 frontmatter 的放最前面 */
+function withKitRule(t) {
+  const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n/.exec(t);
+  return m ? t.slice(0, m[0].length) + '\n' + KIT_PROPOSE_RULE + t.slice(m[0].length).replace(/^\r?\n/, '') : KIT_PROPOSE_RULE + t;
+}
 function installClaudeFiles(claudeDir, beforeOverwrite) {
   if (!usable()) return { ok: false, why: 'Node ' + process.versions.node + ' 低于 OpenSpec ' + ((info() || {}).version || '') + ' 要求的 ' + ((info() || {}).node || '') + '，用你自己装的 OpenSpec', files: [] };
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-openspec-'));
@@ -96,9 +104,13 @@ function installClaudeFiles(claudeDir, beforeOverwrite) {
         if (fs.statSync(p).isDirectory()) { copy(p, r2); continue; }
         const to = path.join(claudeDir, r2); fs.mkdirSync(path.dirname(to), { recursive: true });
         const name = r2.split(path.sep).join('/');
+        // /opsx:propose 原文是"一步生成全部文档"，和套件的"一份一份写"冲突，模型照着写会被拦（审核 R3）：插一段套件的规矩
+        const text = PROPOSE_FILE.test(name) ? withKitRule(fs.readFileSync(p, 'utf8')) : null;
+        const same = () => (text != null ? fs.readFileSync(to, 'utf8') === text : fs.readFileSync(to).equals(fs.readFileSync(p)));
         // 已经有同名文件、内容又不一样：先让调用方处理（安装器拿它备份你自己的同名命令）
-        if (beforeOverwrite && fs.existsSync(to) && !fs.readFileSync(to).equals(fs.readFileSync(p))) beforeOverwrite(name, to);
-        fs.copyFileSync(p, to); files.push(name);
+        if (beforeOverwrite && fs.existsSync(to) && !same()) beforeOverwrite(name, to);
+        if (text != null) fs.writeFileSync(to, text); else fs.copyFileSync(p, to);
+        files.push(name);
       }
     };
     copy(src, '');

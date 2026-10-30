@@ -99,4 +99,21 @@ H.section('A8 人工模式改完代码：问一次审查、自测，答了不用
   H.ok('下一轮又改了代码：这个会话里不再问', !/询问是否/.test(s3), s3);
 }
 
+H.section('A12 /opsx:propose 装好后先说套件的规矩：只写 proposal 就停，一份一份来（不照原文一步全写）');
+{
+  const h = H.makeHome('tco-a12', FROM, QUIET, { openspec: true });
+  const O = require(path.join(h.kit, 'lib', 'openspec.js'));
+  const dir = path.join(h.root, 'claude-out');
+  const r = O.installClaudeFiles(dir);
+  H.ok('自带的 OpenSpec 生成了命令和技能', r.ok && r.files.length > 0, r.why || r.files);
+  if (r.ok) {
+    for (const rel of r.files.filter((f) => /propose/i.test(f))) {
+      const t = H.read(path.join(dir, rel)) || '';
+      H.ok(rel + '：插了套件的规矩，frontmatter 还在最前面', /vibe-kit 的规矩/.test(t) && /只建变更、写 proposal\.md，写完停下/.test(t) && (!/^---/.test(H.read(path.join(dir, rel)) || '') || /^---\r?\n[\s\S]*?\r?\n---\r?\n\n> \*\*vibe-kit 的规矩/.test(t)), t.slice(0, 400));
+    }
+    const other = r.files.find((f) => /opsx\/apply\.md$/i.test(f));
+    H.ok('别的命令原样拷（不插这段）', !!other && !/vibe-kit 的规矩/.test(H.read(path.join(dir, other)) || ''), other);
+  }
+}
+
 H.done('同一件事不再确认第二遍（问题表第 19 条）');
