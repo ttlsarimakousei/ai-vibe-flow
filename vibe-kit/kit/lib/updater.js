@@ -286,6 +286,9 @@ const failedTimes = (st, v) => (st.failed && st.failed.version === v ? Number(st
 function needInstall(anyway) {
   const st = readState('update');
   const v = stagedVersion();
+  // 安装器"什么都没动"拒绝过这一版（退出码 4）：6 小时内不再试（每试一次都要先备份上一版、跑一遍安装器），在配置页点"立即更新"照样试（复审 S5）
+  const rf = st.refused;
+  if (anyway !== true && rf && rf.version === v && Date.now() - (Number(rf.at) || 0) < 6 * 3600000) return false;
   return !!v && v === st.remoteVersion && v !== installedVersion() && (anyway === true || failedTimes(st, v) < 2);
 }
 function apply() {
@@ -306,7 +309,10 @@ function apply() {
   if (r.status === 4) {
     const why = '安装器没动手（' + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
     log(why);
+    const first = !((readState('update').refused || {}).version === to);
     setState({ refused: { version: to, why, at: Date.now() } });
+    // 同一版第一次被拒时记一条问题反馈：用户看不到日志，配置页和状态栏也会说（复审 S5）
+    if (first) { try { require('./feedback.js').record({ kind: '出错', hook: '自动更新', source: '钩子自动记录', title: '自动更新到 ' + to + ' 没动手：' + why.slice(0, 60), what: '从 ' + from + ' 更新到 ' + to + '，安装器什么都没动就停了：' + why + '。没装回上一版，也不算装坏；把电脑上的问题改好，6 小时后会再试，或者在配置页点"立即更新"。' }); } catch (e) { /* 记不了不影响 */ } }
     return { ok: false, refused: true, why, version: to, from };
   }
   let why = '';
@@ -338,7 +344,9 @@ function status() {
   const installed = installedVersion();
   const remote = st.remoteVersion || '';
   const failed = st.failed && st.failed.version === remote ? st.failed : null;
+  const refused = st.refused && st.refused.version === remote && remote !== installed ? st.refused : null;
   return {
+    refused,
     mode: modeOf(cfg), hours: hoursOf(cfg), installed, remote, branch: st.remoteBranch || '', commit: String(st.remoteCommit || '').slice(0, 8), route: st.route || '', routeLabel: st.routeLabel || '',
     differs: !!remote && remote !== installed, behind: !!remote && remote !== installed && !(failed && failed.times >= 2),
     lastCheckAt: st.lastCheckAt || 0, lastCheckOk: st.lastCheckOk !== false, lastError: st.lastError || '', lastApplied: st.lastApplied || null, failed,
