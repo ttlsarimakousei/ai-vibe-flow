@@ -725,5 +725,12 @@ def _scan_for_jar(base, regexes, max_depth=8, version=None, unique=False):
         return None
     if unique and len(hits) > 1:
         raise ConfError("项目目录有多个匹配的驱动文件，在连接里明确写 driver_jar。")
-    hits.sort()
+    # 按文件名里的数字比：以前按字典序，8.1.3.62 排在 8.1.3.140 后面，被当成更新的那个（审核 P33）
+    hits.sort(key=_natural_key)
     return hits[-1]
+
+
+def _natural_key(p):
+    """文件名按"数字当数字、文字当文字"比的键；数字和文字分开标记，不同文件名之间也比得了"""
+    name = re.split(r"[\\/]", str(p))[-1]
+    return [(0, int(x), "") if x.isdigit() else (1, 0, x) for x in re.split(r"(\d+)", name) if x != ""], str(p)
