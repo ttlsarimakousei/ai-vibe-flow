@@ -393,6 +393,10 @@ add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const pro
 // 这一版有意改的（用户 2026-10-30 定的）：push 只留钩子这一道确认，settings 里的 Bash(git push:*) 去掉了；开口提示直接写 git push（不再为了躲确认框写 git -C）
 for (const c of cases) {
   if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git push，几笔提交都一样[^"]*不推到别的分支。"/; c.since = NEXT; }
+  // 不走 OpenSpec 的小改动：问一次审查、自测，答了不用这个会话里不再问那一样；不说"按验收用例"（用户 2026-10-30 定的，审核第三节第 7 条）
+  if (c.name === '收工：改了代码没验证') { c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用 Ask 询问是否跑快检[\s\S]*审查、是否自测；用户说不用就直接继续，这个会话里不再问这一样/; c.since = NEXT; }
+  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用 Ask 询问是否审查、是否自测；用户说不用就直接继续/; c.since = NEXT; }
+  if (c.name === '收工：改了页面没看') { c.expect = /^(?![\s\S]*probe-run)[\s\S]*用 Ask 询问是否跑快检[\s\S]*审查、是否自测；用户说不用就直接继续/; c.since = NEXT; }
 }
 
 let same = 0;

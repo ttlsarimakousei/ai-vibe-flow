@@ -242,8 +242,18 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
   }
-  if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test') && !(stillDeclined(noReview, lastEditAt) && stillDeclined(noTest, lastEditAt))) {
-    const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用 Ask 询问是否' + q + '审查、是否按验收用例自测；放弃后直接继续，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
+  // 人工模式、不在 OpenSpec 任务组里的代码改动：改完问一次审查、自测。用户答了不用，这个会话后面再改代码不再问那一样
+  // （用户 2026-10-30 定的，替代 2026-10-16"新要求、内容变了才再问"）。验收用例只写在走 OpenSpec 的 design.md 里，这里只说自测（审核第三节第 7 条）
+  if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test')) {
+    const keyD = j.session_id && j.session_id !== 'unknown' ? String(j.session_id) + '-plain-declined' : '';
+    let sess = keyD ? S.readState(keyD) : {};
+    if (keyD && ((noReview && !sess.review) || (noTest && !sess.test))) { S.updateState(keyD, (o) => { if (noReview && !o.review) o.review = Date.now(); if (noTest && !o.test) o.test = Date.now(); }); sess = S.readState(keyD); }
+    const askReview = !sess.review && !stillDeclined(noReview, lastEditAt);
+    const askTest = !sess.test && !stillDeclined(noTest, lastEditAt);
+    if (askReview || askTest) {
+      const what = askReview && askTest ? '审查、是否自测' : askReview ? '审查' : '自测';
+      const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用 Ask 询问是否' + q + what + '；用户说不用就直接继续，这个会话里不再问这一样，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
+    }
   }
   return out;
 }
