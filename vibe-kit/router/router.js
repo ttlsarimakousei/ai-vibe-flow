@@ -199,7 +199,8 @@ setInterval(() => {
 // ---------- 运行状态 ----------
 const health = new Map();   // 模型名 -> { until, reason, lastOkAt, lastFailAt, fails }
 const sticky = new Map();   // 会话|角色首选 -> { provider, at }
-const bigTimeouts = new Map();   // 模型名 -> 大请求连续超时次数（一次不算卡住，两次才换模型）
+const bigTimeouts = new Map();   // 模型名 + 会话 -> 大请求连续超时次数（一次不算卡住，两次才换模型）。按会话分开（审核 P23）：以前一个会话成功一次就清掉别的会话的计数
+const bigKey = (ctx, name) => name + '|' + (ctx.session || '');
 const noCountTokens = new Map(); // 模型名 -> 上次 count_tokens 被回 404 的时间（上游不支持这个接口，就不用每次都把整个会话传过去）
 const hOf = (name) => { if (!health.has(name)) health.set(name, { until: 0, reason: '', lastOkAt: 0, lastFailAt: 0, fails: 0, quota: false }); return health.get(name); };
 const onCooldown = (name) => hOf(name).until > Date.now();
@@ -229,7 +230,8 @@ try {
  *   都没有：每日额度到本地明天 0 点，别的按"熔断、key 失效后多久再试"。
  * 离现在不到 5 秒的当普通限流（多半是已经重置了）；最多停用 31 天。
  */
-const QUOTA_WORDS = /额度|配额|余额|用量上限|quota|insufficient_(quota|balance)|billing|credit|balance|spend(ing)?[_ ]limit|budget/i;
+// 只认明确说额度、余额、账单的（审核 P23）：以前 balance、budget、credit 单词出现就算，正文里提到 "load balancer""thinking budget" 也停用 30 分钟，还跨重启保留
+const QUOTA_WORDS = /额度|配额|余额不足|余额已用完|用量上限|\bquota\b|insufficient[_ ](quota|balance|credits?|funds)|\bbilling\b|out of credits|credits? (?:exhausted|depleted|exceeded)|(?:credit )?balance is too low|spend(ing)?[_ ]limit|(?:token|usage|monthly|daily|account) budget (?:exceeded|exhausted)|budget[_ ]exceeded/i;
 const RESET_KEYS = ['reset_at', 'resets_at', 'reset_time', 'resetAt', 'resetsAt', 'reset', 'next_reset', 'next_reset_at', 'quota_reset_at', 'limit_reset_at', 'retry_at', 'available_at'];
 function parseWhen(v) {
   if (v === undefined || v === null || v === '') return 0;
@@ -535,6 +537,11 @@ const HOP_HEADERS = ['host', 'content-length', 'accept-encoding', 'connection', 
 function forward(ctx, list, idx, tried) {
   const { req, res, body, parsed, model, stickyKey, primary, isMessages } = ctx;
   if (res.destroyed || res.writableEnded) return; // 客户端已经走了
+  // 总时间快用完了（剩不到 5 秒）还要换下一个模型：不换了，把试过的告诉 Claude Code（它会自己重试）
+  if (idx > 0 && ctx.deadline && ctx.deadline - Date.now() < 5000) {
+    log((model || req.url) + ' 总时间用完了（' + ctx.clientCapSec + ' 秒），不再换下一个模型：' + tried.map((t) => t.name + '（' + t.reason + '）').join('；'));
+    return sendError(res, 504, 'api_error', '这次请求已经等了 ' + ctx.clientCapSec + ' 秒（Claude Code 的超时减 20 秒），试过 ' + tried.map((t) => t.name).join('、') + ' 都没成，不再换下一个模型。Claude Code 会自己重试。');
+  }
   // 每次尝试前重新看一眼冷却：候选列表是请求进来时排的，这之间别的请求可能刚把某个模型打进冷却（并发时常见），
   // 不能再把整个上下文发给它。冷却中的跳过；剩下的全在冷却时，整个请求只多试一次最快到期的那个（和排候选时的规则一样）
   if (isMessages) {
@@ -663,8 +670,8 @@ function forward(ctx, list, idx, tried) {
         }
         // 大请求遇到网关先回 502 / 504（多半是网关自己等超时了）：和路由自己的首字节计时器到点一样处理——不换模型，
         // 交回给 Claude Code 让它自己重试；同一个模型连续两次这样才换。换了等于让另一个模型把整个上下文再算一遍
-        if (isMessages && ctx.big && (status === 502 || status === 504) && !settled && (bigTimeouts.get(provider.name) || 0) < 1) {
-          bigTimeouts.set(provider.name, 1);
+        if (isMessages && ctx.big && (status === 502 || status === 504) && !settled && (bigTimeouts.get(bigKey(ctx, provider.name)) || 0) < 1) {
+          bigTimeouts.set(bigKey(ctx, provider.name), 1);
           settled = true;
           const mb = (ctx.sentBytes / 1048576).toFixed(2);
           log(label + ' -> ' + provider.name + ' 网关回了 ' + status + '（请求 ' + mb + ' MB，多半是网关自己等超时了）。大请求不换模型，交回给 Claude Code 让它自己重试；再来一次就换' + (text ? '｜' + snippet(text) : ''));
@@ -702,7 +709,7 @@ function forward(ctx, list, idx, tried) {
     settled = true;
     if (isMessages) {
       markOk(provider.name);
-      bigTimeouts.delete(provider.name);
+      bigTimeouts.delete(bigKey(ctx, provider.name));
       // 落在了不是本角色首选的模型上，就记住（第一次记的时间为准，到点回首选）；回到首选了就忘掉
       if (stickyKey && config.options.stickySession) {
         if (provider.name === primary) sticky.delete(stickyKey);
@@ -791,7 +798,8 @@ function forward(ctx, list, idx, tried) {
     // 它先放弃了，路由再换模型就来不及了。大请求（上下文很长）慢是正常的，不是卡住：一直等到这个上限，
     // 到点也不换模型——换了等于让另一个模型把整个上下文再算一遍，而这个模型多半还在算前一份。连着两次超时才当它卡住了
     const big = isMessages && config.options.bigRequestBytes > 0 && sendBody.length >= config.options.bigRequestBytes;
-    const waitSec = Math.min(big ? Math.max(config.options.firstByteTimeoutSec, Math.min(ctx.clientTimeoutSec - 20, 3600)) : config.options.firstByteTimeoutSec, ctx.clientCapSec);
+    const leftSec = ctx.deadline ? Math.max(1, Math.floor((ctx.deadline - Date.now()) / 1000)) : ctx.clientCapSec;
+    const waitSec = Math.min(big ? Math.max(config.options.firstByteTimeoutSec, Math.min(ctx.clientTimeoutSec - 20, 3600)) : config.options.firstByteTimeoutSec, ctx.clientCapSec, leftSec);
     ctx.big = big;
     timer = setTimeout(() => { const e = new Error('timeout'); e.code = 'ROUTER_FIRST_BYTE_TIMEOUT'; up.destroy(e); }, waitSec * 1000);
     up.on('error', (e) => {
@@ -799,8 +807,8 @@ function forward(ctx, list, idx, tried) {
       if (settled) return;
       const code = (e && e.code) || '';
       if (code === 'ROUTER_FIRST_BYTE_TIMEOUT') {
-        if (big && (bigTimeouts.get(provider.name) || 0) < 1) {
-          bigTimeouts.set(provider.name, 1);
+        if (big && (bigTimeouts.get(bigKey(ctx, provider.name)) || 0) < 1) {
+          bigTimeouts.set(bigKey(ctx, provider.name), 1);
           settled = true;
           const mb = (sendBody.length / 1048576).toFixed(2);
           log(label + ' -> ' + provider.name + ' 处理了 ' + waitSec + ' 秒还没回应（请求 ' + mb + ' MB）。大请求不换模型，交回给 Claude Code 让它自己重试；再来一次就换');
@@ -810,7 +818,7 @@ function forward(ctx, list, idx, tried) {
         return fail('等了 ' + waitSec + ' 秒没有回应', config.options.cooldownSec, 0);
       }
       // 复用的长连接正好被对方关掉：请求多半根本没送到。原样再发一次，不算这个模型的错
-      if (up.reusedSocket && !ctx.retried.has(provider.name) && /ECONNRESET|EPIPE|socket hang up/i.test(code + ' ' + ((e && e.message) || ''))) {
+      if (up.reusedSocket && !ctx.retried.has(provider.name) && (!ctx.deadline || ctx.deadline - Date.now() > 10000) && /ECONNRESET|EPIPE|socket hang up/i.test(code + ' ' + ((e && e.message) || ''))) {
         ctx.retried.add(provider.name);
         settled = true;
         log(label + ' -> ' + provider.name + ' 长连接被对方关掉了，重发一次');
@@ -836,7 +844,9 @@ function handleProxy(req, res, body) {
   // Claude Code 自己的超时（x-stainless-timeout，秒）。路由的任何等待都封顶在它减 20 秒（至少 30 秒）
   const clientTimeoutSec = (() => { const n = parseInt(req.headers['x-stainless-timeout'], 10); return n > 0 && n <= 7200 ? n : 600; })();
   const ctx = { req, res, body, parsed, model, stickyKey, primary, isMessages, retried: new Set(), abort: null, sentBytes: body.length, waits: 0, waitedMs: 0, pending: null, big: false,
-    clientTimeoutSec, clientCapSec: Math.max(30, clientTimeoutSec - 20), coldTried: false, clientGone: false };
+    clientTimeoutSec, clientCapSec: Math.max(30, clientTimeoutSec - 20), coldTried: false, clientGone: false, session };
+  // 一个请求一个总截止时间（审核 P23、Codex C18）：换模型、重发共用剩下的时间。以前每个候选都等满一遍，Claude Code 那边早就超时了
+  ctx.deadline = Date.now() + ctx.clientCapSec * 1000;
   res.on('close', () => {
     if (res.writableEnded) return;
     // 在等着重试同一个模型的时候客户端走了：这时没有请求在上游，不用再发了
@@ -932,6 +942,8 @@ function mergeIncoming(inc) {
   const old = new Map(config.providers.map((p) => [p.name, p]));
   const providers = (Array.isArray(inc.providers) ? inc.providers : []).filter((p) => p && typeof p === 'object').map((p) => {
     const prev = old.get(p.original_name || p.name);
+    // 地址改了又没带新 key：不保存（审核 P20）。以前沿用旧 key，已保存的 key 会跟到新地址去；"测试连接"那边本来就挡着，两边口径要一样
+    if (!p.api_key && prev && prev.api_key && cleanUrl(p.base_url) !== cleanUrl(prev.base_url)) throw Object.assign(new Error('模型"' + String(p.name || prev.name) + '"的地址改了，要重新填一次 key 才能保存（已保存的 key 不会发到新地址）。这次什么都没存'), { status: 400 });
     const out = { name: String(p.name || '').trim(), base_url: cleanUrl(p.base_url), api_key: p.api_key ? cleanKey(p.api_key) : (prev ? prev.api_key : '') };
     if (p.model_override) out.model_override = String(p.model_override).trim();
     if (p.enabled === false) out.enabled = false;
@@ -1048,14 +1060,16 @@ async function handleApi(req, res) {
     if (req.method === 'POST' && url === '/api/config') {
       // 页面是按它打开（或上次保存）时的那份配置改的。这之间文件被改过（手改了 config.json、另一个页面保存过），就不能拿页面上的旧内容把它冲掉
       if (body.baseVersion !== undefined && String(body.baseVersion) !== configVersion()) return json(res, 409, { error: '配置在别处改过（比如手改了 config.json，或者另一个配置页保存过），这次没有保存，免得把那边的改动冲掉。页面已经刷新成最新的，请重做这次修改', conflict: true });
-      saveConfig(mergeIncoming(body));
+      let merged;
+      try { merged = mergeIncoming(body); } catch (e) { if (e && e.status === 400) return json(res, 400, { error: e.message }); throw e; }
+      saveConfig(merged);
       return json(res, 200, { ok: true, state: publicState() });
     }
     if (req.method === 'POST' && url === '/api/test') {
       const saved = config.providers.find((p) => p.name === (body.original_name || body.name));
       const addr = body.base_url ? cleanUrl(body.base_url) : (saved ? saved.base_url : '');
       // 已保存的 key 只发给已保存的地址。地址改过了，就得重新填 key 才能测
-      const sameAddr = !!saved && addr === saved.base_url;
+      const sameAddr = !!saved && addr === cleanUrl(saved.base_url);
       const key = body.api_key ? cleanKey(body.api_key) : (sameAddr ? saved.api_key : '');
       if (!key) return json(res, 200, { ok: false, reason: saved && !sameAddr ? '地址改过了，要重新填一次 key 才能测（已保存的 key 不会发到新地址）' : '没有填 key' });
       const verifyCert = body.verify_cert === undefined ? !!saved && saved.verify_cert === true : body.verify_cert === true;
