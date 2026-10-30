@@ -21,9 +21,9 @@ node "$HOME/.claude/vibe-kit/tools/review.js" cancel --change <变更名> --mode
 
 --change 只认 openspec/changes 下已有的变更。不走 OpenSpec 的改动（小修复、改配置）用第三行，不带 --change，--base 写改之前的提交。壳子里几个仓库一起改的，--base 每个仓库写一个：`--base gwjh=11325fd --base .=32171c4`（等号前是相对 --project 的仓库路径）；只写一个不带等号的，只用在认得这个提交的仓库上。`review.js --help` 列着全部写法。
 
-需求点用 proposal、specs、design、tasks；代码点用 group-1、group-2 等整组编号。status、cancel、resolve 使用相同 --point。每个点每轮有独立时间预算；运行失败或取消也计入这一点的轮数。
+需求点用 proposal、specs、design、tasks；代码点用 group-1、group-2 等整组编号。status、cancel、resolve 使用相同 --point。运行失败或取消也计入这一点的轮数（审查不限时，见下面）。
 
-执行器自行读核心产物、基线差异及未跟踪新文件，经本机路由的 sonnet 角色发送材料。目录说明和 revisions 中历史路径不进当前材料；大文件分片，全部片段成功才算覆盖。不给自己的结论，不让审查者自行搜索、编译或跑测试。总预算默认 300 秒，每批显示尝试、回复、覆盖和剩余秒数，整个运行累计计算。超过文件上限或单文件 4MB 明确列为 partial，不默默截掉后算完成。
+执行器自行读核心产物、基线差异及未跟踪新文件，经本机路由的 sonnet 角色发送材料。目录说明和 revisions 中历史路径不进当前材料；大文件分片，全部片段成功才算覆盖。不给自己的结论，不让审查者自行搜索、编译或跑测试。每批显示尝试、回复和覆盖。超过文件上限或单文件 4MB 明确列为 partial，不默默截掉后算完成。
 
 提案模式保留 design 的 Context、现状、背景全文，但不自动读取其中每条探索路径；结果 `contextOnly` 中的源码未审，不能说成已覆盖。必需的源码材料单独写 `审查材料：src/OrderService.java`（相对项目根目录）；其它章节当前引用和变更内 assets/references 材料仍读取。明确材料缺失、不可读或超限不能报完整，随提案交付的 assets/references 材料变化使旧结论失效；实施源码的变化由代码审查核对。不为躲上限删除探索依据，也不把全项目源码都列为必要材料。
 
