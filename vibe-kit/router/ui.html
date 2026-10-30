@@ -1646,7 +1646,8 @@
     if (d.version) { pageVersion = d.version; $('kitVer').textContent = '套件 ' + d.version; }
     const u = d.update || {};
     if (u.differs && u.mode !== 'off' && !(u.failed && u.failed.times >= 2) && u.mode === 'notify') $('banner').innerHTML = '<div class="banner warn">套件有新版 ' + esc(u.remote) + '（这台电脑装着 ' + esc(u.installed) + '）。到"更新和上报"那一页点"立即更新"。</div>';
-    if (u.failed && u.failed.times >= 1 && u.differs) $('banner').innerHTML = '<div class="banner bad">套件的新版 ' + esc(u.failed.version) + ' 没装上：' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回 ' + esc(u.installed) + '，照常能用' : '') + '。详情在"更新和上报"那一页。</div>';
+    if (u.broken) $('banner').innerHTML = '<div class="banner bad">套件的新版 ' + esc(u.broken.version) + ' 没装好，也没能装回上一版 ' + esc(u.broken.from || '') + '。后台会再试；急用就在"更新和上报"点"立即更新"，或者重新运行安装包。原因：' + esc(String(u.broken.why || '').slice(0, 120)) + '</div>';
+    else if (u.failed && u.failed.times >= 1 && u.differs) $('banner').innerHTML = '<div class="banner bad">套件的新版 ' + esc(u.failed.version) + ' 没装上：' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回 ' + esc(u.installed) + '，照常能用' : '') + '。详情在"更新和上报"那一页。</div>';
   }).catch(() => { /* 老版本的路由没有这个接口 */ });
 
   // ---------- 接上 / 断开 Claude Code ----------

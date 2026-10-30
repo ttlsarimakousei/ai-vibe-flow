@@ -3,6 +3,7 @@
  * 10-30 那一批 E、F、G、H、I、J 批里的零散修复（docs/feedback-20261030.md），一项一节：
  *   F7（Codex C14）清理过程文件目录：扫不完整（超过 2000 项、8 层）就不删
  *   E4（审核 P20）路由：改了网关地址又没带新 key，拒绝保存
+ *   别的节（E2、E6、H3、I3、F2、F3、F9、G2、G3、H4、H5、I4）见各节标题；拿 20261028.2041 跑每节至少一项不过
  * 用法：node dev/test-fixes-1031.js [旧版的 vibe-kit 目录]（给了就拿旧版跑，看哪些项不过）
  */
 const fs = require('fs');
@@ -85,6 +86,19 @@ const SRCV = FROM || H.SRC;
     const count = same.length === 1 ? Number((/次数: (\d+)/.exec(same[0]) || [])[1]) : -1;
     H.ok('3 个进程各记 12 条不同的：36 个文件，编号不重', distinct.length === 36 && new Set(distinct.map((n) => n.slice(0, 13))).size === 36, distinct.length);
     H.ok('同一签名各记 12 次：并成一条，次数 36', same.length === 1 && count === 36, { files: same.length, count });
+  }
+
+  H.section('F2 装坏了、也没能装回上一版：状态栏第一行红字、配置页接口带上 broken');
+  {
+    const h = H.makeHome('tfx-f2', FROM, { autoUpdate: 'auto' });
+    H.write(path.join(h.kit, 'VERSION'), '20261031.0900\n');
+    H.write(path.join(h.kit, 'state', 'update.json'), JSON.stringify({ remoteVersion: '20261031.0900', failed: { version: '20261031.0900', from: '20261028.2041', times: 1, why: '装完自检没过', rolledBack: false, at: Date.now() } }));
+    const proj = H.makeRepo(path.join(h.work, 'p'), { 'a.txt': 'x\n' });
+    const sl = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: 's-f2', cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }).out.replace(/\x1b\[[0-9;]*m/g, '');
+    H.ok('状态栏第一行：没装好、也没能装回上一版', /新版 20261031\.0900 没装好，也没能装回上一版/.test(sl.split('\n')[0] || ''), sl);
+    const st = H.node(h, '-e', ['console.log(JSON.stringify(require(' + JSON.stringify(path.join(h.kit, 'lib', 'updater.js')) + ').status().broken || null))'], { timeout: 30000 });
+    let b = null; try { b = JSON.parse(st.out.trim().split(/\r?\n/).pop()); } catch (e) { b = null; }
+    H.ok('配置页接口：status().broken 写着坏的版本和上一版', !!b && b.version === '20261031.0900' && b.from === '20261028.2041', st.out + st.err);
   }
 
   H.done('10-31 零散修复（E、F、G、H、I、J 批）');

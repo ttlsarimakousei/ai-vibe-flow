@@ -330,7 +330,7 @@ function apply() {
   const times = failedTimes(st, to) + 1;
   const back = rollback(from, s);
   log(back.ok ? '已装回上一版 ' + from : '没能装回上一版：' + back.why);
-  setState({ failed: { version: to, times, why, at: Date.now(), rolledBack: back.ok }, history: hist.concat({ at: Date.now(), from, to, ok: false, why, rolledBack: back.ok }) });
+  setState({ failed: { version: to, from, times, why, at: Date.now(), rolledBack: back.ok }, history: hist.concat({ at: Date.now(), from, to, ok: false, why, rolledBack: back.ok }) });
   // 暂存处回到仓库最新的那个提交，下次检查不用重新下载
   try { if (st.remoteCommit) gl.git(STAGE, ['checkout', '-q', '-f', st.remoteCommit], { timeout: 120000 }); } catch (e) { /* 下次检查会重新拉 */ }
   try { require('./feedback.js').record({ kind: '出错', hook: '自动更新', source: '钩子自动记录', title: '自动更新到 ' + to + ' 没装成：' + why.slice(0, 60), what: '从 ' + from + ' 更新到 ' + to + ' 时：' + why + '。' + (back.ok ? '已经装回 ' + from + '。' : '没能装回上一版：' + back.why), stack: readText(INSTALL_LOG).slice(-3000), sig: require('./feedback.js').sigOf(['update', to, why.slice(0, 40)]) }); } catch (e) { /* 记不了就算了 */ }
@@ -344,9 +344,11 @@ function status() {
   const installed = installedVersion();
   const remote = st.remoteVersion || '';
   const failed = st.failed && st.failed.version === remote ? st.failed : null;
+  // 装坏了、也没装回去：现在装着的就是坏的那一版（配置页顶部、状态栏都要说）
+  const broken = st.failed && st.failed.rolledBack === false && st.failed.version === installed ? st.failed : null;
   const refused = st.refused && st.refused.version === remote && remote !== installed ? st.refused : null;
   return {
-    refused,
+    refused, broken,
     mode: modeOf(cfg), hours: hoursOf(cfg), installed, remote, branch: st.remoteBranch || '', commit: String(st.remoteCommit || '').slice(0, 8), route: st.route || '', routeLabel: st.routeLabel || '',
     differs: !!remote && remote !== installed, behind: !!remote && remote !== installed && !(failed && failed.times >= 2),
     lastCheckAt: st.lastCheckAt || 0, lastCheckOk: st.lastCheckOk !== false, lastError: st.lastError || '', lastApplied: st.lastApplied || null, failed,
@@ -398,6 +400,14 @@ async function run(opt) {
     const st = readState('update');
     // 这一次真的跑过安装器没有（等路由空闲没等到的不算）
     let installed = false;
+    // 上次装坏了、也没能装回上一版（审核 P04）：版本号已经是坏的那一版，以前之后就当"已是最新"不再管。这次再试着装回上一版
+    const bad = st.failed;
+    if (bad && bad.rolledBack === false && bad.from && installedVersion() === bad.version && modeOf(cfg) !== 'off') {
+      const back = rollback(bad.from, gl.settings());
+      log(back.ok ? '上次没装回去，这次装回了上一版 ' + bad.from : '还是没能装回上一版 ' + bad.from + '：' + back.why);
+      if (back.ok) { setState({ failed: Object.assign({}, bad, { rolledBack: true, retriedAt: Date.now() }) }); installed = true; }
+      else setState({ failed: Object.assign({}, bad, { retriedAt: Date.now() }) });
+    }
     if (modeOf(cfg) !== 'off' || o.force) {
       if (o.force || Date.now() - (st.lastCheckAt || 0) >= hoursOf(cfg) * 3600000 || !st.remoteVersion) out.check = check();
       if ((modeOf(cfg) === 'auto' || o.force) && needInstall(!!o.force)) {
