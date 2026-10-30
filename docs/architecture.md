@@ -51,6 +51,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `archive-extract.js` | 直接归档解包与查看结果落盘的目标检查，复用 guard-commit 的拆词和工作目录；只读查看放行，项目内临时条目放 `.vibe/tmp/<事由>/`，目录联接核对真实位置 |
 | `onboard.js`、`discover.js` | 后台自动探索：认工程、推命令和端口、找开发环境的数据库和 redis 连接 |
 | `drivers.js`、`toolstats.js` | 多版本驱动登记、默认和单版删除；查库、查 redis 的匿名类别计数 |
+| `perf.js` | 耗时异常（2026-10-31，问题表第 20 条）：devserver 每次起服务按"项目 + 命令"记分段耗时，比本机基线（最近几次的中位数）慢一倍以上且多 60 秒以上、或它自己的检查超过 20 秒，记一条问题反馈并按开关 `perfReport` 上报（只带秒数、分段、原因类别）；基线和上报记录在 `perf-baseline.json`、`perf-report.json`（GLOBAL_STATE），每天最多报 3 条、同一个 24 小时一次 |
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |
 | `usage.js` | 使用情况：每天数次数，第二天传到 GitLab |
 | `pull.js` | 开工前拉代码 |
@@ -119,7 +120,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 
 跨会话状态加入 GLOBAL_STATE：evidence、review-jobs、work-baselines、review-local-metrics、work-sessions、readiness、usage-device、devserver（2026-10-28，devserver 的全机服务登记：端口 → 项目里的记录文件、运行目录、命令；start 找不到同名记录时按运行目录和命令认出之前起的服务，status、stop、会话开始的提醒也看它）。许可仍按会话清理。使用情况按持久随机设备标识分组；旧议题复用编号并改名，历史补充保留。审查材料和诊断明细不上传，耗时仅留本机。用户可见行为以 vibe-kit/README.md 和 vibe-kit/手册/ 为准（开发流程.md、验收清单.md 2026-10-30 删了，用户定的）。
 
-`state-store.atomicWrite` 写结构化对象，`atomicText` 写 Markdown 等原文；调用方检查保存结果。`workspace` 的相同只读 Git 查询只在一次钩子调用内复用，下一次调用重新核对。审查读材料前检查真实路径、文件类型和编码，范围外链接与未覆盖材料不会算作完整审查。
+`state-store.atomicWrite` 写结构化对象，`atomicText` 写 Markdown 等原文；调用方检查保存结果。`state-store.acquire` 的锁记进程号和拿锁时间，进程不在了或者超过租期（默认 10 分钟，`leaseMs` 可改）都按失效处理（2026-10-31：Windows 复用进程号时锁曾经永远拿不回来）；经验规则的读改写用 `state/lessons.lock`。`workspace` 的相同只读 Git 查询只在一次钩子调用内复用，下一次调用重新核对。审查读材料前检查真实路径、文件类型和编码，范围外链接与未覆盖材料不会算作完整审查。
 
 审查不限时（2026-10-28 用户定的）：每批都送完，配置页的 `reviewBudgetSeconds` 是预期用时，审完超了、有批次只回思考或没拿到结论，`reportReview` 记一条问题反馈（总用时、每批用时、重试、输出 token、停止原因、原因，不带材料原文）；`--new-budget` 不再需要。单批请求只有 30 分钟的保险（防本机路由整个没了）。不带变更名的审查（`.vibe/reviews/plain/code.json`）也能 `resolve` 登记决定，"接受"按项目目录核对用户许可（#234）。新的完整审查清除上一轮意见处理状态，修复意见须有当前版本的成功复验。零问题或仅驳回意见不能批准后来修改的代码。
 
