@@ -126,8 +126,6 @@ def run_runner(conn, mode, project_root, sql_segments=None, extra_args=(), timeo
         stats.incident("no-driver", "找不到%s的驱动" % dbconf.driver_info(conn)["name"],
                        "数据库：%s" % dbconf.driver_key(conn), mode, project_root)
         raise
-    classpath = os.pathsep.join([str(RUNNER_DIR), jar])
-
     password = dbconf.resolve_password(conn)
 
     args = ["--mode", mode, "--url", conn["jdbc"]]
@@ -146,18 +144,41 @@ def run_runner(conn, mode, project_root, sql_segments=None, extra_args=(), timeo
     if RUN is not None:
         RUN.dialect = conn["dialect"]
 
-    result = None
-    if daemon.enabled():
-        daemon_args = list(args)
-        if conn.get("_config_path") and conn.get("_config_stamp"):
-            daemon_args += ["--config-file", conn["_config_path"], "--config-stamp", conn["_config_stamp"]]
-        result = daemon.request(java, classpath, RUNNER_CLASS, daemon_args, stdin_data, password, timeout, JVM_FLAGS)
-        if result is not None and RUN is not None:
-            RUN.launched(via_daemon=True)
-    if result is None:
-        result = _one_shot(java, classpath, args, stdin_data + "\n" + END + "\n", password, timeout, mode, project_root)
+    def launch(driver, use_daemon):
+        classpath = os.pathsep.join([str(RUNNER_DIR), driver])
+        r = None
+        if use_daemon and daemon.enabled():
+            daemon_args = list(args)
+            if conn.get("_config_path") and conn.get("_config_stamp"):
+                daemon_args += ["--config-file", conn["_config_path"], "--config-stamp", conn["_config_stamp"]]
+            r = daemon.request(java, classpath, RUNNER_CLASS, daemon_args, stdin_data, password, timeout, JVM_FLAGS)
+            if r is not None and RUN is not None:
+                RUN.launched(via_daemon=True)
+        if r is None:
+            r = _one_shot(java, classpath, args, stdin_data + "\n" + END + "\n", password, timeout, mode, project_root)
+        _scrub(r, conn, password)
+        return r
 
-    _scrub(result, conn, password)
+    result = launch(jar, True)
+    # 建连接这一步就失败、像是驱动的问题（加载不了、和库对不上）：按登记的顺序换下一个再试。这一步什么都还没执行，
+    # 写操作重试也不会做两遍。口令不对、网络不通、SQL 本身的错不换（问题表第 21 条，用户 2026-10-30 定的）
+    if _driver_problem(result):
+        tried = [jar]
+        for alt in dbconf.driver_alternatives(conn, project_root, tried):
+            tried.append(alt)
+            r2 = launch(alt, False)
+            if _driver_problem(r2):
+                continue
+            recorded = dbconf.record_driver(conn, alt)
+            now = "能建连接了" if r2.get("code") != "CONNECT_FAILED" else "不再是驱动的问题（现在报：%s）" % _first_line(r2.get("error"))
+            print("原来的驱动 %s 建连接失败（%s），换成登记的 %s 后%s。%s"
+                  % (os.path.basename(jar), _first_line(result.get("error")), os.path.basename(alt), now,
+                     ("已记进连接配置 [%s] 的 driver_jar，下次直接用。" % conn["name"]) if recorded else "没能记进连接配置，下次还会先试原来的。"),
+                  file=sys.stderr)
+            result, jar, jar_from = r2, alt, "连不上时换过来的"
+            break
+        if len(tried) > 1 and _driver_problem(result):
+            result["_driver_tried"] = tried
     if not result.get("ok") and RUN is not None:
         RUN.error(result.get("code"), result.get("sql_state"), result.get("vendor_code"))
     if result.get("code") == "RUNNER_ERROR":
@@ -165,6 +186,34 @@ def run_runner(conn, mode, project_root, sql_segments=None, extra_args=(), timeo
     result["_driver_jar"] = jar
     result["_driver_from"] = jar_from
     return result
+
+
+_AUTH_FAIL = re.compile(r"access denied|password authentication|authentication failed|ora-01017|invalid username|口令|密码|用户名或", re.I)
+_NET_FAIL = re.compile(r"connection refused|connect timed out|unknownhost|unknown host|no route to host|network is unreachable|拒绝连接|连接超时|timed out", re.I)
+
+
+def _first_line(text):
+    return str(text or "").strip().splitlines()[0][:160] if str(text or "").strip() else "没有说明"
+
+
+def _driver_problem(result):
+    """
+    这次失败是不是换个驱动可能就好的：驱动类加载不了（DRIVER_FAILED）、没有驱动认得这个地址、建连接时协议、版本对不上。
+    口令不对、网络不通、库没起换驱动也没用，不换；SQL_ERROR（连上之后执行出的错）不换。
+    """
+    code = result.get("code")
+    if code == "DRIVER_FAILED":
+        return True
+    if code != "CONNECT_FAILED":
+        return False
+    err = str(result.get("error") or "")
+    if "no suitable driver" in err.lower() or "没有驱动认得" in err:
+        return True
+    if str(result.get("sql_state") or "").startswith("28") or _AUTH_FAIL.search(err):
+        return False
+    if _NET_FAIL.search(err):
+        return False
+    return True
 
 
 def _scrub(result, conn, password):
@@ -388,6 +437,10 @@ def _connect_hint(conn, result):
     state = str(result.get("sql_state") or "")
     if result.get("_driver_jar"):
         print("用的驱动：%s（%s）" % (result["_driver_jar"], result.get("_driver_from")), file=sys.stderr)
+    if result.get("_driver_tried"):
+        print("登记的驱动都试过了，都建不了连接：%s。在 vibe-kit 配置页的「数据库驱动」里加一个和库版本对得上的，"
+              "或者把 jar 的路径写进这个连接的 driver_jar。" % "、".join(os.path.basename(x) for x in result["_driver_tried"]),
+              file=sys.stderr)
     if conn["dialect"] == "oracle" and ("ora-28040" in low or "ora-12505" in low or "ora-12514" in low
                                         or "no matching authentication" in low or "unsupported" in low):
         print("Oracle 的驱动和库的版本要对得上：连 11g 用 ojdbc6 一带的，连 19c 以上用 ojdbc8 / ojdbc11。"

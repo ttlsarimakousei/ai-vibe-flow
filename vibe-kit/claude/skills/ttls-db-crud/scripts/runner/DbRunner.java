@@ -121,7 +121,10 @@ public final class DbRunner {
         DbRunner r = new DbRunner(stdout, body, System.getenv("DBCRUD_PASSWORD"));
         Connection conn = null;
         try {
-            conn = r.connect(opt);
+            conn = r.connectOrFail(opt);
+            if (conn == null) {
+                return;
+            }
             r.run(mode, conn, opt);
         } catch (IllegalArgumentException e) {
             r.fail("BAD_ARGS", e.getMessage(), null);
@@ -187,6 +190,22 @@ public final class DbRunner {
     }
 
     // ==================================================================== 连接
+
+    /**
+     * 建连接；建不起来就报 CONNECT_FAILED（连接这一步的 SQLException）或 DRIVER_FAILED（驱动类加载不了、
+     * 驱动要的 Java 比这个 JVM 新），返回 null。和 SQL_ERROR 分开：这一步什么都还没执行，db.py 可以换一个登记的驱动再试
+     * （问题表第 21 条，用户 2026-10-30 定的）；SQL 本身的错不换驱动。
+     */
+    private Connection connectOrFail(Map<String, String> opt) {
+        try {
+            return connect(opt);
+        } catch (SQLException e) {
+            fail("CONNECT_FAILED", e.getMessage(), e);
+        } catch (LinkageError e) {
+            fail("DRIVER_FAILED", "驱动加载不了（" + e.getClass().getSimpleName() + "）：" + e.getMessage(), null);
+        }
+        return null;
+    }
 
     private Connection connect(Map<String, String> opt) throws SQLException {
         String url = required(opt, "url");
@@ -1742,7 +1761,10 @@ public final class DbRunner {
                 conn = null;
             }
             if (conn == null) {
-                conn = r.connect(opt);
+                conn = r.connectOrFail(opt);
+                if (conn == null) {
+                    return true;
+                }
                 POOL.put(key, conn);
                 if (!empty(configFile)) { POOL_FILES.put(key, configFile); POOL_STAMPS.put(key, expected); }
                 fresh = true;

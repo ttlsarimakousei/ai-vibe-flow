@@ -245,6 +245,8 @@ def _parse(path):
             "user": (sec.get("user") or "").strip(),
             "password_raw": sec.get("password") or "",
             "driver_jar": (sec.get("driver_jar") or "").strip(),
+            # 连不上时套件换过来、记进来的驱动（record_driver 写的）：文件不在了就当没写，照常去找
+            "driver_auto": (sec.get("driver_auto") or "").strip().lower() in ("1", "yes", "true", "on"),
             "driver_class": (sec.get("driver_class") or "").strip(),
             "readonly": sec.getboolean("readonly", fallback=False),
             "schema": (sec.get("schema") or "").strip(),
@@ -528,6 +530,98 @@ def registry_driver(key, project_root=None):
     return None
 
 
+def _same_file(a, b):
+    return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+
+
+def driver_alternatives(conn, project_root, tried):
+    """
+    建连接失败（驱动加载不了、驱动和库对不上）时还能换哪几个：登记表里这种数据库的默认版本、其他版本，按登记的顺序，
+    去掉试过的，最多 3 个（问题表第 21 条，用户 2026-10-30 定的）。不换的情况：
+      · 连接里自己写了 driver_jar（不是套件换过来记的）：那是用户指定的；
+      · 项目 pom 写明了驱动版本：只能用那个版本，不拿别的版本代替（10-10 定的）。
+    """
+    if conn.get("driver_jar") and not conn.get("driver_auto"):
+        return []
+    key = driver_key(conn)
+    info = DRIVER_ONLY.get(key) or DIALECT_INFO.get(key, {})
+    patterns = info.get("jar_patterns", ())
+    if isinstance(patterns, str):
+        patterns = (patterns,)
+    try:
+        if project_driver_versions(driver_project_root(conn, project_root), patterns):
+            return []
+    except Exception:  # noqa: BLE001 读 pom 出错就不换，照原来的报错
+        return []
+    reg = vibe.kit_json("drivers.json", {}) or {}
+    d = (reg.get("drivers") or {}).get(key) or {}
+    versions = d.get("versions") or ([d] if d.get("jar") else [])
+    out = []
+    for jar in [d.get("jar")] + [x.get("jar") for x in versions if isinstance(x, dict)]:
+        if not jar or not os.path.isfile(jar):
+            continue
+        if any(_same_file(jar, t) for t in list(tried) + out):
+            continue
+        out.append(jar)
+    return out[:3]
+
+
+def record_driver(conn, jar):
+    """
+    换成功的驱动记进这条连接（driver_jar、driver_auto），下次直接用。只改这一段里这两行和说明，别的原样留着
+    （口令、注释、后台自动探索写的 source）；文件原来是 GBK 的照旧按 GBK 写。写不了返回 False，不影响这次的结果。
+    """
+    path, name = conn.get("_config_path"), conn.get("name")
+    if not path or not name:
+        return False
+    p = pathlib.Path(path)
+    try:
+        raw = p.read_bytes()
+        bom = raw.startswith(b"\xef\xbb\xbf")
+        try:
+            text, enc = raw.decode("utf-8-sig"), ("utf-8-sig" if bom else "utf-8")
+        except UnicodeDecodeError:
+            text, enc = raw.decode("gbk"), "gbk"
+    except (OSError, UnicodeDecodeError):
+        return False
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines()
+    start, end = None, len(lines)
+    for i, line in enumerate(lines):
+        m = re.match(r"\s*\[([^\]]+)\]\s*$", line)
+        if not m:
+            continue
+        if start is not None:
+            end = i
+            break
+        if m.group(1).strip() == name:
+            start = i
+    if start is None:
+        return False
+    body = [x for x in lines[start + 1:end]
+            if not re.match(r"\s*(driver_jar|driver_auto)\s*[=:]", x) and "连不上时套件换过来的驱动" not in x]
+    k = len(body)
+    while k > 0 and not body[k - 1].strip():
+        k -= 1
+    import datetime
+    add = ["; %s 原来的驱动建连接失败，连不上时套件换过来的驱动；不想要就删掉这三行" % datetime.date.today().isoformat(),
+           "driver_jar = " + str(jar).replace("\\", "/"),
+           "driver_auto = yes"]
+    out = lines[:start + 1] + body[:k] + add + body[k:] + lines[end:]
+    new = nl.join(out) + (nl if text.endswith(("\n", "\r")) else "")
+    tmp = p.with_name(p.name + ".%d.tmp" % os.getpid())
+    try:
+        tmp.write_bytes(new.encode(enc))
+        os.replace(str(tmp), str(p))
+        return True
+    except (OSError, UnicodeEncodeError):
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return False
+
+
 def drivers_tool():
     """套件里管驱动的命令行工具。没装套件返回 None。"""
     k = vibe.kit_dir()
@@ -566,9 +660,10 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
     explicit = conn.get("driver_jar")
     if explicit:
         p = pathlib.Path(os.path.expanduser(explicit))
-        if not p.is_file():
+        if p.is_file():
+            return str(p), ("上次连不上时换过来的" if conn.get("driver_auto") else "配置里指定的")
+        if not conn.get("driver_auto"):
             raise ConfError("配置里写的 driver_jar 不存在：%s" % p)
-        return str(p), "配置里指定的"
 
     key = driver_key(conn)
     info = driver_info(conn)

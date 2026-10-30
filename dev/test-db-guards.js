@@ -190,4 +190,56 @@ else {
   H.ok('地址照旧在', /地址\s+.*10\.0\.0\.5/.test(parts[0] || ''), parts[0]);
 }
 
+H.section('D5 驱动连不上自己换：按登记的顺序换下一个，换成功的记进连接配置；口令不对、SQL 错、pom 写明版本的不换（问题表第 21 条）');
+if (!RT.python || !RT.java || !RT.h2) console.log('  （没找到 Python、Java 或 H2 的驱动，跳过）');
+else {
+  const h = H.makeHome('tdg-d5', FROM);
+  const scripts = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+  const DB = path.join(scripts, 'db.py');
+  // 登记表：默认的是一个坏的（里面没有驱动，DriverManager 认不出这个地址），第二个版本是能用的（H2，拿它当库）
+  const store = path.join(h.root, 'drivers');
+  const bad = path.join(store, 'mysql-connector-j-9.9.9.jar');
+  const bad2 = path.join(store, 'mysql-connector-j-9.9.8.jar');
+  const good = path.join(store, 'mysql-connector-j-8.0.33.jar');
+  const zip = (file) => { const data = Buffer.from('Manifest-Version: 1.0\n'); const n = Buffer.from('META-INF/MANIFEST.MF'); const l = Buffer.alloc(30); l.writeUInt32LE(0x04034b50); l.writeUInt32LE(data.length, 18); l.writeUInt32LE(data.length, 22); l.writeUInt16LE(n.length, 26); const c = Buffer.alloc(46); c.writeUInt32LE(0x02014b50); c.writeUInt32LE(data.length, 20); c.writeUInt32LE(data.length, 24); c.writeUInt16LE(n.length, 28); const e = Buffer.alloc(22); e.writeUInt32LE(0x06054b50); e.writeUInt16LE(1, 8); e.writeUInt16LE(1, 10); e.writeUInt32LE(46 + n.length, 12); e.writeUInt32LE(30 + n.length + data.length, 16); H.write(file, Buffer.concat([l, n, data, c, n, e])); };
+  zip(bad); zip(bad2);
+  fs.mkdirSync(store, { recursive: true }); fs.copyFileSync(RT.h2, good);
+  const reg = (list) => H.write(path.join(h.kit, 'drivers.json'), JSON.stringify({ version: 2, drivers: { mysql: Object.assign({}, list[0], { versions: list }) }, removed: {} }));
+  const proj = H.makeRepo(path.join(h.work, 'proj'), { 'pom.xml': '<project/>\n', '.gitignore': '.vibe/\n' });
+  const ini = path.join(proj, '.vibe', 'db-crud.ini');
+  const conf = ['; 测试用的库', '[main]', 'dialect = mysql', 'jdbc = jdbc:h2:mem:vk5;MODE=MySQL', 'user = sa', 'password =', '', '[other]', 'dialect = mysql', 'jdbc = jdbc:h2:mem:vk6', 'user = sa', 'password =', ''].join('\n');
+  const db = (args) => H.run(h, RT.python, ['-B', DB].concat(args), { cwd: proj, env: { DBCRUD_JAVA: RT.java, DBCRUD_DAEMON: '0', PYTHONDONTWRITEBYTECODE: '1' }, timeout: 120000 });
+  reg([{ jar: bad, version: '9.9.9' }, { jar: good, version: '8.0.33' }]);
+  H.write(ini, conf);
+  const r1 = db(['--conn', 'main', 'query', '--sql', 'SELECT 1 AS N']);
+  H.ok('默认的驱动建不了连接：换成登记的下一个，查出来了', r1.code === 0 && /换成登记的 mysql-connector-j-8\.0\.33\.jar 后能建连接了/.test(r1.err), r1.out + r1.err);
+  const after = H.read(ini) || '';
+  const main = after.split('[other]')[0];
+  H.ok('换成功的记进这条连接：driver_jar、driver_auto 和一行说明，原来的几行都在', /driver_jar = .*mysql-connector-j-8\.0\.33\.jar/.test(main) && /driver_auto = yes/.test(main) && /连不上时套件换过来的驱动/.test(main) && /password =/.test(main) && /; 测试用的库/.test(after), after);
+  H.ok('别的连接不动', !/driver_jar/.test(after.split('[other]')[1] || ''), after);
+  const r2 = db(['--conn', 'main', 'query', '--sql', 'SELECT 2 AS N']);
+  H.ok('下次直接用记下的，不再换', r2.code === 0 && !/换成登记的/.test(r2.err), r2.out + r2.err);
+  const r3 = db(['--conn', 'main', 'query', '--sql', 'SELECT * FROM NO_SUCH_TABLE']);
+  H.ok('SQL 本身的错：不换驱动', r3.code !== 0 && !/换成登记的|都试过了/.test(r3.err), r3.err);
+  // 登记的都不行：报错里列出试过哪几个
+  reg([{ jar: bad, version: '9.9.9' }, { jar: bad2, version: '9.9.8' }]);
+  H.write(ini, conf);
+  const r4 = db(['--conn', 'main', 'query', '--sql', 'SELECT 1 AS N']);
+  H.ok('登记的都建不了连接：报错，列出试过的', r4.code !== 0 && /登记的驱动都试过了.*mysql-connector-j-9\.9\.9\.jar.*mysql-connector-j-9\.9\.8\.jar/.test(r4.err) && !/driver_jar/.test(H.read(ini) || ''), r4.err);
+  // pom 写明了驱动版本：只能用那个版本，不换
+  reg([{ jar: bad, version: '9.9.9' }, { jar: good, version: '8.0.33' }]);
+  H.write(path.join(proj, 'pom.xml'), '<project><dependencies><dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><version>9.9.9</version></dependency></dependencies></project>\n');
+  H.write(ini, conf);
+  const r5 = db(['--conn', 'main', 'query', '--sql', 'SELECT 1 AS N']);
+  H.ok('pom 写明了驱动版本：不拿别的版本代替', r5.code !== 0 && !/换成登记的/.test(r5.err) && !/driver_jar/.test(H.read(ini) || ''), r5.err);
+  // 口令不对、网络不通不算驱动的问题
+  const k = H.run(h, RT.python, ['-B', '-c', [
+    'import sys, json; sys.path.insert(0, sys.argv[1]); import db',
+    'cases = [{"code": "CONNECT_FAILED", "error": "Access denied for user", "sql_state": "28000"}, {"code": "CONNECT_FAILED", "error": "Connection refused: connect"},',
+    ' {"code": "SQL_ERROR", "error": "Table not found"}, {"code": "DRIVER_FAILED", "error": "UnsupportedClassVersionError"}, {"code": "CONNECT_FAILED", "error": "ORA-28040: No matching authentication protocol"}]',
+    'print(json.dumps([db._driver_problem(c) for c in cases]))',
+  ].join('\n'), scripts], { cwd: h.root });
+  H.ok('口令不对、连不通、SQL 错不换；驱动加载不了、协议对不上的换', (json(k.out) || []).join() === 'false,false,false,true,true', k.out + k.err);
+}
+
 H.done('查库、redis 的保护（D 批）');
