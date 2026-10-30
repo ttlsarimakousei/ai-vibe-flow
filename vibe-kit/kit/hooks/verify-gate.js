@@ -889,6 +889,18 @@ async function handle(j) {
   // 新建了、没进 git 的文件（要交的提交，测试用的删掉），项目里留下的过程文件（备份、日志）：同一批只提一次，说"做完了"时再提一次（开关 vibeTidy）
   { try { const lo = await leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices); if (lo) todo.push(lo); } catch (e) { hookLog('verify-gate leftover 出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（收尾：新文件和过程文件）', j, e); } }
 
+  // 产出位置收尾时一起问（用户 2026-10-30 定的）：人工模式下，这一轮先写进 .vibe/pending/ 的产出，收工时用一个提问框问放哪；同一批只提一次。
+  // 全自动列进报告（report.js），不在这里问
+  try {
+    if (!cfg.autoMode && sid) {
+      const pend = [...new Set(calls.filter(isEdit).map(fileOf).filter((f) => /[\\/]\.vibe[\\/]pending[\\/]/i.test(f) && fs.existsSync(f)))];
+      const pk = sid + '-pending-ask'; const sig = pend.map(normKey).sort().join('|');
+      if (pend.length && readState(pk).sig !== sig) {
+        writeState(pk, { sig, at: Date.now() });
+        todo.push('这一轮有 ' + pend.length + ' 个产出先放在了 .vibe/pending/、位置还没定：' + pend.slice(0, 4).map((f) => path.basename(f)).join('、') + (pend.length > 4 ? ' 等' : '') + '。这件事做完了就用一个提问框问用户放哪（一个文件一个问题，选项写实际的目录，第一个放推荐的），定了挪过去，记进项目说明的"产出位置"；还没做完的先接着做，做完再问。');
+      }
+    }
+  } catch (e) { /* 查不了不影响收工 */ }
   // 套件问题：说了是套件的问题却没记；做完了，交代里没列这个会话记下的套件问题
   try { const kt = kitIssueTodo(j, lastSaid); if (kt) todo.push(kt); } catch (e) { if (feedback) feedback.recordHookError('verify-gate（套件问题）', j, e); }
 

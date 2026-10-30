@@ -18,9 +18,14 @@ function handle(j) {
   if (!r) return null;
   const show = (p) => { const rel = path.relative(r.cwd, p); return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : p; };
   hookLog('guard-output block ' + (r.auto ? 'auto ' : '') + r.file);
-  if (r.auto) {
-    return blockOut('PreToolUse', '[vibe-kit 产出位置] 全自动模式：要新建的 ' + show(r.file) + ' 是一份' + r.type + '，不是代码，放哪还没跟用户定过。不要问，也不要自己挑地方：先写到 '
-      + show(r.pending) + '（位置待定，.vibe 不进仓库），在最后交代的"等你回来定的事"里列出来；用户定了位置再挪过去，记进项目说明的"产出位置"。');
+  // 收尾时一起问（用户 2026-10-30 定的，替代 10-17 下午"新建时先问位置"）：新建时不停下来问，先写到 .vibe/pending/，接着干；
+  // 全自动列进报告，人工模式在这件事做完、收尾时用一个提问框问放哪（收工检查会提醒）
+  if (!r.selfAdded) {
+    const where = (() => { const d = show(path.dirname(r.file)).replace(/\\/g, '/'); return d === '.' || !d ? './' : d.replace(/\/?$/, '/'); })();
+    return blockOut('PreToolUse', '[vibe-kit 产出位置] 要新建的 ' + show(r.file) + ' 是一份' + r.type + '，不是代码，放哪还没跟用户定过。\n'
+      + '现在不用问，也不要自己挑地方：先写到 ' + show(r.pending) + '（位置待定，.vibe 不进仓库），接着干。'
+      + (r.auto ? '在最后交代的"等你回来定的事"里列出来；用户定了位置再挪过去，记进项目说明的"产出位置"。'
+        : '这件事做完收尾时，用一个提问框问用户放哪（一个文件一个问题，选项写实际的目录，例：`' + where + '`，第一个放推荐的，比如项目里已有的同类目录；不写"子项目根目录""仓库根目录"这种说法），定了挪过去，记进 ' + show(r.projectMd) + ' 的"产出位置"一节，以后同类的照着放。'));
   }
   // 选项要写成目录（例：子项目根目录写 jssslt-oa/），"子项目根目录""仓库根目录"这种说法认不出是哪个目录（#196）
   const dir = (() => { const d = show(path.dirname(r.file)).replace(/\\/g, '/'); return d === '.' || !d ? './' : d.replace(/\/?$/, '/'); })();
@@ -31,7 +36,7 @@ function handle(j) {
   if (r.selfAdded) {
     return blockOut('PreToolUse', first + '项目说明里现在有这个位置，但它是这个会话里自己加的，不算定过：这个会话里没用提问框问过用户放哪（防止自己给自己定位置）。别再改项目说明的写法：\n' + how);
   }
-  return blockOut('PreToolUse', first + '项目说明的"产出位置"里没有，用户这次也没说过。先定位置再写：' + how);
+  return null;
 }
 
 module.exports = { handle };

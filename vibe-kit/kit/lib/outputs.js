@@ -34,6 +34,8 @@ function outputTypeOf(file) {
 
 const EXEMPT_DIRS = new Set(['openspec', '.vibe', '.claude', '.github', '.gitlab', '.idea', '.vscode', 'node_modules', '.git', 'skills', 'commands', 'agents', 'target', 'dist', 'build', 'out']);
 const EXEMPT_NAMES = /^(readme|changelog|changes|license|licence|contributing|claude|agents|skill|security|notice|authors)(\.[^/]*)?$/i;
+// 构建、依赖清单这类（审核 P41）：名字带 .txt，其实是工程文件，不算产出
+const BUILD_NAMES = /^(requirements(?:[-_.][\w.-]+)?\.txt|constraints\.txt|cmakelists\.txt|robots\.txt|version\.txt|dependencies\.txt|llms\.txt)$/i;
 const SQL_CODE_DIRS = new Set(['src', 'resources', 'migration', 'migrations', 'flyway', 'liquibase']);
 // 代码目录：里面的 txt、csv、md（banner.txt、测试数据、国际化文案、静态文件）是代码的一部分，程序要读，不是给人看的产出
 const CODE_DIRS = new Set(['resources', 'test', 'tests', '__tests__', 'public', 'static', 'assets', 'webapp', 'web-inf', 'i18n', 'locales', 'locale', 'lang', 'mapper', 'mappers', 'migration', 'migrations', 'flyway', 'liquibase', 'fixtures', 'testdata', 'test-data', 'mock', 'mocks']);
@@ -83,7 +85,7 @@ function exempt(file) {
   const name = segs[segs.length - 1];
   const dirs = segs.slice(0, -1);
   if (dirs.some((s) => EXEMPT_DIRS.has(s))) return true;
-  if (EXEMPT_NAMES.test(name)) return true;
+  if (EXEMPT_NAMES.test(name) || BUILD_NAMES.test(name)) return true;
   if (dirs.some((s) => CODE_DIRS.has(s))) return true;
   if (/\.sql$/i.test(name) && dirs.some((s) => SQL_CODE_DIRS.has(s))) return true;
   if (/\.(md|markdown|txt)$/i.test(name) && /技能|文档/.test(projectTypeOf(path.dirname(file)))) return true;
@@ -343,7 +345,8 @@ function outputCheck(j, cfg) {
   const dirKey = normKey(path.dirname(f));
   if (answers.some((x) => ROOT_ANSWER.test(x.a.trim())) && roots.filter(Boolean).some((r) => normKey(r) === dirKey)) return null;
   const auto = !!(cfg && cfg.autoMode);
-  if (auto && establishedDir(f, root)) return null;
+  // 项目里现成的同类目录（同一目录里已经有两个以上同类文件）直接用：人工模式也一样（用户 2026-10-30 定的，以前只有全自动这样）
+  if (establishedDir(f, root)) return null;
   // 现在的项目说明里其实有这个位置，只是这个会话里自己加的：提示里直说，别让模型反复改写法（#218、#196）
   const selfAdded = files.some((df) => declsOf(df).some((d) => matches(f, d.pattern)));
   // 这个会话里用提问框问过用户放哪、用户答了，模型照答案记进项目说明的：算定过（#225：以前一律当"自己给自己定位置"）
