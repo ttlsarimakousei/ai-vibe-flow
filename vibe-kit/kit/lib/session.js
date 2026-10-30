@@ -769,20 +769,29 @@ function uniquifyToolIds(entries) {
 function tailEntries(file, maxBytes) {
   return require('./invocation').memo('transcript|' + file + '|' + (maxBytes || 400000), () => tailEntriesRaw(file, maxBytes));
 }
+/**
+ * 读到的这一段里一句用户开口都没有（这一轮工具输出很大，用户那句话在更前面）、文件还有更早的：往前再读，翻倍，最多 32 MB（审核 P14）。
+ * 以前读不到就当用户没说，提交、推送、审查都拦下要再说一遍
+ */
+const TAIL_MAX = 32 * 1024 * 1024;
 function tailEntriesRaw(file, maxBytes) {
   require('./invocation').phase('读取会话记录');
   try {
     const st = fs.statSync(file);
-    const size = Math.min(st.size, maxBytes || 400000);
-    const fd = fs.openSync(file, 'r');
-    const buf = Buffer.alloc(size);
-    fs.readSync(fd, buf, 0, size, st.size - size);
-    fs.closeSync(fd);
-    const lines = buf.toString('utf8').split('\n');
-    if (st.size > size) lines.shift();
-    const out = [];
-    for (const l of lines) { if (!l.trim()) continue; try { out.push(JSON.parse(l)); } catch (e) { /* 半截行 */ } }
-    return uniquifyToolIds(out);
+    let want = maxBytes || 400000;
+    for (;;) {
+      const size = Math.min(st.size, want);
+      const fd = fs.openSync(file, 'r');
+      const buf = Buffer.alloc(size);
+      try { fs.readSync(fd, buf, 0, size, st.size - size); } finally { fs.closeSync(fd); }
+      const lines = buf.toString('utf8').split('\n');
+      if (st.size > size) lines.shift();
+      const out = [];
+      for (const l of lines) { if (!l.trim()) continue; try { out.push(JSON.parse(l)); } catch (e) { /* 半截行 */ } }
+      const hasVoice = out.some((e) => isUserTurn(e) && !isTaskNote(e));
+      if (hasVoice || size >= st.size || want >= TAIL_MAX || (maxBytes || 400000) < 1000000) return uniquifyToolIds(out);
+      want = Math.min(TAIL_MAX, want * 2);
+    }
   } catch (e) { return []; }
 }
 
