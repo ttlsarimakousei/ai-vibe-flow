@@ -388,11 +388,20 @@ function innerCommand(ws, head, dir, docs) {
  * push 的保守兜底：拆命令总有想不到的写法（函数、别名、变量拼命令……）。去掉 heredoc 正文和引号里的内容之后，
  * 只要出现 git [选项] push，就要用户确认——多问一次没有坏处，漏一次就推出去了
  */
+const PUSH_WORD = /(^|[^\w.-])git(\.exe)?((\s+(-C|-c|--git-dir|--work-tree|--namespace)\s+\S+)|(\s+--?[\w-]+(=\S+)?))*\s+push(?=$|[\s;&|)}`])/i;
 function pushAnywhere(cmd, ps) {
   const { s } = preprocess(cmd, ps);
   // 引号里的换成一个占位词：提交信息里写的"git push"不算，git -C "$d" push 的目录参数还在
   const bare = s.replace(/"(?:[^"\\`]|\\.|`.)*"|'[^']*'/g, ' Q ');
-  return /(^|[^\w.-])git(\.exe)?((\s+(-C|-c|--git-dir|--work-tree|--namespace)\s+\S+)|(\s+--?[\w-]+(=\S+)?))*\s+push(?=$|[\s;&|)}])/i.test(bare);
+  if (PUSH_WORD.test(bare)) return true;
+  // 双引号里的命令替换照样会执行：bash 的 $(…) 和 `…`，PowerShell 的 $(…)。以前整段引号当成文字，
+  // echo "r $(git push)"、x=`git push` 都放行了（审核 P08）。单引号里的不展开，不算
+  for (const m of s.matchAll(/"((?:[^"\\`]|\\.|`.)*)"/g)) {
+    for (const sub of m[1].matchAll(/\$\(((?:[^()]|\([^()]*\))*)\)/g)) if (PUSH_WORD.test(sub[1])) return true;
+    if (!ps) for (const sub of m[1].matchAll(/`([^`]*)`/g)) if (PUSH_WORD.test(sub[1])) return true;
+  }
+  if (!ps) for (const sub of bare.matchAll(/`([^`]*)`/g)) if (PUSH_WORD.test(sub[1])) return true;
+  return false;
 }
 /**
  * 跑套件的发布脚本（安装包里的 publish.js、"发布到 GitLab"那个 bat）：它会把安装包 git push 到团队的仓库，
