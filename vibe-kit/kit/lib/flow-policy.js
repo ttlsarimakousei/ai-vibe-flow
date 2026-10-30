@@ -246,7 +246,9 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   }
   // 人工模式、不在 OpenSpec 任务组里的代码改动：改完问一次审查、自测。用户答了不用，这个会话后面再改代码不再问那一样
   // （用户 2026-10-30 定的，替代 2026-10-16"新要求、内容变了才再问"）。验收用例只写在走 OpenSpec 的 design.md 里，这里只说自测（审核第三节第 7 条）
-  if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test')) {
+  // /vk-fix（小改动快车道，用户 2026-10-30 定的斜杠命令）这一轮：不问审查、自测，命令里写明了最后只问一次提交
+  const vkFix = (() => { try { return S.turnVoices(entriesOf(j)).some((v) => (v.kind === 'command' && /^vk-fix$/i.test(String(v.command || ''))) || /^\s*\/vk-fix\b/i.test(String(v.text || ''))); } catch (e) { return false; } })();
+  if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test') && !vkFix) {
     const keyD = j.session_id && j.session_id !== 'unknown' ? String(j.session_id) + '-plain-declined' : '';
     let sess = keyD ? S.readState(keyD) : {};
     if (keyD && ((noReview && !sess.review) || (noTest && !sess.test))) { S.updateState(keyD, (o) => { if (noReview && !o.review) o.review = Date.now(); if (noTest && !o.test) o.test = Date.now(); }); sess = S.readState(keyD); }
@@ -321,7 +323,7 @@ function actionIssue(j) {
     try {
       const v = S.flowView(j);
       why = '（配置页开了' + [cfg.autoRequirements ? '需求自动' : '', cfg.autoApply ? 'Apply 自动' : ''].filter(Boolean).join('、') + '，开关是现读的，但这一轮不算自动：'
-        + (v.waiting ? v.waiting : v.phase === '需求与提案' ? (cfg.autoApply && !cfg.autoRequirements ? '这个会话还在需求与提案阶段，Apply 自动要用户说"开工"（或"开始实施"、敲 /opsx:apply）之后才算' : '需求文档还没写到能自动审修的那一步') : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
+        + (v.waiting ? v.waiting : v.phase === '需求与提案' ? (cfg.autoApply && !cfg.autoRequirements ? '这个会话还在需求与提案阶段，Apply 自动要用户说"开工"（或"开始实施"、敲 /vk-go、/opsx:apply）之后才算' : '需求文档还没写到能自动审修的那一步') : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
     } catch (e) { why = ''; }
   }
   // 说清楚用户怎么答才算（#210、#212：只说"先 Ask"，模型和用户都不知道哪句话算数，去翻套件源码找口令）

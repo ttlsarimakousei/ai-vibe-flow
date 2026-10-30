@@ -55,7 +55,8 @@ function looksLikeRequirement(p) {
  */
 const CONTINUE_WORDS = /^(继续|接着|接着做|继续做|往下做|下一步|好|好的|嗯|行|可以|ok|okay|go on|continue|next|做吧|开始吧)[\s。！!，,.~～]*$/i;
 // 流程里会用到的那几个技能（审查、看页面、交接）：用户自己敲它们，不算进流程也不算出流程，跟上一轮一样
-const SAME_SLASH = /^\s*\/(ttls-)?(cross-review|see-page|handover)(\s|$)/i;
+// 套件的许可命令（/vk-commit、/vk-push、/vk-archive、/vk-review、/vk-test，用户 2026-10-30 定的）也跟上一轮一样：在流程里就还在
+const SAME_SLASH = /^\s*\/(?:(ttls-)?(cross-review|see-page|handover)|vk-(?:commit|push|archive|review|test))(\s|$)/i;
 // 敲的是 /opsx:apply（不是 archive、verify 这些）；或者在说归档的事（点了名让它归档，不算开工）
 const APPLY_CMD = /^\s*\/(opsx:|openspec[-:])apply\b|<command-name>\s*\/?(opsx:|openspec[-:])apply\b/i;
 const ARCHIVE_TALK = /^\s*\/(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b|<command-name>\s*\/?(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b|归档|archive/i;
@@ -85,7 +86,7 @@ function decideFlow(j, cfg, note, resumed) {
   const stageOf = (fallback) => (applyIntent(p) ? 'apply' : planIntent(p) ? 'plan' : fallback);
   // 上一轮在流程里；或者上一轮只是插进来问了一句、再上一轮在流程里（一天之内）
   const going = !!prev.on || (!!prev.was && Date.now() - prev.was < 86400000);
-  if (FLOW_SLASH.test(p) || FLOW_TAG.test(p)) { on = true; why = '敲了 OpenSpec 的命令'; stage = APPLY_SLASH.test(p) || APPLY_TAG.test(p) ? 'apply' : 'plan'; }
+  if (FLOW_SLASH.test(p) || FLOW_TAG.test(p) || APPLY_SLASH.test(p) || APPLY_TAG.test(p)) { on = true; why = '敲了 OpenSpec 的命令'; stage = APPLY_SLASH.test(p) || APPLY_TAG.test(p) ? 'apply' : 'plan'; }
   else if (SAME_SLASH.test(p)) { on = !!prev.on; why = on ? '接着上一轮' : ''; }
   // 别的斜杠命令（/ttls-onboard、自己的命令）：这一轮做的是那件事，不在流程里（议题 #9）
   else if (/^\s*\//.test(p)) { on = false; }

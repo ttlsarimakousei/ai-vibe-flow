@@ -134,6 +134,69 @@ H.section('A10 会被拦的规矩提前说：进写需求、做任务这两段�
   H.ok('开工：说了做任务这一段的规矩（devserver、git add、不串 cd）', /做任务这一段的规矩/.test(t3) && /devserver\.js/.test(t3) && /git -C/.test(t3), t3.slice(0, 600));
 }
 
+H.section('A11 斜杠命令：/vk-commit、/vk-push、/vk-archive、/vk-review、/vk-test 算许可，/vk-go 算开工，/vk-fix 不问审查自测；安装器装、卸');
+{
+  const h = H.makeHome('tco-a11', FROM, Object.assign({}, QUIET, { commitMode: 'off' }));
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  const F = require(path.join(h.kit, 'lib', 'flow-policy.js'));
+  const SRC_CMDS = path.join(FROM || H.SRC, 'claude', 'commands');
+  // 敲了自定义命令，会话记录里是两条：带 <command-name> 的一条，和 isMeta 的命令正文（正文里的字不算用户说的）
+  const cmd = (name, args) => [H.tr.user('<command-message>' + name + '</command-message>\n<command-name>/' + name + '</command-name>\n<command-args>' + (args || '') + '</command-args>'),
+    Object.assign(H.tr.user(H.read(path.join(SRC_CMDS, name + '.md')) || ('（' + name + ' 的正文）先别推送，先别提交')), { isMeta: true })];
+  let n = 0;
+  const es = (entries) => S.tailEntries(H.transcript(path.join(h.root, 'a11-' + (++n) + '.jsonl'), entries), 3000000);
+  for (const [c, topic] of [['vk-commit', 'commit'], ['vk-push', 'push'], ['vk-archive', 'archive'], ['vk-review', 'review'], ['vk-test', 'test']]) {
+    const r = S.userSaid(es([H.tr.user('改一下 A'), H.tr.say('改好了'), ...cmd(c)]), topic);
+    H.ok('/' + c + '：算' + topic + '许可', r.ok, r);
+  }
+  const r0 = S.userSaid(es([...cmd('vk-review'), H.tr.say('审完了')]), 'push');
+  H.ok('/vk-review 不算推送许可', !r0.ok, r0);
+  // 推送走真钩子：只有 /vk-push、没说过"推送"两个字也放行
+  const proj = H.makeRepo(path.join(h.work, 'proj'), { 'src/A.java': 'class A {}\n' });
+  const bare = path.join(h.root, 'remote.git');
+  spawnSync('git', ['init', '-q', '--bare', bare], { windowsHide: true });
+  H.git(proj, ['remote', 'add', 'origin', bare]);
+  H.git(proj, ['push', '-q', '-u', 'origin', 'HEAD']);
+  H.write(path.join(proj, 'src', 'A.java'), 'class A { int x; }\n');
+  H.git(proj, ['commit', '-qam', 'fix: A 加字段']);
+  const push = (entries) => { n++; return H.hook(h, 'guard-commit', { session_id: 's-a11-' + n, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git push' }, tool_use_id: 'toolu_a11_' + n, transcript_path: H.transcript(path.join(h.root, 'a11p-' + n + '.jsonl'), entries) }); };
+  const p1 = push([H.tr.user('A 加个字段'), H.tr.say('改好提交了'), ...cmd('vk-push')]);
+  H.ok('敲了 /vk-push：git push 放行', !stopped(p1), p1);
+  const p2 = push([H.tr.user('A 加个字段'), H.tr.say('改好提交了'), ...cmd('vk-commit')]);
+  H.ok('只敲了 /vk-commit：git push 照旧拦', stopped(p2), p2);
+  // /vk-go 开工：打勾不拦、流程切到做任务那一段
+  const p = H.makeRepo(path.join(h.work, 'proj2'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE));
+  const tick = (sid, entries) => { H.inFlow(h, sid, [path.join(p, 'openspec/changes/feat-019')], true, 'plan'); const r = H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'openspec/changes/feat-019/tasks.md'), old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }); return { r, stage: S.flowState({ session_id: sid }).stage }; };
+  const g1 = tick('s-a11-go', [H.tr.user('写 feat-019 的需求'), H.tr.say('四份文档都写完了'), ...cmd('vk-go', 'feat-019')]);
+  H.ok('敲了 /vk-go feat-019：算开工，打勾不拦', !blocked(g1.r) && g1.stage === 'apply', g1);
+  const say = (sid, prompt) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, sid + '-p.jsonl'), [H.tr.user(prompt)]) });
+  say('s-a11-go2', '/vk-go feat-019');
+  H.ok('用户开口就是 /vk-go：进了流程、在做任务那一段', S.flowState({ session_id: 's-a11-go2' }).on === true && S.flowState({ session_id: 's-a11-go2' }).stage === 'apply', S.flowState({ session_id: 's-a11-go2' }));
+  // 状态栏：在等你自测验收时，写下一步说什么
+  const norm = (x) => path.resolve(x).split(path.sep).join('/').toLowerCase();
+  H.write(path.join(h.kit, 'state', 's-a11-sl-flow.json'), JSON.stringify({ on: true, why: '测试', at: Date.now(), was: Date.now(), changes: [norm(path.join(p, 'openspec/changes/feat-019'))], stage: 'apply', waiting: '等用户自测验收' }));
+  const sl = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: 's-a11-sl', cwd: p, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: p }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: p }).out.replace(/\x1b\[[0-9;]*m/g, '');
+  H.ok('状态栏：等你自测验收时写"自测后说归档或 /vk-archive"', /等用户自测验收：自测后说归档或 \/vk-archive/.test(sl), sl);
+  // /vk-fix：小改动这一轮不问审查、自测
+  const fix = (sid, entries) => (H.write(path.join(proj, 'src', 'A.java'), 'class A { int ' + sid.replace(/\W/g, '') + '; }\n'), F.stop({ session_id: sid, cwd: proj, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }, [], true, 1, null, Date.now()) || []).join('\n');
+  const e1 = H.tr.ran('Edit', { file_path: path.join(proj, 'src', 'A.java'), old_string: 'a', new_string: 'b' }, 'ok');
+  const f0 = fix('s-a11-f0', [H.tr.user('把 A 的字段改个名'), e1, H.tr.say('改好了')]);
+  H.ok('普通说法改代码：收工问审查、自测', /询问是否审查、是否自测/.test(f0), f0);
+  const f1 = fix('s-a11-f1', [...cmd('vk-fix', '把 A 的字段改个名'), e1, H.tr.say('改好了')]);
+  H.ok('/vk-fix 这一轮：收工不问审查、自测', !/询问是否审查、是否自测/.test(f1), f1);
+  // 安装器：装进 ~/.claude/commands；你改过的同名文件先备份；卸载时收回
+  const pkg = (() => { if (!FROM) return H.makePackage('tco-a11-pkg', '20261030.1400'); const d = path.join(H.tempDir('tco-a11-pkg'), 'vibe-kit'); H.copyDir(FROM, d, (x) => x === 'node_modules' || x === '.git'); H.stubDeps(d); return d; })();
+  const u = H.freshHome('tco-a11-inst');
+  H.write(path.join(u.cfg, 'commands', 'vk-push.md'), '我自己的 vk-push\n');
+  const inst = H.node(u, path.join(pkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+  const names = ['vk-go', 'vk-commit', 'vk-push', 'vk-archive', 'vk-review', 'vk-test', 'vk-fix'];
+  H.ok('装好后 ~/.claude/commands 下有 7 个 vk 命令', inst.code === 0 && names.every((x) => fs.existsSync(path.join(u.cfg, 'commands', x + '.md'))), inst.out.slice(-600));
+  H.ok('你原来的同名 /vk-push 先备份了', /已有同名命令 \/vk-push/.test(inst.out), inst.out.slice(-600));
+  H.write(path.join(u.cfg, 'commands', 'mine.md'), '我自己的命令\n');
+  const un = H.node(u, path.join(u.kit, 'install.js'), ['--uninstall'], { cwd: u.root, timeout: 120000 });
+  H.ok('卸载收回了 vk 命令、留下你自己的命令', un.code === 0 && names.every((x) => !fs.existsSync(path.join(u.cfg, 'commands', x + '.md'))) && fs.existsSync(path.join(u.cfg, 'commands', 'mine.md')), un.out.slice(-600));
+}
+
 H.section('A12 /opsx:propose 装好后先说套件的规矩：只写 proposal 就停，一份一份来（不照原文一步全写）');
 {
   const h = H.makeHome('tco-a12', FROM, QUIET, { openspec: true });

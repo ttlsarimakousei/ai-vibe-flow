@@ -137,7 +137,12 @@ process.stdin.on('end', () => {
   if (fl.effective) line2.push(C.yellow + fl.phase + '，当前生效' + C.reset);
   // 这个会话做的变更都归档了：明说照常，不再像在做任务（用户 2026-10-07 反馈）
   else if (fl.archived) line2.push(C.dim + fl.phase + '，照常，变更已归档' + C.reset);
-  else if (fl.waiting) line2.push(C.yellow + fl.waiting + C.reset);
+  // 在等你：写明你下一步说什么（用户 2026-10-30 定的斜杠命令，和说中文并存）
+  else if (fl.waiting) {
+    const w = fl.waiting;
+    const next = /自测验收/.test(w) ? '：自测后说归档或 /vk-archive' : /范围变化/.test(w) ? '：说开工或 /vk-go' : '';
+    line2.push(C.yellow + w + next + C.reset);
+  }
   // Claude Code 会在用到多少时自己压缩（套件写进 settings.json 的 autoCompactWindow；新开的会话才认）
   const at = autoCompactAt(cfg, windowSize);
   if (at) line2.push(C.dim + '到 ' + k(at) + ' 自动压缩' + C.reset);

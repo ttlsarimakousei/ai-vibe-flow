@@ -28,6 +28,8 @@ const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
 const SKILLS = ['ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis'];
 const AGENTS = ['ttls-reviewer.md'];
+/** 一个目录里套件的斜杠命令文件（vk-*.md）；目录不在返回空 */
+function kitCommands(dir) { try { return fs.readdirSync(dir).filter((f) => /^vk-[\w-]+\.md$/i.test(f)).sort(); } catch (e) { return []; } }
 // 改名之前套件自己装的（名字太普通，会和别人的套件撞）：装这一版时删掉
 const OLD_SKILLS = ['onboard', 'see-page', 'cross-review', 'handover'];
 const OLD_AGENTS = ['vibe-reviewer.md'];
@@ -655,6 +657,13 @@ if (mode === 'uninstall') {
     if (!same(f, path.join(KIT, 'pristine', 'agents', n))) console.log('  [!] 审查代理 ' + n + ' 被改过，删除前备份在 ' + backup(f, 'agents/' + n));
     fs.unlinkSync(f);
   }
+  // 套件的斜杠命令（vk-*）：改过的先备份再删
+  for (const n of kitCommands(path.join(KIT, 'pristine', 'commands'))) {
+    const f = path.join(CLAUDE, 'commands', n);
+    if (!fs.existsSync(f)) continue;
+    if (!same(f, path.join(KIT, 'pristine', 'commands', n))) console.log('  [!] 命令 /' + n.replace(/\.md$/, '') + ' 被改过，删除前备份在 ' + backup(f, 'commands/' + n));
+    fs.unlinkSync(f);
+  }
   // 从改名之前的版本直接卸载：旧名字的技能也是套件装的，一起收回
   removeOldNames();
   // 自带的 OpenSpec 生成的命令和技能（清单里记着的）
@@ -928,6 +937,21 @@ if (mode === 'install') {
     if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'agents', n)) && !same(d, path.join(KIT, 'pristine', 'agents', n))) console.log('  [!] 已有同名代理 ' + n + '，原文件备份在 ' + backup(d, 'agents/' + n));
     copyFile(path.join(SRC, 'claude', 'agents', n), d);
   }
+  // 套件的斜杠命令（/vk-go、/vk-commit、/vk-push、/vk-archive、/vk-review、/vk-test、/vk-fix，用户 2026-10-30 定的）：装成用户级命令，
+  // 敲了钩子直接认成许可，和说中文并存。同名的你自己的、改过的，先备份
+  const cmds = kitCommands(path.join(SRC, 'claude', 'commands'));
+  // 上一版装过、这一版没有的命令：没改过就收回（改过的留着，算你的）
+  for (const n of kitCommands(path.join(KIT, 'pristine', 'commands'))) {
+    const f = path.join(CLAUDE, 'commands', n);
+    if (!cmds.includes(n) && fs.existsSync(f) && same(f, path.join(KIT, 'pristine', 'commands', n))) fs.unlinkSync(f);
+  }
+  if (cmds.length) fs.mkdirSync(path.join(CLAUDE, 'commands'), { recursive: true });
+  for (const n of cmds) {
+    const d = path.join(CLAUDE, 'commands', n);
+    if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'commands', n)) && !same(d, path.join(KIT, 'pristine', 'commands', n))) console.log('  [!] 已有同名命令 /' + n.replace(/\.md$/, '') + '，原文件备份在 ' + backup(d, 'commands/' + n));
+    copyFile(path.join(SRC, 'claude', 'commands', n), d);
+  }
+  if (cmds.length) console.log('  [OK] 斜杠命令：' + cmds.map((n) => '/' + n.replace(/\.md$/, '')).join('  ') + '（敲了直接算你的许可，和说中文一样）');
   // 改名之前的、并进来之前单独装的：删掉。要在换掉 pristine 之前做
   const renamed = removeOldNames();
   const man0 = readManifest();
