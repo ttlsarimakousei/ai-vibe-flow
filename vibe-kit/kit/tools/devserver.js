@@ -439,6 +439,40 @@ function keep() {
   c.on('close', (code) => process.exit(code == null ? 1 : code));
 }
 const quote = (a) => (/^[\w.\-/:\\=@%+,]+$/.test(a) ? a : '"' + String(a).replace(/"/g, '\\"') + '"');
+/** 项目的源文件编码：项目说明（.vibe/project.md，后台自动探索写的）里"- 编码："那一行，往上找到壳子为止；没写的按 UTF-8 */
+function projectEncoding(from) {
+  for (let d = path.resolve(from), i = 0; i < 4; i++) {
+    let t = '';
+    try { t = fs.readFileSync(path.join(d, '.vibe', 'project.md'), 'utf8'); } catch (e) { t = ''; }
+    const m = /^-\s*编码[：:]\s*(.+)$/m.exec(t);
+    if (m) {
+      const v = m[1].trim();
+      if (/^UTF-?8/i.test(v)) return 'UTF-8';
+      if (/^GB18030/i.test(v)) return 'GB18030';
+      if (/^(GBK|GB2312)|不是 UTF-8 的居多/i.test(v)) return 'GBK';
+      return 'UTF-8';
+    }
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  }
+  return 'UTF-8';
+}
+/**
+ * Java 进程的编码参数（问题表第 23 条，用户 2026-10-30 定的）：IDEA 起 Tomcat、Spring Boot 时自己带 -Dfile.encoding=<项目编码>，
+ * devserver 以前不带，JVM 用系统的编码（英文 Windows 是 Windows-1252，中文是 GBK）：Tomcat 的 default servlet 按 file.encoding 读静态文件，
+ * 编码过滤器又强制回 UTF-8，静态页面、js 里的中文全乱；JSP 没写 pageEncoding 的也一样。日志（System.out）统一按 UTF-8 写，
+ * devserver 按 UTF-8 读。走 JAVA_TOOL_OPTIONS：mvn、gradle、catalina、java 起的 JVM 都认；命令里、JAVA_OPTS、CATALINA_OPTS 这些已经写了的那一项不加。
+ * 前端（node、npm 这类）不加
+ */
+function javaEncodingOpts(command, env, projectDir) {
+  if (/^\s*"?(?:[^"\s]*[\\/])?(node|npm|npx|pnpm|yarn|bun|deno|vite|python|py)(\.exe|\.cmd)?"?(\s|$)/i.test(command)) return '';
+  const given = [command, env.JAVA_TOOL_OPTIONS, env.JDK_JAVA_OPTIONS, env._JAVA_OPTIONS, env.JAVA_OPTS, env.CATALINA_OPTS, env.MAVEN_OPTS, env.GRADLE_OPTS].filter(Boolean).join(' ');
+  const out = [];
+  if (!/-Dfile\.encoding=/.test(given)) out.push('-Dfile.encoding=' + projectEncoding(projectDir));
+  for (const p of ['stdout.encoding', 'stderr.encoding', 'sun.stdout.encoding', 'sun.stderr.encoding']) if (!new RegExp('-D' + p.replace(/\./g, '\\.') + '=').test(given)) out.push('-D' + p + '=UTF-8');
+  return out.join(' ');
+}
 async function launch(name, port, command, meta) {
   fs.mkdirSync(runDir, { recursive: true });
   const log = logFile(name);
@@ -448,6 +482,8 @@ async function launch(name, port, command, meta) {
   if (opt('backend')) { const backend = readRec(opt('backend')); if (!backend || !sameProc(backend) || !(await portOpen(backend.port, 300))) throw new Error('指定后端没有有效运行记录，请先用 devserver 起后端'); backendUrl = 'http://127.0.0.1:' + backend.port; Object.assign(env, { VIBE_BACKEND_URL: backendUrl, VITE_BACKEND_URL: backendUrl, BACKEND_URL: backendUrl }); }
   for (const kv of envs) { const i = kv.indexOf('='); if (i > 0) env[kv.slice(0, i)] = kv.slice(i + 1); }
   const cwd = path.resolve(dir, opt('cwd') || '.');
+  const javaOpts = javaEncodingOpts(command, env, cwd);
+  if (javaOpts) { env.JAVA_TOOL_OPTIONS = (env.JAVA_TOOL_OPTIONS ? env.JAVA_TOOL_OPTIONS + ' ' : '') + javaOpts; console.log('Java 的编码：' + javaOpts + '（照项目说明里的编码；命令里、JAVA_OPTS 里自己写了的那一项不加）'); }
   if (opt('backend')) {
     const front = require('../lib/onboard').frontendFacts(cwd, new Set());
     if (front && front.fixedProxyFiles && front.fixedProxyFiles.length) console.error('提醒：前端代理有写死的 target，--backend 只传环境变量。先核对代理是否读取 VIBE_BACKEND_URL（有上下文路径的要保留路径），再验证请求确实到达自测后端；统一认证/CORS 的固定端口另记进项目说明。');
