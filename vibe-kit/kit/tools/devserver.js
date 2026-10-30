@@ -213,14 +213,16 @@ function listeners(port) {
   } catch (e) { /* 查不到就当没有 */ }
   return [...out].filter((p) => p > 0);
 }
-/** 进程的名字、命令行、创建时间 */
+/**
+ * 进程的名字、命令行、创建时间。Windows 上从进程表里取（审核第五节、C 批 C2）：以前每查一个进程起一个 PowerShell（一次 1—3 秒），
+ * 一次 start 要起好几个；现在一次调用只取一份带命令行的进程表，3 秒内复用，表里没有的（刚起的）才重取一次
+ */
 function procInfo(pid) {
   try {
     if (WIN) {
-      const ps = path.join(SYS32, 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-      const script = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; $p = Get-CimInstance Win32_Process -Filter 'ProcessId=" + Number(pid) + "'; if ($p) { $p.Name; ([datetime]$p.CreationDate).ToString('o'); $p.CommandLine }";
-      const t = execFileSync(ps, ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 15000 }).split(/\r?\n/);
-      return { pid, name: (t[0] || '').trim(), created: Date.parse((t[1] || '').trim()) || 0, cmd: t.slice(2).join(' ').trim() };
+      let p = procTable().find((x) => x.pid === Number(pid));
+      if (!p && TABLE && Date.now() - TABLE.at > 300) p = procTable(true).find((x) => x.pid === Number(pid));
+      return p ? { pid, name: p.name, created: p.created, cmd: p.cmd || '' } : { pid, name: '', created: 0, cmd: '' };
     }
     const cmd = execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8' }).trim();
     const lstart = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8' }).trim();
@@ -228,14 +230,22 @@ function procInfo(pid) {
   } catch (e) { return { pid, name: '', created: 0, cmd: '' }; }
 }
 function routerPid() { try { return Number(JSON.parse(fs.readFileSync(path.join(KIT, 'router-data', 'router.pid'), 'utf8')).pid) || 0; } catch (e) { return 0; } }
-/** 这台电脑上现在所有的进程：[{ pid, ppid, name, created }]。查不了返回空 */
-function procTable() {
+/** 这台电脑上现在所有的进程：[{ pid, ppid, name, created, cmd }]。查不了返回空。Windows 上一次调用里 3 秒内复用（fresh 为真时重取） */
+let TABLE = null;
+const TABLE_MS = 3000;
+/** 结束了进程、起了新进程之后，进程表和端口表都要重取 */
+function invalidate() { TABLE = null; }
+function procTable(fresh) {
   try {
     if (WIN) {
+      if (!fresh && TABLE && Date.now() - TABLE.at < TABLE_MS) return TABLE.rows;
       const ps = path.join(SYS32, 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-      const script = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; Get-CimInstance Win32_Process | ForEach-Object { [string]$_.ProcessId + [char]9 + $_.ParentProcessId + [char]9 + $_.Name + [char]9 + ([datetime]$_.CreationDate).ToString('o') }";
-      const t = execFileSync(ps, ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 16 * 1024 * 1024 });
-      return t.split(/\r?\n/).map((l) => l.split('\t')).filter((x) => x.length >= 4 && Number(x[0]) > 0).map((x) => ({ pid: Number(x[0]), ppid: Number(x[1]), name: x[2], created: Date.parse(x[3]) || 0 }));
+      // 字段用 \x01 隔开、每个进程用 \x02 收尾：命令行里可能有制表符、换行
+      const script = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; Get-CimInstance Win32_Process | ForEach-Object { [string]$_.ProcessId + [char]1 + $_.ParentProcessId + [char]1 + $_.Name + [char]1 + ([datetime]$_.CreationDate).ToString('o') + [char]1 + $_.CommandLine + [char]2 }";
+      const t = execFileSync(ps, ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 64 * 1024 * 1024 });
+      const rows = t.split('\x02').map((l) => l.replace(/^\s+/, '').split('\x01')).filter((x) => x.length >= 4 && Number(x[0]) > 0).map((x) => ({ pid: Number(x[0]), ppid: Number(x[1]), name: x[2], created: Date.parse(x[3]) || 0, cmd: String(x[4] || '').replace(/\s+/g, ' ').trim() }));
+      TABLE = { at: Date.now(), rows };
+      return rows;
     }
     const t = execFileSync('ps', ['-eo', 'pid=,ppid=,comm='], { encoding: 'utf8' });
     return t.split(/\n/).map((l) => l.trim().split(/\s+/)).filter((x) => Number(x[0]) > 0).map((x) => ({ pid: Number(x[0]), ppid: Number(x[1]), name: path.basename(x.slice(2).join(' ')), created: 0 }));
@@ -329,6 +339,7 @@ function sameProc(rec) {
   return !i.created || Math.abs(i.created - rec.startedAt) < 15000;
 }
 function killTree(pid) {
+  invalidate();
   if (!alive(pid) || pid === routerPid()) return;
   try {
     if (WIN) execFileSync(path.join(SYS32, 'taskkill.exe'), ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
@@ -375,6 +386,54 @@ async function stopRec(rec) {
 
 // ---------- 代码在服务起来之后改过没有 ----------
 const SKIP = new Set(['.git', '.vibe', 'node_modules', 'target', 'build', 'dist', 'out', 'logs', '.idea', '.vscode']);
+// 不进运行的（审核第五节、Codex C15，用户 2026-10-30 定的）：文档、需求文档、测试代码、服务自己写出来的日志和库文件。改了这些不用重启
+const NOT_RUN = /(^|\/)(openspec|docs?|src\/test|__tests__)(\/|$)|\.(test|spec)\.[cm]?[jt]sx?$|\.(md|markdown|log|mv\.db|trace\.db|lock\.db|lck|pid|tmp|swp|orig|rej|bak)$|(^|\/)(README|CHANGELOG|LICENSE|NOTICE)[^/]*$/i;
+const runFile = (f) => !!f && !f.split('/').some((x) => SKIP.has(x)) && !NOT_RUN.test(f);
+const gitText = (root) => (args, input) => execFileSync('git', ['-C', root, '-c', 'core.quotepath=false'].concat(args), { encoding: 'utf8', input, stdio: [input == null ? 'ignore' : 'pipe', 'pipe', 'ignore'], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+/** git 看得到的改动（含没跟踪的），只留会进运行的；改名两头都算 */
+function dirtyRunFiles(git, rel) {
+  const out = new Set();
+  for (const line of git(['status', '--porcelain', '-uall', '--', rel || '.']).split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    for (const part of line.slice(3).split(' -> ')) { const p = part.replace(/^"|"$/g, ''); if (runFile(p)) out.add(p); }
+  }
+  return [...out];
+}
+/** 工作区里这些文件现在的内容（git 的 blob 哈希，换行按 git 的规则转过）；不在了的是 '' */
+function blobsNow(root, git, files) {
+  const out = {};
+  const there = files.filter((p) => { try { return fs.statSync(path.join(root, p)).isFile(); } catch (e) { return false; } });
+  for (const p of files) out[p] = '';
+  if (there.length) { const h = git(['hash-object', '--stdin-paths'], there.join('\n') + '\n').trim().split(/\r?\n/); there.forEach((p, i) => { out[p] = h[i] || ''; }); }
+  return out;
+}
+/** 某次提交里这些文件的内容（blob 哈希）；那时还没有的是 '' */
+function blobsAt(git, rev, files) {
+  const out = {};
+  for (const p of files) out[p] = '';
+  if (!rev) return out;
+  for (let i = 0; i < files.length; i += 100) {
+    for (const line of git(['ls-tree', '-r', rev, '--'].concat(files.slice(i, i + 100))).split(/\r?\n/)) { const m = /^\d+ blob ([0-9a-f]+)\t(.+)$/.exec(line); if (m) out[m[2].replace(/^"|"$/g, '')] = m[1]; }
+  }
+  return out;
+}
+/**
+ * 起服务时的代码快照：运行目录所在仓库的 HEAD，和当时改着的会进运行的文件的内容。之后按内容比（C1）：只是提交了、改了又改回去不算；
+ * 删掉、改名算。不在 git 里（或者被壳子忽略）的返回 null，照旧按修改时间看
+ */
+function codeSnap(where) {
+  const base = path.resolve(where || dir);
+  const root = gitRootOf(base);
+  if (!root) return null;
+  try {
+    const rel = path.relative(root, base).split(path.sep).join('/');
+    if (rel) { try { execFileSync('git', ['-C', root, 'check-ignore', '-q', rel], { stdio: 'ignore', windowsHide: true }); return null; } catch (e) { /* 没被忽略 */ } }
+    const git = gitText(root);
+    let head = ''; try { head = git(['rev-parse', '--verify', '-q', 'HEAD']).trim(); } catch (e) { head = ''; }
+    const files = blobsNow(root, git, dirtyRunFiles(git, rel));
+    return { root, rel, head, files };
+  } catch (e) { return null; }
+}
 function gitRootOf(d) {
   let x = path.resolve(d);
   for (let i = 0; i < 30; i++) { if (fs.existsSync(path.join(x, '.git'))) return x; const up = path.dirname(x); if (up === x) break; x = up; }
@@ -385,9 +444,23 @@ function gitRootOf(d) {
  * 按运行目录往上找它自己的 git 仓库，只看这个目录里的改动和之后的提交——在壳子里用 --cwd 子项目起服务时，
  * 子项目是独立仓库就查子项目；子项目在壳子仓库里被忽略、git 看不到的，扫文件修改时间（有上限）
  */
-function changedSince(t, where) {
+function changedSince(t, where, snap) {
   const base = path.resolve(where || dir);
   const changed = [];
+  // 起服务时记了快照的：按内容比（C1）
+  if (snap && snap.root && snap.files) {
+    try {
+      const git = gitText(snap.root);
+      const cand = new Set(Object.keys(snap.files).concat(dirtyRunFiles(git, snap.rel)));
+      let head = ''; try { head = git(['rev-parse', '--verify', '-q', 'HEAD']).trim(); } catch (e) { head = ''; }
+      if (snap.head && head && head !== snap.head) for (const p of git(['diff', '--name-only', '--no-renames', snap.head, head, '--', snap.rel || '.']).split(/\r?\n/)) if (runFile(p.trim())) cand.add(p.trim());
+      const list = [...cand];
+      const now = blobsNow(snap.root, git, list);
+      const then = blobsAt(git, snap.head, list.filter((p) => !(p in snap.files)));
+      for (const p of list) if ((p in snap.files ? snap.files[p] : then[p]) !== now[p]) changed.push(p);
+      return changed.slice(0, 20);
+    } catch (e) { /* 比不了就按修改时间 */ }
+  }
   const root = gitRootOf(base);
   const gitOut = (args) => execFileSync('git', ['-C', root, '-c', 'core.quotepath=false'].concat(args), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
   if (root) {
@@ -398,7 +471,7 @@ function changedSince(t, where) {
       if (!ignored) {
         for (const line of gitOut(['status', '--porcelain', '-uall', '--', rel || '.']).split(/\r?\n/)) {
           const f = line.slice(3).replace(/^"|"$/g, '').split(' -> ').pop();
-          if (!f || f.split('/').some((s) => SKIP.has(s))) continue;
+          if (!runFile(f)) continue;
           try { if (fs.statSync(path.join(root, f)).mtimeMs > t) changed.push(f); } catch (e) { /* 删掉的文件 */ }
         }
         const head = Number(gitOut(['log', '-1', '--format=%ct', '--', rel || '.']).trim()) * 1000;
@@ -413,7 +486,9 @@ function changedSince(t, where) {
     for (const e of es) {
       if (++n > 50000 || changed.length >= 20) return;
       if (e.isDirectory()) { if (!SKIP.has(e.name) && depth < 12) walk(path.join(d, e.name), depth + 1); continue; }
-      try { if (fs.statSync(path.join(d, e.name)).mtimeMs > t) changed.push(path.relative(base, path.join(d, e.name)).split(path.sep).join('/')); } catch (err) { /* 刚被删 */ }
+      const relf = path.relative(base, path.join(d, e.name)).split(path.sep).join('/');
+      if (!runFile(relf)) continue;
+      try { if (fs.statSync(path.join(d, e.name)).mtimeMs > t) changed.push(relf); } catch (err) { /* 刚被删 */ }
     }
   };
   walk(base, 0);
@@ -488,13 +563,15 @@ async function launch(name, port, command, meta) {
     const front = require('../lib/onboard').frontendFacts(cwd, new Set());
     if (front && front.fixedProxyFiles && front.fixedProxyFiles.length) console.error('提醒：前端代理有写死的 target，--backend 只传环境变量。先核对代理是否读取 VIBE_BACKEND_URL（有上下文路径的要保留路径），再验证请求确实到达自测后端；统一认证/CORS 的固定端口另记进项目说明。');
   }
+  const snap = codeSnap(cwd);
   const fd = fs.openSync(log, 'w');
   const child = WIN
     ? spawn(process.execPath, [__filename, '__keep'], { detached: true, windowsHide: true, stdio: ['ignore', fd, fd], cwd, env: Object.assign({}, env, { VIBE_DEVSERVER_CMD: command }) })
     : spawn(command, { shell: true, detached: true, stdio: ['ignore', fd, fd], cwd, env });
   child.unref();
   fs.closeSync(fd);
-  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot') || hotOf(command, cwd), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl };
+  invalidate();
+  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot') || hotOf(command, cwd), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl, snap };
   fs.writeFileSync(recFile(name), JSON.stringify(rec, null, 2));
   register(rec, recFile(name));
   return waitUp(rec, Number(opt('wait')) || 180);
@@ -632,7 +709,7 @@ async function start() {
     dropRec(rec.name);
   } else if (rec && recUp && recLive) {
     const hot = hotRec(rec);
-    const changed = flag('restart') ? ['（要求重启）'] : hot ? [] : changedSince(rec.startedAt, rec.cwd);
+    const changed = flag('restart') ? ['（要求重启）'] : hot ? [] : changedSince(rec.startedAt, rec.cwd, rec.snap);
     if (!changed.length && same(rec)) {
       const who = whoListens(rec.port);
       console.log('已经在跑：' + name + '（端口 ' + rec.port + '，' + ago(rec.startedAt) + '起的' + (who ? '，听这个端口的是 ' + who : '') + '）' + (hot ? '，会热更新，改了代码不用重启' : '，启动之后代码没改过') + '。直接用，不用再起。要强制重启加 --restart。');
@@ -716,14 +793,14 @@ async function status() {
     // 只报告，不结束任何进程：进程在、端口没通的是还在启动
     if (!alive_) { console.log(r.name + '：没在跑（进程已经退了），记录清掉了。\n  命令：' + r.cmd + '\n  日志：' + r.log); dropRec(r.name); continue; }
     if (!open) { console.log(r.name + '：还在启动（进程 ' + r.pid + ' 在，端口 ' + r.port + ' 还没通，' + ago(r.startedAt) + '起的）。等一会儿；start 一次会接着等它。\n  命令：' + r.cmd + '\n  日志：' + r.log); continue; }
-    const changed = !hotRec(r) ? changedSince(r.startedAt, r.cwd) : [];
+    const changed = !hotRec(r) ? changedSince(r.startedAt, r.cwd, r.snap) : [];
     const who = whoListens(r.port);
     console.log(r.name + '：在跑，端口 ' + r.port + (r.auto ? '（自动挑的）' : '') + (who ? '，听这个端口的是 ' + who : '') + '，' + ago(r.startedAt) + '起的' + (hotRec(r) ? '，会热更新，改了代码不用重启' : changed.length ? '，之后代码改过（' + changed.slice(0, 3).join('、') + (changed.length > 3 ? ' 等' : '') + '），测之前要 start 一下（会自动重启）' : '，跑的是现在的代码') + '\n  命令：' + r.cmd + '\n  运行目录：' + (r.cwd || dir) + '\n  日志：' + r.log);
   }
   return 0;
 }
 
-module.exports = { changedSince, belongs, whoStarted, listeners, procInfo, sameProc, procTable, descendants, hotOf };
+module.exports = { changedSince, codeSnap, belongs, whoStarted, listeners, procInfo, sameProc, procTable, descendants, hotOf };
 if (require.main === module && sub === '__keep') keep();
 else if (require.main === module) {
   const f = { start, stop, status }[sub];
