@@ -130,6 +130,19 @@ function automaticApply(j) {
 function inGit(dir) {
   for (let d = path.resolve(dir); ; d = path.dirname(d)) { if (fs.existsSync(path.join(d, '.git'))) return true; if (path.dirname(d) === d) return false; }
 }
+/** 这一轮用户在写完 tasks 那一问里怎么选的（用户 2026-10-30 定的：定稿和开工合成一问）：'go' 定稿并开工、'only' 只定稿、'' 没选 */
+function finalizeChoice(j) {
+  let out = '';
+  try {
+    for (const v of S.turnVoices(entriesOf(j))) {
+      const t = v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : String(v.text || '');
+      if (/定稿并开工|定稿[，,、\s]*(?:然后|再|就)?开工/.test(t)) out = 'go';
+      // 旧选项"就这样定稿"不算：旧流程里选完还要再问开工，照旧问
+      else if (/只定稿|先定稿/.test(t)) out = 'only';
+    }
+  } catch (e) { out = ''; }
+  return out;
+}
 function planNext(j, c) {
   const root = path.resolve(c.dir, '../../..'); const rel = path.relative(root, c.dir).replace(/\\/g, '/');
   // 壳子本身可以不是 git 仓库（openspec 在壳子根，代码在子项目）：没有可提交的，直接问开工（2026-10-17 审核问题 12）
@@ -139,7 +152,7 @@ function planNext(j, c) {
     // 提交方式（用户 2026-10-17 定的）：自动——提交一次；询问——问用户一次；关——不提交。问过、不提交的接着给开工选项（审核问题 2：不能自己提交）
     const mode = S.commitModeOf(S.readConfig());
     const msg = mode === 'off' ? '' : once(j, 'plan-commit|' + c.dir, fingerprint(c.dir, 'tasks'), mode === 'ask'
-      ? '同一套需求文档已定稿。提交方式是"询问"：用 Ask 问用户是否提交 docs: 提案 ' + c.name + '（选项"提交定稿"和"先不提交"），用户说提交再提交；然后给出开工选项。'
+      ? '同一套需求文档已定稿。提交方式是"询问"：用 Ask 问用户是否提交 docs: 提案 ' + c.name + '（选项"提交定稿"和"先不提交"），用户说提交再提交；' + (finalizeChoice(j) === 'go' ? '用户在定稿那一问里已经选了"定稿并开工"，提交这一问答完就开工，不再问开工。' : finalizeChoice(j) === 'only' ? '用户选的是"只定稿"，不开工、也不再问开工。' : '然后给出开工选项。')
       : '同一套需求文档已定稿，提交本变更的产物和用例一次 docs: 提案 ' + c.name + '。');
     if (msg) return msg;
     if (mode === 'auto') return '';
@@ -147,6 +160,10 @@ function planNext(j, c) {
   const st = S.flowState(j);
   if (st.planAssessment && st.planAssessment.onlyPlan) return '';
   const done = !git ? '文档已经定稿（' + c.name + ' 所在的目录不是 git 仓库，没有要提交的）。' : dirty ? '文档已经定稿（还没提交，提不提交由用户定）。' : '文档已经定稿提交。';
+  // 定稿和开工合成一问（用户 2026-10-30 定的，审核第四节第 10 条）：用户在定稿那一问里选过的，不再另问开工
+  const fin = finalizeChoice(j);
+  if (fin === 'only') return '';
+  if (fin === 'go') return once(j, 'plan-go|' + c.dir, fingerprint(c.dir, 'tasks'), done + '用户在定稿那一问里选了"定稿并开工"：直接开工（/opsx:apply ' + c.name + '），不再问开工。');
   return once(j, 'plan-apply|' + c.dir, fingerprint(c.dir, 'tasks'), done + '用 Ask 给出“执行 apply / 继续修改 / 暂不执行”的选项。');
 }
 function instruction(dir, point, cfg) {
@@ -221,7 +238,7 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
       // 需求文档一份一份来（用户 2026-10-17 定的）：写完一份停下给用户看，用户选了才写下一份
       const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => mode === 'code'
         ? where + ' 已完成。用 Ask 问是否' + quick() + '审查、是否按验收用例自测，用户已明确要求的直接执行。' + after
-        : where + ' 写完了。一份一份来：停下给用户看，交代写了什么，用 Ask 问（选项写"审一下""' + (point === 'tasks' ? '就这样定稿' : '直接写下一份') + '""我要改"），用户已明确要求审查的直接审。' + after);
+        : where + ' 写完了。一份一份来：停下给用户看，交代写了什么，用 Ask 问（选项写"审一下""' + (point === 'tasks' ? '定稿并开工""只定稿' : '直接写下一份') + '""我要改"' + (point === 'tasks' ? '；定稿和开工在这一问里一起定，不再另问开工' : '') + '），用户已明确要求审查的直接审。' + after);
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
   }

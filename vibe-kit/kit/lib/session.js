@@ -267,7 +267,8 @@ const ANSWER_DO = {
   push: /^推(?:送|上去)?吧?[。！!\s]*$/,
 };
 // 往回看本轮时，后面的提问框选了这些就是不要了：前面给过的审查、自测许可作废
-const ANSWER_DECLINE = { review: /就这样定稿|直接写下一份|写下一份|不审|跳过审查/, test: /不测|不跑|跳过自测|跳过测试/ };
+// "定稿并开工""只定稿"：写完 tasks 时定稿和开工合成的那一问（用户 2026-10-30 定的），选了也是不审
+const ANSWER_DECLINE = { review: /就这样定稿|定稿并开工|只定稿|直接写下一份|写下一份|不审|跳过审查/, test: /不测|不跑|跳过自测|跳过测试/ };
 const WIDE = ['review', 'test', 'commit', 'push', 'archive'];
 /** 一个提问框答案对这件事是 'yes'（许可）、'no'（不要）还是 ''（没说） */
 function answerSays(x, topic, g) {
@@ -280,6 +281,8 @@ function answerSays(x, topic, g) {
     if (asked && (ANSWER_NO.test(a) || (ANSWER_DECLINE[topic] && ANSWER_DECLINE[topic].test(a)))) return 'no';
     // 问题问的是别的事、答案里明说了不要这件事（"先别提交""不推"）：也算否定（20261030 起提交、推送、归档往回看本轮，靠它收回前面的许可）
     if (intent.mentions(a, topic) && intent.denied(a, topic)) return 'no';
+    // 写需求文档时套件给的固定选项（"就这样定稿""定稿并开工""只定稿""直接写下一份"）：问题里没写"审查"也算不审
+    if (topic === 'review' && /^(?:就这样定稿|定稿并开工|只定稿|直接写下一份)/.test(a.trim())) return 'no';
     return '';
   }
   // 其它几类照旧：问题里说了是哪件事、答案是"好""可以"
@@ -375,17 +378,35 @@ function confirmApply(j, more) {
   // 做任务那一段里改了需求、旧开工范围已经失效的，也要能凭新的开工答案重新开工（提问框选开工，旧第 2 类）
   if (st.stage !== 'plan' && !(st.applyScope && !require('./apply-scope').valid(j).ok)) return false;
   const entries = tailEntries(j.transcript_path, 3000000);
-  const v = lastUserVoice(entries);
-  const text = v && (v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text);
-  if (!text || !applyIntent(text)) return false;
+  // 往回看本轮（和提交、推送一样，用户 2026-10-30 定的）：选了"定稿并开工"之后又答了"提交定稿"，开工照旧算；后面说了"先不开工""只定稿"的收回
+  let v = null;
+  for (const x of turnVoices(entries)) { if (startsApply(x)) v = x; else if (stopsApply(x)) v = null; }
+  if (!v) return false;
+  const text = v.kind === 'answer' ? v.answers.map((a) => a.a).join('；') : v.text;
   const voice = voiceKey(v);
   if (st.applyVoice === voice) return false; // 同一次开工答案不能在提案修订后重新授权。
   const grantedAt = st.lastApplyAt || st.applySource && st.applySource.at || st.applyScope && st.applyScope.at || 0;
   if (st.applyVoice && st.applyVoiceSchema !== 2 && (!v.at || !grantedAt || v.at <= grantedAt)) return false;
-  const context = v.kind === 'answer' ? v.answers.filter((a) => applyIntent(a.a)).map((a) => a.q).join('\n') : '';
+  const context = v.kind === 'answer' ? v.answers.filter(answerStartsApply).map((a) => a.q).join('\n') : '';
   if (!require('./apply-scope').grant(j, text, context, { said: saidBefore(entries, v.pos), hint, args }).ok) return false;
   setFlow(j, true, '用户确认开工', 'apply');
   return true;
+}
+/**
+ * 提问框的一个答案算不算开工：答案里有开工说法（"定稿并开工""开工"），或者问的就是开工（"能开工吗？""要执行 apply 吗？"）、
+ * 答的是"可以""好"这类短话（审核 P40：以前只看答案，问"开工吗"、答"可以"不算开工，要用户再说一遍）
+ */
+function answerStartsApply(x) {
+  if (applyIntent(x.a)) return true;
+  const a = bareAnswer(x.a);
+  return YES_SHORT.test(a) && intent.has(x.q, 'apply') && !/(?:先不|暂不|不要|别)[^，,。；;！!\n]{0,6}(?:开工|apply|执行|实施)/i.test(x.q);
+}
+function startsApply(v) { return !!v && (v.kind === 'answer' ? v.answers.some(answerStartsApply) : applyIntent(v.text)); }
+/** 一次开口收回开工："先不开工""暂不执行""继续修改""只定稿"，或者问开工、答了不 */
+function stopsApply(v) {
+  if (!v) return false;
+  const parts = v.kind === 'answer' ? v.answers.map((x) => ({ q: x.q, a: bareAnswer(x.a) })) : [{ q: '', a: String(v.text || '') }];
+  return parts.some((x) => (intent.has(x.a, 'apply') && intent.denied(x.a, 'apply')) || /^(?:暂不执行|暂不开工|先不开工|继续修改|只定稿)/.test(x.a.trim()) || (!!x.q && intent.has(x.q, 'apply') && ANSWER_NO.test(x.a) && !applyIntent(x.a)));
 }
 /**
  * 这个会话是在哪个目录启动的。钩子收到的 cwd 是"现在所在的目录"：模型单独跑过一条 cd，它就跟着变了。
