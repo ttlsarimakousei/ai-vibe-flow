@@ -278,6 +278,8 @@ function answerSays(x, topic, g) {
     if (intent.mentions(a, topic) && !intent.denied(a, topic) && !(g.no && g.no.test(a))) return 'yes';
     if (asked && !ANSWER_NO.test(a) && (YES_SHORT.test(a) || (ANSWER_DO[topic] && ANSWER_DO[topic].test(a)))) return 'yes';
     if (asked && (ANSWER_NO.test(a) || (ANSWER_DECLINE[topic] && ANSWER_DECLINE[topic].test(a)))) return 'no';
+    // 问题问的是别的事、答案里明说了不要这件事（"先别提交""不推"）：也算否定（20261030 起提交、推送、归档往回看本轮，靠它收回前面的许可）
+    if (intent.mentions(a, topic) && intent.denied(a, topic)) return 'no';
     return '';
   }
   // 其它几类照旧：问题里说了是哪件事、答案是"好""可以"
@@ -300,15 +302,18 @@ function voiceSays(v, topic, g) {
 }
 /**
  * 用户是不是让它做这件事。返回 { ok, voice, text, targetText }。
- * 归档、提交、推送和别的几类只看最后一句（用户 2026-10-07 定的）。
- * 审查、自测往回看本轮（用户 2026-10-21 定的）：本轮的原话和之后每个提问框答案里，有一处给了许可、后面没有一处否定就算；
- * voice 是给许可的那一次开口，许可在 permissions.allow() 里按它绑定、用过一次就消费，借不到下一轮
+ * 审查、自测（用户 2026-10-21 定的）和提交、推送、归档（用户 2026-10-30 定的，替代 10-07、10-21 的"只看最后一句"）往回看本轮：
+ *   本轮的原话和之后每个提问框答案里，最后一次明确表态算数——有一处给了许可、后面没有一处否定就算。
+ *   以前提交、推送、归档只看最后一句：用户说了"改完提交并推送"，中间答了一个"要不要审查"，许可就作废，要再说一遍（审核 R1，问题表第 19 条）。
+ *   用户下一次自己开口就是新的一轮，从头算。别的几类（接受、跳过……）照旧只看最后一句。
+ * voice 是给许可的那一次开口，许可在 permissions.allow() 里按它绑定；推送、归档用过一次就消费，提交、审查这一轮能用好几次
  */
+const TURN_TOPICS = new Set(['review', 'test', 'commit', 'push', 'archive']);
 function userSaid(entries, topic) {
   const g = SAID[topic];
   const v = lastUserVoice(entries);
   if (!g || !v) return { ok: false, voice: v, text: '' };
-  if (topic === 'review' || topic === 'test') {
+  if (TURN_TOPICS.has(topic)) {
     let grant = null;
     for (const x of turnVoices(entries)) { const d = voiceSays(x, topic, g); if (d.say === 'yes') grant = { voice: x, d }; else if (d.say === 'no') grant = null; }
     if (grant) return { ok: true, voice: grant.voice, text: grant.d.text, targetText: grant.d.target };
