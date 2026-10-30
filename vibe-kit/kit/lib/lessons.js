@@ -539,7 +539,17 @@ function loadAll(root) {
  *   rejected 写法不合要求；near 有相近的、要模型自己认（加 --same <编号> 或 --new 再来一次）；
  *   candidate 进了候选；promoted 升成了规则；hit 这条已经是规则了、这次又犯了；off 功能关着
  */
-function add(o, cfg) {
+/**
+ * 记经验、自动收这两个入口读改写候选和规则文件，一次只让一个进程做（审核 P28：两个会话同时收工，后写的会盖掉先写的）。
+ * 锁在套件的 state 下，5 秒拿不到照旧做
+ */
+function withLock(fn) {
+  let lock = null;
+  try { lock = require('./state-store').acquire(path.join(KIT, 'state', 'lessons.lock'), { waitMs: 5000 }); } catch (e) { lock = null; }
+  try { return fn(); } finally { if (lock) lock.release(); }
+}
+function add(o, cfg) { return withLock(() => addLocked(o, cfg)); }
+function addLocked(o, cfg) {
   const st = settings(cfg);
   if (st.mode === 'off') return { status: 'off', msg: '经验规则关着（配置页"经验规则"里可以打开），这次没有记。' };
   const cwd = o.cwd || process.cwd();
@@ -872,7 +882,8 @@ function rejectedLines(cwd, source) {
  * 只收：点名了变更的审查；严重程度是"会出错""有隐患"的；报了之后那个文件确实改过的。
  * 返回 { stored: 新收了几条, promoted: [升成规则的], category: [按类别出的规则], hit: [已经是规则、又被审出来的] }
  */
-function autoCollect(o, cfg) {
+function autoCollect(o, cfg) { return withLock(() => autoCollectLocked(o, cfg)); }
+function autoCollectLocked(o, cfg) {
   const st = settings(cfg);
   const out = { stored: 0, promoted: [], category: [], hit: [] };
   if (st.mode === 'off' || !st.auto) return out;

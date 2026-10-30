@@ -268,5 +268,27 @@ const SRCV = FROM || H.SRC;
     H.ok('小文件照旧按内容算', W.fingerprint(p, 'code').hash !== b);
   }
 
+  H.section('I4 经验规则：几个会话同时记，候选一条不丢');
+  {
+    const h = H.makeHome('tfx-i4', FROM);
+    const JAVA = 'src/main/java/com/x/OrderService.java';
+    const p = H.makeRepo(path.join(h.work, 'p6'), { 'pom.xml': '<project/>\n', [JAVA]: 'class OrderService {}\n', 'openspec/changes/add-export/tasks.md': '- [x] 1.1 改 ' + JAVA + '\n' });
+    const items = [
+      ['调 OrderMapper.selectByIds 之前', '先判空列表，传空列表会拼出 in () 报错'],
+      ['格式化日期时', '用 yyyy 不用 YYYY，跨年那一周会算成下一年'],
+      ['金额相加时', '用 BigDecimal，double 会丢精度'],
+      ['比较两个 Integer 时', '用 equals，超过 127 的用 == 不相等'],
+      ['读文件流的时候', '用 try-with-resources，抛异常也能关掉'],
+      ['拼 like 查询时', '转义用户输入里的百分号和下划线，不然会被当通配符'],
+    ];
+    const TOOL = path.join(h.kit, 'tools', 'lesson.js');
+    await Promise.all(items.map(([when, d]) => new Promise((resolve) => {
+      const c = spawn(process.execPath, [TOOL, 'add', '--file', JAVA, '--when', when, '--do', d, '--from', 'add-export 1.1'], { cwd: p, env: H.envFor(h), windowsHide: true, stdio: 'ignore' });
+      c.on('exit', resolve); c.on('error', resolve);
+    })));
+    let got = []; try { got = JSON.parse(H.read(path.join(p, '.vibe', 'lessons', 'candidates.json')) || '{}').items || []; } catch (e) { got = []; }
+    H.ok('6 个进程同时记 6 条不同的：候选里 6 条都在', got.length === items.length, got.map((x) => x.when || x.text || x.id));
+  }
+
   H.done('10-31 零散修复（E、F、G、H、I、J 批）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });
