@@ -16,11 +16,13 @@ UPDATE 匹配 0 行仍报成功），做成「看起来撤回了其实没撤」�
 这一版只把反向 SQL 摆出来给人看，要不要执行、怎么执行由人决定。
 """
 import datetime
+import hashlib
 import json
 import os
 import pathlib
 import re
 import sys
+import time
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -109,30 +111,92 @@ def _pending_save(items):
     os.replace(str(tmp), str(p))
 
 
+def _locked(fn):
+    """
+    读改写登记文件时独占：两个进程同时登记、同时取，以前会互相盖掉（Codex C01：同一个确认串两个进程各取到一次）。
+    锁是同目录下用"只在不存在时创建"建的文件；30 秒没动的当残锁清掉。5 秒拿不到就抛 OSError。
+    """
+    lock = _pending_path().with_name("pending-acks.lock")
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.time() + 5
+    while True:
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > 30:
+                    lock.unlink()
+                    continue
+            except OSError:
+                pass
+            if time.time() > deadline:
+                raise OSError("确认串的登记文件被别的进程占着")
+            time.sleep(0.02)
+    try:
+        os.write(fd, str(os.getpid()).encode("ascii"))
+        return fn()
+    finally:
+        os.close(fd)
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def _claim(token):
+    """
+    认领一个确认串：在 acks-used 下用"只在不存在时创建"建一个以串的指纹命名的文件，只有一个进程建得出来。
+    锁拿不到、登记文件读到的是旧的，靠它兜底：一个确认串最多执行一次。顺手清掉两天以前的认领记录
+    """
+    d = _pending_path().parent / "acks-used"
+    d.mkdir(parents=True, exist_ok=True)
+    name = hashlib.sha1(str(token).encode("utf-8")).hexdigest()
+    try:
+        os.close(os.open(str(d / name), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        return False
+    try:
+        old = time.time() - 2 * PENDING_TTL
+        for f in d.iterdir():
+            if f.stat().st_mtime < old:
+                f.unlink()
+    except OSError:
+        pass
+    return True
+
+
 def pending_put(token, fingerprint):
-    """登记一个刚给出去的确认串。登记不上（目录写不了）就抛 OSError：没登记的串第二步不认，得让人知道。"""
-    items = _pending_load()
-    items[str(token)] = {"fp": str(fingerprint), "at": datetime.datetime.now().timestamp()}
-    _pending_save(items)
+    """登记一个刚给出去的确认串。登记不上（目录写不了、被占着）就抛 OSError：没登记的串第二步不认，得让人知道。"""
+    def put():
+        items = _pending_load()
+        items[str(token)] = {"fp": str(fingerprint), "at": datetime.datetime.now().timestamp()}
+        _pending_save(items)
+    _locked(put)
 
 
 def pending_take(token, fingerprint):
     """
     第二步：这个确认串登记过、确认的东西没变，就把它取走。返回 (行不行, 不行的原因)。
     取走是在执行之前：执行到一半被结束的，这个串也不能再用，要重新走第一步。
+    两个进程同时拿同一个串：只有认领到的那一个算数（Codex C01）
     """
-    items = _pending_load()
-    rec = items.get(str(token))
-    if rec is None:
-        return False, "这个串没有登记过，或者已经用过了（一个确认串只能用一次），或者放了超过一天"
-    if rec.get("fp") != str(fingerprint):
-        return False, "SQL、影响面或者连接和确认的时候不一样了"
-    del items[str(token)]
-    try:
+    def take():
+        items = _pending_load()
+        rec = items.get(str(token))
+        if rec is None:
+            return False, "这个串没有登记过，或者已经用过了（一个确认串只能用一次），或者放了超过一天"
+        if rec.get("fp") != str(fingerprint):
+            return False, "SQL、影响面或者连接和确认的时候不一样了"
+        if not _claim(token):
+            return False, "这个确认串刚被另一个进程用了（一个确认串只能用一次），要重新走第一步"
+        del items[str(token)]
         _pending_save(items)
+        return True, ""
+    try:
+        return _locked(take)
     except OSError:
-        return False, "确认串的登记文件写不了（%s），没法记下这个串已经用过" % _pending_path()
-    return True, ""
+        return False, "确认串的登记文件写不了或者被占着（%s），没法记下这个串已经用过" % _pending_path()
 
 
 def load_snapshot(entry_dir):
