@@ -2062,7 +2062,8 @@ function syncReviews(entries, cwd) {
     // 认不出审的是提案还是代码：不记到任何一边（记错了比不记更糟），流水账里留一句，每次审查只留一次
     if (!r.mode) { noteUnknownReview(r); continue; }
     const fresh = recordReview(r.mode, r.change.dir, r.issues, r.key, r.at);
-    if (fresh) updateState(r.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const rec = o[normKey(r.change.dir)]; if (rec && rec.key === r.key) { rec.executor = 'agent'; if (r.mode === 'proposal') rec.proposalHash = require('./apply-scope').planHash(r.change.dir); } });
+    // 代码审查刚审完就登记的（收工、工具完成钩子里）：绑上这一刻的代码指纹，之后代码改了就不算审过（Codex C06）；登记得晚的认不出当时审的是哪一版，照旧
+    if (fresh) updateState(r.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const rec = o[normKey(r.change.dir)]; if (rec && rec.key === r.key) { rec.executor = 'agent'; if (r.mode === 'proposal') rec.proposalHash = require('./apply-scope').planHash(r.change.dir); else if (Date.now() - (Number(r.at) || 0) < 120000) { try { rec.fingerprint = require('./workspace').fingerprint(r.change.dir, 'code').hash; } catch (e) { /* 算不了照旧 */ } } } });
     // 使用情况：这次审查从调用到结论花了多久（审查慢的时候看它；两小时以上的不算，多半是会话断过）
     if (fresh) { try { const t0 = Date.parse(((entries || [])[r.i] || {}).timestamp || '') || 0; const ms = t0 && r.at > t0 ? r.at - t0 : 0; if (ms > 0 && ms < 7200000) updateState('review-local-metrics', (s) => { s.n = (s.n || 0) + 1; s.totalMs = (s.totalMs || 0) + ms; s.at = Date.now(); }); } catch (e) { /* 本机耗时记不了不影响审查 */ } }
   }
