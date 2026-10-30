@@ -1207,9 +1207,27 @@ def _where_line(conn):
     return "%s　用户 %s" % (dbconf.short_url(conn["jdbc"]), conn.get("user") or "（没写）")
 
 
+_SHARED_CONF = re.compile(r"(?i)^(application|bootstrap)\.(ya?ml|properties)$|^jdbc\.properties$")
+
+
+def _source_line(conn):
+    """
+    这条连接是从哪来的（审核 P30，用户 2026-10-30 定的）：没分环境的 application.yml 照旧当开发库用，
+    但确认的人要知道它不是 application-dev.yml 里写明的开发库，得自己核对地址。
+    """
+    src = (conn.get("source") or "").strip()
+    if not src:
+        return "手工配的（%s）" % (conn.get("_config_path") or "连接配置")
+    base = os.path.basename(re.sub(r":\d+$", "", src.replace("\\", "/")))
+    if _SHARED_CONF.match(base):
+        return "%s（没分环境的公共配置，套件按开发库用：确认前核对上面的地址是不是开发库）" % src
+    return src
+
+
 def _show_plan(conn, stmt, rows, risk):
     print("连接    %s（%s）" % (conn["name"], dbconf.DIALECT_INFO[conn["dialect"]]["name"]))
     print("地址    %s" % _where_line(conn))
+    print("来源    %s" % _source_line(conn))
     print("语句    %s" % stmt.kind)
     print("目标表  %s" % (stmt.table or "(认不出来)"))
     print("影响面  %s" % ("%d 行" % rows if rows is not None and rows >= 0 else "算不出来"))

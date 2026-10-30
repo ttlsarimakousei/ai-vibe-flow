@@ -162,4 +162,32 @@ H.section('D3 驱动登记表：两个进程同时登记，后写的不盖掉先
   H.ok('两边登记的都在（达梦、MySQL）', keys.includes('dm') && keys.includes('mysql'), r.out + r.err);
 }
 
+H.section('D7 改库的确认写明连接从哪来：没分环境的 application.yml 要说明（审核 P30）');
+if (!RT.python) console.log('  （没找到 Python，跳过）');
+else {
+  const h = H.makeHome('tdg-d7', FROM);
+  const dir = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+  const script = path.join(h.root, 'd7.py');
+  H.write(script, [
+    'import sys',
+    'sys.dont_write_bytecode = True',
+    'sys.path.insert(0, sys.argv[1])',
+    'import db',
+    'class St: kind = "UPDATE"; table = "t_user"; raw = "update t_user set a = 1 where id = 1"',
+    'class Rk: level = "低"; reasons = []',
+    'base = {"name": "dev", "dialect": "mysql", "jdbc": "jdbc:mysql://10.0.0.5:3306/app", "user": "app"}',
+    'for src in ["src/main/resources/application.yml:12", "src/main/resources/application-dev.yml:8", ""]:',
+    '    c = dict(base); c["source"] = src; c["_config_path"] = "D:/p/.vibe/db-crud.ini"',
+    '    db._show_plan(c, St, 1, Rk)',
+    '    print("=====")',
+  ].join('\n') + '\n');
+  const r = H.run(h, RT.python, ['-B', script, dir], { cwd: h.root });
+  const parts = r.out.split('=====');
+  const line = (t) => (/来源\s+(.*)/.exec(t || '') || [])[1] || '';
+  H.ok('来自没分环境的 application.yml：写明是公共配置、要核对地址', /application\.yml:12（没分环境的公共配置/.test(line(parts[0])), r.out + r.err);
+  H.ok('来自 application-dev.yml：只写文件，不加提醒', /application-dev\.yml:8$/.test(line(parts[1]).trim()), parts[1]);
+  H.ok('手工配的：写明配置文件', /手工配的（D:\/p\/\.vibe\/db-crud\.ini）/.test(line(parts[2])), parts[2]);
+  H.ok('地址照旧在', /地址\s+.*10\.0\.0\.5/.test(parts[0] || ''), parts[0]);
+}
+
 H.done('查库、redis 的保护（D 批）');
