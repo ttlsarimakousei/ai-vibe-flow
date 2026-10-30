@@ -786,6 +786,8 @@ function removeAbsorbed(man) {
 if (mode === 'install') {
   const major = parseInt(process.versions.node.split('.')[0], 10);
   if (major < 18) { console.log('  [X] Node 版本太低（' + process.versions.node + '），需要 18 以上'); process.exit(REFUSED); }
+  // 随包的 Playwright 要 Node 20（Codex C16）：18、19 装得上，看页面（/ttls-see-page）用不了，先说清楚
+  if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/ttls-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
   for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
     if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
   }
