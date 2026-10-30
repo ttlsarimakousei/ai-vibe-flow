@@ -34,6 +34,7 @@ Claude Code 用户级 MCP 在 `~/.claude.json` 顶层 `mcpServers`；设置 `CLA
 - UserPromptSubmit 钩子用 JSON 输出（`hookSpecificOutput.additionalContext` 加顶层 `systemMessage`）：2.1.120、2.1.289 实测（`dev/probes/cc-system-message.js`）additionalContext 照样送到模型（放在用户消息的 system-reminder 里，和纯文本输出一样），systemMessage 显示在交互界面的对话里、不进模型的上下文。套件开工时用它告诉用户全自动开没开。
 - 同一个事件的多个命令钩子是并行跑的；每个钩子起 shell + node 要 0.3 到 0.9 秒。
 - **`type: "http"` 的钩子能用**（2.1.120 起），一次 0.1 秒左右，服务不在时当放行。Claude Code 发的钩子请求不带 Origin、Sec-Fetch 这类头。
+- **钩子可以带 `if` 条件**（2.1.120、2.1.259、2.1.289 都有，程序里的说明："Permission rule syntax to filter when this hook runs (e.g., "Bash(git *)")… Avoids spawning hooks for non-matching commands"）：对不上就不起钩子进程。2.1.289 实测（`dev/probes/cc-hook-if.js`，2026-10-30）：`Bash(*push*)` 在 `git push`、`git -C x push`、`cd x && git push`、`echo "r $(git push)"`、`` x=`git push` ``、`bash -c "git push"`、`sh -c 'git push'`、`GIT_DIR=x git push` 上都触发，`echo hello`、`git status` 不触发，`echo pushing-notes` 也触发（按子串）；`Bash(git push*)` 漏了 `git -C x push`、`bash -c`、`sh -c`；`Bash(git *)` 漏了 `bash -c`、`sh -c`。
 - **PreToolUse 读会话记录时，正在执行的这一次调用已经写进去了**（还没有结果）。判断"上一次改文件"要按"有没有工具结果"区分，不然会把这一次当成上一次。
 - 会话开着的时候：钩子脚本改了，下一次调用就是新的；settings.json 里新登记的钩子，会话中就生效。全局 CLAUDE.md 改了、新装的技能，要 `/clear` 之后才读到（套件由用户开口时的钩子把变了的部分送过去）。
 - 2.1.259、2.1.263 用 `claude -p` 时，SessionStart 钩子慢一点（几百毫秒）、又有命令方式的 Stop 钩子，答完就不退出。和钩子内容无关，两个空脚本就能复现；2.1.231、2.1.215 没有；Stop 走 HTTP 时没有这个问题。交互方式不受影响。
