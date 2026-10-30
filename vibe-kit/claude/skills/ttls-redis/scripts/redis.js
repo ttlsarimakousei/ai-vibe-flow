@@ -384,12 +384,18 @@ async function subSet(s, a, opt) {
   const key = keyArg(a[0]);
   const value = opt.value;
   const left = await s.call(['PTTL', key]);
-  const cmd = ['SET', key, value];
-  if (left > 0) cmd.push('PX', left);
-  const r = show(await s.call(cmd));
+  // 有过期时间的（PTTL ≥ 0）：一条 SET … KEEPTTL 写进去，过期时间原样留着。以前 PTTL 读到 0 时 SET 不带过期，
+  // 马上要过期的 key 变成了永久的；先读 PTTL 再 SET … PX 也有空档（Codex C12）。Redis 6 以前不认 KEEPTTL，退回 PX，至少 1 毫秒
+  let r;
+  if (left >= 0) {
+    try { r = show(await s.call(['SET', key, value, 'KEEPTTL'])); } catch (e) {
+      if (!/syntax|KEEPTTL|unknown|wrong number/i.test(String((e && e.message) || ''))) throw e;
+      r = show(await s.call(['SET', key, value, 'PX', Math.max(1, left)]));
+    }
+  } else r = show(await s.call(['SET', key, value]));
   const text = Buffer.isBuffer(value) ? show(value) : String(value);
   const out = { data: r, existed: left !== -2, written: text.length > 200 ? text.slice(0, 200) + '…' : text, bytes: Buffer.byteLength(text) };
-  if (left > 0) out.kept_ttl_ms = left;
+  if (left >= 0) out.kept_ttl_ms = left;
   return out;
 }
 
