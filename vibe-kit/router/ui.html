@@ -703,6 +703,10 @@
         <div><div class="t">使用情况上报</div><div class="d">只有次数和版本号。不传路径、项目名、文件名、提交信息、提示词、代码、模型的回答、令牌。关着：本机照样数，不传。</div></div>
         <div class="ctl"><select id="k_usageReport"><option value="on">开：每天传一次</option><option value="off">关</option></select></div>
       </div>
+      <div class="opt">
+        <div><div class="t">耗时异常上报</div><div class="d">起服务比平时慢一倍以上时自动记一条问题反馈并上报，只带秒数、分段和原因类别，不带路径和项目名。</div></div>
+        <div class="ctl"><select id="k_perfReport"><option value="on">上报</option><option value="local">只记本机</option><option value="off">关</option></select></div>
+      </div>
       <div id="usStatus" style="margin-top:6px"></div>
       <div class="row end"><span class="msg" id="usMsg" style="margin-right:auto"></span><button class="btn" id="usPreview">看看要传的内容</button><button class="btn" id="usSync">立即上报</button></div>
       <div id="usPreviewOut"></div>
@@ -1114,7 +1118,7 @@
   fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
   fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('requirementsReviewMaxRounds', '需求每点审查上限', 1, 20); fNum('applyReviewMaxRounds', 'Apply 每组审查上限', 1, 20);
   fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
-  fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
+  fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
   fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fSel('contextStrategy', '连续工作的方式', ['compact', 'handover']);
   fSel('reviewExecutor', '审查方式', ['direct', 'agent']);

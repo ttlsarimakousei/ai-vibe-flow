@@ -47,6 +47,9 @@ const KIT = path.join(__dirname, '..');
 const WIN = process.platform === 'win32';
 const SYS32 = path.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 这次调用从什么时候开始（耗时分两段：devserver 自己的准备、命令开始到答 HTTP）；这次是不是改了代码在重启（C7）
+const T0 = Date.now();
+let RESTART = false;
 
 // ---------- 参数 ----------
 const argv = process.argv.slice(2);
@@ -633,6 +636,8 @@ async function waitUp(rec, waitSec) {
     for (const pid of listeners(rec.port)) { const p = table.find((x) => x.pid === pid); if (p && !tree.some((x) => x.pid === pid) && belongs(procInfo(pid), rec, true)) tree.push({ pid: p.pid, name: p.name, created: p.created }); }
     try { fs.writeFileSync(recFile(rec.name), JSON.stringify(Object.assign({}, rec, { tree, upAt: Date.now() }), null, 2)); } catch (e) { /* 记不了就按父子关系停 */ }
     const who = whoListens(rec.port);
+    // 耗时异常自动发现、上报（问题表第 20 条，C7）：这次调用起的才算；接着等上一次没起完的不算
+    if (rec.startedAt >= T0) { try { const line = require('../lib/perf').noteStart({ kind: RESTART ? 'restart' : 'first', root: rec.cwd, command: rec.cmd, prepMs: rec.startedAt - T0, startMs: Date.now() - rec.startedAt, log: (() => { try { const b = fs.readFileSync(rec.log); return b.slice(Math.max(0, b.length - 2000000)).toString('utf8'); } catch (e) { return ''; } })() }); if (line) console.log(line); } catch (e) { /* 记不了不影响起服务 */ } }
     // 这一行放在最后：输出的最后一行就是结果
     console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
     console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (how ? '，' + how : '') + (rec.hot ? '。会热更新：改了代码不用重启，再 start 直接用' : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
@@ -745,6 +750,7 @@ async function start() {
       return 0;
     }
     console.log(name + ' 在跑（端口 ' + rec.port + '，' + ago(rec.startedAt) + '起的），' + (!same(rec) ? '启动命令、端口或运行目录变了' : '但它跑的不是现在的代码（之后改过：' + changed.slice(0, 5).join('、') + (changed.length > 5 ? ' 等 ' + changed.length + ' 个' : '') + '）') + '：停掉，在同一个端口重启。');
+    RESTART = true;
     const s = await stopRec(rec);
     if (!s.free) { console.log('没起来：旧的没停干净，端口 ' + port + ' 还被占着：' + (s.left.map((i) => (i.name || '进程') + '（PID ' + i.pid + '）').join('、') || '查不到是哪个进程') + '。没有起新的。'); return 1; }
   } else if (rec) {
