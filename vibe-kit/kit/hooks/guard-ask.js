@@ -19,7 +19,7 @@ function applyGate(j) {
   hookLog('guard-ask block Skill opsx:apply（' + (why ? '开工没认下来：' + why.slice(0, 60) : '用户还没说开工') + '）');
   try { require('../lib/feedback.js').countBlock('guard-apply', '[vibe-kit] 还没到 apply', String((j && j.session_id) || '')); } catch (e) { /* 数不了不影响 */ }
   if (why) return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：用户说了开工，但' + why + '。调 /opsx:apply 时参数写上变更名也行（/opsx:apply <变更名>）。');
-  return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：当前尚未满足双自动衔接条件，也没有用户开工许可。现在把要点交代给我：改哪些地方、新加的操作和接口、任务清单；我原话里没提过、你自己加上的，单独列出来。然后用提问框提供"apply 开工"和"还要改"选项。我说开工、或者我自己敲 /vk-go（或 /opsx:apply），再开始。');
+  return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：当前尚未满足双自动衔接条件，也没有用户开工许可。现在把要点交代给我：改哪些地方、新加的操作和接口、任务清单；我原话里没提过、你自己加上的，单独列出来。然后用提问框问能不能开工（选项写"开工""还要改""先不做"）。我说开工、或者我自己敲 /vk-go（或 /opsx:apply），再开始。');
 }
 function handle(j) {
   const manual = require('../lib/flow-policy').actionIssue(j);

@@ -179,7 +179,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { autoMode: true });
     // 模型自己调 /opsx:apply 的技能：没说开工就拦
     const k1 = skill('p2', 'opsx:apply');
-    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问能不能开工', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框提供/.test(H.reasonOf(k1)), H.reasonOf(k1));
+    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问能不能开工', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框问能不能开工/.test(H.reasonOf(k1)), H.reasonOf(k1));
     H.ok('不在流程里的会话调 /opsx:apply：也拦', blocked(skill('p8', 'opsx:apply')));
     H.ok('做任务那一段调 /opsx:apply：放行', skill('p3', 'opsx:apply') === null);
     H.ok('做任务那一段它去调 /opsx:propose（下一个变更）：回到写提案那一段', skill('p3', 'opsx:propose') === null && flow('p3').stage === 'plan', flow('p3'));
@@ -219,7 +219,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /两套独立自动模式/.test(md) && /git push[^。\n]*归档[^。\n]*按对应规则确认/.test(md));
+    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /两套独立自动模式/.test(md) && /按对应规则确认：git push[^。\n]*归档/.test(md));
     H.ok('提交那一节：默认是关，用户说了提交才提交', /提交方式是"关"：不自动提交，也不问/.test(md), md.slice(0, 300));
     H.ok('约定说明双自动条件外先 Ask，归档由用户决定', /其他情况用 Ask 给出 apply 选项/.test(md) && /归档.*用户/.test(md));
     H.setConfig(h, { commitMode: 'auto' });

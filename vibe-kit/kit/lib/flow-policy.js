@@ -164,7 +164,7 @@ function planNext(j, c) {
   const fin = finalizeChoice(j);
   if (fin === 'only') return '';
   if (fin === 'go') return once(j, 'plan-go|' + c.dir, fingerprint(c.dir, 'tasks'), done + '用户在定稿那一问里选了"定稿并开工"：直接开工（/opsx:apply ' + c.name + '），不再问开工。');
-  return once(j, 'plan-apply|' + c.dir, fingerprint(c.dir, 'tasks'), done + '用 Ask 给出“执行 apply / 继续修改 / 暂不执行”的选项。');
+  return once(j, 'plan-apply|' + c.dir, fingerprint(c.dir, 'tasks'), done + '用提问框问能不能开工（选项写"开工""还要改""先不做"）。');
 }
 function instruction(dir, point, cfg) {
   const mode = point.startsWith('group-') ? 'code' : 'proposal'; const rec = record(dir, point); const max = limit(cfg, mode);
@@ -204,7 +204,7 @@ function askOnce(j, id, signature, turn, text) {
   return fresh ? (typeof text === 'function' ? text() : text) : '';
 }
 // quickPending：改了代码、最后一次修改之后还没跑过快检（verify-gate 算）。这时一起问要不要跑快检，不强制（用户 2026-10-16 定的）
-const QUICK_ASK = '跑快检（项目说明里的快检命令，编译级；这个命令本身要跑测试的，问的时候说明）、';
+const QUICK_ASK = '跑快检（项目说明里的快检命令，编译级；这个命令本身要跑测试的，问的时候说明）、要不要';
 /** 这一份需求文档自己的文件最后一次写入的时间 */
 function writtenAt(dir, point) {
   const own = pointFiles(dir, point).filter(f => point === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === point + '.md');
@@ -239,7 +239,7 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
       const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再用一个提问框逐条选（一条一个问题，一框最多 4 条，多了分几框）：改（推荐）/不改/自行输入；用户选了"改"的，改完直接复验，不再问；没选"改"的复验，这一轮用户已经要求过的直接做，没要求过的先问。';
       // 需求文档一份一份来（用户 2026-10-17 定的）：写完一份停下给用户看，用户选了才写下一份
       const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => mode === 'code'
-        ? where + ' 已完成。用 Ask 问是否' + quick() + '审查、是否按验收用例自测，用户已明确要求的直接执行。' + after
+        ? where + ' 已完成。用一个提问框问，一件事一个问题：要不要' + quick() + '审查、要不要按验收用例自测；用户已明确要求的直接执行。' + after
         : where + ' 写完了。一份一份来：停下给用户看，交代写了什么，用 Ask 问（选项写"审一下""' + (point === 'tasks' ? '定稿并开工""只定稿' : '直接写下一份') + '""我要改"' + (point === 'tasks' ? '；定稿和开工在这一问里一起定，不再另问开工' : '') + '），用户已明确要求审查的直接审。' + after);
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0), instruction(dir, point, cfg)); if (msg) out.push(msg); }
@@ -255,8 +255,8 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
     const askReview = !sess.review && !stillDeclined(noReview, lastEditAt);
     const askTest = !sess.test && !stillDeclined(noTest, lastEditAt);
     if (askReview || askTest) {
-      const what = askReview && askTest ? '审查、是否自测' : askReview ? '审查' : '自测';
-      const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用 Ask 询问是否' + q + what + '；用户说不用就直接继续，这个会话里不再问这一样，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
+      const what = askReview && askTest ? '审查、要不要自测' : askReview ? '审查' : '自测';
+      const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用一个提问框问，一件事一个问题：要不要' + q + what + '；用户说不用就直接继续，这个会话里不再问这一样，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
     }
   }
   return out;

@@ -13,6 +13,8 @@ const H = require('./lib/harness');
 const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit')) ? process.argv[2] : null;
 const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'deny'));
 const stopped = (o) => blocked(o) || (!!o && !!o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'ask');
+// 收工提示里"去问审查、自测"的两种说法（10-30 起：用一个提问框问，一件事一个问题）
+const ASKED = /询问是否|Ask 问是否|一件事一个问题：要不要/;
 const ask = (q, a) => H.tr.ran('AskUserQuestion', { questions: [{ question: q }] }, 'User has answered your questions: "' + q + '"="' + a + '". You can now continue with the user\'s answers in mind.');
 
 H.section('A4 提交、推送：说过一次，中间答了别的提问框也照旧有效；明说"先别"的收回；下一次开口从头算');
@@ -79,7 +81,7 @@ H.section('A7 写完 tasks：定稿和开工合成一问，选过的不再另问
   const go = next('定稿并开工');
   H.ok('选了"定稿并开工"：直接开工，不再给"执行 apply / 继续修改 / 暂不执行"', /直接开工/.test(go) && !/暂不执行/.test(go), go);
   H.ok('选了"只定稿"：不再问开工', next('只定稿') === '', next('只定稿'));
-  H.ok('没选过（旧流程）：照旧问开工', /执行 apply \/ 继续修改 \/ 暂不执行/.test(next('')), next(''));
+  H.ok('没选过（旧流程）：照旧问开工', /执行 apply \/ 继续修改 \/ 暂不执行|问能不能开工/.test(next('')), next(''));
 }
 
 H.section('A8 人工模式改完代码：问一次审查、自测，答了不用，这个会话后面再改代码不再问');
@@ -92,11 +94,11 @@ H.section('A8 人工模式改完代码：问一次审查、自测，答了不用
   const stop = (n, entries) => { H.write(path.join(p, 'src', 'A.java'), 'class A { int v' + n + '; }\n'); return (F.stop({ session_id: sid, cwd: p, transcript_path: H.transcript(path.join(h.root, 'a8-' + n + '.jsonl'), entries) }, [], true, n, null, Date.now()) || []).join('\n'); };
   const t1 = [H.tr.user('修一下 A 的空指针'), edit('A.java'), H.tr.say('改好了')];
   const s1 = stop(1, t1);
-  H.ok('第一次改完：问审查、自测', /询问是否审查、是否自测/.test(s1) && !/验收用例/.test(s1), s1);
+  H.ok('第一次改完：问审查、自测', ASKED.test(s1) && !/验收用例/.test(s1), s1);
   const s2 = stop(2, t1.concat(ask('要不要审查、自测？', '都不用')));
-  H.ok('答了都不用：这一轮不再问', !/询问是否/.test(s2), s2);
+  H.ok('答了都不用：这一轮不再问', !ASKED.test(s2), s2);
   const s3 = stop(3, t1.concat(ask('要不要审查、自测？', '都不用'), H.tr.user('再把 B 也改一下'), edit('B.java'), H.tr.say('B 也改好了')));
-  H.ok('下一轮又改了代码：这个会话里不再问', !/询问是否/.test(s3), s3);
+  H.ok('下一轮又改了代码：这个会话里不再问', !ASKED.test(s3), s3);
 }
 
 H.section('A9 审查意见：答"不改"不作废审查许可；答"改"算准了复验；这一轮说过审查、自测的，收工不再提示去问');
@@ -115,9 +117,9 @@ H.section('A9 审查意见：答"不改"不作废审查许可；答"改"算准�
   const stop = (sid, entries) => { H.inFlow(h, sid, [dir], true, 'apply'); return (F.stop({ session_id: sid, cwd: p, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }, [dir], true, 1, null, Date.now()) || []).join('\n'); };
   const edit = H.tr.ran('Edit', { file_path: path.join(p, 'src', 'A.java'), old_string: 'a', new_string: 'b' }, 'ok');
   const s1 = stop('s-a9-1', [H.tr.user('做 1.1'), edit, H.tr.say('1.1 做完了')]);
-  H.ok('没说审查、自测：第 1 组做完，提示去问', /Ask 问是否/.test(s1), s1);
+  H.ok('没说审查、自测：第 1 组做完，提示去问', ASKED.test(s1), s1);
   const s2 = stop('s-a9-2', [H.tr.user('做 1.1，做完审查并自测'), edit, H.tr.say('1.1 做完了')]);
-  H.ok('这一轮说了审查、自测：收工不再提示去问', !/Ask 问是否/.test(s2), s2);
+  H.ok('这一轮说了审查、自测：收工不再提示去问', !ASKED.test(s2), s2);
 }
 
 H.section('A10 会被拦的规矩提前说：进写需求、做任务这两段时各说一次');
@@ -181,9 +183,9 @@ H.section('A11 斜杠命令：/vk-commit、/vk-push、/vk-archive、/vk-review�
   const fix = (sid, entries) => (H.write(path.join(proj, 'src', 'A.java'), 'class A { int ' + sid.replace(/\W/g, '') + '; }\n'), F.stop({ session_id: sid, cwd: proj, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }, [], true, 1, null, Date.now()) || []).join('\n');
   const e1 = H.tr.ran('Edit', { file_path: path.join(proj, 'src', 'A.java'), old_string: 'a', new_string: 'b' }, 'ok');
   const f0 = fix('s-a11-f0', [H.tr.user('把 A 的字段改个名'), e1, H.tr.say('改好了')]);
-  H.ok('普通说法改代码：收工问审查、自测', /询问是否审查、是否自测/.test(f0), f0);
+  H.ok('普通说法改代码：收工问审查、自测', ASKED.test(f0), f0);
   const f1 = fix('s-a11-f1', [...cmd('vk-fix', '把 A 的字段改个名'), e1, H.tr.say('改好了')]);
-  H.ok('/vk-fix 这一轮：收工不问审查、自测', !/询问是否审查、是否自测/.test(f1), f1);
+  H.ok('/vk-fix 这一轮：收工不问审查、自测', !ASKED.test(f1), f1);
   // 安装器：装进 ~/.claude/commands；你改过的同名文件先备份；卸载时收回
   const pkg = (() => { if (!FROM) return H.makePackage('tco-a11-pkg', '20261030.1400'); const d = path.join(H.tempDir('tco-a11-pkg'), 'vibe-kit'); H.copyDir(FROM, d, (x) => x === 'node_modules' || x === '.git'); H.stubDeps(d); return d; })();
   const u = H.freshHome('tco-a11-inst');
@@ -195,6 +197,34 @@ H.section('A11 斜杠命令：/vk-commit、/vk-push、/vk-archive、/vk-review�
   H.write(path.join(u.cfg, 'commands', 'mine.md'), '我自己的命令\n');
   const un = H.node(u, path.join(u.kit, 'install.js'), ['--uninstall'], { cwd: u.root, timeout: 120000 });
   H.ok('卸载收回了 vk 命令、留下你自己的命令', un.code === 0 && names.every((x) => !fs.existsSync(path.join(u.cfg, 'commands', x + '.md'))) && fs.existsSync(path.join(u.cfg, 'commands', 'mine.md')), un.out.slice(-600));
+}
+
+H.section('A13 说法统一：开工选项一套写法；收工几件事分开列、提交排最后');
+{
+  const h = H.makeHome('tco-a13', FROM, Object.assign({}, QUIET, { commitMode: 'ask' }));
+  const kit = h.kit;
+  // 开工选项：套件给模型的话里只剩"开工 / 还要改 / 先不做"这一套（以前三套：apply 开工、执行 apply / 继续修改 / 暂不执行、Ask 提供 apply 选项）
+  const files = ['hooks/guard-ask.js', 'hooks/guard-spec.js', 'hooks/verify-gate.js', 'hooks/task-anchor.js', 'lib/flow-policy.js'].map((f) => path.join(kit, f)).concat([path.join(kit, 'rules', '10-openspec.md')]);
+  const old = files.filter((f) => /执行 apply \/ 继续修改|Ask 提供 apply 选项|"apply 开工"和"还要改"|选项写"开工"和"还要改"/.test(H.read(f) || ''));
+  H.ok('提示和规范里没有旧的开工选项写法', old.length === 0, old);
+  const S = require(path.join(kit, 'lib', 'session.js'));
+  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE));
+  let n = 0;
+  const tick = (sid, entries) => { H.inFlow(h, sid, [path.join(p, 'openspec/changes/feat-019')], true, 'plan'); const r = H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'openspec/changes/feat-019/tasks.md'), old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }); return { r, stage: S.flowState({ session_id: sid }).stage }; };
+  const base = [H.tr.user('写 feat-019 的需求'), H.tr.say('四份文档都写完了')];
+  const g1 = tick('s-a13-go', base.concat(ask('feat-019 能开工吗？', '开工')));
+  H.ok('新问法答"开工"：算开工', !blocked(g1.r) && g1.stage === 'apply', g1);
+  const g2 = tick('s-a13-no', base.concat(ask('feat-019 能开工吗？', '先不做')));
+  H.ok('新问法答"先不做"：不算开工', blocked(g2.r) && g2.stage === 'plan', g2);
+  // 收工：问审查自测、问提交一起出现时，分开编号，提交那条在最后
+  const q = H.makeRepo(path.join(h.work, 'proj2'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n' });
+  H.write(path.join(q, 'src', 'A.java'), 'class A { int x; }\n');
+  n++;
+  const r = H.hook(h, 'verify-gate', { session_id: 's-a13-stop', cwd: q, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '改好了', transcript_path: H.transcript(path.join(h.root, 'a13-stop.jsonl'), [H.tr.user('A 加个字段'), ...H.tr.ran('Edit', { file_path: path.join(q, 'src', 'A.java'), old_string: 'class A {}', new_string: 'class A { int x; }' }, 'ok'), ...H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'BUILD SUCCESS'), H.tr.say('改好了')]) });
+  const t = H.reasonOf(r) || '';
+  const items = t.split('\n').filter((l) => /^\d+\. /.test(l));
+  H.ok('几件事分开编号列出', /有 \d+ 件事，按顺序做（提交放最后）/.test(t) && items.length >= 2, t);
+  H.ok('问提交那条排在最后', items.length >= 2 && /还没提交/.test(items[items.length - 1]) && !items.slice(0, -1).some((l) => /还没提交/.test(l)), items);
 }
 
 H.section('A12 /opsx:propose 装好后先说套件的规矩：只写 proposal 就停，一份一份来（不照原文一步全写）');

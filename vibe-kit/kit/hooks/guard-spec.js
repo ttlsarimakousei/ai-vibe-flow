@@ -217,7 +217,7 @@ function handle(j, opts) {
       const fl = flowState(j); if (fl.on && fl.stage === 'plan') notStarted = true;
       // 用户说了开工、却没认下来（#214）：说出原因，不再说"我还没说开工"
       let why = ''; try { why = notStarted ? require('../lib/apply-scope').refusal(j) : ''; } catch (e) { why = ''; }
-      if (notStarted) flow.unshift(why ? '我说了开工，但' + why + '。认下来之前先不打勾' : '我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工"和"还要改"）；我说开工、或者我自己敲 /vk-go（或 /opsx:apply）之后再做');
+      if (notStarted) flow.unshift(why ? '我说了开工，但' + why + '。认下来之前先不打勾' : '我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工""还要改""先不做"）；我说开工、或者我自己敲 /vk-go（或 /opsx:apply）之后再做');
     }
   }
   if (art.kind === 'spec') format.push(...checkSpec(newText, isAdded));

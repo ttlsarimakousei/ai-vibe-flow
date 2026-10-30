@@ -88,6 +88,8 @@ const notApplicable = (notes, key) => new RegExp('^\\s*[-*]?\\s*(?:' + key + ')\
 
 /** 提交方式：off 关 / ask 询问 / auto 自动（lib/session.js 的 commitModeOf，用户 2026-10-17 定的） */
 const commitMode = (cfg) => require('../lib/session').commitModeOf(cfg);
+/** 收工待办里催提交、问提交的那几条（排到最后） */
+const isCommitTodo = (t) => /^(这一轮改过的文件还没提交|做完一件完整的事、快检过了就接着提交|需求文档四份都写完了|经验规则文件更新了)/.test(String(t));
 /** 这个会话碰过的变更里，有没有审查还没审完的（多轮审查报了问题、还没复审到"问题 0 条"）：有就先不催提交，审查过程不进提交 */
 function reviewOpenFor(sid, entries, changes) {
   try {
@@ -265,8 +267,8 @@ function lessonTodo(j, cfg, entries, reviews, lastSaid) {
 }
 function lessonCommitTodo(j, cfg, turnId, changes) {
   if (!lessons || !j.session_id || lessons.settings(cfg).mode === 'off') return '';
-  const mode = cfg.autoMode ? commitMode(cfg) : 'task';
-  if (mode === 'change' && changes().some((c) => c.todo > 0)) return '';
+  // 按提交方式，人工、自动都一样（审核第三节第 11 条：手册写询问、自动都不再问，以前人工模式一律 Ask）：关——提醒、问用户；询问、自动——直接单独提交，guard-commit 也放行
+  const mode = commitMode(cfg);
   const list = lessons.uncommitted(j.cwd || process.cwd());
   if (!list.length) return '';
   const key = j.session_id + '-lessons';
@@ -277,7 +279,7 @@ function lessonCommitTodo(j, cfg, turnId, changes) {
   if (times >= 2) return '';
   writeState(key, Object.assign({}, st, { commitTurn: turnId || 'x', commitSig: sig, commitTimes: times + 1, at: Date.now() }));
   const where = list.map((x) => path.basename(x.repo) + ' 的 ' + x.rel).join('、');
-  if (!cfg.autoMode || mode === 'off') return '经验规则文件更新了，还没提交：' + where + '。提醒用户提交，用 Ask 给出提交或暂不提交选项；提醒不代表自动提交许可。';
+  if (mode === 'off') return '经验规则文件更新了，还没提交：' + where + '。提醒用户提交，用 Ask 给出提交或暂不提交选项；提醒不代表自动提交许可。';
   return '经验规则文件更新了，还没提交：' + where + '。规则跟着仓库走，同事的 Claude 才看得到：进到对应的仓库（git -C <目录>），只 git add 这个文件，提交信息写"docs: 更新经验规则"，和代码的修复分开提交。';
 }
 
@@ -801,7 +803,7 @@ async function handle(j) {
     const last = codeNeedingCheck.length ? calls.indexOf(codeNeedingCheck[codeNeedingCheck.length - 1]) : -1;
     const roots = [...new Set(codeNeedingCheck.map((c) => require('../lib/workspace').rootOf(path.dirname(fileOf(c)))))];
     const proved = roots.length > 0 && roots.every((r) => require('../lib/evidence').commands(r).length > 0);
-    if (last >= 0 && !proved && !ranAfter(last, VERIFY_CMD) && !SAID_UNVERIFIED.test(lastSaid)) return '这一轮改了代码（' + names(codeNeedingCheck) + '），最后一次修改之后没有成功跑过验证。按项目说明（.vibe/project.md）里的快检命令验一下，把这一轮改过的文件一起传；确实没法验，就明说"没验证"和原因。';
+    if (last >= 0 && !proved && !ranAfter(last, VERIFY_CMD) && !SAID_UNVERIFIED.test(lastSaid)) return '这一轮改了代码（' + names(codeNeedingCheck) + '），最后一次修改之后没有成功跑过快检。按项目说明（.vibe/project.md）里的快检命令验一下，把这一轮改过的文件一起传；确实没法验，就明说"没验证"和原因。';
     return '';
   };
   if (!j.stop_hook_active) {
@@ -854,8 +856,8 @@ async function handle(j) {
       if (dirtyPlan.length) {
         writeState(pkey, { turnId, at: Date.now() });
         todo.push(mode === 'auto'
-          ? '需求文档四份都写完了、还没提交：现在整套提交一次 docs: 提案 <变更名>（只 add 这个变更目录）。提交不等于开工，随后 Ask 提供 apply 选项。'
-          : '需求文档四份都写完了：交代定稿内容和实际执行的检查结果，用 Ask 问是否提交（选项"提交定稿"和"继续修改"）。同意后整套文档提交一次 docs: 提案 <变更名>；提交不等于开工，随后 Ask 提供 apply 选项。');
+          ? '需求文档四份都写完了、还没提交：现在整套提交一次 docs: 提案 <变更名>（只 add 这个变更目录）。提交不等于开工，随后用提问框问能不能开工（选项写"开工""还要改""先不做"）；写完 tasks 时已经选了"定稿并开工""只定稿"的不再问。'
+          : '需求文档四份都写完了：交代定稿内容和实际执行的检查结果，用 Ask 问是否提交（选项"提交定稿"和"继续修改"）。同意后整套文档提交一次 docs: 提案 <变更名>；提交不等于开工，随后用提问框问能不能开工（选项写"开工""还要改""先不做"）；写完 tasks 时已经选了"定稿并开工""只定稿"的不再问。');
       }
     }
     // 提案产物只走上面的提交，不混进实施的提交。
@@ -878,8 +880,8 @@ async function handle(j) {
         else if (mode === 'ask' && !saidCommit) {
           if (cfg.autoMode) { try { if (report) report.note(j, { kind: 'hand', title: '改动还没提交：' + where, detail: '提交方式是"询问"，你不在，等你回来说提交' }); } catch (e) { /* 记不了不影响 */ } }
           else if (plain === 'ask') todo.push('这一轮改过的文件还没提交：' + where + '。做完了一件完整的事（一项任务、一处修复）：先自己把 diff 过一遍（有没有调试代码、误改、漏改），交代改了什么、怎么验的，用提问框问我提不提交（选项写"提交"和"还要改"）。我说提交了再提交，只提交不 push。还没做完的先不问。');
-        } else if (todo.length) todo.push('做完一件完整的事、验证过了就接着提交，不用等我说：' + how + '。验证没过、还没做完的先不提交。');
-        else todo.push('这一轮改过的文件还没提交：' + where + '。做完一件完整的事（勾完一项任务、审查修复收尾、普通修改做完并快检过）就提交：' + how + '。还没做完、验证没过的先不提交，说明原因就行。');
+        } else if (todo.length) todo.push('做完一件完整的事、快检过了就接着提交，不用等我说：' + how + '。快检没过、还没做完的先不提交。');
+        else todo.push('这一轮改过的文件还没提交：' + where + '。做完一件完整的事（勾完一项任务、审查修复收尾、普通修改做完并快检过）就提交：' + how + '。还没做完、快检没过的先不提交，说明原因就行。');
       }
     }
   }
@@ -935,7 +937,9 @@ async function handle(j) {
     writeState(gkey, { turnId, codeEditsAtBlock: codeNeedingCheck.length, specChecked, at: Date.now() });
     // 收工检查拦了一次：数进使用情况和"拦得最多的规矩"（按第一条算是哪条规矩）
     try { if (feedback && feedback.countBlock) feedback.countBlock('verify-gate', todo[0], String(j.session_id || '')); } catch (e) { /* 数不了不影响收工 */ }
-    return blockOut('Stop', '[vibe-kit 收工检查] ' + todo.join('\n'));
+    // 几件事一起时分开列、编号，提交排最后（审核第三节第 15 条：拼成一句时，问审查、自测和问提交一起出现，弱模型先问提交、后跑测试）
+    const commitLast = todo.filter((t) => !isCommitTodo(t)).concat(todo.filter(isCommitTodo));
+    return blockOut('Stop', '[vibe-kit 收工检查] ' + (commitLast.length > 1 ? '有 ' + commitLast.length + ' 件事，按顺序做（提交放最后）：\n' + commitLast.map((t, i) => (i + 1) + '. ' + t).join('\n') : commitLast.join('\n')));
   }
   // 这个会话动过的变更都归档了：流程走完了，记成不在流程里（状态栏不再写"在做任务"，下一句"继续"也不接回去）。报告照交，它认的是上面算好的 cfg
   try { if (flowState(j).on && flowDone(j)) { setFlow(j, false, '变更归档了'); hookLog('全自动模式 这个会话动过的变更都归档了，流程走完，记成不在流程里'); } } catch (e) { /* 记不了不影响收工 */ }

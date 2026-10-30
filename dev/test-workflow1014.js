@@ -92,7 +92,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.ok('旧兼容循环到上限仍不登记通过', /停止自动循环/.test(S.reviewLoopIssue('code', d, { reviewLoop: true, reviewMaxRounds: 4, autoMode: true })) && !S.readState('review-rounds')[limitKey].done);
     cfg({ autoApply: false, autoRequirements: false });
     const first = P.stop(j, [d], true), second = P.stop(j, [d], true);
-    H.ok('人工只提示一次，放弃不被同输入反复催', first.some(x => /Ask/.test(x)) && second.length === 0);
+    H.ok('人工只提示一次，放弃不被同输入反复催', first.some(x => /Ask|提问框/.test(x)) && second.length === 0);
     // 2026-10-16：每个用户要求最多问一次；新要求只有内容又变了才再问
     const jr = { cwd: p, session_id: 'per-request', transcript_path: tf([H.tr.user('改一下 a.js')]) };
     const asks = (turn) => P.stop(jr, [], true, turn).some(x => /本次代码已修改/.test(x));
@@ -208,7 +208,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const edit = H.tr.ran('Edit', { file_path: path.join(p4, 'a.js'), old_string: '1', new_string: '2' }, 'ok');
     const user = H.tr.user('把 a 改成 2');
     const noQuick = stop('quick-1', [user, edit, H.tr.say('改好了')]);
-    H.ok('没跑快检：问审查、自测时一起问要不要跑快检', /还没跑过快检/.test(noQuick) && /是否跑快检/.test(noQuick), noQuick);
+    H.ok('没跑快检：问审查、自测时一起问要不要跑快检', /还没跑过快检/.test(noQuick) && /(是否|要不要)跑快检/.test(noQuick), noQuick);
     H.ok('没跑快检也不强制补跑', !/没有成功跑过验证/.test(noQuick), noQuick);
     H.ok('同一要求里不重复问快检', !/跑快检/.test(stop('quick-1', [user, edit, H.tr.say('改好了')])));
     const ran = stop('quick-2', [H.tr.user('把 a 改成 2'), edit, H.tr.ran('Bash', { command: 'node --check a.js' }, 'ok'), H.tr.say('改好了')]);
