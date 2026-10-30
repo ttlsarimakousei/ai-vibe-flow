@@ -237,7 +237,7 @@ function runInstallerOnly(dir) {
   touchLock();
   const out = String(r.stdout || '') + String(r.stderr || '') + (r.error ? '\n' + r.error.message : '');
   try { fs.writeFileSync(INSTALL_LOG, stamp() + ' node ' + args.join(' ') + '\n退出码 ' + r.status + '\n' + out); } catch (e) { /* 记不了就算了 */ }
-  return { ok: r.status === 0, out };
+  return { ok: r.status === 0, out, status: r.status };
 }
 /**
  * 装完自检：每个钩子、每个库都载得进来；状态栏跑得出一行字。在另一个进程里做，这里的代码是装之前载入的那一份。
@@ -255,6 +255,14 @@ function selfCheck() {
   if (a.status !== 0 || !/ok/.test(String(a.stdout))) return { ok: false, why: (String(a.stdout || '') + String(a.stderr || '')).trim().split(/\r?\n/).slice(0, 3).join('；') || '自检进程没跑完' };
   const b = spawnSync(process.execPath, [path.join(KIT, 'statusline.js')], { input: '{}', encoding: 'utf8', windowsHide: true, timeout: 30000 });
   if (b.status !== 0 || !String(b.stdout || '').trim()) return { ok: false, why: '状态栏跑不出来：' + String(b.stderr || '').trim().split(/\r?\n/)[0] };
+  // 路由冒烟（20261030 起）：另起一份新装的路由接假网关，真发一次请求和一次 HTTP 钩子。以前路由坏了照样判装好（审核 P02、Codex C07）。
+  // 装回的老版本没有 router-smoke.js 就不做；没装路由的它自己跳过
+  const smoke = path.join(KIT, 'lib', 'router-smoke.js');
+  if (fs.existsSync(smoke)) {
+    const c = spawnSync(process.execPath, [smoke], { encoding: 'utf8', windowsHide: true, timeout: 90000 });
+    const last = String(c.stdout || '').trim().split(/\r?\n/).pop() || '';
+    if (c.status !== 0 || last !== 'ok') return { ok: false, why: '路由冒烟没过：' + (last.replace(/^冒烟没过：/, '') || String(c.stderr || '').trim().split(/\r?\n/)[0] || '没跑完') };
+  }
   return { ok: true };
 }
 function rollback(prev, s) {
@@ -293,13 +301,21 @@ function apply() {
   const backup = require('./local-backup').save(KIT, path.join(DIR, 'previous-package'));
   setState({ localBackup: backup.ok ? { version: backup.version, manifestHash: backup.manifestHash, at: Date.now() } : null });
   const r = runInstaller(STAGE);
+  // 安装器"什么都没动"（退出码 4：settings.json 读不懂、全局约定不是 UTF-8、Node 太老）：装回上一版也会被同样拒绝，
+  // 不回退、不算装坏，记下原因，等用户把电脑上的问题改好，下次检查照样再装（审核 P43）
+  if (r.status === 4) {
+    const why = '安装器没动手（' + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
+    log(why);
+    setState({ refused: { version: to, why, at: Date.now() } });
+    return { ok: false, refused: true, why, version: to, from };
+  }
   let why = '';
-  if (!r.ok) why = '安装器没跑完（' + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
+  if (!r.ok) why = (r.status === 3 ? '路由起不来（' : '安装器没跑完（') + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
   else if (installedVersion() !== to) why = '装完版本号不对：是 ' + installedVersion();
   else { const c = selfCheck(); if (!c.ok) why = '装完自检没过：' + c.why; }
   const hist = (readState('update').history || []).slice(-9);
   if (!why) {
-    setState({ lastApplied: { at: Date.now(), from, to }, failed: null, history: hist.concat({ at: Date.now(), from, to, ok: true }) });
+    setState({ lastApplied: { at: Date.now(), from, to }, failed: null, refused: null, history: hist.concat({ at: Date.now(), from, to, ok: true }) });
     log('已更新到 ' + to);
     return { ok: true, version: to, from };
   }

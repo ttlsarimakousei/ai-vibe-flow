@@ -47,6 +47,10 @@ let mode = process.argv.includes('--uninstall') ? 'uninstall' : (process.argv.in
 // 装进去的那份 install.js 旁边没有安装包，不带参数运行就当成 --sync
 if (mode === 'install' && !FROM_PACKAGE) mode = 'sync';
 const NO_ROUTER = process.argv.includes('--no-router');
+// 退出码（自动更新 lib/updater.js 照着它判断）：1 装到一半出错；ROUTER_FAILED 文件都装好了、路由起不来或配置页打不开（要装回上一版）；
+// REFUSED 什么都没动（settings.json 读不懂、全局约定不是 UTF-8、Node 太老）：装回上一版也没用，不算装坏（审核 P43）
+const ROUTER_FAILED = 3;
+const REFUSED = 4;
 
 // 做到一半出错（文件只读、被占用、没有权限、磁盘满）：不甩一屏英文堆栈，用中文说清出了什么事、现在是什么状态、怎么办
 function explainCrash(e) {
@@ -186,9 +190,9 @@ function readSettings() {
   if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
   if (!raw.trim()) return {};
   let s;
-  try { s = JSON.parse(raw); } catch (e) { console.log('  [X] ' + SETTINGS + ' 不是合法的 JSON（' + e.message + '）。什么都没动，修好后再运行一次'); process.exit(1); }
+  try { s = JSON.parse(raw); } catch (e) { console.log('  [X] ' + SETTINGS + ' 不是合法的 JSON（' + e.message + '）。什么都没动，修好后再运行一次'); process.exit(REFUSED); }
   const bad = !isObj(s) || ['hooks', 'permissions', 'env'].some((k) => s[k] !== undefined && !isObj(s[k]));
-  if (bad) { console.log('  [X] ' + SETTINGS + ' 的结构不对（顶层或 hooks / permissions / env 不是对象）。什么都没动，修好后再运行一次'); process.exit(1); }
+  if (bad) { console.log('  [X] ' + SETTINGS + ' 的结构不对（顶层或 hooks / permissions / env 不是对象）。什么都没动，修好后再运行一次'); process.exit(REFUSED); }
   return s;
 }
 const MANIFEST = path.join(KIT, 'installed.json');
@@ -755,14 +759,14 @@ function removeAbsorbed(man) {
 
 if (mode === 'install') {
   const major = parseInt(process.versions.node.split('.')[0], 10);
-  if (major < 18) { console.log('  [X] Node 版本太低（' + process.versions.node + '），需要 18 以上'); process.exit(1); }
+  if (major < 18) { console.log('  [X] Node 版本太低（' + process.versions.node + '），需要 18 以上'); process.exit(REFUSED); }
   for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
     if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
   }
   if (!fs.existsSync(path.join(SRC, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js'))) { console.log('  [X] 安装包不完整：缺自带的 OpenSpec（kit/openspec/node_modules）。重新拷一份完整的包'); process.exit(1); }
   const s = readSettings();
   // 全局 CLAUDE.md 不是 UTF-8：和 settings.json 读不懂一样，什么都不动。装一半、约定写不进去，比不装还乱
-  if (readGlobalMd().text === null) { explainNotUtf8(fs.existsSync(MANIFEST) ? '这次什么都没动：现在装着的还是之前那一版，照常工作。转好之后再运行一次安装。' : '这次什么都没动，套件还没装上。转好之后再运行一次安装。'); process.exit(1); }
+  if (readGlobalMd().text === null) { explainNotUtf8(fs.existsSync(MANIFEST) ? '这次什么都没动：现在装着的还是之前那一版，照常工作。转好之后再运行一次安装。' : '这次什么都没动，套件还没装上。转好之后再运行一次安装。'); process.exit(REFUSED); }
   fs.mkdirSync(KIT, { recursive: true });
   // 版本号（VERSION）最后写：装到一半被结束（关机、注销）的话，版本号还是旧的，自动更新下次会接着重装；
   // 先写的话，技能、约定、钩子登记都还是旧的，却已经显示"已是最新"，一直到下一版
@@ -1005,11 +1009,12 @@ async function setupRouter(svc) {
   } catch (e) { /* 搬不了就让用户在配置页里重新填 */ }
   await svc.stop();
   const r = await svc.start();
-  if (!r.ok) { console.log('  [X] 模型路由没启动：' + r.reason); return; }
+  // 路由起不来、配置页打不开：退出码 ROUTER_FAILED，自动更新据此装回上一版（以前只打印一行 [X]、退出码照样 0，Codex C07）
+  if (!r.ok) { console.log('  [X] 模型路由没启动：' + r.reason); process.exitCode = ROUTER_FAILED; return; }
   const base = 'http://127.0.0.1:' + r.port;
   const page = await httpGet(base + '/ui');
   if (page.status === 200 && page.body.includes('模型路由')) console.log('  [OK] 模型路由 v' + r.version + ' 已在后台运行，没有窗口。配置页（已验证能打开）：' + base + '/ui');
-  else console.log('  [X] 路由起来了，但配置页打不开（' + base + '/ui 返回 ' + page.status + '）。看 ' + path.join(svc.DATA_DIR, 'router.out.log'));
+  else { console.log('  [X] 路由起来了，但配置页打不开（' + base + '/ui 返回 ' + page.status + '）。看 ' + path.join(svc.DATA_DIR, 'router.out.log')); process.exitCode = ROUTER_FAILED; }
   // 上次装的时候设好了登录后自动启动、现在"启动"文件夹里那个文件却没了：是用户删的，记下来，不再加回来
   const man = readManifest();
   if (man.autostart === true && typeof svc.autostartOn === 'function' && !svc.autostartOn() && typeof svc.refuseAutostart === 'function') svc.refuseAutostart('"启动"文件夹里的 vibe-kit-router.vbs 被删掉了');
@@ -1050,6 +1055,6 @@ const tail = () => {
 };
 const svcFile = path.join(KIT, 'router', 'service.js');
 if (mode !== 'install' || NO_ROUTER || !fs.existsSync(svcFile)) return tail();
-setupRouter(require(svcFile)).catch((e) => console.log('  [X] 模型路由没装好：' + ((e && e.message) || e))).then(tail);
+setupRouter(require(svcFile)).catch((e) => { console.log('  [X] 模型路由没装好：' + ((e && e.message) || e)); process.exitCode = ROUTER_FAILED; }).then(tail);
 }
 if (mode !== 'uninstall') finishInstall().catch((e) => { console.error('  [X] 安装收尾失败：' + e.message); process.exitCode = 1; });
