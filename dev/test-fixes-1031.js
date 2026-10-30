@@ -128,5 +128,16 @@ const SRCV = FROM || H.SRC;
     H.ok('登记的 Maven 认得', t.Maven === true, r.out + r.err);
   }
 
+  H.section('H4 openspec --version 只查版本：不在项目里建 openspec/');
+  {
+    const h = H.makeHome('tfx-h4', FROM, {}, { openspec: true });
+    const p = H.makeRepo(path.join(h.work, 'p4'), { 'a.txt': 'x\n' });
+    const call = (id, command) => H.hook(h, 'guard-commit', { session_id: 'h4', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command }, transcript_path: H.transcript(path.join(h.root, id + '.jsonl'), [H.tr.user('看看 openspec 的版本')]) });
+    const out = call('h4-1', 'openspec --version');
+    H.ok('openspec --version：不建 openspec/', !fs.existsSync(path.join(p, 'openspec')), out);
+    const out2 = call('h4-2', 'openspec list');
+    H.ok('对照：openspec list 照旧建（说明自带的 OpenSpec 在这台电脑上用得上）', fs.existsSync(path.join(p, 'openspec')), out2);
+  }
+
   H.done('10-31 零散修复（E、F、G、H、I、J 批）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

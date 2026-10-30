@@ -1868,7 +1868,10 @@ function handle(j) {
     const O = require('../lib/openspec');
     const next = O.rewrite(String((j.tool_input && j.tool_input.command) || ''), j.tool_name === 'PowerShell');
     if (!next) return out;
-    const at = O.ensureRoot(j.cwd || process.cwd());
+    // 只查版本、帮助的（openspec --version、--help、-v）不建 openspec/（审核 P15）
+    const cmdText = String((j.tool_input && j.tool_input.command) || '');
+    const infoOnly = /\bopenspec(?:\.cmd)?\s+(?:--version|-v|-V|--help|-h|help)\b/i.test(cmdText) && !/\bopenspec(?:\.cmd)?\s+(?!--version|-v\b|-V\b|--help|-h\b|help\b)[\w-]/i.test(cmdText);
+    const at = infoOnly ? '' : O.ensureRoot(j.cwd || process.cwd());
     if (at) hookLog('guard-commit 自带的 OpenSpec 在 ' + at + ' 建了 openspec/');
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput: Object.assign({}, j.tool_input, { command: next }) } };
   } catch (e) { try { feedback.recordHookError('guard-commit OpenSpec 改写', j, e); } catch (x) { /* 记不了也放行 */ } return out; }
