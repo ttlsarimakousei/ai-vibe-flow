@@ -59,6 +59,63 @@ const SRCV = FROM || H.SRC;
     r.kill();
   }
 
+  H.section('E2、E6 路由：一个请求一个总截止时间，换模型共用剩下的；正文里提到 load balancer 不当成额度用完');
+  {
+    const listen = (srv) => new Promise((r) => srv.listen(0, '127.0.0.1', () => r(srv.address().port)));
+    const reply = (status, obj) => (q, s) => { q.resume(); q.on('end', () => { s.writeHead(status, { 'content-type': 'application/json' }); s.end(JSON.stringify(obj)); }); };
+    const hang = http.createServer((q) => { q.resume(); /* 一直不回 */ });
+    const lb = http.createServer(reply(403, { type: 'error', error: { type: 'permission_error', message: 'Request rejected by upstream load balancer (policy 7)' } }));
+    const quota = http.createServer(reply(429, { type: 'error', error: { type: 'insufficient_quota', message: 'You exceeded your current quota. 每日额度已用完' } }));
+    const okGw = http.createServer(reply(200, { id: 'msg_1', type: 'message', role: 'assistant', model: 'x', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }));
+    const pHang = await listen(hang); const pLb = await listen(lb); const pQuota = await listen(quota); const pOk = await listen(okGw);
+    const KEY = 'sk-test-0123456789abcdef';
+    const prov = (name, p) => ({ name, base_url: 'http://127.0.0.1:' + p, api_key: KEY });
+    const startRouter = async (tag, providers, def, failover) => {
+      const h = H.makeHome('tfx-' + tag, FROM);
+      const dir = path.join(h.root, 'router-data');
+      fs.mkdirSync(dir, { recursive: true });
+      const cfg = path.join(dir, 'config.json');
+      const port = 18900 + Math.floor(Math.random() * 90);
+      H.write(cfg, JSON.stringify({ listen: { host: '127.0.0.1', port }, providers, routes: [], default: { provider: def }, failover, options: { firstByteTimeoutSec: 30, rateLimitWaitSec: 0, cooldownSec: 10 } }, null, 2));
+      const proc = spawn(process.execPath, [path.join(SRCV, 'router', 'router.js'), '-c', cfg, '-p', String(port)], { env: H.envFor(h), windowsHide: true, stdio: 'ignore' });
+      const call = (method, url, body, headers, timeoutMs) => new Promise((resolve) => {
+        const data = body ? Buffer.from(JSON.stringify(body)) : null;
+        const q = http.request({ host: '127.0.0.1', port, method, path: url, timeout: timeoutMs || 10000, headers: Object.assign({}, headers || { 'x-vibe-router': '1' }, data ? { 'content-type': 'application/json', 'content-length': data.length } : {}) }, (res) => { const c = []; res.on('data', (d) => c.push(d)); res.on('end', () => { let j = null; try { j = JSON.parse(Buffer.concat(c).toString('utf8')); } catch (e) { j = null; } resolve({ status: res.statusCode, json: j }); }); });
+        q.on('timeout', () => q.destroy(new Error('timeout'))); q.on('error', () => resolve({ status: 0, json: null })); if (data) q.write(data); q.end();
+      });
+      let st = null; for (let i = 0; i < 60 && !(st && st.status === 200); i++) { await H.sleep(250); st = await call('GET', '/api/state'); }
+      const ask = (timeoutSec) => call('POST', '/v1/messages', { model: 'claude-sonnet-4-5', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }, { 'anthropic-version': '2023-06-01', authorization: 'Bearer claude-code-placeholder', 'x-stainless-timeout': String(timeoutSec) }, 120000);
+      return { proc, call, ask };
+    };
+    // E2：Claude Code 的超时 50 秒，路由封顶 30 秒。两个模型都不回：以前每个各等满 30 秒（共 60 秒，Claude Code 早放弃了），现在共用 30 秒
+    {
+      const r = await startRouter('e2', [prov('slow1', pHang), prov('slow2', pHang)], 'slow1', ['slow2']);
+      const t0 = Date.now();
+      const res = await r.ask(50);
+      const took = Date.now() - t0;
+      H.ok('两个模型都不回：30 秒左右就回错误，不是每个都等满', res.status >= 500 && took < 45000, { status: res.status, took, error: res.json && res.json.error });
+      r.proc.kill();
+    }
+    // E6：403 的正文里提到 "load balancer"，以前算额度用完（停用到配置的熔断时长、跨重启保留），现在照一般的 403 处理
+    {
+      const r = await startRouter('e6', [prov('lb', pLb), prov('ok', pOk)], 'lb', ['ok']);
+      const res = await r.ask(600);
+      const st = await r.call('GET', '/api/state');
+      const p = st.json && st.json.providers.find((x) => x.name === 'lb');
+      H.ok('正文里提到 load balancer：不算额度用完', res.status === 200 && p && p.quota === false, { status: res.status, lb: p && { quota: p.quota, reason: p.reason } });
+      r.proc.kill();
+    }
+    {
+      const r = await startRouter('e6b', [prov('quota', pQuota), prov('ok', pOk)], 'quota', ['ok']);
+      const res = await r.ask(600);
+      const st = await r.call('GET', '/api/state');
+      const p = st.json && st.json.providers.find((x) => x.name === 'quota');
+      H.ok('明确说 insufficient_quota、每日额度已用完：照旧算额度用完', res.status === 200 && p && p.quota === true, { status: res.status, quota: p && { quota: p.quota, reason: p.reason } });
+      r.proc.kill();
+    }
+    for (const s of [hang, lb, quota, okGw]) { if (s.closeAllConnections) s.closeAllConnections(); s.close(); }
+  }
+
   H.section('H3 会话记录：用户那句话在 3 MB 以外（这一轮工具输出很大），往前再读，不当成没说');
   {
     const h = H.makeHome('tfx-h3', FROM);
