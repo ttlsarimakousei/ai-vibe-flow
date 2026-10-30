@@ -70,5 +70,22 @@ const SRCV = FROM || H.SRC;
     H.ok('记录 4 MB、用户的"改完提交"在最前面：认得出', fs.statSync(file).size > 3500000 && r.ok, { size: fs.statSync(file).size, ok: r.ok });
   }
 
+  H.section('I3 问题反馈：几个进程同时记，编号不重、同签名的次数不丢');
+  {
+    const h = H.makeHome('tfx-i3', FROM);
+    const fbjs = path.join(h.kit, 'lib', 'feedback.js');
+    const script = path.join(h.root, 'rec.js');
+    H.write(script, 'const F = require(' + JSON.stringify(fbjs) + ');\nconst who = process.argv[2];\nfor (let i = 0; i < 12; i++) { F.record({ kind: \'测试\', title: \'并发 \' + who + \' \' + i }); F.record({ kind: \'测试\', title: \'同一条\', sig: \'same-sig\' }); }\n');
+    const kids = [0, 1, 2].map((k) => new Promise((resolve) => { const c = spawn(process.execPath, [script, 'p' + k], { env: H.envFor(h), windowsHide: true, stdio: 'ignore' }); c.on('exit', resolve); }));
+    await Promise.all(kids);
+    const dir = path.join(h.kit, 'feedback');
+    const files = fs.readdirSync(dir).filter((n) => /^F\d{8}-\d+.*\.md$/.test(n));
+    const distinct = files.filter((n) => /并发/.test(n));
+    const same = files.filter((n) => /同一条/.test(n)).map((n) => H.read(path.join(dir, n)));
+    const count = same.length === 1 ? Number((/次数: (\d+)/.exec(same[0]) || [])[1]) : -1;
+    H.ok('3 个进程各记 12 条不同的：36 个文件，编号不重', distinct.length === 36 && new Set(distinct.map((n) => n.slice(0, 13))).size === 36, distinct.length);
+    H.ok('同一签名各记 12 次：并成一条，次数 36', same.length === 1 && count === 36, { files: same.length, count });
+  }
+
   H.done('10-31 零散修复（E、F、G、H、I、J 批）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

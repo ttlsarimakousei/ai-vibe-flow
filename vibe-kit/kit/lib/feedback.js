@@ -183,8 +183,14 @@ function markDirty() { try { writeState('issues-dirty', { at: Date.now() }); } c
  *   blocked 拦下时的原话, stack 出错的位置, sig 签名（同样的问题认得出来）, sid, cwd, transcript, bypass 放行情况, note 又出现时记的一句 }
  * 返回 { id, file, repeated, count }
  */
+/** 记一条（Codex C11）：找同签名、分编号、写文件在一个锁里做，两个钩子同时记不会同号互相盖掉、次数不会丢。锁 3 秒拿不到照旧记 */
 function record(r) {
   fs.mkdirSync(DIR, { recursive: true });
+  let lock = null;
+  try { lock = require('./state-store').acquire(path.join(DIR, '.record.lock'), { waitMs: 3000 }); } catch (e) { lock = null; }
+  try { return recordLocked(r); } finally { if (lock) lock.release(); }
+}
+function recordLocked(r) {
   const now = Date.now();
   const sid = String(r.sid || '');
   const cwd = String(r.cwd || '');
