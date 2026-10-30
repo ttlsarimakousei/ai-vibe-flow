@@ -819,6 +819,15 @@ if (mode === 'install') {
   //   有会话正在 Apply 自动干活时，两个自动模式这次先不关（和上面一样），别的照改；下次没在跑的时候再关
   const forceFile = path.join(KIT, 'state', 'defaults-1017-migration.json');
   let forced = {}; try { forced = JSON.parse(fs.readFileSync(forceFile, 'utf8')) || {}; } catch (e) { forced = {}; }
+  // 标记没了、装之前已经是 20261018.0051（第一版带这次迁移）或更新的：迁移早就做过，标记是 20261030 以前被会话清理误删的
+  // （它不在 GLOBAL_STATE 里，审核 P01）。补写标记，不再动用户的配置——以前每次更新都把两个自动模式关掉，就是这里
+  if (!forced.defaults && !forced.autoOff) {
+    let prev = ''; try { prev = fs.readFileSync(path.join(KIT, 'VERSION'), 'utf8').replace(/^﻿/, '').trim(); } catch (e) { prev = ''; }
+    if (/^\d{8}\.\d{4}$/.test(prev) && prev >= '20261018.0051') {
+      forced = { defaults: Date.now(), autoOff: Date.now(), recoveredFrom: prev };
+      try { fs.mkdirSync(path.dirname(forceFile), { recursive: true }); fs.writeFileSync(forceFile, JSON.stringify(forced)); } catch (e) { /* 写不了：下次照样按版本号认 */ }
+    }
+  }
   if (!forced.defaults || !forced.autoOff) {
     let cur = null;
     try { cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^﻿/, '')); if (!cur || typeof cur !== 'object' || Array.isArray(cur)) throw new Error('不是对象'); }

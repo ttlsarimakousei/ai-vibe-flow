@@ -166,6 +166,9 @@ const DESIGN_OK = ['## Context', '', '- 读过 src/A.java：现在只有查询',
     H.ok('改过一次之后：再更新不动你的选择', i2.code === 0 && c2.autoCompactPercent === 85 && c2.handoverAsk === 'ask' && c2.commitMode === 'auto' && !/改回了新的默认值/.test(i2.out), [c2, i2.out.slice(-400)]);
     // 从旧版升上来：没有标记、旧值都在、还有一个会话正在 Apply 自动干活
     try { fs.unlinkSync(marker); } catch (e) { /* 旧版没写标记 */ }
+    // 20261030 起：标记丢了但装着的已经是带迁移的版本（20261018.0051 起）就补写标记、不改配置（dev/test-auto-mode-kept.js）。
+    // 这里模拟的是真从更老的版本升上来，版本号也拨回去
+    H.write(path.join(u.kit, 'VERSION'), '20261017.0243\n');
     setCfg({ autoCompactPercent: 90, handoverAsk: 'ask', commitMode: 'ask', autoResume: true, autoApply: true, autoMode: true, autoRequirements: true });
     H.write(path.join(u.kit, 'state', 'work-sessions.json'), JSON.stringify({ busy: { pid: process.pid, at: Date.now() } }));
     const i3 = install();
