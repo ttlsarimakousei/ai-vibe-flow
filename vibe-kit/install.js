@@ -80,6 +80,12 @@ const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 const same = (a, b) => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch (e) { return false; } };
 
 // 目标可能带只读属性（从只读共享、版本库检出拷来的），先放开再覆盖
+/** 先写临时文件再改名（审核 P03）：两次 --sync 重叠、写到一半断电，settings.json、全局 CLAUDE.md 不会只剩半截 */
+function writeAtomic(file, text) {
+  const tmp = file + '.' + process.pid + '.' + Date.now() + '.tmp';
+  fs.writeFileSync(tmp, text);
+  try { fs.renameSync(tmp, file); } catch (e) { try { fs.writeFileSync(file, text); } finally { try { fs.unlinkSync(tmp); } catch (x) { /* 已经没了 */ } } }
+}
 function copyFile(s, d) {
   try { fs.chmodSync(d, 0o644); } catch (e) { /* 目标不存在 */ }
   fs.copyFileSync(s, d);
@@ -391,8 +397,8 @@ function mergeSettings(s, remove, hooksOnly) {
     PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand|Agent|Task', hooks: [fast('guard-ask')] },
       // 搜文件内容：范围里有放令牌、放模型 key 的地方就拦（权限规则管不到"对着上级目录搜"）
       { matcher: 'Grep', hooks: [fast('guard-read')] }].concat(transport === 'http' ? [{ matcher: 'Bash|PowerShell', hooks: PUSH_RULES.map(pushGuard) }] : []),
-    // 读文件时提醒（提示规则）2026-09-30 去掉了，不再登记；这一项留着空的，是为了把以前登记过的摘掉
-    PostToolUse: [],
+    // 读文件时提醒（提示规则）2026-09-30 去掉了。以前这里还有一个空的 PostToolUse 键，被下面那个同名键盖掉、从来没起作用（审核 P07），删了：
+    // 以前登记过的读文件提醒照样摘得掉，靠的是登记时按套件的钩子文件名整个替换
     // 用户开口的钩子，Claude Code 默认只等 30 秒（官方文档：UserPromptSubmit 上命令钩子的默认超时从 600 秒降到了 30 秒），到点就结束它、丢掉输出。
     // 开工前拉代码在这个钩子里：连远端最多 15 秒，合并做到一半又不能被结束（会留下 index.lock 和改了一半的工作区），所以写明等 300 秒
     UserPromptSubmit: [{ hooks: [Object.assign(hook('task-anchor.js'), { timeout: 300 })] }],
@@ -423,7 +429,7 @@ function mergeSettings(s, remove, hooksOnly) {
     const ac = applyAutoCompact(s, man0, false);
     const manBefore = JSON.stringify(man0.disableAutoMode);
     const cm = applyCcAutoMode(s, man0, false);
-    if (JSON.stringify(s) !== before) { backup(SETTINGS, 'settings.json'); fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2) + '\n'); console.log('  [OK] settings.json 里的钩子' + (am === 'added' || am === 'removed' ? '、自动记忆的设置' : '') + (ac === 'set' || ac === 'removed' ? '、自动压缩的窗口' : '') + (cm === 'added' || cm === 'removed' ? '、Claude Code 自带的自动模式' : '') + '已更新'); }
+    if (JSON.stringify(s) !== before) { backup(SETTINGS, 'settings.json'); writeAtomic(SETTINGS, JSON.stringify(s, null, 2) + '\n'); console.log('  [OK] settings.json 里的钩子' + (am === 'added' || am === 'removed' ? '、自动记忆的设置' : '') + (ac === 'set' || ac === 'removed' ? '、自动压缩的窗口' : '') + (cm === 'added' || cm === 'removed' ? '、Claude Code 自带的自动模式' : '') + '已更新'); }
     if (am === 'added' || am === 'removed' || ac !== 'kept' || manBefore !== JSON.stringify(man0.disableAutoMode)) { try { saveManifest(man0); } catch (e) { /* 记不了：卸载时这一项就留着 */ } }
     if (am === 'added' || am === 'removed') autoMemoryNote(am);
     autoCompactNote(ac, s);
@@ -509,7 +515,7 @@ function mergeSettings(s, remove, hooksOnly) {
   if (JSON.stringify(s) !== before) {
     const bak = backup(SETTINGS, 'settings.json');
     fs.mkdirSync(CLAUDE, { recursive: true });
-    fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2) + '\n');
+    writeAtomic(SETTINGS, JSON.stringify(s, null, 2) + '\n');
     console.log('  [OK] settings.json 已更新' + (bak ? '（原文件备份在 ' + bak + '）' : ''));
   }
   return man;
@@ -624,7 +630,7 @@ function writeGlobalMd(block) {
   if (next === cur) return false;
   backup(file, 'CLAUDE.md');
   fs.mkdirSync(CLAUDE, { recursive: true });
-  fs.writeFileSync(file, next);
+  writeAtomic(file, next);
   return true;
 }
 
@@ -1009,8 +1015,8 @@ if (mode === 'install') {
   man.router = fs.existsSync(path.join(KIT, 'router', 'service.js'));
   man.absorbed = man0.absorbed;
   saveManifest(man);
-  // 都装好了，最后写版本号
-  copyFile(path.join(SRC, 'kit', 'VERSION'), path.join(KIT, 'VERSION'));
+  // 版本号挪到安装收尾、全局约定写完之后再写（审核 P03）：以前在这里写，后面写约定、撤 IDEA MCP 的时候被打断，
+  // 版本号已经是新的，自动更新就不再重装
 }
 
 /** 模型路由：用刚拷进去的新文件在后台重新启动，设好登录后自动启动，再自己验证一遍配置页打得开 */
@@ -1108,6 +1114,8 @@ if (changed === null) { explainNotUtf8('全局约定没写进去；其余部分�
 else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化') + '；启用的规范：' + (block.rules.length ? block.rules.join('，') : '（无）'));
 // 钩子跑的方式（HTTP / 命令）、自动记忆的开关改了之后，settings.json 里的登记要跟着变
 if (mode === 'sync') mergeSettings(readSettings(), false, true);
+// 都装好了（约定也写了），最后写版本号；路由起不来由更新器按退出码处理
+if (mode === 'install') copyFile(path.join(SRC, 'kit', 'VERSION'), path.join(KIT, 'VERSION'));
 // 不再接 IDEA 的 MCP（用户 2026-10-28 定的）：以前套件登记的 vibe-idea-<端口>，没被改过的撤掉；你自己登记的不动。失败不影响安装
 try {
   const r = await require(path.join(KIT, 'lib', 'idea-mcp.js')).retract({ claudeDir: CLAUDE });

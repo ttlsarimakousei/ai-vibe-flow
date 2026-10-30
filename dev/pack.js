@@ -45,6 +45,22 @@ for (const need of ['kit/lib/apply-scope.js', 'kit/lib/entry-check.js', 'kit/lib
   'claude/skills/ttls-redis/SKILL.md', 'claude/skills/ttls-redis/scripts/redis.js']) {
   if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);
 }
+// 必备清单只列了一部分钩子和库（审核 P06）：再扫一遍 kit 里所有 .js 的相对 require，指到的文件都得在，漏了一个库、删错一个钩子都查得出来
+{
+  const missing = [];
+  const walkJs = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.name === 'node_modules') continue; const p = path.join(d, e.name); if (e.isDirectory()) walkJs(p); else if (/\.js$/.test(e.name)) {
+    const text = fs.readFileSync(p, 'utf8');
+    for (const m of text.matchAll(/require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g)) {
+      let t = path.resolve(path.dirname(p), m[1]);
+      // 装好以后路由在 ~/.claude/vibe-kit/router（和 hooks、lib 同级），源码里在 vibe-kit/router
+      const inKitRouter = path.relative(path.join(SRC, 'kit', 'router'), t);
+      if (!inKitRouter.startsWith('..') && !path.isAbsolute(inKitRouter)) t = path.join(SRC, 'router', inKitRouter);
+      if (![t, t + '.js', path.join(t, 'index.js')].some((x) => fs.existsSync(x))) missing.push(path.relative(SRC, p).split(path.sep).join('/') + ' → ' + m[1]);
+    }
+  } } };
+  walkJs(path.join(SRC, 'kit'));
+  if (missing.length) fail('kit 里有 require 指到不存在的文件：' + missing.slice(0, 10).join('；'));
+}
 
 // 2. 语法检查
 const files = walk(SRC, '', []);
