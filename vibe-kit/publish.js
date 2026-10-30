@@ -154,7 +154,20 @@ function fixedIssues(version) {
   const tree = G(['write-tree']).out.trim();
   if (!/^[0-9a-f]{40}$/.test(tree)) stop('整理要发布的文件时出错了');
   const count = G(['ls-files']).out.split(/\r?\n/).filter(Boolean).length;
-  if (remoteTree && remoteTree === tree) { console.log(''); say('[OK] 仓库里已经是这一版（' + version + '），内容一模一样，不用再发'); cleanup(); return; }
+  if (remoteTree && remoteTree === tree) {
+    // 内容一样，还要核对版本标签在不在（Codex C03）：上次分支推成了、标签没推成的，以前重跑就直接说"不用再发"，同事按标签装回上一版时找不到
+    const head = G(['rev-parse', 'FETCH_HEAD']).out.trim();
+    const ls = gl.viaRoutes(s, (route) => G(['ls-remote', route.url, 'refs/tags/v' + version], { route, timeout: 120000 }));
+    const at = ls.code === 0 ? (String(ls.out || '').trim().split(/\s+/)[0] || '') : '';
+    if (ls.code === 0 && !at && !DRY) {
+      G(['tag', '-f', 'v' + version, head]);
+      const pt = gl.viaRoutes(s, (route) => G(['push', '-q', route.url, 'refs/tags/v' + version], { route, timeout: 600000 }));
+      if (pt.code !== 0) stop('仓库里分支已经是这一版，但标签 v' + version + ' 不在，补推没成：' + gl.explainRoutes(pt, '推标签'));
+      console.log(''); say('[OK] 仓库里已经是这一版（' + version + '），补推了上次没推上去的标签 v' + version); cleanup(); return;
+    }
+    if (at && head && at !== head) say('[!] 仓库里的标签 v' + version + ' 指着别的提交（' + at.slice(0, 8) + '），分支上是 ' + head.slice(0, 8) + '。没动它：要改就先在 GitLab 上删掉这个标签再发一次');
+    console.log(''); say('[OK] 仓库里已经是这一版（' + version + '），内容一模一样，不用再发'); cleanup(); return;
+  }
   if (remoteVersion === version) stop('仓库里已经有 ' + version + ' 了，但内容和这个包不一样。没发：装了这一版的电脑看版本号没变，不会更新。重新打包（换一个版本号）再发布');
   if (remoteVersion && remoteVersion > version) {
     say('[!] 仓库里的 ' + remoteVersion + ' 比这个包（' + version + '）新。发布之后，所有开着自动更新的电脑都会退回 ' + version);
@@ -180,7 +193,8 @@ function fixedIssues(version) {
   const commit = G(ident.concat(['commit', '-q', '-m', 'chore: 发布 vibe-kit ' + version]), { timeout: 120000 });
   if (commit.code !== 0) stop(gl.explainGit(commit, '建提交'));
   G(['tag', '-f', 'v' + version]);
-  const push = gl.viaRoutes(s, (route) => G(['push', '-q', route.url, 'HEAD:refs/heads/' + branch, 'refs/tags/v' + version], { route, timeout: 600000 }));
+  // 分支和标签一起推，要么都成、要么都不动（Codex C03）：以前分支推成了、标签被拒，仓库里是新内容却没有版本标签
+  const push = gl.viaRoutes(s, (route) => G(['push', '-q', '--atomic', route.url, 'HEAD:refs/heads/' + branch, 'refs/tags/v' + version], { route, timeout: 600000 }));
   if (push.code !== 0) {
     const e = String(push.err || '');
     if (/protected branch|not allowed to push/i.test(e)) stop('GitLab 不让推：分支 ' + branch + ' 是受保护的，这个账号的权限不够。在项目的 设置 → 仓库 → 受保护分支 里允许这个账号推送，或者换一个权限够的账号（令牌）');
