@@ -81,4 +81,39 @@ else {
   H.ok('查两个进程、取一次进程表、再查两次：只起了 1 个 PowerShell（以前 5 个）', o.ps === 1, o);
 }
 
+H.section('C3 命令跑完记证据：只算命令针对的仓库；版本查询、curl 不记；分类；环境指纹不含 PATH');
+{
+  const h = H.makeHome('tds-c3', FROM);
+  const shell = H.makeRepo(path.join(h.work, 'shell'), { 'README.md': '# 壳子\n', '.gitignore': 'sub/\n' });
+  const sub = H.makeRepo(path.join(shell, 'sub'), { 'pom.xml': '<project/>\n', 'src/main/java/A.java': 'class A {}\n' });
+  const code = [
+    'const E = require(' + JSON.stringify(path.join(h.kit, 'lib', 'evidence.js')) + ');',
+    'const shell = process.argv[1];',
+    'const a = (command) => { const r = E.actual({ tool_name: "Bash", cwd: shell, tool_input: { command }, tool_response: { stdout: "BUILD SUCCESS" } }); return r ? { root: r.root.replace(/\\\\/g, "/").toLowerCase(), kind: r.kind } : null; };',
+    'const out = {',
+    '  f: a("mvn -q -o -f sub/pom.xml compile"),',
+    '  prefix: a("npm --prefix sub run build"),',
+    '  ver: a("java -version"), nodev: a("node --version"),',
+    '  curl: a("curl -s http://127.0.0.1:8080/api/x"),',
+    '  test: a("mvn -q -f sub/pom.xml test"), tc: a("mvn -q -f sub/pom.xml test-compile"), skip: a("mvn -q -f sub/pom.xml package -DskipTests"),',
+    '  other: a("node sub/tools/gen.js"),',
+    '  pkg: a("mvn -q -f sub/pom.xml package"), chk: a("node --check sub/a.js"), apit: a("node sub/scripts/api-test.js"), gitc: a("git -C ../other status; node a.js"),',
+    '  env: E.environment(shell),',
+    '};',
+    'console.log(JSON.stringify(out));',
+  ].join('\n');
+  const run = (extraPath) => { const r = H.node(h, '-e', [code, shell], { cwd: shell, env: { PATH: extraPath + path.delimiter + process.env.PATH }, timeout: 60000 }); try { return JSON.parse(r.out.trim().split(/\r?\n/).pop()); } catch (e) { return { err: r.out + r.err }; } };
+  const o = run('C:\\vk-a');
+  const o2 = run('C:\\vk-b');
+  const subKey = sub.replace(/\\/g, '/').toLowerCase();
+  H.ok('mvn -f sub/pom.xml：记在 sub 这个仓库（以前不记）', !!o.f && o.f.root === subKey && o.f.kind === 'compile', o.f || o.err);
+  H.ok('npm --prefix sub：记在 sub', !!o.prefix && o.prefix.root === subKey, o.prefix);
+  H.ok('java -version、node --version：不记', o.ver === null && o.nodev === null, [o.ver, o.nodev]);
+  H.ok('curl 探一下接口：不记', o.curl === null, o.curl);
+  H.ok('分类：test 是测试，test-compile、-DskipTests 的 package 是编译检查，node 跑脚本是 other', o.test && o.test.kind === 'test' && o.tc && o.tc.kind === 'compile' && o.skip && o.skip.kind === 'compile' && o.other && o.other.kind === 'other', [o.test, o.tc, o.skip, o.other]);
+  H.ok('和手册的表一致：不跳过测试的 mvn package 算自测，node --check 算快检，名字带 test 的脚本算自测', o.pkg && o.pkg.kind === 'test' && o.chk && o.chk.kind === 'compile' && o.apit && o.apit.kind === 'test', [o.pkg, o.chk, o.apit]);
+  H.ok('git -C 指到别处的：照旧不记', o.gitc === null, o.gitc);
+  H.ok('PATH 不一样，环境指纹一样（命令方式和 HTTP 方式的钩子 PATH 不同）', !!o.env && o.env === o2.env, [o.env, o2.env]);
+}
+
 H.done('devserver 提速（C 批）');
