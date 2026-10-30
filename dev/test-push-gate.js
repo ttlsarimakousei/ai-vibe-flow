@@ -38,6 +38,41 @@ H.section('B1 识别：各种写法里的 git push，用户没说推送就不放
     ['Bash', 'git status'],
   ];
   for (const [tool, c] of fine) { const r = run(tool, c); H.ok(tool + ' 不是 push，不拦：' + c, !stopped(r), r); }
+  // 复审 S2：命令替换里再套引号
+  const nested = run('Bash', 'echo "$(git -C "sub" push)"');
+  H.ok('Bash 认出 push：echo "$(git -C "sub" push)"（替换里再套引号）', stopped(nested), nested);
+  // 复审 S1：用户说过推送，可 push 写在命令替换里、拆不出是哪条：查不了是不是强推、推到哪，照样要确认
+  const saidRun = (command) => { n++; return H.hook(h, 'guard-commit', { session_id: 's-b1-' + n, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command }, tool_use_id: 'toolu_b1_' + n, transcript_path: H.transcript(path.join(h.root, 'b1-' + n + '.jsonl'), [H.tr.user('推送')]) }); };
+  for (const c of ['echo "$(git push --force origin main)"', 'x=`git push --force`; echo $x']) { const r = saidRun(c); H.ok('说了推送，强推藏在命令替换里：要确认，不直接放', stopped(r), [c, r]); }
+}
+
+H.section('复审 S3、S7：检查没跑成时，像推送的不放行；人工要确认，全自动拦下');
+{
+  const h = H.makeHome('tpg-s3', FROM, { autoApply: false });
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  H.ok('有 pushFailOut', typeof S.pushFailOut === 'function');
+  if (typeof S.pushFailOut === 'function') {
+    const proj = H.makeRepo(path.join(h.work, 'proj'), { 'a.txt': 'a\n' });
+    const j = (sid, command) => ({ session_id: sid, cwd: proj, tool_name: 'Bash', tool_input: { command } });
+    const m = S.pushFailOut(j('s-m', 'git push'), '测试');
+    H.ok('人工：要确认', !!m && m.hookSpecificOutput && m.hookSpecificOutput.permissionDecision === 'ask', m);
+    H.ok('不像推送的：照旧放行', S.pushFailOut(j('s-m', 'echo hi'), '测试') === null);
+    // 全自动生效：Apply 自动开着、会话在做任务那一段
+    H.setConfig(h, { autoApply: true });
+    const chg = path.join(proj, 'openspec', 'changes', 'c1');
+    H.write(path.join(chg, 'tasks.md'), '- [ ] 1.1 做一件事\n');
+    H.inFlow(h, 's-auto', [chg], true, 'apply');
+    const a = S.pushFailOut(j('s-auto', 'git push'), '测试');
+    H.ok('全自动：拦下、留给用户，不弹确认框等人', !!a && a.decision === 'block' && /全自动模式：推送留给用户/.test(a.reason || ''), a);
+  }
+  // 命令方式（hookTransport=command）的 guard-commit 出错时走 cli 的 onError
+  const gc = H.read(path.join(h.kit, 'hooks', 'guard-commit.js')) || '';
+  H.ok('命令方式的 guard-commit 出错时回 pushFailOut', /cli\(handle, \{ onError:[^\n]*pushFailOut/.test(gc));
+  const probe = path.join(h.root, 'cli-fail.js');
+  H.write(probe, "const S = require(" + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + "); S.cli(() => { throw new Error('测试：检查出错'); }, { onError: (j, e) => S.pushFailOut(j, e.message) });\n");
+  const r = H.node(h, probe, [], { input: JSON.stringify({ session_id: 's-cli', cwd: h.work, tool_name: 'Bash', tool_input: { command: 'git push' } }) });
+  const o = (() => { try { return JSON.parse(String(r.out || '').trim() || 'null'); } catch (e) { return null; } })();
+  H.ok('cli 出错：像推送的回 pushFailOut 的结果（人工是要确认，全自动是拦下）', !!o && ((o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'ask') || o.decision === 'block'), r.out + r.err);
 }
 
 const { spawn, spawnSync } = require('child_process');
@@ -161,12 +196,22 @@ const stop = (p) => new Promise((r) => { if (!p || p.exitCode !== null) return r
       H.write(rj, t.replace('let sendBody = body;', "let sendBody = parsed ? Buffer.from(JSON.stringify(Object.assign({}, parsed, { model: undefined })), 'utf8') : body;"));
       const bad = H.node(h, smoke, [], { timeout: 90000 });
       H.ok('转发去掉模型名的路由：冒烟没过，说清楚是没带模型名', t.includes('let sendBody = body;') && bad.code === 1 && /没带模型名/.test(bad.out), bad.out + bad.err);
+      // 复审 S4：钩子宿主载不进来（新版 hook-host.js 坏了），路由照样回 200。冒烟要认出检查没真跑起来
+      H.write(rj, t);
+      const hostFile = path.join(h.kit, 'lib', 'hook-host.js');
+      const host = H.read(hostFile);
+      H.write(hostFile, 'this is not javascript {\n');
+      const broken = H.node(h, smoke, [], { timeout: 90000 });
+      H.write(hostFile, host);
+      H.ok('钩子宿主坏了的路由：冒烟没过，说检查没真跑起来', broken.code === 1 && /没真跑起来/.test(broken.out), broken.out + broken.err);
+      H.ok('冒烟起的路由带 -p（不会去改 settings.json 里钩子登记的端口）', /'-p', String\(port\)/.test(H.read(smoke) || ''));
     }
   }
 
   H.section('B4 去掉 Claude Code 的 push 确认规则：套件以前加的收回，你自己加的不动');
   {
-    const BASE = process.env.VKT_BASE_2041;
+    // 从 20261028.2041 升级的两项：默认用 dev/baseline 里存的那一版（复审 S8：以前要设环境变量，没设就跳过还算过）
+    const BASE = process.env.VKT_BASE_2041 || path.join(__dirname, 'baseline', '20261028.2041', 'vibe-kit');
     const newPkg = (() => { if (!FROM) return H.makePackage('tpg-b4-new', '20261030.1400'); const d = path.join(H.tempDir('tpg-b4-new'), 'vibe-kit'); H.copyDir(FROM, d, (n) => n === 'node_modules' || n === '.git'); H.stubDeps(d); return d; })();
     const frag = json(H.read(path.join(newPkg, 'settings.fragment.json'))) || {};
     H.ok('新包的权限片段里没有 push 的确认规则', !(((frag.permissions || {}).ask) || []).includes('Bash(git push:*)'), frag.permissions);
@@ -189,7 +234,10 @@ const stop = (p) => new Promise((r) => { if (!p || p.exitCode !== null) return r
       H.node(v, path.join(oldPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: v.root, timeout: 240000 });
       const j2 = H.node(v, path.join(newPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: v.root, timeout: 240000 });
       H.ok('你自己写的 push 确认规则：升级后照旧留着', j2.code === 0 && ask(v).includes('Bash(git push:*)'), ask(v));
-    } else console.log('  （没给 VKT_BASE_2041=<20261028.2041 的 vibe-kit 目录>，跳过从 2041 升级的两项）');
+      // 3. 新版收回之后又装回 2041（新版路由起不来、自动更新回退时就是这样）：老版本没有 guard-push，它那条确认规则要能加回来（复审 S6）
+      const i4 = H.node(u, path.join(oldPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+      H.ok('装回 2041：它的 push 确认规则加回来了', i4.code === 0 && ask(u).includes('Bash(git push:*)'), ask(u));
+    } else H.ok('有 20261028.2041 的旧版目录（dev/baseline 里，或者 VKT_BASE_2041 指过去）', false, BASE);
   }
 
   H.done('push 只留钩子一道（B 批）');
