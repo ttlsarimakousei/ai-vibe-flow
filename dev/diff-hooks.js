@@ -403,6 +403,8 @@ for (const c of cases) {
   // 会被拦的规矩提前说：开工时送做任务这一段的，提需求时送写需求这一段的（审核 R4、M02，用户 2026-10-30 定的）
   if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /现在开始 apply[\s\S]*做任务这一段的规矩（照做就不会被拦）：起服务自测走[\s\S]*--mode code --point group-<组号>/; c.since = NEXT; }
   if (c.name === '开口：提需求') { c.expect = /这像一条需求[\s\S]*写需求这一段的规矩（照做就不会被拦）：需求文档一份一份写[\s\S]*--mode proposal --point/; c.since = NEXT; }
+  // 问服务起着没有：说"我要看看系统"也算；先 devserver status，不分几次问（问题表第 27 条，2026-10-31）
+  if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = NEXT; }
 }
 
 let same = 0;
