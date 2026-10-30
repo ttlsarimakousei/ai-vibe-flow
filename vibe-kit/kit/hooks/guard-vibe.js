@@ -6,11 +6,11 @@
  *     拦错了原样再写一次就放行（同一个文件只拦一次）
  * 判断细节见 lib/tidy.js。固定检查，不做开关（用户 2026-10-17 定的；以前的开关 vibeTidy 不再认），原来默认开。
  */
-const { readConfig, readConfigFor, blockOut, hookLog, cli } = require('../lib/session');
+const { blockOut, hookLog, cli } = require('../lib/session');
 const { vibeCheck, processCheck } = require('../lib/tidy');
 
+// 固定检查，不看开关：以前开头读一遍配置（连同会话记录）没用上，白花时间（审核 P42）
 function handle(j) {
-  const cfg = readConfigFor(j);
   const reason = vibeCheck(j) || processCheck(j);
   if (!reason) return null;
   hookLog('guard-vibe block ' + String((j.tool_input && j.tool_input.file_path) || ''));
