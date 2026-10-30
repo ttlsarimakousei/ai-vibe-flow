@@ -27,6 +27,8 @@ function claim(file, record) {
 function acquire(file, options) {
   const opt = options || {};
   const wait = opt.waitMs === undefined ? 2000 : Math.max(0, Number(opt.waitMs) || 0);
+  // 租期（审核 P05、P46）：锁只认进程号时，Windows 复用了进程号，锁就永远拿不回来（自动更新、上报全停）。超过租期的锁按失效处理
+  const lease = opt.leaseMs === undefined ? 10 * 60000 : Math.max(1000, Number(opt.leaseMs) || 0);
   const record = { pid: process.pid, thread: threadId, token: crypto.randomBytes(12).toString('hex'), at: Date.now() };
   const reap = file + '.recover';
   try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (e) { return null; }
@@ -39,10 +41,11 @@ function acquire(file, options) {
       release(file, record.token);
     }
     const old = owner(file);
-    if (old && Number.isInteger(old.pid) && old.pid > 0 && !alive(old.pid) && claim(reap, record)) {
+    const stale = (o) => !!o && Number.isInteger(o.pid) && o.pid > 0 && (!alive(o.pid) || (Number(o.at) > 0 && Date.now() - Number(o.at) > lease));
+    if (stale(old) && claim(reap, record)) {
       try {
         const cur = owner(file);
-        if (cur && cur.token === old.token && !alive(cur.pid)) release(file, cur.token);
+        if (cur && cur.token === old.token && stale(cur)) release(file, cur.token);
         if (!fs.existsSync(file) && claim(file, record)) return { file, token: record.token, release: () => release(file, record.token) };
       }
       finally { release(reap, record.token); }

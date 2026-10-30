@@ -88,6 +88,20 @@ const SRCV = FROM || H.SRC;
     H.ok('同一签名各记 12 次：并成一条，次数 36', same.length === 1 && count === 36, { files: same.length, count });
   }
 
+  H.section('F3 锁有租期：进程号被复用（锁的主人看着还活着）、锁已经很旧了，照样拿得回来');
+  {
+    const h = H.makeHome('tfx-f3', FROM);
+    const SS = require(path.join(h.kit, 'lib', 'state-store.js'));
+    const lock = path.join(h.root, 'x.lock');
+    // 主人"还活着"：用这个测试进程自己的进程号，冒充复用了进程号的别的程序；锁是 20 分钟前的
+    H.write(lock, JSON.stringify({ pid: process.pid, thread: 0, token: 'old', at: Date.now() - 20 * 60000 }));
+    const got = SS.acquire(lock, { waitMs: 200 });
+    H.ok('20 分钟前的锁（默认租期 10 分钟）：拿得到', !!got, got);
+    if (got) got.release();
+    H.write(lock, JSON.stringify({ pid: process.pid, thread: 0, token: 'fresh', at: Date.now() }));
+    H.ok('刚建的锁、主人活着：拿不到', !SS.acquire(lock, { waitMs: 200 }));
+  }
+
   H.section('F2 装坏了、也没能装回上一版：状态栏第一行红字、配置页接口带上 broken');
   {
     const h = H.makeHome('tfx-f2', FROM, { autoUpdate: 'auto' });

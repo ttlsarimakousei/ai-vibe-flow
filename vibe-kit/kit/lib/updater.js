@@ -62,7 +62,7 @@ function lockHeld() {
 let updateLock = null;
 function lock() {
   if (updateLock) return false;
-  updateLock = stateStore.acquire(LOCK, { waitMs: 0 });
+  updateLock = stateStore.acquire(LOCK, { waitMs: 0, leaseMs: LOCK_MS });
   return !!updateLock;
 }
 function unlock() { if (updateLock) updateLock.release(); updateLock = null; }
