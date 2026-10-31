@@ -71,6 +71,25 @@ H.section('第 28 条：自动模式按会话开，/vk-auto 开、/vk-auto off �
   H.ok('升级：正在流程里的会话补了会话开关（不打断正在自动干活的）', JSON.parse(H.read(path.join(u.kit, 'state', 'busy-auto-switch.json')) || '{}').on === true && /正在自动干活的 1 个会话照旧开着/.test(i2.out), i2.out.slice(-500));
 }
 
+H.section('复审 V1—V4：/vk-auto 关 是关；需求原文里的"自动关闭""自动完成"不动开关；开着的开关不会 3 天后被清掉');
+{
+  const h = H.makeHome('tas-v', FROM, QUIET);
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  const said = (t) => (S.autoSwitchSaid ? S.autoSwitchSaid(t) : 'none');
+  for (const [t, want] of [['/vk-auto 关', 'off'], ['/vk-auto 关闭', 'off'], ['/vk-auto 实现订单超时自动关闭', 'on'], ['<command-name>/vk-auto</command-name>\n<command-args>关</command-args>', 'off'],
+    ['那就全自动做吧', 'on'], ['你别自动了，我自己来', 'off'], ['把自动关了', 'off'],
+    ['这个功能别自动提交，我来点', ''], ['先别自动推送', ''], ['做一个功能：订单超时自动关闭。', ''], ['账号自动停用', ''],
+    ['支付成功后，自动完成订单状态流转', ''], ['每天零点，自动推进到下一个状态', ''], ['开自动提交', ''], ['开一下自动保存', '']]) H.ok('"' + t.replace(/\n/g, ' ') + '" → ' + (want || '不算'), said(t) === want, said(t));
+  const p = H.makeRepo(path.join(h.work, 'proj'), { 'a.txt': 'x\n', '.gitignore': '.vibe/\n' });
+  const say = (sid, prompt, n) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'v-' + n + '.jsonl'), [H.tr.user(prompt)]) });
+  say('s-v4', '/vk-auto', 1);
+  const f = path.join(h.kit, 'state', 's-v4-auto-switch.json');
+  const old = new Date(Date.now() - 4 * 86400000); fs.utimesSync(f, old, old);
+  say('s-v4', '接着做', 2);
+  S.cleanState(3);
+  H.ok('开着自动的会话用户还在说话：开关文件时间拨到现在，3 天的清理不删', fs.existsSync(f) && S.sessionAuto({ session_id: 's-v4' }) === true);
+}
+
 H.section('第 24 条：会话开着自动，任务做完等验收照样算自动；用户改了需求按改后的重定范围，不退回人工');
 {
   const h = H.makeHome('tas-24', FROM, Object.assign({}, QUIET, { autoApply: true, autoRequirements: true }));

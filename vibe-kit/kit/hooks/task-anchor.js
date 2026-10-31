@@ -393,9 +393,9 @@ async function handle(j) {
   // 用户开、关这个会话的自动模式（/vk-auto、"这个需求自动做"、"别自动了"）：先记下，下面按新的开关算。后台任务的通知不算用户的话
   let autoSaid = '';
   if (!isTaskNotePrompt(j.prompt)) {
-    try { const S0 = require('../lib/session'); autoSaid = S0.autoSwitchSaid(j.prompt); if (autoSaid) { S0.setSessionAuto(j, autoSaid === 'on', String(j.prompt || '').slice(0, 120)); S0.hookLog('自动模式 会话 ' + j.session_id + (autoSaid === 'on' ? ' 用户打开了' : ' 用户关了')); } } catch (e) { autoSaid = ''; }
-    // /vk-auto 后面带着的话（"/vk-auto 做一个订单导出"）当成这一句话本身：照它认需求、定流程
-    const m = /^\s*\/vk-auto(?:\s+(?:on|off|开启|关闭|开|关)(?=\s|$))?\s*([\s\S]*)$/i.exec(String(j.prompt || ''));
+    try { const S0 = require('../lib/session'); autoSaid = S0.autoSwitchSaid(j.prompt); if (autoSaid) { S0.setSessionAuto(j, autoSaid === 'on', String(j.prompt || '').slice(0, 120)); S0.hookLog('自动模式 会话 ' + j.session_id + (autoSaid === 'on' ? ' 用户打开了' : ' 用户关了')); } else if (S0.touchSessionAuto) S0.touchSessionAuto(j); } catch (e) { autoSaid = ''; }
+    // /vk-auto 后面带着的话（"/vk-auto 做一个订单导出"）当成这一句话本身：照它认需求、定流程。开关词和 autoSwitchSaid 一个口径
+    const m = /^\s*\/vk-auto(?:\s+(?:on|off|开启|关闭|关掉|开|关)(?=\s|$))?\s*([\s\S]*)$/i.exec(String(j.prompt || ''));
     if (m && m[1].trim()) j = Object.assign({}, j, { prompt: m[1].trim() });
   }
   const cfg = readConfig(j);

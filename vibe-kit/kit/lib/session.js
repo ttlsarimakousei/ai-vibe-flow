@@ -38,17 +38,37 @@ function setSessionAuto(j, on, by) {
   writeState(AUTO_SWITCH(sid), { on: !!on, at: Date.now(), by: String(by || '').slice(0, 200) });
   return true;
 }
+/** 用户每开口一次，把这个会话的开关文件时间拨到现在：它只在切换时写一次，不拨的话 3 天后被当成会话文件清掉，开着的自动悄悄变回人工（复审 V4） */
+function touchSessionAuto(j) {
+  const sid = j && j.session_id;
+  if (!sid || sid === 'unknown') return false;
+  try { const now = new Date(); fs.utimesSync(stateFile(AUTO_SWITCH(sid)), now, now); return true; } catch (e) { return false; }
+}
 /**
  * 用户这句话是不是在开、关这个会话的自动模式：'on'、'off'、''。只认用户自己的话，问句不算（"能自动做吗？"）。
- * "自动提交""自动测试"这类说的是别的开关，不算
+ * 只认明说"自动模式"、或者整个分句就是"这个需求自动做""别自动了"的（复审 V2、V3：以前需求里的"超时自动关闭订单"会关、
+ * "，自动完成登录"会开）；"自动提交""别自动推送"说的是别的事，不算
  */
-const AUTO_ON = /^\s*\/vk-auto(?:\s+(?:on|开|开启)\b)?(?!\s*(?:off|关|关闭)\b)|(?:^|[，,。；;\n])\s*(?:请|那就|那|就|帮我)?\s*(?:开(?:启|一下)?\s*自动(?:模式)?|自动模式\s*(?:打开|开启|开起来|开一下)|(?:这个|这些|下面的?|接下来的?|剩下的?)?\s*(?:需求|变更|任务)?\s*(?:你)?\s*(?:全)?自动(?:地)?\s*(?:做|完成|跑完|搞定|做完|推进)(?!\s*(?:的|吗|么|不|没)))/;
-const AUTO_OFF = /^\s*\/vk-auto\s+(?:off|关|关闭)\b|(?:关(?:掉|闭|一下)?\s*自动(?:模式)?|自动(?:模式)?\s*(?:关(?:掉|闭|了)?|停(?:掉|了|下)?)|别(?:再)?\s*自动(?:了|做了?)?|停止自动|不要(?:再)?自动(?:做|了)?|退出自动)/;
+const CLAUSE_END = '(?=\\s*(?:吧|啊|呀|哈)?\\s*(?:[，,。.；;！!\\n]|$))';
+const CLAUSE_START = '(?:^|[，,。；;！!\\n])\\s*(?:请|那就|那你|那|就|你就|你先|先|帮我|你)?\\s*';
+const AUTO_ON = new RegExp(CLAUSE_START + '(?:(?:开(?:启|一下)?|打开)\\s*自动模式|开(?:启|一下)?\\s*自动' + CLAUSE_END + '|自动模式\\s*(?:打开|开启|开起来|开一下)'
+  + '|(?:这个|这些|下面的?|接下来的?|剩下的?)\\s*(?:需求|变更|任务)?\\s*(?:你)?\\s*(?:就|都)?\\s*(?:全)?自动(?:地)?\\s*(?:做|跑完|搞定|做完|完成|推进)(?:掉|完)?' + CLAUSE_END
+  + '|全?自动(?:地)?\\s*(?:做|搞定|做完|跑完)(?:掉|完)?' + CLAUSE_END + ')');
+const AUTO_OFF = new RegExp(CLAUSE_START + '(?:(?:关(?:掉|闭|一下)?|退出|停止|停掉)\\s*自动模式|(?:关(?:掉|闭)?|退出|停止)\\s*自动' + CLAUSE_END
+  + '|自动模式\\s*(?:关(?:掉|闭|了)?|停(?:掉|了|下)?)|把\\s*自动(?:模式)?\\s*(?:关(?:掉|闭|了)?|停(?:掉|了)?)'
+  + '|(?:别|不要|不用)(?:再)?\\s*自动(?:模式)?(?:了|做了?|搞了?)?' + CLAUSE_END + ')');
 function autoSwitchSaid(text) {
-  const s = intent.plain(text);
+  let raw = String(text || '');
+  // 斜杠命令：/vk-auto 后面第一个词是 off、关、关闭、关掉就是关，别的（没有、on、开、需求原文）都是开（复审 V1：以前"关"后面跟 \b 认不出，/vk-auto 关 成了开）。
+  // 钩子里拿到的也可能是带标签的样子
+  const tag = /<command-name>\s*\/?vk-auto\s*<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/i.exec(raw);
+  if (tag) raw = '/vk-auto ' + (tag[1] || '');
+  const sl = /^\s*\/vk-auto(?=\s|$)\s*(\S*)/i.exec(raw);
+  if (sl) return /^(?:off|关|关闭|关掉)$/i.test(sl[1]) ? 'off' : 'on';
+  const s = intent.plain(raw);
   if (!s) return '';
   if (AUTO_OFF.test(s)) return 'off';
-  if (/[？?]|[吗么]\s*$/.test(s) && !/^\s*\/vk-auto/.test(s)) return '';
+  if (/[？?]|[吗么]\s*$/.test(s)) return '';
   return AUTO_ON.test(s) ? 'on' : '';
 }
 function readConfig(j) {
@@ -2546,7 +2566,7 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, sessionAuto, setSessionAuto, autoSwitchSaid, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, pushFailOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE, DISPOSABLE_STATE,
+module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, sessionAuto, setSessionAuto, touchSessionAuto, autoSwitchSaid, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, planIntent, changeStarted, handoverStage, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, pushFailOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, readState, writeState, updateState, cleanState, GLOBAL_STATE, DISPOSABLE_STATE,
   HEDGE_WORDS, STAGE, findHedges, hedgeHit, artifactOf, pathTokens, pathExists, sectionOf, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, artifactHash, normKey, snapshotArtifacts,
   VERIFY_CMD, isUserTurn, turnStart, toolCalls, toolResults, projectReads, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyRan, verifyPlan, toolAtCommandPos, NEW_FILE, declaredNew, missingPathIssue,
   changeBorn, reviewModeOf, isRecheck, allChanges, archivedNames, archivedSince, reviewTargetOf, reviewIssues, reviewsIn, pendingReviewsIn, syncReviews, reviewDiagnostics, reviewRecord, recordReview, proposalReviewed, codeReviewed,
