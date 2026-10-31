@@ -42,16 +42,106 @@ function run(args, cwd, extraEnv, timeout) {
 }
 
 /**
- * 一条命令里以 openspec 开头的那几段，换成调用自带的那份。只认段首（开头，或 && || ; | ( 之后）；
- * 带 heredoc 的整条不动（正文里的 openspec 不是命令）。换不了、没有要换的返回 null
+ * 一条命令里在"命令开头"的 openspec（或 npx [-y] [@fission-ai/]openspec），换成调用自带的那份（审核 P15，2026-11-01 起不再用整串正则）：
+ * 命令开头 = 整条开头，没加引号的 && || ; | ( { 换行、$( 之后；前面的环境变量赋值（FOO=1）、包装命令（timeout 60、env、time、nohup、nice、
+ * PowerShell 的 & 调用符）跳过。引号里的不动（echo "a; openspec x" 以前会被改坏）；bash -c / -lc、sh -c、cmd /c、powershell / pwsh -Command
+ * 后面那一截是命令，照样认，替换进引号里时按外层引号转义。带 heredoc、here-string 的整条不动（正文里的 openspec 不是命令）。
+ * 换不了、没有要换的返回 null
  */
-const HEAD = /(^|&&|\|\||[;|(\n])(\s*)(?:npx\s+(?:-y\s+)?(?:@fission-ai\/)?)?openspec(?:\.cmd|\.ps1)?(?=\s|$)/g;
 function rewrite(command, ps) {
   const c = String(command || '');
   if (!/\bopenspec\b/.test(c) || /<<-?\s*['"]?\w+/.test(c) || /@'|@"/.test(c) || !usable()) return null;
   const call = 'node "' + (ps ? BIN : BIN.replace(/\\/g, '/')) + '"';
-  const out = c.replace(HEAD, (m, sep, sp) => sep + sp + call);
+  const out = rewriteSpan(c, ps, call, '');
   return out === c ? null : out;
+}
+// quote：这一截是放在什么引号里的（''、'"'、"'"），决定替换文字怎么转义
+function rewriteSpan(s, ps, call, quote) {
+  const edits = []; // { at, len, text }
+  let i = 0;
+  let start = true; // 现在是不是命令开头
+  const n = s.length;
+  const isSpace = (ch) => ch === ' ' || ch === '\t';
+  const word = (at) => { let j = at; while (j < n && !/[\s;&|(){}'"`<>]/.test(s[j])) j++; return s.slice(at, j); };
+  const skipSpaces = (at) => { while (at < n && isSpace(s[at])) at++; return at; };
+  const escapeFor = (text) => {
+    if (quote === '"') return ps ? text.replace(/"/g, '`"') : text.replace(/(["\\$`])/g, '\\$1');
+    if (quote === "'") return ps ? text.replace(/'/g, "''") : text.replace(/'/g, "'\\''");
+    return text;
+  };
+  // 从命令开头 at 看：跳过前缀，认 openspec；认 bash -c 这类包着命令的
+  const atCommand = (at) => {
+    let j = skipSpaces(at);
+    for (let guard = 0; guard < 6; guard++) {
+      const w = word(j);
+      if (!w) {
+        if (ps && s[j] === '&' && s[j + 1] !== '&') { j = skipSpaces(j + 1); continue; } // PowerShell 的 & 调用符
+        return;
+      }
+      if (!ps && /^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) { // FOO=1 openspec（值带引号的跳过整个引号）
+        let k = j + w.length;
+        if (s[k] === '"' || s[k] === "'") { const q = s[k]; k++; while (k < n && s[k] !== q) { if (q === '"' && s[k] === '\\') k++; k++; } k++; }
+        j = skipSpaces(k); continue;
+      }
+      const lw = w.toLowerCase().replace(/\.(exe|cmd|ps1)$/, '');
+      if (['env', 'time', 'nohup', 'nice', 'command', 'exec'].includes(lw)) { j = skipSpaces(j + w.length); continue; }
+      if (lw === 'timeout') { // timeout 60 openspec、timeout -s KILL 60 openspec
+        let k = skipSpaces(j + w.length);
+        for (let t = 0; t < 4; t++) { const a = word(k); if (/^-/.test(a)) { k = skipSpaces(k + a.length); const b = word(k); if (/^[A-Z]+$|^\d/.test(b)) k = skipSpaces(k + b.length); continue; } if (/^\d+(\.\d+)?[smhd]?$/.test(a)) { k = skipSpaces(k + a.length); } break; }
+        j = k; continue;
+      }
+      if (lw === 'npx') { // npx [-y] [@fission-ai/]openspec
+        let k = skipSpaces(j + w.length); let a = word(k);
+        while (/^-/.test(a)) { k = skipSpaces(k + a.length); a = word(k); }
+        if (/^(@fission-ai\/)?openspec(@[\w.-]+)?$/i.test(a)) edits.push({ at: j, len: k + a.length - j, text: escapeFor(call) });
+        return;
+      }
+      if (/^openspec$/i.test(lw)) { edits.push({ at: j, len: w.length, text: escapeFor(call) }); return; }
+      // 包着命令的：后面那一截是命令
+      const k = skipSpaces(j + w.length);
+      if (!ps && /^(bash|sh|zsh)$/.test(lw) || ps && /^(bash|sh)$/.test(lw)) {
+        const f = word(k); if (/^-[a-z]*c[a-z]*$/.test(f)) inner(skipSpaces(k + f.length));
+        return;
+      }
+      if (lw === 'cmd') { const f = word(k); if (/^\/[ck]$/i.test(f)) { const at2 = skipSpaces(k + f.length); if (s[at2] === '"') inner(at2); else wrapped.push(at2); } return; }
+      if (/^(powershell|pwsh)$/.test(lw)) {
+        let k2 = k; for (let t = 0; t < 6; t++) { const f = word(k2); if (!/^-/.test(f)) break; k2 = skipSpaces(k2 + f.length); if (/^-(c|command)$/i.test(f)) { inner(k2, true); return; } }
+        return;
+      }
+      return;
+    }
+  };
+  const wrapped = []; // cmd /c 后面没加引号的：照命令开头看
+  // 引号里的一截当命令看（bash -c "..."、powershell -Command "..."）
+  const inner = (at, innerPs) => {
+    const q = s[at];
+    if (q !== '"' && q !== "'") { wrapped.push(at); return; }
+    let k = at + 1;
+    while (k < n && s[k] !== q) { if (q === '"' && !ps && s[k] === '\\') k++; if (q === '"' && ps && s[k] === '`') k++; if (q === "'" && ps && s[k] === "'" && s[k + 1] === "'") k++; k++; }
+    const body = s.slice(at + 1, k);
+    const done = rewriteSpan(body, innerPs === undefined ? ps : innerPs, call, q);
+    if (done !== body) edits.push({ at: at + 1, len: body.length, text: done });
+  };
+  while (i < n) {
+    const ch = s[i];
+    if (start) { start = false; atCommand(i); }
+    if (ch === "'") { // 单引号里没有转义（PowerShell 的 '' 是一个 '）
+      i++; while (i < n && !(s[i] === "'" && !(ps && s[i + 1] === "'"))) { if (ps && s[i] === "'" && s[i + 1] === "'") i++; i++; } i++; continue;
+    }
+    if (ch === '"') { i++; while (i < n && s[i] !== '"') { if ((!ps && s[i] === '\\') || (ps && s[i] === '`')) i++; i++; } i++; continue; }
+    if ((!ps && ch === '\\') || (ps && ch === '`')) { i += 2; continue; }
+    if (ch === '#' && (i === 0 || /\s/.test(s[i - 1]))) { while (i < n && s[i] !== '\n') i++; continue; } // 注释
+    if (ch === '&' && s[i + 1] === '&' || ch === '|' && s[i + 1] === '|') { i += 2; start = true; continue; }
+    if (ch === ';' || ch === '|' || ch === '\n' || ch === '(' || ch === '{') { i++; start = true; continue; }
+    if (!ps && ch === '$' && s[i + 1] === '(') { i += 2; start = true; continue; }
+    i++;
+  }
+  for (const at of wrapped) atCommand(at);
+  // 从后往前替换，位置不乱；同一处只换一次
+  const seen = new Set();
+  let out = s;
+  for (const e of edits.sort((a, b) => b.at - a.at)) { if (seen.has(e.at)) continue; seen.add(e.at); out = out.slice(0, e.at) + e.text + out.slice(e.at + e.len); }
+  return out;
 }
 
 /** 往上找有没有 openspec 根（openspec/ 里有 config.yaml、changes 或 specs） */
