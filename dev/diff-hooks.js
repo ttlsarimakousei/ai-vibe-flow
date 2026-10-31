@@ -83,6 +83,7 @@ const V1017 = '20261017.0243'; // 两阶段自动、逐点审查、人工模式�
 const V1018 = '20261018.0051'; // 提交方式三档（默认关）、任务只写实现、验收用例写进设计、需求文档一份一份来、自带 OpenSpec、起服务等答 HTTP（10-17 这一批）
 const V1025 = '20261025.0653'; // 1024 这批：提问框答的自测、复验、提交认得出；IDEA 只留普通检查；说推送直接推；产出位置要写目录
 const V1028 = '20261028.1834'; // 1028 这批：去掉 IDEA 接入和合并推送工具、用户说合并推送照做、复验这一轮说过不再问、产出位置两种拦截话统一、起服务提示热更新和认得之前起过的、环境就绪不写 IDEA
+const V1031 = '20261031.1436'; // 10-30、10-31 统一修改：提交推送归档认本轮最后一次表态、开工定稿合成一问、审查意见一框逐条选、规矩提前说、/vk-* 命令、说法统一、推送提示、产出位置收尾时问、起服务认"我要看看系统"、会话自动开关
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -392,21 +393,21 @@ add('1017：任务清单里写审查任务', 'pre-edit', edit('openspec/changes/
 add('1017：新写的设计没有验收用例', 'pre-edit', (kit) => { const proj = project(kit); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/design.md')); fs.unlinkSync(path.join(proj, 'openspec/changes/add-export/tasks.md')); const prop = path.join(proj, 'openspec/changes/add-export/proposal.md'); const old = (Date.now() - 2 * 3600000) / 1000; fs.utimesSync(prop, old, old); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, 'openspec/changes/add-export/design.md'), content: '## Context\n\n- 读过 src/main/java/com/x/A.java\n\n## Decisions\n\n- 用现有的导出工具类，不新写一套：少一份要维护的代码\n' } }) }; }, /缺\\"## 验收用例\\"一节/, V1018);
 // 这一版有意改的（用户 2026-10-30 定的）：push 只留钩子这一道确认，settings 里的 Bash(git push:*) 去掉了；开口提示直接写 git push（不再为了躲确认框写 git -C）
 for (const c of cases) {
-  if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git push，几笔提交都一样[^"]*不推到别的分支。"/; c.since = NEXT; }
+  if (c.name === '开口：普通push也启动合并预览') { c.expect = /直接 git push，几笔提交都一样[^"]*不推到别的分支。"/; c.since = V1031; }
   // 不走 OpenSpec 的小改动：问一次审查、自测，答了不用这个会话里不再问那一样；不说"按验收用例"（用户 2026-10-30 定的，审核第三节第 7 条）
   // 审查、自测用一个提问框、一件事一个问题（审核第三节第 2 条）
-  if (c.name === '收工：改了代码没验证') { c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测；用户说不用就直接继续，这个会话里不再问这一样/; c.since = NEXT; }
-  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测；用户说不用就直接继续/; c.since = NEXT; }
-  if (c.name === '收工：改了页面没看') { c.expect = /^(?![\s\S]*probe-run)[\s\S]*用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测；用户说不用就直接继续/; c.since = NEXT; }
+  if (c.name === '收工：改了代码没验证') { c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测；用户说不用就直接继续，这个会话里不再问这一样/; c.since = V1031; }
+  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测；用户说不用就直接继续/; c.since = V1031; }
+  if (c.name === '收工：改了页面没看') { c.expect = /^(?![\s\S]*probe-run)[\s\S]*用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测；用户说不用就直接继续/; c.since = V1031; }
   // 审查意见用一个提问框逐条选，选了"改"的改完直接复验（审核第四节第 1、4 条，用户 2026-10-30 定的）
-  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用一个提问框问，一件事一个问题：要不要审查[\s\S]*用一个提问框逐条选[\s\S]*选了\\?"改\\?"的，改完直接复验/; c.since = NEXT; }
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*group-1 已完成。用一个提问框问，一件事一个问题：要不要审查[\s\S]*用一个提问框逐条选[\s\S]*选了\\?"改\\?"的，改完直接复验/; c.since = V1031; }
   // 会被拦的规矩提前说：开工时送做任务这一段的，提需求时送写需求这一段的（审核 R4、M02，用户 2026-10-30 定的）
-  if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /现在开始 apply[\s\S]*做任务这一段的规矩（照做就不会被拦）：起服务自测走[\s\S]*--mode code --point group-<组号>/; c.since = NEXT; }
-  if (c.name === '开口：提需求') { c.expect = /这像一条需求[\s\S]*写需求这一段的规矩（照做就不会被拦）：需求文档一份一份写[\s\S]*--mode proposal --point/; c.since = NEXT; }
+  if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /现在开始 apply[\s\S]*做任务这一段的规矩（照做就不会被拦）：起服务自测走[\s\S]*--mode code --point group-<组号>/; c.since = V1031; }
+  if (c.name === '开口：提需求') { c.expect = /这像一条需求[\s\S]*写需求这一段的规矩（照做就不会被拦）：需求文档一份一份写[\s\S]*--mode proposal --point/; c.since = V1031; }
   // 产出位置收尾时一起问（用户 2026-10-30 定的）：人工模式也先写到 .vibe/pending/、不停下来问，第一行不变（#225 放行按第一行认）
-  if (c.name === '新建报告（产出位置没定）') { c.expect = /不是代码，放哪还没跟用户定过。\\n现在不用问，也不要自己挑地方：先写到 [^"]*pending[^"]*这件事做完收尾时，用一个提问框问用户放哪/; c.since = NEXT; }
+  if (c.name === '新建报告（产出位置没定）') { c.expect = /不是代码，放哪还没跟用户定过。\\n现在不用问，也不要自己挑地方：先写到 [^"]*pending[^"]*这件事做完收尾时，用一个提问框问用户放哪/; c.since = V1031; }
   // 问服务起着没有：说"我要看看系统"也算；先 devserver status，不分几次问（问题表第 27 条，2026-10-31）
-  if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = NEXT; }
+  if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = V1031; }
 }
 
 let same = 0;
