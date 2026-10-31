@@ -236,10 +236,16 @@ else {
   const k = H.run(h, RT.python, ['-B', '-c', [
     'import sys, json; sys.path.insert(0, sys.argv[1]); import db',
     'cases = [{"code": "CONNECT_FAILED", "error": "Access denied for user", "sql_state": "28000"}, {"code": "CONNECT_FAILED", "error": "Connection refused: connect"},',
-    ' {"code": "SQL_ERROR", "error": "Table not found"}, {"code": "DRIVER_FAILED", "error": "UnsupportedClassVersionError"}, {"code": "CONNECT_FAILED", "error": "ORA-28040: No matching authentication protocol"}]',
+    ' {"code": "SQL_ERROR", "error": "Table not found"}, {"code": "DRIVER_FAILED", "error": "UnsupportedClassVersionError"}, {"code": "CONNECT_FAILED", "error": "ORA-28040: No matching authentication protocol"},',
+    ' {"code": "CONNECT_FAILED", "error": "Communications link failure. The last packet sent successfully to the server was 0 milliseconds ago."},',
+    ' {"code": "CONNECT_FAILED", "error": "The TCP/IP connection to the host db01, port 1433 has failed."}, {"code": "CONNECT_FAILED", "error": "IO Error: The Network Adapter could not establish the connection"},',
+    ' {"code": "CONNECT_FAILED", "error": "网络通信异常"}, {"code": "CONNECT_FAILED", "error": "[KingbaseES] 用户 x 登录失败"}, {"code": "CONNECT_FAILED", "error": "某厂商没见过的说法 E1234"},',
+    ' {"code": "CONNECT_FAILED", "error": "Unable to load authentication plugin \'caching_sha2_password\'."}, {"code": "CONNECT_FAILED", "error": "Communications link failure: javax.net.ssl.SSLHandshakeException: No appropriate protocol"}]',
     'print(json.dumps([db._driver_problem(c) for c in cases]))',
   ].join('\n'), scripts], { cwd: h.root });
-  H.ok('口令不对、连不通、SQL 错不换；驱动加载不了、协议对不上的换', (json(k.out) || []).join() === 'false,false,false,true,true', k.out + k.err);
+  H.ok('口令不对、连不通、SQL 错不换；驱动加载不了、协议对不上的换', (json(k.out) || []).slice(0, 5).join() === 'false,false,false,true,true', k.out + k.err);
+  H.ok('复审 D-R7：MySQL、SQL Server、Oracle、达梦连不上，金仓口令错，没见过的说法：都不换（以前认不出的一律当驱动问题）', (json(k.out) || []).slice(5, 11).join() === 'false,false,false,false,false,false', k.out + k.err);
+  H.ok('复审 D-R7：认证插件不支持、SSL 握手协议对不上：换', (json(k.out) || []).slice(11).join() === 'true,true', k.out + k.err);
 }
 
 H.done('查库、redis 的保护（D 批）');

@@ -169,11 +169,16 @@ def run_runner(conn, mode, project_root, sql_segments=None, extra_args=(), timeo
             r2 = launch(alt, False)
             if _driver_problem(r2):
                 continue
-            recorded = dbconf.record_driver(conn, alt)
-            now = "能建连接了" if r2.get("code") != "CONNECT_FAILED" else "不再是驱动的问题（现在报：%s）" % _first_line(r2.get("error"))
-            print("原来的驱动 %s 建连接失败（%s），换成登记的 %s 后%s。%s"
-                  % (os.path.basename(jar), _first_line(result.get("error")), os.path.basename(alt), now,
-                     ("已记进连接配置 [%s] 的 driver_jar，下次直接用。" % conn["name"]) if recorded else "没能记进连接配置，下次还会先试原来的。"),
+            # 确认连上了才记（复审 D-R8：以前超时、执行器出错、输出坏了也当"能建连接了"写进用户的连接配置）：
+            # 成功，或者连上之后执行出的错（SQL_ERROR、提交结果不明）才算
+            connected = bool(r2.get("ok")) or r2.get("code") in ("SQL_ERROR", "UNKNOWN_OUTCOME")
+            recorded = dbconf.record_driver(conn, alt) if connected else False
+            if connected:
+                now = "能建连接了。" + (("已记进连接配置 [%s] 的 driver_jar，下次直接用。" % conn["name"]) if recorded else "没能记进连接配置，下次还会先试原来的。")
+            else:
+                now = "没能确认能连上（现在报：%s），没记进连接配置。" % _first_line(r2.get("error"))
+            print("原来的驱动 %s 建连接失败（%s），换成登记的 %s 后%s"
+                  % (os.path.basename(jar), _first_line(result.get("error")), os.path.basename(alt), now),
                   file=sys.stderr)
             result, jar, jar_from = r2, alt, "连不上时换过来的"
             break
@@ -188,8 +193,14 @@ def run_runner(conn, mode, project_root, sql_segments=None, extra_args=(), timeo
     return result
 
 
-_AUTH_FAIL = re.compile(r"access denied|password authentication|authentication failed|ora-01017|invalid username|口令|密码|用户名或", re.I)
-_NET_FAIL = re.compile(r"connection refused|connect timed out|unknownhost|unknown host|no route to host|network is unreachable|拒绝连接|连接超时|timed out", re.I)
+_AUTH_FAIL = re.compile(r"access denied|password authentication|authentication failed|ora-01017|invalid username|login failed|口令|密码|用户名或", re.I)
+_NET_FAIL = re.compile(r"connection refused|connect timed out|unknownhost|unknown host|no route to host|network is unreachable|communications link failure|"
+                       r"tcp/ip connection to the host|network adapter could not establish|ora-125\d\d|connection to \S+ refused|网络通信|拒绝连接|连接超时|timed out", re.I)
+# 明显是驱动的问题：驱动不认这个地址、协议或版本对不上、认证插件不支持、驱动自己的类缺了（复审 D-R7：以前反过来，认不出的一律当驱动问题，
+# 库没起、口令错用了没见过的说法，也一个个驱动换着试，等几十秒，还可能把账号试锁）
+_DRIVER_HINT = re.compile(r"no suitable driver|没有驱动认得|unsupported|not supported|不支持|authentication plugin|caching_sha2|authentication protocol|ora-28040|"
+                          r"unknown system variable|server version|incompatible|unsupportedclassversion|nosuchmethod|noclassdeffound|classnotfound|abstractmethoderror|"
+                          r"major\.minor|sslhandshake|handshake_failure|protocol violation", re.I)
 
 
 def _first_line(text):
@@ -209,11 +220,10 @@ def _driver_problem(result):
     err = str(result.get("error") or "")
     if "no suitable driver" in err.lower() or "没有驱动认得" in err:
         return True
-    if str(result.get("sql_state") or "").startswith("28") or _AUTH_FAIL.search(err):
-        return False
-    if _NET_FAIL.search(err):
-        return False
-    return True
+    if _DRIVER_HINT.search(err):
+        return True
+    # 口令、网络、别的没见过的说法：都不换
+    return False
 
 
 def _scrub(result, conn, password):
