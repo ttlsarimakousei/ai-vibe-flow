@@ -59,7 +59,7 @@ function noteStart(o) {
     const free = Number(o.freemem) > 0 ? Number(o.freemem) : os.freemem();
     const lowMem = free < 1.5 * 1024 * 1024 * 1024;
     const reason = facts.downloads >= 5 ? '依赖或网络' : lowMem ? '内存' : '';
-    const cold = os.uptime() < 600;
+    const cold = (Number(o.uptimeSec) > 0 ? Number(o.uptimeSec) : os.uptime()) < 600;
     let base = 0; let n = 0; let recent = [];
     S.updateState(BASE, (s) => {
       const r = s[key] || (s[key] = { samples: [], reasons: [] });
@@ -68,8 +68,9 @@ function noteStart(o) {
       r.reasons = (r.reasons || []).concat([reason || '-']).slice(-5); recent = r.reasons;
       r.at = now;
     });
-    const prepSlow = Number(o.prepMs || 0) > 20000;
-    const slow = prepSlow || (n >= 3 && total >= 2 * base && total - base >= 60000);
+    // 开机不到 10 分钟：磁盘、杀毒都在忙，不进基线，也不拿来比（复审 D-R12）
+    const prepSlow = !cold && Number(o.prepMs || 0) > 20000;
+    const slow = prepSlow || (!cold && n >= 3 && total >= 2 * base && total - base >= 60000);
     const remote = recent.filter((x) => x === '依赖或网络').length >= 3;
     if (!slow && !remote) return '';
     const part = prepSlow ? '准备' : '启动';
@@ -92,8 +93,8 @@ function noteStart(o) {
     const env = '空闲内存 ' + (free / 1073741824).toFixed(1) + ' / ' + (os.totalmem() / 1073741824).toFixed(1) + ' GB，CPU ' + os.cpus().length + ' 核，开机 ' + Math.round(os.uptime() / 60) + ' 分钟；日志里下载 ' + facts.downloads + ' 条、编译 ' + facts.compiled + ' 个文件' + (facts.appSec ? '、框架自报启动 ' + facts.appSec + ' 秒' : '');
     const fb = require('./feedback');
     const r = fb.record({
-      kind: '耗时', hook: 'devserver', source: '耗时自动记录', cwd: '',
-      title: '起服务慢在' + part + '：' + sec(total) + ' 秒' + (n >= 3 ? '，平时 ' + sec(base) + ' 秒' : ''),
+      kind: '耗时', hook: 'devserver', source: '耗时自动记录', cwd: '', bare: true,
+      title: (slow ? '起服务慢在' + part : '起服务每次都在查远端（依赖、私服）') + '：' + sec(total) + ' 秒' + (n >= 3 ? '，平时 ' + sec(base) + ' 秒' : ''),
       what: '种类：' + (o.kind === 'restart' ? '改了代码重启' : '首次起') + '；命令签名：' + signature(o.command) + '\n' + table.join('\n') + '\n环境：' + env + '\n原因：' + why,
       sig: 'perf|devserver-' + (o.kind || 'first') + '|' + part + '|' + why,
       note: sec(total) + ' 秒' + (n >= 3 ? '，平时 ' + sec(base) + ' 秒' : ''),

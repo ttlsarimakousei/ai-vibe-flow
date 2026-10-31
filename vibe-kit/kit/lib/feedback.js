@@ -200,7 +200,7 @@ function recordLocked(r) {
     if (old) {
       const count = Number(old.meta['次数'] || 1) + 1;
       const info = transcriptInfo(r.transcript);
-      let t = setMeta(old.text, { '次数': count, '更新': stamp(now), '最近套件版本': kitVersion(), '最近Claude Code': info.claudeCode || '（不知道）', '最近模型': info.model || '（不知道）', '最近项目': cwd || '（不知道）', '最近电脑': os.hostname() });
+      let t = setMeta(old.text, { '次数': count, '更新': stamp(now), '最近套件版本': kitVersion(), '最近Claude Code': info.claudeCode || '（不知道）', '最近模型': info.model || '（不知道）', '最近项目': cwd || '（不知道）', '最近电脑': r.bare ? '（不记）' : os.hostname() });
       if (!/\n## 又出现了\n/.test(t)) t = t.replace(/\s*$/, '\n\n## 又出现了\n');
       const split = t.split('\n## 又出现了\n');
       const notes = (split[1] || '').trim().split(/\r?\n/).filter(Boolean).slice(-19);
@@ -216,13 +216,14 @@ function recordLocked(r) {
   const meta = {
     id, '时间': stamp(now), '更新': stamp(now), '次数': 1, '类型': r.kind || '其他', '涉及': r.hook || '（没说）', '来源': r.source || '模型反馈',
     '放行': r.bypass || '没有申请', '套件版本': kitVersion(), 'Claude Code': info.claudeCode || '（不知道）', '模型': info.model || '（不知道）',
-    '电脑': os.hostname(), '项目': cwd || '（不知道）', '会话': sid, '签名': r.sig || '',
+    '电脑': r.bare ? '（不记）' : os.hostname(), '项目': cwd || '（不知道）', '会话': sid, '签名': r.sig || '',
   };
+  // bare：只带调用方给的内容（耗时上报承诺只带秒数、分段、原因类别，复审 D-R4）：不记电脑名，不附钩子流水账（里面有项目路径）
   const sec = (h, v) => (v && String(v).trim() ? '\n## ' + h + '\n' + clip(redact(v), 6000).trim() + '\n' : '');
   const code = (h, v) => (v && String(v).trim() ? '\n## ' + h + '\n```\n' + clip(redact(v), 6000).trim() + '\n```\n' : '');
   const body = '# ' + clip(redact(r.title || '（没写标题）'), 120).replace(/\r?\n/g, ' ') + '\n'
     + sec('现象', r.what) + sec('当时在做什么', r.action) + sec('为什么认为是套件的问题', r.why) + sec('怎么处理的', r.did) + sec('建议怎么改', r.suggest)
-    + code('附：拦下时的原话', r.blocked) + code('附：出错的位置', r.stack) + code('附：钩子流水账（最后 20 行）', hookLogTail(20).join('\n'));
+    + code('附：拦下时的原话', r.blocked) + code('附：出错的位置', r.stack) + (r.bare ? '' : code('附：钩子流水账（最后 20 行）', hookLogTail(20).join('\n')));
   const text = '---\n' + Object.keys(meta).map((k) => k + ': ' + String(meta[k]).replace(/\r?\n/g, ' ')).join('\n') + '\n---\n' + body;
   const file = path.join(DIR, id + '-' + fileSlug(redact(r.title)) + '.md');
   fs.writeFileSync(file, text);
