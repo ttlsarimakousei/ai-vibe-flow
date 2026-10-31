@@ -121,11 +121,22 @@ const SRCV = FROM || H.SRC;
     const h = H.makeHome('tfx-h3', FROM);
     const S = require(path.join(h.kit, 'lib', 'session.js'));
     const big = 'x'.repeat(400000);
-    const entries = [H.tr.user('改完提交')];
+    const entries = [];
+    for (let i = 0; i < 5; i++) entries.push(...H.tr.ran('Bash', { command: 'mvn -q package' }, big));
+    entries.push(H.tr.user('改完提交'));
     for (let i = 0; i < 10; i++) entries.push(...H.tr.ran('Bash', { command: 'mvn -q test' }, big));
     const file = H.transcript(path.join(h.root, 'big.jsonl'), entries);
     const r = S.userSaid(S.tailEntries(file, 3000000), 'commit');
-    H.ok('记录 4 MB、用户的"改完提交"在最前面：认得出', fs.statSync(file).size > 3500000 && r.ok, { size: fs.statSync(file).size, ok: r.ok });
+    H.ok('记录 6 MB、用户的"改完提交"在 4 MB 以前：认得出', fs.statSync(file).size > 5500000 && r.ok, { size: fs.statSync(file).size, ok: r.ok });
+    // 复审 V13：找到过一次就记下那一行的位置，之后的钩子从那里读（不再每次翻倍重读）；记录又长了照样认得
+    const pos = S.readState('voice-pos')[S.normKey(file)];
+    H.ok('V13 记下了用户那句话在文件里的位置', !!pos && pos.offset > 1500000 && pos.offset < 2500000, pos);
+    const more = [];
+    for (let i = 0; i < 3; i++) more.push(...H.tr.ran('Bash', { command: 'mvn -q test' }, big));
+    fs.appendFileSync(file, more.map((e) => JSON.stringify(e)).join('\n') + '\n');
+    const es2 = S.tailEntries(file, 3000000);
+    const r2 = S.userSaid(es2, 'commit');
+    H.ok('V13 记录又长了 1 MB：从记着的那一行读（不再翻倍读进前面的输出），照样认得', r2.ok && es2.length > 0 && S.textOf(es2[0]) === '改完提交', { ok: r2.ok, first: es2[0] && S.textOf(es2[0]).slice(0, 40) });
   }
 
   H.section('I3 问题反馈：几个进程同时记，编号不重、同签名的次数不丢');

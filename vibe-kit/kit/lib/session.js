@@ -800,18 +800,34 @@ function tailEntriesRaw(file, maxBytes) {
   require('./invocation').phase('读取会话记录');
   try {
     const st = fs.statSync(file);
-    let want = maxBytes || 400000;
+    const base = maxBytes || 400000;
+    let want = base;
+    const wide = base >= 1000000;
+    // 上次往前找到用户那句话的位置（复审 V13）：记着它，下次直接从那一行读，不用每次钩子都翻倍重读到 32 MB
+    const vkey = normKey(file);
+    let known = null;
+    if (wide && st.size > want) { try { const v = readState('voice-pos')[vkey]; if (v && v.offset >= 0 && v.size <= st.size && st.size - v.offset > want && st.size - v.offset <= TAIL_MAX) known = v; } catch (e) { known = null; } }
+    if (known) want = st.size - known.offset;
     for (;;) {
       const size = Math.min(st.size, want);
       const fd = fs.openSync(file, 'r');
       const buf = Buffer.alloc(size);
-      try { fs.readSync(fd, buf, 0, size, st.size - size); } finally { fs.closeSync(fd); }
-      const lines = buf.toString('utf8').split('\n');
-      if (st.size > size) lines.shift();
-      const out = [];
-      for (const l of lines) { if (!l.trim()) continue; try { out.push(JSON.parse(l)); } catch (e) { /* 半截行 */ } }
-      const hasVoice = out.some((e) => isUserTurn(e) && !isTaskNote(e));
-      if (hasVoice || size >= st.size || want >= TAIL_MAX || (maxBytes || 400000) < 1000000) return uniquifyToolIds(out);
+      try { fs.readSync(fd, buf, 0, size, start); } finally { fs.closeSync(fd); }
+      // 按字节切行，才知道每行在文件里的位置；从中间开始读的第一行是半截，不要（从记着的行首读的除外）
+      const out = []; let voiceAt = -1; let i0 = 0; let first = true;
+      const skipFirst = start > 0 && !(known && start === known.offset);
+      while (i0 <= buf.length) {
+        let nl = buf.indexOf(10, i0); if (nl < 0) nl = buf.length;
+        const skip = first && skipFirst; first = false;
+        if (!skip && nl > i0) { const l = buf.toString('utf8', i0, nl); if (l.trim()) { try { const e = JSON.parse(l); out.push(e); if (isUserTurn(e) && !isTaskNote(e)) voiceAt = start + i0; } catch (e) { /* 半截行 */ } } }
+        i0 = nl + 1;
+      }
+      const hasVoice = voiceAt >= 0;
+      if (hasVoice && wide && st.size - voiceAt > base && !(known && known.offset === voiceAt)) {
+        try { updateState('voice-pos', (o) => { o[vkey] = { offset: voiceAt, size: st.size, at: Date.now() }; const ks = Object.keys(o); if (ks.length > 50) for (const k of ks.sort((a, b) => (o[a].at || 0) - (o[b].at || 0)).slice(0, ks.length - 50)) delete o[k]; }); } catch (e) { /* 记不了下次再找 */ }
+      }
+      if (hasVoice || size >= st.size || want >= TAIL_MAX || !wide) return uniquifyToolIds(out);
+      known = null;
       want = Math.min(TAIL_MAX, want * 2);
     }
   } catch (e) { return []; }
@@ -932,7 +948,7 @@ const GLOBAL_STATE = /^(auto-session-migration|perf-baseline|perf-report|reviewe
  * 新加一个固定名字的状态文件，要么进上面的 GLOBAL_STATE，要么进这里（dev/test-auto-mode-kept.js 会扫代码查）。
  * 20261030 以前迁移标记 defaults-1017-migration 两边都不在，3 天后被当成会话文件删掉，之后每次更新都把用户的开关改回默认（审核 P01）
  */
-const DISPOSABLE_STATE = ['review-unknown', 'bypass', 'blocks', 'active-sessions', 'tool-flow', 'onboard-kick', 'onboard.log', 'tool-usage.jsonl', 'idea-mcp.lock', 'hook-miss', 'lessons.lock'];
+const DISPOSABLE_STATE = ['review-unknown', 'bypass', 'blocks', 'active-sessions', 'tool-flow', 'onboard-kick', 'onboard.log', 'tool-usage.jsonl', 'idea-mcp.lock', 'hook-miss', 'lessons.lock', 'voice-pos'];
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
 function cleanState(days) {
