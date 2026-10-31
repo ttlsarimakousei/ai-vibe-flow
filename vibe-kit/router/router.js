@@ -231,7 +231,8 @@ try {
  * 离现在不到 5 秒的当普通限流（多半是已经重置了）；最多停用 31 天。
  */
 // 只认明确说额度、余额、账单的（审核 P23）：以前 balance、budget、credit 单词出现就算，正文里提到 "load balancer""thinking budget" 也停用 30 分钟，还跨重启保留
-const QUOTA_WORDS = /额度|配额|余额不足|余额已用完|用量上限|\bquota\b|insufficient[_ ](quota|balance|credits?|funds)|\bbilling\b|out of credits|credits? (?:exhausted|depleted|exceeded)|(?:credit )?balance is too low|spend(ing)?[_ ]limit|(?:token|usage|monthly|daily|account) budget (?:exceeded|exhausted)|budget[_ ]exceeded/i;
+// 复审 U-R5：quota、billing 两边可以是下划线（quota_exceeded、billing_hard_limit_reached 这类错误码）；中文补"余额为 0""余额耗尽""欠费""调用次数已达上限"
+const QUOTA_WORDS = /额度|配额|余额不足|余额已用完|余额(?:为\s*0|耗尽|用尽)|欠费|用量上限|调用次数已(?:达|到)上限|(?<![a-z])quota(?![a-z])|insufficient[_ ](?:user[_ ])?(?:quota|balance|credits?|funds)|(?<![a-z])billing(?![a-z])|out of credits|credits? (?:exhausted|depleted|exceeded)|(?:credit[_ ])?balance[_ ](?:is[_ ])?too[_ ]low|spend(?:ing)?[_ ]limit|(?:token|usage|monthly|daily|account) budget (?:exceeded|exhausted)|budget[_ ]exceeded|out of budget/i;
 const RESET_KEYS = ['reset_at', 'resets_at', 'reset_time', 'resetAt', 'resetsAt', 'reset', 'next_reset', 'next_reset_at', 'quota_reset_at', 'limit_reset_at', 'retry_at', 'available_at'];
 function parseWhen(v) {
   if (v === undefined || v === null || v === '') return 0;
@@ -657,7 +658,8 @@ function forward(ctx, list, idx, tried) {
         const waitable = isMessages && waitableStatus(status, ra, text);
         const what = status === 429 ? '限流（429）' : status === 529 ? '过载（529）' : '暂时不可用（' + status + '）';
         if (waitable && config.options.rateLimitWaitSec > 0 && !settled) {
-          const budget = Math.min(config.options.rateLimitWaitSec, ctx.clientCapSec) * 1000;
+          // 限流等待也从这次请求剩下的时间里扣，留 10 秒给重发（复审 U-R6）
+          const budget = Math.min(config.options.rateLimitWaitSec * 1000, ctx.clientCapSec * 1000, ctx.deadline ? Math.max(0, ctx.deadline - Date.now() - 10000) + ctx.waitedMs : Infinity);
           const step = Math.round(ra > 0 ? ra : Math.min(10000, 5000 * Math.pow(2, Math.max(0, ctx.waits - 1))));
           if (ctx.waitedMs + step <= budget) {
             settled = true;
@@ -799,7 +801,8 @@ function forward(ctx, list, idx, tried) {
     // 到点也不换模型——换了等于让另一个模型把整个上下文再算一遍，而这个模型多半还在算前一份。连着两次超时才当它卡住了
     const big = isMessages && config.options.bigRequestBytes > 0 && sendBody.length >= config.options.bigRequestBytes;
     const leftSec = ctx.deadline ? Math.max(1, Math.floor((ctx.deadline - Date.now()) / 1000)) : ctx.clientCapSec;
-    const waitSec = Math.min(big ? Math.max(config.options.firstByteTimeoutSec, Math.min(ctx.clientTimeoutSec - 20, 3600)) : config.options.firstByteTimeoutSec, ctx.clientCapSec, leftSec);
+    const normalWait = Math.min(big ? Math.max(config.options.firstByteTimeoutSec, Math.min(ctx.clientTimeoutSec - 20, 3600)) : config.options.firstByteTimeoutSec, ctx.clientCapSec);
+    const waitSec = Math.min(normalWait, leftSec);
     ctx.big = big;
     timer = setTimeout(() => { const e = new Error('timeout'); e.code = 'ROUTER_FIRST_BYTE_TIMEOUT'; up.destroy(e); }, waitSec * 1000);
     up.on('error', (e) => {
@@ -815,7 +818,8 @@ function forward(ctx, list, idx, tried) {
           record({ kind, model, provider: provider.name, status: 504, headerMs: Date.now() - started, totalMs: Date.now() - started, failover: idx > 0, error: '大请求 ' + waitSec + ' 秒没回应，没换模型' });
           return sendError(res, 504, 'api_error', '模型 ' + provider.name + ' 处理了 ' + waitSec + ' 秒还没回应。这次请求有 ' + mb + ' MB，大请求路由不换模型（换了会让另一个模型把整个上下文再算一遍，拖慢别人）。Claude Code 会自己重试；连续两次这样才会换模型。');
         }
-        return fail('等了 ' + waitSec + ' 秒没有回应', config.options.cooldownSec, 0);
+        // 等待被这次请求剩下的时间截短了（没等满平时的首字节时间）：只说这次超时，不冷却这个模型（复审 U-R6：以前照样冷却 5 分钟）
+        return fail('等了 ' + waitSec + ' 秒没有回应' + (waitSec < normalWait ? '（这次请求剩下的时间只够等这么久）' : ''), waitSec < normalWait ? 0 : config.options.cooldownSec, 0);
       }
       // 复用的长连接正好被对方关掉：请求多半根本没送到。原样再发一次，不算这个模型的错
       if (up.reusedSocket && !ctx.retried.has(provider.name) && (!ctx.deadline || ctx.deadline - Date.now() > 10000) && /ECONNRESET|EPIPE|socket hang up/i.test(code + ' ' + ((e && e.message) || ''))) {
@@ -1067,7 +1071,8 @@ async function handleApi(req, res) {
     }
     if (req.method === 'POST' && url === '/api/test') {
       const saved = config.providers.find((p) => p.name === (body.original_name || body.name));
-      const addr = body.base_url ? cleanUrl(body.base_url) : (saved ? saved.base_url : '');
+      // 两边都规范化（复审 U-R7：config.json 里手写的地址带尾斜杠、/v1 时，以前列表上的"测试"按钮说地址改过了）
+      const addr = body.base_url ? cleanUrl(body.base_url) : (saved ? cleanUrl(saved.base_url) : '');
       // 已保存的 key 只发给已保存的地址。地址改过了，就得重新填 key 才能测
       const sameAddr = !!saved && addr === cleanUrl(saved.base_url);
       const key = body.api_key ? cleanKey(body.api_key) : (sameAddr ? saved.api_key : '');

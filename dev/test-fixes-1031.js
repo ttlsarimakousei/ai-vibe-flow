@@ -66,10 +66,11 @@ const SRCV = FROM || H.SRC;
     const hang = http.createServer((q) => { q.resume(); /* 一直不回 */ });
     const lb = http.createServer(reply(403, { type: 'error', error: { type: 'permission_error', message: 'Request rejected by upstream load balancer (policy 7)' } }));
     const quota = http.createServer(reply(429, { type: 'error', error: { type: 'insufficient_quota', message: 'You exceeded your current quota. 每日额度已用完' } }));
+    const quota2 = http.createServer(reply(429, { type: 'error', error: { type: 'rate_limit_error', code: 'daily_quota_exceeded', message: 'daily_quota_exceeded' } }));
     const okGw = http.createServer(reply(200, { id: 'msg_1', type: 'message', role: 'assistant', model: 'x', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } }));
-    const pHang = await listen(hang); const pLb = await listen(lb); const pQuota = await listen(quota); const pOk = await listen(okGw);
+    const pHang = await listen(hang); const pLb = await listen(lb); const pQuota = await listen(quota); const pOk = await listen(okGw); const pQuota2 = await listen(quota2);
     const KEY = 'sk-test-0123456789abcdef';
-    const prov = (name, p) => ({ name, base_url: 'http://127.0.0.1:' + p, api_key: KEY });
+    const prov = (name, p) => ({ name, base_url: 'http://127.0.0.1:' + p + (name === 'ok' ? '/' : ''), api_key: KEY });
     const startRouter = async (tag, providers, def, failover) => {
       const h = H.makeHome('tfx-' + tag, FROM);
       const dir = path.join(h.root, 'router-data');
@@ -113,7 +114,18 @@ const SRCV = FROM || H.SRC;
       H.ok('明确说 insufficient_quota、每日额度已用完：照旧算额度用完', res.status === 200 && p && p.quota === true, { status: res.status, quota: p && { quota: p.quota, reason: p.reason } });
       r.proc.kill();
     }
-    for (const s of [hang, lb, quota, okGw]) { if (s.closeAllConnections) s.closeAllConnections(); s.close(); }
+    {
+      const r = await startRouter('e6c', [prov('quota2', pQuota2), prov('ok', pOk)], 'quota2', ['ok']);
+      const res = await r.ask(600);
+      const st = await r.call('GET', '/api/state');
+      const p = st.json && st.json.providers.find((x) => x.name === 'quota2');
+      H.ok('复审 U-R5：只有错误码 daily_quota_exceeded（下划线连着）：算额度用完', res.status === 200 && p && p.quota === true, { status: res.status, quota: p && { quota: p.quota, reason: p.reason } });
+      // 复审 U-R7：config.json 里手写的地址带尾斜杠，列表上点"测试"（只发名字）：不说地址改过了
+      const t = await r.call('POST', '/api/test', { name: 'ok' });
+      H.ok('复审 U-R7：已保存的地址原样（带尾斜杠）：测试按钮不说地址改过了', !/地址改过了/.test((t.json && t.json.reason) || ''), t.json);
+      r.proc.kill();
+    }
+    for (const s of [hang, lb, quota, quota2, okGw]) { if (s.closeAllConnections) s.closeAllConnections(); s.close(); }
   }
 
   H.section('H3 会话记录：用户那句话在 3 MB 以外（这一轮工具输出很大），往前再读，不当成没说');
