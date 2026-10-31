@@ -10,7 +10,9 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 
-const BASE = path.join(__dirname, 'baseline', '20261018.0051', 'vibe-kit');
+// 0051 的基线打包时被删了，从 git 标签导出（dev/lib/harness.js baselineDir）
+const BASE = H.baselineDir('20261018.0051');
+if (!BASE) { console.log('找不到 20261018.0051 这一版（基线和 git 标签都没有），跳过'); process.exit(0); }
 const h = H.makeHome('feedback1024-budget', process.argv[2], {});
 const ref = H.makeHome('feedback1024-budget-ref', BASE, {});
 const W = require(path.join(h.kit, 'lib/workspace'));

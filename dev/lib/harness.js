@@ -120,6 +120,24 @@ function envFor(h, extra) {
 }
 /** 一个会自己清掉的临时目录 */
 function tempDir(name) { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'vkt-' + name + '-')); roots.push(d); return d; }
+/**
+ * 某个旧版本的 vibe-kit 目录：dev/baseline/<版本>/vibe-kit 还在就用它；打包时只留最近四份，删掉了的从 git 标签 v<版本> 导到临时目录
+ * （2026-11-01：20261031.1436 打包删了 0051 的基线，test-feedback1024-budget 跑不了）。标签也没有就返回 null
+ */
+function baselineDir(version) {
+  const kept = path.join(REPO, 'dev', 'baseline', version, 'vibe-kit');
+  if (fs.existsSync(path.join(kept, 'kit'))) return kept;
+  try {
+    const d = tempDir('base-' + version.replace(/\./g, ''));
+    const tar = path.join(d, 'kit.tar');
+    const { execFileSync } = require('child_process');
+    execFileSync('git', ['-C', REPO, 'archive', '-o', tar, 'v' + version, 'vibe-kit'], { stdio: 'ignore', windowsHide: true });
+    // 用系统自带的 tar（Git Bash 的 GNU tar 把 C: 当成远程主机）
+    const sysTar = path.join(process.env.SystemRoot || 'C:/Windows', 'System32', 'tar.exe');
+    execFileSync(fs.existsSync(sysTar) ? sysTar : 'tar', ['-xf', tar, '-C', d], { stdio: 'ignore', windowsHide: true });
+    return fs.existsSync(path.join(d, 'vibe-kit', 'kit')) ? path.join(d, 'vibe-kit') : null;
+  } catch (e) { return null; }
+}
 /** 一个空的假用户目录（套件用真的 install.js 装进去） */
 function freshHome(name) {
   const root = tempDir(name);
@@ -443,4 +461,4 @@ function reviewPoints(h, dir, mode) {
   for (const point of p.points(dir, mode || 'code')) p.noteResult(dir, point, { id: 'fixture-' + point, status: 'completed', issues: [] }, p.fingerprint(dir, point));
 }
 
-module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, makePackage, runtime, inFlow, reviewPoints, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done, stubDeps };
+module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, baselineDir, makePackage, runtime, inFlow, reviewPoints, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done, stubDeps };
