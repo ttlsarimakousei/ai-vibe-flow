@@ -33,7 +33,10 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const cfgFile = path.join(proj, '.vibe', 'db-crud.ini');
   H.write(cfgFile, ini(['driver_jar = ' + H2.replace(/\\/g, '/')]));
   // PYTHONDONTWRITEBYTECODE：Claude Code 给命令行设了它，照着测
-  const db = (args, opts) => H.run(h, PY, [DB].concat(args), Object.assign({ cwd: proj, env: Object.assign({ DBCRUD_JAVA: JAVA, DBCRUD_DAEMON: '0', PYTHONDONTWRITEBYTECODE: '1' }, (opts && opts.env) || {}) }, opts && opts.cwd ? { cwd: opts.cwd } : {}));
+  // 全自动（会话开着 /vk-auto、在做任务）：钩子跑命令前留条子 state/tool-flow.json；测试里 AUTO 开着时每条命令前刷新一张（2026-10-31 起配置里的 autoMode 不算了，复审 V5）
+  let AUTO = false;
+  const autoTicket = (auto, ageMs, dir) => H.write(path.join(h.kit, 'state', 'tool-flow.json'), JSON.stringify({ byCwd: { [path.resolve(dir || proj).split(path.sep).join('/').toLowerCase()]: { auto, at: Date.now() - (ageMs || 0), sid: 'test' } } }));
+  const db = (args, opts) => (AUTO && autoTicket(true, 0, opts && opts.cwd), H.run(h, PY, [DB].concat(args), Object.assign({ cwd: proj, env: Object.assign({ DBCRUD_JAVA: JAVA, DBCRUD_DAEMON: '0', PYTHONDONTWRITEBYTECODE: '1' }, (opts && opts.env) || {}) }, opts && opts.cwd ? { cwd: opts.cwd } : {})));
   const usage = () => (H.read(path.join(h.kit, 'state', 'tool-usage.jsonl')) || '').split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l));
   const lastUse = () => usage().filter((u) => !u.incident).pop() || {};
   const ackOf = (r) => ((r.out.match(/--ack (\S+)/) || [])[1] || '');
@@ -141,7 +144,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   /** 全自动模式下一条写操作：第一步被拒就到此为止 */
   const autoExec = (sql, more) => { const f = sqlFile('a' + Date.now() + Math.random().toString(16).slice(2, 6) + '.sql', sql); const a = db(['exec', '--sql-file', f].concat(more || [])); const b = a.code === 4 ? db(['exec', '--sql-file', f, '--ack', ackOf(a)].concat(more || [])) : null; return { a, b }; };
   {
-  H.setConfig(h, { autoMode: true });
+  AUTO = true;
   // 建表：记下来，还原脚本是 DROP
   const ac = autoExec('CREATE TABLE T_AUTO (ID INT PRIMARY KEY, NAME VARCHAR(20))');
   H.ok('建表：第一步说了不用等人确认', ac.a.code === 4 && /全自动模式：这条留得下备份，不用等人确认/.test(ac.a.out) && !/给人看过之后/.test(ac.a.out), ac.a.out + ac.a.err);
@@ -189,18 +192,20 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   H.ok('查询不受影响', db(['peek', '--table', 'T_ORDER', '--count']).code === 0);
   H.ok('被拒的记进了用量（类别 BLOCKED）', usage().some((u) => (u.errors || []).includes('BLOCKED')), usage().slice(-3));
   // 全自动模式只在走 OpenSpec 流程的会话里算数：钩子留了条子说这个会话不在流程里（用户在），就照有人在的样子来
-  const ticket = (auto, ageMs) => H.write(path.join(h.kit, 'state', 'tool-flow.json'), JSON.stringify({ byCwd: { [path.resolve(proj).split(path.sep).join('/').toLowerCase()]: { auto, at: Date.now() - (ageMs || 0), sid: 'test' } } }));
+  AUTO = false;
+  const ticket = (auto, ageMs) => autoTicket(auto, ageMs);
   ticket(false);
   const t1 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
   H.ok('条子说用户在：照有人在的样子来（给确认串，让它给人看）', t1.code === 4 && /把上面的内容给人看过之后/.test(t1.out) && !/全自动模式/.test(t1.out + t1.err), t1.out + t1.err);
   ticket(false, 5 * 60000);
   const t2 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
-  H.ok('条子是五分钟前的：不认，按用户不在算', t2.code === 3 && /全自动模式（用户不在）/.test(t2.err), t2.out + t2.err);
+  H.ok('条子是五分钟前的：不认，按有人在算（没有全局开关了，2026-10-31）', t2.code === 4 && !/全自动模式/.test(t2.out + t2.err), t2.out + t2.err);
   ticket(true);
   const t3 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
   H.ok('条子说在流程里：按用户不在算', t3.code === 3 && /全自动模式（用户不在）/.test(t3.err), t3.out + t3.err);
   fs.unlinkSync(path.join(h.kit, 'state', 'tool-flow.json'));
-  H.setConfig(h, { autoMode: false });
+  const t4 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
+  H.ok('没有条子（终端里手敲的）：按有人在算，给确认串', t4.code === 4 && !/全自动模式/.test(t4.out + t4.err), t4.out + t4.err);
   // 人回来了：全自动模式下新增的那两行，照还原脚本删掉
   const ui1 = db(['exec', '--undo', insEntry]);
   const ui2 = db(['exec', '--undo', insEntry, '--ack', ackOf(ui1)]);
@@ -217,7 +222,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   fs.writeFileSync(path.join(h.kit, 'config.json'), JSON.stringify(Object.assign(JSON.parse(H.read(path.join(h.kit, 'config.json'))), { autoMode: true })));
   const a3 = db(['exec', '--sql-file', sqlFile('n.sql', "UPDATE T_ORDER SET NOTE = 'x' WHERE ID = 1")]);
   const a4 = db(['exec', '--sql-file', path.join(proj, '.vibe', 'tmp', 'n.sql'), '--ack', ackOf(a3)]);
-  H.ok('手改配置文件打开的全自动不算数：照常执行', a4.code === 0 && /已提交/.test(a4.out), a4.out + a4.err);
+  H.ok('配置文件里的 autoMode 不算数（自动按会话开）：照常执行', a4.code === 0 && /已提交/.test(a4.out), a4.out + a4.err);
   H.setConfig(h, { autoMode: false });
 
   H.section('确认的是哪台库、执行的是哪一条、确认串只能用一次');
@@ -270,11 +275,11 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   H.ok('不是留痕目录的不收', outside.code === 1 && /不是留痕目录/.test(outside.err), outside.out + outside.err);
   execBoth("UPDATE T_ORDER SET NOTE = 'auto' WHERE ID = 3");
   const autoEntry = lastEntry('update');
-  H.setConfig(h, { autoMode: true });
+  AUTO = true;
   const una1 = db(['exec', '--undo', autoEntry]);
   const una = db(['exec', '--undo', autoEntry, '--ack', ackOf(una1)]);
   H.ok('全自动模式下还原不做（它自己不留快照，做了回不去）', una1.code === 4 && una.code === 3 && /全自动模式（用户不在）/.test(una.err) && /还原不是全自动模式下做的事/.test(una.err) && valueOf(3, 'NOTE') === 'auto', una.out + una.err);
-  H.setConfig(h, { autoMode: false });
+  AUTO = false; try { fs.unlinkSync(path.join(h.kit, 'state', 'tool-flow.json')); } catch (e) { /* 没有 */ }
   const una2 = db(['exec', '--undo', autoEntry, '--ack', ackOf(db(['exec', '--undo', autoEntry]))]);
   H.ok('人回来之后照常还原', una2.code === 0 && valueOf(3, 'NOTE') === 'semi', una2.out + una2.err);
 

@@ -57,21 +57,18 @@ function kitDir() {
   return '';
 }
 /**
- * 这条命令是不是在全自动模式下跑的（用户不在）。只认配置页打开的（封条里记着）。
- * 全自动模式只在走 OpenSpec 流程的会话里算数：跑命令之前套件的钩子留了一张条子（state/tool-flow.json，按当前目录记，
- * 两分钟内有效），条子说这个会话不在流程里（用户在），就不算。没有条子（钩子没经过）按用户不在算
+ * 这条命令是不是在全自动模式下跑的（用户不在）。2026-10-31 起自动模式按会话开（/vk-auto），配置里没有全局开关了：
+ * 只看套件钩子跑命令之前留的条子（state/tool-flow.json，按当前目录记，两分钟内有效；钩子按这个会话开没开自动写 auto）。
+ * 以前先看配置里的 autoMode，迁移删掉以后会话开着自动也照有人在写数据（复审 V5）。没有条子（钩子没经过）按有人在算
  */
 function autoMode() {
   const kit = kitDir();
   if (!kit) return false;
-  const cfg = readJson(path.join(kit, 'config.json'));
-  const seal = readJson(path.join(kit, 'state', 'config-seal.json'));
-  if (!(cfg && cfg.autoMode === true && !(seal && seal.autoMode === false))) return false;
   const t = readJson(path.join(kit, 'state', 'tool-flow.json'));
   const rec = t && t.byCwd && t.byCwd[path.resolve(process.cwd()).split(path.sep).join('/').toLowerCase()];
   const age = rec ? Date.now() - Number(rec.at) : -1;
   if (rec && age >= 0 && age <= 120000) return rec.auto === true;
-  return true;
+  return false;
 }
 function readJson(file) {
   try { let t = fs.readFileSync(file, 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t); } catch (e) { return null; }

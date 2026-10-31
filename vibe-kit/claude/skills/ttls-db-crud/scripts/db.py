@@ -1310,15 +1310,11 @@ def _norm_key(p):
 def auto_mode():
     """
     这条命令是不是在全自动模式下跑的（用户不在）。
-    只认配置页打开的（state/config-seal.json 里记着）：手改 config.json 打开的不算。
-    全自动模式只在走 OpenSpec 流程的会话里算数：跑命令之前套件的钩子留了一张条子（state/tool-flow.json，
-    按当前目录记，两分钟内有效），条子说这个会话不在流程里（用户在），就照有人在的样子来。
-    没有条子（钩子没经过：在终端里手敲的、套在脚本里跑的）按用户不在算。
+    2026-10-31 起自动模式按会话开（用户敲 /vk-auto），配置里没有全局开关了：只看套件钩子跑命令之前留的条子
+    （state/tool-flow.json，按当前目录记，两分钟内有效；钩子按这个会话开没开自动、在不在做任务那一段写 auto）。
+    以前先看配置里的 autoMode，迁移删掉这个键以后永远是"有人在"，会话开着自动也按人工走（复审 V5）。
+    没有条子（钩子没经过：在终端里手敲的、套在脚本里跑的）按有人在算：没有哪个会话能开着自动。
     """
-    cfg = vibe.kit_json("config.json", {}) or {}
-    seal = vibe.kit_json("state/config-seal.json", {}) or {}
-    if not (cfg.get("autoMode") is True and seal.get("autoMode") is not False):
-        return False
     ticket = vibe.kit_json("state/tool-flow.json", {}) or {}
     rec = (ticket.get("byCwd") or {}).get(_norm_key(os.getcwd()))
     if isinstance(rec, dict):
@@ -1328,7 +1324,7 @@ def auto_mode():
             age = -1
         if 0 <= age <= 120000:
             return rec.get("auto") is True
-    return True
+    return False
 
 
 def _auto_blocked(reasons=None):
