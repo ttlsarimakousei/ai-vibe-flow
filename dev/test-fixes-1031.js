@@ -181,6 +181,17 @@ const SRCV = FROM || H.SRC;
     const st = H.node(h, '-e', ['console.log(JSON.stringify(require(' + JSON.stringify(path.join(h.kit, 'lib', 'updater.js')) + ').status().broken || null))'], { timeout: 30000 });
     let b = null; try { b = JSON.parse(st.out.trim().split(/\r?\n/).pop()); } catch (e) { b = null; }
     H.ok('配置页接口：status().broken 写着坏的版本和上一版', !!b && b.version === '20261031.0900' && b.from === '20261028.2041', st.out + st.err);
+    // 复审 U-R3：安装器在写版本号之前就失败、也没装回去：版本号还是旧的，照样算装坏
+    H.write(path.join(h.kit, 'VERSION'), '20261028.2041\n');
+    const sb = (code) => { const r = H.node(h, '-e', [code], { timeout: 30000 }); try { return JSON.parse(r.out.trim().split(/\r?\n/).pop()); } catch (e) { return r.out + r.err; } };
+    const U = JSON.stringify(path.join(h.kit, 'lib', 'updater.js'));
+    H.ok('复审 U-R3：版本号没写上（还是旧的）、也没装回去：照样算装坏', !!(sb('console.log(JSON.stringify(require(' + U + ').status().broken || null))') || {}).version);
+    // 之后有人重新装好了（安装器记了 install-done）：不再算装坏
+    H.write(path.join(h.kit, 'state', 'install-done.json'), JSON.stringify({ version: '20261028.2041', at: Date.now() + 1000 }));
+    H.ok('复审 U-R3：之后重新装好过：不再算装坏', sb('console.log(JSON.stringify(require(' + U + ').status().broken || null))') === null);
+    // 复审 U-R1：锁的主人进程号还活着（被复用了），但锁已经 50 分钟没续租：不算有人在跑
+    H.write(path.join(h.kit, 'update', 'lock.json'), JSON.stringify({ pid: process.pid, token: 'x', at: Date.now() - 50 * 60000 }));
+    H.ok('复审 U-R1：进程号活着、锁 50 分钟没续租：不算在跑', sb('console.log(JSON.stringify(require(' + U + ').status().running))') === false);
   }
 
   H.section('F9 就绪检查：本机环境里登记的 Maven（写的是 home）认得，PATH 里没有 mvn 也不报缺');

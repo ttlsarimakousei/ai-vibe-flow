@@ -1117,7 +1117,11 @@ else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化'
 // 钩子跑的方式（HTTP / 命令）、自动记忆的开关改了之后，settings.json 里的登记要跟着变
 if (mode === 'sync') mergeSettings(readSettings(), false, true);
 // 都装好了（约定也写了），最后写版本号；路由起不来由更新器按退出码处理
-if (mode === 'install') copyFile(path.join(SRC, 'kit', 'VERSION'), path.join(KIT, 'VERSION'));
+if (mode === 'install') {
+  copyFile(path.join(SRC, 'kit', 'VERSION'), path.join(KIT, 'VERSION'));
+  // 装完了记一笔：自动更新据此知道"装坏了、没装回去"之后有没有人重新装好过（复审 U-R3）
+  try { fs.mkdirSync(path.join(KIT, 'state'), { recursive: true }); writeAtomic(path.join(KIT, 'state', 'install-done.json'), JSON.stringify({ version: fs.readFileSync(path.join(SRC, 'kit', 'VERSION'), 'utf8').trim(), at: Date.now() })); } catch (e) { /* 记不了：状态栏可能多报一次装坏 */ }
+}
 // 不再接 IDEA 的 MCP（用户 2026-10-28 定的）：以前套件登记的 vibe-idea-<端口>，没被改过的撤掉；你自己登记的不动。失败不影响安装
 try {
   const r = await require(path.join(KIT, 'lib', 'idea-mcp.js')).retract({ claudeDir: CLAUDE });

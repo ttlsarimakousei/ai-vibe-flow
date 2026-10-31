@@ -160,7 +160,8 @@ process.stdin.on('end', () => {
       try { cur = fs.readFileSync(path.join(__dirname, 'VERSION'), 'utf8').trim(); } catch (e) { /* 没有版本号 */ }
       const failed = up.failed && up.failed.version === up.remoteVersion && up.failed.version !== cur ? up.failed : null;
       // 装坏了、也没能装回上一版（审核 P04）：现在装着的就是坏的，放第一行红字
-      if (up.failed && up.failed.rolledBack === false && up.failed.version === cur) line1.unshift(C.red + '⚠ 新版 ' + cur + ' 没装好，也没能装回上一版：后台会再试，急用就在配置页"更新和上报"点"立即更新"或重新运行安装包' + C.reset);
+      let doneAt = 0; try { doneAt = Number(JSON.parse(fs.readFileSync(path.join(__dirname, 'state', 'install-done.json'), 'utf8')).at) || 0; } catch (e) { /* 没装过新的 */ }
+      if (up.failed && up.failed.rolledBack === false && !(doneAt > Number(up.failed.at || 0))) line1.unshift(C.red + '⚠ 新版 ' + up.failed.version + ' 没装好，也没能装回上一版：后台会再试，急用就在配置页"更新和上报"点"立即更新"或重新运行安装包' + C.reset);
       if (failed) line2.push(C.yellow + '新版 ' + failed.version + ' 没装上，看配置页' + C.reset);
       // 安装器什么都没动就停了（settings.json 读不懂、全局约定不是 UTF-8、Node 太老）：要用户改电脑上的问题，不然一直装不上（复审 S5）
       else if (up.refused && up.refused.version === up.remoteVersion && up.refused.version !== cur) line2.push(C.yellow + '新版 ' + up.refused.version + ' 装不上：电脑上有问题要改，看配置页' + C.reset);

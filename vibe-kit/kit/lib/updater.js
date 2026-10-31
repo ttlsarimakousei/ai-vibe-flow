@@ -56,8 +56,9 @@ const setState = (patch) => updateState('update', (o) => Object.assign(o, patch)
 
 // ---------- 同一时间只跑一个 ----------
 function pidAlive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; } }
+// 超过租期（LOCK_MS，跑着的会续租）的锁不算有人在跑（复审 U-R1：以前只看进程号活着，进程号被复用以后自动更新、上报一直不跑）
 function lockHeld() {
-  try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && pidAlive(l.pid) && l.pid !== process.pid; } catch (e) { return false; }
+  try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && pidAlive(l.pid) && l.pid !== process.pid && !(Number(l.at) > 0 && Date.now() - Number(l.at) > LOCK_MS); } catch (e) { return false; }
 }
 let updateLock = null;
 function lock() {
@@ -68,8 +69,23 @@ function lock() {
 function unlock() { if (updateLock) updateLock.release(); updateLock = null; }
 /** 锁还是自己的吗 */
 function ownLock() { try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && l.pid === process.pid && !!updateLock && l.token === updateLock.token; } catch (e) { return false; } }
-/** 活进程持有的锁没有租期；核对归属，不覆盖随机 token 和线程身份。 */
-function touchLock() { return ownLock(); }
+/** 核对锁还是自己的，顺带续租：拿锁时间拨到现在（一分钟最多一次）。等路由空闲、拉取、安装加起来可能超过租期，不续租会被别的进程当失效抢走（复审 U-R4） */
+function touchLock() {
+  try {
+    const l = JSON.parse(fs.readFileSync(LOCK, 'utf8'));
+    if (!(l && l.pid === process.pid && updateLock && l.token === updateLock.token)) return false;
+    if (Date.now() - (Number(l.at) || 0) > 60000) stateStore.atomicWrite(LOCK, Object.assign({}, l, { at: Date.now() }));
+    return true;
+  } catch (e) { return false; }
+}
+/** 上次自动更新装坏了、也没能装回上一版，而且之后没有成功装过（安装器装完会记 state/install-done.json）。
+ *  以前只认"装着的版本号就是坏的那一版"，安装器在写版本号之前就失败的（版本号还是旧的、文件半新半旧）认不出来（复审 U-R3） */
+function brokenOf(st) {
+  const f = st && st.failed;
+  if (!f || f.rolledBack !== false) return null;
+  const done = readState('install-done');
+  return Number(done.at) > Number(f.at || 0) ? null : f;
+}
 
 // ---------- 问仓库、拉到暂存处 ----------
 /** 仓库现在是哪个提交。没指定分支就用仓库的默认分支。返回 { ok, commit, branch, empty, route, why } */
@@ -345,7 +361,7 @@ function status() {
   const remote = st.remoteVersion || '';
   const failed = st.failed && st.failed.version === remote ? st.failed : null;
   // 装坏了、也没装回去：现在装着的就是坏的那一版（配置页顶部、状态栏都要说）
-  const broken = st.failed && st.failed.rolledBack === false && st.failed.version === installed ? st.failed : null;
+  const broken = brokenOf(st);
   const refused = st.refused && st.refused.version === remote && remote !== installed ? st.refused : null;
   return {
     refused, broken,
@@ -401,8 +417,9 @@ async function run(opt) {
     // 这一次真的跑过安装器没有（等路由空闲没等到的不算）
     let installed = false;
     // 上次装坏了、也没能装回上一版（审核 P04）：版本号已经是坏的那一版，以前之后就当"已是最新"不再管。这次再试着装回上一版
-    const bad = st.failed;
-    if (bad && bad.rolledBack === false && bad.from && installedVersion() === bad.version && modeOf(cfg) !== 'off') {
+    // 只在自动更新模式下、离上次试过 6 小时以上、路由空闲时试（复审 U-R2：以前每次检查都重装、重启路由，不等空闲，只提醒的模式也装）
+    const bad = brokenOf(st);
+    if (bad && bad.from && modeOf(cfg) === 'auto' && Date.now() - (Number(bad.retriedAt) || Number(bad.at) || 0) >= 6 * 3600000 && await waitIdle(o.waitMs, o.quietMs)) {
       const back = rollback(bad.from, gl.settings());
       log(back.ok ? '上次没装回去，这次装回了上一版 ' + bad.from : '还是没能装回上一版 ' + bad.from + '：' + back.why);
       if (back.ok) { setState({ failed: Object.assign({}, bad, { rolledBack: true, retriedAt: Date.now() }) }); installed = true; }
