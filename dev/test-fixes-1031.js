@@ -324,5 +324,14 @@ const SRCV = FROM || H.SRC;
     H.ok('6 个进程同时记 6 条不同的：候选里 6 条都在', got.length === items.length, got.map((x) => x.when || x.text || x.id));
   }
 
+  H.section('J1 跟进（复审顺带）：位置待定的产出先放 .vibe/pending/，已有同名的加 -2，不覆盖');
+  {
+    const h = H.makeHome('tfx-pend', FROM);
+    const p = H.makeRepo(path.join(h.work, 'pp'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' });
+    H.write(path.join(p, '.vibe', 'pending', '说明.md'), '# 另一个目录的说明\n');
+    const w = H.hook(h, 'pre-edit', { session_id: 'pend', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(p, 'docs', '说明.md'), content: '# 说明\n' }, transcript_path: H.transcript(path.join(h.root, 'pend.jsonl'), [H.tr.user('写一份说明文档')]) });
+    H.ok('pending 里已有 说明.md：让它写到 说明-2.md', /pending[\\/]+说明-2\.md/.test(H.reasonOf(w)), H.reasonOf(w));
+  }
+
   H.done('10-31 零散修复（E、F、G、H、I、J 批）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

@@ -351,7 +351,15 @@ function outputCheck(j, cfg) {
   const selfAdded = files.some((df) => declsOf(df).some((d) => matches(f, d.pattern)));
   // 这个会话里用提问框问过用户放哪、用户答了，模型照答案记进项目说明的：算定过（#225：以前一律当"自己给自己定位置"）
   if (selfAdded && answers.length) return null;
-  return { type, file: f, root, projectMd: pm || path.join(root, '.vibe', 'project.md'), auto, pending: path.join(root, '.vibe', 'pending', path.basename(f)), cwd, selfAdded, home };
+  return { type, file: f, root, projectMd: pm || path.join(root, '.vibe', 'project.md'), auto, pending: pendingPath(root, f), cwd, selfAdded, home };
+}
+/** 位置待定的产出先放 .vibe/pending/：已经有同名的（别的目录的同名产出）加 -2、-3，不覆盖（复审顺带发现：以前按文件名放，后写的盖掉先写的） */
+function pendingPath(root, f) {
+  const dir = path.join(root, '.vibe', 'pending');
+  const ext = path.extname(f); const base = path.basename(f, ext);
+  let p = path.join(dir, base + ext);
+  for (let i = 2; i < 100 && fs.existsSync(p); i++) p = path.join(dir, base + '-' + i + ext);
+  return p;
 }
 
 module.exports = { outputTypeOf, exempt, declFiles, parseDecls, declsOf, matches, snapshot, trustedPatterns, userTexts, locationAnswers, mentioned, establishedDir, outputCheck, nearestProjectMd };
