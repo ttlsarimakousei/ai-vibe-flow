@@ -249,4 +249,17 @@ H.section('A12 /opsx:propose 装好后先说套件的规矩：只写 proposal �
   }
 }
 
+H.section('复审 V12：/vk-* 只能用户敲，模型自己调不算许可');
+{
+  const h = H.makeHome('tco-v12', FROM, QUIET);
+  const p = H.makeRepo(path.join(h.work, 'proj'), { 'a.txt': 'x\n' });
+  for (const [tool, input] of [['SlashCommand', { command: '/vk-push' }], ['Skill', { skill: 'vk-commit' }]]) {
+    const r = H.hook(h, 'guard-ask', { session_id: 'v12', cwd: p, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: input, transcript_path: H.transcript(path.join(h.root, 'v12-' + tool + '.jsonl'), [H.tr.user('改完了吗')]) });
+    H.ok('模型用 ' + tool + ' 调 ' + JSON.stringify(input) + '：拦下', /是给用户敲的/.test(H.reasonOf(r)), H.reasonOf(r));
+  }
+  const src = FROM || H.SRC;
+  const cmds = fs.readdirSync(path.join(src, 'claude', 'commands')).filter((n) => /^vk-.*\.md$/.test(n));
+  H.ok('命令文件都写了 disable-model-invocation: true', cmds.length >= 8 && cmds.every((n) => /^disable-model-invocation:\s*true\s*$/m.test(H.read(path.join(src, 'claude', 'commands', n)) || '')), cmds);
+}
+
 H.done('同一件事不再确认第二遍（问题表第 19 条）');

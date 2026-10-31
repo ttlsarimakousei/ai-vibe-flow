@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 推送：直接 git push（套件认它是你的推送许可）
 argument-hint: [仓库或说明]
 ---

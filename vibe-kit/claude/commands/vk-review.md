@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 审查：按套件的审查流程审当前改动（套件认它是你的审查许可）
 argument-hint: [变更名或范围]
 ---

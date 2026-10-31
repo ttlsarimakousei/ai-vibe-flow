@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 自测：按验收用例自测（套件认它是你的自测许可）
 argument-hint: [范围]
 ---

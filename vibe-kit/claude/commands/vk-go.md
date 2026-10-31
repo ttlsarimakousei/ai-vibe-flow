@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 开工：按变更的 tasks.md 做任务（套件认它是你的开工许可）
 argument-hint: [变更名]
 ---

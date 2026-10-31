@@ -30,6 +30,8 @@ function handle(j) {
       const inp = j.tool_input || {};
       const name = String(inp.skill || inp.command || inp.name || '');
       const first = name.trim().split(/\s+/)[0].replace(/^\//, '');
+      // 套件的 /vk-* 命令敲了就算用户点头（开工、提交、推送、归档）：只能用户自己敲，模型调了不算（复审 V12；命令文件也写了 disable-model-invocation）
+      if (/^vk-[\w-]+$/i.test(first)) return blockOut('PreToolUse', '[vibe-kit] /' + first + ' 是给用户敲的：敲了就算用户点头，你自己调不算。要开工、提交、推送、归档，先问用户，用户说了再做。');
       if (FLOW_SKILL.test(name)) {
         const st = flowState(j);
         const cfg = readConfigFor(j);

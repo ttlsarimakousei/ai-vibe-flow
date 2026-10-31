@@ -72,7 +72,8 @@ function readSkill(file, level, note, plugin, kind) {
     // 截断和总字数上限是技能列表的规矩；代理的说明不在那份列表里
     if (kind !== '代理' && desc.length > MAX_DESC) problems.push('description 有 ' + desc.length + ' 个字符，超过 ' + MAX_DESC + ' 的部分模型看不到');
   }
-  if (kind !== '代理' && /^true$/i.test(fm['disable-model-invocation'] || '')) problems.push('写了 disable-model-invocation: true：模型不会自己用它，只能你手动输入 /' + name);
+  // 套件自己的 /vk-* 命令有意只让用户敲（敲了算用户点头，复审 V12），不算问题
+  if (kind !== '代理' && !/^vk-/i.test(name) && /^true$/i.test(fm['disable-model-invocation'] || '')) problems.push('写了 disable-model-invocation: true：模型不会自己用它，只能你手动输入 /' + name);
   return { name, level, note: note || '', file, desc, chars: name.length + desc.length + 4, problems, kind };
 }
 

@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 提交：把这次改的提交（套件认它是你的提交许可，这一轮分几笔都算）
 argument-hint: [说明]
 ---

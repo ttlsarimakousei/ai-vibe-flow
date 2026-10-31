@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 这个会话开自动模式（/vk-auto off 关）：探索完、范围确认后自动写需求、开工、审查、自测、修改
 argument-hint: [off | 要做的需求或材料]
 ---

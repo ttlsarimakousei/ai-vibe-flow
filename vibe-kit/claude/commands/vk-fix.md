@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 小改动快车道：查清原因、改、快检，最后只问一次提交
 argument-hint: <要改的问题>
 ---

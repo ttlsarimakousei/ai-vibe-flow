@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 归档：归档变更（套件认它是你的归档许可）
 argument-hint: [变更名]
 ---
