@@ -1746,7 +1746,9 @@ function planStatusOf(name, changesDir) {
     if (done + todo === 0) return '提案中';
     if (todo === 0) {
       const cfg = readConfig();
-      const pending = cfg.autoApply && (codeReviewIssue(dir) || (cfg.reviewLoop && reviewLoopIssue('code', dir, cfg)));
+      // 自动改成按会话开以后，这里不知道是哪个会话（复审 V14）：审过一轮、还没收尾的写"待审查"，从没审过的照旧写"待用户验收"
+      let started = false; try { const P = require('./flow-policy'); started = P.points(dir, 'code').some((p) => !!P.record(dir, p).status); } catch (e) { started = false; }
+      const pending = started && codeReviewIssue(dir) || (cfg.reviewLoop && reviewLoopIssue('code', dir, cfg));
       return '已完成 ' + done + '/' + done + (pending ? '，待审查或处理意见' : '，待用户验收并确认归档');
     }
     return (done ? '进行中 ' : '已提案 ') + done + '/' + (done + todo);

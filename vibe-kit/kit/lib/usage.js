@@ -95,6 +95,13 @@ function seen(kind, ver) {
 /** 攒着数的那几天（老的在前） */
 function days() { const o = readState('usage').days; return o && typeof o === 'object' ? Object.keys(o).sort() : []; }
 
+/** 这一天有没有会话开着自动（2026-10-31 起自动按会话开，配置里没有这个开关了，复审 V14）：看那天改过的会话开关文件 */
+function autoUsedOn(d) {
+  try {
+    const dir = path.join(KIT, 'state');
+    return fs.readdirSync(dir).some((n) => { if (!/-auto-switch\.json$/.test(n)) return false; const f = path.join(dir, n); try { return dayKey(fs.statSync(f).mtime) === d && JSON.parse(fs.readFileSync(f, 'utf8')).on === true; } catch (e) { return false; } });
+  } catch (e) { return false; }
+}
 /** 这一天要传的数（结构化的，导出时拿来汇总） */
 function collect(day) {
   const d = day || dayKey();
@@ -138,7 +145,7 @@ function collect(day) {
   return {
     v: 1, day: d, host: deviceId(),
     kit: Array.isArray(u.kit) && u.kit.length ? u.kit : [kitVersion()].filter(Boolean), cc: Array.isArray(u.cc) ? u.cc : [],
-    os: process.platform + ' ' + os.release(), node: process.version, hook: String(cfg.hookTransport || 'auto'), autoMode: cfg.autoMode === true,
+    os: process.platform + ' ' + os.release(), node: process.version, hook: String(cfg.hookTransport || 'auto'), autoMode: autoUsedOn(d),
     changed, n: Object.fromEntries(Object.entries(u.n || {}).filter(([k]) => !/\.ms$|duration|latency|elapsed|average/i.test(k))), models,
     hooks: hooks.map((h) => ({ name: h.name, n: h.n, errors: h.errors })), tools: tools.map((t) => ({ tool: t.tool, cmd: t.cmd, n: t.n, fail: t.fail })), hints: [],
   };
