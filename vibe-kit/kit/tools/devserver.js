@@ -83,7 +83,7 @@ function writeReg(fn) {
   } catch (e) { /* 记不了：照旧按项目里的记录认 */ }
   finally { if (lock) lock.release(); }
 }
-function register(rec, file) { writeReg((o) => { for (const k of Object.keys(o)) if (o[k] && normPath(o[k].file) === normPath(file)) delete o[k]; o[String(rec.port)] = { port: rec.port, name: rec.name, file, cwd: rec.cwd, cmd: rec.cmd, startedAt: rec.startedAt }; }); }
+function register(rec, file) { writeReg((o) => { for (const k of Object.keys(o)) if (o[k] && normPath(o[k].file) === normPath(file)) delete o[k]; o[String(rec.port)] = { port: rec.port, name: rec.name, file, cwd: rec.cwd, cmd: rec.cmd, asked: rec.asked || rec.cmd, startedAt: rec.startedAt }; }); }
 function unregister(file) { writeReg((o) => { for (const k of Object.keys(o)) if (!o[k] || normPath(o[k].file) === normPath(file)) delete o[k]; }); }
 /** 登记里还活着的（记录文件还在、看管进程还是当初那一个），先用 pick 筛（查进程慢，不相干的不查） */
 function liveReg(pick) {
@@ -113,7 +113,7 @@ function findOurs(name, cwd, port, cmdFor) {
   const key = normPath(cwd);
   const elsewhere = (e) => normPath(path.dirname(e.file)) !== normPath(runDir);
   const live = liveReg((e) => elsewhere(e) && (normPath(e.cwd) === key || (port > 0 && e.port === port && sameArea(e.cwd, cwd))));
-  return live.find((e) => normPath(e.cwd) === key && (e.name === name || e.cmd === cmdFor(e.port))) || (port > 0 ? live.find((e) => e.port === port) : null) || null;
+  return live.find((e) => normPath(e.cwd) === key && (e.name === name || (e.asked || e.cmd) === cmdFor(e.port))) || (port > 0 ? live.find((e) => e.port === port) : null) || null;
 }
 /** 认下之前起的那个：记录挪到这次的目录和名字下（日志留在原处，记录里是完整路径） */
 function adopt(e, name, why) {
@@ -393,9 +393,22 @@ async function stopRec(rec) {
 
 // ---------- 代码在服务起来之后改过没有 ----------
 const SKIP = new Set(['.git', '.vibe', 'node_modules', 'target', 'build', 'dist', 'out', 'logs', '.idea', '.vscode']);
+// 构建输出、日志目录的名字：只在 src 外面算（复审 D-R1：com/x/build/、com/x/out/ 这种包名下的源码以前被当成构建输出，改了不重启）
+const OUT_DIRS = new Set(['target', 'build', 'dist', 'out', 'logs']);
 // 不进运行的（审核第五节、Codex C15，用户 2026-10-30 定的）：文档、需求文档、测试代码、服务自己写出来的日志和库文件。改了这些不用重启
-const NOT_RUN = /(^|\/)(openspec|docs?|src\/test|__tests__)(\/|$)|\.(test|spec)\.[cm]?[jt]sx?$|\.(md|markdown|log|mv\.db|trace\.db|lock\.db|lck|pid|tmp|swp|orig|rej|bak)$|(^|\/)(README|CHANGELOG|LICENSE|NOTICE)[^/]*$/i;
-const runFile = (f) => !!f && !f.split('/').some((x) => SKIP.has(x)) && !NOT_RUN.test(f);
+// README、LICENSE 这类只认整个文件名（可以带 .md、.txt 这类后缀）：以前 NOTICE 后面跟什么都算，NoticeController.java、LicenseServiceImpl.java 改了不重启（复审 D-R1）
+const NOT_RUN = /(^|\/)(src\/test|__tests__)(\/|$)|\.(test|spec)\.[cm]?[jt]sx?$|\.(md|markdown|log|mv\.db|trace\.db|lock\.db|lck|pid|tmp|swp|orig|rej|bak)$|(^|\/)(README|CHANGELOG|LICENSE|NOTICE)(\.(md|markdown|txt|rst|adoc))?$/i;
+// openspec、doc、docs 目录也只在 src、webapp 外面算（src/main/webapp/docs/*.jsp、com/x/doc/ 是代码）
+const DOC_DIR = /(^|\/)(openspec|docs?)(\/|$)/i;
+const CODE_ROOT = /(^|\/)(src|webapp|WebContent|WebRoot)\//i;
+const runFile = (f) => {
+  if (!f) return false;
+  const parts = f.split('/');
+  const srcAt = parts.findIndex((x) => /^(src|webapp|WebContent|WebRoot)$/i.test(x));
+  if (parts.some((x, i) => SKIP.has(x) && !(OUT_DIRS.has(x) && srcAt >= 0 && i > srcAt))) return false;
+  if (DOC_DIR.test(f) && !CODE_ROOT.test(f)) return false;
+  return !NOT_RUN.test(f);
+};
 const gitText = (root) => (args, input) => execFileSync('git', ['-C', root, '-c', 'core.quotepath=false'].concat(args), { encoding: 'utf8', input, stdio: [input == null ? 'ignore' : 'pipe', 'pipe', 'ignore'], windowsHide: true, maxBuffer: 64 * 1024 * 1024, timeout: 20000 });
 /** git 看得到的改动（含没跟踪的），只留会进运行的；改名两头都算 */
 function dirtyRunFiles(git, rel) {
@@ -580,7 +593,7 @@ async function launch(name, port, command, meta) {
   child.unref();
   fs.closeSync(fd);
   invalidate();
-  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot') || hotOf(command, cwd), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl, snap, retriedOnline: !!(meta && meta.retriedOnline) };
+  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot') || hotOf(command, cwd), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl, snap, retriedOnline: !!(meta && meta.retriedOnline), asked: (meta && meta.asked) || command };
   fs.writeFileSync(recFile(name), JSON.stringify(rec, null, 2));
   register(rec, recFile(name));
   return waitUp(rec, Number(opt('wait')) || 180);
@@ -637,7 +650,7 @@ async function waitUp(rec, waitSec) {
     try { fs.writeFileSync(recFile(rec.name), JSON.stringify(Object.assign({}, rec, { tree, upAt: Date.now() }), null, 2)); } catch (e) { /* 记不了就按父子关系停 */ }
     const who = whoListens(rec.port);
     // 耗时异常自动发现、上报（问题表第 20 条，C7）：这次调用起的才算；接着等上一次没起完的不算
-    if (rec.startedAt >= T0) { try { const line = require('../lib/perf').noteStart({ kind: RESTART ? 'restart' : 'first', root: rec.cwd, command: rec.cmd, prepMs: rec.startedAt - T0, startMs: Date.now() - rec.startedAt, log: (() => { try { const b = fs.readFileSync(rec.log); return b.slice(Math.max(0, b.length - 2000000)).toString('utf8'); } catch (e) { return ''; } })() }); if (line) console.log(line); } catch (e) { /* 记不了不影响起服务 */ } }
+    if (rec.startedAt >= T0 && !rec.retriedOnline) { try { const line = require('../lib/perf').noteStart({ kind: RESTART ? 'restart' : 'first', root: rec.cwd, command: rec.cmd, prepMs: rec.startedAt - T0, startMs: Date.now() - rec.startedAt, log: (() => { try { const b = fs.readFileSync(rec.log); return b.slice(Math.max(0, b.length - 2000000)).toString('utf8'); } catch (e) { return ''; } })() }); if (line) console.log(line); } catch (e) { /* 记不了不影响起服务 */ } }
     // 这一行放在最后：输出的最后一行就是结果
     console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
     console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (how ? '，' + how : '') + (rec.hot ? '。会热更新：改了代码不用重启，再 start 直接用' : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
@@ -665,7 +678,7 @@ async function waitUp(rec, waitSec) {
       if (offline && !rec.retriedOnline) {
         const cmd2 = rec.cmd.replace(/(^|\s)(?:-o|--offline)(?=\s|$)/, '$1').replace(/\s{2,}/g, ' ').trim();
         console.log('离线（-o）起不来：父 pom 或内部依赖只在私服上（日志里 "' + fail + '"）。去掉 -o 再起一次：' + cmd2);
-        return launch(rec.name, rec.port, cmd2, { auto: rec.auto, avoid: rec.avoid, retriedOnline: true });
+        return launch(rec.name, rec.port, cmd2, { auto: rec.auto, avoid: rec.avoid, retriedOnline: true, asked: rec.asked || rec.cmd });
       }
       console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
       console.log('没起来：日志里报了 "' + fail + '"，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒。看上面的日志改好再 start；进程已经停了。');
@@ -731,8 +744,13 @@ async function start() {
   // -- 后面只有一个参数（整条命令加了引号）：原样用，不再包一层引号
   const command = cmdFor(port);
   // 同一个服务：命令、端口、运行目录都一样（同名同端口换了个子项目，不能拿另一个子项目的服务来用）
-  const same = (r) => r.cmd === command && r.port === port && normPath(r.cwd || dir) === normPath(cwd);
+  // 比的是当初要求的命令：离线（-o）起不来、去掉 -o 重起成功的，记录里实际跑的命令不带 -o（复审 D-R2：以前之后每次 start 都对不上，停掉重来）
+  const same = (r) => (r.asked || r.cmd) === command && r.port === port && normPath(r.cwd || dir) === normPath(cwd);
   const recUp = rec ? await portOpen(rec.port, 500) : false;
+  // 旧记录里记着的、它起的那几个进程（下面可能先把旧记录清掉，所以先记下）：startup.bat 那种看管进程随 bat 退了的，端口上的 Tomcat 还在 tree 里（复审 D-R10）。
+  // 只认进程号和创建时间都对得上的：用户后来自己双击 startup.bat 起的不算
+  const treeBefore = rec && rec.port === port && Array.isArray(rec.tree) ? rec.tree : [];
+  const inTree = (i) => treeBefore.some((t) => t && t.pid === i.pid && (!t.created || !i.created || String(t.created) === String(i.created)));
   const recLive = rec ? sameProc(rec) : false;
   // 进程还在、端口没通：多半还在启动。同一个服务就接着等，不结束重来（大项目起得慢，结束重来可能永远起不来）。
   // 端口通了、记录里却没有 upAt 的：上一次 start 没等到它答 HTTP（等超时了、被打断了），也接着等
@@ -780,7 +798,7 @@ async function start() {
     // 起它的程序不在了（orphan）的，要有 devserver 起过它的痕迹（全机登记里这一处、这个端口）才停（审核 P29）：
     // 用户双击 startup.bat 起的 Tomcat，bat 退了以后也找不到父进程，以前被当成"没人管的"直接停掉
     const traced = Object.values(readReg()).some((e) => e && e.port === port && sameArea(e.cwd, cwd));
-    const users = who.filter((x) => x.by === 'user' || (x.by === 'orphan' && !traced));
+    const users = who.filter((x) => x.by === 'user' || (x.by === 'orphan' && !traced && !inTree(x.i)));
     if (users.length && !flag('takeover')) {
       console.log('端口 ' + port + ' 上是用户自己起的这个项目的服务：' + users.map((x) => (x.i.name || '进程') + '（PID ' + x.i.pid + (x.i.created ? '，' + ago(x.i.created) + '起的' : '') + '）' + (x.i.cmd ? '：' + x.i.cmd.slice(0, 160) : '')).join('；') + '。没有动它。\n'
         + '要用就直接拿它测（它跑的可能不是你改过之后的代码：改的是后端的话，先问用户要不要重启它）。确实要由 devserver 接管（结束它、在同一个端口重起），先问用户，同意了再加 --takeover 重跑。全自动模式下用户不在：不要接管，把要重启才能验的那一步留给用户。');

@@ -37,6 +37,7 @@ H.section('C1 改过没有按内容算：md、openspec、src/test、日志不算
     'w("README.md", "# 说明\\n改了\\n"); out.md = ch();',
     'w("openspec/changes/x/tasks.md", "- [x] 1.1 改 A\\n"); out.tick = ch();',
     'w("src/test/java/ATest.java", "class ATest { int t; }\\n"); out.test = ch();',
+    'w("docs/arch.png", "x"); w("LICENSE", "MIT\\n"); out.docs = ch();',
     'w("app.log", "日志\\n"); w("data/db.mv.db", "x"); out.runtime = ch();',
     'git("add", "-A"); git("commit", "-qm", "提交一下"); out.commit = ch();',
     'w("src/main/java/A.java", "class A { int x; }\\n"); out.edit = ch();',
@@ -44,6 +45,9 @@ H.section('C1 改过没有按内容算：md、openspec、src/test、日志不算
     'fs.unlinkSync(path.join(proj, "src/main/java/A.java")); out.del = ch();',
     'git("checkout", "--", "src/main/java/A.java");',
     'w("pom.xml", "<project><x/></project>\\n"); out.pom = ch();',
+    'w("src/main/java/com/x/NoticeController.java", "class NoticeController {}\\n"); out.notice = ch();',
+    'w("src/main/java/com/x/build/Util.java", "class Util {}\\n"); out.pkgBuild = ch();',
+    'w("src/main/webapp/docs/help.jsp", "<p>帮助</p>\\n"); out.webDocs = ch();',
     'console.log(JSON.stringify(out));',
   ].join('\n');
   const r = H.node(h, '-e', [code, proj], { cwd: proj, timeout: 120000 });
@@ -59,6 +63,10 @@ H.section('C1 改过没有按内容算：md、openspec、src/test、日志不算
   H.ok('又改回去了（内容和起服务时一样）：不算改过', none('revert'), o.revert);
   H.ok('删了 A.java：算改过', has('del', /A\.java$/), o.del);
   H.ok('改了 pom.xml：算改过', has('pom', /pom\.xml$/), o.pom);
+  H.ok('docs/ 下的图、LICENSE：不算改过', none('docs'), o.docs);
+  H.ok('复审 D-R1：NoticeController.java 算改过（以前 NOTICE 开头的都当说明文件）', has('notice', /NoticeController\.java$/), o.notice);
+  H.ok('复审 D-R1：com/x/build/ 包下的源码算改过（以前当构建输出）', has('pkgBuild', /build\/Util\.java$/), o.pkgBuild);
+  H.ok('复审 D-R1：src/main/webapp/docs/ 下的 jsp 算改过', has('webDocs', /docs\/help\.jsp$/), o.webDocs);
 }
 
 H.section('C2 一次调用只查一份进程表：查几个进程不再各起一个 PowerShell');
@@ -130,6 +138,8 @@ H.section('C5、C6 devserver：离线缺依赖去掉 -o 再起；--cwd 不在；
   const port = 31000 + Math.floor(Math.random() * 800);
   const s1 = H.node(h, dev, ['start', '--name', 'off', '--port', String(port), '--wait', '40', '--', 'node', fake, '-o'], { cwd: proj, timeout: 120000 });
   H.ok('离线（-o）缺依赖：去掉 -o 再起一次，起来了', s1.code === 0 && /去掉 -o 再起一次/.test(s1.out) && /起来了/.test(s1.out), s1.out.slice(-800));
+  const s1b = H.node(h, dev, ['start', '--name', 'off', '--port', String(port), '--wait', '40', '--', 'node', fake, '-o'], { cwd: proj, timeout: 120000 });
+  H.ok('复审 D-R2：同一条带 -o 的命令再 start：认得是在跑的那个，不停掉重来', s1b.code === 0 && /已经在跑/.test(s1b.out) && !/去掉 -o/.test(s1b.out), s1b.out.slice(-600));
   H.node(h, dev, ['stop', '--all'], { cwd: proj, timeout: 60000 });
   const s2 = H.node(h, dev, ['start', '--name', 'nocwd', '--port', 'auto', '--cwd', 'no-such-dir', '--', 'node', fake], { cwd: proj, timeout: 60000 });
   H.ok('--cwd 指的目录不在：说清楚、退出码 1、不留记录', s2.code === 1 && /运行目录不在/.test(s2.out) && !fs.existsSync(path.join(proj, '.vibe', 'run', 'nocwd.json')), s2.out.slice(-400));
