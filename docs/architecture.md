@@ -50,6 +50,8 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `tidy.js` | `.vibe` 的整理和过程文件的清理 |
 | `archive-extract.js` | 直接归档解包与查看结果落盘的目标检查，复用 guard-commit 的拆词和工作目录；只读查看放行，项目内临时条目放 `.vibe/tmp/<事由>/`，目录联接核对真实位置 |
 | `onboard.js`、`discover.js` | 后台自动探索：认工程、推命令和端口、找开发环境的数据库和 redis 连接 |
+| `shell-words.js` | 拆命令（2026-11-01 从 guard-commit 拆出）：按 Bash / PowerShell 的规则拆组、段、词，认命令名、解开包着的命令 |
+| `guard-git.js`、`guard-kit.js`、`guard-process.js`、`guard-archive.js` | guard-commit 的各类检查（2026-11-01 拆出）：git 提交推送和提交方式；改套件、读令牌、经验规则、路由接口；结束进程、起服务、过程文件、串 cd；归档门槛。guard-commit 只留调度 |
 | `drivers.js`、`toolstats.js` | 多版本驱动登记、默认和单版删除；查库、查 redis 的匿名类别计数 |
 | `perf.js` | 耗时异常（2026-10-31，问题表第 20 条）：devserver 每次起服务按"项目 + 命令"记分段耗时，比本机基线（最近几次的中位数）慢一倍以上且多 60 秒以上、或它自己的检查超过 20 秒，记一条问题反馈并按开关 `perfReport` 上报（只带秒数、分段、原因类别）；基线和上报记录在 `perf-baseline.json`、`perf-report.json`（GLOBAL_STATE），每天最多报 3 条、同一个 24 小时一次 |
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |
