@@ -102,7 +102,9 @@ net.createServer((sock) => {
     if (c === 'GETRANGE') return bulk(e ? bytes(e.v).subarray(Number(a[1]), Number(a[2]) + 1).toString('latin1') : '');
     if (c === 'SET') {
       const px = Number(optOf(a.slice(2), 'px', 0)) || 0;
-      m.set(a[0], { t: 'string', v: a[1], exp: px ? Date.now() + px : 0 });
+      // KEEPTTL（Redis 6 起）：保留原来的过期时间（20261030 起 redis.js 改值用它，以前用 PX）
+      const keep = a.slice(2).some((x) => String(x).toUpperCase() === 'KEEPTTL') && e ? e.exp : 0;
+      m.set(a[0], { t: 'string', v: a[1], exp: px ? Date.now() + px : keep });
       return text('+OK');
     }
     if (c === 'DEL') { let n = 0; for (const k of a) if (live(m, k) && m.delete(k)) n++; return text(':' + n); }
