@@ -25,7 +25,7 @@ function tickIssue(text, dir, j) {
     if (!r || !r.done) return '先完成代码审查，再处理审查意见。';
     if (Number(r.issues) === 0 && S.codeReviewed(dir)) return '';
     if (r.resolved && r.resolvedFingerprint === require('./workspace').fingerprint(dir, 'code').hash) return '';
-    return '审查意见逐条核实、修复或写明不成立依据，复验通过后用 review.js resolve 登记处理结果，再勾意见处理任务。';
+    return '审查意见逐条核实、修复或写明不成立依据，复验通过后用 review.js resolve 登记处理结果；登记里有"修了"的，再审一次改过的地方（review.js run），审过了再勾意见处理任务。';
   }
   const entries = j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : [];
   if (!S.userSaid(entries, 'accept').ok && !S.userSaid(entries, 'archive').ok) return '用户验收只能在用户明确说自测通过或同意归档后打勾；模型测试不能代替用户验收。';

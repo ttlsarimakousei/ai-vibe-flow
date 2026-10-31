@@ -421,7 +421,7 @@ function resolve(opts) {
   // 不带审查点的整套审查：按 --mode 读提案或代码的记录（Codex C20：以前固定读代码的，整套提案审查的意见配不上报告）
   const kind = opts.mode === 'proposal' ? 'proposal' : 'code';
   const r = pointRec ? Object.assign({}, pointRec, { reportFile: pointRec.report }) : S.reviewRecord(kind, change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
-  const report = r.reportFile ? JSON.parse(fs.readFileSync(r.reportFile, 'utf8')) : { id: r.key, fingerprint: r.fingerprint || W.fingerprint(opts.cwd, 'code').hash, issues: Array.from({ length: Number(r.issues) || 0 }, (_, i) => ({ id: 'r' + (i + 1) })) }; const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
+  const report = r.reportFile ? JSON.parse(fs.readFileSync(r.reportFile, 'utf8')) : { id: r.key, fingerprint: r.fingerprint || W.fingerprint(opts.cwd, kind === 'proposal' ? 'all' : 'code').hash, issues: Array.from({ length: Number(r.issues) || 0 }, (_, i) => ({ id: 'r' + (i + 1) })) }; const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
   for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected', 'accepted'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
   if (report.id !== r.key || !Array.isArray(report.issues)) throw new Error('审查报告不属于当前完整记录');
@@ -439,7 +439,7 @@ function resolve(opts) {
   // 有"修了"的：和带审查点的一样要复审改过的地方，不直接算解决（审核 P34：以前有一条修了就记成已解决）
   const fixedAny = decisions.findings.some((x) => x.action === 'fixed');
   S.updateState(kind === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const rec = o[S.normKey(change.dir)]; if (rec && rec.key === r.key) { rec.resolved = !fixedAny; rec.needsReview = fixedAny; rec.resolvedAt = Date.now(); if (fixedAny) delete rec.resolvedFingerprint; else rec.resolvedFingerprint = fingerprint; rec.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) })); } });
-  return { status: fixedAny ? 'needs_review' : 'resolved', count: report.issues.length };
+  return fixedAny ? { status: 'needs_review', count: report.issues.length, next: '登记好了。有改过的地方，下一步是复审：再跑一次 review.js run（同样的 --change、--mode），审过了才算处理完；不用再登记一次。' } : { status: 'resolved', count: report.issues.length };
 }
 /**
  * 不走 OpenSpec 的审查（run 不带 --change，结果在 .vibe/reviews/plain/<模式>.json）登记用户的决定（#234：以前一律要变更，决定只能留在会话里）。
