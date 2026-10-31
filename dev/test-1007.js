@@ -32,7 +32,8 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('在流程里让它生成一个文件记东西：这一轮不在流程里', flow('f1').on === false, flow('f1'));
     H.ok('提醒它开工前先定好放哪，是问我的说法，不是全自动的"先放 pending"', /开工前先定好放哪/.test(r1) && /用提问框问我/.test(r1) && !/pending/.test(r1), r1);
     const w = H.hook(h, 'pre-edit', { session_id: 'f1', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, '改动要点.md'), content: '# 要点\n' } });
-    H.ok('真要写的时候拦下问位置，不是全自动那套"不要问"', !!w && w.decision === 'block' && /放哪还没跟用户定过/.test(H.reasonOf(w)) && /用提问框问用户/.test(H.reasonOf(w)) && !/全自动模式/.test(H.reasonOf(w)), H.reasonOf(w));
+    // 20261031 起（用户 10-30 定的，feedback-20261030 J1）：人工模式也先写到 .vibe/pending/、收尾时用一个提问框问放哪，不再新建时停下来问
+    H.ok('真要写的时候拦下：先写到 .vibe/pending，收尾时用提问框问用户放哪，不是全自动的说法', !!w && w.decision === 'block' && /放哪还没跟用户定过/.test(H.reasonOf(w)) && /pending/.test(H.reasonOf(w)) && /提问框问用户放哪/.test(H.reasonOf(w)) && !/全自动模式/.test(H.reasonOf(w)), H.reasonOf(w));
     say('f1', '继续');
     H.ok('说"继续"接回流程', flow('f1').on === true, flow('f1'));
     say('f1', '写一份接口文档');
