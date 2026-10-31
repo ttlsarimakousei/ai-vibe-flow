@@ -150,4 +150,37 @@ H.section('第 26 条：问题处理完再审，轮数接着数；到上限不�
   H.ok('到上限的点不挡提交（以前一直"审查还没收尾"）', !blocked(r), H.reasonOf(r));
 }
 
+H.section('复审 V6—V9：自动开着时修了没复审不提交；连着没审成的照实说；到上限不挡归档；没写任务的变更不算勾完');
+{
+  const h = H.makeHome('tas-v6', FROM, Object.assign({}, QUIET, { commitMode: 'auto', autoApply: true, applyReviewMaxRounds: 3 }));
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  const P = require(path.join(h.kit, 'lib', 'flow-policy.js'));
+  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE(true)));
+  const dir = path.join(p, 'openspec', 'changes', 'feat-028');
+  const k = S.normKey(dir) + '|group-1';
+  const commit = (sid, n) => H.hook(h, 'guard-commit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git add src/A.java && git commit -m "fix: 处理审查意见"' }, transcript_path: H.transcript(path.join(h.root, 'v6-' + n + '.jsonl'), [H.tr.user('接着做'), H.tr.say('改好了')]) });
+  // V6：审出问题、登记"修了"（needs_review），还没复审
+  P.begin(dir, 'group-1', 'r1', P.fingerprint(dir, 'group-1'));
+  P.noteResult(dir, 'group-1', { id: 'r1', status: 'completed', issues: [{ id: 'x' }], file: '', materialInputs: [] }, P.fingerprint(dir, 'group-1'));
+  S.updateState('review-points', (o) => { o[k].status = 'needs_review'; });
+  H.write(path.join(p, 'src', 'A.java'), 'class A { int fixed; }\n');
+  H.inFlow(h, 'v6', [dir], true, 'apply');
+  const r6 = commit('v6', 1);
+  H.ok('V6 自动开着、修了还没复审：先不提交，等复审', blocked(r6) && /审查还没收尾/.test(H.reasonOf(r6)), H.reasonOf(r6));
+  // V7：连着三轮没审成
+  S.updateState('review-points', (o) => { o[k].status = 'failed'; o[k].rounds = 3; });
+  H.ok('V7 连着到上限都没审成：照实说"没审成"，不说成"没通过"', /没审成/.test(P.instruction(dir, 'group-1', S.readConfig())), P.instruction(dir, 'group-1', S.readConfig()));
+  // V8：唯一的审查点到了上限没通过：归档的审查检查不再挡
+  S.updateState('review-points', (o) => { o[k].status = 'completed'; o[k].issues = 2; o[k].rounds = 3; });
+  H.ok('V8 审查点到上限：归档的审查检查不挡（没解决的写进报告）', P.exhausted(dir, 'group-1') && S.codeReviewIssue(dir) === '', S.codeReviewIssue(dir));
+  // V9：另一个变更还没写 tasks：不算都勾完
+  const dir2 = path.join(p, 'openspec', 'changes', 'feat-029');
+  H.write(path.join(dir2, 'proposal.md'), '## Why\n\n要打印。\n\n## What Changes\n\n- 改 src/A.java\n');
+  S.updateState('review-points', (o) => { delete o[k]; });
+  H.reviewPoints(h, dir, 'code');
+  H.inFlow(h, 'v9', [dir, dir2], true, 'apply');
+  const r9 = commit('v9', 2);
+  H.ok('V9 一个变更勾完、另一个还没写任务：不算做完一件事', blocked(r9) && /还没做完一件事/.test(H.reasonOf(r9)), H.reasonOf(r9));
+}
+
 H.done('自动模式按会话开、第 24—27 条');

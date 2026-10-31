@@ -82,7 +82,12 @@ function pending(dir, mode) { return points(dir, mode).find(p => !settled(dir, p
  * 审过（零问题或处理完）之后代码又改了的不算没收尾（问题表第 25 条，2026-10-31）：以前也算，任务全勾完后改用户报的 bug，
  * 人工模式下用户不让重审，提交方式"自动"就永远提交不了
  */
-function fixPending(dir, point, cfg) { const r = record(dir, point); return r.status === 'completed' && Number(r.issues) > 0 && !settled(dir, point) && !exhausted(dir, point, cfg); }
+// 会话开着自动时，"修了、还没复审"（needs_review）也算没收尾：自动会接着复审，等它审完一起提交（复审 V6）。人工模式不算：用户不让复审时会一直提交不了（第 25 条）
+function fixPending(dir, point, cfg) {
+  const r = record(dir, point);
+  const open = r.status === 'completed' && Number(r.issues) > 0 || r.status === 'needs_review' && !!(cfg && cfg.autoMode);
+  return open && !settled(dir, point) && !exhausted(dir, point, cfg);
+}
 function allPassed(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p)); }
 function limit(cfg, mode) { return Math.min(20, Math.max(1, Number(mode === 'proposal' ? cfg.requirementsReviewMaxRounds : cfg.applyReviewMaxRounds) || 3)); }
 // 轮数只数"审出问题、修了再审"这一串：上一轮零问题通过了，这次重审从头数（不然全程零问题也会被复审耗光轮数，2026-10-17 审核问题 4）。
@@ -181,6 +186,8 @@ function planNext(j, c) {
 }
 function instruction(dir, point, cfg) {
   const mode = point.startsWith('group-') ? 'code' : 'proposal'; const rec = record(dir, point); const max = limit(cfg, mode);
+  // 最后一轮没审成（网关断、超时、只审了一部分）：照实说没审过，不说成"没通过"（复审 V7：以前连着失败到上限也按"问题没解决"往下走）
+  if ((rec.rounds || 0) >= max && rec.status && !['completed', 'needs_review', 'resolved'].includes(rec.status)) return '当前审查点 ' + point + ' 已经 ' + max + ' 轮，最后一轮没审成（' + rec.status + '）：这一组的代码可能根本没审过。停止自动循环，收工报告里写明"' + point + ' 没审成"，请用户决定要不要再审；用户主动要求仍可继续审查。';
   if ((rec.rounds || 0) >= max) return '当前审查点 ' + point + ' 已达到 ' + max + ' 轮上限且尚未通过，停止自动循环并报告问题；用户主动要求仍可继续审查。';
   return selfTestFirst(dir, point, cfg) + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '。自动核验、修改、复验，最多 ' + max + ' 轮；当前已经 ' + (rec.rounds || 0) + ' 轮。需求变化先沟通并同步相关产物和用例。';
 }

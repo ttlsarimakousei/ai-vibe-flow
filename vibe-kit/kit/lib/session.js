@@ -2200,7 +2200,10 @@ function codeReviewed(dir) {
 }
 /** 归档、催审查时说的话：没审过，还是审过之后又做了任务。审过了返回空串 */
 function codeReviewIssue(dir) {
-  if (require('./flow-policy').allPassed(dir, 'code')) return '';
+  const P = require('./flow-policy');
+  if (P.allPassed(dir, 'code')) return '';
+  // 每个审查点都审过了或者到了上限（第 26 条）：到上限的不再挡（复审 V8：以前归档要求全部通过，到上限的点又不能再自动审，两头堵住）；没解决的写在收工报告里，归档本来就要用户点头
+  try { const ps = P.points(dir, 'code'); if (ps.length && ps.every((p) => P.settled(dir, p) || P.exhausted(dir, p))) return ''; } catch (e) { /* 算不了照下面的老规矩 */ }
   const r = reviewRecord('code', dir);
   if (!r) return '还没做过代码审查（/ttls-cross-review 的代码模式，前端后端都在内；审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
   if (r.fingerprint && !codeReviewed(dir)) return '代码或任务验法在审查后变更，需要针对变更部分复验和补审；仅打勾不会触发重复审查。';

@@ -1446,7 +1446,8 @@ function consentIssue(g, st, cfg, docs) {
   const reviewReady = rounds.some((x) => x.key.startsWith('code|') && current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && (x.rec.done || (!cfg.reviewLoop && x.fixed)) && x.rec.at > since);
   // 任务都勾完了（等用户验收、用户报了问题在改）：改完一处就算做完一件事（问题表第 25 条，2026-10-31）。
   // 以前只认"上次提交之后有新勾的任务或刚收尾的审查"，任务全勾完以后改 bug 永远凑不出来，提交方式选了自动也一直攒着
-  const allTicked = current.some((c) => { try { return require('../lib/task-types').automatedLeft(c.dir).length === 0; } catch (e) { return false; } });
+  // 每个当前变更都有任务、而且都勾完了才算（复审 V9：以前还没写 tasks 的变更也算勾完，几个变更里一个勾完就放行别的半成品）
+  const allTicked = current.length > 0 && current.every((c) => { try { const T = require('../lib/task-types'); return T.tasks(c.dir).length > 0 && T.automatedLeft(c.dir).length === 0; } catch (e) { return false; } });
   const ready = reviewReady || allTicked || current.some((c) => Object.values(S.syncTicks(c.dir)).some((tick) => tick > since));
   if (!ready) return '[vibe-kit] 提交方式是"自动"，但还没做完一件事：上次提交之后还没有新勾完的任务，也没有刚收尾的审查修复。做完、勾上再提交。';
   return '';
