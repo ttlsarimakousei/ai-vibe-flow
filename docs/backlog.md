@@ -10,6 +10,8 @@
 | feedback-20261030 F8 | 更新时用户的补充放单独文件，更新不碰 | 后做 | 同上 F 批 | |
 | feedback-20261030 E1 | 远程桌面多人共用一台电脑时连到别人的路由（停路由只看 /version） | 后做 | 同上 E 批 | /version 带上本安装的标识 |
 | feedback-20261030 E3 | 网关断在半截，路由照样正常结束 | 后做 | 同上 E 批 | 先用真 Claude Code 加假网关探 SSE error 的处理 |
+| 复审 20261031 D-R6 | 壳子里 `mvn -f 子项目` 记的证据按子仓库记，review-runner 登记"修了"时按壳子查，对不上 | 后做 | [reviews/claude/20261031-C至J批-复审.md](../reviews/claude/20261031-C至J批-复审.md) | `evidence.commands` 认壳子下各子仓库的证据 |
+| 复审 20261031 D-R9 | `.vibe/db-crud.ini` 读改写没锁（换驱动记 driver_jar 和后台探索同时写） | 后做 | 同上 | 照 drivers.js 用 state-store 的锁 |
 | feedback-20261030 H2、H4、H5 剩下的 | 安全检查排在流程检查前面；OpenSpec 命令改写换成分词库；`app/web` 这类词当成路径 | 后做 | 同上 H 批 | |
 | feedback-20261030 C8 | 前后端只能串行起；命名管道认看管进程 | 后做 | 同上 | 这批做完再商量 |
 | Codex V01 | 改库快照和写入之间别人改了同一行，还原脚本可能对不上 | 后做 | 同上 D6 | 这批只在手册写明限制；有各家数据库的测试环境再做 |
