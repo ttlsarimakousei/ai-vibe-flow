@@ -50,6 +50,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `tidy.js` | `.vibe` 的整理和过程文件的清理 |
 | `archive-extract.js` | 直接归档解包与查看结果落盘的目标检查，复用 guard-commit 的拆词和工作目录；只读查看放行，项目内临时条目放 `.vibe/tmp/<事由>/`，目录联接核对真实位置 |
 | `onboard.js`、`discover.js` | 后台自动探索：认工程、推命令和端口、找开发环境的数据库和 redis 连接 |
+| `session-*.js` | session.js 拆出来的 11 块（2026-11-01）：state 状态文件和流水账（最底层）、transcript 会话记录、config 配置和会话自动开关、flow 流程状态、voice 用户的话和许可、out 钩子输出和 cli、projects 壳子和变更目录、proposal 提案门槛、plan 大需求计划、review 审查记录、kitfiles 套件文件保护和约定变化提示。session.js 只剩出口，导出的名字和以前一样，别的文件照旧 `require('./session')` |
 | `shell-words.js` | 拆命令（2026-11-01 从 guard-commit 拆出）：按 Bash / PowerShell 的规则拆组、段、词，认命令名、解开包着的命令 |
 | `guard-git.js`、`guard-kit.js`、`guard-process.js`、`guard-archive.js` | guard-commit 的各类检查（2026-11-01 拆出）：git 提交推送和提交方式；改套件、读令牌、经验规则、路由接口；结束进程、起服务、过程文件、串 cd；归档门槛。guard-commit 只留调度 |
 | `drivers.js`、`toolstats.js` | 多版本驱动登记、默认和单版删除；查库、查 redis 的匿名类别计数 |
