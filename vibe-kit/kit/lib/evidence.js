@@ -37,9 +37,22 @@ function actual(j) {
   if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis|urai-db-crud|redis)[\\/]/i.test(command)) return null;
   // 切目录、git -C 指到别处的命令不猜覆盖范围；IDEA 的明确 projectPath 已在上面处理。mvn -f、gradle -p、npm --prefix 指到哪个仓库就算哪个，指了几个不同的不记
   if (/\b(?:cd|pushd|Set-Location)\b|\bgit\s+-C\b/i.test(command)) return null;
-  const targets = [...new Set([...command.matchAll(/\b(?:mvnw?|gradlew?|npm|pnpm|yarn)(?:\.cmd|\.bat)?\b[^\n;&|]*?\s(?:-f|--file|-p|--project-dir|--prefix|--dir|-C)\s+("[^"]+"|'[^']+'|[^\s;&|]+)/gi)].map((m) => path.resolve(root, m[1].replace(/^["']|["']$/g, ''))))];
-  if (targets.length > 1) return null;
-  if (targets.length) { let t = targets[0]; try { if (fs.statSync(t).isFile()) t = path.dirname(t); } catch (e) { if (/\.(xml|gradle|kts)$/i.test(t)) t = path.dirname(t); } root = t; }
+  // 每个工具只认自己指目录的那几个选项，大小写要对（复审 D-R5：以前不分大小写，mvn -P dev 的 profile 名、mvn -C 后面的 test 被当成目录，算指纹时报错）
+  const DIR_OPTS = { mvn: ['-f', '--file'], gradle: ['-p', '--project-dir'], npm: ['--prefix'], pnpm: ['-C', '--dir', '--prefix'], yarn: ['--cwd'] };
+  const targets = [];
+  for (const m of command.matchAll(/\b(mvnw?|gradlew?|npm|pnpm|yarn)(?:\.cmd|\.bat)?\b([^\n;&|]*)/gi)) {
+    const opts = DIR_OPTS[m[1].toLowerCase().replace(/w$/, '')] || [];
+    for (const o of m[2].matchAll(/\s(-{1,2}[\w-]+)\s+("[^"]+"|'[^']+'|[^\s;&|]+)/g)) if (opts.includes(o[1])) targets.push(path.resolve(root, o[2].replace(/^["']|["']$/g, '')));
+  }
+  const uniq = [...new Set(targets)];
+  if (uniq.length > 1) return null;
+  if (uniq.length) {
+    let t = uniq[0];
+    try { if (fs.statSync(t).isFile()) t = path.dirname(t); } catch (e) { if (/\.(xml|gradle|kts)$/i.test(t)) t = path.dirname(t); }
+    // 指的目录不在：认不出是哪个仓库，不记（以前照样去算指纹，报错记一条问题反馈）
+    if (!fs.existsSync(t)) return null;
+    root = t;
+  }
   const response = j.tool_response || {};
   if (response.isRunning || response.is_running || response.background_task_id || response.task_id || response.session_id || /(?:running in (?:the )?background|still running|后台运行|任务已启动)/i.test(JSON.stringify(response))) return null;
   if (!require('./session').VERIFY_CMD.test(command) || /\b(?:echo|printf|write-output|write-host)\s+['"]?(?:测试|Tests|BUILD)/i.test(command)) return null;

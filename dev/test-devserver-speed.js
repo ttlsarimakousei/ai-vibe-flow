@@ -100,6 +100,9 @@ H.section('C3 命令跑完记证据：只算命令针对的仓库；版本查询
     'const a = (command) => { const r = E.actual({ tool_name: "Bash", cwd: shell, tool_input: { command }, tool_response: { stdout: "BUILD SUCCESS" } }); return r ? { root: r.root.replace(/\\\\/g, "/").toLowerCase(), kind: r.kind } : null; };',
     'const out = {',
     '  f: a("mvn -q -o -f sub/pom.xml compile"),',
+    '  profile: (() => { try { return a("mvn -q -P dev -f sub/pom.xml test"); } catch (e) { return "抛错：" + e.message; } })(),',
+    '  strict: (() => { try { return a("mvn -C test"); } catch (e) { return "抛错：" + e.message; } })(),',
+    '  gone: (() => { try { return a("mvn -f nosuch/pom.xml test"); } catch (e) { return "抛错：" + e.message; } })(),',
     '  prefix: a("npm --prefix sub run build"),',
     '  ver: a("java -version"), nodev: a("node --version"),',
     '  curl: a("curl -s http://127.0.0.1:8080/api/x"),',
@@ -116,6 +119,9 @@ H.section('C3 命令跑完记证据：只算命令针对的仓库；版本查询
   const subKey = sub.replace(/\\/g, '/').toLowerCase();
   H.ok('mvn -f sub/pom.xml：记在 sub 这个仓库（以前不记）', !!o.f && o.f.root === subKey && o.f.kind === 'compile', o.f || o.err);
   H.ok('npm --prefix sub：记在 sub', !!o.prefix && o.prefix.root === subKey, o.prefix);
+  H.ok('复审 D-R5：mvn -P dev -f sub/pom.xml：profile 名不当目录，记在 sub', !!o.profile && o.profile.root === subKey, o.profile);
+  H.ok('复审 D-R5：mvn -C test：test 不当目录，不报错', o.strict === null || (o.strict && typeof o.strict === 'object'), o.strict);
+  H.ok('复审 D-R5：-f 指的目录不在：不记、不报错', o.gone === null, o.gone);
   H.ok('java -version、node --version：不记', o.ver === null && o.nodev === null, [o.ver, o.nodev]);
   H.ok('curl 探一下接口：不记', o.curl === null, o.curl);
   H.ok('分类：test 是测试，test-compile、-DskipTests 的 package 是编译检查，node 跑脚本是 other', o.test && o.test.kind === 'test' && o.tc && o.tc.kind === 'compile' && o.skip && o.skip.kind === 'compile' && o.other && o.other.kind === 'other', [o.test, o.tc, o.skip, o.other]);
