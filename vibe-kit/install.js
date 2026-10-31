@@ -82,6 +82,8 @@ const same = (a, b) => { try { return fs.readFileSync(a).equals(fs.readFileSync(
 // 目标可能带只读属性（从只读共享、版本库检出拷来的），先放开再覆盖
 /** 先写临时文件再改名（审核 P03）：两次 --sync 重叠、写到一半断电，settings.json、全局 CLAUDE.md 不会只剩半截 */
 function writeAtomic(file, text) {
+  // 是符号链接的（有人把 settings.json 链到别处统一管）：写穿链接，不改名（改名会把链接换成普通文件，复审 U-R15）
+  try { if (fs.lstatSync(file).isSymbolicLink()) { fs.writeFileSync(file, text); return; } } catch (e) { /* 还没有这个文件 */ }
   const tmp = file + '.' + process.pid + '.' + Date.now() + '.tmp';
   fs.writeFileSync(tmp, text);
   try { fs.renameSync(tmp, file); } catch (e) { try { fs.writeFileSync(file, text); } finally { try { fs.unlinkSync(tmp); } catch (x) { /* 已经没了 */ } } }

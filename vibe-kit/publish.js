@@ -157,14 +157,18 @@ function fixedIssues(version) {
   if (remoteTree && remoteTree === tree) {
     // 内容一样，还要核对版本标签在不在（Codex C03）：上次分支推成了、标签没推成的，以前重跑就直接说"不用再发"，同事按标签装回上一版时找不到
     const head = G(['rev-parse', 'FETCH_HEAD']).out.trim();
-    const ls = gl.viaRoutes(s, (route) => G(['ls-remote', route.url, 'refs/tags/v' + version], { route, timeout: 120000 }));
-    const at = ls.code === 0 ? (String(ls.out || '').trim().split(/\s+/)[0] || '') : '';
+    // 带说明的标签（GitLab 页面上建的）ls-remote 先给标签对象，^{} 那一行才是它指的提交（复审 U-R16）
+    const ls = gl.viaRoutes(s, (route) => G(['ls-remote', route.url, 'refs/tags/v' + version, 'refs/tags/v' + version + '^{}'], { route, timeout: 120000 }));
+    const rows = ls.code === 0 ? String(ls.out || '').trim().split(/\r?\n/).map((l) => l.trim().split(/\s+/)).filter((x) => x.length === 2) : [];
+    const peeled = rows.find((x) => /\^\{\}$/.test(x[1]));
+    const at = (peeled || rows[0] || [])[0] || '';
     if (ls.code === 0 && !at && !DRY) {
       G(['tag', '-f', 'v' + version, head]);
       const pt = gl.viaRoutes(s, (route) => G(['push', '-q', route.url, 'refs/tags/v' + version], { route, timeout: 600000 }));
       if (pt.code !== 0) stop('仓库里分支已经是这一版，但标签 v' + version + ' 不在，补推没成：' + gl.explainRoutes(pt, '推标签'));
       console.log(''); say('[OK] 仓库里已经是这一版（' + version + '），补推了上次没推上去的标签 v' + version); cleanup(); return;
     }
+    if (ls.code !== 0) say('[!] 没查成仓库里有没有标签 v' + version + '（' + gl.explainRoutes(ls, '查标签') + '），标签在不在没核对；分支上已经是这一版。');
     if (at && head && at !== head) say('[!] 仓库里的标签 v' + version + ' 指着别的提交（' + at.slice(0, 8) + '），分支上是 ' + head.slice(0, 8) + '。没动它：要改就先在 GitLab 上删掉这个标签再发一次');
     console.log(''); say('[OK] 仓库里已经是这一版（' + version + '），内容一模一样，不用再发'); cleanup(); return;
   }
@@ -197,6 +201,7 @@ function fixedIssues(version) {
   const push = gl.viaRoutes(s, (route) => G(['push', '-q', '--atomic', route.url, 'HEAD:refs/heads/' + branch, 'refs/tags/v' + version], { route, timeout: 600000 }));
   if (push.code !== 0) {
     const e = String(push.err || '');
+    if (/does not support --atomic|atomic push/i.test(e)) stop('GitLab 不支持分支和标签一起推（--atomic，服务端的 Git 太老）。这次什么都没推。请维护 GitLab 的人升级，或者告诉改套件的人换成分开推');
     if (/protected branch|not allowed to push/i.test(e)) stop('GitLab 不让推：分支 ' + branch + ' 是受保护的，这个账号的权限不够。在项目的 设置 → 仓库 → 受保护分支 里允许这个账号推送，或者换一个权限够的账号（令牌）');
     if (/already exists|rejected/i.test(e) && /tags\/v/.test(e)) stop('仓库里已经有标签 v' + version + ' 了，指着的不是这个包。重新打包（换一个版本号）再发布');
     if (/insufficient_scope|write_repository|denied|not allowed|403/i.test(e)) stop('GitLab 不让推：权限不够。令牌要勾 write_repository；走 SSH 的话账号在项目里至少是 Developer。原话：' + e.split(/\r?\n/).filter(Boolean).pop());
