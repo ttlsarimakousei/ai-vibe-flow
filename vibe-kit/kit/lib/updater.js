@@ -11,13 +11,24 @@
  *        自检不过：从仓库拉上一版的标签装回去，这个坏版本记下来不再装，等仓库里出了新的再说
  *     4. 顺带把还没上报的问题反馈建成议题（lib/issues.js）
  *
+ * 发版保护（K2，仓库主人 2026-11-01 定的"尝鲜组 + 观察期"；以前一发新版所有电脑两小时内全装上，出了问题全员中招）：
+ *   尝鲜组   配置页勾了"先装新版"（updateEarly）的电脑：一发现新版就装，和以前一样
+ *   别的电脑 等这一版发布满 24 小时（按仓库里那个提交的时间；比现在晚一小时以上、读不出来的，按这台电脑第一次看到它的时间），
+ *            而且尝鲜组没在仓库里报"这一版有问题"（开着的"[有问题的版本] <版本>"议题，lib/issues.js），才自动装。
+ *            仓库退回了旧版（维护的人把大家退回去）不等，马上跟着退。
+ *            查不到有没有人报（没有令牌、接口不通）按"没问题"：24 小时已经给了尝鲜组和维护的人一天；很多电脑没有建 issue 的令牌，
+ *            按"等等再装"它们就永远装不上。查过的结果记两小时，过了再查（维护的人关掉误报的那条，别的电脑最晚两小时后知道）。
+ *            勾了"先装新版"的电脑不查，一发现就装：尝鲜组本来就是来试的，多一台装上、装回也是给维护的人的证据
+ *
  * 连仓库走哪条路（手填的令牌、SSH 密钥、这台电脑上 git 登录的身份）由 lib/gitlab.js 挨个试，这里不管。
  *
- * 开关（config.json）：autoUpdate = auto 自动装 / notify 只提醒（状态栏、配置页上说有新版，点了才装）/ off 不检查；updateCheckHours 几小时查一次（默认 2）。
+ * 开关（config.json）：autoUpdate = auto 自动装 / notify 只提醒（状态栏、配置页上说有新版，点了才装）/ off 不检查；updateCheckHours 几小时查一次（默认 2）；
+ * updateEarly 先装新版（默认不勾）。
  * 更新源在 lib/gitlab.js（配置页里填，默认是团队的那个仓库）。
  *
  * 为什么放在 lib/ 里：模型只能跑 page/ 和 tools/ 里的脚本（guard-commit），这里的它跑不了——更新等于执行仓库里的代码，不能让模型来触发。
- * 状态在 state/update.json，日志在 update/update.log，安装器的输出在 update/last-install.log。
+ * 状态在 state/update.json（全局，不按时间清；发版保护用的几项：remoteAt、remoteSeenAt 这一版什么时候发布的、flag 查到的"这一版有没有问题"），
+ * 日志在 update/update.log，安装器的输出在 update/last-install.log。
  *
  * 配置页的几个按钮（测试连接、立即检查、立即更新、申请令牌、导出议题）也是起一个进程跑这个文件：连 GitLab 可能要等十几秒，
  * 不能在路由的进程里等。这些命令往标准输出写一行 JSON，令牌从不写出来。
@@ -37,8 +48,24 @@ const LOCK = path.join(DIR, 'lock.json');
 const INSTALL_LOG = path.join(DIR, 'last-install.log');
 const VERSION_RE = /^\d{8}\.\d{4}$/;
 const LOCK_MS = 40 * 60000;
+// 发版保护（见文件开头）：没勾"先装新版"的等多久；查过的"这一版有没有问题"记多久
+const CANARY_WAIT_MS = 24 * 3600000;
+const FLAG_TTL_MS = 2 * 3600000;
 
 const modeOf = (cfg) => { const m = (cfg || readConfig()).autoUpdate; return ['auto', 'notify', 'off'].includes(m) ? m : 'auto'; };
+/** 仓库里现在这一版什么时候发布的（check() 记的）：提交的时间，不可信时是这台电脑第一次看到它的时间 */
+const releasedAt = (st) => Number(st && st.remoteAt) || Number(st && st.remoteSeenAt) || 0;
+/** 本地日期 YYYY-MM-DD */
+const dayKey = (t) => { const d = t ? new Date(t) : new Date(); const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+/** 给人看的时间：今天、明天的只写几点 */
+function whenText(t) {
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  const hm = p(d.getHours()) + ':' + p(d.getMinutes());
+  if (dayKey(t) === dayKey()) return '今天 ' + hm;
+  if (dayKey(t) === dayKey(Date.now() + 86400000)) return '明天 ' + hm;
+  return (d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + hm;
+}
 const hoursOf = (cfg) => { const n = Number((cfg || readConfig()).updateCheckHours); return n >= 1 && n <= 24 ? n : 2; };
 const readText = (f) => { try { return fs.readFileSync(f, 'utf8').replace(/^﻿/, '').trim(); } catch (e) { return ''; } };
 const installedVersion = () => readText(path.join(KIT, 'VERSION'));
@@ -163,7 +190,14 @@ function check() {
   }
   const v = stagedVersion();
   if (!v) return fail('仓库里的东西不像是 vibe-kit 的安装包（没有 install.js、kit/VERSION 这些）。先用"发布"把包推进去');
-  setState({ lastCheckAt: now, lastCheckOk: true, lastError: '', remoteCommit: head.commit, remoteBranch: head.branch, remoteVersion: v, repo: gl.maskUrl(s.repo), route: head.route.name, routeLabel: head.route.label });
+  // 这一版什么时候发布的（发版保护：没勾"先装新版"的等它发布满 24 小时）：发布脚本每次推一个新提交，提交的时间就是发布的时间。
+  // 维护的电脑钟快了（提交时间比现在晚一小时以上）、读不出来的，按这台电脑第一次看到这个提交的时间
+  const changed = st.remoteCommit !== head.commit;
+  const seenAt = changed || !Number(st.remoteSeenAt) ? now : Number(st.remoteSeenAt);
+  let at = changed ? 0 : Number(st.remoteAt) || 0;
+  if (!at) { const t = gl.git(STAGE, ['log', '-1', '--format=%ct', 'HEAD'], { timeout: 15000 }); at = t.code === 0 && /^\d+$/.test(t.out.trim()) ? Number(t.out.trim()) * 1000 : 0; }
+  if (!(at > 0) || at > now + 3600000) at = seenAt;
+  setState({ lastCheckAt: now, lastCheckOk: true, lastError: '', remoteCommit: head.commit, remoteBranch: head.branch, remoteVersion: v, remoteAt: at, remoteSeenAt: seenAt, repo: gl.maskUrl(s.repo), route: head.route.name, routeLabel: head.route.label });
   if (v !== st.remoteVersion) log('仓库里现在是 ' + v + '，这台电脑装着 ' + (installedVersion() || '（没有版本号）'));
   return status();
 }
@@ -298,14 +332,59 @@ function rollback(prev, s) {
   return r.ok && installedVersion() === prev ? { ok: true } : { ok: false, why: '装回上一版也没成功，看 ' + INSTALL_LOG };
 }
 const failedTimes = (st, v) => (st.failed && st.failed.version === v ? Number(st.failed.times) || 0 : 0);
-/** 要不要装：暂存处是一个完整的包、版本和装着的不一样、而且这个版本没有连着装坏过两次（anyway：在配置页上点的，装坏过也再试） */
+/**
+ * 发版保护：仓库里那一版现在该不该自动装（只看配置和状态文件，不连网；状态栏、配置页也用它说现在是什么状态）。
+ * 返回 { hold, until, flag }：hold 为空是可以装；'wait' 等尝鲜组（until 之后再装）；'flag' 尝鲜组报了这一版有问题
+ */
+function gate(cfg, st, installed, now) {
+  const remote = (st && st.remoteVersion) || '';
+  if (!remote || remote === installed) return { hold: '' };
+  // 尝鲜组：一发现新版就装，和以前一样
+  if (cfg.updateEarly === true) return { hold: '' };
+  // 仓库退回了旧版（维护的人把大家退回去，多半是新版出了事）：不等，马上跟着退
+  if (olderThan(remote, installed)) return { hold: '' };
+  const until = releasedAt(st) + CANARY_WAIT_MS;
+  if (now < until) return { hold: 'wait', until };
+  const f = st.flag;
+  if (f && f.version === remote && f.bad === true) return { hold: 'flag', flag: f };
+  return { hold: '' };
+}
+/** 要不要装：暂存处是一个完整的包、版本和装着的不一样、而且这个版本没有连着装坏过两次、发版保护不拦（anyway：在配置页上点的，装坏过也再试，也不等尝鲜组） */
 function needInstall(anyway) {
   const st = readState('update');
   const v = stagedVersion();
   // 安装器"什么都没动"拒绝过这一版（退出码 4）：6 小时内不再试（每试一次都要先备份上一版、跑一遍安装器），在配置页点"立即更新"照样试（复审 S5）
   const rf = st.refused;
   if (anyway !== true && rf && rf.version === v && Date.now() - (Number(rf.at) || 0) < 6 * 3600000) return false;
-  return !!v && v === st.remoteVersion && v !== installedVersion() && (anyway === true || failedTimes(st, v) < 2);
+  const cur = installedVersion();
+  if (!(!!v && v === st.remoteVersion && v !== cur)) return false;
+  if (anyway === true) return true;
+  return failedTimes(st, v) < 2 && !gate(readConfig(), st, cur, Date.now()).hold;
+}
+/**
+ * 没勾"先装新版"的电脑：等满 24 小时、要装之前，去仓库查尝鲜组有没有报这一版有问题，结果记进 state/update.json 的 flag（两小时内不再查）。
+ * 查不到（没有令牌、不能用 SSH 申请、接口不通）记成 ok: false、不算有问题，照装（理由见文件开头）。
+ * evenWaiting：配置页点"立即检查"时，还在等的也查一次、不管两小时，让页面马上看得到
+ */
+async function refreshFlag(cfg, evenWaiting) {
+  try {
+    const st = readState('update');
+    const v = st.remoteVersion || '';
+    const cur = installedVersion();
+    if (!v || v === cur || stagedVersion() !== v || failedTimes(st, v) >= 2) return null;
+    if (cfg.updateEarly === true || olderThan(v, cur)) return null;
+    if (!evenWaiting && Date.now() < releasedAt(st) + CANARY_WAIT_MS) return null;
+    const f = st.flag;
+    if (!evenWaiting && f && f.version === v && Date.now() - (Number(f.at) || 0) < FLAG_TTL_MS) return f;
+    let r;
+    try { r = await require('./issues.js').versionFlag(v); } catch (e) { r = { ok: false, why: String((e && e.message) || e) }; }
+    const flag = r && r.ok ? { version: v, ok: true, bad: !!r.bad, iid: Number(r.iid) || 0, url: String(r.url || ''), count: Number(r.count) || 0, at: Date.now() } : { version: v, ok: false, bad: false, why: String((r && r.why) || '没查成').slice(0, 300), at: Date.now() };
+    setState({ flag });
+    if (flag.bad && !(f && f.version === v && f.bad)) log('尝鲜组报了 ' + v + ' 有问题（议题 #' + flag.iid + '），先不装');
+    if (!flag.bad && f && f.version === v && f.bad) log(v + ' 那条"有问题"的议题关掉了，照常装');
+    if (!flag.ok && !(f && f.version === v && f.ok === false)) log('查不到尝鲜组有没有报 ' + v + ' 有问题（' + flag.why + '），按没问题算');
+    return flag;
+  } catch (e) { log('查"这一版有没有问题"时出错：' + ((e && e.message) || e)); return null; }
 }
 function apply() {
   const s = gl.settings();
@@ -354,6 +433,14 @@ function apply() {
 }
 
 // ---------- 现在的情况（配置页、状态栏用） ----------
+/**
+ * 发版保护现在处在哪一步（状态栏、配置页顶部、status() 共用，只看配置和状态文件，不连网）：
+ * { hold: '' / 'wait' / 'flag', until: 等到什么时候, flag: 尝鲜组报的那一条 }
+ */
+function phase(cfg, st, installed, now) {
+  const g = gate(cfg || {}, st || {}, installed, now || Date.now());
+  return { hold: g.hold || '', until: g.until || 0, flag: g.hold === 'flag' ? g.flag : null };
+}
 function status() {
   const cfg = readConfig();
   const st = readState('update');
@@ -363,12 +450,16 @@ function status() {
   // 装坏了、也没装回去：现在装着的就是坏的那一版（配置页顶部、状态栏都要说）
   const broken = brokenOf(st);
   const refused = st.refused && st.refused.version === remote && remote !== installed ? st.refused : null;
+  const ph = phase(cfg, st, installed, Date.now());
   return {
     refused, broken,
     mode: modeOf(cfg), hours: hoursOf(cfg), installed, remote, branch: st.remoteBranch || '', commit: String(st.remoteCommit || '').slice(0, 8), route: st.route || '', routeLabel: st.routeLabel || '',
     differs: !!remote && remote !== installed, behind: !!remote && remote !== installed && !(failed && failed.times >= 2),
     lastCheckAt: st.lastCheckAt || 0, lastCheckOk: st.lastCheckOk !== false, lastError: st.lastError || '', lastApplied: st.lastApplied || null, failed,
     history: (st.history || []).slice(-10).reverse(), running: lockHeld(), log: LOG, maintainer: gl.isMaintainer(),
+    // 发版保护：先装新版（尝鲜组）勾没勾；现在等不等、等到什么时候；这一版什么时候发布的；查到的"这一版有没有问题"（只给仓库里现在这一版的）
+    early: cfg.updateEarly === true, hold: ph.hold, waitUntil: ph.hold === 'wait' ? ph.until : 0, remoteAt: releasedAt(st),
+    flag: st.flag && st.flag.version === remote && remote !== installed ? st.flag : null,
   };
 }
 
@@ -427,6 +518,8 @@ async function run(opt) {
     }
     if (modeOf(cfg) !== 'off' || o.force) {
       if (o.force || Date.now() - (st.lastCheckAt || 0) >= hoursOf(cfg) * 3600000 || !st.remoteVersion) out.check = check();
+      // 没勾"先装新版"的：等满了 24 小时，装之前查一下尝鲜组有没有报这一版有问题（只提醒的也查，配置页上好说清楚）
+      if (!o.force) { const f = await refreshFlag(cfg, false); if (f) out.flag = f; }
       if ((modeOf(cfg) === 'auto' || o.force) && needInstall(!!o.force)) {
         if (o.force || await waitIdle(o.waitMs, o.quietMs)) { out.apply = apply(); installed = true; }
         else { log('一直有请求在跑，这次先不装，十分钟后再看'); out.apply = { ok: false, why: '路由一直在忙' }; }
@@ -440,7 +533,7 @@ async function run(opt) {
   return out;
 }
 
-module.exports = { DIR, STAGE, LOG, INSTALL_LOG, modeOf, hoursOf, installedVersion, stagedVersion, remoteHead, check, needInstall, apply, selfCheck, idle, waitIdle, status, kick, run, spawnBackground, lockHeld };
+module.exports = { DIR, STAGE, LOG, INSTALL_LOG, CANARY_WAIT_MS, FLAG_TTL_MS, modeOf, hoursOf, installedVersion, stagedVersion, remoteHead, check, needInstall, gate, phase, refreshFlag, whenText, apply, selfCheck, idle, waitIdle, status, kick, run, spawnBackground, lockHeld };
 
 if (require.main === module) {
   const cmd = process.argv[2] || 'status';
@@ -450,7 +543,8 @@ if (require.main === module) {
     // --wait-ms、--quiet-ms：等路由空闲最多等多久、多久没请求才算空闲（默认 30 分钟、20 秒）；--print：把结果写出来
     const num = (f) => { const i = process.argv.indexOf(f); const n = i > 0 ? Number(process.argv[i + 1]) : NaN; return n >= 0 ? n : undefined; };
     if (cmd === 'run') { const r = await run({ force: has('--force'), waitMs: num('--wait-ms'), quietMs: num('--quiet-ms') }); if (has('--print')) print(r); }
-    else if (cmd === 'check') { let ran = false; if (lock()) { try { check(); ran = true; } finally { unlock(); } } print(Object.assign(status(), ran ? {} : { skipped: '已经有一个在跑了' })); }
+    // 配置页点"立即检查"：顺带查一下尝鲜组有没有报仓库里这一版有问题（没勾"先装新版"、仓库里的比装着的新才查）
+    else if (cmd === 'check') { let ran = false; if (lock()) { try { const c = check(); if (c.lastCheckOk) await refreshFlag(readConfig(), true); ran = true; } finally { unlock(); } } print(Object.assign(status(), ran ? {} : { skipped: '已经有一个在跑了' })); }
     else if (cmd === 'apply') print(await run({ force: true, noIssues: true }));
     else if (cmd === 'selfcheck') { const c = selfCheck(); console.log(c.ok ? 'ok' : c.why); process.exitCode = c.ok ? 0 : 1; }
     else if (cmd === 'diagnose') print(await gl.diagnose(readConfig()));

@@ -47,6 +47,7 @@ suites.unshift(['1012 数据库诊断', 'test-feedback1012-db.js', [rt || 'none'
 suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'decisions', 'states', 'context'].map((name) => ['1013 反馈 ' + name, 'test-feedback1013-' + name + '.js', []]));
 suites.unshift(['提案审查结果有效性', 'test-proposal-review-state.js', []]);
 suites.unshift(...['apply', 'stop', 'review', 'review-scope', 'review-command', 'budget', 'output', 'push'].map((name) => ['1024 反馈 ' + name, 'test-feedback1024-' + name + '.js', []]));
+suites.push(['发版保护（尝鲜组、观察期、固定和跳过）', 'test-update-canary.js', ['18755']]);
 if (old) suites.push(['旧版复现', 'check-old-repro.js', [old]]);
 if (old0929) suites.push(['旧版复现 0929', 'check-old-repro-0929.js', [old0929]]);
 if (oldNames) suites.push(['改名和并进来的技能', 'test-ttls.js', [oldNames]]);

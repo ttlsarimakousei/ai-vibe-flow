@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', perfReport: 'on', ccAutoMode: 'off', contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, updateEarly: false, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', perfReport: 'on', ccAutoMode: 'off', contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -92,6 +92,8 @@ function cleanConfig(x, base) {
   // 自动更新：auto 发现新版自己装；notify 只提醒；off 不检查。几小时查一次（1～24）
   if (x && ['auto', 'notify', 'off'].includes(x.autoUpdate)) c.autoUpdate = x.autoUpdate;
   const hours = Number(x && x.updateCheckHours); if (hours >= 1 && hours <= 24) c.updateCheckHours = Math.round(hours);
+  // 先装新版（尝鲜组，发版保护 K2）：勾了一发现新版就装；不勾等这一版发布满 24 小时、尝鲜组没报问题再装（见套件 lib/updater.js）
+  if (x && typeof x.updateEarly === 'boolean') c.updateEarly = x.updateEarly;
   // 问题上报：on 记下的问题自动建成 GitLab 的议题；off 只存在本机。没填令牌时用不用 SSH 去申请一个：auto / off
   if (x && ['on', 'off'].includes(x.issueUpload)) c.issueUpload = x.issueUpload;
   if (x && ['auto', 'off'].includes(x.sshToken)) c.sshToken = x.sshToken;
@@ -486,7 +488,7 @@ function runKit(kitDir, args, timeoutMs) {
 }
 function remoteView(r, light) {
   const cfg = r.session.readConfig();
-  const out = { settings: r.gl.publicSettings(), update: r.up.status(), maintainer: r.gl.isMaintainer(), version: r.up.installedVersion(), config: { autoUpdate: r.up.modeOf(cfg), updateCheckHours: r.up.hoursOf(cfg), issueUpload: cfg.issueUpload === 'off' ? 'off' : 'on', sshToken: cfg.sshToken === 'off' ? 'off' : 'auto', usageReport: cfg.usageReport === 'off' ? 'off' : 'on' } };
+  const out = { settings: r.gl.publicSettings(), update: r.up.status(), maintainer: r.gl.isMaintainer(), version: r.up.installedVersion(), config: { autoUpdate: r.up.modeOf(cfg), updateCheckHours: r.up.hoursOf(cfg), updateEarly: cfg.updateEarly === true, issueUpload: cfg.issueUpload === 'off' ? 'off' : 'on', sshToken: cfg.sshToken === 'off' ? 'off' : 'auto', usageReport: cfg.usageReport === 'off' ? 'off' : 'on' } };
   if (!light) out.issues = Object.assign(r.is.summary(), { lastExport: r.is.lastExport() });
   return out;
 }

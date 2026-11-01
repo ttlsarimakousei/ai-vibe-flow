@@ -87,6 +87,7 @@
   .banner { padding:10px 14px; border-radius:9px; margin-bottom:16px; border:1px solid; background:var(--card); }
   .banner.bad { color:var(--bad); border-color:var(--bad); }
   .banner.warn { color:var(--warn); border-color:var(--warn); }
+  .banner.info { color:var(--text); border-color:var(--line); }
 
   /* ---------- 一项开关：左边是名字和一句话，右边是控件 ---------- */
   .opt { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 20px; align-items:start; padding:13px 0; border-top:1px solid var(--hair); }
@@ -202,6 +203,7 @@
 </aside>
 <main>
   <div id="banner"></div>
+  <div id="updBanner"></div>
 
   <section id="tab-guide" class="tab hide">
     <div class="pagehead"><h2>套件说明</h2><p>vibe-kit 是什么、由哪几块组成、人工和自动两种模式各怎么走，以及哪些规矩是固定的、不做开关。</p></div>
@@ -653,10 +655,15 @@
     </div>
     <div class="card" id="sec-update" data-sec="自动更新">
       <h2>自动更新</h2>
-      <p class="hint">用 Claude Code 的时候，隔一阵在后台问一次仓库，没有窗口。有新版就下载，等路由空闲时装上。装完自检，自检不过自动装回上一版。装着的版本跟着仓库走：仓库退回旧版，这台电脑也跟着退。</p>
+      <p class="hint">用 Claude Code 的时候，隔一阵在后台问一次仓库，没有窗口。有新版就下载；勾了"先装新版"的马上装，没勾的等这一版发布满 24 小时、尝鲜组没报问题再装，都等路由空闲时装。装完自检，自检不过自动装回上一版。装着的版本跟着仓库走：仓库退回旧版，这台电脑也马上跟着退，不等。</p>
       <div class="opt">
         <div><div class="t">发现新版之后</div><div class="d">"只提醒"：状态栏和这一页说有新版，你点了才装。</div></div>
         <div class="ctl"><select id="k_autoUpdate"><option value="auto">自动装上</option><option value="notify">只提醒</option><option value="off">不检查</option></select></div>
+      </div>
+      <div class="opt">
+        <div><div class="t">先装新版（尝鲜）</div><div class="d">勾上：一发现新版就装，替大家先试。不勾：等这一版发布满 24 小时、尝鲜组没报问题再装。</div>
+          <details class="more"><summary>细节</summary><ul><li>24 小时按仓库里那次发布的时间算；那个时间比现在还晚（维护的电脑钟不准）的，按这台电脑第一次看到它的时间算。</li><li>尝鲜组报问题：仓库里有开着的"[有问题的版本] 版本号"这条 issue，这台电脑就不自动装。维护的人确认是误报、关掉它以后，最晚两小时照常装。</li><li>查不到有没有人报（没有建 issue 的令牌、接口不通）按没问题算，满 24 小时照装。</li><li>点"立即更新"不用等；仓库退回旧版也不等，马上跟着退。</li></ul></details></div>
+        <div class="ctl"><label class="switch"><input type="checkbox" id="k_updateEarly"><i></i></label></div>
       </div>
       <div class="opt">
         <div><div class="t">多久检查一次</div><div class="d">1 到 24。</div></div>
@@ -1126,7 +1133,7 @@
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('autoOnboard', '后台自动探索'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);
-  fSel('autoUpdate', '发现新版之后', ['auto', 'notify', 'off']); fNum('updateCheckHours', '多久检查一次', 1, 24); fSel('issueUpload', '问题上报', ['on', 'off']); fSel('sshToken', '没填令牌的时候', ['auto', 'off']);
+  fSel('autoUpdate', '发现新版之后', ['auto', 'notify', 'off']); fNum('updateCheckHours', '多久检查一次', 1, 24); fBool('updateEarly', '先装新版（尝鲜）'); fSel('issueUpload', '问题上报', ['on', 'off']); fSel('sshToken', '没填令牌的时候', ['auto', 'off']);
   const sameVal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   let base = null; // 上一次从路由拿到的开关：和页面上现在的值一比，就知道哪几项是在这个页面上改过的
   const baseOf = (k) => base[k];
@@ -1470,7 +1477,30 @@
   let remote = null;
   let pageVersion = '';
   const at = (t) => (t ? new Date(t).toLocaleString('zh-CN', { hour12: false }) : '');
+  // 快到的时间：今天、明天的只写几点（和状态栏的说法一样）
+  const soon = (t) => {
+    if (!t) return '';
+    const d = new Date(t); const p = (n) => String(n).padStart(2, '0'); const hm = p(d.getHours()) + ':' + p(d.getMinutes());
+    const day = (x) => new Date(x).toDateString();
+    return day(t) === day(Date.now()) ? '今天 ' + hm : day(t) === day(Date.now() + 86400000) ? '明天 ' + hm : (d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + hm;
+  };
   const tag = (cls, text) => '<span class="tag ' + cls + '">' + esc(text) + '</span>';
+  /**
+   * 页面顶部说清楚更新现在是什么状态（发版保护 K2）。单独一块（#updBanner）：路由的提示每 5 秒重画 #banner，放在那里会被冲掉。
+   * 先说要你管的（装坏了、没装上），再说正在发生的（等尝鲜组、尝鲜组报了问题），最后是"只提醒"的有新版
+   */
+  function renderUpdBanner(u) {
+    const box = $('updBanner');
+    if (!u || !u.mode) { box.innerHTML = ''; return; }
+    const b = (cls, text) => '<div class="banner ' + cls + '">' + text + '</div>';
+    let h = '';
+    if (u.broken) h = b('bad', '套件的新版 ' + esc(u.broken.version) + ' 没装好，也没能装回上一版 ' + esc(u.broken.from || '') + '。后台会再试；急用就在"更新和上报"点"立即更新"，或者重新运行安装包。原因：' + esc(String(u.broken.why || '').slice(0, 120)));
+    else if (u.failed && u.failed.times >= 1 && u.differs) h = b('bad', '套件的新版 ' + esc(u.failed.version) + ' 没装上：' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回 ' + esc(u.installed) + '，照常能用' : '') + '。详情在"更新和上报"那一页。');
+    else if (u.mode !== 'off' && u.differs && u.hold === 'flag') h = b('warn', '套件的新版 ' + esc(u.remote) + ' 被尝鲜组报了有问题，这台电脑先不自动装。维护的人确认没问题、把那条 issue 关掉以后照常装；急用就在"更新和上报"点"立即更新"。');
+    else if (u.mode !== 'off' && u.differs && u.hold === 'wait') h = b('info', '套件有新版 ' + esc(u.remote) + '，等尝鲜组先试：' + esc(soon(u.waitUntil)) + ' 以后，尝鲜组没报问题就' + (u.mode === 'auto' ? '自动装' : '提醒你装') + '。想现在装，在"更新和上报"点"立即更新"，或者勾"先装新版"。');
+    else if (u.mode === 'notify' && u.differs && !(u.failed && u.failed.times >= 2)) h = b('warn', '套件有新版 ' + esc(u.remote) + '（这台电脑装着 ' + esc(u.installed) + '）。到"更新和上报"那一页点"立即更新"。');
+    box.innerHTML = h;
+  }
   function fillRemoteSettings(st) {
     $('r_repo').value = st.isDefault ? '' : st.repo;
     $('r_repo').placeholder = st.defaultRepo || '';
@@ -1495,12 +1525,17 @@
     $('kitVer').textContent = d.version ? '套件 ' + d.version : '';
     const rows = [];
     rows.push('<tr><td style="width:150px" class="dim">这台电脑装着的</td><td><b class="mono">' + esc(u.installed || '（没有版本号）') + '</b></td></tr>');
-    rows.push('<tr><td class="dim">仓库里现在的</td><td>' + (u.remote ? '<b class="mono">' + esc(u.remote) + '</b>　' + (u.differs ? (u.failed && u.failed.times >= 2 ? tag('bad', '这一版装坏过 ' + u.failed.times + ' 次，不再自动装') : u.running ? tag('off', '正在装') : tag('bad', u.mode === 'auto' ? '不一样，等空闲时自动装' : '不一样，还没装')) : tag('ok', '一样')) + (u.branch ? ' <span class="dim">分支 ' + esc(u.branch) + '，提交 ' + esc(u.commit) + '</span>' : '') : '<span class="dim">还没查过</span>') + '</td></tr>');
+    // 仓库里那一版现在怎么样：发版保护拦着的（等尝鲜组、尝鲜组报了有问题）先说
+    const holdTag = u.hold === 'wait' ? tag('off', '等尝鲜组先试，' + soon(u.waitUntil) + ' 以后' + (u.mode === 'auto' ? '自动装' : '再装更稳'))
+      : u.hold === 'flag' ? tag('bad', '尝鲜组报了这一版有问题，先不自动装') : '';
+    rows.push('<tr><td class="dim">仓库里现在的</td><td>' + (u.remote ? '<b class="mono">' + esc(u.remote) + '</b>　' + (u.differs ? (u.failed && u.failed.times >= 2 ? tag('bad', '这一版装坏过 ' + u.failed.times + ' 次，不再自动装') : u.running ? tag('off', '正在装') : holdTag || tag('bad', u.mode === 'auto' ? '不一样，等空闲时自动装' : '不一样，还没装')) : tag('ok', '一样')) + (u.branch ? ' <span class="dim">分支 ' + esc(u.branch) + '，提交 ' + esc(u.commit) + (u.remoteAt ? '，' + esc(at(u.remoteAt)) + ' 发布' : '') + '</span>' : '') : '<span class="dim">还没查过</span>') + '</td></tr>');
+    if (u.differs && u.flag) rows.push('<tr><td class="dim">尝鲜组</td><td>' + (u.flag.bad ? '<b style="color:var(--bad)">报了这一版有问题</b>（' + (u.flag.url ? '<a href="' + esc(u.flag.url) + '" target="_blank" rel="noopener">#' + esc(u.flag.iid) + '</a>' : '#' + esc(u.flag.iid)) + (u.flag.count > 1 ? '，' + esc(u.flag.count) + ' 台电脑装回了' : '') + '）。维护的人确认没问题、把那条关掉以后，最晚两小时照常装' : u.flag.ok ? '没人报这一版有问题' : '<span class="dim">查不到有没有人报（' + esc(u.flag.why || '') + '），按没问题算</span>') + ' <span class="dim">' + esc(at(u.flag.at)) + ' 查的</span></td></tr>');
     rows.push('<tr><td class="dim">上次检查</td><td>' + (u.lastCheckAt ? esc(at(u.lastCheckAt)) + '　' + (u.lastCheckOk ? tag('ok', '通') + (u.routeLabel ? ' <span class="dim">走的是' + esc(u.routeLabel) + '</span>' : '') : tag('bad', '没成功') + '<div style="color:var(--bad)">' + esc(u.lastError || '') + '</div>') : '<span class="dim">还没查过</span>') + '</td></tr>');
     if (u.refused) rows.push('<tr><td class="dim">没动手的那一版</td><td><span class="mono">' + esc(u.refused.version) + '</span>　' + esc(at(u.refused.at)) + '　' + esc(u.refused.why || '') + '。<b style="color:var(--bad)">电脑上有问题要改</b>，改好之后 6 小时内会再试，或者点"立即更新"</td></tr>');
     if (u.failed) rows.push('<tr><td class="dim">装坏的那一版</td><td><span class="mono">' + esc(u.failed.version) + '</span>　' + esc(at(u.failed.at)) + '　' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回上一版' : '。<b style="color:var(--bad)">没能装回上一版，拿安装包手动装一次</b>') + '</td></tr>');
     if (u.running) rows.push('<tr><td class="dim">后台</td><td>' + tag('off', '正在跑') + ' <span class="dim">检查、下载或者安装，跑完这里会变</span></td></tr>');
     $('ruStatus').innerHTML = '<div class="scroll"><table><tbody>' + rows.join('') + '</tbody></table></div>';
+    renderUpdBanner(u);
     $('ruApply').disabled = !u.differs || !!u.running;
     $('ruCheck').disabled = !!u.running;
     const h = u.history || [];
@@ -1579,11 +1614,17 @@
     const c = d.check || {};
     if (c.failed) say($('ruMsg'), c.why, false);
     else if (c.skipped) say($('ruMsg'), '后台正好有一个在跑，等它跑完看上面的结果', true);
-    else say($('ruMsg'), d.update.lastCheckOk ? (d.update.differs ? '仓库里是 ' + d.update.remote + '，这台电脑装着 ' + d.update.installed + (d.update.mode === 'auto' ? '。等空闲时会自动装，也可以点"立即更新"' : '。点"立即更新"装上') : '已经和仓库里一样了') : '没查成，原因在上面', !!d.update.lastCheckOk);
+    else {
+      const x = d.update;
+      const next = x.hold === 'flag' ? '。尝鲜组报了这一版有问题，先不自动装；要装就点"立即更新"' : x.hold === 'wait' ? '。等尝鲜组先试，' + soon(x.waitUntil) + ' 以后' + (x.mode === 'auto' ? '自动装' : '再装更稳') + '；急用就点"立即更新"' : x.mode === 'auto' ? '。等空闲时会自动装，也可以点"立即更新"' : '。点"立即更新"装上';
+      say($('ruMsg'), x.lastCheckOk ? (x.differs ? '仓库里是 ' + x.remote + '，这台电脑装着 ' + x.installed + next : '已经和仓库里一样了') : '没查成，原因在上面', !!x.lastCheckOk);
+    }
   });
   $('ruApply').onclick = () => busy($('ruApply'), $('ruMsg'), '开始更新…', async () => {
     const u = (remote && remote.update) || {};
-    if (!confirm('现在把套件装成仓库里的 ' + (u.remote || '') + '？\n\n安装的时候路由会重启一下，正在跑的 Claude Code 请求会断一次（它自己会重试）。装完这个页面会自动重新载入。')) return;
+    // 发版保护拦着的也能装（你点的），先说清楚拦着的是什么
+    const held = u.hold === 'flag' ? '\n\n注意：尝鲜组报了这一版有问题，这台电脑本来不自动装它。' : u.hold === 'wait' ? '\n\n这一版发布还不到 24 小时，尝鲜组还在试；不点的话 ' + soon(u.waitUntil) + ' 以后' + (u.mode === 'auto' ? '自动装' : '再提醒你') + '。' : '';
+    if (!confirm('现在把套件装成仓库里的 ' + (u.remote || '') + '？' + held + '\n\n安装的时候路由会重启一下，正在跑的 Claude Code 请求会断一次（它自己会重试）。装完这个页面会自动重新载入。')) return;
     const d = await api('POST', '/api/kit/remote/apply', {});
     if (remote && remote.issues) d.issues = remote.issues;
     renderRemote(d, false);
@@ -1640,15 +1681,15 @@
     else say($('usMsg'), x.error ? '没传成：' + x.error : (x.sent ? '传了 ' + x.sent + ' 天' + (x.left ? '，还剩 ' + x.left + ' 天下次传' : '') : '没有要传的：今天的明天传'), !x.error);
   });
   setInterval(() => { if (!$('tab-remote').classList.contains('hide')) pollRemote(); }, 5000);
-  // 一打开页面：页头显示套件的版本；开关是"只提醒"、仓库里有新版的，顶上挂一条
-  api('GET', '/api/kit/remote/status').then((d) => {
+  // 一打开页面：页头显示套件的版本；顶上说清楚更新现在是什么状态（renderUpdBanner）。不在"更新和上报"那一页时一分钟刷新一次
+  // （在那一页时 pollRemote 每 5 秒刷新，顺带重画）
+  const loadUpdBanner = (first) => api('GET', '/api/kit/remote/status').then((d) => {
     if (d.missing) return;
-    if (d.version) { pageVersion = d.version; $('kitVer').textContent = '套件 ' + d.version; }
-    const u = d.update || {};
-    if (u.differs && u.mode !== 'off' && !(u.failed && u.failed.times >= 2) && u.mode === 'notify') $('banner').innerHTML = '<div class="banner warn">套件有新版 ' + esc(u.remote) + '（这台电脑装着 ' + esc(u.installed) + '）。到"更新和上报"那一页点"立即更新"。</div>';
-    if (u.broken) $('banner').innerHTML = '<div class="banner bad">套件的新版 ' + esc(u.broken.version) + ' 没装好，也没能装回上一版 ' + esc(u.broken.from || '') + '。后台会再试；急用就在"更新和上报"点"立即更新"，或者重新运行安装包。原因：' + esc(String(u.broken.why || '').slice(0, 120)) + '</div>';
-    else if (u.failed && u.failed.times >= 1 && u.differs) $('banner').innerHTML = '<div class="banner bad">套件的新版 ' + esc(u.failed.version) + ' 没装上：' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回 ' + esc(u.installed) + '，照常能用' : '') + '。详情在"更新和上报"那一页。</div>';
-  }).catch(() => { /* 老版本的路由没有这个接口 */ });
+    if (first && d.version) { pageVersion = d.version; $('kitVer').textContent = '套件 ' + d.version; }
+    renderUpdBanner(d.update || {});
+  }).catch(() => { /* 老版本的路由没有这个接口；路由正在换新版时连不上 */ });
+  loadUpdBanner(true);
+  setInterval(() => { if ($('tab-remote').classList.contains('hide')) loadUpdBanner(false); }, 60000);
 
   // ---------- 接上 / 断开 Claude Code ----------
   function renderLink(l) {

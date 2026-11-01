@@ -28,6 +28,9 @@
  *
  * 使用情况（lib/usage.js）：每份安装一条匿名设备议题，一天一条补充（syncUsage）。开关 usageReport。
  * 它不是问题：导出时不当问题列、不关掉，各台电脑的数汇总在导出文件的最后（上次导出之后的，没导出过就是最近 7 天）。
+ *
+ * 有问题的版本（发版保护 K2，2026-11-01，lib/updater.js）：标题"[有问题的版本] <版本号>"、正文里带 vibe-kit-bad-version:<版本号> 的议题，
+ * 开着就是尝鲜组报了这一版有问题。没勾"先装新版"的电脑装之前用 versionFlag 查；维护的人确认是误报，把它关掉，别的电脑就照常装。
  */
 const fs = require('fs');
 const path = require('path');
@@ -467,6 +470,34 @@ function usagePreview() {
   const st = readState('usage-sync');
   return { ok: true, on: readConfig().usageReport !== 'off', today: U.summary().text, pending: usagePending(store), iid: rec.iid || 0, url: rec.url || '', lastOkAt: st.lastOkAt || 0, lastError: st.lastError || '' };
 }
+// ---------- 有问题的版本（发版保护 K2） ----------
+const BAD_TITLE = '[有问题的版本]';
+const BAD_MARK = 'vibe-kit-bad-version:';
+const BAD_LABEL = 'vibe-kit有问题的版本';
+const VERSION_RE = /^\d{8}\.\d{4}$/;
+const isBadVersionIssue = (i) => String((i && i.title) || '').startsWith(BAD_TITLE);
+/** 在仓库里找报这一版有问题、还开着的那一条。返回 { issue } 或 { error } */
+async function findBadVersion(api, ctx, version) {
+  const mark = BAD_MARK + version;
+  const r = await call(ctx, 'GET', api.base + '/issues?state=opened&per_page=20&search=' + encodeURIComponent(mark));
+  if (r.status !== 200 || !Array.isArray(r.json)) return { error: r };
+  return { issue: r.json.find((i) => i && isBadVersionIssue(i) && String(i.description || '').includes(mark)) || null };
+}
+/**
+ * 尝鲜组有没有报这一版有问题（没勾"先装新版"的电脑装之前查）。只读，不建、不改。
+ * 返回 { ok: true, bad, iid, url, count（报了几台） } 或 { ok: false, why }（没有令牌、接口不通：由调的人决定怎么算）
+ */
+async function versionFlag(version) {
+  const v = String(version || '');
+  if (!VERSION_RE.test(v)) return { ok: false, why: '版本号不对' };
+  const c = await connect(readConfig());
+  if (!c.ok) return { ok: false, why: c.why, noToken: !!c.noToken };
+  const f = await findBadVersion(c.api, c.ctx, v);
+  if (f.error) return { ok: false, why: gl.explain(f.error, '查这一版有没有人报问题') };
+  const i = f.issue;
+  return { ok: true, bad: !!i, iid: i ? i.iid : 0, url: i ? i.web_url || '' : '', count: i ? 1 + (Number(i.user_notes_count) || 0) : 0 };
+}
+
 /**
  * 发布新版时：更新说明里写了"修了 #编号"的议题，在下面留一句是哪一版修的；还开着的顺手关掉。
  * 返回 { ok, noted, closed, failed }
@@ -491,4 +522,4 @@ async function closeFixed(version, iids) {
   return { ok: true, noted, closed, failed };
 }
 
-module.exports = { sync, summary, pending, uploadState, exportIssues, closeExported, lastExport, closeFixed, syncUsage, usagePreview, usagePending, isUsageIssue, describe, titleOf, sigOf, keyOf, MARK, USAGE_TITLE, USAGE_MARK, STORE };
+module.exports = { sync, summary, pending, uploadState, exportIssues, closeExported, lastExport, closeFixed, syncUsage, usagePreview, usagePending, versionFlag, isUsageIssue, isBadVersionIssue, describe, titleOf, sigOf, keyOf, MARK, USAGE_TITLE, USAGE_MARK, BAD_TITLE, BAD_MARK, BAD_LABEL, STORE };
