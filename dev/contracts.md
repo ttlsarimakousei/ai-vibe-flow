@@ -225,6 +225,15 @@ ttls-db-crud：拿一个真的 JDBC 数据库（H2，MySQL 兼容模式）走完
 - 后台执行器（开关，默认关）
 - 不连库就能定的判断（冒烟靶场 dev/testbed/ttls-db-crud/smoke，从 urai-db-crud 搬来的）
 
+### test-deps-manifest.js
+
+K1-6 依赖清单（Codex 改进路线第 11 节）：随包的 node_modules、查库执行器的 class 要说得清是什么、从哪来。
+
+- 版本范围的判断（engines.node 的写法）
+- 打包时生成依赖清单：每个顶层包都在，带版本、Node 要求、来源、哈希
+- 执行器：.java 改了没重编、class 被换过，都不打包
+- 安装器读清单：包不全、版本对不上不装；Node 不够哪个组件说清楚
+
 ### test-devserver-0929.js
 
 起服务的工具（kit/tools/devserver.js），0929 反馈里的一条：
@@ -649,6 +658,16 @@ ttls-redis：客户端对着假 redis（dev/lib/fake-redis.js）走一遍。
 
 测试和审查也是 tasks；独立请求有限时、覆盖和取消判定。假模型只在回环端口回复，不调用 Claude 账户。
 
+### test-router-k.js
+
+11-01 这一批里路由的几项（docs/feedback-20261101.md）：
+
+- K1-1 路由拆成几个文件：引到的文件都在、都在打包的必备清单里，入口还是 router.js
+- E1 远程桌面多人共用一台电脑：端口上是别的安装的路由，不停它、不当成自己的，说清端口被占
+- E1 兼容：老版本的路由不带标识，照以前的规矩当成自己的（自动更新时新版的 service.js 要停得掉它）
+- E1 兼容：装回老版本时老的 service.js 停得掉新路由；老的 service.js 起新的 router.js 也认（入口、参数没变）
+- E3 网关在流式回复传到一半时出事：没收到 message_stop 的一律断开客户端的连接；收到了的照常结束
+
 ### test-secrets.js
 
 令牌和模型的 key 不给模型看；发布脚本和 push 一样要用户确认；安装器加的"不许读"权限规则。
@@ -692,6 +711,16 @@ ttls-redis：客户端对着假 redis（dev/lib/fake-redis.js）走一遍。
 ### test-usage-identity.js
 
 使用情况采用持久随机标识；跨进程、改电脑名与旧议题迁移只在假用户及假 GitLab 验证，不读取真实电脑名。
+
+### test-user-rules.js
+
+F8（P 报告 H 节，用户 2026-10-30 定的）：更新不覆盖用户自己的选择。
+
+- 你的补充放 user/：生成进全局约定，remove.txt 去掉套件的句子
+- 以前直接改过套件的约定、规范：升级时挪进 user/，照样生效，套件文件换成新版
+- 没改过的：照常更新，不挪、不提示
+- 技能照旧换成新版：改过的先备份，记一条提示
+- JAVA_TOOL_OPTIONS：系统里设了的不盖
 
 ### test-workflow-intent.js
 

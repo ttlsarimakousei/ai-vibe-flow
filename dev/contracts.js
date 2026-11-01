@@ -53,7 +53,9 @@ function check() {
     if (!t) { problems.push('契约表引的 ' + m[1] + ' 不存在'); continue; }
     if (m[2] && !t.sections.some((s) => s.includes(m[2]))) problems.push('契约表引的 ' + m[1] + ' 里找不到节"' + m[2] + '"');
   }
-  if (problems.length) { console.log(problems.join('\n')); process.exitCode = 1; } else console.log('[OK] 契约索引对得上：' + tests().length + ' 个测试文件');
+  // 结果行照 dev/run-all.js 认的格式（通过 N 项，失败 M 项）
+  const n = tests().length;
+  if (problems.length) { console.log(problems.join('\n')); console.log('[X] 测试契约索引：通过 ' + n + ' 项，失败 ' + problems.length + ' 项'); process.exitCode = 1; } else console.log('[OK] 测试契约索引：通过 ' + n + ' 项（' + n + ' 个测试文件都在目录里，契约表引的节都在）');
 }
 if (process.argv.includes('--write')) write();
 else check();
