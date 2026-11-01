@@ -1204,9 +1204,9 @@
     // 和套件里算 autoCompactWindow 的办法一样（kit/lib/session.js 的 autoCompactWindowOf）
     const acw = acp > 0 ? Math.max(100000, Math.min(960000, Math.round((limit > 0 ? limit : 1000000) * Math.min(acp, 95) / 100) + 33000)) : 0;
     const compact = acw ? '；用到 ' + tok(acw - 33000) + ' 时 Claude Code 自己压缩（开着的会话敲 /autocompact ' + acw + ' 马上生效）' : '；自动压缩照 Claude Code 自己的';
-    const say = action === 'ask' ? '问你要不要交接' : '提醒一句';
+    const doing = action === 'ask' ? '问你要不要交接' : '提醒一句';
     const head = limit > 0 ? '按现在填的：上限 ' + tok(limit) : '按现在填的：上限跟着 Claude Code 报的窗口走';
-    const remind = action === 'remind' || action === 'ask' ? (limit > 0 ? '，用到 ' + tok(Math.round(limit * line / 100)) + '（' + line + '%）时' : '，用到它的 ' + line + '% 时') + say : '';
+    const remind = action === 'remind' || action === 'ask' ? (limit > 0 ? '，用到 ' + tok(Math.round(limit * line / 100)) + '（' + line + '%）时' : '，用到它的 ' + line + '% 时') + doing : '';
     $('ctxPreview').textContent = head + remind + compact;
     const g = state && state.gateway;
     $('gwNote').innerHTML = g && g.limitBytes
