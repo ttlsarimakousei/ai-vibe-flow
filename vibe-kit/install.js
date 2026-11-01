@@ -643,6 +643,7 @@ const readMd = (f) => { try { return fs.readFileSync(f, 'utf8').replace(/^﻿/, 
 function userFiles() { try { return fs.readdirSync(USER_DIR).filter((f) => /\.md$/i.test(f) && !f.startsWith('_') && fs.statSync(path.join(USER_DIR, f)).isFile()).sort(); } catch (e) { return []; } }
 function removedLines() { return new Set(readMd(USER_REMOVE).split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('//'))); }
 const dropLines = (text, drop) => (drop.size ? text.split('\n').filter((l) => !drop.has(l.trim())).join('\n') : text);
+const SENT_BY_HOOK = /^<!--\s*vibe-kit:钩子送\s*-->\s*/;
 function buildBlock() {
   const drop = removedLines();
   // 去两遍：模板里的原句（升级时挪来的是这种），换完占位符之后的句子（你从生成的全局约定里抄的是这种）
@@ -653,10 +654,13 @@ function buildBlock() {
   const mine = userFiles();
   // remove.txt 只管套件的规范（上次装的原样里有的）；rules/ 里你自己以前加的文件和 user/ 一样不受影响。认不出（没有原样）就当套件的
   const kitRule = (f) => !fs.existsSync(path.join(KIT, 'pristine', 'rules')) || fs.existsSync(path.join(KIT, 'pristine', 'rules', f));
-  const parts = [base].concat(rules.map((f) => (kitRule(f) ? kitPart(path.join(rulesDir, f)) : fill(readMd(path.join(rulesDir, f)))))).concat(mine.map((f) => fill(readMd(path.join(USER_DIR, f)))));
+  // 开头标着"钩子送"的套件规范不进全局约定（J4：每个请求都带太贵），填好占位符单独写成 hook-rules.md，进 OpenSpec 流程时由钩子送（lib/stage-rules.js）
+  const hooked = (f) => kitRule(f) && SENT_BY_HOOK.test(readMd(path.join(rulesDir, f)));
+  const hookRules = rules.filter(hooked).map((f) => kitPart(path.join(rulesDir, f)).replace(SENT_BY_HOOK, '').trim()).join('\n\n');
+  const parts = [base].concat(rules.filter((f) => !hooked(f)).map((f) => (kitRule(f) ? kitPart(path.join(rulesDir, f)) : fill(readMd(path.join(rulesDir, f)))))).concat(mine.map((f) => fill(readMd(path.join(USER_DIR, f)))));
   const local = localSection();
   if (local) parts.push(local);
-  return { text: BEGIN + '\n' + parts.filter(Boolean).join('\n\n') + '\n' + END + '\n', rules, mine };
+  return { text: BEGIN + '\n' + parts.filter(Boolean).join('\n\n') + '\n' + END + '\n', rules, mine, hookRules };
 }
 /**
  * 两份文本按行比（最长公共子序列），行尾的空格不算。返回 [['=' | '+' | '-', 行], …]：+ 是 b 里新加的，- 是 a 里有、b 里没了的。
@@ -860,7 +864,7 @@ if (mode === 'uninstall') {
     if (fs.existsSync(kitMd) && !same(kitMd, path.join(KIT, 'pristine', 'CLAUDE.md'))) console.log('  [!] 你改过 ' + kitMd + '，删除前备份在 ' + backup(kitMd, 'vibe-kit/CLAUDE.md'));
     // results：老版本看页面的执行器没写 --out 时把结果放在这里
     // update：自动更新从仓库拉下来的暂存处和日志
-    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js', 'deps.json']) removeDir(path.join(KIT, n));
+    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js', 'deps.json', 'hook-rules.md']) removeDir(path.join(KIT, n));
     console.log('  [OK] 已卸载：约定块、钩子、状态栏、技能，以及安装时加的权限和环境变量都收回了。');
     if (mergeSettings.unlinked) console.log('  [OK] 在配置页点过"接上"：' + mergeSettings.unlinked + '（替你点了一次"断开"）。');
     if (unlinkRouter.note && hadRouter) console.log('  [!] ' + unlinkRouter.note + '。');
@@ -1327,6 +1331,7 @@ if (!fs.existsSync(path.join(KIT, 'CLAUDE.md'))) { console.log('  [X] 还没安�
 // --sync（配置页保存开关、本机环境也走这里）：全局 CLAUDE.md 不是 UTF-8 就什么都不动
 if (mode === 'sync' && readGlobalMd().text === null) { explainNotUtf8('这次什么都没动：开关和本机环境已经存下了，但全局约定和钩子登记还是上次生成的，套件其余部分照常工作。转好之后运行 node "' + path.join(KIT, 'install.js') + '" --sync。'); process.exit(1); }
 const block = buildBlock();
+try { if (block.hookRules) writeAtomic(path.join(KIT, 'hook-rules.md'), block.hookRules + '\n'); else fs.rmSync(path.join(KIT, 'hook-rules.md'), { force: true }); } catch (e) { console.log('  [!] 进流程时送的规范（hook-rules.md）没写成：' + e.message); }
 const changed = writeGlobalMd(block.text);
 if (changed === null) { explainNotUtf8('全局约定没写进去；其余部分（钩子、技能、审查代理、状态栏、权限）都已经就位。转好之后运行 node "' + path.join(KIT, 'install.js') + '" --sync 补上。'); process.exitCode = 1; }
 else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化') + '；启用的规范：' + (block.rules.length ? block.rules.join('，') : '（无）') + (block.mine.length ? '；你的补充（user/）：' + block.mine.join('，') : ''));

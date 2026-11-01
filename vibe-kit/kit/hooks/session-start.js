@@ -251,6 +251,8 @@ async function handle(j) {
     cleanState(3);
     if (source === 'clear') { try { require('../lib/work-sessions').clearOwner(process.ppid); } catch (e) { /* 旧状态稍后过期 */ } }
     try { if (source === 'compact' || source === 'resume') out.push(require('../lib/workflow').brief(cwd, j)); else if (require('../lib/session').looksLikeProject(cwd) || shell) out.push(require('../lib/readiness').brief(cwd)); } catch (e) { hookLog('本机事实摘要未完成，不能把旧记录当当前结果'); }
+    // 钩子送过的规矩压缩、/clear 之后就不在上下文里了（J4，lib/stage-rules.js）：清掉"送过了"的记录，压缩后还在流程里的马上重送
+    if (source === 'compact' || source === 'clear') { try { const s = require('../lib/stage-rules').afterCompact(j, readConfig(j)); if (s) out.push(s); } catch (e) { hookLog('压缩后重送规矩没成：' + e.message); } }
     hookLog('session-start source=' + source + ' cwd=' + cwd + ' shell=' + shell + ' ' + handoverNote + ' initialUserMessage=' + (firstWords ? 'yes' : 'no'));
     if (out.length || firstWords) {
       const o = { hookEventName: 'SessionStart' };

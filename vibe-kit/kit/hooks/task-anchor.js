@@ -135,25 +135,6 @@ function applyNotice(cfg) {
       + '提案提交许可和 apply 开工许可分别判断；没有明确提交许可时不在开工节点补提案提交。',
   };
 }
-/**
- * 会被拦的规矩提前说（用户 2026-10-30 定的，审核 R4、M02）：以前这些都是拦下以后才告诉模型，模型总要先被拦一次。
- * 进写需求、做任务这两段时各送一次（每个会话每段一次，记在 <会话>-stage-rules.json），不写进每个请求都带的全局约定（硬规矩 8）
- */
-function stageRules(j, stage, cfg) {
-  const sid = String((j && j.session_id) || '');
-  if (!sid || sid === 'unknown') return '';
-  const k = sid + '-stage-rules';
-  if (readState(k)[stage]) return '';
-  writeState(k, Object.assign({}, readState(k), { [stage]: Date.now() }));
-  const tool = (n) => 'node "' + path.join(require('../lib/session').KIT, 'tools', n).split(path.sep).join('/') + '"';
-  // 会话开着自动（复审 V10）：初次探索、范围和疑问跟用户确认完以后逐份写、逐份审修，不停下等用户；没开的照旧写完一份停下
-  const oneByOne = cfg && cfg.autoSwitch ? '需求文档一份一份写（这个会话开着自动：初次探索、范围和疑问跟用户确认完以后，每份写完按审查点审修，接着写下一份，不停下等用户）' : '需求文档一份一份写，写完一份停下给用户看，用户说了再写下一份（/opsx:continue）';
-  if (stage === 'plan') return '写需求这一段的规矩（照做就不会被拦）：' + oneByOne + '；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；审查带审查点：' + tool('review.js') + ' run --change <变更名> --mode proposal --point <proposal|specs|design|tasks>。';
-  // 这个会话开着自动：开工前先存检查点（K3 M07，lib/checkpoint.js；和收工钩子共用"只送一次"的记录，不进全局约定）
-  let ckpt = '';
-  if (cfg && cfg.autoSwitch) { try { ckpt = require('../lib/checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; } }
-  return (ckpt ? ckpt + '\n' : '') + '做任务这一段的规矩（照做就不会被拦）：起服务自测走 ' + tool('devserver.js') + ' start --name <名字> --port auto -- <原来的命令>，不直接跑 mvn spring-boot:run、npm run dev、catalina；新建的文件提交前要 git add，只 add 这次改的（不用 git add -A、git add .），或者用 ' + tool('commit.js') + ' -m "类型: 内容" 只提交这个会话改过的文件；命令里不串 cd，用 git -C <目录>、mvn -f <目录>/pom.xml、npm --prefix <目录>；审查带审查点：' + tool('review.js') + ' run --change <变更名> --mode code --point group-<组号>。';
-}
 function requirementHint(j, cfg) {
   const p = String(j.prompt || '').trim();
   if (!looksLikeRequirement(p)) return '';
@@ -508,9 +489,11 @@ async function handle(j) {
   if (oh) lines.push(oh);
   // 开工了：告诉用户这次全自动开没开（systemMessage 给人看，additionalContext 给模型）
   const notice = applyStart ? applyNotice(cfg) : null;
-  // 规矩提前说：开工时送做任务这一段的；提需求、敲 /opsx:propose、explore、new、continue 时送写需求这一段的
+  // 规矩提前说（lib/stage-rules.js，第一次进流程时带上 OpenSpec 规范）：开工时送做任务这一段的；提需求、敲 /opsx:propose、explore、new、continue 时送写需求这一段的；
+  // 这个会话已经在流程里的（换了个说法接着做、压缩后的下一句）按它现在在哪一段送
   try {
-    const sr = applyStart ? stageRules(j, 'apply', cfg) : (rhSent || /^\s*\/(?:opsx:|openspec-)(?:propose|explore|new|continue)\b/i.test(String(j.prompt || ''))) ? stageRules(j, 'plan', cfg) : '';
+    const SR = require('../lib/stage-rules');
+    const sr = applyStart ? SR.stageRules(j, 'apply', cfg) : (rhSent || /^\s*\/(?:opsx:|openspec-)(?:propose|explore|new|continue)\b/i.test(String(j.prompt || ''))) ? SR.stageRules(j, 'plan', cfg) : on ? SR.stageRules(j, stage === 'apply' ? 'apply' : 'plan', cfg) : '';
     if (sr) lines.push(sr);
   } catch (e) { /* 送不了不影响开口 */ }
   if (notice) lines.unshift(notice.model);

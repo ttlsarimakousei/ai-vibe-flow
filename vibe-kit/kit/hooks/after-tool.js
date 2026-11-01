@@ -4,6 +4,7 @@
  * 2026-11-01 起（K3）还给模型送几句话（additionalContext），都只在有话说时才送：
  *   编译、测试命令失败：第一个错误、文件:行、前后 5 行源码（lib/fail-summary.js）
  *   改了 .sql、Mapper XML：和查库技能存的表结构对不上的表名、列名（lib/sql-check.js，只提醒）
+ *   开始走 OpenSpec 了还没拿到规范：送规范（lib/stage-rules.js）
  * 还记一笔"命令失败 → 改了文件 → 同一条命令再跑通过"，够条件的成经验规则候选（lib/fix-pass.js），不送话。
  */
 const S = require('../lib/session');
@@ -50,6 +51,8 @@ function handle(j) {
     if (/^(Bash|PowerShell)$/.test(String(j.tool_name || '')) && !successful(j)) { try { const s = require('../lib/fail-summary').summarize(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 失败摘要', j, e); } }
     // 改了 .sql、Mapper XML：拿查库技能存的表结构缓存核对表名、列名，对不上提醒一句，不拦（K3 M10，lib/sql-check.js）
     if (/^(Edit|Write|MultiEdit)$/.test(String(j.tool_name || '')) && successful(j)) { try { const s = require('../lib/sql-check').hintFor(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 表结构核对', j, e); } }
+    // 模型没经过提需求、/opsx 这些入口就开始走 OpenSpec：规范这时候送（J4，lib/stage-rules.js，一个会话一次）
+    try { const SR = require('../lib/stage-rules'); if (SR.touchesOpenspec(j)) { const s = SR.openspecOnce(j); if (s) notes.push('[vibe-kit 提醒] ' + s); } } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool OpenSpec 规范', j, e); }
     if (notes.length) return { hookSpecificOutput: { hookEventName: j.hook_event_name || 'PostToolUse', additionalContext: notes.join('\n\n') } };
     return null;
   } catch (e) { try { require('../lib/feedback').recordHookError('after-tool', j, e); } catch (ignored) { /* 记不了也放行 */ } return null; }

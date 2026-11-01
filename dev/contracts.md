@@ -731,6 +731,15 @@ K3 M10（2026-11-01，docs/feedback-20261101.md）：改了 *.sql、MyBatis Mapp
 - .sql 脚本：脚本自己建的表、加的列算有的
 - 没有缓存、缓存太旧、不是 Mapper 的 XML：不提
 
+### test-stage-rules.js
+
+J4 后半（2026-11-01，docs/feedback-20261101.md）：OpenSpec 规范改成进流程时由钩子送，压缩后重送。
+
+- 安装器：规范不进全局约定，写成 hook-rules.md
+- 开口：进流程第一次送规范和这一段的规矩，不重复；不进流程的不送
+- 工具：模型没经过这些入口就开始走 OpenSpec，工具跑完送一次规范
+- 压缩：还在流程里的马上重送；不在流程里的下次进流程再送；/clear 之后记录清掉
+
 ### test-team-lessons.js
 
 K3 M11（2026-11-01，docs/feedback-20261101.md）：团队的坑。

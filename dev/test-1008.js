@@ -218,7 +218,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('状态栏显示当前实施阶段实际生效', /自动 开/.test(sl('p1')) && /实施，当前生效/.test(sl('p1')));
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
-    const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
+    // OpenSpec 规范 2026-11-01 起不进全局约定，进流程时由钩子送（J4），两处合起来看
+    const md = (H.read(path.join(h.cfg, 'CLAUDE.md')) || '') + (H.read(path.join(h.kit, 'hook-rules.md')) || '');
     H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /自动模式按会话开/.test(md) && /按对应规则确认：git push[^。\n]*归档/.test(md));
     H.ok('提交那一节：默认是关，用户说了提交才提交', /提交方式是"关"：不自动提交，也不问/.test(md), md.slice(0, 300));
     H.ok('约定说明双自动条件外先 Ask，归档由用户决定', /其他情况用 Ask 给出 apply 选项/.test(md) && /归档.*用户/.test(md));
@@ -259,7 +260,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('提交方式"关"：不提', !/开工前先把/.test(say('v4', '开工 add-x', { commitMode: 'off' })));
     H.setConfig(h, { commitMode: 'auto' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
-    const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
+    const md = (H.read(path.join(h.cfg, 'CLAUDE.md')) || '') + (H.read(path.join(h.kit, 'hook-rules.md')) || '');
     H.ok('提交说明：文档定稿后按提交方式提交一次', /定稿后按提交方式一起提交一次/.test(md) && /同一套文档定稿后提交一次/.test(md), md.slice(0, 300));
     H.ok('交叉审查的技能也改了说法', /人工/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))) && /Ask/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))));
     // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
