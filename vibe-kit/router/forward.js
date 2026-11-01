@@ -316,7 +316,14 @@ function forward(ctx, list, idx, tried) {
         try { up.destroy(); } catch (e) { /* 已经断了 */ }
         return;
       }
-      if (err) {
+      // 流式回复已经收到 message_stop：回复是全的，之后上游再断开（没发 HTTP 的结束块就关了连接、半天不收尾）不要紧，照常结束。
+      // 实测（E3，docs/claude-code-facts.md"流式回复断在半截"）：这时候路由也断开的话，2.1.120 报错停下，回复其实是全的
+      const whole = isMessages && tap.sse && tap.stopped;
+      if (err && whole) {
+        log(label + ' -> ' + provider.name + ' 回复已经收全（有 message_stop），上游随后断开（' + err + '），照常结束');
+        try { up.destroy(); } catch (e) { /* 已经断了 */ }
+      }
+      if (err && !whole) {
         // 半截回复不能装成正常结束：把客户端的连接也断开，它才知道没收全、会自己重试
         log(label + ' -> ' + provider.name + ' 回复传到一半断了：' + err);
         record(Object.assign(base, { failed: true, error: '传输中断：' + err }, tap.usage));
@@ -332,8 +339,14 @@ function forward(ctx, list, idx, tried) {
         log(label + ' -> ' + provider.name + ' 先回了 200，又在流里报错：' + e.type + (e.message ? '｜' + snippet(e.message) : '') + (overloaded ? '。这个模型冷却 ' + C.config.options.cooldownSec + ' 秒' : ''));
         record(Object.assign(base, { failed: true, error: '流里报错：' + e.type + (e.message ? '｜' + snippet(e.message) : '') }, tap.usage));
       } else if (isMessages && tap.sse && !tap.stopped) {
-        log(label + ' -> ' + provider.name + ' 回复没有 message_stop 就结束了（是半截的）');
+        // 没有 message_stop 就收了尾（上游没报错）：回复是半截的，和上游中途断开一样把客户端的连接也断开（E3，2026-11-01）。
+        // 实测（docs/claude-code-facts.md"流式回复断在半截"）：以前照常结束，一整段文字发完之后断的，2.1.120、2.1.259 把半截当成回完了；
+        // 断开连接，断在一段中间的三个版本都重发，一段发完之后断的 2.1.259、2.1.289 留着半截接着写、2.1.120 报错停下。
+        // 补一个 event: error 再结束效果一样，只是三个版本都会改成不走流式重发；断开连接，2.1.259 起照样走流式重发
+        log(label + ' -> ' + provider.name + ' 回复没有 message_stop 就结束了（是半截的），断开客户端的连接，让它知道没收全');
         record(Object.assign(base, { failed: true, error: '传输中断：上游没发 message_stop 就结束了（回复是半截的）' }, tap.usage));
+        try { res.destroy(); } catch (e) { /* 已经断了 */ }
+        return;
       } else {
         if (isMessages) learnRatio(ctx.sentBytes, tap.usage.input + tap.usage.cacheRead + tap.usage.cacheWrite);
         record(Object.assign(base, { error: '' }, tap.usage));

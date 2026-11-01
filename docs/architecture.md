@@ -76,7 +76,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
   | `config-file.js` | 配置的读、校验、保存（带备份）、热加载，实际监听的地址。`config` 会被重新赋值，别的文件经它的同名属性取当前的 |
   | `health.js` | 冷却、额度用完（跨重启保留，`router-data/quota.json`）、粘住同一个模型、上游错误怎么分类、要不要先等 |
   | `usage.js` | 用量记录和落盘、网关对单次请求大小的上限（`state/gateway.json`） |
-  | `forward.js` | 选模型、转发、换模型、流式回复边收边转、配置页"测试"一个模型 |
+  | `forward.js` | 选模型、转发、换模型、流式回复边收边转（没收到 message_stop 就结束的断开客户端的连接，收到了之后上游才断开的照常结束，E3）、配置页"测试"一个模型 |
   | `access.js` | 谁能用哪些接口：转发和钩子入口只收本机程序，配置页接口只收本机、不收别的网站的页面 |
   | `api.js` | 配置页的 `/api` 接口（`/api/kit` 交给 `kit-api.js`） |
   | `hook-entry.js` | 套件的 HTTP 钩子入口（`/vibe-kit/hook/<名字>`） |
