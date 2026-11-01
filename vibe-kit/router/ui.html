@@ -655,14 +655,14 @@
     </div>
     <div class="card" id="sec-update" data-sec="自动更新">
       <h2>自动更新</h2>
-      <p class="hint">用 Claude Code 的时候，隔一阵在后台问一次仓库，没有窗口。有新版就下载；勾了"先装新版"的马上装，没勾的等这一版发布满 24 小时、尝鲜组没报问题再装，都等路由空闲时装。装完自检，自检不过自动装回上一版。装着的版本跟着仓库走：仓库退回旧版，这台电脑也马上跟着退，不等。</p>
+      <p class="hint">用 Claude Code 的时候，隔一阵在后台问一次仓库，没有窗口。有新版就下载；勾了"先装新版"的马上装，没勾的等这一版发布满 24 小时、尝鲜组没报问题再装，都等路由空闲时装。装完自检，自检不过自动装回上一版；装完再观察至少 2 小时，路由的请求失败得明显比以前多，也自动装回上一版。装着的版本跟着仓库走：仓库退回旧版，这台电脑也马上跟着退，不等。</p>
       <div class="opt">
         <div><div class="t">发现新版之后</div><div class="d">"只提醒"：状态栏和这一页说有新版，你点了才装。</div></div>
         <div class="ctl"><select id="k_autoUpdate"><option value="auto">自动装上</option><option value="notify">只提醒</option><option value="off">不检查</option></select></div>
       </div>
       <div class="opt">
         <div><div class="t">先装新版（尝鲜）</div><div class="d">勾上：一发现新版就装，替大家先试。不勾：等这一版发布满 24 小时、尝鲜组没报问题再装。</div>
-          <details class="more"><summary>细节</summary><ul><li>24 小时按仓库里那次发布的时间算；那个时间比现在还晚（维护的电脑钟不准）的，按这台电脑第一次看到它的时间算。</li><li>尝鲜组报问题：仓库里有开着的"[有问题的版本] 版本号"这条 issue，这台电脑就不自动装。维护的人确认是误报、关掉它以后，最晚两小时照常装。</li><li>查不到有没有人报（没有建 issue 的令牌、接口不通）按没问题算，满 24 小时照装。</li><li>点"立即更新"不用等；仓库退回旧版也不等，马上跟着退。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li>24 小时按仓库里那次发布的时间算；那个时间比现在还晚（维护的电脑钟不准）的，按这台电脑第一次看到它的时间算。</li><li>尝鲜组报问题：勾了的电脑装完新版、观察期里路由的请求失败得明显比以前多，自动装回上一版的同时，在仓库里记一条"[有问题的版本] 版本号"（只有版本号和次数；问题上报关着的不记）。</li><li>这一条开着，没勾的电脑就不自动装那一版。维护的人确认是误报、关掉它以后，最晚两小时照常装。</li><li>观察期：每台电脑装完比原来新的版本都看，至少 2 小时、看够 20 次请求，最长 24 小时；装之后至少 8 次请求、一半以上失败、比装之前高 30 个百分点才算明显变多。</li><li>查不到有没有人报（没有建 issue 的令牌、接口不通）按没问题算，满 24 小时照装。</li><li>点"立即更新"不用等；仓库退回旧版也不等，马上跟着退。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_updateEarly"><i></i></label></div>
       </div>
       <div class="opt">
@@ -1487,7 +1487,7 @@
   const tag = (cls, text) => '<span class="tag ' + cls + '">' + esc(text) + '</span>';
   /**
    * 页面顶部说清楚更新现在是什么状态（发版保护 K2）。单独一块（#updBanner）：路由的提示每 5 秒重画 #banner，放在那里会被冲掉。
-   * 先说要你管的（装坏了、没装上），再说正在发生的（等尝鲜组、尝鲜组报了问题），最后是"只提醒"的有新版
+   * 先说要你管的（装坏了、没装上、装完出错变多装回了），再说正在发生的（观察中、尝鲜组报了问题、等尝鲜组），最后是"只提醒"的有新版
    */
   function renderUpdBanner(u) {
     const box = $('updBanner');
@@ -1495,7 +1495,9 @@
     const b = (cls, text) => '<div class="banner ' + cls + '">' + text + '</div>';
     let h = '';
     if (u.broken) h = b('bad', '套件的新版 ' + esc(u.broken.version) + ' 没装好，也没能装回上一版 ' + esc(u.broken.from || '') + '。后台会再试；急用就在"更新和上报"点"立即更新"，或者重新运行安装包。原因：' + esc(String(u.broken.why || '').slice(0, 120)));
+    else if (u.failed && u.failed.observed && u.differs) h = b('bad', '套件的新版 ' + esc(u.failed.version) + ' 装完以后出错明显变多，已经自动装回 ' + esc(u.installed) + '，照常能用，这一版不再自动装。' + esc(u.failed.why || '') + '。详情在"更新和上报"那一页。');
     else if (u.failed && u.failed.times >= 1 && u.differs) h = b('bad', '套件的新版 ' + esc(u.failed.version) + ' 没装上：' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回 ' + esc(u.installed) + '，照常能用' : '') + '。详情在"更新和上报"那一页。');
+    else if (u.observe) h = b('info', '套件刚更新到 ' + esc(u.observe.version) + '，在观察：' + esc(soon(u.observe.until)) + ' 之前（而且看够 ' + esc(u.observe.need || 20) + ' 次请求），路由的请求失败得明显比更新前多，就自动装回 ' + esc(u.observe.from) + '。');
     else if (u.mode !== 'off' && u.differs && u.hold === 'flag') h = b('warn', '套件的新版 ' + esc(u.remote) + ' 被尝鲜组报了有问题，这台电脑先不自动装。维护的人确认没问题、把那条 issue 关掉以后照常装；急用就在"更新和上报"点"立即更新"。');
     else if (u.mode !== 'off' && u.differs && u.hold === 'wait') h = b('info', '套件有新版 ' + esc(u.remote) + '，等尝鲜组先试：' + esc(soon(u.waitUntil)) + ' 以后，尝鲜组没报问题就' + (u.mode === 'auto' ? '自动装' : '提醒你装') + '。想现在装，在"更新和上报"点"立即更新"，或者勾"先装新版"。');
     else if (u.mode === 'notify' && u.differs && !(u.failed && u.failed.times >= 2)) h = b('warn', '套件有新版 ' + esc(u.remote) + '（这台电脑装着 ' + esc(u.installed) + '）。到"更新和上报"那一页点"立即更新"。');
@@ -1532,7 +1534,13 @@
     if (u.differs && u.flag) rows.push('<tr><td class="dim">尝鲜组</td><td>' + (u.flag.bad ? '<b style="color:var(--bad)">报了这一版有问题</b>（' + (u.flag.url ? '<a href="' + esc(u.flag.url) + '" target="_blank" rel="noopener">#' + esc(u.flag.iid) + '</a>' : '#' + esc(u.flag.iid)) + (u.flag.count > 1 ? '，' + esc(u.flag.count) + ' 台电脑装回了' : '') + '）。维护的人确认没问题、把那条关掉以后，最晚两小时照常装' : u.flag.ok ? '没人报这一版有问题' : '<span class="dim">查不到有没有人报（' + esc(u.flag.why || '') + '），按没问题算</span>') + ' <span class="dim">' + esc(at(u.flag.at)) + ' 查的</span></td></tr>');
     rows.push('<tr><td class="dim">上次检查</td><td>' + (u.lastCheckAt ? esc(at(u.lastCheckAt)) + '　' + (u.lastCheckOk ? tag('ok', '通') + (u.routeLabel ? ' <span class="dim">走的是' + esc(u.routeLabel) + '</span>' : '') : tag('bad', '没成功') + '<div style="color:var(--bad)">' + esc(u.lastError || '') + '</div>') : '<span class="dim">还没查过</span>') + '</td></tr>');
     if (u.refused) rows.push('<tr><td class="dim">没动手的那一版</td><td><span class="mono">' + esc(u.refused.version) + '</span>　' + esc(at(u.refused.at)) + '　' + esc(u.refused.why || '') + '。<b style="color:var(--bad)">电脑上有问题要改</b>，改好之后 6 小时内会再试，或者点"立即更新"</td></tr>');
-    if (u.failed) rows.push('<tr><td class="dim">装坏的那一版</td><td><span class="mono">' + esc(u.failed.version) + '</span>　' + esc(at(u.failed.at)) + '　' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回上一版' : '。<b style="color:var(--bad)">没能装回上一版，拿安装包手动装一次</b>') + '</td></tr>');
+    // 观察期里失败变多、装回了的（发版保护 K2）叫"装回的那一版"，写上有没有在仓库里报这一版有问题
+    const sent = u.failed && u.flagSent && u.flagSent.version === u.failed.version ? u.flagSent : null;
+    if (u.failed) rows.push('<tr><td class="dim">' + (u.failed.observed ? '装回的那一版' : '装坏的那一版') + '</td><td><span class="mono">' + esc(u.failed.version) + '</span>　' + esc(at(u.failed.at)) + '　' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回上一版' + (u.failed.observed ? '，这一版不再自动装' : '') : '。<b style="color:var(--bad)">没能装回上一版，拿安装包手动装一次</b>')
+      + (sent ? (sent.ok ? '。已经在仓库里报了这一版有问题（' + (sent.url ? '<a href="' + esc(sent.url) + '" target="_blank" rel="noopener">#' + esc(sent.iid) + '</a>' : '#' + esc(sent.iid)) + '），别的电脑先不装' : '。<span class="dim">没在仓库里报：' + esc(sent.why || '') + '</span>') : '') + '</td></tr>');
+    // 观察期：正在看的、上一次看过了的
+    if (u.observe) { const s = u.observe.seen || { req: 0, fail: 0 }; rows.push('<tr><td class="dim">观察期</td><td>' + tag('off', '观察中') + ' <span class="mono">' + esc(u.observe.version) + '</span> ' + esc(at(u.observe.at)) + ' 装的，至少看到 ' + esc(soon(u.observe.until)) + '、看够 ' + esc(u.observe.need || 20) + ' 次请求（最晚 ' + esc(soon(u.observe.last)) + '）。到现在请求 ' + esc(s.req) + ' 次、失败 ' + esc(s.fail) + ' 次。路由的请求失败得明显比装之前多，就自动装回 ' + esc(u.observe.from) + (u.early ? '，并在仓库里报这一版有问题' : '') + '</td></tr>'); }
+    else if (u.observed) rows.push('<tr><td class="dim">观察期</td><td>' + tag('ok', '过了') + ' <span class="mono">' + esc(u.observed.version) + '</span> 装完看了 ' + esc(u.observed.req) + ' 次请求、失败 ' + esc(u.observed.fail) + ' 次，没有明显变多 <span class="dim">' + esc(at(u.observed.at)) + '</span></td></tr>');
     if (u.running) rows.push('<tr><td class="dim">后台</td><td>' + tag('off', '正在跑') + ' <span class="dim">检查、下载或者安装，跑完这里会变</span></td></tr>');
     $('ruStatus').innerHTML = '<div class="scroll"><table><tbody>' + rows.join('') + '</tbody></table></div>';
     renderUpdBanner(u);

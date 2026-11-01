@@ -30,7 +30,8 @@
  * 它不是问题：导出时不当问题列、不关掉，各台电脑的数汇总在导出文件的最后（上次导出之后的，没导出过就是最近 7 天）。
  *
  * 有问题的版本（发版保护 K2，2026-11-01，lib/updater.js）：标题"[有问题的版本] <版本号>"、正文里带 vibe-kit-bad-version:<版本号> 的议题，
- * 开着就是尝鲜组报了这一版有问题。没勾"先装新版"的电脑装之前用 versionFlag 查；维护的人确认是误报，把它关掉，别的电脑就照常装。
+ * 开着就是尝鲜组报了这一版有问题。尝鲜组的电脑装完新版、观察期里失败率明显变高装回时用 flagVersion 报（只有版本号和次数，又一台报的补在同一条下面）；
+ * 没勾"先装新版"的电脑装之前用 versionFlag 查；维护的人确认是误报，把它关掉，别的电脑就照常装。导出后"关掉这一批"不关它。
  */
 const fs = require('fs');
 const path = require('path');
@@ -314,6 +315,7 @@ async function exportIssues() {
   const head = '# vibe-kit 议题汇总\n\n- 项目：' + ctx.s.parsed.projectPath + '\n- 导出时间：' + when(Date.now()) + '\n- 导出的电脑：' + os.hostname() + '\n- 这次导出 ' + pick.length + ' 条，是仓库里开放中的全部问题议题'
     + (usage ? '\n- 最后附了各台电脑的使用情况（' + days.length + ' 个人天）' : '')
     + '\n\n给改套件的人：每条的编号（#数字）是议题号。修好之后在《更新说明.md》那一版里写上"修了 #编号"，发布时会在对应的议题下面留一句是哪一版修的。\n\n'
+    + (pick.some(isBadVersionIssue) ? '"[有问题的版本]"开头的是尝鲜组的电脑报的：开着，别的电脑就不自动装那一版。"关掉这一批"不关它们；确认是误报、或者已经发了修好的版本，在 GitLab 上手动关。\n\n' : '')
     + (pick.length ? '| 类型 | 条数 |\n|---|---|\n' + Object.keys(kinds).sort((a, b) => kinds[b] - kinds[a]).map((k) => '| ' + k + ' | ' + kinds[k] + ' |').join('\n') + '\n' : '现在没有开放中的问题议题。\n');
   const text = head + (parts.length ? '\n---\n\n' + parts.join('\n\n---\n\n') + '\n' : '') + (usage ? '\n---\n\n' + usage : '');
   // 每条导出时的"最近更新"记下来：关的时候对一下，导出之后又有人补充过的不关
@@ -348,7 +350,8 @@ async function closeExported(iids, name) {
   for (const iid of want) {
     const cur = await call(ctx, 'GET', api.base + '/issues/' + iid);
     if (cur.status !== 200 || !cur.json) { failed.push('#' + iid + '（' + (cur.status === 404 ? '没有这个议题' : gl.explain(cur, '读议题')) + '）'); continue; }
-    if (isUsageIssue(cur.json) || cur.json.state === 'closed') continue;
+    // "有问题的版本"那几条不关：开着别的电脑就不装那一版，关了就会去装（维护的人确认之后在 GitLab 上手动关）
+    if (isUsageIssue(cur.json) || isBadVersionIssue(cur.json) || cur.json.state === 'closed') continue;
     if (stamps[iid] && cur.json.updated_at && String(cur.json.updated_at) !== stamps[iid]) { later.push(iid); continue; }
     await call(ctx, 'POST', api.base + '/issues/' + iid + '/notes', { body: '已导出，交给改套件的人处理（' + when(Date.now()) + (tag ? '，' + tag : '') + '）。关掉之后同样的问题再出现，会重新报上来。' });
     const r = await call(ctx, 'PUT', api.base + '/issues/' + iid, { state_event: 'close' });
@@ -497,6 +500,47 @@ async function versionFlag(version) {
   const i = f.issue;
   return { ok: true, bad: !!i, iid: i ? i.iid : 0, url: i ? i.web_url || '' : '', count: i ? 1 + (Number(i.user_notes_count) || 0) : 0 };
 }
+/**
+ * 尝鲜组的电脑装完 version、观察期里路由的请求失败率明显变高（lib/updater.js）：在仓库里报"这一版有问题"，别的电脑装之前会查到。
+ * 已经有人报了（还开着）就在那一条下面补一句"又一台"，不另建。问题上报关着的不报。
+ * 只传版本号和次数（硬规矩 15）：不传电脑名、路径、项目名、模型名。补的那一句也算报了几台（别的电脑按补充的条数数）。
+ * info：{ from, base: { req, fail }, after: { req, fail }, minutes, rolledBack }。返回 { ok, iid, url, created } 或 { ok: false, why / skipped }
+ */
+async function flagVersion(version, info) {
+  const v = String(version || '');
+  if (!VERSION_RE.test(v)) return { ok: false, why: '版本号不对' };
+  const cfg = readConfig();
+  if (cfg.issueUpload === 'off') return { ok: false, skipped: '问题上报关着，没在仓库里报' };
+  const c = await connect(cfg);
+  if (!c.ok) return { ok: false, why: c.why };
+  const x = info || {};
+  const n = (k) => Math.max(0, Math.round(Number(k) || 0));
+  const rate = (f, r) => (r > 0 ? Math.round((f * 100) / r) + '%' : '—');
+  const b = x.base || {};
+  const a = x.after || {};
+  const from = VERSION_RE.test(String(x.from || '')) ? String(x.from) : '';
+  const back = x.rolledBack === false ? '想装回上一版，没装成' : '已经自动装回' + (from ? ' ' + from : '上一版');
+  const table = '| 项 | 次数 |\n|---|---|\n| 装之前（最近 7 个用过的日子） | 请求 ' + n(b.req) + ' 次，失败 ' + n(b.fail) + ' 次（' + rate(n(b.fail), n(b.req)) + '） |\n| 装之后（' + n(x.minutes) + ' 分钟） | 请求 ' + n(a.req) + ' 次，失败 ' + n(a.fail) + ' 次（' + rate(n(a.fail), n(a.req)) + '） |\n';
+  const f = await findBadVersion(c.api, c.ctx, v);
+  if (f.error) return { ok: false, why: gl.explain(f.error, '查这一版有没有人报过') };
+  if (f.issue) {
+    const r = await call(c.ctx, 'POST', c.api.base + '/issues/' + f.issue.iid + '/notes', { body: '又一台尝鲜组的电脑装了 ' + v + ' 之后，路由的请求失败率明显变高，' + back + '。\n\n' + table });
+    return r.status === 201 ? { ok: true, iid: f.issue.iid, url: f.issue.web_url || '', created: false } : { ok: false, why: gl.explain(r, '在 #' + f.issue.iid + ' 下面补一句') };
+  }
+  const body = {
+    title: BAD_TITLE + ' ' + v,
+    description: '一台尝鲜组的电脑装了 ' + v + ' 之后，观察期里路由的请求失败率明显比装之前高，' + back + '。\n\n'
+      + '这条开着，别的电脑（没勾"先装新版"的）就不自动装 ' + v + '；在配置页"更新和上报"点"立即更新"照样能装。\n'
+      + '确认不是这一版的问题（比如那段时间网关出了故障），把这条关掉，别的电脑最晚两小时后照常装。发了修好的版本以后，这条可以关掉。\n'
+      + '导出 issue 时"关掉这一批"不关它，要在这里手动关。\n\n'
+      + table + '\n---\n由 vibe-kit 自动上报，只有版本号和次数。' + BAD_MARK + v + '\n',
+    labels: BAD_LABEL,
+  };
+  let r = await call(c.ctx, 'POST', c.api.base + '/issues', body);
+  // 没有建标签的权限、或者这个版本的 GitLab 不认：不带标签再建一次（认的是标题和正文里的记号，不靠标签）
+  if (r.status === 400 || r.status === 403 || r.status === 422) { const y = await call(c.ctx, 'POST', c.api.base + '/issues', { title: body.title, description: body.description }); if (y.status === 201) r = y; }
+  return r.status === 201 && r.json && r.json.iid ? { ok: true, iid: r.json.iid, url: r.json.web_url || '', created: true } : { ok: false, why: gl.explain(r, '在仓库里报这一版有问题') };
+}
 
 /**
  * 发布新版时：更新说明里写了"修了 #编号"的议题，在下面留一句是哪一版修的；还开着的顺手关掉。
@@ -522,4 +566,4 @@ async function closeFixed(version, iids) {
   return { ok: true, noted, closed, failed };
 }
 
-module.exports = { sync, summary, pending, uploadState, exportIssues, closeExported, lastExport, closeFixed, syncUsage, usagePreview, usagePending, versionFlag, isUsageIssue, isBadVersionIssue, describe, titleOf, sigOf, keyOf, MARK, USAGE_TITLE, USAGE_MARK, BAD_TITLE, BAD_MARK, BAD_LABEL, STORE };
+module.exports = { sync, summary, pending, uploadState, exportIssues, closeExported, lastExport, closeFixed, syncUsage, usagePreview, usagePending, versionFlag, flagVersion, isUsageIssue, isBadVersionIssue, describe, titleOf, sigOf, keyOf, MARK, USAGE_TITLE, USAGE_MARK, BAD_TITLE, BAD_MARK, BAD_LABEL, STORE };
