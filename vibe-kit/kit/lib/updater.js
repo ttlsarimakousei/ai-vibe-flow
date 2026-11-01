@@ -332,11 +332,13 @@ function selfCheck() {
   }
   return { ok: true };
 }
+/** 装回的那一版没带依赖清单（K1-6 之前的版本）：把新版留下的清单删掉，不然体检拿新版的清单对旧版的包，报依赖不对 */
+function dropStaleDeps(pkg) { try { if (!fs.existsSync(path.join(pkg, 'kit', 'deps.json'))) fs.rmSync(path.join(KIT, 'deps.json'), { force: true }); } catch (e) { /* 只影响体检的一行 */ } }
 function rollback(prev, s) {
   const backup = readState('update').localBackup;
   if (backup && backup.version === prev && require('./local-backup').verify(path.join(DIR, 'previous-package'), backup)) {
     const restored = runInstaller(path.join(DIR, 'previous-package'));
-    if (restored.ok && installedVersion() === prev && selfCheck().ok) { log('已从本地恢复上一版 ' + prev); return { ok: true, local: true }; }
+    if (restored.ok && installedVersion() === prev && selfCheck().ok) { dropStaleDeps(path.join(DIR, 'previous-package')); log('已从本地恢复上一版 ' + prev); return { ok: true, local: true }; }
     log('本地恢复未通过，沿用仓库标签恢复');
   }
   if (!VERSION_RE.test(prev)) return { ok: false, why: '装之前的版本没有版本号，没法从仓库里找回来' };
@@ -346,6 +348,7 @@ function rollback(prev, s) {
   const c = gl.git(STAGE, ['checkout', '-q', '-f', tag], { timeout: 120000 });
   if (c.code !== 0 || stagedVersion() !== prev) return { ok: false, why: '切不到上一版 v' + prev };
   const r = runInstaller(STAGE);
+  if (r.ok && installedVersion() === prev) dropStaleDeps(STAGE);
   return r.ok && installedVersion() === prev ? { ok: true } : { ok: false, why: '装回上一版也没成功，看 ' + INSTALL_LOG };
 }
 const failedTimes = (st, v) => (st.failed && st.failed.version === v ? Number(st.failed.times) || 0 : 0);

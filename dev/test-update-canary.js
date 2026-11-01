@@ -212,6 +212,8 @@ function makePkg(name, version) {
     // 装之后：14 次请求（1 次取消）、失败 11 次
     usage(c1, { requests: 134, fail: 13, cancelled: 5 });
     setState(c1, { observe: Object.assign({}, state(c1).observe, { lastAt: Date.now() - 11 * 60000 }), lastKickAt: 0 });
+    // 装回的 A 没带依赖清单：新版留下的那份要删掉（复审发现，不然体检拿新清单对旧包）
+    H.write(path.join(c1.kit, 'deps.json'), JSON.stringify({ format: 1, components: [] }));
     const k = c1.js('console.log(require(' + c1.up() + ').kick("测试"))');
     H.ok('过了 10 分钟：钩子甩后台进程去看', k === 'true', k);
     let done = false;
@@ -220,6 +222,7 @@ function makePkg(name, version) {
     H.ok('后台装回了 A', done && version(c1) === V.A, [version(c1), st, H.read(path.join(c1.kit, 'update', 'update.log'))]);
     H.ok('记下 G 是装回的：不再自动装，带着装之后的数', st.failed && st.failed.version === V.G && st.failed.from === V.A && st.failed.times >= 2 && st.failed.rolledBack === true && st.failed.observed && st.failed.observed.req === 13 && st.failed.observed.fail === 11 && /失败/.test(st.failed.why || '') && !st.observe, st.failed);
     H.ok('更新记录里有这一笔', (st.history || []).some((x) => x.to === V.G && x.ok === false && x.observed && x.rolledBack), st.history);
+    H.ok('装回的那一版没带依赖清单：新版留下的删掉了', !fs.existsSync(path.join(c1.kit, 'deps.json')));
     H.ok('从本机留的上一版装回（不用连仓库）', /已从本地恢复上一版/.test(H.read(path.join(c1.kit, 'update', 'update.log')) || ''));
     const fbDir = path.join(c1.kit, 'feedback');
     const recs = fs.existsSync(fbDir) ? fs.readdirSync(fbDir).filter((f) => /\.md$/.test(f)).map((f) => H.read(path.join(fbDir, f))) : [];
