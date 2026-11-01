@@ -99,7 +99,9 @@ function days() { const o = readState('usage').days; return o && typeof o === 'o
 function autoUsedOn(d) {
   try {
     const dir = path.join(KIT, 'state');
-    return fs.readdirSync(dir).some((n) => { if (!/-auto-switch\.json$/.test(n)) return false; const f = path.join(dir, n); try { return dayKey(fs.statSync(f).mtime) === d && JSON.parse(fs.readFileSync(f, 'utf8')).on === true; } catch (e) { return false; } });
+    const files = fs.readdirSync(dir).filter((n) => /-auto-switch\.json$/.test(n)).map((n) => path.join(dir, n));
+    try { const sd = path.join(dir, 'session'); for (const sid of fs.existsSync(sd) ? fs.readdirSync(sd) : []) files.push(path.join(sd, sid, 'auto-switch.json')); } catch (e) { /* 没有会话目录 */ }
+    return files.some((f) => { if (!fs.existsSync(f)) return false; try { return dayKey(fs.statSync(f).mtime) === d && JSON.parse(fs.readFileSync(f, 'utf8')).on === true; } catch (e) { return false; } });
   } catch (e) { return false; }
 }
 /** 这一天要传的数（结构化的，导出时拿来汇总） */

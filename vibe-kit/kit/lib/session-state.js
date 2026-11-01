@@ -16,7 +16,16 @@ function sleepMs(ms) { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4
 // 写一律先写临时文件再改名（原子写）：好几个钩子进程、路由的工作线程会同时读写同一个文件，直接覆盖写会让别人读到半截、再把空对象写回去冲掉记录。
 const safeId = (id) => String(id || 'unknown').replace(/[^\w.-]/g, '_').slice(0, 80);
 
-const stateFile = (name) => path.join(KIT, 'state', safeId(name) + '.json');
+/**
+ * 状态文件在哪（K1-3，2026-11-01，审核 M14）：名字以 Claude Code 的会话号开头的（<会话号>、<会话号>-flow、<会话号>-auto-switch……），
+ * 放 state/session/<会话号>/<后缀>.json（只有会话号的叫 context.json），一个会话一个目录，清理按目录算；别的（跨会话的、缓存、迁移标记）
+ * 照旧在 state/ 下，很多地方（查库、redis 的脚本，路由，状态栏）按这个路径直接读，不挪。
+ * 升级前就开着的会话：旧位置（state/<会话号>-xxx.json）有文件、新位置没有，就接着用旧位置（仓库主人 11-01 定的"旧文件留一版"，装回旧版时还读得到）
+ */
+const SESSION_NAME = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:-(.+))?$/i;
+const flatFile = (name) => path.join(KIT, 'state', safeId(name) + '.json');
+function sessionFileOf(name) { const m = SESSION_NAME.exec(String(name || '')); return m ? path.join(KIT, 'state', 'session', m[1].toLowerCase(), safeId(m[2] || 'context') + '.json') : ''; }
+const stateFile = (name) => { const s = sessionFileOf(name); if (!s) return flatFile(name); try { if (!fs.existsSync(s) && fs.existsSync(flatFile(name))) return flatFile(name); } catch (e) { /* 照新位置 */ } return s; };
 
 /** 读状态。文件不存在返回 {}；存在但读不懂（别人正在写）重试几次，还不行也返回 {}（只读的地方够用；要写回的用 updateState） */
 /**
@@ -74,13 +83,38 @@ const DISPOSABLE_STATE = ['review-unknown', 'bypass', 'blocks', 'active-sessions
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
 
+/**
+ * 每种状态多久清（K1-3，Codex 改进路线第 4 节的"目录说明"）：新加一个固定名字的状态要落进下面一类（dev/test-auto-mode-kept.js 扫代码查）。
+ *   会话        state/session/<会话号>/：目录里最新的文件过了天数（cleanState 的 days）整个删
+ *   跨会话      GLOBAL_STATE 里的：不按文件时间删，条目自己 60 天清（见 cleanState 末尾）
+ *   迁移标记    GLOBAL_STATE 里 *-migration 的：永远不删（删了每次更新都会重做一遍迁移，审核 P01）
+ *   缓存        DISPOSABLE_STATE 里的：按文件时间删，清了只是少一次去重或从头再记
+ *   别的        升级前留下的按会话的旧文件（state/<会话号>-xxx.json）：按文件时间删
+ */
+const STATE_KINDS = [
+  { kind: '会话', where: 'state/session/<会话号>/', clean: '目录里最新的文件过了天数整个删' },
+  { kind: '跨会话', where: 'state/<名字>.json（GLOBAL_STATE）', clean: '不按文件时间删，条目 60 天清' },
+  { kind: '迁移标记', where: 'state/<名字>-migration.json（GLOBAL_STATE）', clean: '不删' },
+  { kind: '缓存', where: 'state/<名字>（DISPOSABLE_STATE）', clean: '按文件时间删' },
+];
+function stateKindOf(name) { const n = String(name || ''); if (SESSION_NAME.test(n)) return '会话'; if (/-migration$/.test(n) && GLOBAL_STATE.test(n + '.json')) return '迁移标记'; if (GLOBAL_STATE.test(n + '.json')) return '跨会话'; if (DISPOSABLE_STATE.includes(n)) return '缓存'; return ''; }
 function cleanState(days) {
   try {
     const d = path.join(KIT, 'state');
     const dead = Date.now() - days * 86400000;
+    // 会话目录：里面最新的文件过了天数，整个目录删（锁还被活进程拿着的不删）
+    try {
+      const sd = path.join(d, 'session');
+      for (const sid of fs.existsSync(sd) ? fs.readdirSync(sd) : []) {
+        const dir = path.join(sd, sid); let newest = 0; let busy = false;
+        try { for (const f of fs.readdirSync(dir)) { const p = path.join(dir, f); try { newest = Math.max(newest, fs.statSync(p).mtimeMs); } catch (e) { /* 刚删 */ } if (/\.lock$/.test(f)) { const o = stateStore.read(p); if (o.pid) { try { process.kill(o.pid, 0); busy = true; } catch (e) { if (e.code === 'EPERM') busy = true; } } } } } catch (e) { continue; }
+        if (!busy && newest && newest < dead) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 别人在用 */ } }
+      }
+    } catch (e) { /* 清不了下次再清 */ }
     for (const f of fs.readdirSync(d)) {
       const p = path.join(d, f);
       let st; try { st = fs.statSync(p); } catch (e) { continue; }
+      if (st.isDirectory()) continue;
       if (/\.(?:lock|recover)$/.test(f)) { const owner = stateStore.read(p); if (owner.pid) { try { process.kill(owner.pid, 0); continue; } catch (e) { if (e.code === 'EPERM') continue; } } }
       if (/\.tmp$/.test(f)) { if (st.mtimeMs < Date.now() - 3600000) try { fs.unlinkSync(p); } catch (e) { /* 别人在用 */ } continue; }
       if (GLOBAL_STATE.test(f)) continue;
@@ -102,4 +136,4 @@ const normKey = (f) => path.resolve(f).split(path.sep).join('/').toLowerCase();
 // 轮数用完还有问题：问用户一次（全自动按原则自己定），也算完。状态在 state/review-rounds.json，按"模式|变更目录"计。
 const underDir = (file, dir) => { const f = normKey(file); const d = normKey(dir); return f === d || f.startsWith(d + '/'); };
 
-module.exports = { KIT, sleepMs, stateFile, readState, writeState, updateState, hookLog, GLOBAL_STATE, DISPOSABLE_STATE, cleanState, normKey, underDir };
+module.exports = { KIT, sleepMs, stateFile, readState, writeState, updateState, hookLog, GLOBAL_STATE, DISPOSABLE_STATE, cleanState, normKey, underDir, STATE_KINDS, stateKindOf, sessionFileOf };

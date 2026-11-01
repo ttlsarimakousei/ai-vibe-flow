@@ -10,7 +10,7 @@ const stateStore = require('./state-store');
 const intent = require('./intent');
 const { execFileSync } = require('child_process');
 // 拆出去的检查（2026-11-01，K 批：guard-commit 只留调度）
-const { KIT, sleepMs, readState, writeState, updateState, hookLog, GLOBAL_STATE, DISPOSABLE_STATE, cleanState, normKey, underDir } = require('./session-state');
+const { KIT, sleepMs, readState, writeState, updateState, hookLog, GLOBAL_STATE, DISPOSABLE_STATE, cleanState, normKey, underDir, STATE_KINDS, stateKindOf, sessionFileOf } = require('./session-state');
 const { DEFAULT_CONFIG, sessionAuto, setSessionAuto, touchSessionAuto, autoSwitchSaid, readConfig, sealConfig, commitModeOf } = require('./session-config');
 const { FLOW_SLASH, FLOW_TAG, FLOW_SKILL, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, APPLY_SLASH, APPLY_TAG, applyIntent, planIntent, changeStarted, handoverStage, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowAdopt, readConfigFor, flowView, sessionChanges, touchChange } = require('./session-flow');
 const { ANSWERED, lastUserVoice, turnVoices, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, saidBefore, confirmApply, sessionHome, noteSessionHome, atHome } = require('./session-voice');
@@ -31,4 +31,4 @@ module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, sessionAuto, setSessi
   taskNotes, isTaskNote, isTaskNotePrompt,
   CFG_DIR, realish, protectedKitPaths, expandHome, isKitPath, isKitSkillScript, isClaudeSettingsFile,
   mentionsChange, handoverStale, readTextFileRaw, readPlan, planStatusOf, refreshPlan, planSummary, changeNames, archivedChanges, planMissingInfo, planInit, planUnlisted,
-  mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice, flowView };
+  mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice, flowView, STATE_KINDS, stateKindOf, sessionFileOf };

@@ -84,5 +84,33 @@ const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit'))
     H.ok('一次调用里打开会话自动：再读配置就是开的', JSON.stringify(sw) === '[false,true]', sw);
   }
 
+  H.section('K1-3 按会话的状态放 state/session/<会话号>/；升级前开着的会话接着用旧位置；清理按目录；每种状态有寿命类别（M14）');
+  {
+    const h = H.makeHome('tkb-k13', FROM);
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    const sd = path.join(h.kit, 'state');
+    const a = '3f2a1b4c-1111-2222-3333-444455556666';
+    S.writeState(a + '-flow', { on: true, stage: 'apply' });
+    S.writeState(a, { used: 1000, at: Date.now() });
+    H.ok('新会话的状态写进 state/session/<会话号>/', fs.existsSync(path.join(sd, 'session', a, 'flow.json')) && fs.existsSync(path.join(sd, 'session', a, 'context.json')) && !fs.existsSync(path.join(sd, a + '-flow.json')), fs.readdirSync(sd));
+    H.ok('读得回来', S.readState(a + '-flow').stage === 'apply' && S.readState(a).used === 1000);
+    const b = '9a8b7c6d-1111-2222-3333-444455556666';
+    H.write(path.join(sd, b + '-flow.json'), JSON.stringify({ on: true, stage: 'plan' }));
+    S.updateState(b + '-flow', (o) => { o.stage = 'apply'; });
+    H.ok('升级前就开着的会话（旧位置有文件）：接着读写旧位置，旧文件留着', JSON.parse(H.read(path.join(sd, b + '-flow.json'))).stage === 'apply' && !fs.existsSync(path.join(sd, 'session', b)), fs.readdirSync(sd));
+    S.writeState('short-id-flow', { on: true });
+    H.ok('不是会话号的名字（测试里的短名字、全局记录）：照旧在 state/ 下', fs.existsSync(path.join(sd, 'short-id-flow.json')));
+    // 清理：老会话目录整个删，新的留着，全局记录不按时间删
+    const c = 'c0c0c0c0-1111-2222-3333-444455556666';
+    S.writeState(c + '-flow', { on: false });
+    const old = new Date(Date.now() - 10 * 86400000);
+    for (const f of fs.readdirSync(path.join(sd, 'session', c))) fs.utimesSync(path.join(sd, 'session', c, f), old, old);
+    S.writeState('review-rounds', { x: { at: Date.now() } }); fs.utimesSync(path.join(sd, 'review-rounds.json'), old, old);
+    S.cleanState(3);
+    H.ok('清理：10 天没动的会话目录整个删，新的留着', !fs.existsSync(path.join(sd, 'session', c)) && fs.existsSync(path.join(sd, 'session', a, 'flow.json')));
+    H.ok('清理：全局记录不按文件时间删', fs.existsSync(path.join(sd, 'review-rounds.json')));
+    H.ok('寿命类别：会话、跨会话、迁移标记、缓存', S.stateKindOf && S.stateKindOf(a + '-flow') === '会话' && S.stateKindOf('review-rounds') === '跨会话' && S.stateKindOf('defaults-1017-migration') === '迁移标记' && S.stateKindOf('bypass') === '缓存');
+  }
+
   H.done('11-01 这一批（主会话）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

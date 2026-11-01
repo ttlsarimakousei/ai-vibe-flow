@@ -266,11 +266,13 @@ function liveSessions(kitDir) {
   const out = [];
   try {
     const dir = path.join(kitDir, 'state');
-    for (const f of fs.readdirSync(dir)) {
-      if (!/\.json$/.test(f) || f === 'reviewed.json' || f === 'gateway.json' || /-hints\.json$/.test(f)) continue;
-      let s; try { s = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch (e) { continue; }
+    // 状态栏记的每个会话的用量：升级前的会话在 state/<会话号>.json，之后的在 state/session/<会话号>/context.json（K1-3）
+    const files = fs.readdirSync(dir).filter((f) => /\.json$/.test(f) && f !== 'reviewed.json' && f !== 'gateway.json' && !/-hints\.json$/.test(f)).map((f) => ({ id: f.replace(/\.json$/, ''), file: path.join(dir, f) }));
+    try { const sd = path.join(dir, 'session'); for (const sid of fs.existsSync(sd) ? fs.readdirSync(sd) : []) files.push({ id: sid, file: path.join(sd, sid, 'context.json') }); } catch (e) { /* 没有会话目录 */ }
+    for (const x of files) {
+      let s; try { s = JSON.parse(fs.readFileSync(x.file, 'utf8')); } catch (e) { continue; }
       if (!s || !(s.used > 0) || !(Date.now() - s.at < 2 * 3600000)) continue;
-      out.push({ id: f.replace(/\.json$/, '').slice(0, 8), used: s.used, windowSize: s.windowSize || 0, cwd: String(s.cwd || ''), at: s.at });
+      out.push({ id: x.id.slice(0, 8), used: s.used, windowSize: s.windowSize || 0, cwd: String(s.cwd || ''), at: s.at });
     }
   } catch (e) { /* 还没有 */ }
   return out.sort((a, b) => b.at - a.at).slice(0, 8);
