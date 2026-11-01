@@ -106,7 +106,9 @@ H.section('压缩：还在流程里的马上重送；不在流程里的下次进
   const next = h.say('s-c', '接着做');
   H.ok('压缩后下一句：不重复', !next.includes(SPEC), next.slice(0, 300));
   h.say('s-p', '/opsx:propose 加一个导出接口');
+  H.write(path.join(h.kit, 'state', 's-p-ckpt-hint.json'), JSON.stringify({ keys: ['apply'] }));
   const p = h.start('s-p', 'compact');
+  H.ok('压缩后：开工前存检查点的提醒也能再送', !/apply/.test(H.read(path.join(h.kit, 'state', 's-p-ckpt-hint.json')) || ''));
   H.ok('写需求时压缩：重送规范和写需求这一段', p.includes(SPEC) && /写需求这一段的规矩/.test(p), p.slice(0, 400));
   const none = h.start('s-n', 'compact');
   H.ok('不在流程里的压缩：不送', !none.includes(SPEC), none.slice(0, 300));

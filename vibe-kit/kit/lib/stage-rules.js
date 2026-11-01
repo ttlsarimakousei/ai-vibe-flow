@@ -49,6 +49,9 @@ function afterCompact(j, cfg) {
   if (!k) return '';
   const had = readState(k);
   if (Object.keys(had).length) writeState(k, {});
+  // 开工前先存检查点的提醒也是钩子送过的（lib/checkpoint.js）
+  const hint = String(j.session_id) + '-ckpt-hint';
+  if (Object.keys(readState(hint)).length) writeState(hint, {});
   if (String(j.source) !== 'compact') return '';
   const f = flowState(j);
   return f && f.on ? stageRules(j, f.stage === 'apply' ? 'apply' : 'plan', cfg) : '';
