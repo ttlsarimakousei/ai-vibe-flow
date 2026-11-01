@@ -188,6 +188,40 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
         H.ok('选"确定"：关掉了', openNow() === 0 && dialogs.length === 2 && /关掉 1 条/.test(await ep.textContent('#riMsg')), [openNow(), await ep.textContent('#riMsg')]);
         H.ok('页面没有报错', pageErrors.length === 0, pageErrors);
       } catch (e) { H.ok('页面上导出走得通', false, String((e && e.stack) || e).slice(0, 600) + ' | 弹过的框：' + JSON.stringify(dialogs) + ' | 页面报的错：' + JSON.stringify(pageErrors)); }
+      // 固定在这一版、跳过这一版（K2）：发布一版新的，页面上真的点按钮
+      try {
+        const pkgP = H.makePackage('uiu-p', '20260918.0900');
+        const pubP = H.node(m, path.join(pkgP, 'publish.js'), ['--no-router', '--no-open'], { cwd: pkgP, timeout: 600000, env: { VIBE_KIT_NO_UPDATE: undefined } });
+        H.ok('（又发布了一版）', pubP.code === 0, pubP.out + pubP.err);
+        await call('POST', '/api/kit/remote/check', {});
+        const label = (sel) => ep.textContent(sel);
+        const off = (sel) => ep.$eval(sel, (b) => b.disabled);
+        const hidden = (sel) => ep.$eval(sel, (b) => b.classList.contains('hide'));
+        await ep.goto('http://127.0.0.1:' + PORT + '/ui');
+        await ep.click('nav button[data-tab="remote"]');
+        // "跳过这一版"平时藏着，查到有新版才露出来：等它出来，页面就是读到接口之后的样子了
+        await ep.waitForFunction(() => !document.querySelector('#ruSkip').classList.contains('hide'), null, { timeout: 30000 });
+        H.ok('有新版：两个按钮都在，"立即更新"能点', !(await off('#ruPin')) && !(await off('#ruSkip')) && !(await off('#ruApply')), [await label('#ruPin'), await label('#ruSkip')]);
+        dialogs.length = 0;
+        answer = false;
+        await ep.click('#ruPin');
+        await ep.waitForFunction(() => !document.querySelector('#ruPin').disabled, null, { timeout: 15000 });
+        H.ok('点固定选"取消"：没固定', dialogs.length === 1 && /什么版本都不自动装/.test(dialogs[0]) && !readJson(path.join(h.kit, 'config.json')).updatePin, dialogs);
+        answer = true;
+        await ep.click('#ruPin');
+        await ep.waitForFunction(() => /取消固定/.test(document.querySelector('#ruPin').textContent), null, { timeout: 15000 });
+        H.ok('点固定选"确定"：固定了，按钮变"取消固定"，跳过的按钮藏了，"立即更新"灰了，顶部和状态表都说了', /^\d{8}\.\d{4}$/.test(readJson(path.join(h.kit, 'config.json')).updatePin) && await hidden('#ruSkip') && await off('#ruApply') && /套件固定在 /.test(await ep.textContent('#updBanner')) && /固定着/.test(await ep.textContent('#ruStatus')), [await ep.textContent('#updBanner'), await ep.textContent('#ruStatus')]);
+        await ep.click('#ruPin');
+        await ep.waitForFunction(() => /固定在这一版/.test(document.querySelector('#ruPin').textContent), null, { timeout: 15000 });
+        H.ok('点"取消固定"：不用确认，恢复', readJson(path.join(h.kit, 'config.json')).updatePin === '' && !(await hidden('#ruSkip')) && !(await off('#ruApply')));
+        await ep.click('#ruSkip');
+        await ep.waitForFunction(() => /取消跳过/.test(document.querySelector('#ruSkip').textContent), null, { timeout: 15000 });
+        H.ok('点"跳过这一版"：记下了，按钮变"取消跳过"，"立即更新"还能点，顶部说了', readJson(path.join(h.kit, 'config.json')).updateSkip === '20260918.0900' && !(await off('#ruApply')) && /跳过了套件的新版 20260918\.0900/.test(await ep.textContent('#updBanner')), await ep.textContent('#updBanner'));
+        await ep.click('#ruSkip');
+        await ep.waitForFunction(() => /跳过这一版/.test(document.querySelector('#ruSkip').textContent), null, { timeout: 15000 });
+        H.ok('点"取消跳过"：恢复', readJson(path.join(h.kit, 'config.json')).updateSkip === '');
+        H.ok('点这几个按钮页面没有报错', pageErrors.length === 0, pageErrors);
+      } catch (e) { H.ok('页面上固定、跳过走得通', false, String((e && e.stack) || e).slice(0, 600) + ' | 弹过的框：' + JSON.stringify(dialogs) + ' | 页面报的错：' + JSON.stringify(pageErrors)); }
     }
     if (eb) { try { await eb.close(); } catch (e) { /* 已经关了 */ } }
     const pv = await call('GET', '/api/kit/remote/usage/preview');
