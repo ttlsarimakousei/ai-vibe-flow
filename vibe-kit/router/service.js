@@ -31,6 +31,10 @@ const PID_FILE = path.join(DATA_DIR, 'router.pid');
 const STARTUP_DIR = process.env.VIBE_KIT_STARTUP_DIR || (process.env.APPDATA ? path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup') : '');
 const VBS = STARTUP_DIR ? path.join(STARTUP_DIR, 'vibe-kit-router.vbs') : '';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 这一份安装的标识（E1，2026-11-01）：路由的 /version 带着它的。远程桌面几个人共用一台电脑时各装各的套件、路由都默认用 15730，
+// 以前只看 /version 有回话就当是自己的，会连到、停掉别人的路由。算不出来（install-id.js 缺了）就照以前的规矩
+let INSTALL_ID = '';
+try { INSTALL_ID = require('./install-id.js').installId(KIT_DIR); } catch (e) { /* 照以前的规矩 */ }
 
 function listenOf() {
   try { let t = fs.readFileSync(CONFIG, 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t).listen || {}; } catch (e) { return {}; }
@@ -38,18 +42,30 @@ function listenOf() {
 function portOf() { const p = Number(listenOf().port); return p > 0 && p < 65536 ? p : 15730; }
 /** 配置里的监听地址，和路由自己的默认一样是 127.0.0.1 */
 function hostOf() { const h = listenOf().host; return typeof h === 'string' && h ? h : '127.0.0.1'; }
-/** 端口上是不是我们的路由在跑：{ listening, ours, version } */
+/**
+ * 端口上是不是这份安装的路由在跑：{ listening, ours, foreign, version }。
+ * foreign：是路由，但 /version 带的安装标识和这份对不上——别的安装的（远程桌面多人共用一台电脑时会碰上）。不停它、不当成自己的。
+ * 老版本的路由 /version 不带标识（自动更新那一刻还在跑的就是）：照以前的规矩，答得出版本号就当是自己的
+ */
 function probe(port) {
   return new Promise((resolve) => {
     const r = http.get({ host: '127.0.0.1', port, path: '/version', timeout: 1200 }, (res) => {
       let b = '';
       res.on('data', (c) => { b += c; });
-      res.on('end', () => { let v = ''; try { v = String(JSON.parse(b).version || ''); } catch (e) { /* 不是我们的 */ } resolve({ listening: true, ours: !!v, version: v }); });
+      res.on('end', () => {
+        let v = ''; let id = '';
+        try { const j = JSON.parse(b); v = String(j.version || ''); id = typeof j.install === 'string' ? j.install : ''; } catch (e) { /* 不是我们的 */ }
+        const foreign = !!v && !!id && !!INSTALL_ID && id !== INSTALL_ID;
+        resolve({ listening: true, ours: !!v && !foreign, foreign, version: v });
+      });
     });
-    r.on('timeout', () => { r.destroy(); resolve({ listening: true, ours: false, version: '' }); });
-    r.on('error', (e) => resolve({ listening: !(e && e.code === 'ECONNREFUSED'), ours: false, version: '' }));
+    r.on('timeout', () => { r.destroy(); resolve({ listening: true, ours: false, foreign: false, version: '' }); });
+    r.on('error', (e) => resolve({ listening: !(e && e.code === 'ECONNREFUSED'), ours: false, foreign: false, version: '' }));
   });
 }
+/** 端口被别的安装的路由占着时怎么说（E1） */
+const foreignWhy = (port) => '端口 ' + port + ' 被另一个安装的路由占着（这台电脑上别的用户、或者另一份套件起的）';
+const foreignFix = () => '在 ' + CONFIG + ' 里把 listen.port 换一个没人用的，再 start；然后在配置页"断开"再"接上"一次，让 Claude Code 跟着换端口';
 /** 只看端口通不通，给钩子用，要快 */
 function portOpen(port, ms) {
   return new Promise((resolve) => {
@@ -132,16 +148,22 @@ async function start() {
   const port = portOf();
   let p = await probe(port);
   if (p.ours) return { ok: true, already: true, port, version: p.version };
+  if (p.foreign) return { ok: false, foreign: true, port, reason: foreignWhy(port) + '，不能和它共用。' + foreignFix() };
   if (p.listening) return { ok: false, port, reason: '端口 ' + port + ' 被别的程序占着（不是这个路由）。在 ' + CONFIG + ' 里把 listen.port 换一个，再运行一次' };
   if (!fs.existsSync(ROUTER_JS)) return { ok: false, port, reason: '找不到 ' + ROUTER_JS };
   launch();
-  for (let i = 0; i < 40; i++) { await sleep(250); p = await probe(port); if (p.ours) return { ok: true, already: false, port, version: p.version }; }
+  for (let i = 0; i < 40; i++) {
+    await sleep(250); p = await probe(port);
+    if (p.ours) return { ok: true, already: false, port, version: p.version };
+    // 这一会儿工夫端口被别的安装的路由抢先占了：这边起的那个起不来，不用再等
+    if (p.foreign) return { ok: false, foreign: true, port, reason: foreignWhy(port) + '，不能和它共用。' + foreignFix() };
+  }
   return { ok: false, port, reason: '启动了但 10 秒内没有回应。它的输出：\n' + (tailLog() || '（空）') };
 }
 /**
  * 停路由：
- *   1. 认人：端口上回答 /version 的是这个路由；或者它卡住了不回答，但 pid 文件里记的进程正占着配置里的 host:端口
- *      （别的程序占着同一个端口，一律不碰）
+ *   1. 认人：端口上回答 /version 的是这个路由（带安装标识的要和这份对得上，老版本不带的照旧算）；或者它卡住了不回答，
+ *      但 pid 文件里记的进程正占着配置里的 host:端口（别的程序、别的安装的路由占着同一个端口，一律不碰）
  *   2. 先带 pid 文件里的令牌请它自己保存用量、退出（Windows 上直接结束进程，路由的收尾代码不会执行，最近的用量就丢了）
  *   3. 2 秒内端口没关（卡住了、或者是没有这个接口的旧版本），再按 pid 结束它
  */
@@ -156,6 +178,8 @@ async function stop() {
     if (pfHere && !pidAlive(Number(pf.pid))) { try { fs.unlinkSync(PID_FILE); } catch (e) { /* 忽略 */ } }
     return { ok: true, wasRunning: false, port };
   }
+  // 别的安装的路由：不停它。自己的 pid 文件正好记着它的进程号也不算（进程号被重新用了）
+  if (p.foreign) return { ok: true, wasRunning: false, foreign: true, port, reason: foreignWhy(port) + '，没有停它（这份安装的路由没在这个端口上跑）' };
   const listenPid = pidOnPort(port, host);
   const stuck = !p.ours && pfHere && listenPid > 0 && listenPid === Number(pf.pid);
   if (!p.ours && !stuck) return { ok: true, wasRunning: false, port };
@@ -237,7 +261,7 @@ function disableAutostart() {
 }
 const autostartOn = () => { try { return !!VBS && fs.existsSync(VBS) && fs.readFileSync(VBS, 'utf16le').includes(ROUTER_JS); } catch (e) { return false; } };
 
-module.exports = { start, stop, probe, portOf, hostOf, pidOnPort, readPidFile, ensureRunning, enableAutostart, disableAutostart, autostartOn, autostartRefused, refuseAutostart, DATA_DIR, CONFIG, VBS, PID_FILE };
+module.exports = { start, stop, probe, portOf, hostOf, pidOnPort, readPidFile, ensureRunning, enableAutostart, disableAutostart, autostartOn, autostartRefused, refuseAutostart, DATA_DIR, CONFIG, VBS, PID_FILE, INSTALL_ID };
 
 if (require.main === module) {
   (async () => {
@@ -249,11 +273,11 @@ if (require.main === module) {
       say(r.ok ? '[OK] 路由 v' + r.version + (r.already ? ' 本来就在运行' : ' 已在后台启动') + '：http://127.0.0.1:' + r.port + '/ui' : '[X] ' + r.reason);
       process.exit(r.ok ? 0 : 1);
     }
-    if (cmd === 'stop') { const r = await stop(); say(r.ok ? (r.wasRunning ? '[OK] 已停止' : '本来就没在运行') : '[X] ' + r.reason); process.exit(r.ok ? 0 : 1); }
+    if (cmd === 'stop') { const r = await stop(); say(r.ok ? (r.foreign ? '[!] ' + r.reason : r.wasRunning ? '[OK] 已停止' : '本来就没在运行') : '[X] ' + r.reason); process.exit(r.ok ? 0 : 1); }
     if (cmd === 'autostart') { const r = enableAutostart(true); say(r.ok ? '[OK] 登录后自动启动：' + r.file : '[!] 没设成：' + r.reason); process.exit(r.ok ? 0 : 1); }
     if (cmd === 'no-autostart') { const r = disableAutostart(); if (r.ok) refuseAutostart('跑了 service.js no-autostart'); say(r.ok ? (r.removed ? '[OK] 已取消登录后自动启动（以后装新版也不会再加回来）' : '本来就没设（以后装新版也不会加）') : '[X] ' + r.reason); process.exit(r.ok ? 0 : 1); }
     const port = portOf();
     const p = await probe(port);
-    say((p.ours ? '在运行，v' + p.version : p.listening ? '端口 ' + port + ' 被别的程序占着' : '没在运行') + '；登录后自动启动：' + (autostartOn() ? '是' : '否') + '；配置页 http://127.0.0.1:' + port + '/ui；数据目录 ' + DATA_DIR);
+    say((p.ours ? '在运行，v' + p.version : p.foreign ? '端口 ' + port + ' 被另一个安装的路由占着（不是这份安装的）' : p.listening ? '端口 ' + port + ' 被别的程序占着' : '没在运行') + '；登录后自动启动：' + (autostartOn() ? '是' : '否') + '；配置页 http://127.0.0.1:' + port + '/ui；数据目录 ' + DATA_DIR);
   })();
 }

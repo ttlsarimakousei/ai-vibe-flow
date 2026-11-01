@@ -80,9 +80,10 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
   | `access.js` | 谁能用哪些接口：转发和钩子入口只收本机程序，配置页接口只收本机、不收别的网站的页面 |
   | `api.js` | 配置页的 `/api` 接口（`/api/kit` 交给 `kit-api.js`） |
   | `hook-entry.js` | 套件的 HTTP 钩子入口（`/vibe-kit/hook/<名字>`） |
+  | `install-id.js` | 这一份安装的标识：按套件目录的真实路径算的哈希（不带用户名、路径原文），`/version` 带着，`service.js` 比对（E1） |
 
   `install.js` 装新版时整个换 `router/` 目录；新加的文件要加进 `dev/pack.js` 的必备清单（`dev/test-router-k.js` 查）。安装器按 `router.js` 里有没有 `/vibe-kit/hook/` 判断路由认不认得钩子请求，所以钩子入口的分派留在入口里。
-- `service.js`：后台启动（没有窗口）、停止、登录后自启（"启动"文件夹里的 `.vbs`）。
+- `service.js`：后台启动（没有窗口）、停止、登录后自启（"启动"文件夹里的 `.vbs`）。认"端口上的是不是这份安装的路由"看 `/version`：带安装标识的要和这份对得上，对不上的是别的安装的（远程桌面多人共用一台电脑时会碰上），不停、不当成自己的、说清端口被另一个安装的路由占着；老版本的路由不带标识，照以前的规矩答得出版本号就算（E1，2026-11-01）。
 - `ui.html` + `kit-api.js`（+ `kit-worker.js`）：本机配置页 `http://127.0.0.1:15730/ui`。只认本机连接、本机 Host，不收别的网站的页面发来的请求（按 Sec-Fetch-Site 认，`access.js` 的 `apiAllowed`），改东西还要带自定义请求头。开关只传改过的项，保存后跑一次 `install.js --sync` 让约定和钩子跟着变。
 - 路由每 20 秒写一次 `router-data/usage-daily.json`、`usage-today.json`（状态栏第三行读后者）。
 

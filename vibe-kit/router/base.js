@@ -26,6 +26,9 @@ const overridePort = argOf('-p') ? parseInt(argOf('-p'), 10) : null;
 // 套件目录按这个文件自己所在的位置定（~/.claude/vibe-kit/router/router.js → ~/.claude/vibe-kit），不看环境变量：
 // 路由可能是登录时由"启动"文件夹拉起来的，那时候没有任何自定义的环境变量。VIBE_KIT_DIR 只给测试用。
 const KIT_DIR = process.env.VIBE_KIT_DIR || path.dirname(__dirname);
+// 这一份安装的标识，/version 带着（E1，2026-11-01）：service.js 靠它认出端口上的是不是这份安装的路由。
+// 按程序所在的套件目录算（和 service.js 一样），不看 VIBE_KIT_DIR
+const INSTALL_ID = require('./install-id').installId(path.dirname(__dirname));
 
 // ---------- 日志 ----------
 // 由 service.js 在后台拉起时，标准输出接的是数据目录里的 router.out.log（一个文件）：每行都写进去等于把 router.log 再存一份，
@@ -54,4 +57,4 @@ function readBody(req, limit) {
 }
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(diagnostic.tree(obj, diagnosticSecrets))); };
 
-module.exports = { diagnostic, secrets: () => diagnosticSecrets, scrub, refreshSecrets, VERSION, argOf, CONFIG_PATH, DATA_DIR, LAST_GOOD, BACKUP_DIR, USAGE_PATH, DAILY_PATH, TODAY_PATH, LOG_PATH, UI_PATH, overridePort, KIT_DIR, log, writeAtomic, readBody, json };
+module.exports = { diagnostic, secrets: () => diagnosticSecrets, scrub, refreshSecrets, VERSION, argOf, CONFIG_PATH, DATA_DIR, LAST_GOOD, BACKUP_DIR, USAGE_PATH, DAILY_PATH, TODAY_PATH, LOG_PATH, UI_PATH, overridePort, KIT_DIR, INSTALL_ID, log, writeAtomic, readBody, json };

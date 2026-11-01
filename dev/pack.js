@@ -46,7 +46,7 @@ for (const need of ['kit/lib/apply-scope.js', 'kit/lib/entry-check.js', 'kit/lib
   if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);
 }
 // 路由按块拆成了几个文件（2026-11-01，K1-1），router.js 只留入口：这些漏打进包，路由就起不来（router.js、ui.html 在上面那一串里）
-for (const need of ['router/service.js', 'router/base.js', 'router/config-file.js', 'router/health.js', 'router/usage.js', 'router/forward.js', 'router/access.js', 'router/api.js', 'router/hook-entry.js']) {
+for (const need of ['router/service.js', 'router/base.js', 'router/config-file.js', 'router/health.js', 'router/usage.js', 'router/forward.js', 'router/access.js', 'router/api.js', 'router/hook-entry.js', 'router/install-id.js']) {
   if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);
 }
 // 必备清单只列了一部分钩子和库（审核 P06）：再扫一遍 kit 里所有 .js 的相对 require，指到的文件都得在，漏了一个库、删错一个钩子都查得出来

@@ -28,13 +28,14 @@
  *   access.js       谁能用哪些接口：只收本机程序、挡网页
  *   api.js          配置页的 /api 接口（套件那几页在 kit-api.js）
  *   hook-entry.js   套件的 HTTP 钩子入口
+ *   install-id.js   这一份安装的标识（/version 带着，service.js 比对；E1）
  * 只用 Node 自带模块。
  */
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
 const path = require('path');
-const { VERSION, CONFIG_PATH, DATA_DIR, UI_PATH, log, writeAtomic, json } = require('./base');
+const { VERSION, CONFIG_PATH, DATA_DIR, UI_PATH, INSTALL_ID, log, writeAtomic, json } = require('./base');
 const C = require('./config-file');
 const { LISTEN, LISTEN_IS_LOOPBACK } = C;
 const { classify, waitableStatus } = require('./health');
@@ -94,7 +95,8 @@ const server = http.createServer((req, res) => {
   // 下面四个只读的也不给别的网站的页面用
   if (req.method === 'GET' && ['/health', '/version', '/busy', '/stats'].includes(url) && fromOtherSite(req)) { res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('不接受别的网页发来的请求'); }
   if (req.method === 'GET' && url === '/health') return json(res, 200, { status: C.configError ? 'degraded' : 'ok', error: C.configError, warnings: C.configWarnings, routes: C.config.routes, default: C.config.default.provider, providers: usableProviders().map((p) => p.name) });
-  if (req.method === 'GET' && url === '/version') return json(res, 200, { version: VERSION });
+  // install：这一份安装的标识（install-id.js，E1）。service.js 停路由、认"端口上的是不是自己的路由"时比对，对不上的是别的安装的，不停它
+  if (req.method === 'GET' && url === '/version') return json(res, 200, { version: VERSION, install: INSTALL_ID });
   // 现在闲不闲：套件自动更新要重启路由，得挑没有请求在跑的时候（lib/updater.js 来问）
   if (req.method === 'GET' && url === '/busy') return json(res, 200, busyState());
   if (req.method === 'GET' && url === '/stats') return json(res, 200, stats);
