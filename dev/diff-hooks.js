@@ -84,6 +84,7 @@ const V1018 = '20261018.0051'; // 提交方式三档（默认关）、任务只�
 const V1025 = '20261025.0653'; // 1024 这批：提问框答的自测、复验、提交认得出；IDEA 只留普通检查；说推送直接推；产出位置要写目录
 const V1028 = '20261028.1834'; // 1028 这批：去掉 IDEA 接入和合并推送工具、用户说合并推送照做、复验这一轮说过不再问、产出位置两种拦截话统一、起服务提示热更新和认得之前起过的、环境就绪不写 IDEA
 const V1031 = '20261031.1436'; // 10-30、10-31 统一修改：提交推送归档认本轮最后一次表态、开工定稿合成一问、审查意见一框逐条选、规矩提前说、/vk-* 命令、说法统一、推送提示、产出位置收尾时问、起服务认"我要看看系统"、会话自动开关
+const V1102 = '20261102.0255'; // K 批和问题表第 29—31 条：OpenSpec 规范由钩子送、commit.js 当提交查、失败摘要、开工提醒存检查点
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -412,12 +413,12 @@ for (const c of cases) {
 
 // K3（2026-11-01）：跑 tools/commit.js 当成一次提交来查（提交信息格式、提交方式），不能成了绕过提交检查的后门；做任务这一段的规矩里提一句 commit.js
 const commitJs = (msg) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "' + path.join(kit.kit, 'tools', 'commit.js').replace(/\\/g, '/') + '" -m "' + msg + '"' } }) }; };
-add('K3：跑 commit.js，提交信息不合规', 'guard-commit', commitJs('加导出'), /提交信息不符合公司规范/, NEXT);
-add('K3：跑 commit.js，用户没说提交', 'guard-commit', commitJs('feat: 加导出'), /提交方式是\\"关\\"/, NEXT);
-for (const c of cases) if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /做任务这一段的规矩（照做就不会被拦）：[\s\S]*commit\.js\\" -m \\"类型: 内容\\" 只提交这个会话改过的文件/; c.since = NEXT; }
+add('K3：跑 commit.js，提交信息不合规', 'guard-commit', commitJs('加导出'), /提交信息不符合公司规范/, V1102);
+add('K3：跑 commit.js，用户没说提交', 'guard-commit', commitJs('feat: 加导出'), /提交方式是\\"关\\"/, V1102);
+for (const c of cases) if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /做任务这一段的规矩（照做就不会被拦）：[\s\S]*commit\.js\\" -m \\"类型: 内容\\" 只提交这个会话改过的文件/; c.since = V1102; }
 // K3（2026-11-01）：编译、测试命令失败时，第一个错误、文件:行、前后 5 行源码作为摘要送给模型；成功的什么都不加
 const built = (event, extra) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, Object.assign({ hook_event_name: event, tool_name: 'Bash', tool_input: { command: 'mvn -q -o compile' } }, extra(proj))) }; };
-add('K3：编译失败只给摘要', 'after-tool', built('PostToolUseFailure', (proj) => ({ error: 'Exit code 1\n[INFO] 编译\n[ERROR] /' + path.join(proj, 'src/main/java/com/x/A.java').replace(/\\/g, '/') + ':[2,1] 需要 class, interface, enum 或 record\n[INFO] 1 error\n' })), /失败摘要\] Maven 没过，第一个错误：src\/main\/java\/com\/x\/A\.java:2:1　需要 class[\s\S]*2>\| class A \{\}/, NEXT);
+add('K3：编译失败只给摘要', 'after-tool', built('PostToolUseFailure', (proj) => ({ error: 'Exit code 1\n[INFO] 编译\n[ERROR] /' + path.join(proj, 'src/main/java/com/x/A.java').replace(/\\/g, '/') + ':[2,1] 需要 class, interface, enum 或 record\n[INFO] 1 error\n' })), /失败摘要\] Maven 没过，第一个错误：src\/main\/java\/com\/x\/A\.java:2:1　需要 class[\s\S]*2>\| class A \{\}/, V1102);
 add('K3：编译成功什么都不加', 'after-tool', built('PostToolUse', () => ({ tool_response: { stdout: '[INFO] BUILD SUCCESS', stderr: '' } })));
 // K3（2026-11-01）：这个会话开着自动，开工时先提醒存检查点（会话号单独起，免得自动开关带到别的输入上）
 add('K3：自动模式开工提醒存检查点', 'task-anchor', (kit) => {
@@ -426,7 +427,7 @@ add('K3：自动模式开工提醒存检查点', 'task-anchor', (kit) => {
   const j = base(proj, kit, { session_id: 'sess-ckpt', hook_event_name: 'UserPromptSubmit', prompt: '/opsx:apply add-export' });
   j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), [H.tr.user('/opsx:apply add-export')]);
   return { proj, j };
-}, /大改之前先存一个检查点：node \\"[^"]*checkpoint\.js\\" save --why/, NEXT);
+}, /大改之前先存一个检查点：node \\"[^"]*checkpoint\.js\\" save --why/, V1102);
 
 let same = 0;
 let changed = 0;
