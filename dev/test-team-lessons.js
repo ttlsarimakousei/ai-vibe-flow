@@ -59,6 +59,9 @@ const cands = (repo) => { try { return JSON.parse(fs.readFileSync(path.join(repo
     said.forEach((s, i) => L.add({ file, text: s, from: 'chg-' + i + ' 1.1', kind: '项目约定', isNew: true, cwd: t.repo }));
     const text = H.read(ruleFile(path.join(t.repo, '.claude', 'rules'), 'java')) || '';
     H.ok('这一组满了（3 条），挤掉的是自动记的，人加的还在', /BigDecimal/.test(text) && (text.match(/^- /gm) || []).length === 3, text);
+    const more = ['接口返回的错误码要写进接口文档，别只写在代码注释里', '定时任务要记开始和结束日志，出问题才查得到'].map((s) => op(t, { action: 'add', scope: 'project', root: t.repo, group: 'java', text: s }));
+    const full = op(t, { action: 'add', scope: 'project', root: t.repo, group: 'java', text: '事务方法里不要调用远程接口，超时会把连接占满' });
+    H.ok('人加的到了上限（3 条）：不再收，说清楚，文件不超', more.every((m) => m.ok) && /到上限/.test(full.error || '') && !/事务方法/.test(H.read(ruleFile(path.join(t.repo, '.claude', 'rules'), 'java')) || ''), [full, more.map((m) => m.error)]);
     const t2 = setup('ttl-promote');
     const L2 = require(path.join(t2.h.kit, 'lib', 'lessons.js'));
     const c = L2.add({ file: path.join(t2.repo, 'src/main/java/com/x/OrderService.java'), text: '查询条件里的状态码用常量类，不写魔法数字', from: 'chg-a 1.1', kind: '项目约定', isNew: true, cwd: t2.repo });

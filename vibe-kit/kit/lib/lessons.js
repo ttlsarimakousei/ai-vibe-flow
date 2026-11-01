@@ -1046,16 +1046,19 @@ function writeByHand(scope, root, group, rule, st, rest) {
   migrateNames(dir, scope, root);
   const file = ruleFileOf(dir, group);
   const data = readRuleFile(file);
+  // 人加的不挤，所以这里要挡：不然这一组没有上限，读到这类文件就全带进上下文
+  const byHand = data.rules.filter((r) => r.byHand).length;
+  if (byHand >= st.maxPerGroup) return { ok: false, msg: '这一组人加的已经有 ' + byHand + ' 条，到上限了（一种文件类型最多 ' + st.maxPerGroup + ' 条）。删几条，或者把几条合成一条再加。' };
   data.rules.push(rule);
   const squeezed = squeeze(data, st, rule.id);
   sortRules(data);
   writeRuleFile(file, data, scope, group);
-  if (scope === 'user') return { file, squeezed };
+  if (scope === 'user') return { ok: true, file, squeezed };
   noteWritten(file, root);
   for (const r of squeezed) rest.push({ id: r.id, text: r.text, group, kind: r.kind || '', file: '', sources: (r.from || []).map((f) => ({ from: f, at: r.last })), first: r.last, last: r.last, state: 'evicted', auto: !!r.auto });
   writeCandidates(root, rest);
   try { const idx = readIndex(); noteProject(idx, root); writeIndex(idx); } catch (e) { /* 记不了不影响 */ }
-  return { file, squeezed };
+  return { ok: true, file, squeezed };
 }
 /** 人在配置页加一条：直接是规则，不用等次数。o: { scope, root, group（java / sql / web / spec / other）, ext（other 时的扩展名）, text } */
 function addByHand(o, st0) {
@@ -1077,7 +1080,7 @@ function addByHand(o, st0) {
     const rest = items.filter((c) => !(similarity(c.text, text) >= SAME && (c.state !== 'retired' || removedByUser(c))));
     const taken = new Set(data.rules.map((r) => r.id).concat(rest.map((c) => c.id)));
     const rule = { id: idOf(text, taken), text, count: 1, last: today(), miss: 0, kind: '', names: [], from: [], byHand: true };
-    return Object.assign({ ok: true }, writeByHand(scope, o.root, group, rule, st, rest));
+    return writeByHand(scope, o.root, group, rule, st, rest);
   });
 }
 /** 候选上点"升成规则"：不等次数，算人加的。退役的不能点（配置页上也没有这个按钮） */
@@ -1088,7 +1091,7 @@ function promoteCandidate(root, id, st0) {
     const c = items.find((x) => x.id === id && x.state !== 'retired');
     if (!c) return { ok: false, msg: '没有这一条候选：' + id };
     const rule = { id: c.id, text: c.text, count: Math.max(1, distinctChanges(c.sources)), last: today(), miss: 0, kind: c.kind || '', names: [], from: (c.sources || []).map((s) => s.from).slice(-4), byHand: true };
-    return Object.assign({ ok: true }, writeByHand('project', root, c.group, rule, st, items.filter((x) => x !== c)));
+    return writeByHand('project', root, c.group, rule, st, items.filter((x) => x !== c));
   });
 }
 /**
