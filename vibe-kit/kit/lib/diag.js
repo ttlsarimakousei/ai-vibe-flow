@@ -20,8 +20,13 @@ let lastFlush = 0;
 let timer = null;
 
 const dayKey = (t) => { const d = new Date(t); const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+/** 最多等 100 毫秒拿锁：诊断不值得让钩子、路由等（路由这里同步等会堵住所有请求，复审发现）。拿不到这一批就丢了 */
 function write(items) {
-  require('./state-store').update(FILE, (o) => {
+  const store = require('./state-store');
+  const lock = store.acquire(FILE + '.lock', { waitMs: 100 });
+  if (!lock) return;
+  try {
+    const o = store.read(FILE);
     for (const x of items) {
       const day = o[x.day] || (o[x.day] = {});
       const cat = day[x.cat] || (day[x.cat] = {});
@@ -29,7 +34,8 @@ function write(items) {
       it.n++; it.total += x.ms; it.max = Math.max(it.max, x.ms);
     }
     for (const d of Object.keys(o).sort().slice(0, -KEEP_DAYS)) delete o[d];
-  });
+    store.atomicWrite(FILE, o);
+  } finally { lock.release(); }
 }
 function flush() {
   if (timer) { clearTimeout(timer); timer = null; }

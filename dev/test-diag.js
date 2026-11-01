@@ -49,10 +49,10 @@ const lib = (h, n) => JSON.stringify(path.join(h.kit, 'lib', n));
     const I = lib(h, 'invocation.js');
     js(h, 'const I = require(' + I + "); I.run(() => { I.phase('读会话记录'); }, { budgetMs: 5000 });");
     H.ok('没用完：不记', !fs.existsSync(fileOf(h)) || !(readJson(fileOf(h))[today()] || {})['钩子预算']);
-    const out = js(h, 'const I = require(' + I + "); const end = Date.now() + 30; try { I.run(() => { I.phase('读会话记录'); while (Date.now() < end); I.phase('查提案'); }, { budgetMs: 5 }); console.log('没抛'); } catch (e) { console.log(e.code); }");
+    const out = js(h, 'const I = require(' + I + "); const end = Date.now() + 30; try { I.run(() => { I.phase('读会话记录'); while (Date.now() < end); try { I.phase('查提案'); } catch (e) { /* 里面很多 catch 会吞掉 */ } I.phase('再查'); }, { budgetMs: 5 }); console.log('没抛'); } catch (e) { console.log(e.code); }");
     H.ok('用完了：照旧抛给放行入口', /VIBE_HOOK_BUDGET/.test(out), out);
     const d = (readJson(fileOf(h))[today()] || {})['钩子预算'] || {};
-    H.ok('记下停在哪个阶段', !!d['读会话记录'] && d['读会话记录'].n === 1 && d['读会话记录'].max >= 5, d);
+    H.ok('记下停在哪个阶段；一次调用只记一笔', !!d['读会话记录'] && d['读会话记录'].n === 1 && d['读会话记录'].max >= 5 && Object.keys(d).length === 1, d);
   }
 
   H.section('等锁 200 毫秒以上的记一笔，键里没有会话号；不到的不记；诊断自己的锁不记');
