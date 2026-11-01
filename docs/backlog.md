@@ -4,16 +4,9 @@
 
 | 编号 | 问题 | 状态 | 在哪分析 | 下一步 |
 |---|---|---|---|---|
-| feedback-20261030 K | 结构性大改：拆大文件（guard-commit、session、router）、状态分目录、开关只在一处定义、一次调用一份上下文、依赖清单、测试按契约索引 | 后做 | [feedback-20261030.md](feedback-20261030.md) K 批、decisions.md 10-31 | 发版之后单独一批，先拆 guard-commit |
-| feedback-20261030 J2 | 上下文快满时的 5 个开关合成两项（"快满时怎么办"+百分比，按现有值换算） | 后做 | 同上 J 批 | 改配置页和 ui-kit 那三套界面测试 |
-| feedback-20261030 F8 | 更新时用户的补充放单独文件，更新不碰 | 后做 | 同上 F 批 | |
-| feedback-20261030 E1 | 远程桌面多人共用一台电脑时连到别人的路由（停路由只看 /version） | 后做 | 同上 E 批 | /version 带上本安装的标识 |
-| feedback-20261030 E3 | 网关断在半截，路由照样正常结束 | 后做 | 同上 E 批 | 先用真 Claude Code 加假网关探 SSE error 的处理 |
-| 问题表第 29—31 条 | 配置页：自动模式的几块合并、自动自测和看页面不要开关、审核上限固定 20；后台自动探索不要开关；提案、打勾、归档的门槛默认开着 | 待修 | [owner-issues.md](owner-issues.md) | 等仓库主人说修 |
 | 审核 20261029 H 节第 6 项 | 更新时套件钩子条目的 timeout、matcher，状态栏的 refreshInterval 每次被重写，用户改过的要不要保留 | 待定（等仓库主人） | reviews/claude/20261029-vibe-kit-整体审核.md 第七节 H；feedback-20261101.md 交接细节 | 子代理做 F8 时提出 |
 | 复审 20261031 D-R6 | 壳子里 `mvn -f 子项目` 记的证据按子仓库记，review-runner 登记"修了"时按壳子查，对不上 | 后做 | [reviews/claude/20261031-C至J批-复审.md](../reviews/claude/20261031-C至J批-复审.md) | `evidence.commands` 认壳子下各子仓库的证据 |
 | 复审 20261031 D-R9 | `.vibe/db-crud.ini` 读改写没锁（换驱动记 driver_jar 和后台探索同时写） | 后做 | 同上 | 照 drivers.js 用 state-store 的锁 |
-| feedback-20261030 H2、H4、H5 剩下的 | 安全检查排在流程检查前面；OpenSpec 命令改写换成分词库；`app/web` 这类词当成路径 | 后做 | 同上 H 批 | |
 | feedback-20261030 C8 | 前后端只能串行起；命名管道认看管进程 | 后做 | 同上 | 这批做完再商量 |
 | Codex V01 | 改库快照和写入之间别人改了同一行，还原脚本可能对不上 | 后做 | 同上 D6 | 这批只在手册写明限制；有各家数据库的测试环境再做 |
 | #229—#232 | 神通 SQL 报错 42S22、42000、42S02；找不到神通驱动 | 证据不足 | [feedback-20261028.md](feedback-20261028.md) 第 12、13 类 | 在出错的电脑上跑 `tools/diagnose.js` |
