@@ -78,6 +78,13 @@ const status = (t) => H.git(t.repo, ['status', '--porcelain']).out;
     H.ok('提交信息不符合规范：拦下', /提交信息不符合公司规范/.test(H.reasonOf(g2)), g2);
     const r2 = run(t, ['-m', '加导出']);
     H.ok('commit.js 自己也查提交信息格式', r2.code !== 0 && /提交信息不符合公司规范/.test(r2.out), r2.out);
+    // 开关"提交检查"关了：git commit 不查格式，commit.js 也不查（两边一个口径）
+    H.setConfig(t.h, { commitCheck: false });
+    const loose = 'node "' + tool(t) + '" -m "随便写的"';
+    const g4 = H.hook(t.h, 'guard-commit', session(t, '提交', loose));
+    const r4 = run(t, ['-m', '随便写的']);
+    H.ok('提交检查关了：commit.js 也不查提交信息格式', g4 === null && r4.code === 0 && committed(t)[0] === '随便写的', [g4, r4.out]);
+    H.setConfig(t.h, { commitCheck: true });
     const ps = 'node "' + tool(t) + '" -m "feat: 加导出"';
     const g3 = H.hook(t.h, 'guard-commit', Object.assign(session(t, '提交', ps), { tool_name: 'PowerShell' }));
     H.ok('PowerShell 里跑也认得', g3 === null && fs.existsSync(path.join(t.h.kit, 'state', t.sid + '-commit-tool.json')), g3);

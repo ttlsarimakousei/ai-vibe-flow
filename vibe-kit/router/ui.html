@@ -546,7 +546,7 @@
       </div>
       <div class="opt">
         <div><div class="t">提交检查</div><div class="d">开着：提交信息要写成"类型: 内容"；不许 git add -A、git add .、git commit -a。</div>
-          <details class="more"><summary>细节</summary><ul><li>提交信息的例子：<span class="mono">feat: 新增修改页面</span>。</li><li>壳子里 add 子项目目录也拦，那样会提交成 gitlink。</li><li>它新建的文件漏了 add 就提交，会点名拦一次。</li><li>不查提交内容里像密码的东西；套件自己的令牌文件（GitLab 令牌、模型的 key）一直不许提交，不受这个开关管。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li>提交信息的例子：<span class="mono">feat: 新增修改页面</span>。</li><li>壳子里 add 子项目目录也拦，那样会提交成 gitlink。</li><li>它新建的文件漏了 add 就提交，会点名拦一次。</li><li>它用 tools/commit.js（只提交这个会话改过的文件）提交的，和 git commit 一样查。</li><li>不查提交内容里像密码的东西；套件自己的令牌文件（GitLab 令牌、模型的 key）一直不许提交，不受这个开关管。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_commitCheck"><i></i></label></div>
       </div>
     </div>

@@ -97,7 +97,10 @@ function commit() {
   if (!msg.trim()) { console.log('要写提交信息：' + SELF + ' -m "类型: 内容"'); return 1; }
   const first = msg.split(/\r?\n/)[0].trim();
   const G = require('../lib/guard-git');
-  if (!G.FORMAT.test(first)) { console.log('提交信息不符合公司规范：' + JSON.stringify(first) + '\n格式：类型: 内容（类型后面是英文冒号加一个空格，然后直接写内容，只写一行）。\n类型只能是 ' + G.TYPES.join(' / ') + '。\n例：feat: 新增修改页面'); return 1; }
+  // 提交信息格式和 git commit 一样跟着开关"提交检查"（commitCheck）走
+  let checkFormat = true;
+  try { checkFormat = require('../lib/session').readConfig().commitCheck !== false; } catch (e) { checkFormat = true; }
+  if (checkFormat && !G.FORMAT.test(first)) { console.log('提交信息不符合公司规范：' + JSON.stringify(first) + '\n格式：类型: 内容（类型后面是英文冒号加一个空格，然后直接写内容，只写一行）。\n类型只能是 ' + G.TYPES.join(' / ') + '。\n例：feat: 新增修改页面'); return 1; }
   const p = E.commitPlan({ entries: E.entriesOf(s.transcript), cwd, root, only: opts.only });
   if (!ticket) { console.log('这次提交没经过套件的提交检查（钩子没跑，或者被拦下了），没有提交。重新执行一次这条命令；还是不行，用 git add <文件>、git commit 提交。'); return 1; }
   if (p.notMine.length) { console.log('这几个不是这个会话改过的：' + p.notMine.join('、') + '。commit.js 只提交这个会话改过的文件，没有提交。别的文件用 git add <文件>、git commit 提交。'); return 1; }
