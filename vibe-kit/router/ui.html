@@ -506,7 +506,7 @@
 
     <div class="card" id="sec-guard" data-sec="保护">
       <h2>保护</h2>
-      <p class="hint">前两项和"全自动模式"只认在这个页面上改的。有程序直接改开关文件，不会生效。</p>
+      <p class="hint">前两项只认在这个页面上改的。有程序直接改开关文件，不会生效。</p>
       <div class="opt">
         <div><div class="t">不许 Claude 改套件</div><div class="d">开着：<span class="mono">~/.claude/vibe-kit</span>、settings.json、全局 CLAUDE.md、装进去的技能和代理，它只能用不能改。</div>
           <details class="more"><summary>细节</summary><ul><li>用 Edit、Write 改会被拦。用 rm、重定向、sed 这些命令改也拦。直接调这个页面的接口也拦。</li><li>只读的命令和套件自带的工具不受影响。</li><li>令牌和模型的 key 不归这个开关管，什么时候都不给它读。</li></ul></details></div>
@@ -514,7 +514,7 @@
       </div>
       <div class="opt">
         <div><div class="t">被检查拦住时能不能放行</div><div class="d">只管带拦截编号的检查：OpenSpec 门槛、归档、产出位置、过程文件、起服务、提交信息格式、新文件没 add。</div>
-          <details class="more"><summary>细节</summary><ul><li><b>要我点同意</b>：写清查过什么，再做那一步时弹确认框。通行证只用一次；每个会话最多 5 个不同问题，同类最多 3 个。</li><li><b>它自己放行</b>：不弹框，最多 60 个不同问题。</li><li>同一检查、目标和理由重试不重复扣额度，申请结果显示剩余数量。</li><li><b>不许放行</b>：被拦住就停下来告诉你。</li><li>全自动阶段直接放行并记报告，选了“不许放行”的除外。</li><li>只适用于带拦截编号的流程检查；推送确认、读令牌和改套件不能用放行额度替代。</li><li>放行记录在“更新和上报”可见。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li><b>要我点同意</b>：写清查过什么，再做那一步时弹确认框。通行证只用一次；每个会话最多 5 个不同问题，同类最多 3 个。</li><li><b>它自己放行</b>：不弹框，最多 60 个不同问题。</li><li>同一检查、目标和理由重试不重复扣额度，申请结果显示剩余数量。</li><li><b>不许放行</b>：被拦住就停下来告诉你。</li><li>自动模式下直接放行并记报告，选了“不许放行”的除外。</li><li>只适用于带拦截编号的流程检查；推送确认、读令牌和改套件不能用放行额度替代。</li><li>放行记录在“更新和上报”可见。</li></ul></details></div>
         <div class="ctl"><select id="k_kitBypass"><option value="ask">要我点同意</option><option value="auto">它自己放行</option><option value="off">不许放行</option></select></div>
       </div>
       <div class="opt">
@@ -526,7 +526,7 @@
       <div class="opt">
         <div><div class="t">Claude Code 自带的自动模式</div><div class="d">新版 Claude Code 没配权限模式时默认进它：有风险的命令先发给一个分类模型审。内网的模型当不了这个分类器，默认关掉。</div>
           <details class="more"><summary>细节</summary><ul>
-            <li>它是 Claude Code 的 auto mode，和上面套件的"全自动模式"是两回事。2.1.284 起默认进，2.1.259 和更早的版本没有这回事。</li>
+            <li>它是 Claude Code 的 auto mode，和套件的自动模式（/vk-auto）是两回事。2.1.284 起默认进，2.1.259 和更早的版本没有这回事。</li>
             <li>实测（2.1.289，经网关）：node -e、curl 这类命令每条多发一次请求给审查用的那个模型，系统提示有 14 万字符；它答得不合格式就重试，最多十次，然后把命令拦下。</li>
             <li><b>关掉</b>：套件在 settings.json 里写 <span class="mono">permissions.disableAutoMode</span>，会话照以前的普通模式起（底下显示 manual mode），放行的还是套件装的那几条权限。</li>
             <li><b>不管它</b>：套件把自己写的那一项去掉，照 Claude Code 的默认。</li>

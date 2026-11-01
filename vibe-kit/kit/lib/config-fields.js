@@ -35,7 +35,7 @@ const FIELDS = [
   { name: 'applyReviewMaxRounds', type: 'int', def: 20, min: 1, max: 20, internal: true },
   { name: 'autoHandover', type: 'bool', def: false, internal: true },
   { name: 'kitLock', type: 'bool', def: true, page: 'kit', doc: '禁止 Claude 自己改套件', since: '0923', defText: '开' },
-  { name: 'kitBypass', type: 'enum', def: 'ask', values: ['ask', 'auto', 'off'], page: 'kit', doc: '被检查拦住、它又确信是套件拦错了（全自动模式下不用点，选"不许放行"的除外）', since: '0924.1848', defText: '要我点同意' },
+  { name: 'kitBypass', type: 'enum', def: 'ask', values: ['ask', 'auto', 'off'], page: 'kit', doc: '被检查拦住、它又确信是套件拦错了（自动模式下不用点，选"不许放行"的除外）', since: '0924.1848', defText: '要我点同意' },
   { name: 'hookTransport', type: 'enum', def: 'auto', values: ['auto', 'http', 'command'], page: 'kit', doc: '检查在哪里跑（自动 / HTTP / 命令）', since: '0924 上午', defText: '自动' },
   { name: 'contextLimitTokens', type: 'int', def: 1000000, min: 50000, max: 10000000, zero: true, page: 'kit', doc: '上下文上限 contextLimitTokens', since: '0921', defText: '100 万 token' },
   { name: 'handoverPercent', type: 'int', def: 70, min: 30, max: 95, internal: true },
