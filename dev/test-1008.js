@@ -335,7 +335,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { handoverAsk: 'ask' });
     const r2 = say('再改一下');
     H.ok('选"问我"：照旧说收工时会用提问框问', /收工时会让你用提问框问我要不要交接/.test(r2), r2);
-    H.ok('配置页上"不问"那一项写明了只提醒、我说交接才交接', /不问，只提醒；我说交接才交接/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+    H.ok('配置页上"不问"那一项写明了只提醒、我说交接才交接', /提醒一句：状态栏变红，你说交接才写/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
   }
 
   const wins = await watch.stop();

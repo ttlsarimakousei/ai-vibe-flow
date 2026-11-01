@@ -261,6 +261,8 @@
         <li><b>任务只写实现</b>：tasks.md 不写"验："，不写测试、审查、用户验收任务；测试和验收写在 design.md 的"验收用例"里。打勾不查验法。</li>
         <li><b>人工模式先问</b>：跑测试、起服务、看页面、审查、复验先问你，同一个要求只问一次；这一轮你说过要审、要测的，改完再审、再测不再问（"提交"也一样，分几笔提交不再问）。编译、类型检查、静态检查直接跑。你放弃就继续，不记待办。</li>
         <li><b>开工前不拉代码</b>：要拉最新代码你自己拉。</li>
+        <li><b>后台自动探索</b>：进到一个没探索过的项目，套件在后台查工程类型、构建和启动命令、端口、编码，还有开发环境的数据库和 redis 连接，写进项目的 .vibe/。不用模型，不花额度，不占你的对话。只读项目里的文件，不跑构建命令，不连数据库；测试、生产环境的连接不配；你和 Claude 改过的行它不动。命令是照工程结构推出来的，项目说明里标着"没跑过"，Claude 第一次用的时候跑一遍。脚本查不了的（登录账号、代码之外的产出放哪），用到的时候 Claude 会问你。</li>
+        <li><b>提案、打勾、归档有门槛</b>：过不去就拦下，提示里写着怎么改；只查这次新加、改过的行，老内容不追究。写提案：没在项目里读过代码不让写；不许写"待定、后续完善、视情况"，拿不准的写成决策项；设计里提到的文件要真的存在。写设计：要有"## 验收用例"一节。写任务：只写要做的实现，每项写改哪个文件。打勾：还没说开工不能打勾；自动模式时后面一组要等前面一组做完、审修过。改产物：要在 revisions.md 记原因。归档：任务全部打勾，你说了归档才归档；人工模式不要求先审查，提示照实说审过没有；归档之后主规格里没有这个变更的需求会提醒。</li>
       </ul>
     </div>
     <div class="card" id="sec-guide-docs" data-sec="大需求怎么写">
@@ -412,33 +414,27 @@
 
     <div class="card" id="sec-ctx" data-sec="上下文和交接">
       <h2>上下文和交接</h2>
-      <div class="opt">
-        <div><div class="t">连续工作的方式</div><div class="d">默认自动压缩。手动交接必须明确选择记录；一句“继续”不会恢复旧记录。旧交接开关保留，选择交接提醒后生效。</div></div>
-        <div class="ctl"><select id="k_contextStrategy"><option value="compact">自动压缩优先</option><option value="handover">按交接线提醒</option></select></div>
-      </div>
-      <p class="hint">改完点底部的保存条。上限、交接线：开着的会话不用重开，下一条消息就按新值算。</p>
+      <p class="hint">改完点底部的保存条。上限、百分比：开着的会话不用重开，下一条消息就按新值算；自动压缩的线新开的会话生效。</p>
       <div class="opt">
         <div><div class="t">上下文上限</div><div class="d">状态栏进度条的分母，单位 token。填 0：用 Claude Code 自己报的窗口大小。</div></div>
         <div class="ctl"><input type="number" id="k_contextLimitTokens" min="0" step="10000" style="width:130px"></div>
       </div>
       <div class="opt">
-        <div><div class="t">交接线</div><div class="d">上下文用到百分之多少开始提醒交接，状态栏同时变红。30 到 95。</div></div>
-        <div class="ctl"><input type="number" id="k_handoverPercent" min="30" max="95"><span class="dim">%</span></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">自动压缩线</div><div class="d">上下文用到上限的百分之多少，Claude Code 自己压缩。50 到 95；填 0：不管，照 Claude Code 自己的。</div>
+        <div><div class="t">快满时怎么办</div><div class="d">自动压缩：到线 Claude Code 自己压缩。提醒一句：状态栏变红，你说交接才写。问我：用提问框问要不要交接。不管：照 Claude Code 自己的。</div>
           <details class="more"><summary>细节</summary><ul>
-            <li>新版的 Claude Code（2.1.259 这类）没设这一项时不按用量压缩，要等模型接口报"请求太长"才补救。内网模型报的错它认不出，上下文会一直涨，过了 100% 也不压缩。</li>
-            <li>套件把它写进 settings.json 的 <span class="mono">autoCompactWindow</span>（窗口 = 上限 × 这个百分比 + 3.3 万，Claude Code 在"窗口 − 3.3 万"处压缩）。2.1.120、2.1.259、2.1.289 都认。</li>
-            <li>窗口最大写到 96 万，也就是最晚用到 92.7 万压缩：实测窗口再大，Claude Code 还没压缩就先报 Prompt is too long 了。上限填得比 100 万大、这里填 95 的，都按这个数算，下面的预览里写着。</li>
-            <li>改了之后新开的会话生效。开着的会话在 Claude Code 里敲下面算好的那条 <span class="mono">/autocompact</span> 命令，马上生效。</li>
-            <li>默认 70%。默认的"自动压缩优先"不提醒交接，用到这里 Claude Code 自己压缩；"连续工作的方式"选了"按交接线提醒"的，这一项要比交接线高，才会先提醒交接、再压缩。</li>
+            <li>手动交接必须明确选择记录；一句"继续"不会恢复旧记录。</li>
+            <li>选"问我"时，这一轮说完 Claude 用提问框问你；选"再做一会儿"，再涨 10% 才再问。</li>
+            <li>选"提醒一句""问我"时，再过 15 个百分点（最高 95）Claude Code 才压缩，这样先提醒、再压缩。</li>
+            <li>新版的 Claude Code（2.1.259 这类）不设压缩线时不按用量压缩，要等模型接口报"请求太长"才补救。内网模型报的错它认不出，上下文会一直涨，过了 100% 也不压缩。所以默认设着。</li>
+            <li>套件把压缩线写进 settings.json 的 <span class="mono">autoCompactWindow</span>（窗口 = 上限 × 百分比 + 3.3 万，Claude Code 在"窗口 − 3.3 万"处压缩）。2.1.120、2.1.259、2.1.289 都认。</li>
+            <li>窗口最大写到 96 万，也就是最晚用到 92.7 万压缩：实测窗口再大，Claude Code 还没压缩就先报 Prompt is too long 了。下面的预览里写着算出来的数。</li>
+            <li>压缩线改了之后新开的会话生效。开着的会话在 Claude Code 里敲下面算好的那条 <span class="mono">/autocompact</span> 命令，马上生效。</li>
           </ul></details></div>
-        <div class="ctl"><input type="number" id="k_autoCompactPercent" min="0" max="95"><span class="dim">%</span></div>
+        <div class="ctl"><select id="k_contextAction"><option value="compact">自动压缩</option><option value="remind">提醒一句</option><option value="ask">问我要不要交接</option><option value="off">不管</option></select></div>
       </div>
       <div class="opt">
-        <div><div class="t">到了交接线之后</div><div class="d">选"问我"：这一轮说完，Claude 用提问框问你要不要交接；选"再做一会儿"，再涨 10% 才再问。选"不问"：只提醒一句，你说交接它才写。</div></div>
-        <div class="ctl"><select id="k_handoverAsk"><option value="ask">用提问框问我要不要交接</option><option value="off">不问，只提醒；我说交接才交接</option></select></div>
+        <div><div class="t">到百分之多少</div><div class="d">上下文用到上限的百分之多少时做上面那件事。30 到 95，选自动压缩时最低 50（填得更低按 50 算）。选"不管"时不起作用。</div></div>
+        <div class="ctl"><input type="number" id="k_contextPercent" min="30" max="95"><span class="dim">%</span></div>
       </div>
       <div class="row" style="margin-top:6px"><span id="ctxPreview" class="dim"></span><span class="msg" id="ctxMsg"></span></div>
       <p class="hint" id="gwNote" style="margin:10px 0 0"></p>
@@ -451,23 +447,6 @@
       <div class="opt">
         <div><div class="t">显示今天的用量</div><div class="d">开着：第三行显示今天经过路由的请求次数、token，和用得最多的三个模型各自的次数、token。次数到公司提醒线的 75% 变黄，到了变红。保存后下一次刷新就变。</div></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_statusUsage"><i></i></label></div>
-      </div>
-    </div>
-
-    <div class="card" id="sec-onboard" data-sec="自动探索">
-      <h2>自动探索</h2>
-      <p class="hint">进到一个没探索过的项目，套件在后台自己查。不用模型，不花额度，不占你的对话。</p>
-      <div class="opt">
-        <div><div class="t">后台自动探索</div><div class="d">开着：查工程类型、构建和启动命令、端口、编码，还有开发环境的数据库和 redis 连接，写进项目的 <span class="mono">.vibe/</span>。依据的文件改了，结果跟着改。</div>
-          <details class="more"><summary>细节</summary><ul>
-            <li>只读项目里的文件，不跑构建命令，不连数据库。</li>
-            <li>命令是照工程结构推出来的，项目说明里标着"没跑过"。Claude 第一次用的时候会跑一遍。</li>
-            <li>只把开发环境的连接配进去。测试、生产环境的不配。</li>
-            <li>你和 Claude 改过的行它不动，只更新它自己生成的、没人改过的那几行。</li>
-            <li>脚本查不了的：登录账号、代码之外的产出放哪。用到的时候 Claude 会问你。</li>
-            <li>关掉之后：没有项目说明的项目，Claude 会先跑 /ttls-onboard 自己查。</li>
-          </ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoOnboard"><i></i></label></div>
       </div>
     </div>
 
@@ -495,47 +474,17 @@
         <div><div class="t">每轮最多审文件数</div><div class="d">超出时列为未覆盖，不把部分审查记成完整结果。</div></div>
         <div class="ctl"><input type="number" id="k_reviewMaxFiles" min="1" max="60" step="1"></div>
       </div>
-      <p class="hint">提案、任务、归档各有一道门槛。过不去就拦下，提示里写着怎么改。</p>
-      <div class="opt">
-        <div><div class="t">提案、打勾、归档的门槛</div><div class="d">写提案、规格、设计、任务时查写法和顺序；打勾、归档时查流程。审查与自测是否自动执行由所属阶段决定。</div>
-          <details class="more"><summary>细节</summary><ul>
-            <li><b>写提案</b>：没在项目里读过代码不让写。不许写"待定、后续完善、视情况"，拿不准的写成决策项。设计里提到的文件要真的存在。</li>
-            <li><b>一份一份写</b>：proposal → specs → design → tasks，上一份审完（人工模式是你看过、说了写下一份）才写下一份。</li><li><b>写设计</b>：要有"## 验收用例"一节，每条写对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。</li><li><b>写任务</b>：只写要做的实现，每项写改哪个文件；不写"验："，不写测试、审查、用户验收任务（新写的会被拦下）。</li>
-            <li><b>打勾</b>：不查验法。还没说开工不能打勾（不能申请放行）。自动模式时，后面一组的任务要等前面一组做完、审修过才能打勾。</li>
-            <li><b>改产物</b>：要在 revisions.md 记原因。</li>
-            <li><b>归档</b>：任务全部打勾，你说了归档才归档；人工模式不要求先审查，提示照实说审过没有。归档之后主规格里没有这个变更的需求会提醒。</li>
-            <li>只查这次新加、改过的行，老内容不追究。</li>
-          </ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_specGate"><i></i></label></div>
-      </div>
-
-
     </div>
 
-    <div class="card" id="sec-requirements" data-sec="自动模式：需求">
+    <div class="card" id="sec-auto" data-sec="自动模式">
       <h2>自动模式（每个会话自己开）</h2>
       <p class="hint">自动模式不在这里开：在要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），只对那个会话有效，/vk-auto off 关，状态栏第二行看得到。开了以后先探索、和你确认范围和疑问，之后自动写需求文档、审修、定稿、开工，每组做完审查、自测、修改，按提交方式提交，收工交报告。不加你没说的需求；你中途报的问题、改的需求照改，接着自动做。归档、push 照旧要你点头；改库照旧按自动模式的规矩（留得下备份的才做，别的留给你，见手册"查库和 redis"）。</p>
-      <div class="opt"><div><div class="t">需求文档每个审查点的轮数上限</div><div class="d">1 到 20 轮，每个点独立计数。到上限停止该点自动循环，主动要求审查仍可继续。</div></div><div class="ctl"><input type="number" id="k_requirementsReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
-      <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档写多长都行，复杂的关系画图。两种自动都开时定稿提交后自动 apply；只要求写需求时不会自行开工。</p>
-    </div>
-    <div class="card" id="sec-auto" data-sec="自动模式：实施">
-      <h2>自动模式：实施</h2>
-      <p class="hint">整组 1.x 做完后先审查、核验、修改和复验，再做下一组。没开自动的会话，审查、自测和复验都先用 Ask 问你；放弃就继续，不记待办。</p>
-      <div class="opt"><div><div class="t">每组任务审查的轮数上限</div><div class="d">1 到 20 轮，每组独立计数，零问题通过才重数。到上限不再自动审、不挡提交，报告里写着没通过。</div></div><div class="ctl"><input type="number" id="k_applyReviewMaxRounds" min="1" max="20" step="1"><span class="dim">轮</span></div></div>
-      <div class="opt">
-        <div><div class="t">自动自测</div><div class="d">自动模式生效时，每组任务做完先跑 design.md "验收用例"里这一组的、Claude 能自动跑的用例，全部做完再全跑一遍；改了代码还要跑过快检。人工模式先 Ask。</div>
-          <details class="more"><summary>细节</summary><ul><li>验不了的，它说明"没验证"和原因就放行。</li><li>快检：项目说明（.vibe/project.md）里记的那条编译级命令，比如 <span class="mono">mvn -q compile</span>，后台探索时找出来的。标了"快检：不适用"的项目不查。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoVerify"><i></i></label></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">自动验证页面</div><div class="d">开着：改了 .vue、.html、.css 这类文件却没跑过页面场景，让它用 /ttls-see-page 看一遍。</div>
-          <details class="more"><summary>细节</summary><ul><li>/ttls-see-page 会自己起服务，用无头浏览器照步骤操作，不开窗口。</li><li>改动不影响显示的，它说明原因就放行。</li><li>关掉之后，约定改成"页面不用自己去看，我让你看时再看"，任务的验法写"人工看页面"。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoSeePage"><i></i></label></div>
-      </div>
-      <div class="opt sub">
-        <div><div class="t">到交接线先写交接记录</div><div class="d">只在“连续工作的方式”选了按交接线提醒、而且这个会话的自动模式正在生效时起作用：到了交接线先写一份交接记录再接着做。关着：不写。默认的自动压缩方式下这一项不起作用。</div></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_autoHandover"><i></i></label></div>
-      </div>
+      <ul class="g-list">
+        <li><b>审查</b>：需求文档的每个审查点、任务的每一组，做完都自动审查、核验、修改和复验，再做下一步。轮数上限固定 20 轮，各算各的，零问题通过才重数。到上限不再自动审、不挡提交，报告里写着没通过；你主动要求审查仍可继续。</li>
+        <li><b>自测</b>：每组任务做完先跑 design.md "验收用例"里这一组的、Claude 能自动跑的用例，全部做完再全跑一遍；改了代码还要跑过快检（项目说明 .vibe/project.md 里记的那条编译级命令，比如 <span class="mono">mvn -q compile</span>；标了"快检：不适用"的项目不查）。验不了的，它说明"没验证"和原因就放行。</li>
+        <li><b>看页面</b>：改了 .vue、.html、.css 这类文件却没跑过页面场景，用 /ttls-see-page 看一遍：自己起服务，用无头浏览器照步骤操作，不开窗口。改动不影响显示的，它说明原因就放行。</li>
+      </ul>
+      <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档写多长都行，复杂的关系画图。只要求写需求时不会自行开工。没开自动的会话，审查、自测和复验都先用提问框问你；放弃就继续，不记待办。</p>
     </div>
 
     <div class="card" id="sec-commit" data-sec="提交">
@@ -628,9 +577,10 @@
         <div class="ctl"><select id="k_autoMemory"><option value="off">关掉</option><option value="on">不管它，照 Claude Code 的默认</option></select></div>
       </div>
       <div class="opt">
-        <div style="flex:1"><div class="t">自己加一条</div><div class="d">直接是规则，不用等次数。自动收的满了也不挤掉它。项目里的要提交，同事的 Claude 才看得到。</div>
+        <div style="flex:1"><div class="t">自己加一条</div><div class="d">直接是规则，不用等次数，满了也不挤掉它。项目里的要提交，同事的 Claude 才看得到。</div>
           <div class="row" style="margin-top:6px"><select id="lsAddWhere" aria-label="加到哪里"></select><select id="lsAddGroup" aria-label="哪类文件"><option value="java">Java</option><option value="sql">SQL 和 Mapper</option><option value="web">前端</option><option value="spec">提案、设计、任务</option><option value="other">别的文件类型</option></select><input id="lsAddExt" class="hide" placeholder="扩展名，比如 yml" style="width:130px" aria-label="扩展名"></div>
-          <div class="row" style="margin-top:6px"><input id="lsAddText" placeholder="一句话：什么情况下、要怎么做" style="flex:1;min-width:220px" aria-label="规则"><button class="btn primary" id="lsAdd">加上</button></div></div>
+          <div class="row" style="margin-top:6px"><input id="lsAddText" placeholder="一句话：什么情况下、要怎么做" style="flex:1;min-width:220px" aria-label="规则"></div></div>
+        <div class="ctl"><button class="btn primary" id="lsAdd">加上</button></div>
       </div>
       <p class="msg" id="lsMsg" style="margin:6px 0 0"></p>
       <div id="lsPending"></div>
@@ -1131,19 +1081,17 @@
     if (n < min || n > max) return { error: label + '：要在 ' + min + ' 到 ' + max + ' 之间' + (zeroOk ? '，或者填 0' : '') };
     return n;
   }, set: (v) => { $('k_' + key).value = v === undefined || v === null ? '' : v; } }; };
-  fBool('autoVerify', '改了代码要验证'); fBool('autoSeePage', '改了页面要看页面'); fBool('specGate', '提案、打勾、归档的门槛');
   
-  fBool('autoHandover', '到交接线先写交接记录'); fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
-  fNum('tmpKeepDays', '临时目录留几天', 0, 90); fNum('requirementsReviewMaxRounds', '需求每点审查上限', 1, 20); fNum('applyReviewMaxRounds', 'Apply 每组审查上限', 1, 20);
-  fNum('handoverPercent', '交接线', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true); fNum('autoCompactPercent', '自动压缩线', 50, 95, true);
+  fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
+  fNum('tmpKeepDays', '临时目录留几天', 0, 90);
+  fNum('contextPercent', '到百分之多少', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
-  fSel('handoverAsk', '到了交接线之后', ['ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
-  fSel('contextStrategy', '连续工作的方式', ['compact', 'handover']);
+  fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fSel('reviewExecutor', '审查方式', ['direct', 'agent']);
   fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800); fNum('reviewMaxFiles', '审查文件上限', 1, 60);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
-  fBool('lessonAuto', '审查报的问题自动收'); fBool('autoOnboard', '后台自动探索'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);
+  fBool('lessonAuto', '审查报的问题自动收'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);
   fSel('autoUpdate', '发现新版之后', ['auto', 'notify', 'off']); fNum('updateCheckHours', '多久检查一次', 1, 24); fBool('updateEarly', '先装新版（尝鲜）'); fSel('issueUpload', '问题上报', ['on', 'off']); fSel('sshToken', '没填令牌的时候', ['auto', 'off']);
   const sameVal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   let base = null; // 上一次从路由拿到的开关：和页面上现在的值一比，就知道哪几项是在这个页面上改过的
@@ -1249,14 +1197,17 @@
   let sessions = [];
   function renderCtx() {
     const limit = Number($('k_contextLimitTokens').value) || 0;
-    const line = Number($('k_handoverPercent').value) || 70;
-    const acp = Number($('k_autoCompactPercent').value);
+    const action = $('k_contextAction').value;
+    const line = Number($('k_contextPercent').value) || 70;
+    // 和套件的 lib/config-fields.js 算压缩线的办法一样
+    const acp = action === 'off' ? 0 : action === 'compact' ? Math.max(50, line) : Math.min(95, Math.max(50, line + 15));
     // 和套件里算 autoCompactWindow 的办法一样（kit/lib/session.js 的 autoCompactWindowOf）
     const acw = acp > 0 ? Math.max(100000, Math.min(960000, Math.round((limit > 0 ? limit : 1000000) * Math.min(acp, 95) / 100) + 33000)) : 0;
     const compact = acw ? '；用到 ' + tok(acw - 33000) + ' 时 Claude Code 自己压缩（开着的会话敲 /autocompact ' + acw + ' 马上生效）' : '；自动压缩照 Claude Code 自己的';
-    $('ctxPreview').textContent = (limit > 0
-      ? '按现在填的：上限 ' + tok(limit) + '，用到 ' + tok(Math.round(limit * line / 100)) + '（' + line + '%）时提醒交接'
-      : '按现在填的：上限跟着 Claude Code 报的窗口走，用到它的 ' + line + '% 时提醒交接') + compact;
+    const say = action === 'ask' ? '问你要不要交接' : '提醒一句';
+    const head = limit > 0 ? '按现在填的：上限 ' + tok(limit) : '按现在填的：上限跟着 Claude Code 报的窗口走';
+    const remind = action === 'remind' || action === 'ask' ? (limit > 0 ? '，用到 ' + tok(Math.round(limit * line / 100)) + '（' + line + '%）时' : '，用到它的 ' + line + '% 时') + say : '';
+    $('ctxPreview').textContent = head + remind + compact;
     const g = state && state.gateway;
     $('gwNote').innerHTML = g && g.limitBytes
       ? '<b style="color:var(--warn)">实测到的网关限制：</b>' + esc(new Date(g.limitAt).toLocaleString('zh-CN', { hour12: false })) + ' 有一次 ' + (g.limitBytes / 1048576).toFixed(2) + ' MB 的请求被网关直接拒绝（413），那时的上下文大约 ' + tok(g.limitTokens) + ' token。这是网关对单次请求大小的限制，和模型的上下文长度无关，到了就发不出去。之后快到这个大小的 85% 时，状态栏会提前警告，不管上面的上限填多少。想根治要请网关管理员把请求体上限调大。 <button class="btn" id="gwForget">忘掉这条记录</button>'
@@ -1281,7 +1232,7 @@
   }
   async function loadHooks() { try { renderHookStatus(await api('GET', '/api/kit/hooks')); } catch (e) { /* 老版本没有这个接口 */ } }
   // 上下文这几项以前一改就自动保存：保存条冒出来又马上消失，看着像没存（2026-10-17 用户提的）。现在和别的开关一样，等点保存条
-  for (const id of ['k_contextLimitTokens', 'k_handoverPercent', 'k_autoCompactPercent']) $(id).addEventListener('input', renderCtx);
+  for (const id of ['k_contextLimitTokens', 'k_contextPercent', 'k_contextAction']) { $(id).addEventListener('input', renderCtx); $(id).addEventListener('change', renderCtx); }
   setInterval(() => { if (!$('tab-kit').classList.contains('hide')) { loadSessions(); loadHooks(); } }, 5000);
 
   // ---------- 底部的保存条：页面上有开关改了还没保存，它就冒出来。存的是这个页面上所有改过的开关 ----------
@@ -1303,7 +1254,7 @@
     $('barSave').disabled = true;
     try {
       const r = await saveFields(null, $('barMsg'), '已保存，立即生效');
-      if (r && r.saved.includes('autoCompactPercent')) say($('barMsg'), '已保存。自动压缩线新开的会话生效；开着的会话照"上下文和交接"里那条 /autocompact 命令敲一下', true);
+      if (r && (r.saved.includes('contextAction') || r.saved.includes('contextPercent') || r.saved.includes('contextLimitTokens'))) say($('barMsg'), '已保存。压缩线新开的会话生效；开着的会话照"上下文和交接"里那条 /autocompact 命令敲一下', true);
       if (r) { barKeep = Date.now() + 4000; setTimeout(renderBar, 4100); loadRemote(false); loadLessons(); loadFeedback(); }
     } finally { $('barSave').disabled = false; renderBar(); }
   };

@@ -14,7 +14,9 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, updateEarly: false, updatePin: '', updateSkip: '', issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', perfReport: 'on', ccAutoMode: 'off', contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+// 开关字段表（K1-4）：装好的在 ../lib，源码里在 ../kit/lib。默认值、清洗都从它来
+const CF = (() => { for (const d of ['lib', 'kit/lib']) { const f = path.join(__dirname, '..', d, 'config-fields.js'); if (fs.existsSync(f)) return require(f); } throw new Error('找不到开关字段表 config-fields.js，重新运行安装包'); })();
+const { DEFAULT_CONFIG } = CF;
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -57,71 +59,20 @@ function installNotice(kitDir) {
 }
 function cleanConfig(x, base) {
   const c = Object.assign({}, DEFAULT_CONFIG, base && typeof base === 'object' ? base : {});
-  // 提示规则 2026-09-30 去掉了：文件里以前存的那一项不再写回去
+  // 提示规则 2026-09-30 去掉了；维护套件的电脑 2026-10-01 起写死在套件的 lib/gitlab.js 里（不给别的电脑看到）：文件里以前存的不再写回去
   delete c.hints;
-  // autoOnboard 后台自动探索；lessonAuto 审查报的问题自动收；dbcrudDaemon 查库的后台执行器
-  for (const k of ['autoVerify', 'autoSeePage', 'autoCrossReview', 'commitCheck', 'specGate', 'reviewLoop', 'autoMode', 'autoRequirements', 'autoApply', 'autoHandover', 'kitLock', 'autoOnboard', 'lessonAuto', 'dbcrudDaemon']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
-  // 后台执行器多久没人用就退出：1 到 60 分钟
-  const idle = Number(x && x.dbcrudDaemonIdleMinutes); if (idle >= 1 && idle <= 60) c.dbcrudDaemonIdleMinutes = Math.round(idle);
-  // .vibe/tmp 下的临时目录多少天没动就自动清掉：0 = 不自动清，最多 90 天
-  const keep = Number(x && x.tmpKeepDays); if (x && x.tmpKeepDays !== undefined && x.tmpKeepDays !== '' && keep >= 0 && keep <= 90) c.tmpKeepDays = Math.round(keep);
-  // 需求、Apply 每个审查点最多几轮：1 到 20
-  for (const k of ['requirementsReviewMaxRounds', 'applyReviewMaxRounds']) { const n = Number(x && x[k]); if (n >= 1 && n <= 20) c[k] = Math.round(n); }
+  delete c.maintainerHosts;
+  CF.applyFields(c, x);
   // 只有旧名 autoMode、没有 autoApply 时按 autoMode 算，和钩子的 readConfig 同一条规则（2026-10-17 审核建议 19：原来钩子按开着、配置页显示关着）
   if (x && !Object.prototype.hasOwnProperty.call(x, 'autoApply') && typeof x.autoMode === 'boolean') c.autoApply = x.autoMode;
   c.autoMode = c.autoApply;
-  const rounds = Number(x && x.reviewMaxRounds); if (rounds >= 1 && rounds <= 5) c.reviewMaxRounds = Math.round(rounds);
-  if (x && ['direct', 'agent'].includes(x.reviewExecutor)) c.reviewExecutor = x.reviewExecutor;
-  const budget = Number(x && x.reviewBudgetSeconds); if (budget >= 10 && budget <= 1800) c.reviewBudgetSeconds = Math.round(budget);
-  const files = Number(x && x.reviewMaxFiles); if (files >= 1 && files <= 60) c.reviewMaxFiles = Math.round(files);
-  if (x && ['ask', 'off'].includes(x.handoverAsk)) c.handoverAsk = x.handoverAsk;
-  if (x && ['compact', 'handover'].includes(x.contextStrategy)) c.contextStrategy = x.contextStrategy;
-  // 自动提交：task 每完成一件事就提交；change 整个 OpenSpec 变更做完再提交一次；off 用户说了才提交
-  // 提交方式：关 / 询问 / 自动（2026-10-17 起替代 autoCommit、plainCommit）
-  if (x && ['off', 'ask', 'auto'].includes(x.commitMode)) c.commitMode = x.commitMode;
-  // 不走 OpenSpec 的改动（修 bug、改配置）：ask 改完先问用户、他说了提交才提交；auto 验证过就提交
-  // 钩子运行方式：auto 装了路由就走 HTTP、否则走命令；http、command 固定用一种。别的值丢掉，用默认的 auto
-  if (x && ['auto', 'http', 'command'].includes(x.hookTransport)) c.hookTransport = x.hookTransport;
-  // 被检查拦住、它确信是套件拦错了：ask 申请后弹确认框等你点头；auto 记下问题就放行；off 不许申请
-  if (x && ['ask', 'auto', 'off'].includes(x.kitBypass)) c.kitBypass = x.kitBypass;
-  const pct = Number(x && x.handoverPercent); if (pct >= 30 && pct <= 95) c.handoverPercent = Math.round(pct);
-  // 上下文上限：状态栏进度条和交接线的分母。0 = 跟着 Claude Code 自己报的窗口走。旧版本的 gatewayLimitTokens 不再认
-  const raw = x && x.contextLimitTokens;
-  const lim = raw === '' || raw === null || raw === undefined ? NaN : Number(raw);
-  if (lim === 0 || (lim >= 50000 && lim <= 10000000)) c.contextLimitTokens = Math.round(lim);
-  // 经验规则：on 到次数就生成规则；collect 只收候选、不生成规则；off 不记也不催
-  if (x && ['on', 'collect', 'off'].includes(x.lessons)) c.lessons = x.lessons;
-  // 同一条经验在几个不同的变更里出现才变成规则（1～5）；一种文件类型最多几条（3～30）；一条最多多少字（40～300）
-  const th = Number(x && x.lessonThreshold); if (th >= 1 && th <= 5) c.lessonThreshold = Math.round(th);
-  const per = Number(x && x.lessonMaxPerGroup); if (per >= 3 && per <= 30) c.lessonMaxPerGroup = Math.round(per);
-  const chars = Number(x && x.lessonMaxChars); if (chars >= 40 && chars <= 300) c.lessonMaxChars = Math.round(chars);
-  // 升成用户级：ask 要你在这个页面上点；auto 两个项目里都成了规则就自动升
-  if (x && ['ask', 'auto'].includes(x.lessonPromote)) c.lessonPromote = x.lessonPromote;
-  // Claude Code 自带的自动记忆：off 由套件关掉（settings.json 的 env 里写 CLAUDE_CODE_DISABLE_AUTO_MEMORY=1）；on 不管它
-  if (x && ['off', 'on'].includes(x.autoMemory)) c.autoMemory = x.autoMemory;
-  // 自动更新：auto 发现新版自己装；notify 只提醒；off 不检查。几小时查一次（1～24）
-  if (x && ['auto', 'notify', 'off'].includes(x.autoUpdate)) c.autoUpdate = x.autoUpdate;
-  const hours = Number(x && x.updateCheckHours); if (hours >= 1 && hours <= 24) c.updateCheckHours = Math.round(hours);
-  // 先装新版（尝鲜组，发版保护 K2）：勾了一发现新版就装；不勾等这一版发布满 24 小时、尝鲜组没报问题再装（见套件 lib/updater.js）
-  if (x && typeof x.updateEarly === 'boolean') c.updateEarly = x.updateEarly;
-  // 固定在这一版、跳过这一版（K2）：存版本号，空 = 没有。由"更新和上报"的按钮写，乱填的保持原值
-  for (const k of ['updatePin', 'updateSkip']) if (x && typeof x[k] === 'string' && (x[k] === '' || /^\d{8}\.\d{4}$/.test(x[k]))) c[k] = x[k];
-  // 问题上报：on 记下的问题自动建成 GitLab 的议题；off 只存在本机。没填令牌时用不用 SSH 去申请一个：auto / off
-  if (x && ['on', 'off'].includes(x.issueUpload)) c.issueUpload = x.issueUpload;
-  if (x && ['auto', 'off'].includes(x.sshToken)) c.sshToken = x.sshToken;
-  // 维护套件的电脑 2026-10-01 起写死在套件的 lib/gitlab.js 里，不再是开关（不给别的电脑看到）：文件里以前存的那一项不再写回去
-  delete c.maintainerHosts;
-  // 自动压缩线：用到上下文上限的百分之多少时 Claude Code 自己压缩（写进 settings.json 的 autoCompactWindow）。0 = 不管，照 Claude Code 自己的；别的在 50 到 95 之间
-  const acp = Number(x && x.autoCompactPercent); if (x && x.autoCompactPercent !== undefined && x.autoCompactPercent !== '' && (acp === 0 || (acp >= 50 && acp <= 95))) c.autoCompactPercent = Math.round(acp);
-  // 状态栏第三行显示今天的请求次数和 token；开工前先拉代码
-  for (const k of ['statusUsage']) if (x && typeof x[k] === 'boolean') c[k] = x[k];
-  // 使用情况上报：每天一条，只有次数和名字（见套件 lib/usage.js）
-  if (x && ['on', 'off'].includes(x.usageReport)) c.usageReport = x.usageReport;
-  // 耗时异常上报（问题表第 20 条，2026-10-30 定的）：上报 / 只记本机 / 关
-  if (x && ['on', 'local', 'off'].includes(x.perfReport)) c.perfReport = x.perfReport;
-  // Claude Code 自带的自动模式（auto mode）：off = 套件把它关掉（settings.json 的 permissions.disableAutoMode），on = 不管它
-  if (x && ['off', 'on'].includes(x.ccAutoMode)) c.ccAutoMode = x.ccAutoMode;
-  return c;
+  // 上下文快满时怎么办（J2）：页面上的两项改了才写回文件里存的四项；页面给的值都从这四项算
+  const before = CF.contextView(base && typeof base === 'object' ? Object.assign({}, DEFAULT_CONFIG, base) : DEFAULT_CONFIG);
+  const [fa, fp] = CF.VIEW_FIELDS;
+  const action = CF.accept(fa, x && x.contextAction);
+  const percent = CF.accept(fp, x && x.contextPercent);
+  if ((action !== undefined && action !== before.contextAction) || (percent !== undefined && percent !== before.contextPercent)) Object.assign(c, CF.contextFromView(action === undefined ? before.contextAction : action, percent === undefined ? before.contextPercent : percent));
+  return Object.assign(c, CF.contextView(c));
 }
 
 // ---------- 自动探测 ----------
@@ -619,7 +570,10 @@ function mergeConfig(kitDir, inc) {
   try {
     const cur = cleanConfig(readJson(configFile, DEFAULT_CONFIG));
     const c = cleanConfig(Object.assign({}, cur, inc), cur);
-    writeJson(configFile, c);
+    // 页面上的两项（J2）不存：文件里只有算它们用的四项，手改那四项才算数
+    const saved = Object.assign({}, c);
+    for (const f of CF.VIEW_FIELDS) delete saved[f.name];
+    writeJson(configFile, saved);
     return { cur, c };
   } finally { if (lock) lock.release(); }
 }

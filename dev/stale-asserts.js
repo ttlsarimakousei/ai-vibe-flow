@@ -62,9 +62,10 @@ for (const n of tests) {
 }
 
 // 默认值：DEFAULT_CONFIG 是一行，按"名字: 值"比
-const cfgOf = (text) => { const m = String(text || '').match(/const DEFAULT_CONFIG = \{([^\n]*)\};/); const o = {}; if (m) for (const x of m[1].matchAll(/(\w+):\s*('[^']*'|"[^"]*"|[^,\s]+)/g)) o[x[1]] = x[2]; return o; };
-const before = cfgOf(git(['show', base + ':vibe-kit/kit/lib/session.js']));
-const after = cfgOf(fs.readFileSync(path.join(REPO, 'vibe-kit', 'kit', 'lib', 'session.js'), 'utf8'));
+// 2026-11-01 起在字段表里（K1-4），一个字段一行；再早在 session-config.js、session.js 里
+const cfgOf = (text) => { const t = String(text || ''); const m = t.match(/const DEFAULT_CONFIG = \{([^\n]+)\};/); const o = {}; if (m) for (const x of m[1].matchAll(/(\w+):\s*('[^']*'|"[^"]*"|[^,\s]+)/g)) o[x[1]] = x[2]; else for (const x of t.matchAll(/\{ name: '(\w+)', type: '\w+', def: ('[^']*'|true|false|\d+)/g)) o[x[1]] = x[2]; return o; };
+const before = cfgOf(['kit/lib/config-fields.js', 'kit/lib/session-config.js', 'kit/lib/session.js'].map((f) => git(['show', base + ':vibe-kit/' + f])).join('\n'));
+const after = cfgOf(fs.readFileSync(path.join(REPO, 'vibe-kit', 'kit', 'lib', 'config-fields.js'), 'utf8'));
 const changed = [...new Set(Object.keys(before).concat(Object.keys(after)))].filter((k) => before[k] !== after[k]);
 
 console.log('从 ' + base + ' 以来：');

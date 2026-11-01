@@ -91,7 +91,8 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
     H.ok('新的几项存得进去', s4.json.config.autoUpdate === 'notify' && s4.json.config.updateCheckHours === 6 && s4.json.config.sshToken === 'off' && s4.json.config.autoCompactPercent === 80 && s4.json.config.usageReport === 'off' && s4.json.config.commitMode === 'auto' && s4.json.config.statusUsage === false, s4.text);
     H.ok('自动压缩线改了：settings.json 的窗口跟着改', readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow === 833000 && s4.json.synced !== false, [readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow, s4.json.output]);
     const s5 = await call('POST', '/api/kit/config', { autoCompactPercent: 0 });
-    H.ok('填 0：窗口去掉，照 Claude Code 自己的', s5.json.config.autoCompactPercent === 0 && readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow === undefined, s5.text);
+    H.ok('页面上的两项（J2）给页面，不存进文件', s5.json.config.contextAction === 'off' && !('contextAction' in readJson(path.join(h.kit, 'config.json'))) && !('contextPercent' in readJson(path.join(h.kit, 'config.json'))), readJson(path.join(h.kit, 'config.json')));
+    H.ok('填 0：窗口去掉，照 Claude Code 自己的', s5.json.config.autoCompactPercent === 0 &&readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow === undefined, s5.text);
     await call('POST', '/api/kit/config', { sshToken: 'auto', commitMode: 'ask', reviewMaxRounds: 3, autoCompactPercent: 90, usageReport: 'on', statusUsage: true });
 
     H.section('仓库地址和令牌');

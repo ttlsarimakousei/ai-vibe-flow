@@ -185,20 +185,13 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('存下了', (await call('GET', '/api/kit')).json.config.dbcrudDaemon === true);
     await shot('6-data-full');
     await page.click('nav button[data-tab="kit"]');
-    await page.waitForFunction(() => document.getElementById('k_handoverPercent').value !== '');
+    await page.waitForFunction(() => document.getElementById('k_contextPercent').value !== '');
     const ksecs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());
-    // 20261031 起（问题表第 28 条）自动模式按会话开，两节改叫"自动模式：需求""自动模式：实施"，里面只剩说明和轮数上限
-    H.ok('套件开关页有"自动探索"一节；"提示规则""清点技能"两节去掉了', ksecs.join('|') === '上下文和交接|状态栏|自动探索|全局：过程文件|全局：审查与产物|自动模式：需求|自动模式：实施|提交|保护', ksecs);
-    H.ok('自动探索、审查问题自动收（在经验规则那一页）：默认开着', (await page.locator('#k_autoOnboard').isChecked()) && (await page.locator('#tab-lessons #k_lessonAuto').isChecked()));
+    // 20261102 起（问题表第 29、30 条）自动探索不做开关，自动模式合成一节
+    H.ok('套件开关页没有"自动探索""提示规则""清点技能"这几节', ksecs.join('|') === '上下文和交接|状态栏|全局：过程文件|全局：审查与产物|自动模式|提交|保护', ksecs);
+    H.ok('审查问题自动收（在经验规则那一页）默认开着；自动探索没有开关', (await page.locator('#k_autoOnboard').count()) === 0 && (await page.locator('#tab-lessons #k_lessonAuto').isChecked()));
     const opts = await page.locator('#tab-kit .opt, #tab-data .opt, #tab-lessons .opt, #tab-remote .opt').evaluateAll((els) => els.map((e) => ({ t: (e.querySelector('.t') || {}).textContent || '', d: (e.querySelector(':scope > div > .d') || {}).textContent || '' })));
     H.ok('新加的开关也是一句话说明，不超过 90 个字', opts.every((o) => o.t.trim() && o.d.trim() && o.d.trim().length <= 90), opts.filter((o) => o.d.trim().length > 90).map((o) => o.t + ' ' + o.d.trim().length));
-    await page.locator('#k_autoOnboard').setChecked(false, { force: true });
-    await page.waitForSelector('#savebar.on');
-    await page.click('#barSave');
-    await page.waitForSelector('#barMsg.ok');
-    H.ok('关掉自动探索：存下了', (await call('GET', '/api/kit')).json.config.autoOnboard === false);
-    await page.locator('#sec-onboard').scrollIntoViewIfNeeded();
-    await shot('7-kit-onboard', true);
     H.ok('页面上没有报错', errors.length === 0, errors);
   }
   await stopAll();

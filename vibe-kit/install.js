@@ -614,7 +614,7 @@ function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'
 // 两阶段各有独立的审查上限；每个产物、每个整组任务分别计数。
 function reviewModeText() {
   const c = kitConfig();
-  return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 3) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 3) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做；用户主动要求审查不受自动上限限制。';
+  return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 20) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 20) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做；用户主动要求审查不受自动上限限制。';
 }
 const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动逐产物审修；Apply 按已授权范围逐整组任务审修、自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
 const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
@@ -1086,6 +1086,25 @@ if (mode === 'install') {
       fs.mkdirSync(path.dirname(forceFile), { recursive: true });
       fs.writeFileSync(forceFile, JSON.stringify(forced));
       if (said.length) console.log('  [OK] 这一版把几项开关改回了新的默认值：' + said.join('；') + '。要别的在配置页改，之后的更新不再动');
+    }
+  }
+  // 2026-11-02（用户定的，问题表第 29—31 条）：自动自测、自动验证页面、后台自动探索、提案打勾归档的门槛不再是开关，自动审核上限固定 20，
+  // 到交接线先写交接记录取消。配置里以前存的值清掉一次（配置页上已经改不回来了）；之后手写的还认
+  {
+    const fx = path.join(KIT, 'state', 'fixed-switch-migration.json');
+    if (!fs.existsSync(fx)) {
+      let cur = null;
+      try { cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^\uFEFF/, '')); if (!cur || typeof cur !== 'object' || Array.isArray(cur)) cur = null; } catch (e) { cur = null; }
+      if (cur) {
+        const { FIXED } = require(path.join(SRC, 'kit', 'lib', 'config-fields.js'));
+        const had = FIXED.filter((k) => k in cur);
+        for (const k of had) delete cur[k];
+        try {
+          if (had.length) fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2) + '\n');
+          fs.mkdirSync(path.dirname(fx), { recursive: true });
+          fs.writeFileSync(fx, JSON.stringify({ at: Date.now(), removed: had }));
+        } catch (e) { /* 写不了：下次更新再清 */ }
+      }
     }
   }
   // 2026-10-31（用户定的，问题表第 28 条）：自动模式改成每个会话一个开关（/vk-auto），配置里旧的两个开关（需求自动、Apply 自动）清掉一次。
