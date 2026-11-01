@@ -415,6 +415,10 @@ const commitJs = (msg) => (kit) => { const proj = project(kit); return { proj, j
 add('K3：跑 commit.js，提交信息不合规', 'guard-commit', commitJs('加导出'), /提交信息不符合公司规范/, NEXT);
 add('K3：跑 commit.js，用户没说提交', 'guard-commit', commitJs('feat: 加导出'), /提交方式是\\"关\\"/, NEXT);
 for (const c of cases) if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /做任务这一段的规矩（照做就不会被拦）：[\s\S]*commit\.js\\" -m \\"类型: 内容\\" 只提交这个会话改过的文件/; c.since = NEXT; }
+// K3（2026-11-01）：编译、测试命令失败时，第一个错误、文件:行、前后 5 行源码作为摘要送给模型；成功的什么都不加
+const built = (event, extra) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, Object.assign({ hook_event_name: event, tool_name: 'Bash', tool_input: { command: 'mvn -q -o compile' } }, extra(proj))) }; };
+add('K3：编译失败只给摘要', 'after-tool', built('PostToolUseFailure', (proj) => ({ error: 'Exit code 1\n[INFO] 编译\n[ERROR] /' + path.join(proj, 'src/main/java/com/x/A.java').replace(/\\/g, '/') + ':[2,1] 需要 class, interface, enum 或 record\n[INFO] 1 error\n' })), /失败摘要\] Maven 没过，第一个错误：src\/main\/java\/com\/x\/A\.java:2:1　需要 class[\s\S]*2>\| class A \{\}/, NEXT);
+add('K3：编译成功什么都不加', 'after-tool', built('PostToolUse', () => ({ tool_response: { stdout: '[INFO] BUILD SUCCESS', stderr: '' } })));
 
 let same = 0;
 let changed = 0;

@@ -1,5 +1,9 @@
 'use strict';
-/* 工具完成后的本机记账入口。只记可核对的结果；失败、取消和未知结果不消费用户许可，也不算通过验证。 */
+/*
+ * 工具完成后的本机记账入口。只记可核对的结果；失败、取消和未知结果不消费用户许可，也不算通过验证。
+ * 2026-11-01 起（K3）还给模型送几句话（additionalContext），都只在有话说时才送：
+ *   编译、测试命令失败：第一个错误、文件:行、前后 5 行源码（lib/fail-summary.js）
+ */
 const S = require('../lib/session');
 function successful(j) {
   if (j.hook_event_name !== 'PostToolUse') return false;
@@ -33,6 +37,10 @@ function handle(j) {
     // 失败的命令走 PostToolUseFailure，顶层是 error、没有 tool_response（docs/claude-code-facts.md 三版实测；2026-10-17 审核问题 11）
     const output = String(j.tool_response && (j.tool_response.stderr || j.tool_response.stdout || j.tool_response.error) || j.error || '');
     if (/\bopenspec\b/i.test(cmd) && /unknown command|unknown option|不支持.*(?:指令|命令)|未知.*(?:指令|命令)/i.test(output)) return { hookSpecificOutput: { hookEventName: j.hook_event_name || 'PostToolUse', additionalContext: openspecHint() } };
+    // 编译、测试命令失败：第一个错误、文件:行、前后 5 行源码作为摘要送给模型（K3 M08，lib/fail-summary.js）。成功的什么都不加
+    const notes = [];
+    if (/^(Bash|PowerShell)$/.test(String(j.tool_name || '')) && !successful(j)) { try { const s = require('../lib/fail-summary').summarize(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 失败摘要', j, e); } }
+    if (notes.length) return { hookSpecificOutput: { hookEventName: j.hook_event_name || 'PostToolUse', additionalContext: notes.join('\n\n') } };
     return null;
   } catch (e) { try { require('../lib/feedback').recordHookError('after-tool', j, e); } catch (ignored) { /* 记不了也放行 */ } return null; }
 }
