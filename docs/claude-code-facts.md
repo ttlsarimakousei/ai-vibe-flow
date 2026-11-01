@@ -138,3 +138,12 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 - 半截被当成回完了，只在"一整段发完之后、没有 message_stop 就正常收尾"出现，内网在用的 2.1.120、2.1.259 都中招；2.1.289 自己认得出。
 - 让 Claude Code 知道没成，报错事件和断开连接效果一样：断在一段中间三个版本都重发；一段发完之后 2.1.259、2.1.289 接着写，2.1.120 报错停下（不重发，但不再装成回完了，用户说"继续"就接着做）。区别是重发的方式：报错事件让三个版本都改成不走流式重发，断开连接时 2.1.259 起照样走流式。报错事件的类型（api_error、overloaded_error）对重不重发没影响。
 - 路由的做法（11-01 这一批，E3）：流式回复没收到 message_stop 就结束的（上游中途断开、半天不再发数据、正常收尾却没有 message_stop），一律断开客户端的连接；已经收到 message_stop 之后上游才断开的，照常结束。改完拿同一个探针、改过的路由在三个版本上复测：没有 message_stop 就正常收尾、断在一段中间的，三个版本都重发（2.1.259 起走流式）；一整段发完之后的，2.1.259、2.1.289 接着写，2.1.120 报错停下（`API Error: The socket connection was closed unexpectedly…`），不再把半截当成回完了；发完 message_stop 才断开的，三个版本都照常。
+
+## 失败命令的输出、附加上下文、工具认出自己的会话（实测，2026-11-01）
+
+`dev/probes/cc-tool-context.js` 在 2.1.120、2.1.289 上实测（K3 的失败摘要、表结构提醒、commit.js、checkpoint.js 靠这几条）：
+
+- 失败的 Bash 走 PostToolUseFailure，顶层 `error` 是 `Exit code N`、一个换行，再跟命令的全部输出（stdout、stderr 混在一起）；会话记录里这条 tool_result 是同样的文字、`is_error: true`。
+- PostToolUseFailure 的 `hookSpecificOutput.additionalContext` 送得到模型（和 PostToolUse 一样，下一次请求里带着）。
+- PreToolUse 不拦、只给 `additionalContext`：工具照常执行，那句话随工具结果一起送到模型。模型读到它时工具已经跑完了，所以"动手之前提醒"不能靠它，要在用户开口、收工这些时机说。
+- Bash 工具起的进程里：2.1.289 有环境变量 `CLAUDE_CODE_SESSION_ID`（就是会话号），2.1.120 没有。两版都是：命令执行时，这条 tool_use 已经写进了会话记录（最后一条），记录里带着当前目录 `cwd`。没有环境变量时，工具按"最近改过的会话记录里还没有结果的那条命令"认出自己（lib/edited-files.js 的 findSession）。

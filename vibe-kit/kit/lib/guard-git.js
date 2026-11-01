@@ -264,7 +264,7 @@ function onlyMetadata(g, st) {
   const added = [...st.added].filter((a) => a === rk || a.startsWith(rk + '/'));
   const kitFile = (a) => /\/\.claude\/rules\/(?:[^/]*lessons-[^/]*|learned-rules)\.md$/i.test(a) || /\/openspec\//i.test(a);
   try {
-    const staged = execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { windowsHide: true, encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\x00').filter(Boolean).map((f) => normKey(path.resolve(root, f)));
+    const staged = (Array.isArray(g.files) ? g.files : execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { windowsHide: true, encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\x00').filter(Boolean)).map((f) => normKey(path.resolve(root, f)));
     const files = added.concat(staged);
     return files.length > 0 && files.every(kitFile);
   } catch (e) { return false; }
@@ -276,6 +276,8 @@ function onlyMetadata(g, st) {
  * Git 出错、超时返回 null，调用方按更严的一边处理。
  */
 function commitFiles(g, st) {
+  // 跑 tools/commit.js 合成的提交（commitToolRun）：要提交的就是它算好的那几个，不看真暂存区
+  if (Array.isArray(g.files)) return g.files.slice();
   const root = repoRoot(g.dir) || g.dir; const rk = normKey(root);
   const opt = { encoding: 'utf8', windowsHide: true, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] };
   try {
@@ -370,4 +372,61 @@ function plainPush(g) {
   } catch (e) { return false; }
 }
 
-module.exports = { parseGit, messageOf, pushAnywhere, publishAnywhere, commitAll, gitIssue, tempIndexOf, newFilesIssue, consentIssue, plainPush };
+// ---------- 跑 tools/commit.js：当成一次 git add + git commit 来查（K3 M09，2026-11-01） ----------
+/*
+ * commit.js 只提交这个会话改过的文件（lib/edited-files.js 的 commitPlan）。它不能成了绕过提交检查的后门：
+ * 这里按它会提交的文件和提交信息合成两条——git add -- <那几个文件>、git commit -m <信息>（g.files 是要提交的文件，
+ * commitFiles、onlyMetadata 认它，不看真暂存区）——guard-commit 照 git 的检查走一遍：提交信息格式、提交方式（关 / 询问 / 自动）、
+ * 提案材料、过程文件、新文件没带上（--only 只提交一部分时，这个会话新建的别的文件照样点名）。套件自己的文件（含令牌文件）commitPlan 不收。
+ * 没拦下的，guard-commit 最后给这次运行记一张票（noteCommitTools）；commit.js 没有票不提交（钩子没跑、出错放行时）。
+ * 只看不提交的（help、list、--dry-run）不合成
+ */
+/** 这一段是不是在跑套件的 tools/commit.js：是的话返回脚本后面的参数（词），不是返回 null */
+function commitToolArgs(ws, head, dir) {
+  if (!head || head.name !== 'node') return null;
+  const rest = ws.slice(head.i + 1);
+  const k = rest.findIndex((w) => !String(w.text).startsWith('-'));
+  if (k < 0 || dynamicPath(rest[k])) return null;
+  const script = path.resolve(dir, local(rest[k].text));
+  if (!/[\\/]tools[\\/]commit\.js$/i.test(script)) return null;
+  try { if (!require('./session').isKitPath(script, dir)) return null; } catch (e) { return null; }
+  return rest.slice(k + 1);
+}
+function commitToolRun(ws, head, dir, st) {
+  const args = commitToolArgs(ws, head, dir);
+  if (!args) return null;
+  const t = args.map((w) => String(w.text));
+  if ((t[0] && /^(help|list|-h|--help)$/i.test(t[0])) || t.includes('--dry-run')) return null;
+  let dirWord = null;
+  const only = [];
+  const msgWords = [];
+  for (let i = 0; i < args.length; i++) {
+    const x = t[i];
+    if (x === '--dir' && args[i + 1]) { dirWord = args[++i]; continue; }
+    if (x.startsWith('--dir=')) { dirWord = { text: x.slice(6), raw: String(args[i].raw).replace(/^--dir=/, '') }; continue; }
+    if (x === '--only' && args[i + 1]) { only.push(...String(args[++i].text).split(',').map((s) => s.trim()).filter(Boolean)); continue; }
+    if (x === '--session' && args[i + 1]) { i++; continue; }
+    if ((x === '-m' || x === '--message') && args[i + 1]) { msgWords.push(args[i], args[i + 1]); i++; continue; }
+    if (/^-m./.test(x) || x.startsWith('--message=')) msgWords.push(args[i]);
+  }
+  const dyn = dirWord && dynamicPath(dirWord) ? String(dirWord.raw) : '';
+  const at = dirWord && !dyn ? path.resolve(dir, local(dirWord.text)) : dir;
+  const root = dyn ? '' : require('./edited-files').repoOf(at);
+  const j = st.j || {};
+  let plan = { files: [] };
+  if (root && j.transcript_path) {
+    const E = require('./edited-files');
+    plan = E.commitPlan({ entries: E.entriesOf(j.transcript_path), cwd: j.cwd || st.cwd0 || dir, root, only });
+  }
+  const word = (s) => ({ text: s, raw: JSON.stringify(s) });
+  const files = plan.files.map((f) => f.rel);
+  const gCommit = { sub: 'commit', args: msgWords, dir: root || at, dyn, files, tool: 'commit.js' };
+  if (root) st.commitTools = (st.commitTools || []).concat({ sid: j.session_id, root, files });
+  return files.length ? [{ sub: 'add', args: plan.files.map((f) => word(f.abs)), dir: root, dyn: '', tool: 'commit.js' }, gCommit] : [gCommit];
+}
+/** 这条命令查完、没拦下（放行或要用户确认）：给里面每次 commit.js 记一张票。拦下的不记 */
+function noteCommitTools(st) {
+  for (const t of (st && st.commitTools) || []) { try { require('./edited-files').writeTicket(t.sid, t); } catch (e) { /* 记不了票：commit.js 不提交，让它改用 git */ } }
+}
+
+module.exports = { parseGit, messageOf, pushAnywhere, publishAnywhere, commitAll, gitIssue, tempIndexOf, newFilesIssue, consentIssue, plainPush, commitToolRun, noteCommitTools, TYPES, FORMAT };

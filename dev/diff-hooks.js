@@ -410,6 +410,24 @@ for (const c of cases) {
   if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = V1031; }
 }
 
+// K3（2026-11-01）：跑 tools/commit.js 当成一次提交来查（提交信息格式、提交方式），不能成了绕过提交检查的后门；做任务这一段的规矩里提一句 commit.js
+const commitJs = (msg) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "' + path.join(kit.kit, 'tools', 'commit.js').replace(/\\/g, '/') + '" -m "' + msg + '"' } }) }; };
+add('K3：跑 commit.js，提交信息不合规', 'guard-commit', commitJs('加导出'), /提交信息不符合公司规范/, NEXT);
+add('K3：跑 commit.js，用户没说提交', 'guard-commit', commitJs('feat: 加导出'), /提交方式是\\"关\\"/, NEXT);
+for (const c of cases) if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /做任务这一段的规矩（照做就不会被拦）：[\s\S]*commit\.js\\" -m \\"类型: 内容\\" 只提交这个会话改过的文件/; c.since = NEXT; }
+// K3（2026-11-01）：编译、测试命令失败时，第一个错误、文件:行、前后 5 行源码作为摘要送给模型；成功的什么都不加
+const built = (event, extra) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, Object.assign({ hook_event_name: event, tool_name: 'Bash', tool_input: { command: 'mvn -q -o compile' } }, extra(proj))) }; };
+add('K3：编译失败只给摘要', 'after-tool', built('PostToolUseFailure', (proj) => ({ error: 'Exit code 1\n[INFO] 编译\n[ERROR] /' + path.join(proj, 'src/main/java/com/x/A.java').replace(/\\/g, '/') + ':[2,1] 需要 class, interface, enum 或 record\n[INFO] 1 error\n' })), /失败摘要\] Maven 没过，第一个错误：src\/main\/java\/com\/x\/A\.java:2:1　需要 class[\s\S]*2>\| class A \{\}/, NEXT);
+add('K3：编译成功什么都不加', 'after-tool', built('PostToolUse', () => ({ tool_response: { stdout: '[INFO] BUILD SUCCESS', stderr: '' } })));
+// K3（2026-11-01）：这个会话开着自动，开工时先提醒存检查点（会话号单独起，免得自动开关带到别的输入上）
+add('K3：自动模式开工提醒存检查点', 'task-anchor', (kit) => {
+  const proj = project(kit);
+  fs.writeFileSync(path.join(kit.kit, 'state', 'sess-ckpt-auto-switch.json'), JSON.stringify({ on: true, at: Date.now(), by: '/vk-auto' }));
+  const j = base(proj, kit, { session_id: 'sess-ckpt', hook_event_name: 'UserPromptSubmit', prompt: '/opsx:apply add-export' });
+  j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), [H.tr.user('/opsx:apply add-export')]);
+  return { proj, j };
+}, /大改之前先存一个检查点：node \\"[^"]*checkpoint\.js\\" save --why/, NEXT);
+
 let same = 0;
 let changed = 0;
 for (const c of cases) {

@@ -579,7 +579,15 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
     if (!remaining.length) continue;
     const signature = remaining.map(t => t.text).join('\n') + policy.groups(c.dir).map(g => g.id + ':' + g.done).join('|');
     let fresh = false; updateState(j.session_id + '-auto', o => { const k = normKey(c.dir); if (o[k] !== signature) { o[k] = signature; fresh = true; } });
-    if (fresh) return ['Apply 自动模式：继续当前范围的下一项 ' + remaining[0].text + '。整组 1.x 做完先审修再进入下一组；做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask；服务起停、测试执行和诊断只记本机。'];
+    if (!fresh) continue;
+    // 下一项是新的一组（这一组一项都还没勾）：大改之前先存检查点（K3 M07）。一项都没勾过的算开工，和开口钩子的开工那一句共用一条记录
+    let ckpt = '';
+    try {
+      const groups = policy.groups(c.dir);
+      const g = groups.find((x) => x.tasks.some((t) => t.text === remaining[0].text));
+      if (g && !g.tasks.some((t) => t.done)) ckpt = require('../lib/checkpoint').hintOnce(j, groups.some((x) => x.tasks.some((t) => t.done)) ? 'group:' + normKey(c.dir) + '|' + g.id : 'apply');
+    } catch (e) { ckpt = ''; }
+    return ['Apply 自动模式：继续当前范围的下一项 ' + remaining[0].text + '。整组 1.x 做完先审修再进入下一组；做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask；服务起停、测试执行和诊断只记本机。' + (ckpt ? '\n' + ckpt : '')];
   }
   return [];
 }
@@ -837,7 +845,13 @@ async function handle(j) {
   // 这一轮最后一次改代码、页面的时间：用户说了不审不测之后又改了，才再问（#220）
   const lastEditAt = Math.max(0, ...calls.filter((c) => isSource(c, CODE) || isSource(c, PAGE)).map((c) => c.at || 0));
   todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId, quickPending, lastEditAt));
-  if (policy.automaticApply(j)) { Object.assign(cfg, readConfigFor(j)); todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；完成整组任务后先审查、自测、修复复验，再进入下一组。'); }
+  if (policy.automaticApply(j)) {
+    Object.assign(cfg, readConfigFor(j));
+    // 自动开工：大改之前先存检查点（K3 M07，只送一次）
+    let ckpt = '';
+    try { ckpt = require('../lib/checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; }
+    todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；完成整组任务后先审查、自测、修复复验，再进入下一组。' + (ckpt ? '\n' + ckpt : ''));
+  }
   if (cfg.autoMode && flowState(j).stage === 'plan') {
     for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {
       if (policy.points(c.dir, 'proposal').length === 4 && policy.allPassed(c.dir, 'proposal')) { const msg = policy.planNext(j, c); if (msg) todo.push(msg); }
