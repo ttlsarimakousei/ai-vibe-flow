@@ -19,7 +19,7 @@
 
 ## 装和升级
 
-需要 Node 18 以上。
+需要 Node 18 以上；看页面要 20 以上，自带的 OpenSpec 要 20.19 以上，Node 不够时安装器会说哪个用不了（套件照样装）。
 
 1. 拿安装包：浏览器打开团队 GitLab 仓库 `http://scm.skytech.io/nb-2026/p1/ai-engineering/90-personal/3139/vibe-kit`，点"代码"下载 zip；有 git 的也可以 `git clone --depth 1` 这个仓库；连不上仓库时用别人发的压缩包。
 2. **整个解压**，双击里面的 `安装（双击我）.bat`，或者在那个目录里 `node install.js`。装两样：套件装进 `~/.claude`；模型路由在后台启动。装完这个目录可以删。

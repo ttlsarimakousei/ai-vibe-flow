@@ -58,14 +58,23 @@ node dev/stamp-and-pack.js
 node dev/pack.js
 ```
 
-包名带完整的版本号，比如 `vibe-kit-20260928.1700.zip`：一天发几版，文件名都不一样。打包时顺手在 `dev/baseline/<版本号>/` 留一份这一版的代码（不带看页面的依赖，一兆左右），下一版做新旧对比时当"上一版"用，只留最近四份。
+包名带完整的版本号，比如 `vibe-kit-20260928.1700.zip`：一天发几版，文件名都不一样。打包时顺手在 `dev/baseline/<版本号>/` 留一份这一版的代码（不带看页面的依赖和依赖清单，一兆左右），下一版做新旧对比时当"上一版"用，只留最近四份。
+
+打包时还做两件事（K1-6，2026-11-01）：
+
+- 生成依赖清单 `vibe-kit/kit/deps.json`，随包带上：看页面（`kit/page`）、自带的 OpenSpec（`kit/openspec`）两个组件，每个顶层包的名字、版本、要求的 Node（`engines.node`）、来源（lock 文件里的下载地址和校验值，没有 lock 的写 `npm:<名字>@<版本>`）、内容哈希，组件要求的 Node 按主包（playwright、@fission-ai/openspec）算，再带上查库执行器的编译记录。主包写的最低版本不满足组件里某个包的要求就不打包。生成的内容只看文件，依赖没变就一字不差；改了依赖要跑一次 `node dev/pack.js --check-only` 把新的清单一起提交（`test-deps-manifest.js` 核对源码里的清单是不是最新的；直接从源码装时安装器也按它核对）。代码在 `kit/lib/deps.js`。
+- 核对查库执行器：`DbRunner.java` 的 sha256、每个 `DbRunner*.class` 的 sha256 要和编译记录 `DbRunner.build.json` 对得上，对不上（改了 .java 没重编、class 被换过）不打包。以前比修改时间，重新检出之后说明不了先后。重编：`node dev/build-db-runner.js auto`（找 JDK 的位置和 `--rt auto` 一样，按 `--release 8` 编，同时重写编译记录）。
+
+只想检查、生成清单，不写版本号、不压缩、不留基线：`node dev/pack.js --check-only`。
 
 ## 都有什么
 
 | 文件 | 干什么 |
 |---|---|
 | `run-all.js` | 依次跑下面的测试，汇总；结尾查桌面有没有多出窗口、临时目录清没清 |
-| `pack.js` | 检查、写版本号、压成 zip、解压出来逐个文件核对 |
+| `pack.js` | 检查、生成依赖清单、写版本号、压成 zip、解压出来逐个文件核对；`--check-only` 只检查和生成清单 |
+| `build-db-runner.js auto` | 按 Java 8 编查库执行器，写编译记录 `DbRunner.build.json`（`lib/db-runner-record.js`） |
+| `test-deps-manifest.js [旧套件目录]` | K1-6 依赖清单（2026-11-01）：在临时目录拼一个仓库跑 `pack.js --check-only`，清单里有每个顶层包、版本和 Node 要求对得上、有来源和哈希，源码里提交的清单是最新的；.java 改了没重编（class 修改时间照样新）、class 被换过不打包；安装器缺包、版本对不上不装，Node 不够的组件说清楚。给旧版目录时 pack.js 取那一版标签上的 |
 | `test-lessons.js` | 经验规则：记、合并、升规则、上限、过时、保护、收工检查 |
 | `test-feedback0928.js` | 内网 0928 导出的五条问题反馈，照原样复现 |
 | `test-feedback0929.js` | 内网 0929 导出的问题反馈：id 重复、审查记账、打勾、放行、全自动模式和报告、不记噪音 |
@@ -186,7 +195,7 @@ node dev/probes/cc-updated-input.js 2.1.289
 `cc-updated-input.js`：PreToolUse 钩子用 `updatedInput` 改写 Bash 命令，实际执行的是不是改写后的（套件集成 OpenSpec 靠它，2026-10-17 三版都实测通过）。
 
 
-测试支架和自带的 OpenSpec（2026-10-17 起）：`H.makeHome` 拷套件时不带任何 `node_modules`，所以假用户目录里默认没有自带的 OpenSpec，钩子不改写 `openspec` 命令（和 Node 版本不够的电脑一样），以前的测试不受影响；要测 OpenSpec 的，第四个参数给 `{ openspec: true }`，拷一份真的进去（约 16MB）。`H.makePackage` 和 `H.stubDeps(dir)` 给安装包放的 OpenSpec 是占位，要求 Node 99，安装器照常装完、只说一句"没装自带的 OpenSpec"。
+测试支架和自带的 OpenSpec（2026-10-17 起）：`H.makeHome` 拷套件时不带任何 `node_modules`，所以假用户目录里默认没有自带的 OpenSpec，钩子不改写 `openspec` 命令（和 Node 版本不够的电脑一样），以前的测试不受影响；要测 OpenSpec 的，第四个参数给 `{ openspec: true }`，拷一份真的进去（约 16MB）。`H.makePackage` 和 `H.stubDeps(dir)` 给安装包放的 OpenSpec 是占位，要求 Node 99，安装器照常装完、只说一句"没装自带的 OpenSpec"。占位和依赖清单 `kit/deps.json` 对不上，`H.stubDeps` 顺手删掉清单，安装器照没有清单时的写死检查走；测清单的 `test-deps-manifest.js` 用真的依赖自己生成。
 
 ```bash
 node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.289\node_modules\@anthropic-ai\claude-code\bin\claude.exe" --rt auto
@@ -219,7 +228,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 
 打包自查和验收解压安装包用 Windows PowerShell 自带的 Expand-Archive（`dev/lib/unzip.js`），不用 tar.exe：tar.exe 按系统代码页转文件名，英文系统上中文文件名转不过去就报错退出。
 
-改了 `DbRunner.java` 要重新编译，命令在 `docs/ttls-db-crud/维护须知.md`。
+改了 `DbRunner.java` 要重新编译：`node dev/build-db-runner.js auto`（同时写编译记录，打包按它核对），见 `docs/ttls-db-crud/维护须知.md`。
 
 ## 推送只推到临时目录
 
@@ -251,7 +260,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 
 `test-proposal-review-state.js` 核对独立提案审查的有效性：需求、设计、验法改变后旧结论失效；任务勾选、实现代码和生成交付摘要不重开需求审查。本轮修复前有三项真实失败，不能仅用新模块存在作反例。
 
-`node dev/build-db-runner.js auto` 在假环境编译 Java 8 目标，源码和 class 一起交付。
+`node dev/build-db-runner.js auto` 在假环境编译 Java 8 目标，源码、class 和编译记录 `DbRunner.build.json` 一起交付。
 
 `node dev/probes/cc-post-tool.js 2.1.289` 实测完成钩子；2.1.120、2.1.259、2.1.289 都仅连假网关，成功返回 tool_use_id 与 stdout/stderr/interrupted，失败走 PostToolUseFailure，不登记通过。IDEA 输出替换的形状来自官方协议，未在真实 IDE 上注入凭据做破坏性测试。
 

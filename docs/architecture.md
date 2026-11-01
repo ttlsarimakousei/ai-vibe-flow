@@ -58,6 +58,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `idea-mcp.js` | 撤回套件以前登记的 IDEA MCP（2026-10-28 起不再登记）：装新版、卸载时删掉套件加的、没被改过的 `vibe-idea-端口`；老版本代码调的 `due`、`sync` 留着（due 恒为假，sync 只撤回） |
 | `idea-tools.js` | 用户自己登记的 IDEA MCP（名字 jetbrains、老的 vibe-idea-端口，或带 IDEA 特有工具名）的入口：终端按 Bash、改文件按 Edit、读令牌照拦；认不出是 IDEA 的 MCP 只查写明的路径读不读令牌 |
 | `hook-host.js`、`hook-worker.js`、`hook-health.js` | HTTP 钩子：路由里跑钩子、自检 |
+| `deps.js` | 随包依赖的清单 `kit/deps.json`（2026-11-01，K1-6）：打包时扫看页面、自带 OpenSpec 两个组件的 node_modules（每个顶层包的名字、版本、`engines.node`、来源、内容哈希，组件要的 Node 按主包算）；安装时核对包在不在、版本对不对，列出这台电脑的 Node 用不了的组件。engines 的版本范围自己判断（`satisfies`、`minOf`），不靠 npm |
 
 ## 给模型看的东西（vibe-kit/claude）
 
@@ -92,6 +93,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 ## 安装、更新、上报
 
 - `install.js`：先检查后动手（settings.json 读不懂、全局 CLAUDE.md 不是 UTF-8 就什么都不动）；只往 `~/.claude` 里添加，覆盖前备份；`--sync` 只重新生成约定、重新登记钩子（配置页保存开关时调）；`--uninstall` 只收回自己加的。它替用户写进 settings.json 的 Claude Code 设置有三样，都跟着开关走、记在安装清单里：自动压缩窗口 `autoCompactWindow`、关自动记忆的环境变量、关自带自动模式的 `permissions.disableAutoMode`。
+  - 依赖（K1-6）：按安装包里的依赖清单 `kit/deps.json` 核对每个包在不在、版本对不对（不算哈希），这台电脑的 Node 用不了哪个组件照清单说；没有清单（直接从源码装、本地恢复包）照以前写死的检查。清单由 `dev/pack.js` 生成，查库执行器的 class 打包时按编译记录 `DbRunner.build.json` 核对是从现在的 `DbRunner.java` 编的。
 - 自动更新：团队的内网 GitLab 仓库里放着解开的安装包。钩子看一眼"该检查了没有"，该了就甩一个后台进程（`updater.js run`）：拉仓库、等路由空闲、跑新版的 `install.js`、自检，不过就装回上一版。
 - 问题上报：本机记下的问题反馈由后台进程建成 GitLab 的议题，不重复建；使用情况一台电脑一条议题、一天一条补充。维护的那台电脑在配置页导出开放中的议题（浏览器下载），导出后关掉这一批。
 - 发布：维护的人打包、解压，双击 `发布到 GitLab（双击我）.bat`（`publish.js`：先在本机装一遍、自检，再推一个提交加一个标签 `v<版本号>`）。

@@ -141,6 +141,8 @@ function stubDeps(dir) {
   const os1 = path.join(dir, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec');
   write(path.join(os1, 'package.json'), JSON.stringify({ name: '@fission-ai/openspec', version: '0.0.0-test', engines: { node: '>=99.0.0' } }) + '\n');
   write(path.join(os1, 'bin', 'openspec.js'), "console.log('占位');\n");
+  // 依赖清单（kit/deps.json）记的是真的依赖，和占位对不上，安装器会说包不完整：去掉，安装器照没有清单时的检查走。测清单的套自己生成一份
+  try { fs.unlinkSync(path.join(dir, 'kit', 'deps.json')); } catch (e) { /* 没有 */ }
 }
 function makePackage(name, version, mutate, notes) {
   const dir = path.join(tempDir(name), 'vibe-kit');

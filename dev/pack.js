@@ -4,8 +4,11 @@
  *   node dev/pack.js                     版本号取现在的时间（年月日.时分）
  *   node dev/pack.js --version 20260928.1700
  *   node dev/pack.js --keep-version      只补了文档、重新打包时用：版本号不变
+ *   node dev/pack.js --check-only        只做检查、重新生成依赖清单（kit/deps.json），不写版本号、不压缩、不留基线
  * 压缩用系统自带的 PowerShell（Compress-Archive），和以前的包一样；解压核对用系统自带的 tar。
  * 包里不该有的东西（state、feedback、config.json 这类运行时才有的）要是出现在源目录里，直接报错不打包：多半是测试跑到源目录里了。
+ * 依赖清单（K1-6）：随包的 node_modules 每个顶层包的名字、版本、要求的 Node、来源、内容哈希，查库执行器的编译记录，每次打包重新生成，随包带上
+ * （kit/lib/deps.js）；查库执行器的 class 按编译记录核对是从现在的 DbRunner.java 编的（lib/db-runner-record.js），对不上不打包。
  */
 const fs = require('fs');
 const os = require('os');
@@ -37,7 +40,7 @@ if (stray.length) fail('源目录里有运行时才该有的东西：' + stray.j
 for (const need of ['kit/lib/apply-scope.js', 'kit/lib/entry-check.js', 'kit/lib/evidence.js', 'kit/lib/feedback.js', 'kit/lib/hook-health.js', 'kit/lib/hook-host.js', 'kit/lib/hook-worker.js', 'kit/lib/invocation.js', 'kit/lib/local-backup.js', 'kit/lib/permissions.js', 'kit/lib/readiness.js', 'kit/lib/redact.js', 'kit/lib/review-runner.js', 'kit/lib/task-types.js', 'kit/lib/work-sessions.js', 'kit/lib/workflow.js', 'kit/lib/workspace.js', 'kit/hooks/after-tool.js', 'kit/tools/review.js', 'kit/tools/workflow.js', 'kit/hooks/guard-read.js', 'kit/.ignore', 'publish.js', '发布到 GitLab（双击我）.bat', '.gitattributes', 'kit/lib/gitlab.js', 'kit/lib/updater.js', 'kit/lib/issues.js', 'install.js', 'README.md', '更新说明.md',
   '手册/保护和放行.md', '手册/审查和自测.md', '手册/提交和推送.md', '手册/开关一览.md', '手册/查库和redis.md', '手册/自动更新和上报.md', '手册/上下文和token.md', '手册/模型路由和配置.md', '手册/项目说明和自动探索.md',
   '安装（双击我）.bat', 'settings.fragment.json', 'claude/CLAUDE.md', 'kit/lib/session.js', 'kit/lib/flow-policy.js', 'kit/lib/openspec.js', 'kit/openspec/package.json', 'kit/openspec/node_modules/@fission-ai/openspec/bin/openspec.js', 'kit/lib/lessons.js', 'kit/tools/lesson.js', 'router/router.js', 'router/ui.html', 'kit/page/node_modules/playwright-core/package.json', 'kit/page/node_modules/pixelmatch/package.json', 'kit/page/node_modules/pngjs/package.json', 'kit/page/node_modules/playwright/package.json',
-  'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/lib/proposal-files.js', 'kit/lib/idea-mcp.js', 'kit/lib/idea-tools.js', 'kit/lib/state-store.js', 'kit/lib/intent.js', 'kit/lib/connection-lifecycle.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/ttls-reviewer.md',
+  'kit/lib/deps.js', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.build.json', 'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/lib/proposal-files.js', 'kit/lib/idea-mcp.js', 'kit/lib/idea-tools.js', 'kit/lib/state-store.js', 'kit/lib/intent.js', 'kit/lib/connection-lifecycle.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/ttls-reviewer.md',
   // source-hint.js 是个空壳，但不能没有：20260930.1505 和更早的版本自动更新到新版时，装后自检（跑的是旧版的代码）要载它，载不到就装回旧版，永远升不上来
   'kit/hooks/source-hint.js', 'kit/hooks/guard-push.js', 'claude/commands/vk-go.md', 'claude/commands/vk-fix.md', 'claude/commands/vk-auto.md', 'kit/lib/router-smoke.js', 'kit/lib/perf.js', 'kit/lib/report.js', 'kit/lib/outputs.js', 'kit/lib/archive-extract.js', 'kit/lib/tidy.js', 'kit/tools/skills-check.js', 'kit/lib/usage.js', 'kit/lib/pull.js', 'kit/tools/diagnose.js', 'kit/page/probe-run.js',
   'claude/skills/ttls-onboard/SKILL.md', 'claude/skills/ttls-see-page/SKILL.md', 'claude/skills/ttls-cross-review/SKILL.md', 'claude/skills/ttls-handover/SKILL.md',
@@ -72,11 +75,15 @@ const files = walk(SRC, '', []);
   if (pyc.length) fail('源目录里有 Python 的缓存，删掉再打包：' + pyc.slice(0, 5).join('、'));
   const old = ['onboard', 'see-page', 'cross-review', 'handover'].filter((n) => fs.existsSync(path.join(SRC, 'claude', 'skills', n))).concat(fs.existsSync(path.join(SRC, 'claude', 'agents', 'vibe-reviewer.md')) ? ['vibe-reviewer.md'] : []);
   if (old.length) fail('源目录里还有改名之前的技能或代理：' + old.join('、'));
-  // 执行器：class 比源码旧，就是改了 DbRunner.java 没重新编译
+  // 执行器：class 要是从现在这份 DbRunner.java 编出来的，按编译记录（源码和每个 class 的 sha256）核对。
+  // 以前比修改时间：重新检出之后时间说明不了什么，.java 改了没重编照样打进包（Codex 改进路线第 11 节）
   const rd = path.join(SRC, 'claude', 'skills', 'ttls-db-crud', 'scripts', 'runner');
-  if (fs.statSync(path.join(rd, 'DbRunner.class')).mtimeMs + 2000 < fs.statSync(path.join(rd, 'DbRunner.java')).mtimeMs) fail('DbRunner.class 比 DbRunner.java 旧：改了执行器要重新编译（javac --release 8 -encoding UTF-8 -d <runner 目录> DbRunner.java）');
-  const head = fs.readFileSync(path.join(rd, 'DbRunner.class')).subarray(0, 8);
-  if (head.readUInt32BE(0) !== 0xCAFEBABE || head.readUInt16BE(6) !== 52) fail('DbRunner.class 不是按 Java 8 编的（版本号 ' + head.readUInt16BE(6) + '，应该是 52）：用 javac --release 8');
+  const rc = require('./lib/db-runner-record').check(rd);
+  if (!rc.ok) fail(rc.why);
+  for (const n of Object.keys(rc.rec.classes)) {
+    const head = fs.readFileSync(path.join(rd, n)).subarray(0, 8);
+    if (head.readUInt32BE(0) !== 0xCAFEBABE || head.readUInt16BE(6) !== 52) fail(n + ' 不是按 Java 8 编的（版本号 ' + head.readUInt16BE(6) + '，应该是 52）：' + require('./lib/db-runner-record').REBUILD);
+  }
 }
 const code = files.filter((f) => /\.js$/.test(f) && !/node_modules\//.test(f));
 for (const f of code) {
@@ -113,6 +120,21 @@ for (const f of files.filter((x) => /\.(bat|cmd)$/i.test(x) && !/node_modules\//
 // 仓库里的文件不许转换换行：同事的电脑用 git 拿新版，拿到的要和包里的一字不差
 if (fs.readFileSync(path.join(SRC, '.gitattributes'), 'utf8').trim() !== '* -text') fail('.gitattributes 的内容应该是一行：* -text');
 console.log('  [OK] 检查过了：' + code.length + ' 个脚本语法正确，文本文件都是 UTF-8，bat 是 GBK + CRLF');
+
+// 2b. 依赖清单：随包的 node_modules 每个顶层包的名字、版本、要求的 Node、来源、内容哈希，加上查库执行器的编译记录。
+// 每次打包重新生成（内容只看文件，同样的依赖生成出来一字不差），写进 kit/deps.json 随包带上；安装器读它说清哪个组件这台电脑的 Node 用不了
+{
+  const D = require(path.join(SRC, 'kit', 'lib', 'deps.js'));
+  let man;
+  try { man = D.scan(SRC); } catch (e) { fail('依赖清单生成不了：' + e.message + '。安装包里的依赖不全，重新装一遍再打包（升级 OpenSpec 的做法见 docs/release.md）'); }
+  const bad = D.consistency(man);
+  if (bad.length) fail('组件写的 Node 要求比里面的包松：' + bad.slice(0, 5).join('；') + '。先确认这个组件在那个 Node 版本上能不能用，再在 kit/lib/deps.js 的 COMPONENTS 里给它写明 node');
+  const rec = require('./lib/db-runner-record').read(path.join(SRC, 'claude', 'skills', 'ttls-db-crud', 'scripts', 'runner'));
+  man.runner = Object.assign({ dir: 'claude/skills/ttls-db-crud/scripts/runner' }, rec);
+  fs.writeFileSync(path.join(SRC, 'kit', D.FILE), JSON.stringify(man, null, 2) + '\n');
+  console.log('  [OK] 依赖清单 kit/' + D.FILE + '：' + man.components.map((c) => c.id + ' ' + c.packages.length + ' 个包（要 Node ' + c.node + '）').join('，') + '；查库执行器按编译记录核对过，是从现在的 DbRunner.java 编的');
+}
+if (args.includes('--check-only')) { console.log('  [OK] --check-only：检查做完了，没写版本号、没压缩'); process.exit(0); }
 
 // 3. 版本号
 const vf = path.join(SRC, 'kit', 'VERSION');
@@ -162,7 +184,8 @@ const baseDir = path.join(__dirname, 'baseline');
 const keep = path.join(baseDir, version, 'vibe-kit');
 fs.rmSync(path.join(baseDir, version), { recursive: true, force: true });
 for (const f of all) {
-  if (/(^|\/)node_modules\//.test(f)) continue;
+  // 依赖清单不留：基线不带 node_modules，测试拿基线拼旧版的安装包时只放几个占位，带着清单旧版的安装器会说包不完整
+  if (/(^|\/)node_modules\//.test(f) || f === 'kit/deps.json') continue;
   fs.mkdirSync(path.dirname(path.join(keep, f)), { recursive: true });
   fs.copyFileSync(path.join(SRC, f), path.join(keep, f));
 }

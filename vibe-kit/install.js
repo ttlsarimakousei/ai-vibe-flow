@@ -689,7 +689,7 @@ if (mode === 'uninstall') {
     if (fs.existsSync(kitMd) && !same(kitMd, path.join(KIT, 'pristine', 'CLAUDE.md'))) console.log('  [!] 你改过 ' + kitMd + '，删除前备份在 ' + backup(kitMd, 'vibe-kit/CLAUDE.md'));
     // results：老版本看页面的执行器没写 --out 时把结果放在这里
     // update：自动更新从仓库拉下来的暂存处和日志
-    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js']) removeDir(path.join(KIT, n));
+    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js', 'deps.json']) removeDir(path.join(KIT, n));
     console.log('  [OK] 已卸载：约定块、钩子、状态栏、技能，以及安装时加的权限和环境变量都收回了。');
     if (mergeSettings.unlinked) console.log('  [OK] 在配置页点过"接上"：' + mergeSettings.unlinked + '（替你点了一次"断开"）。');
     if (unlinkRouter.note && hadRouter) console.log('  [!] ' + unlinkRouter.note + '。');
@@ -788,12 +788,27 @@ function removeAbsorbed(man) {
 if (mode === 'install') {
   const major = parseInt(process.versions.node.split('.')[0], 10);
   if (major < 18) { console.log('  [X] Node 版本太低（' + process.versions.node + '），需要 18 以上'); process.exit(REFUSED); }
-  // 随包的 Playwright 要 Node 20（Codex C16）：18、19 装得上，看页面（/ttls-see-page）用不了，先说清楚
-  if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/ttls-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
-  for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
-    if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
+  // 随包的依赖（K1-6）：按依赖清单 kit/deps.json（打包时生成）核对每个包在不在、版本对不对；这台电脑的 Node 用不了哪个组件，照清单里各组件的要求说清楚
+  // （看页面的 Playwright 要 20，自带的 OpenSpec 要 20.19，Codex C16）。没有清单的（直接从源码装、本地恢复包里没带它）照以前写死的检查
+  let D = null;
+  let depMan = null;
+  try { D = require(path.join(SRC, 'kit', 'lib', 'deps.js')); depMan = D.read(path.join(SRC, 'kit')); } catch (e) { depMan = null; }
+  if (depMan) {
+    const c = D.check(path.join(SRC, 'kit'), depMan);
+    if (c.missing.length || c.mismatched.length) {
+      console.log('  [X] 安装包不完整：' + [c.missing.length ? '缺 ' + c.missing.slice(0, 5).map((r) => 'kit/' + r).join('、') + (c.missing.length > 5 ? ' 等 ' + c.missing.length + ' 个包' : '') : '', c.mismatched.length ? '和依赖清单对不上 ' + c.mismatched.slice(0, 3).map((r) => 'kit/' + r).join('、') : ''].filter(Boolean).join('；') + '。重新拷一份完整的包');
+      process.exit(1);
+    }
+    const gaps = D.nodeGaps(depMan);
+    const top = gaps.map((g) => g.min).filter(Boolean).sort((a, b) => (D.satisfies(a, '>=' + b) ? 1 : -1)).pop();
+    if (gaps.length) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：' + gaps.map((g) => g.label + '要 Node ' + g.node + '，' + g.without).join('；') + (top ? '。要用就把 Node 升到 ' + top + ' 以上' : ''));
+  } else {
+    if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/ttls-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
+    for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
+      if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
+    }
+    if (!fs.existsSync(path.join(SRC, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js'))) { console.log('  [X] 安装包不完整：缺自带的 OpenSpec（kit/openspec/node_modules）。重新拷一份完整的包'); process.exit(1); }
   }
-  if (!fs.existsSync(path.join(SRC, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js'))) { console.log('  [X] 安装包不完整：缺自带的 OpenSpec（kit/openspec/node_modules）。重新拷一份完整的包'); process.exit(1); }
   const s = readSettings();
   // 全局 CLAUDE.md 不是 UTF-8：和 settings.json 读不懂一样，什么都不动。装一半、约定写不进去，比不装还乱
   if (readGlobalMd().text === null) { explainNotUtf8(fs.existsSync(MANIFEST) ? '这次什么都没动：现在装着的还是之前那一版，照常工作。转好之后再运行一次安装。' : '这次什么都没动，套件还没装上。转好之后再运行一次安装。'); process.exit(REFUSED); }
