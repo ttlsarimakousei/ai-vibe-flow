@@ -49,8 +49,11 @@ async function ensureRouter() {
     let pointed = false;
     try { const u = new URL(base); pointed = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname) && String(u.port || 80) === String(svc.portOf()); } catch (e) { /* 没指 */ }
     if (!pointed && !httpHooksRegistered()) return;
-    await svc.ensureRunning();
+    // 端口上是另一个安装的路由（E1）：这个会话的请求、HTTP 钩子会走到别人的路由上，说一句
+    const how = await svc.ensureRunning();
+    if (how === 'foreign') return '[vibe-kit] 模型路由的端口 ' + svc.portOf() + ' 被这台电脑上另一个安装的路由占着（远程桌面多人共用时会碰上），这个会话的请求会走到它那里。打开 ' + svc.CONFIG + '，把 listen.port 换一个没人用的，再在配置页"断开""接上"一次。';
   } catch (e) { /* 兜底失败不能影响会话启动 */ }
+  return '';
 }
 
 async function handle(j) {
@@ -245,7 +248,8 @@ async function handle(j) {
       result = { hookSpecificOutput: o };
     }
   } catch (e) { /* 注入失败不能影响会话启动 */ }
-  await ensureRouter();
+  const routerNote = await ensureRouter();
+  if (routerNote) { try { if (result && result.hookSpecificOutput) result.hookSpecificOutput.additionalContext = String(result.hookSpecificOutput.additionalContext || '') + '\n' + routerNote; else result = { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: routerNote } }; } catch (e) { /* 说不了就算了 */ } }
   return result;
 }
 

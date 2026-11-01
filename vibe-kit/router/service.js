@@ -197,7 +197,7 @@ async function stop() {
 async function ensureRunning() {
   try {
     if (!fs.existsSync(ROUTER_JS)) return 'absent';
-    if (await portOpen(portOf(), 400)) return 'running';
+    if (await portOpen(portOf(), 400)) { try { const p = await probe(portOf()); if (p.foreign) return 'foreign'; } catch (e) { /* 认不出按在跑算 */ } return 'running'; }
     launch();
     return 'started';
   } catch (e) { return 'error'; }

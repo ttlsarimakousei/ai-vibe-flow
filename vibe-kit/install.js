@@ -1297,6 +1297,8 @@ async function setupRouter(svc) {
   await svc.stop();
   const r = await svc.start();
   // 路由起不来、配置页打不开：退出码 ROUTER_FAILED，自动更新据此装回上一版（以前只打印一行 [X]、退出码照样 0，Codex C07）
+  // 端口被另一个安装的路由占着（远程桌面多人共用一台电脑，E1）：套件本身装好了，只是路由要换端口。不算装坏，免得自动更新为这个装回旧版
+  if (!r.ok && r.foreign) { console.log('  [!] 模型路由没启动：' + r.reason); return; }
   if (!r.ok) { console.log('  [X] 模型路由没启动：' + r.reason); process.exitCode = ROUTER_FAILED; return; }
   const base = 'http://127.0.0.1:' + r.port;
   const page = await httpGet(base + '/ui');

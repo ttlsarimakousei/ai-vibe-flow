@@ -152,6 +152,17 @@ async function check(j) {
     hookLog('hook-health port mismatch registered=' + ports.join(',') + ' router=' + port + ' resync=' + ok);
     return '[vibe-kit 自检] 钩子登记的端口（' + ports.join('、') + '）和模型路由的端口（' + port + '）对不上，上一轮改文件、跑命令的检查都没生效；' + (ok ? '已经重新登记。' : '重新登记没成功，请用户在配置页"套件开关"里把钩子运行方式改成"命令"。') + AFTERMATH;
   }
+  // 端口上是另一个安装的路由（远程桌面多人共用一台电脑，E1）：钩子打过去会在别人的路由里、按别人的套件和状态跑。切回命令方式
+  try {
+    if (svc && typeof svc.probe === 'function') {
+      const p = await svc.probe(port);
+      if (p && p.foreign) {
+        const sw = switchToCommand();
+        hookLog('hook-health port ' + port + ' is another install\'s router, switch to command ok=' + sw.ok);
+        return '[vibe-kit 自检] 端口 ' + port + ' 上是这台电脑上另一个安装的模型路由，不是你的，钩子不能走它' + (sw.ok ? '：已经把钩子切回命令方式，检查照常生效。' : '；想切回命令方式没成（' + sw.why + '）。') + '要用自己的路由，打开 ' + svc.CONFIG + ' 把 listen.port 换一个没人用的，再在配置页"断开""接上"一次。';
+      }
+    }
+  } catch (e) { /* 认不出按原来的规矩走 */ }
   if (!(await portOpen(port, 400))) {
     // ensureRunning 不抛错：起不来时返回 absent / error。以前只要它没抛错就当拉起来了，新版路由一启动就崩时 HTTP 钩子一直放行（审核 P36）
     let how = 'error';

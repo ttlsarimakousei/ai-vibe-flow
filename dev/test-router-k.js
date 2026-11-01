@@ -81,6 +81,9 @@ const svc = (h, cmd) => H.node(h, path.join(h.kit, 'router', 'service.js'), [cmd
       H.ok('乙起路由：不当成自己的"本来就在运行"，退出码 1、说清端口被占', b2.code === 1 && new RegExp('端口 ' + port + ' 被另一个安装的路由占着').test(b2.out), [b2.code, b2.out]);
       const b3 = svc(B, 'status');
       H.ok('乙看状态：说端口被另一个安装的路由占着', new RegExp('端口 ' + port + ' 被另一个安装的路由占着').test(b3.out), b3.out);
+      // 乙开会话时（session-start 调 ensureRunning）：认得出是别人的，返回 foreign，会话开始时提示一句
+      const e1 = H.node(B, '-e', ["require(" + JSON.stringify(path.join(B.kit, 'router', 'service.js')) + ").ensureRunning().then((x) => console.log('结果=' + x))"], { cwd: B.root, timeout: 30000 });
+      H.ok('乙开会话：ensureRunning 认出端口上是别人的路由（foreign），不当成自己的在跑', /结果=foreign/.test(e1.out), e1.out + e1.err);
       const v3 = await getJson(port, '/version');
       H.ok('乙这几下之后甲的路由还是原来那个', v3.status === 200 && !!v3.json && !!id && v3.json.install === id, v3.text);
       const a2 = svc(A, 'stop');
