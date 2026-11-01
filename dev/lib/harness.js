@@ -114,7 +114,8 @@ function envFor(h, extra) {
   const localApp = path.join(h.home, 'AppData', 'Local');
   const startup = path.join(h.home, 'Startup');
   for (const d of [roaming, localApp, startup]) { try { fs.mkdirSync(d, { recursive: true }); } catch (e) { /* 建不了就算了 */ } }
-  const out = Object.assign(env, { HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1' }, extra || {});
+  // VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS：安装器不去读真的注册表（这台电脑设没设 JAVA_TOOL_OPTIONS 不影响结果），当系统里没设；测这一项的套自己给
+  const out = Object.assign(env, { HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1', VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '' }, extra || {});
   for (const k of Object.keys(out)) if (out[k] === undefined || out[k] === null) delete out[k];
   return out;
 }

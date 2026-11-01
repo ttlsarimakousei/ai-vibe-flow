@@ -381,6 +381,36 @@ function ccAutoModeNote(r) {
   else if (r === 'removed') console.log('  [OK] 不再关着 Claude Code 自带的"自动模式"，照 Claude Code 自己的默认。重新打开 Claude Code 后生效');
   else if (r === 'user-auto') console.log('  [!] settings.json 里你自己把 permissions.defaultMode 设成了 auto，没动它。提醒：经网关用自动模式，有风险的命令每条多一次带 14 万字符系统提示的请求；分类模型答得不合格式，命令会被拦下');
 }
+/**
+ * 系统里（Windows 的用户级、机器级环境变量，注册表里存着的那份）设的值，没设返回 ''。不看 process.env：自动更新可能是 Claude Code
+ * 的钩子拉起来的，那时的环境变量里已经是 settings.json 的值了。测试用 VIBE_KIT_SYSTEM_<名字> 顶替，不碰真的注册表
+ */
+function systemEnv(name) {
+  const over = process.env['VIBE_KIT_SYSTEM_' + name];
+  if (over !== undefined) return over;
+  if (process.platform !== 'win32') return '';
+  const reg = path.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32', 'reg.exe');
+  // reg.exe 按控制台代码页输出（中文系统是 GBK）
+  const decode = (b) => { try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch (e) { try { return new TextDecoder('gbk').decode(b); } catch (x) { return ''; } } };
+  // 用户级的同名变量盖过机器级的，所以先看用户级
+  for (const key of ['HKCU\\Environment', 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment']) {
+    try {
+      const r = require('child_process').spawnSync(fs.existsSync(reg) ? reg : 'reg', ['query', key, '/v', name], { windowsHide: true, timeout: 10000 });
+      if (r.status !== 0 || !r.stdout) continue;
+      const m = new RegExp('^\\s*' + name + '\\s+REG_(EXPAND_)?SZ\\s*(.*?)\\s*$', 'mi').exec(decode(r.stdout));
+      if (m) return m[1] ? m[2].replace(/%([^%]+)%/g, (x, k) => (process.env[k] !== undefined ? process.env[k] : x)) : m[2];
+    } catch (e) { /* 读不了就当没设 */ }
+  }
+  return '';
+}
+/** 系统的 JAVA_TOOL_OPTIONS 加上套件要的几项：-Dxxx= 这种同名的系统里已经写了的不加（你的设置为准） */
+function javaToolOptions(sys, kit) {
+  const s = String(sys || '').trim();
+  if (!s) return kit;
+  const have = new Set(s.split(/\s+/).map((t) => t.split('=')[0]));
+  const add = String(kit).split(/\s+/).filter((t) => t && !have.has(t.split('=')[0]));
+  return add.length ? s + ' ' + add.join(' ') : s;
+}
 /** hooksOnly：只重新登记钩子（--sync 时用），不碰状态栏、权限；跟着配置页的开关走的三项照样管："自动记忆"那一项环境变量、自动压缩的窗口、关掉 Claude Code 自带的自动模式 */
 function mergeSettings(s, remove, hooksOnly) {
   const before = JSON.stringify(s);
@@ -483,7 +513,20 @@ function mergeSettings(s, remove, hooksOnly) {
       man.deny = man.deny.filter((x) => have.includes(x)).concat(add);
       man.known.deny = union(man.known.deny, want);
     }
-    const fragEnv = isObj(frag.env) ? frag.env : {};
+    const fragEnv = isObj(frag.env) ? Object.assign({}, frag.env) : {};
+    // JAVA_TOOL_OPTIONS 不盖系统里已有的（用户 2026-10-30 定的，F8）：settings.json 的 env 会替掉 Claude Code 里跑的命令看到的系统值，
+    // 所以系统里设了的，写进去的是"系统的值 + 套件要加的、系统里没写的那几项"。还是套件自己写的那个值（你没改过）就跟着系统重新算；你改过的不动
+    if (typeof fragEnv.JAVA_TOOL_OPTIONS === 'string') {
+      const sys = systemEnv('JAVA_TOOL_OPTIONS').trim();
+      const want = javaToolOptions(sys, fragEnv.JAVA_TOOL_OPTIONS);
+      fragEnv.JAVA_TOOL_OPTIONS = want;
+      const env = isObj(s.env) ? s.env : {};
+      const cur = env.JAVA_TOOL_OPTIONS;
+      const ours = cur !== undefined && man.env.JAVA_TOOL_OPTIONS !== undefined && cur === man.env.JAVA_TOOL_OPTIONS;
+      const fresh = cur === undefined && !man.known.env.includes('JAVA_TOOL_OPTIONS') && man.env.JAVA_TOOL_OPTIONS === undefined;
+      if (ours && cur !== want) { env.JAVA_TOOL_OPTIONS = want; s.env = env; man.env.JAVA_TOOL_OPTIONS = want; }
+      if (sys && ((ours && cur !== want) || fresh)) mergeSettings.javaOpts = '系统里设了 JAVA_TOOL_OPTIONS=' + sys + '：settings.json 里写的是它' + (want === sys ? '（套件要的几项它都写了，没再加）' : '再加上套件要的 ' + want.slice(sys.length).trim()) + '，没盖掉你的';
+    }
     for (const k of Object.keys(fragEnv)) {
       const env = isObj(s.env) ? s.env : {};
       if (env[k] !== undefined) continue;
@@ -1181,6 +1224,7 @@ if (mode === 'install') {
   autoMemoryNote(mergeSettings.autoMemory);
   autoCompactNote(mergeSettings.autoCompact, s);
   ccAutoModeNote(mergeSettings.ccAutoMode);
+  if (mergeSettings.javaOpts) { console.log('  [OK] ' + mergeSettings.javaOpts + '。改了系统里的值，下次更新时跟着重新算'); noticeItems.push(mergeSettings.javaOpts); }
   // 这一份安装里有没有路由程序（这次装的，或者 --no-router 时以前装的还留着）：卸载时有才去停
   man.router = fs.existsSync(path.join(KIT, 'router', 'service.js'));
   man.absorbed = man0.absorbed;

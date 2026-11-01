@@ -96,6 +96,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 - `install.js`：先检查后动手（settings.json 读不懂、全局 CLAUDE.md 不是 UTF-8 就什么都不动）；只往 `~/.claude` 里添加，覆盖前备份；`--sync` 只重新生成约定、重新登记钩子（配置页保存开关时调）；`--uninstall` 只收回自己加的。它替用户写进 settings.json 的 Claude Code 设置有三样，都跟着开关走、记在安装清单里：自动压缩窗口 `autoCompactWindow`、关自动记忆的环境变量、关自带自动模式的 `permissions.disableAutoMode`。
   - 依赖（K1-6）：按安装包里的依赖清单 `kit/deps.json` 核对每个包在不在、版本对不对（不算哈希），这台电脑的 Node 用不了哪个组件照清单说；没有清单（直接从源码装、本地恢复包）照以前写死的检查。清单由 `dev/pack.js` 生成，查库执行器的 class 打包时按编译记录 `DbRunner.build.json` 核对是从现在的 `DbRunner.java` 编的。
   - 用户改过的（F8，用户 2026-10-30 定的）：升级时套件的 `CLAUDE.md`、`rules/<套件的>.md` 和上次装的原样（`pristine/`）对不上的，按行比，新加的（带所在那一节的标题）挪进 `user/migrated-<文件名>.md`，删掉改掉的原句并进 `user/remove.txt`，再备份、换成新版；重装时同样的内容不重复写。技能、审查代理、命令照旧换成新版、先备份。这些都记进 `state/install-done.json` 的 `notice`（没看过的跨次安装留着，最多 20 条），配置页（`kit-api.js` 的 `installNotice`）在顶上提示，点"知道了"写 `noticeSeen`。
+  - `JAVA_TOOL_OPTIONS`（F8）：settings.json 的 env 会替掉 Claude Code 里跑的命令看到的系统值，所以写进去的是系统的值（注册表里用户级、机器级的环境变量，测试用 `VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS` 顶替）加上套件要的、系统里没写同名项的几项；还是套件写的那个值的，每次安装跟着系统重新算，用户改过的不动。
 - 自动更新：团队的内网 GitLab 仓库里放着解开的安装包。钩子看一眼"该检查了没有"，该了就甩一个后台进程（`updater.js run`）：拉仓库、等路由空闲、跑新版的 `install.js`、自检，不过就装回上一版。
 - 问题上报：本机记下的问题反馈由后台进程建成 GitLab 的议题，不重复建；使用情况一台电脑一条议题、一天一条补充。维护的那台电脑在配置页导出开放中的议题（浏览器下载），导出后关掉这一批。
 - 发布：维护的人打包、解压，双击 `发布到 GitLab（双击我）.bat`（`publish.js`：先在本机装一遍、自检，再推一个提交加一个标签 `v<版本号>`）。

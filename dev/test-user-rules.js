@@ -5,6 +5,7 @@
  *   以前改过的   直接改过 vibe-kit/CLAUDE.md、rules/*.md 的，升级时和上次装的原样比：新加的挪进 user/migrated-<文件名>.md，
  *                删掉、改掉的原句记进 remove.txt，照样生效；套件文件换成新版，原文件备份；没改过的照常更新
  *   提示一次     覆盖了你改过的约定、规范、技能：安装器记进 state/install-done.json 的 notice，配置页提示到你点"知道了"
+ *   JAVA_TOOL_OPTIONS  系统里设了的不盖：写进 settings.json 的是系统的值加上套件要的几项（同名的不加）
  * 用法：node dev/test-user-rules.js [旧版的 vibe-kit 目录]（给了就拿旧版的安装器跑，看哪些项不过）
  */
 const fs = require('fs');
@@ -137,6 +138,28 @@ H.section('技能照旧换成新版：改过的先备份，记一条提示');
   const done = json(path.join(w.kit, 'state', 'install-done.json'));
   H.ok('技能换成了新版', r.code === 0 && !/F8-SKILL/.test(H.read(path.join(w.cfg, 'skills', 'ttls-handover', 'SKILL.md')) || ''), r.out.slice(-600));
   H.ok('配置页要提示的事里有这个技能和备份位置', done.notice && done.notice.items.some((x) => /技能 ttls-handover/.test(x) && /备份在/.test(x)), done);
+}
+
+// ---------------------------------------------------------------------------------------------
+H.section('JAVA_TOOL_OPTIONS：系统里设了的不盖');
+{
+  const SYS = '-Xmx512m -Dstdout.encoding=GBK';
+  const env = (u2) => (json(path.join(u2.cfg, 'settings.json')).env || {}).JAVA_TOOL_OPTIONS;
+  const x = H.freshHome('tur-java');
+  const r = install(x, P1, { VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: SYS });
+  const val = env(x) || '';
+  H.ok('新装：系统的值在前面，套件的几项接在后面，系统里写了的 stdout.encoding 不再加', r.code === 0 && val.startsWith(SYS + ' ') && /-Dsun\.stdout\.encoding=UTF-8/.test(val) && !/-Dstdout\.encoding=UTF-8/.test(val), val);
+  H.ok('安装输出说了没盖掉', /没盖掉你的/.test(r.out), r.out.slice(-800));
+  const y = H.freshHome('tur-java2');
+  install(y, P1);
+  const before = env(y);
+  const r2 = install(y, P2, { VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '-Xmx1g' });
+  H.ok('以前装的时候系统里没有、后来设了：升级时还是套件写的值，跟着系统重新算', r2.code === 0 && !String(before).includes('-Xmx1g') && String(env(y)).startsWith('-Xmx1g ') && /-Dsun\.stdout\.encoding=UTF-8/.test(env(y)), [before, env(y)]);
+  const s = json(path.join(y.cfg, 'settings.json')); s.env.JAVA_TOOL_OPTIONS = '-Dmine=1'; H.write(path.join(y.cfg, 'settings.json'), JSON.stringify(s, null, 2));
+  install(y, P2, { VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '-Xmx2g' });
+  H.ok('你自己在 settings.json 里改过的：不动', env(y) === '-Dmine=1', env(y));
+  const un = H.node(x, path.join(x.kit, 'install.js'), ['--uninstall'], { cwd: x.root, timeout: 120000, env: { VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: SYS } });
+  H.ok('卸载：套件写的那个值收回了', un.code === 0 && env(x) === undefined, [un.out.slice(-400), env(x)]);
 }
 
 H.done('用户的补充和选择不被更新覆盖（F8）');

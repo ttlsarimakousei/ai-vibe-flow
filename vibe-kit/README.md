@@ -33,6 +33,7 @@
 - 先检查后动手：`settings.json` 读不懂、全局 `CLAUDE.md` 不是 UTF-8，就什么都不动，说清是哪几行。覆盖你改过的技能、约定、规范、审查代理之前，先备份到 `~/.claude/vibe-kit/backup/`，配置页提示一次。
 - 你自己的约定和规范放 `~/.claude/vibe-kit/user/`，更新从不碰；以前直接改过套件约定、规范的，升级时挪进去，照样生效。见[模型路由和配置](手册/模型路由和配置.md)"加规范、改约定"。
 - 在 `settings.json` 里放行 Bash、PowerShell、Read、Edit、Write、Glob、Grep，平时不弹确认。你删掉的放行、环境变量，再装不补回来。
+- 在 `settings.json` 的 env 里设 `JAVA_TOOL_OPTIONS`，让 Java 程序的输出按 UTF-8；系统环境变量里已经设了的，写进去的是系统的值加上套件要的几项，不盖掉你的。
 - 默认关掉 Claude Code 自带的 auto mode 和自动记忆，原因和改回去的办法见[保护和放行](手册/保护和放行.md)、[上下文和 token](手册/上下文和token.md)。
 - 不再接 IDEA 的 MCP（2026-10-28 起），以前套件登记的更新时撤掉，见[保护和放行](手册/保护和放行.md)"IDEA 的 MCP"一节。
 - 以前单独装过 `urai-db-crud`、`redis` 技能的：装在用户目录里的删掉（先备份），装在项目里的不动。
