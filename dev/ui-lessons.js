@@ -136,6 +136,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         H.ok('选"别的文件类型"才要写扩展名', await ep.$eval('#lsAddExt', (x) => x.classList.contains('hide')));
         await ep.selectOption('#lsAddGroup', 'other');
         H.ok('选了以后扩展名那一栏出来了', !(await ep.$eval('#lsAddExt', (x) => x.classList.contains('hide'))));
+        // 20261102.0255 发版后看截图发现：下拉框被 width:100% 撑满整行、堆成两行；没写 type 的输入框没有样式
+        const boxes = await ep.$$eval('#lsAddWhere,#lsAddGroup,#lsAddExt', (xs) => xs.map((x) => x.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y + r.height / 2, w: r.width })));
+        H.ok('"加到哪里""哪类文件"、扩展名排在同一行', boxes.length === 3 && boxes.every((b) => Math.abs(b.y - boxes[0].y) < 3 && b.w >= 100) && boxes[0].x < boxes[1].x && boxes[1].x < boxes[2].x, boxes);
+        const bare = await ep.$$eval('input', (xs) => xs.filter((x) => !['checkbox', 'radio', 'file', 'hidden', 'range', 'color'].includes(x.type) && getComputedStyle(x).borderTopLeftRadius !== '7px').map((x) => x.id || x.outerHTML.slice(0, 80)));
+        H.ok('页面上所有输入框都是统一的样式，写没写 type 都一样', bare.length === 0, bare);
         await ep.$$eval('[data-lspromotecand]', (bs) => bs.find((b) => /翻页要带上/.test(b.parentElement.textContent)).click());
         await ep.waitForFunction(() => /升成规则了/.test(document.querySelector('#lsMsg').textContent), null, { timeout: 15000 });
         H.ok('候选点"升成规则"：进了规则文件', /翻页要带上当前的查询条件/.test(H.read(ruleFile) || ''), H.read(ruleFile));

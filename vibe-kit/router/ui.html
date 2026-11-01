@@ -138,12 +138,13 @@
   button.primary:hover { color:var(--card); filter:brightness(1.08); }
   button.danger:hover { border-color:var(--bad); color:var(--bad); }
   button:disabled { opacity:.5; cursor:default; }
-  input[type=text], input[type=password], input[type=number], select, textarea { width:100%; padding:6px 9px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font:inherit; transition:border-color .12s, box-shadow .12s; }
+  input:not([type]), input[type=text], input[type=password], input[type=number], select, textarea { width:100%; padding:6px 9px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font:inherit; transition:border-color .12s, box-shadow .12s; }
   input:focus, select:focus, textarea:focus { outline:0; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
   textarea { min-height:70px; resize:vertical; }
   label.f { display:block; margin-bottom:10px; } label.f > span { display:block; font-size:12px; color:var(--dim); margin-bottom:3px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:0 14px; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row.picks > select { width:auto; flex:1 1 200px; min-width:0; }
   .row.end { justify-content:flex-end; margin-top:8px; }
   .row.between { justify-content:space-between; align-items:flex-start; flex-wrap:nowrap; gap:16px; }
   .pairs .row { margin-bottom:6px; flex-wrap:nowrap; } .pairs .row input:first-child { flex:0 0 110px; }
@@ -356,7 +357,7 @@
 
   <section id="tab-local" class="tab hide">
     <div class="pagehead"><h2>本机环境</h2><p>这台电脑上的 JDK、Maven、Tomcat 在哪。配一次，所有项目都用。</p></div>
-    <div class="card" id="sec-readiness"><h2>项目就绪与本机耗时</h2><p class="hint">只核对来源文件、工具和登记，不运行项目脚本、不主动连库。识别结果不代表构建或测试成功。耗时仅保存在本机。</p><div class="row"><input id="readyProject" placeholder="项目完整路径"><button class="btn" id="readyCheck">核对环境</button><button class="btn" id="performanceCheck">本机耗时</button></div><pre id="readyOutput" style="white-space:pre-wrap"></pre></div>
+    <div class="card" id="sec-readiness"><h2>项目就绪与本机耗时</h2><p class="hint">只核对来源文件、工具和登记，不运行项目脚本、不主动连库。识别结果不代表构建或测试成功。耗时仅保存在本机。</p><div class="row"><input id="readyProject" placeholder="项目完整路径" style="flex:1;min-width:220px;width:auto"><button class="btn" id="readyCheck">核对环境</button><button class="btn" id="performanceCheck">本机耗时</button></div><pre id="readyOutput" style="white-space:pre-wrap"></pre></div>
     <div class="card">
       <div class="row between"><div><h2>开发环境</h2><p class="hint">只存在本机（<span class="mono" id="kitDir"></span>），不进仓库。保存后写进全局约定，Claude 每个会话都看得到。先点"自动探测"；没找到的点"选…"去硬盘上点选。</p></div><button class="btn primary" id="detect">自动探测</button></div>
       <div id="kitMissing" class="banner warn hide">这台电脑还没装 vibe-kit，保存了也不会写进全局约定。</div>
@@ -578,8 +579,8 @@
       </div>
       <div class="opt">
         <div style="flex:1"><div class="t">自己加一条</div><div class="d">直接是规则，不用等次数，满了也不挤掉它。项目里的要提交，同事的 Claude 才看得到。</div>
-          <div class="row" style="margin-top:6px"><select id="lsAddWhere" aria-label="加到哪里"></select><select id="lsAddGroup" aria-label="哪类文件"><option value="java">Java</option><option value="sql">SQL 和 Mapper</option><option value="web">前端</option><option value="spec">提案、设计、任务</option><option value="other">别的文件类型</option></select><input id="lsAddExt" class="hide" placeholder="扩展名，比如 yml" style="width:130px" aria-label="扩展名"></div>
-          <div class="row" style="margin-top:6px"><input id="lsAddText" placeholder="一句话：什么情况下、要怎么做" style="flex:1;min-width:220px" aria-label="规则"></div></div>
+          <div class="row picks" style="margin-top:6px"><select id="lsAddWhere" aria-label="加到哪里"></select><select id="lsAddGroup" aria-label="哪类文件"><option value="java">Java</option><option value="sql">SQL 和 Mapper</option><option value="web">前端</option><option value="spec">提案、设计、任务</option><option value="other">别的文件类型</option></select><input id="lsAddExt" class="hide" placeholder="扩展名，比如 yml" style="width:130px" aria-label="扩展名"></div>
+          <div class="row" style="margin-top:6px"><input id="lsAddText" placeholder="一句话：什么情况下、要怎么做" style="flex:1;min-width:220px;width:auto" aria-label="规则"></div></div>
         <div class="ctl"><button class="btn primary" id="lsAdd">加上</button></div>
       </div>
       <p class="msg" id="lsMsg" style="margin:6px 0 0"></p>
