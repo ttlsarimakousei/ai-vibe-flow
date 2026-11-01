@@ -4,6 +4,7 @@
  * 2026-11-01 起（K3）还给模型送几句话（additionalContext），都只在有话说时才送：
  *   编译、测试命令失败：第一个错误、文件:行、前后 5 行源码（lib/fail-summary.js）
  *   改了 .sql、Mapper XML：和查库技能存的表结构对不上的表名、列名（lib/sql-check.js，只提醒）
+ * 还记一笔"命令失败 → 改了文件 → 同一条命令再跑通过"，够条件的成经验规则候选（lib/fix-pass.js），不送话。
  */
 const S = require('../lib/session');
 function successful(j) {
@@ -38,6 +39,12 @@ function handle(j) {
     // 失败的命令走 PostToolUseFailure，顶层是 error、没有 tool_response（docs/claude-code-facts.md 三版实测；2026-10-17 审核问题 11）
     const output = String(j.tool_response && (j.tool_response.stderr || j.tool_response.stdout || j.tool_response.error) || j.error || '');
     if (/\bopenspec\b/i.test(cmd) && /unknown command|unknown option|不支持.*(?:指令|命令)|未知.*(?:指令|命令)/i.test(output)) return { hookSpecificOutput: { hookEventName: j.hook_event_name || 'PostToolUse', additionalContext: openspecHint() } };
+    // 命令失败 → 改了文件 → 同一条命令再跑通过：记一条经验规则候选（K3 M11，lib/fix-pass.js）。只记账，不影响工具结果
+    try {
+      const FP = require('../lib/fix-pass');
+      if (/^(Bash|PowerShell)$/.test(String(j.tool_name || ''))) { if (successful(j)) FP.passed(j); else FP.failed(j); }
+      else if (/^(Edit|Write|MultiEdit)$/.test(String(j.tool_name || '')) && successful(j)) FP.edited(j);
+    } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 经验候选', j, e); }
     // 编译、测试命令失败：第一个错误、文件:行、前后 5 行源码作为摘要送给模型（K3 M08，lib/fail-summary.js）。成功的什么都不加
     const notes = [];
     if (/^(Bash|PowerShell)$/.test(String(j.tool_name || '')) && !successful(j)) { try { const s = require('../lib/fail-summary').summarize(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 失败摘要', j, e); } }

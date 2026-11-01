@@ -627,6 +627,11 @@
         <div><div class="t">Claude Code 自带的自动记忆</div><div class="d">它和经验规则重复，条数不受控制，说明文字每个请求都占上下文。改了要重新打开 Claude Code 才生效。</div></div>
         <div class="ctl"><select id="k_autoMemory"><option value="off">关掉</option><option value="on">不管它，照 Claude Code 的默认</option></select></div>
       </div>
+      <div class="opt">
+        <div style="flex:1"><div class="t">自己加一条</div><div class="d">直接是规则，不用等次数。自动收的满了也不挤掉它。项目里的要提交，同事的 Claude 才看得到。</div>
+          <div class="row" style="margin-top:6px"><select id="lsAddWhere" aria-label="加到哪里"></select><select id="lsAddGroup" aria-label="哪类文件"><option value="java">Java</option><option value="sql">SQL 和 Mapper</option><option value="web">前端</option><option value="spec">提案、设计、任务</option><option value="other">别的文件类型</option></select><input id="lsAddExt" class="hide" placeholder="扩展名，比如 yml" style="width:130px" aria-label="扩展名"></div>
+          <div class="row" style="margin-top:6px"><input id="lsAddText" placeholder="一句话：什么情况下、要怎么做" style="flex:1;min-width:220px" aria-label="规则"><button class="btn primary" id="lsAdd">加上</button></div></div>
+      </div>
       <p class="msg" id="lsMsg" style="margin:6px 0 0"></p>
       <div id="lsPending"></div>
       <div id="lsUser"></div>
@@ -1344,7 +1349,7 @@
   $('fbRefresh').onclick = loadFeedback;
 
   // ---------- 经验规则：设置、等确认的、用户级、各个项目 ----------
-  const lsRule = (r, scope, root) => '<tr><td>' + esc(r.text) + (r.auto ? ' <span class="tag off" title="脚本从审查报的问题里自动归并出来的。改字之后就不算自动的了，脚本不再动它">自动' + (r.auto === '类别' ? '，按类别' : '') + '</span>' : '') + '<div class="dim mono" style="font-size:12px">' + esc(r.id) + (r.kind ? '　' + esc(r.kind) : '') + (r.from && r.from.length ? '　出处：' + esc(r.from.join('；')) : '') + '</div></td><td class="num">' + (r.count || 1) + '</td><td class="mono">' + esc(r.last || '') + '</td><td>'
+  const lsRule = (r, scope, root) => '<tr><td>' + esc(r.text) + (r.byHand ? ' <span class="tag off" title="人加的：自动收的满了也不挤掉它">人加</span>' : '') + (r.auto ? ' <span class="tag off" title="脚本从审查报的问题里自动归并出来的。改字之后就不算自动的了，脚本不再动它">自动' + (r.auto === '类别' ? '，按类别' : '') + '</span>' : '') + '<div class="dim mono" style="font-size:12px">' + esc(r.id) + (r.kind ? '　' + esc(r.kind) : '') + (r.from && r.from.length ? '　出处：' + esc(r.from.join('；')) : '') + '</div></td><td class="num">' + (r.count || 1) + '</td><td class="mono">' + esc(r.last || '') + '</td><td>'
     + (r.miss >= 2 ? '<span class="tag bad" title="规则生效之后同样的问题又被审出来：光靠规则管不住，建议改成脚本检查，或者把规则改得更具体">没管住 ' + r.miss + ' 次</span>' : r.miss ? '<span class="tag off">又犯 ' + r.miss + ' 次</span>' : '')
     + '</td><td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end"><button class="btn" data-lsedit="' + esc(r.id) + '" data-scope="' + scope + '" data-root="' + esc(root || '') + '" data-text="' + esc(r.text) + '">改字</button><button class="btn danger" data-lsdel="' + esc(r.id) + '" data-scope="' + scope + '" data-root="' + esc(root || '') + '" data-text="' + esc(r.text) + '">删</button></div></td></tr>';
   const lsFile = (f, scope, root, max) => '<div style="margin:10px 0 4px"><b>' + esc(f.title) + '</b> <span class="dim">读到 ' + esc((f.paths || []).slice(0, 4).join('、')) + ((f.paths || []).length > 4 ? ' 等' : '') + ' 时带上　' + (f.rules.length + f.manual.length) + ' / ' + max + ' 条，' + f.chars + ' 字</span><div class="dim mono" style="font-size:12px">' + esc(f.file) + '</div></div>'
@@ -1352,6 +1357,9 @@
     + f.manual.map((m) => '<tr><td>' + esc(m) + '<div class="dim" style="font-size:12px">手写的，工具不动它；要改直接改文件</div></td><td></td><td></td><td></td><td></td></tr>').join('') + '</tbody></table></div>';
   function renderLessons(d) {
     if (d.missing) { $('lsPending').innerHTML = '<p class="hint">这台机器上装的套件还没有经验规则（版本太老），装新版就有了。</p>'; $('lsUser').innerHTML = ''; $('lsProjects').innerHTML = ''; return; }
+    const where = $('lsAddWhere').value;
+    $('lsAddWhere').innerHTML = '<option value="">用户级（所有项目，只在这台电脑）</option>' + (d.choices || []).map((c) => '<option value="' + esc(c.root) + '" title="' + esc(c.root) + '">项目 ' + esc(c.name) + '</option>').join('');
+    if ([...$('lsAddWhere').options].some((o) => o.value === where)) $('lsAddWhere').value = where;
     const max = (d.settings && d.settings.maxPerGroup) || 10;
     $('lsPending').innerHTML = d.pending.length ? '<h2 style="margin-top:14px">等你确认：要不要升成用户级</h2><p class="hint">这几条在两个以上的项目里都成了规则，而且不带项目特有的名字。升了之后写进 <span class="mono">' + esc(d.userDir) + '</span>，所有项目读到这类文件时都会带上。</p>'
       + d.pending.map((p) => '<div class="envitem"><div>' + esc(p.text) + '</div><div class="dim" style="font-size:12px">出现在：' + esc(p.projects.join('、')) + '</div><div class="row" style="margin-top:6px"><button class="btn primary" data-lspromote="' + esc(p.id) + '">升成用户级</button><button class="btn" data-lsdismiss="' + esc(p.id) + '">不升</button></div></div>').join('') : '';
@@ -1362,17 +1370,27 @@
       return '<div class="envitem"><div><b>' + esc(p.name) + '</b> <span class="dim mono" style="font-size:12px">' + esc(p.root) + '</span></div>'
         + (p.files.length ? p.files.map((f) => lsFile(f, 'project', p.root, max)).join('') : '<p class="hint" style="margin:6px 0">还没有规则。</p>')
         + (p.findings && p.findings.total ? '<details style="margin-top:8px"><summary class="dim">自动收了 ' + p.findings.total + ' 条审查报的问题（只在这台电脑上）</summary><div class="scroll"><table><thead><tr><th>哪类文件</th><th>类别</th><th class="num">条数</th><th class="num">变更数</th><th>最近</th></tr></thead><tbody>' + p.findings.by.slice(0, 12).map((x) => '<tr><td>' + esc(({ java: 'Java', sql: 'SQL 和 Mapper', web: '前端', spec: '提案' })[x.group] || x.group) + '</td><td>' + esc(x.kind) + '</td><td class="num">' + x.n + '</td><td class="num">' + x.changes + '</td><td class="mono">' + esc(x.last || '') + '</td></tr>').join('') + '</tbody></table></div></details>' : '')
-        + (cands.length ? '<details style="margin-top:8px"><summary class="dim">候选 ' + cands.length + ' 条（还没到次数，不进上下文，只在这台电脑上）</summary>' + cands.map((c) => '<div style="padding:4px 0">' + esc(c.text) + ' <span class="dim">' + c.count + ' 次' + (c.state === 'evicted' ? '，被挤出来的' : '') + '</span></div>').join('') + '</details>' : '')
+        + (cands.length ? '<details style="margin-top:8px"><summary class="dim">候选 ' + cands.length + ' 条（还没到次数，不进上下文，只在这台电脑上）</summary>' + cands.map((c) => '<div style="padding:4px 0">' + esc(c.text) + ' <span class="dim">' + c.count + ' 次' + (c.state === 'evicted' ? '，被挤出来的' : '') + (c.origin === 'fix' ? '，命令失败后改好的' : '') + '</span> <button class="btn" data-lspromotecand="' + esc(c.id) + '" data-root="' + esc(p.root) + '">升成规则</button></div>').join('') + '</details>' : '')
         + (gone.length ? '<details style="margin-top:4px"><summary class="dim">已退役 ' + gone.length + ' 条</summary>' + gone.map((c) => '<div style="padding:4px 0">' + esc(c.text) + ' <span class="dim">' + esc(c.why || '') + '</span></div>').join('') + '</details>' : '') + '</div>';
     }).join('') : '<p class="hint" style="margin:0">还没有项目记过经验。</p>');
   }
   async function loadLessons() { try { renderLessons(await api('GET', '/api/kit/lessons')); } catch (e) { say($('lsMsg'), e.message, false); } }
   $('lsRefresh').onclick = loadLessons;
+  $('lsAddGroup').onchange = () => $('lsAddExt').classList.toggle('hide', $('lsAddGroup').value !== 'other');
+  $('lsAdd').onclick = async () => {
+    const root = $('lsAddWhere').value;
+    try {
+      renderLessons(await api('POST', '/api/kit/lessons/add', { scope: root ? 'project' : 'user', root, group: $('lsAddGroup').value, ext: $('lsAddExt').value.trim(), text: $('lsAddText').value.trim() }));
+      $('lsAddText').value = '';
+      say($('lsMsg'), root ? '加上了。规则文件改了，记得提交（Claude 下次收工时也会被提醒）' : '加上了，新开的会话生效', true);
+    } catch (e) { say($('lsMsg'), e.message, false); }
+  };
   $('tab-lessons').addEventListener('click', async (ev) => {
     const t = ev.target;
     if (!t || !t.dataset) return;
     try {
-      if (t.dataset.lspromote) { renderLessons(await api('POST', '/api/kit/lessons/promote', { id: t.dataset.lspromote })); say($('lsMsg'), '已升成用户级，新开的会话生效', true); }
+      if (t.dataset.lspromotecand) { renderLessons(await api('POST', '/api/kit/lessons/promote-candidate', { id: t.dataset.lspromotecand, root: t.dataset.root })); say($('lsMsg'), '升成规则了。规则文件改了，记得提交（Claude 下次收工时也会被提醒）', true); }
+      else if (t.dataset.lspromote) { renderLessons(await api('POST', '/api/kit/lessons/promote', { id: t.dataset.lspromote })); say($('lsMsg'), '已升成用户级，新开的会话生效', true); }
       else if (t.dataset.lsdismiss) { if (!confirm('这一条不升成用户级，以后也不再问。各个项目里的规则不受影响。确定吗？')) return; renderLessons(await api('POST', '/api/kit/lessons/dismiss', { id: t.dataset.lsdismiss })); }
       else if (t.dataset.lsdel) {
         const proj = t.dataset.scope !== 'user';

@@ -106,6 +106,43 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     H.setConfig(h, Object.assign(JSON.parse(H.read(path.join(h.kit, 'config.json'))), { lessonThreshold: 2 }));
     d = (await call('GET', '/api/kit/lessons')).json;
     H.ok('页面上会有一条等确认的', d.pending.length === 1, d.pending);
+
+    // K3 M11：页面上真的点"自己加一条""升成规则"。用系统的 Edge 无头跑
+    H.section('页面：自己加一条、候选升成规则');
+    add(A, 'web/src/views/Order.vue', '列表页翻页要带上当前的查询条件，不然翻到第二页条件就丢了', 'fix-page 1.1');
+    let eb = null; let ep = null; const pageErrors = [];
+    try {
+      eb = (await require(path.join(H.SRC, 'kit', 'page', 'browser.js')).launchBrowser({})).browser;
+      ep = await (await eb.newContext({ viewport: { width: 1360, height: 900 }, locale: 'zh-CN' })).newPage();
+      ep.on('pageerror', (e) => pageErrors.push(String((e && e.message) || e)));
+    } catch (e) { console.log('  这台电脑上起不来浏览器，页面这部分没法测：' + String((e && e.message) || e).split('\n')[0]); }
+    if (ep) {
+      try {
+        await ep.goto('http://127.0.0.1:' + PORT + '/ui');
+        await ep.click('nav button[data-tab="lessons"]');
+        await ep.waitForFunction(() => document.querySelectorAll('#lsAddWhere option').length >= 2, null, { timeout: 30000 });
+        const msg = () => ep.textContent('#lsMsg');
+        const ruleFile = path.join(A, '.claude', 'rules', 'ttls-lessons-web.md');
+        await ep.selectOption('#lsAddWhere', A);
+        await ep.selectOption('#lsAddGroup', 'web');
+        await ep.click('#lsAdd');
+        await ep.waitForFunction(() => /8 到/.test(document.querySelector('#lsMsg').textContent), null, { timeout: 15000 });
+        H.ok('什么都没写就点：说要 8 到多少字', /8 到/.test(await msg()), await msg());
+        await ep.fill('#lsAddText', '弹窗里的下拉框要等字典加载完再渲染，不然第一次打开是空的');
+        await ep.click('#lsAdd');
+        await ep.waitForFunction(() => /加上了/.test(document.querySelector('#lsMsg').textContent), null, { timeout: 15000 });
+        H.ok('写了再点：进了项目的规则文件，标着人加的；输入框清空', /弹窗里的下拉框/.test(H.read(ruleFile) || '') && /人加=是/.test(H.read(ruleFile) || '') && (await ep.inputValue('#lsAddText')) === '', H.read(ruleFile));
+        H.ok('页面上这一条标着"人加"', /弹窗里的下拉框[\s\S]{0,60}人加/.test(await ep.textContent('#lsProjects')), await ep.textContent('#lsProjects'));
+        H.ok('选"别的文件类型"才要写扩展名', await ep.$eval('#lsAddExt', (x) => x.classList.contains('hide')));
+        await ep.selectOption('#lsAddGroup', 'other');
+        H.ok('选了以后扩展名那一栏出来了', !(await ep.$eval('#lsAddExt', (x) => x.classList.contains('hide'))));
+        await ep.$$eval('[data-lspromotecand]', (bs) => bs.find((b) => /翻页要带上/.test(b.parentElement.textContent)).click());
+        await ep.waitForFunction(() => /升成规则了/.test(document.querySelector('#lsMsg').textContent), null, { timeout: 15000 });
+        H.ok('候选点"升成规则"：进了规则文件', /翻页要带上当前的查询条件/.test(H.read(ruleFile) || ''), H.read(ruleFile));
+        H.ok('页面没有报错', pageErrors.length === 0, pageErrors);
+      } catch (e) { H.ok('页面上加规则走得通', false, String((e && e.stack) || e).slice(0, 600) + ' | 页面报的错：' + JSON.stringify(pageErrors)); }
+    }
+    if (eb) { try { await eb.close(); } catch (e) { /* 已经关了 */ } }
   }
   if (up && STAY > 0) {
     console.log('配置页：http://127.0.0.1:' + PORT + '/ui   （点"套件开关"，往下找"经验规则"）。留 ' + STAY + ' 秒；看完了建这个文件让它退出：' + path.join(h.root, 'stop'));

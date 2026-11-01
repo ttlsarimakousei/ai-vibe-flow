@@ -26,6 +26,10 @@
  *   说的是同一件事（文字相近、类别一样）：当成同一条经验，在不同的变更里出现到门槛就变成规则，和模型记的走同一条路
  *   同一类（同一种文件、同一个类别）在好几个变更里反复出现：出一条"这一类要对照检查"的规则，带上最近的几个例子
  * 自动出来的规则在注释里标着"自动"，措辞是审查者的原话，配置页里能改能删。
+ *
+ * 团队的坑（K3 M11，2026-11-01）：
+ *   人加的（配置页"自己加一条"、候选上点"升成规则"）直接是规则，不用等次数，注释里标"人加=是"；满了不挤它们，提到的名字找不到了也不退役
+ *   命令失败 → 改了文件 → 同一条命令再跑通过（lib/fix-pass.js）：记一条候选，和自动收的走同一条路（autoFix），不直接成规则
  */
 const fs = require('fs');
 const path = require('path');
@@ -211,6 +215,7 @@ function parseMeta(s) {
     else if (k === '没管住') m.miss = Math.max(0, parseInt(v, 10) || 0);
     else if (k === '类别') m.kind = v;
     else if (k === '自动') m.auto = v;
+    else if (k === '人加') m.byHand = v === '是';
     else if (k === '名字') m.names = v.split(',').map((x) => x.trim()).filter(Boolean);
   }
   return m;
@@ -265,6 +270,7 @@ function renderRuleFile(data, scope, group) {
     if (r.miss) meta.push('没管住=' + r.miss);
     if (r.kind) meta.push('类别=' + metaSafe(r.kind).replace(/\s/g, ''));
     if (r.auto) meta.push('自动=' + metaSafe(r.auto).replace(/\s/g, ''));
+    if (r.byHand) meta.push('人加=是');
     if (r.names && r.names.length) meta.push('名字=' + r.names.map((n) => metaSafe(n).replace(/[\s,]/g, '')).join(','));
     if (r.from && r.from.length) meta.push('出处=' + r.from.slice(-4).map(metaSafe).join('；'));
     L.push('<!-- ' + meta.join(' ') + ' -->');
@@ -316,12 +322,12 @@ function writeRuleFile(file, data, scope, group) {
 }
 const bulletsOf = (data) => data.rules.length + data.manual.filter((l) => /^\s*[-*]\s+\S/.test(l)).length;
 const charsOf = (data) => data.rules.reduce((n, r) => n + r.text.length, 0) + data.manual.reduce((n, l) => n + l.trim().length, 0);
-/** 超过上限：挤掉次数最少、最久没再出现的（keep 这一条不挤）。返回被挤掉的 */
+/** 超过上限：挤掉次数最少、最久没再出现的（keep 这一条不挤，人加的不挤）。返回被挤掉的 */
 function squeeze(data, st, keep) {
   const out = [];
   const over = () => bulletsOf(data) > st.maxPerGroup || charsOf(data) > st.maxPerGroup * st.maxChars;
   while (over()) {
-    const cand = data.rules.filter((r) => r.id !== keep).sort((a, b) => (a.count - b.count) || String(a.last).localeCompare(String(b.last)));
+    const cand = data.rules.filter((r) => r.id !== keep && !r.byHand).sort((a, b) => (a.count - b.count) || String(a.last).localeCompare(String(b.last)));
     if (!cand.length) break;
     data.rules = data.rules.filter((r) => r !== cand[0]);
     out.push(cand[0]);
@@ -771,7 +777,7 @@ function addAuto(root, st, o) {
   }
   const items = all.candidates;
   let cand = target ? items.find((c) => c.id === target.id) : null;
-  if (!cand) { cand = { id: idOf(text, taken), text, alt: also, group: o.group, kind: o.kind || '', file: o.rel || '', sources: [], first: today(), last: today(), state: 'candidate', auto: true }; items.push(cand); }
+  if (!cand) { cand = { id: idOf(text, taken), text, alt: also, group: o.group, kind: o.kind || '', file: o.rel || '', sources: [], first: today(), last: today(), state: 'candidate', auto: true }; if (o.origin) cand.origin = o.origin; items.push(cand); }
   // 以前收的时候审查者没写"以后怎么避免"，存的是"问题"那一句；这次写了：换成能照着做的这一句
   else if (cand.auto && !cand.alt && also) { cand.alt = cand.text; cand.text = text; }
   if (!cand.sources.some((s) => changeOf(s.from) === changeOf(o.from))) cand.sources.push({ from: o.from, at: today() });
@@ -1010,12 +1016,12 @@ function tidy(cwd, apply, rootHint) {
 function fileView(rf, scope) {
   const d = readRuleFile(rf.file);
   return { group: rf.group, title: (groupInfo(rf.group) || {}).title || rf.group, file: rf.file, scope, paths: d.paths, manual: d.manual.filter((l) => /^\s*[-*]\s+\S/.test(l)).map((l) => l.replace(/^\s*[-*]\s+/, '')), chars: charsOf(d),
-    rules: d.rules.map((r) => ({ id: r.id, text: r.text, count: r.count, last: r.last, miss: r.miss || 0, kind: r.kind || '', from: r.from || [], names: r.names || [], auto: r.auto || '' })) };
+    rules: d.rules.map((r) => ({ id: r.id, text: r.text, count: r.count, last: r.last, miss: r.miss || 0, kind: r.kind || '', from: r.from || [], names: r.names || [], auto: r.auto || '', byHand: !!r.byHand })) };
 }
 function projectView(root) {
   migrateNames(projectRulesDir(root), 'project', root);
   return { root, name: path.basename(root), exists: fs.existsSync(root), files: listRuleFiles(projectRulesDir(root)).map((rf) => fileView(rf, 'project')),
-    candidates: readCandidates(root).map((c) => ({ id: c.id, text: c.text, group: c.group, kind: c.kind || '', count: distinctChanges(c.sources), last: c.last, state: c.state || 'candidate', why: c.why || '', from: (c.sources || []).map((s) => s.from), auto: !!c.auto })),
+    candidates: readCandidates(root).map((c) => ({ id: c.id, text: c.text, group: c.group, kind: c.kind || '', count: distinctChanges(c.sources), last: c.last, state: c.state || 'candidate', why: c.why || '', from: (c.sources || []).map((s) => s.from), auto: !!c.auto, origin: c.origin || '' })),
     findings: findingsSummary(root) };
 }
 function overview(cfg) {
@@ -1023,8 +1029,89 @@ function overview(cfg) {
   const st = settings(cfg);
   const idx = readIndex();
   const projects = Object.values(idx.projects).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 30).map((p) => projectView(p.root)).filter((p) => p.exists && (p.files.length || p.candidates.length));
-  return { settings: st, userDir: USER_RULES_DIR, user: listRuleFiles(USER_RULES_DIR).map((rf) => fileView(rf, 'user')), projects,
+  return { settings: st, userDir: USER_RULES_DIR, user: listRuleFiles(USER_RULES_DIR).map((rf) => fileView(rf, 'user')), projects, choices: projectChoices(idx),
     pending: idx.lessons.filter((l) => l.state === 'pending').map((l) => ({ id: l.id, text: l.text, group: l.group, kind: l.kind || '', projects: Object.values(l.projects).map((p) => path.basename(p.root)) })) };
+}
+/** 配置页"自己加一条"能选的项目：记过经验的、最近开过会话的（还没有规则的也算）。只有这些目录能写，不接受任意路径 */
+function projectChoices(idx0) {
+  const out = new Map();
+  const put = (root) => { if (root && fs.existsSync(root)) { const k = normKey(root); if (!out.has(k)) out.set(k, { root, name: path.basename(root) }); } };
+  for (const p of Object.values((idx0 || readIndex()).projects)) put(p.root);
+  for (const s of Object.values(readState('active-sessions'))) if (s && s.cwd) { try { put(repoRootOf(s.cwd, s.cwd)); } catch (e) { /* 目录没了 */ } }
+  return [...out.values()].slice(0, 50);
+}
+/** 把人加的这一条写进规则文件。挤出来的回候选（项目级） */
+function writeByHand(scope, root, group, rule, st, rest) {
+  const dir = scope === 'user' ? USER_RULES_DIR : projectRulesDir(root);
+  migrateNames(dir, scope, root);
+  const file = ruleFileOf(dir, group);
+  const data = readRuleFile(file);
+  data.rules.push(rule);
+  const squeezed = squeeze(data, st, rule.id);
+  sortRules(data);
+  writeRuleFile(file, data, scope, group);
+  if (scope === 'user') return { file, squeezed };
+  noteWritten(file, root);
+  for (const r of squeezed) rest.push({ id: r.id, text: r.text, group, kind: r.kind || '', file: '', sources: (r.from || []).map((f) => ({ from: f, at: r.last })), first: r.last, last: r.last, state: 'evicted', auto: !!r.auto });
+  writeCandidates(root, rest);
+  try { const idx = readIndex(); noteProject(idx, root); writeIndex(idx); } catch (e) { /* 记不了不影响 */ }
+  return { file, squeezed };
+}
+/** 人在配置页加一条：直接是规则，不用等次数。o: { scope, root, group（java / sql / web / spec / other）, ext（other 时的扩展名）, text } */
+function addByHand(o, st0) {
+  return withLock(() => {
+    const st = st0 || settings();
+    const scope = o.scope === 'user' ? 'user' : 'project';
+    const group = o.group === 'other' ? 'other-' + String(o.ext || '').trim().replace(/^\./, '').toLowerCase() : String(o.group || '');
+    if (!groupInfo(group)) return { ok: false, msg: o.group === 'other' ? '别的文件类型要写扩展名（1 到 8 个字母或数字），比如 yml。' : '不认识这类文件：' + o.group };
+    const text = oneLine(o.text);
+    if (text.length < 8 || text.length > st.maxChars) return { ok: false, msg: '一条规则 8 到 ' + st.maxChars + ' 个字。' };
+    if (/<!--|-->/.test(text)) return { ok: false, msg: '规则里不要带注释符号。' };
+    const dir = scope === 'user' ? USER_RULES_DIR : projectRulesDir(o.root);
+    const data = readRuleFile(ruleFileOf(dir, group));
+    const dup = data.rules.find((r) => similarity(r.text, text) >= SAME);
+    if (dup) return { ok: false, msg: '这一组已经有差不多的了（' + dup.id + '："' + dup.text + '"）。要改字，点它后面的"改字"。' };
+    if (data.manual.some((l) => oneLine(l).includes(text))) return { ok: false, msg: '这一组已经有一样的了（手写的那几行里）。' };
+    // 差不多的候选、以前删过的记录：人这次明确要了，并掉，不留两份
+    const items = scope === 'user' ? [] : readCandidates(o.root);
+    const rest = items.filter((c) => !(similarity(c.text, text) >= SAME && (c.state !== 'retired' || removedByUser(c))));
+    const taken = new Set(data.rules.map((r) => r.id).concat(rest.map((c) => c.id)));
+    const rule = { id: idOf(text, taken), text, count: 1, last: today(), miss: 0, kind: '', names: [], from: [], byHand: true };
+    return Object.assign({ ok: true }, writeByHand(scope, o.root, group, rule, st, rest));
+  });
+}
+/** 候选上点"升成规则"：不等次数，算人加的。退役的不能点（配置页上也没有这个按钮） */
+function promoteCandidate(root, id, st0) {
+  return withLock(() => {
+    const st = st0 || settings();
+    const items = readCandidates(root);
+    const c = items.find((x) => x.id === id && x.state !== 'retired');
+    if (!c) return { ok: false, msg: '没有这一条候选：' + id };
+    const rule = { id: c.id, text: c.text, count: Math.max(1, distinctChanges(c.sources)), last: today(), miss: 0, kind: c.kind || '', names: [], from: (c.sources || []).map((s) => s.from).slice(-4), byHand: true };
+    return Object.assign({ ok: true }, writeByHand('project', root, c.group, rule, st, items.filter((x) => x !== c)));
+  });
+}
+/**
+ * 命令失败 → 改了文件 → 同一条命令再跑通过（lib/fix-pass.js）：记一条候选。走自动收的路（addAuto），到门槛才变成规则。
+ * 文字只有哪个工具、报什么、改了哪个文件（文件名），不带路径、行号。o: { kind, error, files, from, cwd }
+ */
+function autoFix(o, cfg) {
+  const st = settings(cfg);
+  if (st.mode === 'off' || !st.auto) return { status: 'off' };
+  const files = (o.files || []).filter((f) => groupOf(f));
+  if (!files.length) return { status: 'skipped' };
+  return withLock(() => {
+    const root = repoRootOf(files[0], o.cwd);
+    if (!root) return { status: 'skipped' };
+    const names = [...new Set(files.map((f) => path.basename(f)))].slice(0, 2).join('、');
+    const head = oneLine(o.kind) + ' 报“';
+    const tail = '”时，先看 ' + names;
+    const msg = oneLine(o.error).replace(/(?:[A-Za-z]:[\\/]|\/(?:[^\s/:]+\/)+)[^\s:'"，。）)]*/g, (p) => path.basename(p.replace(/\\/g, '/'))).replace(/:\[?\d+(?:[,:]\d+)*\]?/g, '').trim();
+    if (!msg) return { status: 'skipped' };
+    const text = head + msg.slice(0, Math.max(8, st.maxChars - head.length - tail.length)) + tail;
+    try { const idx = readIndex(); noteProject(idx, root); writeIndex(idx); } catch (e) { /* 记不了不影响 */ }
+    return addAuto(root, st, { text, group: groupOf(files[0]), kind: '其他', from: oneLine(o.from), rel: path.relative(root, path.resolve(o.cwd || process.cwd(), files[0])).split(path.sep).join('/'), origin: 'fix' });
+  });
 }
 /** 配置页里删一条、改一条的字（用户级、项目级都行；项目级的改了要提交，记下来由收工检查催） */
 function editRule(scope, root, id, newText, st0) {
@@ -1063,4 +1150,4 @@ function editRule(scope, root, id, newText, st0) {
 }
 
 module.exports = { settings, GROUPS, KINDS, groupOf, groupInfo, isLessonFile, migrateNames, parseFindings, autoCollect, readFindings, findingsSummary, findingsFile, repoRootOf, projectNames, namesAlive, tokensOf, similarity, idOf, readRuleFile, renderRuleFile, writeRuleFile, listRuleFiles, squeeze,
-  readCandidates, candidatesFile, readIndex, pendingUser, promoteUser, dismissUser, noteWritten, uncommitted, add, retire, tidy, overview, projectView, editRule, USER_RULES_DIR, STORE, SAME, NEAR, projectRulesDir, ruleFileOf };
+  readCandidates, candidatesFile, readIndex, pendingUser, promoteUser, dismissUser, noteWritten, uncommitted, add, addByHand, promoteCandidate, autoFix, projectChoices, retire, tidy, overview, projectView, editRule, USER_RULES_DIR, STORE, SAME, NEAR, projectRulesDir, ruleFileOf };

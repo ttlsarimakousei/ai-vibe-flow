@@ -452,8 +452,8 @@ async function handle(method, url, body, kitDir, ctx) {
   if (/^\/api\/kit\/remote(\/|\?|$)/.test(url)) return remote(method, url, body, kitDir);
   // 经验规则：各项目和用户级现在生效的规则、候选、等确认升用户级的。升用户级、删、改字只有这里能做（命令行工具里没有，模型做不了）
   if (url === '/api/kit/lessons' && method === 'GET') return inWorker('lessons', { kitDir, action: 'list' }, '读经验规则');
-  if (method === 'POST' && /^\/api\/kit\/lessons\/(promote|dismiss|edit|remove)$/.test(url)) {
-    return inWorker('lessons', { kitDir, action: url.split('/').pop(), id: str(body && body.id), scope: body && body.scope === 'user' ? 'user' : 'project', root: str(body && body.root), text: str(body && body.text) }, '改经验规则');
+  if (method === 'POST' && /^\/api\/kit\/lessons\/(promote|dismiss|edit|remove|add|promote-candidate)$/.test(url)) {
+    return inWorker('lessons', { kitDir, action: url.split('/').pop(), id: str(body && body.id), scope: body && body.scope === 'user' ? 'user' : 'project', root: str(body && body.root), text: str(body && body.text), group: str(body && body.group), ext: str(body && body.ext) }, '改经验规则');
   }
   throw new Error('没有这个接口');
 }
@@ -588,6 +588,10 @@ function lessonsOp(a) {
     // 项目级的只许动记录里有的项目（配置页上列出来的那些），不接受任意路径
     if (a.scope !== 'user' && !ls.overview().projects.some((p) => p.root === a.root)) throw new Error('不认识这个项目：' + a.root);
     r = ls.editRule(a.scope, a.root, a.id, a.action === 'remove' ? null : a.text);
+  } else if (a.action === 'add' || a.action === 'promote-candidate') {
+    // 人加的（K3 M11）：项目级的只许写配置页能选到的项目，不接受任意路径
+    if ((a.action === 'promote-candidate' || a.scope !== 'user') && !ls.projectChoices().some((p) => p.root === a.root)) throw new Error('不认识这个项目：' + a.root);
+    r = a.action === 'add' ? ls.addByHand(a) : ls.promoteCandidate(a.root, a.id);
   }
   if (!r.ok) throw new Error(r.msg || '没做成');
   return Object.assign({ ok: true, done: a.action, file: r.file || '' }, ls.overview());
