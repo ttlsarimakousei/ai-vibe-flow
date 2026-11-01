@@ -207,6 +207,8 @@ function readSettings() {
   return s;
 }
 const MANIFEST = path.join(KIT, 'installed.json');
+// 这台电脑以前没装过：装完留个记号，第一个会话说一次怎么用（K3 M05）。升级的不说
+const FIRST_INSTALL = !fs.existsSync(MANIFEST);
 /**
  * installed.json：allow / ask / env 是自己加进 settings.json、现在还在的（卸载时只收回这些）；
  * known 是装过的各个版本带过的全部条目，不管当时是自己加的还是你本来就有。升级时 known 里有、settings.json 里没有的，是你删掉或挪走的，不再补；
@@ -1346,6 +1348,7 @@ if (mode === 'install') {
     if (items.length) rec.notice = { at: rec.at, version, items };
     fs.mkdirSync(path.join(KIT, 'state'), { recursive: true });
     writeAtomic(doneFile, JSON.stringify(rec));
+    if (FIRST_INSTALL) writeAtomic(path.join(KIT, 'state', 'welcome.json'), JSON.stringify({ pending: true, at: rec.at }));
   } catch (e) { /* 记不了：状态栏可能多报一次装坏 */ }
 }
 // 不再接 IDEA 的 MCP（用户 2026-10-28 定的）：以前套件登记的 vibe-idea-<端口>，没被改过的撤掉；你自己登记的不动。失败不影响安装

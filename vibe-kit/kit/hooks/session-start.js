@@ -68,11 +68,22 @@ async function handle(j) {
     try { const U = require('../lib/usage.js'); U.bump('session.' + (/^(startup|resume|clear|compact)$/.test(source) ? source : 'other')); U.seen('kit', fs.readFileSync(path.join(KIT, 'VERSION'), 'utf8').trim()); } catch (e) { /* 数不了不影响会话开始 */ }
     // 这个会话是在哪个目录启动的：压缩、/clear 之后这里收到的是"现在所在的目录"（模型单独 cd 过就不是启动目录了），项目级的事照启动目录来
     if (source !== 'compact') noteSessionHome(j);
+    // 这台电脑第一次用套件（安装器全新安装时留的记号）：说一次就清掉（K3 M05）。升级的没有记号，不说
+    let welcome = '';
+    try {
+      if (source !== 'compact' && readState('welcome').pending) {
+        writeState('welcome', { pending: false, at: Date.now() });
+        let page = '';
+        try { page = '配置页 http://127.0.0.1:' + require(path.join(KIT, 'router', 'service.js')).portOf() + '/ui 管模型、开关、更新；'; } catch (e) { /* 没装路由 */ }
+        welcome = '这台电脑第一次用 vibe-kit。先用三四句话告诉用户，再做用户要的事：' + page + '新需求走 /opsx:propose，小改动用 /vk-fix，提交用 /vk-commit；被拦下了提示里写着怎么改，觉得拦错了可以让 Claude 记一条问题反馈；不确定装得对不对，跑 node "' + path.join(KIT, 'tools', 'doctor.js') + '" 体检。';
+      }
+    } catch (e) { welcome = ''; }
     j = atHome(j);
     const cwd = path.resolve(j.cwd || process.cwd());
     // 压缩之后：之前"选了再做一会儿"、全自动"这一段已经提醒过写交接记录"、"快到网关上限说过了"的记录作废，重新到线再说
     if (source === 'compact' && j.session_id) { const k = j.session_id + '-handover'; const h = readState(k); if (h.askedAtPct != null || h.autoAtPct != null || h.gwAsked || h.gwNoted || h.gwStop) writeState(k, Object.assign({}, h, { askedAtPct: null, autoAtPct: null, gwAsked: false, gwNoted: false, gwStop: false, at: Date.now() })); }
     const out = [];
+    if (welcome) out.push(welcome);
 
     // 壳子：外面一层放 openspec、文档、.claude，里面是各个子项目，子项目各是独立的 git 仓库。看实际结构认，不依赖标志文件；
     // 普通的单个项目（自己有 pom.xml、package.json、src 这些）就算下面有别的 git 仓库也不算壳子
