@@ -27,11 +27,14 @@
  *            时长、门槛写成常量（OBSERVE）不做开关：没人知道该怎么调；按请求数判比只按时间可靠（装完两小时没人用，看了等于没看）。
  *            路由换模型时每次失败都记一次，但同一个模型失败后要冷却一阵（一般 5 分钟）不再试，所以单个模型出故障时失败率涨不到一半；
  *            整个网关断了会误判成新版的问题，误判的代价是装回上一版（照常能用）、报一条维护的人能关掉的 issue
+ *   固定     配置页"固定在这一版"（config.json 的 updatePin，存的是固定时装着的版本）：不再自动装任何版本——新版、仓库退回的旧版、
+ *            观察期里的装回、装坏后的修复都不做，直到点"取消固定"；"立即更新"也要先取消。照常检查，配置页上看得到仓库里有什么
+ *   跳过     配置页"跳过这一版"（updateSkip，存的是跳过的版本）：仓库里是这一版时不自动装，出了别的版本照常（不用再去取消）
  *
  * 连仓库走哪条路（手填的令牌、SSH 密钥、这台电脑上 git 登录的身份）由 lib/gitlab.js 挨个试，这里不管。
  *
  * 开关（config.json）：autoUpdate = auto 自动装 / notify 只提醒（状态栏、配置页上说有新版，点了才装）/ off 不检查；updateCheckHours 几小时查一次（默认 2）；
- * updateEarly 先装新版（默认不勾）。
+ * updateEarly 先装新版（默认不勾）；updatePin、updateSkip 由配置页的按钮写（空 = 没固定、没跳过）。
  * 更新源在 lib/gitlab.js（配置页里填，默认是团队的那个仓库）。
  *
  * 为什么放在 lib/ 里：模型只能跑 page/ 和 tools/ 里的脚本（guard-commit），这里的它跑不了——更新等于执行仓库里的代码，不能让模型来触发。
@@ -65,6 +68,8 @@ const FLAG_TTL_MS = 2 * 3600000;
 const OBSERVE = { minMs: 2 * 3600000, maxMs: 24 * 3600000, passReq: 20, failReq: 8, rate: 0.5, jump: 0.3, baseDays: 7, everyMs: 10 * 60000 };
 
 const modeOf = (cfg) => { const m = (cfg || readConfig()).autoUpdate; return ['auto', 'notify', 'off'].includes(m) ? m : 'auto'; };
+/** 配置里存的版本号（固定、跳过）：不像版本号的当没有 */
+const verOf = (v) => { const s = String(v == null ? '' : v).trim(); return VERSION_RE.test(s) ? s : ''; };
 /** 仓库里现在这一版什么时候发布的（check() 记的）：提交的时间，不可信时是这台电脑第一次看到它的时间 */
 const releasedAt = (st) => Number(st && st.remoteAt) || Number(st && st.remoteSeenAt) || 0;
 /** 本地日期 YYYY-MM-DD */
@@ -346,11 +351,14 @@ function rollback(prev, s) {
 const failedTimes = (st, v) => (st.failed && st.failed.version === v ? Number(st.failed.times) || 0 : 0);
 /**
  * 发版保护：仓库里那一版现在该不该自动装（只看配置和状态文件，不连网；状态栏、配置页也用它说现在是什么状态）。
- * 返回 { hold, until, flag }：hold 为空是可以装；'wait' 等尝鲜组（until 之后再装）；'flag' 尝鲜组报了这一版有问题
+ * 返回 { hold, until, flag }：hold 为空是可以装；'pin' 固定在这一版；'skip' 跳过了仓库里这一版；'wait' 等尝鲜组（until 之后再装）；'flag' 尝鲜组报了这一版有问题
  */
 function gate(cfg, st, installed, now) {
   const remote = (st && st.remoteVersion) || '';
   if (!remote || remote === installed) return { hold: '' };
+  // 固定在这一版：什么都不自动装，仓库退回的旧版也不装；跳过的就是仓库里这一版：不装，等下一版
+  if (verOf(cfg.updatePin)) return { hold: 'pin' };
+  if (verOf(cfg.updateSkip) === remote) return { hold: 'skip' };
   // 尝鲜组：一发现新版就装，和以前一样
   if (cfg.updateEarly === true) return { hold: '' };
   // 仓库退回了旧版（维护的人把大家退回去，多半是新版出了事）：不等，马上跟着退
@@ -385,6 +393,8 @@ async function refreshFlag(cfg, evenWaiting) {
     const cur = installedVersion();
     if (!v || v === cur || stagedVersion() !== v || failedTimes(st, v) >= 2) return null;
     if (cfg.updateEarly === true || olderThan(v, cur)) return null;
+    // 固定着、跳过了这一版：不装，也就不用查
+    if (verOf(cfg.updatePin) || verOf(cfg.updateSkip) === v) return null;
     if (!evenWaiting && Date.now() < releasedAt(st) + CANARY_WAIT_MS) return null;
     const f = st.flag;
     if (!evenWaiting && f && f.version === v && Date.now() - (Number(f.at) || 0) < FLAG_TTL_MS) return f;
@@ -454,6 +464,8 @@ async function observeStep(cfg, o) {
   const now = Date.now();
   const cur = installedVersion();
   if (ob.version !== cur) { setState({ observe: null }); log('装着的已经不是 ' + ob.version + '（现在是 ' + (cur || '没有版本号') + '），它的观察期不看了'); return { dropped: '装着的不是 ' + ob.version }; }
+  // 固定在这一版：你要留着它，不再看、也不会自动装回
+  if (verOf(cfg.updatePin)) { setState({ observe: null }); log('固定在这一版：' + cur + ' 的观察期不看了，不会自动装回'); return { dropped: '固定在这一版' }; }
   const v = observeVerdict(ob, routerCounts(), now);
   const seen = { req: v.req, fail: v.fail };
   if (v.pass) {
@@ -541,15 +553,18 @@ function apply() {
 // ---------- 现在的情况（配置页、状态栏用） ----------
 /**
  * 发版保护现在处在哪一步（状态栏、配置页顶部、status() 共用，只看配置和状态文件，不连网）：
- * { hold: '' / 'wait' / 'flag', until: 等到什么时候, flag: 尝鲜组报的那一条,
- *   observe: 装着的这一版正在观察（version、from、at、until 至少看到、last 最晚看到、seen 装之后到现在的次数）或 null }
+ * { hold: '' / 'pin' / 'skip' / 'wait' / 'flag', until: 等到什么时候, flag: 尝鲜组报的那一条,
+ *   pin: 固定在哪一版（没固定是空的，仓库里没有新版也给）, skip: 跳过的那一版（仓库里现在就是它才给）,
+ *   observe: 装着的这一版正在观察（version、from、at、until 至少看到、last 最晚看到、seen 装之后到现在的次数）或 null（固定了不给：不会自动装回） }
  */
 function phase(cfg, st, installed, now) {
   const s = st || {};
-  const g = gate(cfg || {}, s, installed, now || Date.now());
-  const ob = s.observe && s.observe.version && s.observe.version === installed ? s.observe : null;
+  const c = cfg || {};
+  const g = gate(c, s, installed, now || Date.now());
+  const pin = verOf(c.updatePin);
+  const ob = !pin && s.observe && s.observe.version && s.observe.version === installed ? s.observe : null;
   const at = ob ? Number(ob.at) || 0 : 0;
-  return { hold: g.hold || '', until: g.until || 0, flag: g.hold === 'flag' ? g.flag : null,
+  return { hold: g.hold || '', until: g.until || 0, flag: g.hold === 'flag' ? g.flag : null, pin, skip: g.hold === 'skip' ? s.remoteVersion : '',
     observe: ob ? { version: ob.version, from: ob.from || '', at, until: at + OBSERVE.minMs, last: at + OBSERVE.maxMs, need: OBSERVE.passReq, seen: ob.seen || null, base: ob.base || null } : null };
 }
 function status() {
@@ -570,6 +585,8 @@ function status() {
     history: (st.history || []).slice(-10).reverse(), running: lockHeld(), log: LOG, maintainer: gl.isMaintainer(),
     // 发版保护：先装新版（尝鲜组）勾没勾；现在等不等、等到什么时候；这一版什么时候发布的；查到的"这一版有没有问题"（只给仓库里现在这一版的）
     early: cfg.updateEarly === true, hold: ph.hold, waitUntil: ph.hold === 'wait' ? ph.until : 0, remoteAt: releasedAt(st),
+    // 固定在哪一版（空 = 没固定）；跳过的版本（配置里存的，不管仓库里现在是不是它）
+    pin: ph.pin, skip: verOf(cfg.updateSkip),
     flag: st.flag && st.flag.version === remote && remote !== installed ? st.flag : null,
     // 观察期：装着的这一版正在观察；上一次观察过了的（还是装着的这一版才给）；上一次在仓库里报"这一版有问题"
     observe: ph.observe, observed: st.observed && st.observed.version === installed ? st.observed : null, flagSent: st.flagSent || null,
@@ -632,8 +649,10 @@ async function run(opt) {
     let installed = false;
     // 上次装坏了、也没能装回上一版（审核 P04）：版本号已经是坏的那一版，以前之后就当"已是最新"不再管。这次再试着装回上一版
     // 只在自动更新模式下、离上次试过 6 小时以上、路由空闲时试（复审 U-R2：以前每次检查都重装、重启路由，不等空闲，只提醒的模式也装）
+    // 固定在这一版的不试（固定 = 什么都不自动装）
+    const pin = verOf(cfg.updatePin);
     const bad = brokenOf(st);
-    if (bad && bad.from && modeOf(cfg) === 'auto' && Date.now() - (Number(bad.retriedAt) || Number(bad.at) || 0) >= 6 * 3600000 && await waitIdle(o.waitMs, o.quietMs)) {
+    if (bad && bad.from && !pin && modeOf(cfg) === 'auto' && Date.now() - (Number(bad.retriedAt) || Number(bad.at) || 0) >= 6 * 3600000 && await waitIdle(o.waitMs, o.quietMs)) {
       const back = rollback(bad.from, gl.settings());
       log(back.ok ? '上次没装回去，这次装回了上一版 ' + bad.from : '还是没能装回上一版 ' + bad.from + '：' + back.why);
       if (back.ok) { setState({ failed: Object.assign({}, bad, { rolledBack: true, retriedAt: Date.now() }) }); installed = true; }
@@ -643,7 +662,9 @@ async function run(opt) {
       if (o.force || Date.now() - (st.lastCheckAt || 0) >= hoursOf(cfg) * 3600000 || !st.remoteVersion) out.check = check();
       // 没勾"先装新版"的：等满了 24 小时，装之前查一下尝鲜组有没有报这一版有问题（只提醒的也查，配置页上好说清楚）
       if (!o.force) { const f = await refreshFlag(cfg, false); if (f) out.flag = f; }
-      if ((modeOf(cfg) === 'auto' || o.force) && needInstall(!!o.force)) {
+      // 固定在这一版：配置页点"立即更新"也不装，要先取消固定（配置页上这个按钮是灰的，这里再挡一次）
+      if (o.force && pin && needInstall(true)) { out.apply = { ok: false, pinned: true, why: '固定在 ' + pin + '，不更新。要更新先在配置页"更新和上报"点"取消固定"' }; log('固定在 ' + pin + '，没装 ' + stagedVersion()); }
+      else if ((modeOf(cfg) === 'auto' || o.force) && needInstall(!!o.force)) {
         if (o.force || await waitIdle(o.waitMs, o.quietMs)) { out.apply = apply(); installed = true; }
         else { log('一直有请求在跑，这次先不装，十分钟后再看'); out.apply = { ok: false, why: '路由一直在忙' }; }
       }

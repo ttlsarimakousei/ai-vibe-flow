@@ -14,7 +14,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { Worker } = require('worker_threads');
 
-const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, updateEarly: false, issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', perfReport: 'on', ccAutoMode: 'off', contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
+const DEFAULT_CONFIG = { autoVerify: true, autoSeePage: true, autoCrossReview: true, commitCheck: true, specGate: true, tmpKeepDays: 7, reviewLoop: false, reviewMaxRounds: 3, autoMode: false, autoRequirements: false, autoApply: false, requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, kitLock: true, kitBypass: 'ask', handoverPercent: 70, contextLimitTokens: 1000000, handoverAsk: 'off', commitMode: 'off', hookTransport: 'auto', lessons: 'on', lessonThreshold: 2, lessonMaxPerGroup: 10, lessonMaxChars: 120, lessonPromote: 'ask', autoMemory: 'off', autoUpdate: 'auto', updateCheckHours: 2, updateEarly: false, updatePin: '', updateSkip: '', issueUpload: 'on', sshToken: 'auto', autoOnboard: true, lessonAuto: true, dbcrudDaemon: false, dbcrudDaemonIdleMinutes: 5, autoCompactPercent: 70, statusUsage: true, usageReport: 'on', perfReport: 'on', ccAutoMode: 'off', contextStrategy: 'compact', reviewExecutor: 'direct', reviewBudgetSeconds: 300, reviewMaxFiles: 20 };
 const EMPTY_LOCAL = { jdks: [], defaultJdk: '', mavens: [], defaultMaven: '', tomcats: [], notes: '' };
 
 function readJson(file, fallback) {
@@ -94,6 +94,8 @@ function cleanConfig(x, base) {
   const hours = Number(x && x.updateCheckHours); if (hours >= 1 && hours <= 24) c.updateCheckHours = Math.round(hours);
   // 先装新版（尝鲜组，发版保护 K2）：勾了一发现新版就装；不勾等这一版发布满 24 小时、尝鲜组没报问题再装（见套件 lib/updater.js）
   if (x && typeof x.updateEarly === 'boolean') c.updateEarly = x.updateEarly;
+  // 固定在这一版、跳过这一版（K2）：存版本号，空 = 没有。由"更新和上报"的按钮写，乱填的保持原值
+  for (const k of ['updatePin', 'updateSkip']) if (x && typeof x[k] === 'string' && (x[k] === '' || /^\d{8}\.\d{4}$/.test(x[k]))) c[k] = x[k];
   // 问题上报：on 记下的问题自动建成 GitLab 的议题；off 只存在本机。没填令牌时用不用 SSH 去申请一个：auto / off
   if (x && ['on', 'off'].includes(x.issueUpload)) c.issueUpload = x.issueUpload;
   if (x && ['auto', 'off'].includes(x.sshToken)) c.sshToken = x.sshToken;
@@ -397,15 +399,7 @@ async function handle(method, url, body, kitDir, ctx) {
   // 别的开关不会被页面打开时的旧值改回去。有的开关要重新生成全局约定、重新登记钩子才生效（全自动模式、钩子跑的方式、自动记忆），所以保存后同步一次
   if (method === 'POST' && url === '/api/kit/config') {
     const inc = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
-    // 和钩子自检切回命令方式（lib/hook-health.js）用同一把锁：两边同时写会互相盖掉。拿不到锁照样写（老版本的套件没有 state-store）
-    let lock = null;
-    try { lock = require(path.join(kitDir, 'lib', 'state-store.js')).acquire(configFile + '.lock', { waitMs: 3000 }); } catch (e) { lock = null; }
-    let cur, c;
-    try {
-      cur = cleanConfig(readJson(configFile, DEFAULT_CONFIG));
-      c = cleanConfig(Object.assign({}, cur, inc), cur);
-      writeJson(configFile, c);
-    } finally { if (lock) lock.release(); }
+    const { cur, c } = mergeConfig(kitDir, inc);
     // 封条：三个放松保护的开关（关掉禁改、自动放行、全自动模式）只认这里和安装器改的，钩子拿它对照（见套件 lib/session.js 的 readConfig）
     try { fs.mkdirSync(path.join(kitDir, 'state'), { recursive: true }); fs.writeFileSync(path.join(kitDir, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass, autoMode: c.autoApply === true, autoApply: c.autoApply === true, autoRequirements: c.autoRequirements === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
     auditLog(kitDir, cur, c);
@@ -513,7 +507,29 @@ async function remote(method, url, body, kitDir) {
   if (p === '/test') return Object.assign({ test: await runKit(kitDir, ['diagnose'], 120000) }, remoteView(loadRemote(kitDir), true));
   if (p === '/mint') return Object.assign({ mint: await runKit(kitDir, ['mint'], 90000) }, remoteView(loadRemote(kitDir), true));
   if (p === '/check') { const c = await runKit(kitDir, ['check'], 600000); return Object.assign({ check: c }, remoteView(loadRemote(kitDir), true)); }
+  // 固定在这一版、跳过这一版（K2）：版本号由这里定（固定的是装着的，跳过的是仓库里现在的），页面只说开还是关。
+  // 不用重新生成全局约定，只改配置
+  if (p === '/pin' || p === '/skip') {
+    const on = !!(body && body.on);
+    const u = r.up.status();
+    if (on && r.up.lockHeld()) throw new Error('后台正在检查或更新，等它跑完再点');
+    let inc;
+    if (p === '/pin') {
+      if (on && u.broken) throw new Error('这一版没装好，不能固定。先重新运行安装包，或者等后台装回上一版');
+      if (on && !u.installed) throw new Error('这台电脑上的套件没有版本号，不能固定');
+      inc = { updatePin: on ? u.installed : '' };
+    } else {
+      if (on && !(u.differs && u.remote)) throw new Error('仓库里的和装着的一样，没有可跳过的版本');
+      inc = { updateSkip: on ? u.remote : '' };
+    }
+    const { cur, c } = mergeConfig(kitDir, inc);
+    auditLog(kitDir, cur, c);
+    return Object.assign({ ok: true }, remoteView(loadRemote(kitDir), true));
+  }
   if (p === '/apply') {
+    // 固定着的不装：页面上按钮是灰的，这里再挡一次
+    const pinned = r.up.status().pin;
+    if (pinned) return Object.assign({ started: false, why: '固定在 ' + pinned + '，不更新。要更新先点"取消固定"' }, remoteView(r, true));
     // 安装器会把路由停掉换新的：更新进程得独立于路由（不然跟着路由一起被结束），所以甩到后台，页面自己隔几秒来问进度
     if (r.up.lockHeld()) return Object.assign({ started: false, why: '已经有一个在跑了' }, remoteView(r, true));
     r.up.spawnBackground(['apply']);
@@ -569,6 +585,21 @@ function loadLessons(kitDir) {
  * 配置页是用户点的，但接口也可能被绕过检查的程序调到——事后能看到是什么时候改的。
  * 以前记在问题反馈里：那是用户自己点的，不是套件的问题，导出的汇总里全是这种就没法看了
  */
+/**
+ * 在文件里现有的配置上合并传进来的字段、整体清洗、写回。返回改之前和改之后的。
+ * 和钩子自检切回命令方式（lib/hook-health.js）用同一把锁：两边同时写会互相盖掉。拿不到锁照样写（老版本的套件没有 state-store）
+ */
+function mergeConfig(kitDir, inc) {
+  const configFile = path.join(kitDir, 'config.json');
+  let lock = null;
+  try { lock = require(path.join(kitDir, 'lib', 'state-store.js')).acquire(configFile + '.lock', { waitMs: 3000 }); } catch (e) { lock = null; }
+  try {
+    const cur = cleanConfig(readJson(configFile, DEFAULT_CONFIG));
+    const c = cleanConfig(Object.assign({}, cur, inc), cur);
+    writeJson(configFile, c);
+    return { cur, c };
+  } finally { if (lock) lock.release(); }
+}
 function auditLog(kitDir, before, after) {
   const changed = [];
   if (before.kitLock !== false && after.kitLock === false) changed.push('关掉了"禁止 Claude 自己改套件"');
