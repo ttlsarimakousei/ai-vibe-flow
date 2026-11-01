@@ -120,3 +120,21 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 ## PreToolUse 的 updatedInput 实测，2026-10-17
 
 `dev/probes/cc-updated-input.js` 在 2.1.120、2.1.259、2.1.289 上都实测：PreToolUse 钩子输出 `hookSpecificOutput.updatedInput`（整个替换 tool_input），Bash 实际执行的是改写后的命令，不需要同时给 `permissionDecision`。`-p` 模式下只允许原命令（`Bash(echo ORIGINAL)`）时，改写后的命令照样执行了。官方文档说权限规则按改写后的输入查，deny 和 ask 规则不管钩子返回什么都照查。套件集成 OpenSpec 靠这个：模型照常敲 `openspec …`，钩子改成调用套件自带的那份。
+
+## 流式回复断在半截，2026-11-01 实测
+
+`dev/probes/cc-stream-cut.js` 在 2.1.120、2.1.259、2.1.289 上实测（E3）：`claude -p` 经套件的路由（20261031.1436 那一版）接本机假网关，假网关对第一个主请求按剧本出事，之后的照常回完整的。下表"重发"指 Claude Code 自己再发一次同样的请求，拿到完整回复，结果正常；"接着写"指它把半截的回复留作一轮，再发一条 "Your response above was cut off mid-stream…" 让模型接着写，结果也正常；"报错停下"指 `is_error: true`、退出码 1、不重发。
+
+| 怎么断的（路由转给 Claude Code 的样子） | 2.1.120 | 2.1.259 | 2.1.289 |
+|---|---|---|---|
+| 一段文字中间，HTTP 正常收尾、没有 message_stop（网关自己收了尾，路由照常结束） | 重发（不走流式） | 重发（不走流式） | 重发（流式） |
+| 一整段文字发完（content_block_stop），HTTP 正常收尾，没有 message_delta、message_stop | **当成回完了，结果就是半截** | **当成回完了，结果就是半截** | 接着写 |
+| 一段文字中间来一个 `event: error`（api_error、overloaded_error 一样） | 重发（不走流式） | 重发（不走流式） | 重发（不走流式） |
+| 一整段文字发完之后来 `event: error`（两种类型一样） | 报错停下：`API Error: {"type":"error",…}` | 接着写 | 接着写 |
+| 一段文字中间连接断开（路由把客户端的连接也断开） | 重发（不走流式） | 重发（流式） | 重发（流式） |
+| 一整段文字发完之后连接断开 | 报错停下：`API Error: The socket connection was closed unexpectedly…` | 接着写 | 接着写 |
+| 整个回复发完（有 message_stop）之后连接才断开 | **报错停下（同上），回复其实是全的** | 照常 | 照常 |
+
+- 半截被当成回完了，只在"一整段发完之后、没有 message_stop 就正常收尾"出现，内网在用的 2.1.120、2.1.259 都中招；2.1.289 自己认得出。
+- 让 Claude Code 知道没成，报错事件和断开连接效果一样：断在一段中间三个版本都重发；一段发完之后 2.1.259、2.1.289 接着写，2.1.120 报错停下（不重发，但不再装成回完了，用户说"继续"就接着做）。区别是重发的方式：报错事件让三个版本都改成不走流式重发，断开连接时 2.1.259 起照样走流式。报错事件的类型（api_error、overloaded_error）对重不重发没影响。
+- 路由的做法（11-01 这一批，E3）：流式回复没收到 message_stop 就结束的（上游中途断开、半天不再发数据、正常收尾却没有 message_stop），一律断开客户端的连接；已经收到 message_stop 之后上游才断开的，照常结束。改完拿同一个探针、改过的路由在三个版本上复测：没有 message_stop 就正常收尾、断在一段中间的，三个版本都重发（2.1.259 起走流式）；一整段发完之后的，2.1.259、2.1.289 接着写，2.1.120 报错停下（`API Error: The socket connection was closed unexpectedly…`），不再把半截当成回完了；发完 message_stop 才断开的，三个版本都照常。
