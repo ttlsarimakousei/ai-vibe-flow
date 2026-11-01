@@ -89,6 +89,22 @@ const snap = (t) => ({ status: H.git(t.repo, ['status', '--porcelain']).out, cac
     H.ok('在壳子里回退，子项目里这个会话改过的文件也回去了', r2.code === 0 && H.read(path.join(svc, 'S.java')) === 'class S { int x; }\n', r2.out);
   }
 
+  H.section('Windows：Edit 记的大小写和 git 记的不一样，回退不能把文件删了（复审发现）');
+  if (process.platform === 'win32') {
+    const c = setup('tck-case');
+    edit(c, 'a.js', 'a1\n');
+    H.ok('（存了检查点）', ck(c, ['save']).code === 0);
+    edit(c, 'A.JS', 'a2\n');
+    const r = ck(c, ['restore', '1']);
+    H.ok('还原成检查点里的内容，没有删', r.code === 0 && read(c, 'a.js') === 'a1\n' && fs.existsSync(path.join(c.repo, 'a.js')), [r.out, r.err, read(c, 'a.js')]);
+    const made = setup('tck-case2');
+    edit(made, 'a.js', 'a1\n');
+    ck(made, ['save']);
+    edit(made, 'NEW.js', 'n\n');
+    ck(made, ['restore', '1']);
+    H.ok('检查点之后才建的照旧删掉', !fs.existsSync(path.join(made.repo, 'NEW.js')));
+  }
+
   H.section('自动模式开工、开新一组任务之前：钩子送一句"先存检查点"；人工模式不送');
   {
     const h = H.makeHome('tck-hint', FROM);

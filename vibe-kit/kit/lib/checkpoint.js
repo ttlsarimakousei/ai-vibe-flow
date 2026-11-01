@@ -154,8 +154,15 @@ function restore(o) {
     const rels = mine.map((f) => rel(root, f.abs));
     let ignored = new Set();
     if (rels.length) { try { ignored = new Set(git(root, ['check-ignore', '-z', '--stdin'], { input: rels.join('\0') + '\0' }).split('\0').filter(Boolean)); } catch (e) { ignored = new Set(); } }
+    // Windows 上路径不分大小写，Edit 记的大小写可能和 git 记的不一样：按 git 记的认。不然查不到，会当成"那时不存在"把文件删掉（复审发现）
+    let names = null;
+    const treeName = (r0) => {
+      if (process.platform !== 'win32') return r0;
+      if (!names) { names = new Map(); try { for (const n of git(root, ['ls-tree', '-r', '-z', '--name-only', ck.sha]).split('\0').filter(Boolean)) names.set(n.toLowerCase(), n); } catch (e) { /* 查不了就按原样 */ } }
+      return names.get(r0.toLowerCase()) || r0;
+    };
     for (const f of mine) {
-      const r = rel(root, f.abs);
+      const r = treeName(rel(root, f.abs));
       let entry = '';
       try { entry = git(root, ['ls-tree', '-z', ck.sha, '--', r], { env: { GIT_LITERAL_PATHSPECS: '1' } }).split('\0').filter(Boolean)[0] || ''; } catch (e) { entry = ''; }
       const m = /^(\d+) blob ([0-9a-f]+)\t/.exec(entry);
