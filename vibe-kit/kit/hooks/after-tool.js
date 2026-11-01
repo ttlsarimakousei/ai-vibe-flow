@@ -3,6 +3,7 @@
  * 工具完成后的本机记账入口。只记可核对的结果；失败、取消和未知结果不消费用户许可，也不算通过验证。
  * 2026-11-01 起（K3）还给模型送几句话（additionalContext），都只在有话说时才送：
  *   编译、测试命令失败：第一个错误、文件:行、前后 5 行源码（lib/fail-summary.js）
+ *   改了 .sql、Mapper XML：和查库技能存的表结构对不上的表名、列名（lib/sql-check.js，只提醒）
  */
 const S = require('../lib/session');
 function successful(j) {
@@ -40,6 +41,8 @@ function handle(j) {
     // 编译、测试命令失败：第一个错误、文件:行、前后 5 行源码作为摘要送给模型（K3 M08，lib/fail-summary.js）。成功的什么都不加
     const notes = [];
     if (/^(Bash|PowerShell)$/.test(String(j.tool_name || '')) && !successful(j)) { try { const s = require('../lib/fail-summary').summarize(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 失败摘要', j, e); } }
+    // 改了 .sql、Mapper XML：拿查库技能存的表结构缓存核对表名、列名，对不上提醒一句，不拦（K3 M10，lib/sql-check.js）
+    if (/^(Edit|Write|MultiEdit)$/.test(String(j.tool_name || '')) && successful(j)) { try { const s = require('../lib/sql-check').hintFor(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 表结构核对', j, e); } }
     if (notes.length) return { hookSpecificOutput: { hookEventName: j.hook_event_name || 'PostToolUse', additionalContext: notes.join('\n\n') } };
     return null;
   } catch (e) { try { require('../lib/feedback').recordHookError('after-tool', j, e); } catch (ignored) { /* 记不了也放行 */ } return null; }
