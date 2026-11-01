@@ -70,6 +70,8 @@ const rows = [];
 suites.unshift(['使用情况匿名标识', 'test-usage-identity.js', []]);
 suites.unshift(['归档解包的临时目录', 'test-archive-extract.js', []]);
 suites.unshift(['服务实际地址', 'test-service-address.js', []]);
+// 2026-11-01 这一批的路由（K1-1 拆分、E1 安装标识、E3 断在半截）
+suites.unshift(['11-01 路由', 'test-router-k.js', []]);
 for (const [name, file] of [['状态并发和恢复', 'test-workflow-state.js'], ['用户意图与许可', 'test-workflow-intent.js'], ['许可与上下文', 'test-workflow-permissions.js'], ['连接生命周期', 'test-connection-lifecycle.js'], ['诊断脱敏', 'test-diagnostic-redaction.js'], ['审查和执行证据', 'test-review-evidence.js'], ['运行流程优化', 'test-optimization-runtime.js'], ['优化边界', 'test-optimization-boundaries.js']]) suites.unshift([name, file, []]);
 // --only a.js,b.js：只跑这几套（日常专项用；发版必须全量，不带它）。e2e 代表全部端到端（每个 --claude 版本），diff 代表新旧钩子对比（每个 --old）
 const only = all('--only').flatMap((s) => s.split(',')).map((s) => path.basename(s.trim())).filter(Boolean);

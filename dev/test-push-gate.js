@@ -191,7 +191,8 @@ const stop = (p) => new Promise((r) => { if (!p || p.exitCode !== null) return r
     if (fs.existsSync(smoke)) {
       const ok = H.node(h, smoke, [], { timeout: 90000 });
       H.ok('正常的路由：冒烟过了', ok.code === 0 && /^ok$/m.test(ok.out), ok.out + ok.err);
-      const rj = path.join(h.kit, 'router', 'router.js');
+      // 转发的代码 2026-11-01 起在 router/forward.js（K1-1 拆分），以前在 router.js：找有这一行的那个文件改
+      const rj = ['forward.js', 'router.js'].map((n) => path.join(h.kit, 'router', n)).find((f) => (H.read(f) || '').includes('let sendBody = body;')) || path.join(h.kit, 'router', 'router.js');
       const t = H.read(rj);
       H.write(rj, t.replace('let sendBody = body;', "let sendBody = parsed ? Buffer.from(JSON.stringify(Object.assign({}, parsed, { model: undefined })), 'utf8') : body;"));
       const bad = H.node(h, smoke, [], { timeout: 90000 });
