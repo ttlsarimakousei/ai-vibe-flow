@@ -65,7 +65,7 @@ suites.unshift(['IDEA MCP 接入撤掉', 'test-idea-mcp.js', []]);
 suites.unshift(['自动模式不会被悄悄关掉', 'test-auto-mode-kept.js', []], ['push 只留钩子一道', 'test-push-gate.js', []], ['同一件事不再确认第二遍', 'test-confirm-once.js', []], ['认用户说法的语料', 'test-intent-corpus.js', []], ['查库、redis 的保护', 'test-db-guards.js', []], ['devserver 起 Tomcat 的中文', 'test-devserver-encoding.js', []], ['devserver 提速', 'test-devserver-speed.js', []], ['自动模式按会话开', 'test-auto-session.js', []], ['耗时异常上报', 'test-perf.js', []], ['10-31 零散修复', 'test-fixes-1031.js', []]);
 suites.unshift(['1028 反馈', 'test-feedback1028.js', ['18797']]);
 // K3（2026-11-01）：体检、检查点、失败摘要、只提交本会话的、SQL 对表结构、团队的坑
-suites.unshift(['K3：只提交本会话改过的文件', 'test-commit-tool.js', []], ['K3：编译测试失败只给摘要', 'test-fail-summary.js', []], ['K3：检查点和一键回退', 'test-checkpoint.js', []], ['K3：SQL、Mapper 对表结构', 'test-sql-check.js', []], ['K3：团队的坑', 'test-team-lessons.js', []], ['K3：总体检和第一次使用的说明', 'test-doctor.js', []], ['J4：规范进流程时送、压缩后重送', 'test-stage-rules.js', []]);
+suites.unshift(['K3：只提交本会话改过的文件', 'test-commit-tool.js', []], ['K3：编译测试失败只给摘要', 'test-fail-summary.js', []], ['K3：检查点和一键回退', 'test-checkpoint.js', []], ['K3：SQL、Mapper 对表结构', 'test-sql-check.js', []], ['K3：团队的坑', 'test-team-lessons.js', []], ['K3：总体检和第一次使用的说明', 'test-doctor.js', []], ['J4：规范进流程时送、压缩后重送', 'test-stage-rules.js', []], ['K1-8：本机诊断指标', 'test-diag.js', []]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
 // 2026-11-01（docs/feedback-20261101.md）：K1-6 依赖清单
 suites.unshift(['依赖清单', 'test-deps-manifest.js', []]);

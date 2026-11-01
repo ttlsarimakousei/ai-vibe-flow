@@ -311,6 +311,10 @@ async function reviewBatch(batch, no, opts, cancelled, received, progress) {
   stat.ms = Date.now() - t0;
   return out;
 }
+/** 每批的结果记进本机诊断（K1-8）：拿到结论、重试后才拿到、没拿到 */
+function noteBatches(stats) {
+  try { const D = require('./diag'); for (const b of stats) { if (!b.attempts.length) continue; D.note('审查批次', !b.attempts.some((a) => a.ok) ? '没拿到结论' : b.attempts.length > 1 ? '重试后拿到' : '拿到结论', b.ms); } } catch (e) { /* 老版本没有 */ }
+}
 /**
  * 审完对着配置页的"审查预期用时"看：超了，或者碰到了输出上限、有批次失败，就记一条问题反馈（用户 2026-10-28 定的，问题反馈表第 6、7 条），
  * 写清用在哪、为什么，给维护的人持续优化审查用。只有次数、用时、token、字数，不带材料原文和审查意见
@@ -396,6 +400,7 @@ async function run(opts, progress) {
   let valid = false;
   S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) { const terminal = o[key].status; if (terminal !== 'running') { result.status = terminal; result.reason = o[key].reason; } o[key] = Object.assign(o[key], result); valid = true; } });
   if (!valid) { result.status = 'cancelled'; result.reason = '迟到结果已忽略'; return result; }
+  noteBatches(stats);
   if (result.status !== 'cancelled') { const fb = reportReview(result, opts, expectMs, stats); if (fb && fb.id) result.reported = fb.id; }
   const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + (opts.point ? '-' + opts.point : '') + '.json');
   try { if (!store.atomicWrite(file, result)) throw new Error('结果写入失败'); result.file = file; }
@@ -476,4 +481,4 @@ function syncAgent(j) {
   return S.syncReviews(entries.slice(), j.cwd);
 }
 function instruction(name, mode, cfg) { return cfg.reviewExecutor === 'agent' ? '按 /ttls-cross-review 的兼容代理方式审查 ' + name + '，等它审完（预期 ' + cfg.reviewBudgetSeconds + ' 秒，超了不取消）' : '执行 review.js run --change ' + name + ' --mode ' + mode + '（预期 ' + cfg.reviewBudgetSeconds + ' 秒，超了不截断，套件会自动记问题反馈）'; }
-module.exports = { run, materials, inputsCurrent, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent, waived, waive, decisionIssue };
+module.exports = { run, noteBatches, materials, inputsCurrent, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent, waived, waive, decisionIssue };

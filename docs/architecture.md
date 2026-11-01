@@ -62,6 +62,9 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `idea-tools.js` | 用户自己登记的 IDEA MCP（名字 jetbrains、老的 vibe-idea-端口，或带 IDEA 特有工具名）的入口：终端按 Bash、改文件按 Edit、读令牌照拦；认不出是 IDEA 的 MCP 只查写明的路径读不读令牌 |
 | `hook-host.js`、`hook-worker.js`、`hook-health.js` | HTTP 钩子：路由里跑钩子、自检 |
 | `deps.js` | 随包依赖的清单 `kit/deps.json`（2026-11-01，K1-6）：打包时扫看页面、自带 OpenSpec 两个组件的 node_modules（每个顶层包的名字、版本、`engines.node`、来源、内容哈希，组件要的 Node 按主包算）；安装时核对包在不在、版本对不对，列出这台电脑的 Node 用不了的组件。engines 的版本范围自己判断（`satisfies`、`minOf`），不靠 npm |
+| `stage-rules.js` | 进 OpenSpec 流程时送的规矩（2026-11-01，J4）：`hook-rules.md`、写需求和做任务两段的"照做就不会被拦"；每样一个会话一次，压缩后重送 |
+| `fail-summary.js`、`sql-check.js`、`fix-pass.js`、`checkpoint.js`、`edited-files.js` | K3（2026-11-01）：编译测试失败只给摘要；改 SQL、Mapper 时核对表结构缓存；命令失败改好再通过的记成经验候选；检查点和一键回退；认出这个会话改过哪些文件（`tools/commit.js`、`tools/checkpoint.js` 用） |
+| `diag.js` | 本机诊断指标（2026-11-01，K1-8）：钩子预算用完停在哪个阶段、等锁 200 毫秒以上、审查每批结果、路由首字节和限流等待。按天汇总进 `state/diag.json`，留 14 天，`tools/doctor.js` 显示，不上报 |
 
 ## 给模型看的东西（vibe-kit/claude）
 

@@ -156,6 +156,29 @@ function state() {
   if (mb > 200) return warn('状态目录有 ' + mb + ' MB（' + count + ' 个文件），偏大', '告诉维护的人，记一条问题反馈');
   return good('状态目录写得了，' + count + ' 个文件');
 }
+/** 最近 7 天的本机诊断（lib/diag.js）：钩子预算用完、锁等待、审查批次、路由首字节 */
+function diag() {
+  const r = require('../lib/diag').recent(7);
+  const sum = (o) => Object.values(o || {}).reduce((a, v) => ({ n: a.n + v.n, total: a.total + v.total, max: Math.max(a.max, v.max) }), { n: 0, total: 0, max: 0 });
+  const sec = (ms) => (Math.round(ms / 100) / 10) + ' 秒';
+  const parts = [];
+  const budget = r['钩子预算'] || {};
+  const lock = sum(r['锁等待']);
+  const failed = (r['审查批次'] || {})['没拿到结论'];
+  const first = sum(r['路由首字节']);
+  const wait = sum(r['路由等待']);
+  if (first.n) parts.push('路由 ' + first.n + ' 次请求，首字节平均 ' + sec(first.total / first.n) + '、最长 ' + sec(first.max));
+  if (wait.n) parts.push('被限流等了 ' + wait.n + ' 次，共 ' + sec(wait.total));
+  const batches = sum(r['审查批次']);
+  if (batches.n) parts.push('审查 ' + batches.n + ' 批' + (failed ? '，' + failed.n + ' 批没拿到结论' : ''));
+  if (lock.n) parts.push('等锁超过 0.2 秒 ' + lock.n + ' 次，最长 ' + sec(lock.max));
+  const stops = Object.entries(budget).sort((a, b) => b[1].n - a[1].n);
+  const n = stops.reduce((a, x) => a + x[1].n, 0);
+  if (n) parts.unshift('钩子预算用完 ' + n + ' 次（最多的停在"' + stops[0][0] + '"，这些次检查放行了）');
+  if (!parts.length) return good('最近 7 天没有要说的（只记本机，不上报）');
+  const text = '最近 7 天：' + parts.join('；');
+  return n || failed ? warn(text, '次数多的话记一条问题反馈，把这一行带上') : good(text);
+}
 /** 跑体检的这个目录：是不是项目、OpenSpec 初始化了没有、.vibe 忽略了没有 */
 function project() {
   const cwd = process.cwd();
@@ -173,7 +196,7 @@ function project() {
   return good(notes.join('，'));
 }
 
-const CHECKS = [['环境', env], ['套件文件', files], ['随包依赖', deps], ['Claude Code 设置', settings], ['模型路由', router], ['自动更新', update], ['工具', tools], ['开关', config], ['代码指纹', drift], ['问题上报', issues], ['状态目录', state], ['当前项目', project]];
+const CHECKS = [['环境', env], ['套件文件', files], ['随包依赖', deps], ['Claude Code 设置', settings], ['模型路由', router], ['自动更新', update], ['工具', tools], ['开关', config], ['代码指纹', drift], ['问题上报', issues], ['状态目录', state], ['本机诊断', diag], ['当前项目', project]];
 
 async function examine() {
   const out = [];

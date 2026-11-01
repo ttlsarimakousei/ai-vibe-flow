@@ -32,12 +32,15 @@ function acquire(file, options) {
   const record = { pid: process.pid, thread: threadId, token: crypto.randomBytes(12).toString('hex'), at: Date.now() };
   const reap = file + '.recover';
   try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch (e) { return null; }
-  const end = Date.now() + wait;
+  const began = Date.now();
+  const end = began + wait;
+  // 等了 200 毫秒以上的记一笔（K1-8，lib/diag.js）。诊断自己的文件不记，不然等它的锁又要记它
+  const waited = () => { const ms = Date.now() - began; if (ms >= 200 && !/diag.json/.test(file)) { try { require('./diag').note('锁等待', path.basename(file).replace(/^[0-9a-f]{8}-[0-9a-f-]{27}-?/i, '').replace(/.lock$/, ''), ms); } catch (e) { /* 老版本没有 */ } } };
   do {
     const recovery = owner(reap);
     if (recovery && !alive(recovery.pid)) release(reap, recovery.token);
     if (!fs.existsSync(reap) && claim(file, record)) {
-      if (!fs.existsSync(reap)) return { file, token: record.token, release: () => release(file, record.token) };
+      if (!fs.existsSync(reap)) { waited(); return { file, token: record.token, release: () => release(file, record.token) }; }
       release(file, record.token);
     }
     const old = owner(file);
@@ -54,6 +57,7 @@ function acquire(file, options) {
     if (Date.now() >= end) break;
     pause(Math.min(15, Math.max(1, end - Date.now())));
   } while (Date.now() <= end);
+  waited();
   return null;
 }
 function atomicText(file, value) {

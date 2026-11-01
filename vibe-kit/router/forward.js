@@ -12,6 +12,9 @@ const C = require('./config-file');
 const { providerProblem, LISTEN } = C;
 const { hOf, onCooldown, quotaOut, markFail, markOk, markQuota, quotaInfo, whenText, sticky, stickyAlive, classify, retryAfterMs, waitableStatus, clampSec } = require('./health');
 const { record, learnRatio, learnLimit } = require('./usage');
+const { KIT_DIR } = require('./base');
+// 本机诊断（K1-8，kit 的 lib/diag.js）：上游多久回头部、被限流等了多久。装回老版本的套件没有这个文件，就不记
+const diagNote = (cat, key, ms) => { try { require(require('path').join(KIT_DIR, 'lib', 'diag.js')).note(cat, key, ms, { buffer: true }); } catch (e) { /* 不记 */ } };
 const { diagnostic, secrets, scrub, log } = require('./base');
 
 const CONNECT_COOLDOWN_SEC = 60;      // 连接层面的错误：所有模型走同一个网关，多半不是这一个模型的问题，只短暂避开
@@ -201,6 +204,7 @@ function forward(ctx, list, idx, tried) {
     if (settled) { ur.resume(); return; }
     const headerMs = Date.now() - started;
     const status = ur.statusCode || 0;
+    if (isMessages) diagNote('路由首字节', provider.name, headerMs);
 
     if (status >= 400) {
       // 出错的回复都很小，收齐了再决定是换模型还是原样交回去；迟迟收不齐也要有个了断
@@ -241,6 +245,7 @@ function forward(ctx, list, idx, tried) {
           if (ctx.waitedMs + step <= budget) {
             settled = true;
             ctx.waits++; ctx.waitedMs += step;
+            diagNote('路由等待', provider.name, step);
             log(label + ' -> ' + provider.name + ' ' + what + '，' + (ra > 0 ? '按它说的等 ' : '等 ') + Math.round(step / 1000) + ' 秒后再试同一个模型（不换模型，免得让另一个模型把整个上下文重新算一遍）');
             record({ kind, model, provider: provider.name, status, headerMs, totalMs: Date.now() - started, failover: idx > 0, waitMs: step, error: what + '，等 ' + Math.round(step / 1000) + ' 秒后重试同一个模型' });
             ctx.pending = setTimeout(() => { ctx.pending = null; forward(ctx, list, idx, tried); }, step);
