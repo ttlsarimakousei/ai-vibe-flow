@@ -66,6 +66,8 @@ suites.unshift(['1028 反馈', 'test-feedback1028.js', ['18797']]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
 // 2026-11-01（docs/feedback-20261101.md）：K1-6 依赖清单
 suites.unshift(['依赖清单', 'test-deps-manifest.js', []]);
+// F8 用户的补充不被更新覆盖
+suites.unshift(['用户的补充不被更新覆盖', 'test-user-rules.js', []]);
 
 suites.unshift(['1014 非数据库反馈', 'test-feedback1014.js', []], ['1014 两阶段工作流', 'test-workflow1014.js', []]);
 const rows = [];

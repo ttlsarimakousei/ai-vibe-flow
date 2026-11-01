@@ -202,6 +202,7 @@
 </aside>
 <main>
   <div id="banner"></div>
+  <div id="kitNotice"></div>
 
   <section id="tab-guide" class="tab hide">
     <div class="pagehead"><h2>套件说明</h2><p>vibe-kit 是什么、由哪几块组成、人工和自动两种模式各怎么走，以及哪些规矩是固定的、不做开关。</p></div>
@@ -1192,6 +1193,12 @@
         renderHookStatus(kit.hooks);
         loadFeedback();
         loadLessons();
+        // 安装、自动更新时覆盖了你改过的东西、挪了你的补充：提示到你点"知道了"为止
+        if (kit.notice && kit.notice.items && kit.notice.items.length) {
+          $('kitNotice').innerHTML = '<div class="banner warn">套件更新' + (kit.notice.version ? '到 ' + esc(kit.notice.version) + ' ' : '') + '时动了你改过的东西（你自己的约定和规范以后放 ~/.claude/vibe-kit/user/，更新不碰）：<ul>'
+            + kit.notice.items.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul><button class="btn" id="kitNoticeOk">知道了</button></div>';
+          $('kitNoticeOk').onclick = async () => { try { await api('POST', '/api/kit/notice', {}); $('kitNotice').innerHTML = ''; } catch (e) { say($('kitMsg'), e.message, false); } };
+        }
         if (kit.tampered && kit.tampered.length) say($('kitMsg'), '开关文件被直接改过，不是在这个页面上改的：' + kit.tampered.join('、') + '。这几项现在按安全的值算，没有生效。是你自己手改的，在页面上重新设一次再保存；不是的话，说明有程序绕过了检查。', false);
       } else {
         // 没在页面上动过的项跟着文件里现在的值走；动过还没保存的留着

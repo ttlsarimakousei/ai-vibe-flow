@@ -64,6 +64,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 
 - `CLAUDE.md`：全局约定的模板。里面的 `{{AUTO_COMMIT}}`、`{{AUTO_MODE}}` 这类占位由 `install.js` 的 `fill()` 按开关生成。生成后放在 `~/.claude/CLAUDE.md` 两行标记之间，每个请求都带着，所以要短。
 - `rules/`：规范，启用的并进全局约定（`10-openspec.md`、`20-git-commit.md`）。文件名前加下划线就停用。
+- 用户自己的约定和规范不在这里：装好后的 `~/.claude/vibe-kit/user/*.md` 接在套件的规范后面生成进全局约定，`user/remove.txt` 一行一句从套件的约定、规范里去掉（模板里的原句、换完占位符的句子都认）；安装器不拷进、不覆盖这个目录，打包时它出现在源目录里就报错（F8，2026-11-01）。
 - `skills/`：六个技能，都带 `ttls-` 前缀：`ttls-onboard`、`ttls-see-page`、`ttls-cross-review`、`ttls-handover`、`ttls-db-crud`、`ttls-redis`。
 - `agents/ttls-reviewer.md`：审查代理。审查提示第一行写"模式：提案 / 代码 / 复审提案 / 复审代码"，第二行统一写裸变更名（兼容目录、完整路径）；审查者最后一行写"结论：问题 N 条"，钩子靠这两处记账。前台结果和带 result 的后台通知都认，不存在的变更不借用材料里另一个变更。
 
@@ -94,6 +95,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 
 - `install.js`：先检查后动手（settings.json 读不懂、全局 CLAUDE.md 不是 UTF-8 就什么都不动）；只往 `~/.claude` 里添加，覆盖前备份；`--sync` 只重新生成约定、重新登记钩子（配置页保存开关时调）；`--uninstall` 只收回自己加的。它替用户写进 settings.json 的 Claude Code 设置有三样，都跟着开关走、记在安装清单里：自动压缩窗口 `autoCompactWindow`、关自动记忆的环境变量、关自带自动模式的 `permissions.disableAutoMode`。
   - 依赖（K1-6）：按安装包里的依赖清单 `kit/deps.json` 核对每个包在不在、版本对不对（不算哈希），这台电脑的 Node 用不了哪个组件照清单说；没有清单（直接从源码装、本地恢复包）照以前写死的检查。清单由 `dev/pack.js` 生成，查库执行器的 class 打包时按编译记录 `DbRunner.build.json` 核对是从现在的 `DbRunner.java` 编的。
+  - 用户改过的（F8，用户 2026-10-30 定的）：升级时套件的 `CLAUDE.md`、`rules/<套件的>.md` 和上次装的原样（`pristine/`）对不上的，按行比，新加的（带所在那一节的标题）挪进 `user/migrated-<文件名>.md`，删掉改掉的原句并进 `user/remove.txt`，再备份、换成新版；重装时同样的内容不重复写。技能、审查代理、命令照旧换成新版、先备份。这些都记进 `state/install-done.json` 的 `notice`（没看过的跨次安装留着，最多 20 条），配置页（`kit-api.js` 的 `installNotice`）在顶上提示，点"知道了"写 `noticeSeen`。
 - 自动更新：团队的内网 GitLab 仓库里放着解开的安装包。钩子看一眼"该检查了没有"，该了就甩一个后台进程（`updater.js run`）：拉仓库、等路由空闲、跑新版的 `install.js`、自检，不过就装回上一版。
 - 问题上报：本机记下的问题反馈由后台进程建成 GitLab 的议题，不重复建；使用情况一台电脑一条议题、一天一条补充。维护的那台电脑在配置页导出开放中的议题（浏览器下载），导出后关掉这一批。
 - 发布：维护的人打包、解压，双击 `发布到 GitLab（双击我）.bat`（`publish.js`：先在本机装一遍、自检，再推一个提交加一个标签 `v<版本号>`）。

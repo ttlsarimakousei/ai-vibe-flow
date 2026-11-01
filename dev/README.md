@@ -74,6 +74,7 @@ node dev/pack.js
 | `run-all.js` | 依次跑下面的测试，汇总；结尾查桌面有没有多出窗口、临时目录清没清 |
 | `pack.js` | 检查、生成依赖清单、写版本号、压成 zip、解压出来逐个文件核对；`--check-only` 只检查和生成清单 |
 | `build-db-runner.js auto` | 按 Java 8 编查库执行器，写编译记录 `DbRunner.build.json`（`lib/db-runner-record.js`） |
+| `test-user-rules.js [旧套件目录]` | F8（2026-11-01）：你的补充放 `user/` 生效、更新不碰；`remove.txt` 去掉套件的句子；以前直接改过约定、规范的升级时挪进 `user/`（加的、删的、改的、CRLF），重装不重复挪；没改过的照常更新；技能换新版记提示；配置页提示到点"知道了" |
 | `test-deps-manifest.js [旧套件目录]` | K1-6 依赖清单（2026-11-01）：在临时目录拼一个仓库跑 `pack.js --check-only`，清单里有每个顶层包、版本和 Node 要求对得上、有来源和哈希，源码里提交的清单是最新的；.java 改了没重编（class 修改时间照样新）、class 被换过不打包；安装器缺包、版本对不上不装，Node 不够的组件说清楚。给旧版目录时 pack.js 取那一版标签上的 |
 | `test-lessons.js` | 经验规则：记、合并、升规则、上限、过时、保护、收工检查 |
 | `test-feedback0928.js` | 内网 0928 导出的五条问题反馈，照原样复现 |

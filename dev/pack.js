@@ -34,7 +34,8 @@ const sha = (f) => crypto.createHash('sha1').update(fs.readFileSync(f)).digest('
 
 // 1. 源目录里不该有运行时的东西
 // secrets.json 里是 GitLab 的令牌：进了包就等于发给了所有人
-const RUNTIME = ['kit/secrets.json', 'kit/gitlab.json', 'kit/update', 'kit/issue-exports', 'secrets.json', 'gitlab.json', '.git', 'kit/state', 'kit/feedback', 'kit/lessons', 'kit/config.json', 'kit/local.json', 'kit/installed.json', 'kit/backup', 'kit/pristine', 'kit/router-data', 'router/config.json', 'router/router.pid', 'router/usage.json', 'kit/drivers', 'kit/drivers.json'];
+// kit/user：用户自己的约定和规范（安装器从不覆盖），进了包就会盖到别人的电脑上
+const RUNTIME = ['kit/secrets.json', 'kit/gitlab.json', 'kit/update', 'kit/issue-exports', 'secrets.json', 'gitlab.json', '.git', 'kit/state', 'kit/feedback', 'kit/lessons', 'kit/config.json', 'kit/local.json', 'kit/installed.json', 'kit/backup', 'kit/pristine', 'kit/router-data', 'router/config.json', 'router/router.pid', 'router/usage.json', 'kit/drivers', 'kit/drivers.json', 'kit/user'];
 const stray = RUNTIME.filter((r) => fs.existsSync(path.join(SRC, r)));
 if (stray.length) fail('源目录里有运行时才该有的东西：' + stray.join('、') + '。多半是测试跑到源目录里了，清掉再打包');
 for (const need of ['kit/lib/apply-scope.js', 'kit/lib/entry-check.js', 'kit/lib/evidence.js', 'kit/lib/feedback.js', 'kit/lib/hook-health.js', 'kit/lib/hook-host.js', 'kit/lib/hook-worker.js', 'kit/lib/invocation.js', 'kit/lib/local-backup.js', 'kit/lib/permissions.js', 'kit/lib/readiness.js', 'kit/lib/redact.js', 'kit/lib/review-runner.js', 'kit/lib/task-types.js', 'kit/lib/work-sessions.js', 'kit/lib/workflow.js', 'kit/lib/workspace.js', 'kit/hooks/after-tool.js', 'kit/tools/review.js', 'kit/tools/workflow.js', 'kit/hooks/guard-read.js', 'kit/.ignore', 'publish.js', '发布到 GitLab（双击我）.bat', '.gitattributes', 'kit/lib/gitlab.js', 'kit/lib/updater.js', 'kit/lib/issues.js', 'install.js', 'README.md', '更新说明.md',

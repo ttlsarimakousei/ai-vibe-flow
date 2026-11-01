@@ -45,6 +45,16 @@ function cleanLocal(x) {
 function openspecInfo(kitDir) {
   try { const O = require(path.join(kitDir, 'lib', 'openspec.js')); const i = O.info(); return i ? { version: i.version, node: i.node, usable: O.usable() } : null; } catch (e) { return null; }
 }
+/**
+ * 安装（自动更新也算）时覆盖了你改过的约定、规范、技能，或者把你改的内容挪进了 user/（F8，用户 2026-10-30 定的"配置页提示一次"）。
+ * 安装器写在 state/install-done.json 的 notice 里；你点了"知道了"（noticeSeen 不早于这条）就不再给。没有返回 null
+ */
+function installNotice(kitDir) {
+  const d = readJson(path.join(kitDir, 'state', 'install-done.json'), {});
+  const n = d.notice;
+  if (!n || typeof n !== 'object' || !Array.isArray(n.items) || !n.items.length || Number(d.noticeSeen) >= Number(n.at)) return null;
+  return { at: Number(n.at) || 0, version: str(n.version), items: n.items.slice(-20).map((x) => str(x).slice(0, 600)) };
+}
 function cleanConfig(x, base) {
   const c = Object.assign({}, DEFAULT_CONFIG, base && typeof base === 'object' ? base : {});
   // 提示规则 2026-09-30 去掉了：文件里以前存的那一项不再写回去
@@ -385,7 +395,14 @@ async function handle(method, url, body, kitDir, ctx) {
     if (config.kitLock === false && seal.kitLock !== false) tampered.push('关掉"禁止 Claude 自己改套件"');
     if (config.kitBypass === 'auto' && seal.kitBypass !== 'auto') tampered.push('兜底放行"让它自己放行"');
     for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (config[k] === true && seal[k] === false) tampered.push('打开“' + label + '”');
-    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, openspec: openspecInfo(kitDir) };
+    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, openspec: openspecInfo(kitDir), notice: installNotice(kitDir) };
+  }
+  // 安装时覆盖了你改过的东西、挪了你的补充（安装器写在 state/install-done.json 的 notice）：页面上点"知道了"之后不再提示
+  if (method === 'POST' && url === '/api/kit/notice') {
+    const f = path.join(kitDir, 'state', 'install-done.json');
+    const d = readJson(f, {});
+    if (d.notice && d.notice.at) { d.noticeSeen = Number(d.notice.at) || Date.now(); writeJson(f, d); }
+    return { ok: true };
   }
   if (method === 'GET' && url === '/api/kit/hooks') return hookInfo(kitDir);
   if (method === 'GET' && url === '/api/kit/sessions') return { sessions: liveSessions(kitDir) };
