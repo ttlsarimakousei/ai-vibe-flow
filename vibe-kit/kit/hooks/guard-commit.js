@@ -14,6 +14,8 @@
  *      还要用户自测过、说了归档（会话记录里他最后一句话是"归档"，或者提问框里选了"归档"；用户 2026-10-07 定的。这一条不能放行）。
  *  12. 提交方式（配置页"提交方式"，用户 2026-10-17 定的，人工和自动都用）：关——用户说了"提交"才提交；询问——用户在就交代改动、用提问框问，
  *      自动模式下用户不在就先不提交、记进报告；自动——做完一件完整的事（新勾完任务、审查修复收尾、需求文档定稿）才提交。不能放行。
+ *  13. 跑 tools/commit.js（只提交本会话改过的文件，2026-11-01 K3）：按它要提交的文件和提交信息合成 git add、git commit，上面 2、3、8、9、12 条照查；
+ *      没拦下的记一张票，commit.js 凭票提交，钩子没跑就不提交（lib/guard-git.js 的 commitToolRun、lib/edited-files.js）。
  *   5. 禁止改套件（开关 kitLock）：命令动到套件的文件、直接调路由的 /api、命令里出现 disableAllHooks，都拦。
  *   6. 装了路由时，不许一把结束所有 node 进程（taskkill /IM node.exe 之类），也不许结束路由自己的进程：路由一停，模型连不上、走 HTTP 的检查全部失效。
  *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（固定，不做开关）：同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000。
@@ -50,7 +52,7 @@ let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 // 拆出去的检查（2026-11-01，K 批：guard-commit 只留调度）
 const { stripComments, preprocess, OPEN, CLOSE, splitCommand, scanRedirects, words, dynamic, dynamicPath, local, headOf, repoRoot, CD, PUSHD, POPD, cdTarget, docOf, innerCommand, expandLoopVars } = require('../lib/shell-words');
-const { pushAnywhere, publishAnywhere, parseGit, messageOf, commitAll, gitIssue, tempIndexOf, newFilesIssue, consentIssue, plainPush } = require('../lib/guard-git');
+const { pushAnywhere, publishAnywhere, parseGit, messageOf, commitAll, gitIssue, tempIndexOf, newFilesIssue, consentIssue, plainPush, commitToolRun, noteCommitTools } = require('../lib/guard-git');
 const { archiveTarget, archiveIssue } = require('../lib/guard-archive');
 const { easyListing, mayTouchSecret, keyFileIssue, kitIssue, lessonIssue, routerApiIssue, readOnlyCommand, hasReaderIn } = require('../lib/guard-kit');
 const { killIssue, killAnywhere, serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText } = require('../lib/guard-process');
@@ -146,11 +148,14 @@ function analyze(cmd, ps, st, cfg, depth) {
       }
       if (tidy && !st.block) { let k = ''; try { k = keepIssue(x, head, st.dir, st, cfg); } catch (e) { k = ''; checkFailed('留过程文件', st.j, e); } if (k) setBlock(st, 'keep', k); }
       if (cfg.specGate !== false && !st.block) { const t = archiveTarget(ws, head, st.dir); if (t) { const a = archiveIssue(t, st.dir, st.j); if (a) setBlock(st, a.noBypass ? 'archive-ok' : 'archive', a.msg, 'archive:' + a.name.toLowerCase()); } }
-      const g0 = parseGit(ws, st.dir);
+      // 跑 tools/commit.js（只提交本会话改过的文件，K3）：按它要提交的文件和提交信息合成 git add、git commit，下面照 git 的检查走
+      let tool = null;
+      try { tool = commitToolRun(ws, head, st.dir, st); } catch (e) { tool = null; checkFailed('commit.js', st.j, e); }
+      const g0 = tool ? tool[0] : parseGit(ws, st.dir);
       if (!g0) continue;
       // 目录写在循环变量里（for r in a b c; do git -C "$r" …）：取值挨个代进去查；代不出来的按"算不出是哪个仓库"查
-      let gits = [g0];
-      if (g0.dyn) { const ex = expandLoopVars(ws, st.loops); const list = ex ? ex.map((w2) => parseGit(w2, st.dir)).filter(Boolean) : []; if (list.length && !list.some((x) => x.dyn)) gits = list; }
+      let gits = tool || [g0];
+      if (!tool && g0.dyn) { const ex = expandLoopVars(ws, st.loops); const list = ex ? ex.map((w2) => parseGit(w2, st.dir)).filter(Boolean) : []; if (list.length && !list.some((x) => x.dyn)) gits = list; }
       for (const g of gits) {
       if (g.sub === 'push') { st.pushes.push(g); st.push = st.push || '[vibe-kit] 这是 git push' + (g.dyn ? '' : '（' + path.basename(repoRoot(g.dir) || g.dir) + '）') + '，推到远端要你确认。'; continue; }
       // 同一条命令里前面 git add 过的文件，提交时算已经加进去了
@@ -176,7 +181,8 @@ function analyze(cmd, ps, st, cfg, depth) {
       if (g.sub === 'commit' && !g.dyn && cfg.specGate !== false && !st.block) {
         try {
           const root = repoRoot(g.dir) || g.dir;
-          const staged = execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\x00').filter(Boolean);
+          // commit.js 合成的提交：查它要提交的那几个（g.files），不看真暂存区
+          const staged = Array.isArray(g.files) ? g.files : execFileSync('git', ['-C', root, 'diff', '--cached', '--name-only', '-z'], { encoding: 'utf8', windowsHide: true, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\x00').filter(Boolean);
           const check = require('../lib/proposal-files');
           const found = [];
           for (const f of staged) {
@@ -272,7 +278,7 @@ function check(j) {
   try { if (j.transcript_path) pushSaid = userSaid(tailEntries(j.transcript_path, 3000000), 'push'); } catch (e) { pushSaid = { ok: false, text: '' }; }
   const publishNotice = '[vibe-kit] 这条命令会把 vibe-kit 的安装包发布到团队的 GitLab 仓库（里面有 git push，同事的电脑会跟着更新），发布要你确认。';
   const pushAsk = pushAnywhere(cmd, ps) ? '[vibe-kit] 这条命令里有 git push，推到远端要你确认。' : publishing ? publishNotice : '';
-  if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find|jar|tar|gtar|bsdtar|unzip|7z|7za|7zr|7zz|expand-archive)\b/i.test(cmd)) return cdBlock();
+  if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/commit\.js/i.test(cmd) &&!/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find|jar|tar|gtar|bsdtar|unzip|7z|7za|7zr|7zz|expand-archive)\b/i.test(cmd)) return cdBlock();
   const cwd0 = path.resolve(j.cwd || process.cwd());
   const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
   // 先按名字挑出进程再结束的写法（Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process）：拆成组之后认不出来，整条看一遍
@@ -317,24 +323,26 @@ function check(j) {
   const pushRoots = pushes.length ? [...new Set(pushes.map((g) => repoRoot(g.dir) || g.dir))] : [repoRoot(st.dir) || st.dir];
   // 只在引号、命令替换里认出来的 push（拆不出是哪条 git push）：查不了推到哪、是不是强推，用户说过推送也要确认（复审 S1）
   const pushApproved = !!st.push && !st.publishing && pushSaid.ok && !pushConfirm && pushes.length > 0 && pushRoots.every((r) => require('../lib/permissions').allow(j, 'push', r, j.tool_use_id).ok);
+  // 没拦下（放行，或者要用户确认）：这条命令里跑 tools/commit.js 的，各记一张票，commit.js 凭票提交（拦下的不记）
+  const pass = (out) => { noteCommitTools(st); return out; };
   if (cfg.autoMode) {
     if (st.push && !pushApproved) {
       hookLog('guard-commit 全自动模式不 push：' + cmd.slice(0, 80));
       try { if (report) report.note(j, { kind: 'hand', title: '它想' + (/发布/.test(st.push) ? '发布安装包' : '执行 git push') + '，没让做：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: '推到远端要你自己来' }); } catch (e) { /* 记不了不影响 */ }
       return counted('auto-push', '[vibe-kit] 全自动模式：' + (/发布/.test(st.push) ? '发布' : 'push') + '留给用户做，已经记进全自动报告。不要再试，也不要等：提交留在本地，接着做别的；最后的交代里说一句哪些提交还没推。');
     }
-    if (st.used.length) return feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);
-    return null;
+    if (st.used.length) return pass(feedback.bypassOutcome(st.used, cfg, j, st.blocked, action));
+    return pass(null);
   }
   const ask = pushApproved ? '' : st.push;
   if (st.used.length) {
     const out = feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);
     // 放行申请和 push 确认一起问
-    if (ask) return askOut(ask + (out ? '\n' + out.hookSpecificOutput.permissionDecisionReason : ''));
-    return out;
+    if (ask) return pass(askOut(ask + (out ? '\n' + out.hookSpecificOutput.permissionDecisionReason : '')));
+    return pass(out);
   }
-  if (ask) return askOut(ask);
-  return null;
+  if (ask) return pass(askOut(ask));
+  return pass(null);
 }
 /**
  * 检查都过了、照常放行的命令：里面以 openspec 开头的段，改成调用套件自带的那份（lib/openspec.js，用户 2026-10-17 定的集成 OpenSpec）。

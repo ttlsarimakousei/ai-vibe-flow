@@ -410,6 +410,12 @@ for (const c of cases) {
   if (c.name === '反馈1007：env -C 跑套件场景脚本' || /devserver\.js" start/.test(c.name)) { c.expect = /人工模式：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = V1031; }
 }
 
+// K3（2026-11-01）：跑 tools/commit.js 当成一次提交来查（提交信息格式、提交方式），不能成了绕过提交检查的后门；做任务这一段的规矩里提一句 commit.js
+const commitJs = (msg) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "' + path.join(kit.kit, 'tools', 'commit.js').replace(/\\/g, '/') + '" -m "' + msg + '"' } }) }; };
+add('K3：跑 commit.js，提交信息不合规', 'guard-commit', commitJs('加导出'), /提交信息不符合公司规范/, NEXT);
+add('K3：跑 commit.js，用户没说提交', 'guard-commit', commitJs('feat: 加导出'), /提交方式是\\"关\\"/, NEXT);
+for (const c of cases) if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：说"开工"（点名变更）'].includes(c.name)) { c.expect = /做任务这一段的规矩（照做就不会被拦）：[\s\S]*commit\.js\\" -m \\"类型: 内容\\" 只提交这个会话改过的文件/; c.since = NEXT; }
+
 let same = 0;
 let changed = 0;
 for (const c of cases) {
