@@ -67,8 +67,8 @@ npm view @fission-ai/openspec version
 npm install --prefix vibe-kit/kit/openspec @fission-ai/openspec@<版本号> --omit=dev --ignore-scripts --no-audit --no-fund
 ```
 
-然后把 `vibe-kit/kit/openspec/package.json` 里的版本钉成确切的版本号（不留 `^`），核对三件事：
-- 新版要求的 Node 版本（`node_modules/@fission-ai/openspec/package.json` 的 `engines`）。比以前高的，在《更新说明》里写明：Node 不够的电脑会退回用自己装的。
+然后把 `vibe-kit/kit/openspec/package.json` 里的版本钉成确切的版本号（不留 `^`），重新生成依赖清单（`node dev/pack.js --check-only`，和升级一起提交 `vibe-kit/kit/deps.json`），核对三件事：
+- 新版要求的 Node 版本（`node_modules/@fission-ai/openspec/package.json` 的 `engines`，清单里组件的 `node`）。比以前高的，在《更新说明》里写明：Node 不够的电脑会退回用自己装的，安装器照清单说。依赖里有包要求比它高的，`pack.js` 不打包，先确认那个版本上能不能用，再在 `kit/lib/deps.js` 的 `COMPONENTS` 里写明 `node`。
 - 在临时目录里用新版建一个变更、写好四份产物，拿 1.2.0 跑 `list`、`status`、`validate`、`archive`，确认同事的旧版还认（做法见 2026-10-17 的记录：`.vibe/tmp/openspec-probe` 里的探测脚本思路）。
 - 新版生成的命令里调用命令行的写法没变（`openspec <子命令>` 开头），`lib/openspec.js` 的改写还能认出来。
 
@@ -78,7 +78,9 @@ npm install --prefix vibe-kit/kit/openspec @fission-ai/openspec@<版本号> --om
 node dev/stamp-and-pack.js
 ```
 
-它把《更新说明.md》里的两处 `@@VER@@` 换成现在的时间，再跑 `pack.js`：检查（脚本语法、UTF-8、`.bat` 是 GBK + CRLF、源目录里没有运行时文件、必备文件都在、没有 jar）→ 写 `kit/VERSION` → 压缩 → 解压出来逐个文件核对 → 在 `dev/baseline/<版本号>/` 留一份这一版的代码（只留最近四份）。
+它把《更新说明.md》里的两处 `@@VER@@` 换成现在的时间，再跑 `pack.js`：检查（脚本语法、UTF-8、`.bat` 是 GBK + CRLF、源目录里没有运行时文件、必备文件都在、没有 jar、查库执行器的 class 和编译记录 `DbRunner.build.json` 对得上）→ 生成依赖清单 `kit/deps.json`（随包的 node_modules 每个顶层包的名字、版本、要求的 Node、来源、内容哈希，执行器的编译记录）→ 写 `kit/VERSION` → 压缩 → 解压出来逐个文件核对 → 在 `dev/baseline/<版本号>/` 留一份这一版的代码（不带 node_modules 和清单，只留最近四份）。`kit/deps.json` 和 `kit/VERSION` 一起进 `release` 提交。
+
+执行器对不上（改了 `DbRunner.java` 没重编）时 `pack.js` 停下，先 `node dev/build-db-runner.js auto` 重编、提交，再打包。只想先查一遍：`node dev/pack.js --check-only`（不写版本号、不压缩、不留基线）。
 
 只补了文档、要重打同一个版本：`node dev/pack.js --keep-version`。
 

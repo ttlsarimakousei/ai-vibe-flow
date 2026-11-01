@@ -114,7 +114,8 @@ function envFor(h, extra) {
   const localApp = path.join(h.home, 'AppData', 'Local');
   const startup = path.join(h.home, 'Startup');
   for (const d of [roaming, localApp, startup]) { try { fs.mkdirSync(d, { recursive: true }); } catch (e) { /* 建不了就算了 */ } }
-  const out = Object.assign(env, { HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1' }, extra || {});
+  // VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS：安装器不去读真的注册表（这台电脑设没设 JAVA_TOOL_OPTIONS 不影响结果），当系统里没设；测这一项的套自己给
+  const out = Object.assign(env, { HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1', VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '' }, extra || {});
   for (const k of Object.keys(out)) if (out[k] === undefined || out[k] === null) delete out[k];
   return out;
 }
@@ -159,6 +160,8 @@ function stubDeps(dir) {
   const os1 = path.join(dir, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec');
   write(path.join(os1, 'package.json'), JSON.stringify({ name: '@fission-ai/openspec', version: '0.0.0-test', engines: { node: '>=99.0.0' } }) + '\n');
   write(path.join(os1, 'bin', 'openspec.js'), "console.log('占位');\n");
+  // 依赖清单（kit/deps.json）记的是真的依赖，和占位对不上，安装器会说包不完整：去掉，安装器照没有清单时的检查走。测清单的套自己生成一份
+  try { fs.unlinkSync(path.join(dir, 'kit', 'deps.json')); } catch (e) { /* 没有 */ }
 }
 function makePackage(name, version, mutate, notes) {
   const dir = path.join(tempDir(name), 'vibe-kit');

@@ -28,6 +28,7 @@
 /vibe-kit/kit/pristine/
 /vibe-kit/kit/router-data/
 /vibe-kit/kit/drivers/
+/vibe-kit/kit/user/
 /vibe-kit/router/config.json
 /vibe-kit/router/router.pid
 /vibe-kit/router/usage.json

@@ -5,9 +5,10 @@
  *   模型路由：在后台启动（没有窗口，任务栏里没有东西），登录后自动启动，最后自己验证配置页打得开
  *   node install.js             安装或更新（从安装包目录运行）。--no-open 不自动打开配置页；
  *                               --no-router 不装、不更新路由（以前装过的路由原样留着、照常运行，卸载时照样停它）
- *   node install.js --sync      只根据 ~/.claude/vibe-kit 里的约定、规范和本机环境（local.json）重新生成全局约定
+ *   node install.js --sync      只根据 ~/.claude/vibe-kit 里的约定、规范、你的补充（user/）和本机环境（local.json）重新生成全局约定
  *   node install.js --uninstall 卸载（你自己加的规范文件和备份会留着）
- * 原则：先检查后动手，settings.json 读不懂、全局 CLAUDE.md 不是 UTF-8，就什么都不动；只添加不删改；要覆盖你改过的东西之前先备份（只留最近 20 份）；
+ * 原则：先检查后动手，settings.json 读不懂、全局 CLAUDE.md 不是 UTF-8，就什么都不动；只添加不删改；要覆盖你改过的东西之前先备份（只留最近 20 份），
+ * 覆盖过的在配置页提示一次；你自己的约定和规范放 vibe-kit/user/，从不覆盖，以前直接改过套件约定、规范的，升级时挪进去（F8）；
  * 装了什么记在 installed.json 里，卸载时只收回自己加的；你删掉的权限和环境变量，升级时不再补回来。
  * 目录复制是自己写的递归：Node 22 自带的递归 cpSync 碰到带中文的路径会直接崩。
  */
@@ -23,7 +24,7 @@ const CLAUDE = FROM_PACKAGE ? (process.env.CLAUDE_CONFIG_DIR || path.join(os.hom
 const KIT = path.join(CLAUDE, 'vibe-kit');
 // 新版删掉了的套件文件（相对 vibe-kit 目录）：装新版时把旧版留下的删掉。2026-10-28：IDEA 起服务、合并推送整条去掉
 const DROPPED_FILES = ['lib/idea-run.js', 'lib/merge-push.js', 'tools/merge-push.js'];
-const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。要改请改 ~/.claude/vibe-kit 里的 CLAUDE.md 或 rules/*.md，然后运行 node ~/.claude/vibe-kit/install.js --sync -->';
+const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。自己的约定写在 ~/.claude/vibe-kit/user/ 里的 .md（更新不碰），然后运行 node ~/.claude/vibe-kit/install.js --sync -->';
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
 const SKILLS = ['ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis'];
@@ -380,6 +381,36 @@ function ccAutoModeNote(r) {
   else if (r === 'removed') console.log('  [OK] 不再关着 Claude Code 自带的"自动模式"，照 Claude Code 自己的默认。重新打开 Claude Code 后生效');
   else if (r === 'user-auto') console.log('  [!] settings.json 里你自己把 permissions.defaultMode 设成了 auto，没动它。提醒：经网关用自动模式，有风险的命令每条多一次带 14 万字符系统提示的请求；分类模型答得不合格式，命令会被拦下');
 }
+/**
+ * 系统里（Windows 的用户级、机器级环境变量，注册表里存着的那份）设的值，没设返回 ''。不看 process.env：自动更新可能是 Claude Code
+ * 的钩子拉起来的，那时的环境变量里已经是 settings.json 的值了。测试用 VIBE_KIT_SYSTEM_<名字> 顶替，不碰真的注册表
+ */
+function systemEnv(name) {
+  const over = process.env['VIBE_KIT_SYSTEM_' + name];
+  if (over !== undefined) return over;
+  if (process.platform !== 'win32') return '';
+  const reg = path.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32', 'reg.exe');
+  // reg.exe 按控制台代码页输出（中文系统是 GBK）
+  const decode = (b) => { try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch (e) { try { return new TextDecoder('gbk').decode(b); } catch (x) { return ''; } } };
+  // 用户级的同名变量盖过机器级的，所以先看用户级
+  for (const key of ['HKCU\\Environment', 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment']) {
+    try {
+      const r = require('child_process').spawnSync(fs.existsSync(reg) ? reg : 'reg', ['query', key, '/v', name], { windowsHide: true, timeout: 10000 });
+      if (r.status !== 0 || !r.stdout) continue;
+      const m = new RegExp('^\\s*' + name + '\\s+REG_(EXPAND_)?SZ\\s*(.*?)\\s*$', 'mi').exec(decode(r.stdout));
+      if (m) return m[1] ? m[2].replace(/%([^%]+)%/g, (x, k) => (process.env[k] !== undefined ? process.env[k] : x)) : m[2];
+    } catch (e) { /* 读不了就当没设 */ }
+  }
+  return '';
+}
+/** 系统的 JAVA_TOOL_OPTIONS 加上套件要的几项：-Dxxx= 这种同名的系统里已经写了的不加（你的设置为准） */
+function javaToolOptions(sys, kit) {
+  const s = String(sys || '').trim();
+  if (!s) return kit;
+  const have = new Set(s.split(/\s+/).map((t) => t.split('=')[0]));
+  const add = String(kit).split(/\s+/).filter((t) => t && !have.has(t.split('=')[0]));
+  return add.length ? s + ' ' + add.join(' ') : s;
+}
 /** hooksOnly：只重新登记钩子（--sync 时用），不碰状态栏、权限；跟着配置页的开关走的三项照样管："自动记忆"那一项环境变量、自动压缩的窗口、关掉 Claude Code 自带的自动模式 */
 function mergeSettings(s, remove, hooksOnly) {
   const before = JSON.stringify(s);
@@ -482,7 +513,20 @@ function mergeSettings(s, remove, hooksOnly) {
       man.deny = man.deny.filter((x) => have.includes(x)).concat(add);
       man.known.deny = union(man.known.deny, want);
     }
-    const fragEnv = isObj(frag.env) ? frag.env : {};
+    const fragEnv = isObj(frag.env) ? Object.assign({}, frag.env) : {};
+    // JAVA_TOOL_OPTIONS 不盖系统里已有的（用户 2026-10-30 定的，F8）：settings.json 的 env 会替掉 Claude Code 里跑的命令看到的系统值，
+    // 所以系统里设了的，写进去的是"系统的值 + 套件要加的、系统里没写的那几项"。还是套件自己写的那个值（你没改过）就跟着系统重新算；你改过的不动
+    if (typeof fragEnv.JAVA_TOOL_OPTIONS === 'string') {
+      const sys = systemEnv('JAVA_TOOL_OPTIONS').trim();
+      const want = javaToolOptions(sys, fragEnv.JAVA_TOOL_OPTIONS);
+      fragEnv.JAVA_TOOL_OPTIONS = want;
+      const env = isObj(s.env) ? s.env : {};
+      const cur = env.JAVA_TOOL_OPTIONS;
+      const ours = cur !== undefined && man.env.JAVA_TOOL_OPTIONS !== undefined && cur === man.env.JAVA_TOOL_OPTIONS;
+      const fresh = cur === undefined && !man.known.env.includes('JAVA_TOOL_OPTIONS') && man.env.JAVA_TOOL_OPTIONS === undefined;
+      if (ours && cur !== want) { env.JAVA_TOOL_OPTIONS = want; s.env = env; man.env.JAVA_TOOL_OPTIONS = want; }
+      if (sys && ((ours && cur !== want) || fresh)) mergeSettings.javaOpts = '系统里设了 JAVA_TOOL_OPTIONS=' + sys + '：settings.json 里写的是它' + (want === sys ? '（套件要的几项它都写了，没再加）' : '再加上套件要的 ' + want.slice(sys.length).trim()) + '，没盖掉你的';
+    }
     for (const k of Object.keys(fragEnv)) {
       const env = isObj(s.env) ? s.env : {};
       if (env[k] !== undefined) continue;
@@ -585,14 +629,139 @@ function fill(text) {
     .split('{{REVIEW_MODE}}').join(reviewModeText()).split('{{AUTO_MODE}}').join(auto)
     .split('{{AUTO_TOP}}').join(AUTO_TOP_TEXT).replace(/\n{3,}/g, '\n\n').trim();
 }
+// ---------- 你自己的约定和规范：~/.claude/vibe-kit/user/，安装器从不覆盖（F8，用户 2026-10-30 定的） ----------
+// 以前照 README 直接改 vibe-kit 里的 CLAUDE.md、rules/*.md，自动更新装新版时被覆盖、只留备份（审核报告 H 节）。现在：
+//   user/*.md（文件名不以下划线开头的）接在套件的约定和规范后面，一起生成进全局约定；
+//   user/remove.txt 一行一句：套件的约定、规范里和这一行一字不差（不算行首行尾的空格）的那一行，生成时去掉。// 开头的行是说明；
+//   以前直接改过套件文件的，升级时和上次装的原样（pristine）比：新加的内容挪进 user/migrated-<文件名>.md，删掉、改掉的原句记进 remove.txt
+const USER_DIR = path.join(KIT, 'user');
+const USER_REMOVE = path.join(USER_DIR, 'remove.txt');
+/** 读成文本：去掉开头的 BOM，换行统一成 LF（用记事本改过的文件是 CRLF）。读不了返回 '' */
+const readMd = (f) => { try { return fs.readFileSync(f, 'utf8').replace(/^﻿/, '').replace(/\r\n?/g, '\n'); } catch (e) { return ''; } };
+function userFiles() { try { return fs.readdirSync(USER_DIR).filter((f) => /\.md$/i.test(f) && !f.startsWith('_') && fs.statSync(path.join(USER_DIR, f)).isFile()).sort(); } catch (e) { return []; } }
+function removedLines() { return new Set(readMd(USER_REMOVE).split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('//'))); }
+const dropLines = (text, drop) => (drop.size ? text.split('\n').filter((l) => !drop.has(l.trim())).join('\n') : text);
 function buildBlock() {
-  const base = fill(fs.readFileSync(path.join(KIT, 'CLAUDE.md'), 'utf8').trim());
+  const drop = removedLines();
+  // 去两遍：模板里的原句（升级时挪来的是这种），换完占位符之后的句子（你从生成的全局约定里抄的是这种）
+  const kitPart = (f) => dropLines(fill(dropLines(readMd(f), drop)), drop).replace(/\n{3,}/g, '\n\n').trim();
+  const base = kitPart(path.join(KIT, 'CLAUDE.md'));
   const rulesDir = path.join(KIT, 'rules');
   const rules = fs.existsSync(rulesDir) ? fs.readdirSync(rulesDir).filter((f) => /\.md$/i.test(f) && !f.startsWith('_')).sort() : [];
-  const parts = [base].concat(rules.map((f) => fill(fs.readFileSync(path.join(rulesDir, f), 'utf8').trim())));
+  const mine = userFiles();
+  // remove.txt 只管套件的规范（上次装的原样里有的）；rules/ 里你自己以前加的文件和 user/ 一样不受影响。认不出（没有原样）就当套件的
+  const kitRule = (f) => !fs.existsSync(path.join(KIT, 'pristine', 'rules')) || fs.existsSync(path.join(KIT, 'pristine', 'rules', f));
+  const parts = [base].concat(rules.map((f) => (kitRule(f) ? kitPart(path.join(rulesDir, f)) : fill(readMd(path.join(rulesDir, f)))))).concat(mine.map((f) => fill(readMd(path.join(USER_DIR, f)))));
   const local = localSection();
   if (local) parts.push(local);
-  return { text: BEGIN + '\n' + parts.join('\n\n') + '\n' + END + '\n', rules };
+  return { text: BEGIN + '\n' + parts.filter(Boolean).join('\n\n') + '\n' + END + '\n', rules, mine };
+}
+/**
+ * 两份文本按行比（最长公共子序列），行尾的空格不算。返回 [['=' | '+' | '-', 行], …]：+ 是 b 里新加的，- 是 a 里有、b 里没了的。
+ * 太大的（几千行对几千行）不比，返回 null
+ */
+function diffLines(a, b) {
+  const n = a.length;
+  const m = b.length;
+  if (n * m > 4000000) return null;
+  const x = a.map((l) => l.trimEnd());
+  const y = b.map((l) => l.trimEnd());
+  const L = [];
+  for (let i = 0; i <= n; i++) L.push(new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const ops = [];
+  let i = 0;
+  let j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && x[i] === y[j]) { ops.push(['=', b[j]]); i++; j++; } else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { ops.push(['+', b[j]]); j++; } else { ops.push(['-', a[i]]); i++; }
+  }
+  return ops;
+}
+// 只有符号的行（表格的 |---|、分隔线、空的列表符号）和代码块的开头结尾（```、```bash）不记进 remove.txt：
+// 去一句会把所有文件里的同样一行都去掉，表格、代码块就散了
+const STRUCTURAL = /^(?:[\s`~\-*_#>|=:+.]*|`{3,}.*|~{3,}.*)$/;
+/**
+ * 你改过的一份套件文件（原样 was、你改的 cur）：挑出新加的内容（added，接在后面能照样生效的一段文本，每段前面带上它所在那一节的标题）
+ * 和删掉、改掉的原句（removed）。比不了返回 null
+ */
+function editsOf(was, cur) {
+  const ops = diffLines(was.split('\n'), cur.split('\n'));
+  if (!ops) return null;
+  const hunks = [];
+  let heading = '';
+  let run = null;
+  let lastHead = '';
+  for (const [op, line] of ops) {
+    if (op === '+') { if (!run) run = { heading, lines: [] }; run.lines.push(line); if (/^#{1,6}\s/.test(line)) heading = line; continue; }
+    if (run) { hunks.push(run); run = null; }
+    if (op === '=' && /^#{1,6}\s/.test(line)) heading = line;
+  }
+  if (run) hunks.push(run);
+  const parts = [];
+  for (const h of hunks) {
+    const lines = h.lines.slice();
+    while (lines.length && !lines[0].trim()) lines.shift();
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    if (!lines.length) continue;
+    // 新加的不是一整节（不以标题开头）：带上它原来所在那一节的标题，挪到后面还看得出是补哪一节的；同一节接连几段只带一次
+    const head = h.heading && !/^#{1,6}\s/.test(lines[0]) && h.heading !== lastHead ? h.heading + '\n' : '';
+    if (head) lastHead = h.heading;
+    parts.push(head + lines.join('\n'));
+  }
+  const removed = [];
+  for (const [op, line] of ops) { const t = line.trim(); if (op === '-' && t && !STRUCTURAL.test(t) && !removed.includes(t)) removed.push(t); }
+  return { added: parts.join('\n\n'), removed };
+}
+/** 新加的内容写进 user/migrated-<名字>.md：已经有这个文件（上次升级挪过）就接在后面；同样的内容已经在里面了（装到一半重来）不重复写。返回写到哪 */
+function writeMigrated(rel, text) {
+  const f = path.join(USER_DIR, 'migrated-' + path.basename(rel));
+  const old = readMd(f);
+  if (old.includes(text)) return f;
+  fs.mkdirSync(USER_DIR, { recursive: true });
+  fs.writeFileSync(f, (old.trim() ? old.trimEnd() + '\n\n' : '') + text + '\n');
+  return f;
+}
+const REMOVE_HEAD = '// 每行一句：套件的全局约定、规范里和这一行一字不差（不算行首行尾的空格）的那一行，生成全局约定时去掉。\n'
+  + '// 以 // 开头的是说明。只管套件自带的约定和规范，这个目录里你自己的 .md 不受影响。改完运行 node "' + path.join(KIT, 'install.js') + '" --sync\n';
+/** 删掉、改掉的原句并进 user/remove.txt（已经在里面的不重复） */
+function addRemovals(lines) {
+  const have = removedLines();
+  const add = lines.filter((l) => !have.has(l));
+  if (!add.length) return 0;
+  fs.mkdirSync(USER_DIR, { recursive: true });
+  const old = readMd(USER_REMOVE);
+  fs.writeFileSync(USER_REMOVE, (old.trim() ? old.trimEnd() + '\n' : REMOVE_HEAD) + add.join('\n') + '\n');
+  return add.length;
+}
+/** 这次安装要在配置页上提示一次的事（覆盖了你改过的文件、挪了你的补充）：装完写进 state/install-done.json 的 notice */
+const noticeItems = [];
+/**
+ * 升级前：你改过套件的约定或规范（rel 是 CLAUDE.md、rules/<名字>.md，和这一版、和上次装的原样都对不上），先备份，
+ * 再把改了什么挪进 user/（新加的进 migrated-<名字>.md，删掉改掉的进 remove.txt），然后照常换成这一版
+ */
+function keepEdits(rel) {
+  const cur = path.join(KIT, rel);
+  const was = path.join(KIT, 'pristine', rel);
+  const now = path.join(SRC, 'claude', rel);
+  if (!fs.existsSync(cur) || same(cur, now) || same(cur, was)) return;
+  const d = fs.existsSync(was) ? editsOf(readMd(was), readMd(cur)) : null;
+  // 只差空白、换行符：不算改过
+  if (d && !d.added && !d.removed.length) return;
+  const bak = backup(cur, 'vibe-kit/' + rel);
+  const name = rel === 'CLAUDE.md' ? '全局约定 ' + rel : '规范 ' + rel;
+  if (!d) {
+    console.log('  [!] 你改过' + name + '，但上次装的原样不在（或者文件太大），认不出改了哪些，没法替你挪：原文件备份在 ' + bak + '，把你加的内容挑出来放进 ' + USER_DIR + ' 里的 .md，再运行 --sync');
+    noticeItems.push('你改过' + name + '，认不出改了哪些，这次换成了新版。原文件备份在 ' + bak + '：把你加的内容挑出来放进 ' + USER_DIR + ' 里的 .md，再运行 --sync');
+    return;
+  }
+  const said = [];
+  if (d.added) said.push('新加的内容挪到了 ' + writeMigrated(rel, d.added));
+  if (d.removed.length) { addRemovals(d.removed); said.push('删掉、改掉的 ' + d.removed.length + ' 句原文记进了 ' + USER_REMOVE + '（生成时照样去掉）'); }
+  const nowLines = new Set(readMd(now).split('\n').map((l) => l.trim()));
+  const gone = d.removed.filter((l) => !nowLines.has(l));
+  console.log('  [OK] 你改过' + name + '：' + said.join('；') + '，照样生效，以后更新不再碰。原文件备份在 ' + bak);
+  if (gone.length) console.log('  [!] 你删掉、改掉的这几句，新版里换了说法，没法替你去掉，看一眼新版要不要也去掉：' + gone.slice(0, 5).join(' / '));
+  noticeItems.push('你改过' + name + '：' + said.join('；') + '，照样生效，以后更新不再碰。原文件备份在 ' + bak + (gone.length ? '。其中 ' + gone.length + ' 句新版换了说法，没法替你去掉，看一眼新版' : ''));
 }
 const GLOBAL_MD = path.join(CLAUDE, 'CLAUDE.md');
 /**
@@ -689,11 +858,11 @@ if (mode === 'uninstall') {
     if (fs.existsSync(kitMd) && !same(kitMd, path.join(KIT, 'pristine', 'CLAUDE.md'))) console.log('  [!] 你改过 ' + kitMd + '，删除前备份在 ' + backup(kitMd, 'vibe-kit/CLAUDE.md'));
     // results：老版本看页面的执行器没写 --out 时把结果放在这里
     // update：自动更新从仓库拉下来的暂存处和日志
-    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js']) removeDir(path.join(KIT, n));
+    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js', 'deps.json']) removeDir(path.join(KIT, n));
     console.log('  [OK] 已卸载：约定块、钩子、状态栏、技能，以及安装时加的权限和环境变量都收回了。');
     if (mergeSettings.unlinked) console.log('  [OK] 在配置页点过"接上"：' + mergeSettings.unlinked + '（替你点了一次"断开"）。');
     if (unlinkRouter.note && hadRouter) console.log('  [!] ' + unlinkRouter.note + '。');
-    console.log('  留着没删的：你自己的规范文件、本机环境（local.json）、开关（config.json）、数据库驱动（drivers、drivers.json）、路由的数据（router-data，里面有配好的模型和 key）、问题反馈（feedback）、跨项目的经验记录（lessons）、GitLab 的仓库地址和令牌（gitlab.json、secrets.json）、以前单独装的技能（retired）和备份，都在 ' + KIT);
+    console.log('  留着没删的：你自己的约定和规范（user/，还有 rules/ 里你自己加的）、本机环境（local.json）、开关（config.json）、数据库驱动（drivers、drivers.json）、路由的数据（router-data，里面有配好的模型和 key）、问题反馈（feedback）、跨项目的经验记录（lessons）、GitLab 的仓库地址和令牌（gitlab.json、secrets.json）、以前单独装的技能（retired）和备份，都在 ' + KIT);
     if (['secrets.json', 'router-data'].some((n) => fs.existsSync(path.join(KIT, n)))) {
       console.log('  [!] 令牌（secrets.json）和模型的 key（router-data）还在，套件卸了之后它们不再受保护：挡命令读取的钩子已经没了。'
         + (mergeSettings.keptDeny && mergeSettings.keptDeny.length ? 'settings.json 里那两条"不许读"的规则留着（挡 Read、Grep 工具）。' : '')
@@ -788,12 +957,27 @@ function removeAbsorbed(man) {
 if (mode === 'install') {
   const major = parseInt(process.versions.node.split('.')[0], 10);
   if (major < 18) { console.log('  [X] Node 版本太低（' + process.versions.node + '），需要 18 以上'); process.exit(REFUSED); }
-  // 随包的 Playwright 要 Node 20（Codex C16）：18、19 装得上，看页面（/ttls-see-page）用不了，先说清楚
-  if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/ttls-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
-  for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
-    if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
+  // 随包的依赖（K1-6）：按依赖清单 kit/deps.json（打包时生成）核对每个包在不在、版本对不对；这台电脑的 Node 用不了哪个组件，照清单里各组件的要求说清楚
+  // （看页面的 Playwright 要 20，自带的 OpenSpec 要 20.19，Codex C16）。没有清单的（直接从源码装、本地恢复包里没带它）照以前写死的检查
+  let D = null;
+  let depMan = null;
+  try { D = require(path.join(SRC, 'kit', 'lib', 'deps.js')); depMan = D.read(path.join(SRC, 'kit')); } catch (e) { depMan = null; }
+  if (depMan) {
+    const c = D.check(path.join(SRC, 'kit'), depMan);
+    if (c.missing.length || c.mismatched.length) {
+      console.log('  [X] 安装包不完整：' + [c.missing.length ? '缺 ' + c.missing.slice(0, 5).map((r) => 'kit/' + r).join('、') + (c.missing.length > 5 ? ' 等 ' + c.missing.length + ' 个包' : '') : '', c.mismatched.length ? '和依赖清单对不上 ' + c.mismatched.slice(0, 3).map((r) => 'kit/' + r).join('、') : ''].filter(Boolean).join('；') + '。重新拷一份完整的包');
+      process.exit(1);
+    }
+    const gaps = D.nodeGaps(depMan);
+    const top = gaps.map((g) => g.min).filter(Boolean).sort((a, b) => (D.satisfies(a, '>=' + b) ? 1 : -1)).pop();
+    if (gaps.length) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：' + gaps.map((g) => g.label + '要 Node ' + g.node + '，' + g.without).join('；') + (top ? '。要用就把 Node 升到 ' + top + ' 以上' : ''));
+  } else {
+    if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/ttls-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
+    for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
+      if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
+    }
+    if (!fs.existsSync(path.join(SRC, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js'))) { console.log('  [X] 安装包不完整：缺自带的 OpenSpec（kit/openspec/node_modules）。重新拷一份完整的包'); process.exit(1); }
   }
-  if (!fs.existsSync(path.join(SRC, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js'))) { console.log('  [X] 安装包不完整：缺自带的 OpenSpec（kit/openspec/node_modules）。重新拷一份完整的包'); process.exit(1); }
   const s = readSettings();
   // 全局 CLAUDE.md 不是 UTF-8：和 settings.json 读不懂一样，什么都不动。装一半、约定写不进去，比不装还乱
   if (readGlobalMd().text === null) { explainNotUtf8(fs.existsSync(MANIFEST) ? '这次什么都没动：现在装着的还是之前那一版，照常工作。转好之后再运行一次安装。' : '这次什么都没动，套件还没装上。转好之后再运行一次安装。'); process.exit(REFUSED); }
@@ -802,7 +986,8 @@ if (mode === 'install') {
   // 先写的话，技能、约定、钩子登记都还是旧的，却已经显示"已是最新"，一直到下一版
   // 自带的 OpenSpec 整个换新：换版本时不留上一版的旧文件
   removeDirQuiet(path.join(KIT, 'openspec'));
-  copyDir(path.join(SRC, 'kit'), KIT, ['VERSION']);
+  // user/ 是你自己的约定和规范：安装包里就算带了也不拷（打包时也查）
+  copyDir(path.join(SRC, 'kit'), KIT, ['VERSION', 'user']);
   // 新版删掉了的文件：拷贝不会删，旧版留下的要清掉（自检会挨个载 lib 下的每个文件）。hooks 下的文件不删（AGENTS.md 硬规矩第 11 条）
   for (const rel of DROPPED_FILES) { try { fs.unlinkSync(path.join(KIT, rel)); } catch (e) { /* 没有 */ } }
   for (const f of ['install.js', 'settings.fragment.json']) copyFile(path.join(SRC, f), path.join(KIT, f));
@@ -945,9 +1130,20 @@ if (mode === 'install') {
       if (seal && seal.autoMode === undefined) { const cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^﻿/, '')); seal.autoMode = cur.autoMode === true; fs.writeFileSync(sealFile, JSON.stringify(seal)); }
     } catch (e) { /* 补不了就认文件里的 */ }
   }
-  // 基础约定：你改过装进去的那份，就先备份再覆盖
+  // 你自己的约定和规范放 user/：第一次装（或者升到带这个目录的版本）时建好，放一份说明。之后安装器不再碰这个目录（除了下面挪你改过的内容进来）
+  if (!fs.existsSync(USER_DIR)) {
+    try {
+      fs.mkdirSync(USER_DIR, { recursive: true });
+      fs.writeFileSync(path.join(USER_DIR, '说明.txt'), '这个目录放你自己的约定和规范，更新套件从不覆盖、卸载也留着。\n'
+        + '- 这里的 .md 文件（文件名不以下划线开头的）按文件名顺序接在套件的约定和规范后面，一起写进全局约定 ~/.claude/CLAUDE.md。每个字都是每个请求的成本，写短。\n'
+        + '- 套件约定、规范里有你不要的句子：把那一句原样抄进这里的 remove.txt，一行一句，生成时去掉。\n'
+        + '- 改完运行一次 node "' + path.join(KIT, 'install.js') + '" --sync（配置页保存开关时也会顺带生成）。\n'
+        + '- 以前直接改过 vibe-kit 里的 CLAUDE.md、rules/*.md 的，升级时认出你改了什么：新加的挪进这里的 migrated-<文件名>.md，删掉、改掉的原句记进 remove.txt。\n');
+    } catch (e) { /* 建不了：下面挪内容时再建 */ }
+  }
+  // 基础约定：你改过装进去的那份，先备份，改了什么挪进 user/，再换成这一版
   const kitMd = path.join(KIT, 'CLAUDE.md');
-  if (fs.existsSync(kitMd) && !same(kitMd, path.join(SRC, 'claude', 'CLAUDE.md')) && !same(kitMd, path.join(KIT, 'pristine', 'CLAUDE.md'))) console.log('  [!] 你改过 ' + kitMd + '，覆盖前备份在 ' + backup(kitMd, 'vibe-kit/CLAUDE.md'));
+  keepEdits('CLAUDE.md');
   copyFile(path.join(SRC, 'claude', 'CLAUDE.md'), kitMd);
   // 规范：你自己加的文件不动；你启用了的模板不会被空模板盖回来；你加下划线停用的也不会被重新拷回来
   const rulesDst = path.join(KIT, 'rules');
@@ -960,15 +1156,20 @@ if (mode === 'install') {
       if (!same(twinPath, path.join(KIT, 'pristine', 'rules', twin))) continue;
       fs.unlinkSync(twinPath);
     }
-    const d = path.join(rulesDst, f);
-    if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'rules', f)) && !same(d, path.join(KIT, 'pristine', 'rules', f))) console.log('  [!] 你改过规范 ' + f + '，覆盖前备份在 ' + backup(d, 'vibe-kit/rules/' + f));
-    copyFile(path.join(SRC, 'claude', 'rules', f), d);
+    // 你改过的套件规范：先备份，改了什么挪进 user/，再换成这一版
+    keepEdits('rules/' + f);
+    copyFile(path.join(SRC, 'claude', 'rules', f), path.join(rulesDst, f));
   }
   // 技能和代理：已有同名的而且内容不同（你自己的或改过的），先备份。技能目录逐个文件比，
   // 和这一版、和上次装的原样（pristine）都对不上（改过任何一个文件、加了自己的配方都算），就整目录备份
   for (const n of SKILLS) {
     const d = path.join(CLAUDE, 'skills', n);
-    if (fs.existsSync(d) && !sameDir(d, path.join(SRC, 'claude', 'skills', n)) && !sameDir(d, path.join(KIT, 'pristine', 'skills', n))) console.log('  [!] 已有同名技能 ' + n + '（你自己的，或者改过里面的文件），原目录备份在 ' + backup(d, 'skills/' + n));
+    // 技能、审查代理、命令照旧整个换成这一版（用户 2026-10-30 定的），改过的先备份，配置页提示一次
+    if (fs.existsSync(d) && !sameDir(d, path.join(SRC, 'claude', 'skills', n)) && !sameDir(d, path.join(KIT, 'pristine', 'skills', n))) {
+      const bak = backup(d, 'skills/' + n);
+      console.log('  [!] 已有同名技能 ' + n + '（你自己的，或者改过里面的文件），原目录备份在 ' + bak);
+      noticeItems.push('技能 ' + n + ' 你改过（或者加了文件），这次换成了新版。原目录备份在 ' + bak);
+    }
     // 整个目录一步挪走再换新的：删到一半被占着，会留下新旧混在一起的半截目录
     if (fs.existsSync(d) && !moveAway(d, n, false)) removeDir(d);
     copyDir(path.join(SRC, 'claude', 'skills', n), d);
@@ -976,7 +1177,11 @@ if (mode === 'install') {
   fs.mkdirSync(path.join(CLAUDE, 'agents'), { recursive: true });
   for (const n of AGENTS) {
     const d = path.join(CLAUDE, 'agents', n);
-    if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'agents', n)) && !same(d, path.join(KIT, 'pristine', 'agents', n))) console.log('  [!] 已有同名代理 ' + n + '，原文件备份在 ' + backup(d, 'agents/' + n));
+    if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'agents', n)) && !same(d, path.join(KIT, 'pristine', 'agents', n))) {
+      const bak = backup(d, 'agents/' + n);
+      console.log('  [!] 已有同名代理 ' + n + '，原文件备份在 ' + bak);
+      noticeItems.push('审查代理 ' + n + ' 你改过，这次换成了新版。原文件备份在 ' + bak);
+    }
     copyFile(path.join(SRC, 'claude', 'agents', n), d);
   }
   // 套件的斜杠命令（/vk-go、/vk-commit、/vk-push、/vk-archive、/vk-review、/vk-test、/vk-fix，用户 2026-10-30 定的）：装成用户级命令，
@@ -990,7 +1195,11 @@ if (mode === 'install') {
   if (cmds.length) fs.mkdirSync(path.join(CLAUDE, 'commands'), { recursive: true });
   for (const n of cmds) {
     const d = path.join(CLAUDE, 'commands', n);
-    if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'commands', n)) && !same(d, path.join(KIT, 'pristine', 'commands', n))) console.log('  [!] 已有同名命令 /' + n.replace(/\.md$/, '') + '，原文件备份在 ' + backup(d, 'commands/' + n));
+    if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'commands', n)) && !same(d, path.join(KIT, 'pristine', 'commands', n))) {
+      const bak = backup(d, 'commands/' + n);
+      console.log('  [!] 已有同名命令 /' + n.replace(/\.md$/, '') + '，原文件备份在 ' + bak);
+      noticeItems.push('命令 /' + n.replace(/\.md$/, '') + ' 你改过（或者是你自己的同名命令），这次换成了套件的。原文件备份在 ' + bak);
+    }
     copyFile(path.join(SRC, 'claude', 'commands', n), d);
   }
   if (cmds.length) console.log('  [OK] 斜杠命令：' + cmds.map((n) => '/' + n.replace(/\.md$/, '')).join('  ') + '（敲了直接算你的许可，和说中文一样）');
@@ -1015,6 +1224,7 @@ if (mode === 'install') {
   autoMemoryNote(mergeSettings.autoMemory);
   autoCompactNote(mergeSettings.autoCompact, s);
   ccAutoModeNote(mergeSettings.ccAutoMode);
+  if (mergeSettings.javaOpts) { console.log('  [OK] ' + mergeSettings.javaOpts + '。改了系统里的值，下次更新时跟着重新算'); noticeItems.push(mergeSettings.javaOpts); }
   // 这一份安装里有没有路由程序（这次装的，或者 --no-router 时以前装的还留着）：卸载时有才去停
   man.router = fs.existsSync(path.join(KIT, 'router', 'service.js'));
   man.absorbed = man0.absorbed;
@@ -1115,14 +1325,26 @@ if (mode === 'sync' && readGlobalMd().text === null) { explainNotUtf8('这次什
 const block = buildBlock();
 const changed = writeGlobalMd(block.text);
 if (changed === null) { explainNotUtf8('全局约定没写进去；其余部分（钩子、技能、审查代理、状态栏、权限）都已经就位。转好之后运行 node "' + path.join(KIT, 'install.js') + '" --sync 补上。'); process.exitCode = 1; }
-else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化') + '；启用的规范：' + (block.rules.length ? block.rules.join('，') : '（无）'));
+else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化') + '；启用的规范：' + (block.rules.length ? block.rules.join('，') : '（无）') + (block.mine.length ? '；你的补充（user/）：' + block.mine.join('，') : ''));
 // 钩子跑的方式（HTTP / 命令）、自动记忆的开关改了之后，settings.json 里的登记要跟着变
 if (mode === 'sync') mergeSettings(readSettings(), false, true);
 // 都装好了（约定也写了），最后写版本号；路由起不来由更新器按退出码处理
 if (mode === 'install') {
   copyFile(path.join(SRC, 'kit', 'VERSION'), path.join(KIT, 'VERSION'));
-  // 装完了记一笔：自动更新据此知道"装坏了、没装回去"之后有没有人重新装好过（复审 U-R3）
-  try { fs.mkdirSync(path.join(KIT, 'state'), { recursive: true }); writeAtomic(path.join(KIT, 'state', 'install-done.json'), JSON.stringify({ version: fs.readFileSync(path.join(SRC, 'kit', 'VERSION'), 'utf8').trim(), at: Date.now() })); } catch (e) { /* 记不了：状态栏可能多报一次装坏 */ }
+  // 装完了记一笔：自动更新据此知道"装坏了、没装回去"之后有没有人重新装好过（复审 U-R3）。
+  // notice：这次覆盖了你改过的东西、挪了你的补充，配置页提示一次（点"知道了"记下 noticeSeen）。自动更新时安装的输出只进日志，你看不到。
+  // 上次的还没看过就并进来（最多留 20 条），不会被这一次盖掉
+  try {
+    const doneFile = path.join(KIT, 'state', 'install-done.json');
+    const version = fs.readFileSync(path.join(SRC, 'kit', 'VERSION'), 'utf8').trim();
+    let prev = {}; try { prev = JSON.parse(fs.readFileSync(doneFile, 'utf8')) || {}; } catch (e) { prev = {}; }
+    const unseen = isObj(prev.notice) && Array.isArray(prev.notice.items) && !(Number(prev.noticeSeen) >= Number(prev.notice.at)) ? prev.notice.items.map(String) : [];
+    const items = unseen.concat(noticeItems.filter((x) => !unseen.includes(x))).slice(-20);
+    const rec = { version, at: Date.now() };
+    if (items.length) rec.notice = { at: rec.at, version, items };
+    fs.mkdirSync(path.join(KIT, 'state'), { recursive: true });
+    writeAtomic(doneFile, JSON.stringify(rec));
+  } catch (e) { /* 记不了：状态栏可能多报一次装坏 */ }
 }
 // 不再接 IDEA 的 MCP（用户 2026-10-28 定的）：以前套件登记的 vibe-idea-<端口>，没被改过的撤掉；你自己登记的不动。失败不影响安装
 try {
@@ -1133,7 +1355,7 @@ try {
 } catch (e) { console.log('  [!] 以前登记的 IDEA MCP 这次没撤成，下次更新再撤；套件其余部分照常安装。'); }
 const tail = () => {
   console.log('');
-  console.log('  加规范、改约定：改 ' + KIT + ' 里的 CLAUDE.md 或 rules/*.md（文件名不以下划线开头的才生效），再运行 node "' + path.join(KIT, 'install.js') + '" --sync');
+  console.log('  加规范、改约定：写在 ' + USER_DIR + ' 里的 .md（更新不碰；要去掉套件约定里的某一句，原样抄进那里的 remove.txt），再运行 node "' + path.join(KIT, 'install.js') + '" --sync');
   console.log('  钩子、约定和技能：已经开着的 Claude Code 不用重开，也不用 /clear。钩子立刻生效；约定和技能变了的部分，在你下一次发消息时由钩子带给它。MCP 登记按上面的提示重新打开 Claude Code。');
 };
 const svcFile = path.join(KIT, 'router', 'service.js');
