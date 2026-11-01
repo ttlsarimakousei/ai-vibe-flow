@@ -74,6 +74,28 @@ const noise = (n) => Array.from({ length: n }, (_, i) => '[INFO] Downloading som
     } else console.log('  （这台电脑没有 Python，跳过真跑 unittest）');
   }
 
+  H.section('输出点名放令牌、key 的文件：不读出来（复审发现）');
+  {
+    const TOKEN = 'glpat-fail-summary-secret-1234';
+    const KEY = 'sk-fail-summary-model-key-5678';
+    const secret = path.join(h.kit, 'secrets.json');
+    const data = path.join(h.kit, 'router-data', 'config.json');
+    H.write(secret, JSON.stringify({ gitlabToken: TOKEN }) + '\n');
+    H.write(data, JSON.stringify({ providers: [{ api_key: KEY }] }) + '\n');
+    const a = ctx(fail('npm run lint', 'Exit code 1\n' + secret + '\n  1:1  error  x  rule\n'));
+    H.ok('ESLint 那种写法点名 secrets.json：不带内容', !a.includes(TOKEN), a);
+    const b = ctx(fail('python -m pytest', 'Exit code 1\nTraceback (most recent call last):\n  File "' + data + '", line 1, in x\nValueError: x\n'));
+    H.ok('Python 那种写法点名 router-data：不带内容', !b.includes(KEY), b);
+    const up = ctx(fail('npm run lint', 'Exit code 1\n' + secret.toUpperCase() + '\n  1:1  error  x  rule\n'));
+    H.ok('大小写换一换也不行', !up.includes(TOKEN), up);
+    const link = path.join(proj, 'link-to-secrets.json');
+    let linked = false;
+    try { fs.symlinkSync(secret, link); linked = true; } catch (e) { linked = false; }
+    if (linked) { const l = ctx(fail('npm run lint', 'Exit code 1\n' + link + '\n  1:1  error  x  rule\n')); H.ok('符号链接指过去也不行', !l.includes(TOKEN), l); fs.unlinkSync(link); }
+    const fine = ctx(fail('npm run lint', 'Exit code 1\n' + path.join(proj, 'src/views/Order.vue') + '\n  7:7  error  x  rule\n'));
+    H.ok('项目里的文件照常带源码', /7>\|/.test(fine), fine);
+  }
+
   H.section('成功的命令、认不出的命令、抽不出错误的：什么都不加');
   {
     const ok = H.hook(h, 'after-tool', { session_id: 'sess-tfs', cwd: proj, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'mvn -q -o compile' }, tool_response: { stdout: '[ERROR] 这行只是日志里的字 src/A.java:[1,1] x', stderr: '' } });

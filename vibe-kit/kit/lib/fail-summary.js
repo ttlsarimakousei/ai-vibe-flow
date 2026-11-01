@@ -119,9 +119,22 @@ function findClass(root, cls) {
   return '';
 }
 
+/**
+ * 这个文件不能读出来给模型：放令牌、模型 key 的文件（硬规矩 6，复审发现：路径来自命令输出，模型能让输出点名任何文件）。
+ * 按真实路径看，符号链接、大小写绕不过去。判断不了的按不能读
+ */
+function secretFile(file) {
+  try {
+    let real = file;
+    try { real = fs.realpathSync(file); } catch (e) { real = path.resolve(file); }
+    const G = require('../hooks/guard-read');
+    return G.protectedRange(real) || G.protectedRange(path.resolve(file));
+  } catch (e) { return true; }
+}
 /** 文件里第 line 行前后 n 行，带行号，出错那一行标 > */
 function snippet(file, line, n) {
   try {
+    if (secretFile(file)) return '';
     const st = fs.statSync(file);
     if (!st.isFile() || st.size > 2 * 1024 * 1024) return '';
     const text = fs.readFileSync(file, 'utf8');
