@@ -41,8 +41,8 @@ for (const need of ['kit/lib/shell-words.js', 'kit/lib/guard-git.js', 'kit/lib/g
   // source-hint.js 是个空壳，但不能没有：20260930.1505 和更早的版本自动更新到新版时，装后自检（跑的是旧版的代码）要载它，载不到就装回旧版，永远升不上来
   'kit/hooks/source-hint.js', 'kit/hooks/guard-push.js', 'claude/commands/vk-go.md', 'claude/commands/vk-fix.md', 'claude/commands/vk-auto.md', 'kit/lib/router-smoke.js', 'kit/lib/perf.js', 'kit/lib/report.js', 'kit/lib/outputs.js', 'kit/lib/archive-extract.js', 'kit/lib/tidy.js', 'kit/tools/skills-check.js', 'kit/lib/usage.js', 'kit/lib/pull.js', 'kit/tools/diagnose.js', 'kit/page/probe-run.js',
   'claude/skills/ttls-onboard/SKILL.md', 'claude/skills/ttls-see-page/SKILL.md', 'claude/skills/ttls-cross-review/SKILL.md', 'claude/skills/ttls-handover/SKILL.md',
-  // K3（2026-11-01）：只提交本会话改过的文件、失败摘要
-  'kit/lib/edited-files.js', 'kit/tools/commit.js', 'kit/lib/fail-summary.js',
+  // K3（2026-11-01）：只提交本会话改过的文件、失败摘要、检查点
+  'kit/lib/edited-files.js', 'kit/tools/commit.js', 'kit/lib/fail-summary.js', 'kit/lib/checkpoint.js', 'kit/tools/checkpoint.js',
   'claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.class', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.java',
   'claude/skills/ttls-redis/SKILL.md', 'claude/skills/ttls-redis/scripts/redis.js']) {
   if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);

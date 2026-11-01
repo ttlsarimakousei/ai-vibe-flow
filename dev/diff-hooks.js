@@ -419,6 +419,14 @@ for (const c of cases) if (['开口：敲 /opsx:apply（开工时说全自动开
 const built = (event, extra) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, Object.assign({ hook_event_name: event, tool_name: 'Bash', tool_input: { command: 'mvn -q -o compile' } }, extra(proj))) }; };
 add('K3：编译失败只给摘要', 'after-tool', built('PostToolUseFailure', (proj) => ({ error: 'Exit code 1\n[INFO] 编译\n[ERROR] /' + path.join(proj, 'src/main/java/com/x/A.java').replace(/\\/g, '/') + ':[2,1] 需要 class, interface, enum 或 record\n[INFO] 1 error\n' })), /失败摘要\] Maven 没过，第一个错误：src\/main\/java\/com\/x\/A\.java:2:1　需要 class[\s\S]*2>\| class A \{\}/, NEXT);
 add('K3：编译成功什么都不加', 'after-tool', built('PostToolUse', () => ({ tool_response: { stdout: '[INFO] BUILD SUCCESS', stderr: '' } })));
+// K3（2026-11-01）：这个会话开着自动，开工时先提醒存检查点（会话号单独起，免得自动开关带到别的输入上）
+add('K3：自动模式开工提醒存检查点', 'task-anchor', (kit) => {
+  const proj = project(kit);
+  fs.writeFileSync(path.join(kit.kit, 'state', 'sess-ckpt-auto-switch.json'), JSON.stringify({ on: true, at: Date.now(), by: '/vk-auto' }));
+  const j = base(proj, kit, { session_id: 'sess-ckpt', hook_event_name: 'UserPromptSubmit', prompt: '/opsx:apply add-export' });
+  j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), [H.tr.user('/opsx:apply add-export')]);
+  return { proj, j };
+}, /大改之前先存一个检查点：node \\"[^"]*checkpoint\.js\\" save --why/, NEXT);
 
 let same = 0;
 let changed = 0;
