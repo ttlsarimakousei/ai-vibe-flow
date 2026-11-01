@@ -177,7 +177,9 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     const c0 = readJson(path.join(u.kit, 'config.json'));
     H.ok('新装的默认：自动更新、问题上报都开着', c0.autoUpdate === 'auto' && c0.updateCheckHours === 2 && c0.issueUpload === 'on' && c0.sshToken === 'auto', c0);
     fs.writeFileSync(path.join(u.kit, 'gitlab.json'), JSON.stringify({ repo: gl.url }));
-    setCfg(u, { reviewMaxRounds: 4 });
+    // 发版保护（K2，2026-11-01）起，没勾"先装新版"的要等新版发布满 24 小时才装；这一套测的是发现就装，所以这台算尝鲜组。
+    // 等 24 小时、查"有没有问题"的那些在 test-update-canary.js
+    setCfg(u, { reviewMaxRounds: 4, updateEarly: true });
     gl.clearLogs();
     const c = run(['check']);
     H.ok('检查：发现仓库里是 B', c.code === 0 && c.json && c.json.remote === B && c.json.installed === A && c.json.differs && c.json.behind && c.json.lastCheckOk, c.out + c.err);
@@ -343,6 +345,7 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     const pkgOld = H.makePackage('pkg-cn', '20260908.0900');
     const inst = H.node(c, path.join(pkgOld, 'install.js'), ['--no-router', '--no-open'], { cwd: c.root, timeout: 180000 });
     fs.writeFileSync(path.join(c.kit, 'gitlab.json'), JSON.stringify({ repo: gl.url }));
+    setCfg(c, { updateEarly: true });
     const r = H.node(c, path.join(c.kit, 'lib', 'updater.js'), ['run', '--print'], { cwd: c.root, timeout: 600000, env: Object.assign({}, live) });
     const j = json(r.out);
     H.ok('装着旧版，仓库里是 W：查到了、装上了', inst.code === 0 && j && j.apply && j.apply.ok && version(c) === W, inst.out.slice(-300) + r.out + r.err);

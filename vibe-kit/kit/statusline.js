@@ -151,7 +151,8 @@ process.stdin.on('end', () => {
   if (cfg.kitBypass === 'auto') line2.push(C.yellow + '被拦可自行放行' + C.reset);
   // 有经验在几个项目里都成了规则、等你确认要不要升成用户级（去配置页"经验规则"里点）
   try { if (cfg.lessons !== 'off') { const n = require('./lib/lessons').pendingUser().length; if (n) line2.push(C.yellow + '经验待确认 ' + n + ' 条' + C.reset); } } catch (e) { /* 老版本没有，或者读不了 */ }
-  // 自动更新：刚更新过（一小时内）说一声；开关是"只提醒"的挂着"有新版"；新版装不上的也挂着。只读一个状态文件，不连网
+  // 自动更新：刚更新过（一小时内）说一声，还在观察期的一直说；开关是"只提醒"的挂着"有新版"；新版装不上、装完出错变多装回了的也挂着；
+  // 新版在等尝鲜组、被尝鲜组报了有问题、仓库里有新版但固定着或跳过了的也说。只读一个状态文件，不连网
   try {
     const mode = ['auto', 'notify', 'off'].includes(cfg.autoUpdate) ? cfg.autoUpdate : 'auto';
     if (mode !== 'off') {
@@ -162,9 +163,19 @@ process.stdin.on('end', () => {
       // 装坏了、也没能装回上一版（审核 P04）：现在装着的就是坏的，放第一行红字
       let doneAt = 0; try { doneAt = Number(JSON.parse(fs.readFileSync(path.join(__dirname, 'state', 'install-done.json'), 'utf8')).at) || 0; } catch (e) { /* 没装过新的 */ }
       if (up.failed && up.failed.rolledBack === false && !(doneAt > Number(up.failed.at || 0))) line1.unshift(C.red + '⚠ 新版 ' + up.failed.version + ' 没装好，也没能装回上一版：后台会再试，急用就在配置页"更新和上报"点"立即更新"或重新运行安装包' + C.reset);
-      if (failed) line2.push(C.yellow + '新版 ' + failed.version + ' 没装上，看配置页' + C.reset);
+      // 发版保护（K2）现在拦着没有：等尝鲜组先试、尝鲜组报了这一版有问题（和配置页用同一份判断）
+      let ph = null;
+      try { const U = require('./lib/updater'); ph = { p: U.phase(cfg, up, cur, Date.now()), when: U.whenText }; } catch (e) { ph = null; }
+      // 观察期里失败变多、装回了的（发版保护 K2）说"装完出错变多"，和自检没过的"没装上"分开
+      if (failed) line2.push(C.yellow + (failed.observed ? '新版 ' + failed.version + ' 装完出错变多，已装回 ' + (cur || failed.from) + '，看配置页' : '新版 ' + failed.version + ' 没装上，看配置页') + C.reset);
       // 安装器什么都没动就停了（settings.json 读不懂、全局约定不是 UTF-8、Node 太老）：要用户改电脑上的问题，不然一直装不上（复审 S5）
       else if (up.refused && up.refused.version === up.remoteVersion && up.refused.version !== cur) line2.push(C.yellow + '新版 ' + up.refused.version + ' 装不上：电脑上有问题要改，看配置页' + C.reset);
+      else if (ph && ph.p.hold === 'pin') line2.push(C.dim + '固定在 ' + ph.p.pin + '，不自动更新（仓库里是 ' + up.remoteVersion + '）' + C.reset);
+      else if (ph && ph.p.hold === 'skip') line2.push(C.dim + '跳过了新版 ' + up.remoteVersion + '，出了别的版本照常' + C.reset);
+      else if (ph && ph.p.hold === 'flag') line2.push(C.yellow + '新版 ' + up.remoteVersion + ' 尝鲜组报了有问题，先不装' + C.reset);
+      else if (ph && ph.p.hold === 'wait') line2.push(C.dim + '新版 ' + up.remoteVersion + ' 等尝鲜组先试，' + ph.when(ph.p.until) + ' 以后' + (mode === 'auto' ? '装' : '再装') + C.reset);
+      // 装完新版正在观察（路由的请求失败明显变多会自动装回）
+      else if (ph && ph.p.observe) line2.push(C.green + '已更新到 ' + cur + C.reset + C.dim + '，观察中' + C.reset);
       else if (up.remoteVersion && cur && up.remoteVersion !== cur) { if (mode === 'notify') line2.push(C.yellow + '有新版 ' + up.remoteVersion + '，去配置页更新' + C.reset); }
       else if (up.lastApplied && up.lastApplied.to === cur && Date.now() - (up.lastApplied.at || 0) < 3600000) line2.push(C.green + '已更新到 ' + cur + C.reset);
     }

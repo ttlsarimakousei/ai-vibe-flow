@@ -98,6 +98,8 @@ const server = http.createServer((req, res) => {
   H.ok('套件装进了假的用户目录', inst.code === 0, inst.out + inst.err);
   fs.writeFileSync(path.join(h.kit, 'gitlab.json'), JSON.stringify({ repo: gl.url }));
   fs.writeFileSync(path.join(h.kit, 'secrets.json'), JSON.stringify({ gitlabToken: TOKEN_MARK, gitlabTokenSource: 'manual' }));
+  // 发版保护（K2，2026-11-01）起没勾"先装新版"的要等新版发布满 24 小时：这里测的是会话里发现就装，这台算尝鲜组
+  { const cf = path.join(h.kit, 'config.json'); fs.writeFileSync(cf, JSON.stringify(Object.assign(readJson(cf), { updateEarly: true }), null, 2)); }
   fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });
   fs.writeFileSync(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ providers: [{ name: 'x', api_key: KEY_MARK }] }));
   const st = readJson(path.join(h.cfg, 'settings.json'));

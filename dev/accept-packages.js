@@ -101,6 +101,8 @@ function unzip(zip, name) {
   const inst = H.node(u, path.join(p1, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 300000 });
   H.ok('装上了', inst.code === 0 && inst.out.includes('这个安装包的版本：' + V1) && (H.read(path.join(u.kit, 'VERSION')) || '').trim() === V1, inst.out + inst.err);
   fs.writeFileSync(path.join(u.kit, 'gitlab.json'), JSON.stringify({ repo: gl.url }));
+  // 发版保护（K2，2026-11-01）起没勾"先装新版"的要等新版发布满 24 小时：验收走的是发现就装，这台算尝鲜组（旧包不认这一项，照旧马上装）
+  { const cf = path.join(u.kit, 'config.json'); fs.writeFileSync(cf, JSON.stringify(Object.assign(readJson(cf), { updateEarly: true }), null, 2)); }
   // 同事以前单独装过查库的技能（0930 起并进套件，自动更新时要把它收掉）
   const RENAMED = V2 > '20260929.2205' && V1 <= '20260929.2205';
   if (RENAMED) for (const f of ['SKILL.md', 'scripts/db.py', 'scripts/sqlguard.py']) H.write(path.join(u.cfg, 'skills', 'urai-db-crud', f), '# 以前单独装的\n');
