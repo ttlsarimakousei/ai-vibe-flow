@@ -75,8 +75,9 @@ function setBlock(st, kind, msg, target) {
   st.target = t;
 }
 function analyze(cmd, ps, st, cfg, depth) {
-  require('../lib/invocation').phase('分析执行命令');
-  const decision = require('../lib/review-runner').decisionIssue(Object.assign({}, st.j, { cwd: st.dir, tool_input: { command: cmd } }));
+  // st.securityOnly：check() 开头那一遍，只查读令牌、改套件、经验规则、结束进程（不登记阶段，不受 12 秒预算管；别的检查等正常那一遍）
+  if (!st.securityOnly) require('../lib/invocation').phase('分析执行命令');
+  const decision = st.securityOnly ? '' : require('../lib/review-runner').decisionIssue(Object.assign({}, st.j, { cwd: st.dir, tool_input: { command: cmd } }));
   if (decision) { setBlock(st, 'review-decision', '[vibe-kit 审查决定] ' + decision); return; }
   // 包装命令换过目录后，相对发布脚本也要按内层的目录检查。
   if (publishAnywhere(cmd, st.dir)) st.publishing = true;
@@ -130,6 +131,7 @@ function analyze(cmd, ps, st, cfg, depth) {
         continue;
       }
       // 经过 devserver.js 起的：它自己查重、查端口，这一段里带的启动命令不拦（只免这一段，同一条命令里别的段照查）
+      if (st.securityOnly) continue;
       const viaTool = ws.some((w) => /devserver\.js$/i.test(w.text));
       if (!viaTool && !st.block) { const s = serverStart(ws, head, st.dir); if (s) setBlock(st, 'server', serverMsg(s, st.dir)); }
       if (tidy && !st.block) { const p = processTarget(x, head, st.dir); if (p && tidy.blockOnce(st.j.session_id, p.key)) setBlock(st, 'process', tidy.processMsg(p.show)); }
@@ -221,6 +223,29 @@ function noteToolFlow(j, cfg) {
     });
   } catch (e) { /* 留不了：工具按用户不在算，只会更严 */ }
 }
+/** 只查安全的那一遍：拦下就照正常那一遍的说法返回（带拦截编号、串着 cd 的顺带说），没拦返回 null；自己出错照常放行、记反馈 */
+function securityFirst(j, cmd) {
+  try {
+    const ps = j.tool_name === 'PowerShell';
+    const cfg0 = readConfig(j);
+    const cwd0 = path.resolve(j.cwd || process.cwd());
+    const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, securityOnly: true };
+    { const k = killAnywhere(cmd, ps); if (k) setBlock(st, 'kill', k); }
+    if (!st.block) analyze(cmd, ps, st, cfg0, 0);
+    if (!st.block) return null;
+    let tail = '';
+    try { if (feedback) tail = feedback.registerBlock(j, st.kind, feedback.sigOf([j.tool_name || 'Bash', cmd.trim()]), st.block, (j.tool_name || 'Bash') + '：' + cmd, st.target); } catch (e) { /* 记不了编号也照样拦 */ }
+    // 全自动模式的那句和正常那一遍一样（真拦下时才算流程状态，慢一点没关系）
+    let auto = false; try { auto = !!readConfigFor(j).autoMode; } catch (e) { auto = false; }
+    if (!tail && auto) {
+      tail = '\n全自动模式：我不在，不要停下等我。这条命令不要跑：照上面说的换一个做法；换不了，就把这一步留给我，写进最后的交代，接着做别的。';
+      try { if (report) report.note(j, { kind: 'hand', title: '没让它跑：' + cmd.replace(/\s+/g, ' ').slice(0, 120), detail: st.block.split(/\r?\n/)[0].replace(/^\[vibe-kit[^\]]*\]\s*/, '') }); } catch (e) { /* 记不了不影响 */ }
+    }
+    let cdHit = null; try { cdHit = ps ? null : cdCompoundIssue(cmd, j.cwd); } catch (e) { cdHit = null; }
+    const cdNote = cdHit ? '\n另外，这条命令里 cd 和别的命令串在一起，Claude Code 会停下来等人点确认：改的时候把 cd 去掉，git 用 git -C <目录>，Maven 用 mvn -f <目录>/pom.xml，npm 用 npm --prefix <目录>，别的写完整路径。' : '';
+    return blockOut('PreToolUse', st.block + tail + cdNote);
+  } catch (e) { checkFailed('安全检查前置', j, e); return null; }
+}
 function check(j) {
   // IDEA 的终端、工具路由也走现有检查；认不出是 IDEA 的 MCP 只查路径参数读不读套件令牌（lib/idea-tools.js）。
   if (/^mcp__/.test(String(j.tool_name || ''))) {
@@ -230,6 +255,10 @@ function check(j) {
   }
   const cmd = String((j.tool_input && j.tool_input.command) || '');
   if (!cmd.trim()) return null;
+  // 安全检查先跑（审核 P13，2026-11-01 H2）：读令牌、改套件、改经验规则、结束进程这几道不依赖流程状态，放在读开关（可能要算整个仓库的指纹）、
+  // 读 3 MB 会话记录之前，也不登记阶段、不受 12 秒预算管。以前排在后面，预算用完时整条命令放行，这几道等于没查
+  const early = securityFirst(j, cmd);
+  if (early) return early;
   // 前面这几段各记一个阶段名：12 秒预算在第一次登记阶段之前花完时，报错里以前只写"开始"，看不出慢在哪（旧 #181）
   const I = require('../lib/invocation');
   I.phase('命令：读开关');

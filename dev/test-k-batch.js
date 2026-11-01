@@ -35,5 +35,23 @@ const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit'))
     for (const [c, ps, want] of cases) { const got = O.rewrite(c, ps); H.ok((ps ? 'PowerShell：' : 'Bash：') + c + ' → ' + (want === null ? '不改' : '改写'), got === want, { got, want }); }
   }
 
+  H.section('H2 读令牌、改套件、结束进程先查：12 秒预算用完了照样拦（以前排在读开关、读会话记录后面，预算用完整条放行）');
+  {
+    const h = H.makeHome('tkb-h2', FROM);
+    const G = require(path.join(h.kit, 'hooks', 'guard-commit.js'));
+    const I = require(path.join(h.kit, 'lib', 'invocation.js'));
+    const proj = H.makeRepo(path.join(h.work, 'p2'), { 'a.txt': 'x\n' });
+    const tf = H.transcript(path.join(h.root, 'h2.jsonl'), [H.tr.user('看看配置')]);
+    const kit = h.kit.replace(/\\/g, '/');
+    // 预算 1 毫秒，进钩子之前先空转 20 毫秒：第一次登记阶段就超了
+    const tight = (command) => { try { return I.run(() => { const t = Date.now(); while (Date.now() - t < 20) { /* 空转 */ } return G.handle({ session_id: 'h2', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'h2-' + command.length, tool_input: { command }, transcript_path: tf }); }, { budgetMs: 1 }); } catch (e) { return { threw: e.message }; } };
+    const r1 = tight('cat "' + kit + '/secrets.json"');
+    H.ok('预算用完：cat secrets.json 照样拦', !!r1 && r1.decision === 'block' || !!(r1 && r1.hookSpecificOutput && r1.hookSpecificOutput.permissionDecision === 'deny'), r1);
+    const r2 = tight('sed -i "s/a/b/" "' + kit + '/hooks/guard-commit.js"');
+    H.ok('预算用完：改套件的钩子照样拦', !!r2 && (r2.decision === 'block' || !!(r2.hookSpecificOutput && r2.hookSpecificOutput.permissionDecision === 'deny')), r2);
+    const r3 = tight('echo hello');
+    H.ok('预算用完、普通命令：照旧放行（出错放行）', !r3 || !!r3.threw, r3);
+  }
+
   H.done('11-01 这一批（主会话）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });
