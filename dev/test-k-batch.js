@@ -53,5 +53,13 @@ const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit'))
     H.ok('预算用完、普通命令：照旧放行（出错放行）', !r3 || !!r3.threw, r3);
   }
 
+  H.section('H5 app/web、controller/service/dao、test/prod 这类泛称不当文件路径（审核 P16）');
+  {
+    const h = H.makeHome('tkb-h5', FROM);
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    for (const t of ['按 app/web 分两层', 'controller/service/dao 三层都要改', 'test/prod 两套环境']) H.ok('"' + t + '"：没有路径', S.pathTokens(t).length === 0, S.pathTokens(t));
+    for (const [t, want] of [['改 src/main/java/com/x/A.java', 'src/main/java/com/x/A.java'], ['web/src/views/Order.vue', 'web/src/views/Order.vue'], ['mapper/OrderMapper.xml', 'mapper/OrderMapper.xml']]) H.ok('"' + t + '"：照旧认', S.pathTokens(t).includes(want), S.pathTokens(t));
+  }
+
   H.done('11-01 这一批（主会话）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

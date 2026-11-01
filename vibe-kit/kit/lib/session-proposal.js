@@ -102,6 +102,9 @@ const CODE_EXT = /\.(?:java|kt|groovy|scala|xml|vue|jsx?|tsx?|mjs|cjs|sql|ya?ml|
 
 const SRC_ROOTS = /^(?:\.{1,2}[\\/])?(?:src|web|app|apps|lib|libs|config|conf|resources|static|public|pages|views|components|api|server|client|frontend|backend|db|sql|scripts?|tests?|docs?|WebRoot|WebContent|main|java|mapper|service|controller|dao|entity|model|utils?)\b/i;
 
+// 分层、环境、目录的泛称（审核 P16，2026-11-01）：没扩展名、不以 / 结尾、每一段都是这些词的（app/web、controller/service/dao、test/prod），
+// 是在说"分几层、几套环境"，不是文件路径。以前 design 里这样写会被拦成"找不到这个文件"，tasks 里这样写反倒能冒充写了要改的文件
+const GENERIC_SEG = /^(?:app|apps|web|api|server|client|frontend|backend|front|back|controller|controllers|service|services|dao|daos|entity|entities|model|models|mapper|mappers|view|views|page|pages|component|components|util|utils|common|core|domain|repository|test|tests|prod|dev|uat|sit|pre|main|java|resources|config|conf|static|public|lib|libs|db|sql|docs?|src|vo|dto|po|bo)$/i;
 // 路径里允许中文（sql/v2_订单.sql、docs/说明.md）
 const PC = String.raw`[\w.\-一-龥]`;
 
@@ -121,6 +124,10 @@ function pathTokens(line) {
     if (!/[A-Za-z一-龥]/.test(t)) continue;
     const slash = /[\\/]/.test(t);
     if (s[m.index - 1] === '/' && !(slash && CODE_EXT.test(t) && SRC_ROOTS.test(t))) continue;
+    if (slash && !CODE_EXT.test(t.replace(/[\\/]+$/, '')) && !/[\\/]$/.test(t) && !/^[A-Za-z]:/.test(t)) {
+      const segs = t.split(/[\\/]+/).filter((x) => x && x !== '.' && x !== '..');
+      if (segs.length && segs.every((x) => GENERIC_SEG.test(x))) continue;
+    }
     if (slash ? (CODE_EXT.test(t.replace(/[\\/]+$/, '')) || SRC_ROOTS.test(t) || /^[A-Za-z]:/.test(t)) : CODE_EXT.test(t)) out.push(t);
   }
   return out;
