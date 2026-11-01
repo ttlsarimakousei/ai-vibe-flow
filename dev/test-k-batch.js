@@ -61,5 +61,28 @@ const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit'))
     for (const [t, want] of [['改 src/main/java/com/x/A.java', 'src/main/java/com/x/A.java'], ['web/src/views/Order.vue', 'web/src/views/Order.vue'], ['mapper/OrderMapper.xml', 'mapper/OrderMapper.xml']]) H.ok('"' + t + '"：照旧认', S.pathTokens(t).includes(want), S.pathTokens(t));
   }
 
+  H.section('K1-5 一次钩子调用只读一份配置、同一个状态文件只读一次（M13）；写了以后再读是新的');
+  {
+    const h = H.makeHome('tkb-k15', FROM, { commitMode: 'ask' });
+    const G = require(path.join(h.kit, 'hooks', 'guard-commit.js'));
+    const I = require(path.join(h.kit, 'lib', 'invocation.js'));
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    const proj = H.makeRepo(path.join(h.work, 'p15'), { 'a.txt': 'x\n' });
+    const tf = H.transcript(path.join(h.root, 'k15.jsonl'), [H.tr.user('提交一下')]);
+    const cfgFile = path.join(h.kit, 'config.json').toLowerCase();
+    const flowFile = path.join(h.kit, 'state').toLowerCase();
+    const orig = fs.readFileSync; let cfgReads = 0; const stateReads = {};
+    fs.readFileSync = function (f, ...rest) { const k = String(f).toLowerCase(); if (k === cfgFile) cfgReads++; else if (k.startsWith(flowFile)) stateReads[k] = (stateReads[k] || 0) + 1; return orig.call(fs, f, ...rest); };
+    try { I.run(() => G.handle({ session_id: 'k15', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'k15-1', tool_input: { command: 'git add a.txt && git commit -m "docs: 改一下"' }, transcript_path: tf }), { budgetMs: 12000 }); } finally { fs.readFileSync = orig; }
+    const most = Math.max(0, ...Object.values(stateReads));
+    H.ok('一次 guard-commit 调用：config.json 只读一次', cfgReads === 1, cfgReads);
+    H.ok('一次 guard-commit 调用：同一个状态文件最多读一次', most <= 1, stateReads);
+    // 写了以后再读，是新的
+    const after = I.run(() => { S.writeState('k15-probe', { v: 1 }); const a = S.readState('k15-probe').v; S.writeState('k15-probe', { v: 2 }); const b = S.readState('k15-probe').v; const c = S.readState('k15-probe'); c.v = 99; return [a, b, S.readState('k15-probe').v]; }, { budgetMs: 12000 });
+    H.ok('一次调用里写了再读：读到新的；改了读出来的对象，不影响下一次读', JSON.stringify(after) === '[1,2,2]', after);
+    const sw = I.run(() => { const a = S.readConfig({ session_id: 'k15b' }).autoApply; S.setSessionAuto({ session_id: 'k15b' }, true, 'test'); return [a, S.readConfig({ session_id: 'k15b' }).autoApply]; }, { budgetMs: 12000 });
+    H.ok('一次调用里打开会话自动：再读配置就是开的', JSON.stringify(sw) === '[false,true]', sw);
+  }
+
   H.done('11-01 这一批（主会话）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

@@ -80,7 +80,12 @@ function autoSwitchSaid(text) {
   return AUTO_ON.test(s) ? 'on' : '';
 }
 
+/** 一次钩子调用里同一个会话的配置只算一次（2026-11-01，K 批 M13），给出去的是副本；会话自动开关、配置封条写了就作废（session-state.js forgetState） */
 function readConfig(j) {
+  const sid = j && j.session_id ? String(j.session_id) : '';
+  return JSON.parse(JSON.stringify(require('./invocation').memo('config|' + sid, () => readConfigRaw(j))));
+}
+function readConfigRaw(j) {
   let raw = {};
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); raw = JSON.parse(t) || {}; } catch (e) { raw = {}; }
   const c = Object.assign({}, DEFAULT_CONFIG, raw);

@@ -14,4 +14,6 @@ async function external(fn) {
   try { return await scope.run(Object.assign({}, s, { deadline: 0 }), fn); }
   finally { if (s.deadline) s.deadline += Date.now() - started; }
 }
-module.exports = { run, memo, object, remaining, phase, external };
+/** 作废这次调用里以 prefix 开头的缓存（写了状态文件、改了开关之后） */
+function forget(prefix) { const s = scope.getStore(); if (!s) return; for (const k of [...s.values.keys()]) if (String(k).startsWith(prefix)) s.values.delete(k); }
+module.exports = { run, memo, object, remaining, phase, external, forget };

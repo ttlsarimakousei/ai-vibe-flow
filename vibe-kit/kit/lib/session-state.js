@@ -19,12 +19,23 @@ const safeId = (id) => String(id || 'unknown').replace(/[^\w.-]/g, '_').slice(0,
 const stateFile = (name) => path.join(KIT, 'state', safeId(name) + '.json');
 
 /** 读状态。文件不存在返回 {}；存在但读不懂（别人正在写）重试几次，还不行也返回 {}（只读的地方够用；要写回的用 updateState） */
+/**
+ * 一次钩子调用里同一个状态文件只读一次（2026-11-01，K 批 M13：以前一次调用把 flow、配置封条、审查记录这些读好几遍）。
+ * 给出去的是副本，调用方改了不影响缓存；这次调用里写了它就作废。不在钩子调用里（工具、测试直接调）照旧每次读
+ */
+const inv = () => require('./invocation');
+const copy = (v) => (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v);
 function readState(name) {
-  return stateStore.read(stateFile(name));
+  return copy(inv().memo('state|' + name, () => stateStore.read(stateFile(name))));
 }
+/** 写了这个状态：作废它的缓存；会话自动开关、配置封条变了，读配置的缓存也作废 */
+function forgetState(name) { try { const I = inv(); if (!I.forget) return; I.forget('state|' + name); if (name === 'config-seal' || /-auto-switch$/.test(name)) I.forget('config|'); } catch (e) { /* 老版本没有 */ } }
 
 function writeState(name, obj) {
-  return stateStore.write(stateFile(name), obj);
+  forgetState(name);
+  const r = stateStore.write(stateFile(name), obj);
+  forgetState(name);
+  return r;
 }
 
 /**
@@ -35,7 +46,9 @@ function writeState(name, obj) {
  * 返回写进去的对象；放弃了、写不进去（杀毒软件占着文件）时返回 null
  */
 function updateState(name, fn) {
-  return stateStore.update(stateFile(name), fn, hookLog);
+  const r = stateStore.update(stateFile(name), fn, hookLog);
+  forgetState(name);
+  return r;
 }
 
 /** 钩子的流水账（state/hooks.log）：什么时候跑的、看到了什么、做了什么。出问题时看这个，不用猜 */

@@ -96,7 +96,7 @@ function switchToCommand() {
     cur.hookTransport = 'command';
     if (!store.atomicText(cfgFile, JSON.stringify(cur, null, 2) + '\n')) return { ok: false, why: '写不进 config.json' };
   } catch (e) { return { ok: false, why: String((e && e.message) || e) }; }
-  finally { lock.release(); }
+  finally { lock.release(); try { const I = require('./invocation'); if (I.forget) I.forget('config|'); } catch (e) { /* 没有就算了 */ } }
   return resync() ? { ok: true, why: '' } : { ok: false, why: '重新登记钩子没成功' };
 }
 /** 这个会话连着几轮没收到钩子调用（收到了就清零）。只记次数，清了也就是从头数 */
