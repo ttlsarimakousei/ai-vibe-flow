@@ -13,7 +13,7 @@ const path = require('path');
 /** 编译、测试命令是哪一类；不是返回 '' */
 function kindOf(cmd) {
   const c = String(cmd || '');
-  if (/(^|[\s;&|("'\\/])mvnw?(\.cmd)?(\s|$)/i.test(c)) return 'Maven';
+  if (/(^|[\s;&|("'\\/])mvnw?(\.cmd)?["']?(\s|$)/i.test(c)) return 'Maven';
   if (/(^|[\s;&|("'\\/])gradlew?(\.bat)?(\s|$)/i.test(c)) return 'Gradle';
   if (/(^|[\s;&|("'\\/])(vue-)?tsc(\.cmd)?(\s|$)/i.test(c)) return 'TypeScript';
   if (/(^|[\s;&|("'\\/])eslint(\.cmd)?(\s|$)/i.test(c)) return 'ESLint';

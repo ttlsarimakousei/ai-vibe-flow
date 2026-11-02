@@ -22,7 +22,10 @@ function inspect(root) {
   const cached = S.readState('readiness')[S.normKey(root)]; if (cached && cached.fingerprint === fingerprint) return cached;
   const identified = [...new Set(marks.map(([f]) => /pom\.xml$/.test(f) ? 'Maven' : /build\.gradle$/.test(f) ? 'Gradle' : /package\.json$/.test(f) ? 'Node' : /pyproject\.toml$/.test(f) ? 'Python' : '').filter(Boolean))];
   const dirs = String(process.env.PATH || '').split(path.delimiter);
-  const configured = (k) => (Array.isArray(local[k]) ? local[k] : []).map((x) => path.join(homeOf(x), 'bin'));
+  // IDEA 里配的也算有（问题表第 33 条）
+  const fromIdea = { jdks: [], mavens: [] };
+  try { for (const r of roots) { const I = require('./idea-config').mavenOf(r); if (I.jdkHome) fromIdea.jdks.push(path.join(I.jdkHome, 'bin')); if (I.home) fromIdea.mavens.push(path.join(I.home, 'bin')); } } catch (e) { /* 读不了就按没配 */ }
+  const configured = (k) => fromIdea[k].concat((Array.isArray(local[k]) ? local[k] : []).map((x) => path.join(homeOf(x), 'bin')));
   const tools = { Node: executable('node', dirs), JDK: executable('javac', configured('jdks').concat(dirs)), Maven: executable('mvn', configured('mavens').concat(dirs)), Python: executable('python', dirs) || executable('python3', dirs), Gradle: roots.some((r) => fs.existsSync(path.join(r, 'gradlew')) || fs.existsSync(path.join(r, 'gradlew.bat'))) || executable('gradle', dirs) };
   const required = [...new Set(identified.flatMap((x) => x === 'Maven' ? ['JDK', 'Maven'] : x === 'Gradle' ? ['JDK', 'Gradle'] : [x]))];
   const requested = roots.flatMap((r) => require('./drivers').projectDrivers(r));

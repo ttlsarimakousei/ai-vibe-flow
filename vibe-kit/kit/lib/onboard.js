@@ -9,6 +9,7 @@
  * 什么时候跑：会话开始、用户每次开口时看一眼（只读一个小文件、对十几个文件取一下修改时间），该跑了就甩一个后台进程，钩子自己马上返回。
  *   没探索过                          → 探索
  *   依据的文件改了（pom.xml、application-dev.yml…）→ 重新探索，只改变了的那几行
+ *   IDEA 里配的 Maven、JDK 变了（比的是配的内容：workspace.xml 开着 IDEA 时老在变，不能按修改时间算）→ 同上
  *   离上次整个扫一遍超过 6 小时           → 再扫一遍（看有没有新加的配置文件、新模块）
  *
  * 脚本查不了的不猜：登录账号、代码之外的产出放哪、壳子里这次动哪个子项目。用到的时候由模型问用户。
@@ -193,6 +194,7 @@ function due(root) {
   if (!rec || !rec.at) return '没探索过';
   const ch = changedFiles(rec);
   if (ch.length) return '依据的文件' + ch[0].how + '：' + rel(root, ch[0].file) + (ch.length > 1 ? ' 等 ' + ch.length + ' 个' : '');
+  if ((rec.idea || '') !== ideaDigest(root)) return 'IDEA 里配的 Maven 或 JDK 变了';
   if (Date.now() - (rec.scanAt || 0) > RESCAN_MS) return '离上次整个扫一遍超过 6 小时';
   // 项目说明被删了：重新生成
   if (rec.wroteProject && !exists(path.join(root, '.vibe', 'project.md'))) return '项目说明不见了';
@@ -341,6 +343,40 @@ function encodingFacts(root) {
   if (bad.length / withCn > 0.5) return '不是 UTF-8 的居多（多半是 GBK）。这类文件不要直接改，钩子会拦，照它说的做';
   return 'UTF-8；这 ' + bad.length + ' 个不是 UTF-8（多半是 GBK），别直接改：' + bad.slice(0, 8).join('、') + (bad.length > 8 ? ' 等' : '');
 }
+/** IDEA 里配的 Maven、JDK 的指纹（lib/idea-config.js）。读不了当没配 */
+function ideaDigest(root) { try { return require('./idea-config.js').digest(root); } catch (e) { return ''; } }
+function mvnOnPath() {
+  for (const d of String(process.env.PATH || '').split(path.delimiter)) if (d && (exists(path.join(d, 'mvn.cmd')) || exists(path.join(d, 'mvn')))) return true;
+  return false;
+}
+/**
+ * 跑 Maven 用哪一套（问题表第 33 条，2026-11-02 用户定的：项目在 IDEA 里肯定能起来，IDEA 里配的是首选）。
+ * 顺序：IDEA 里配的 → "本机环境"、PATH 上的（命令写 mvn，模型照全局约定用）→ IDEA 自带的。只有 IDEA 里写明的才带 -s、-Dmaven.repo.local：没写就是 Maven 自己的默认，和 IDEA 一样。
+ * 返回 { cmd: 命令头, note: "环境"那一行里 Maven 的部分, jdk: JDK 的部分, settings, repo }
+ */
+function mavenSetup(root) {
+  const out = { cmd: 'mvn', note: '', jdk: '', settings: '', repo: '' };
+  let C = null;
+  let I = null;
+  try { C = require('./idea-config.js'); I = C.mavenOf(root); } catch (e) { return out; }
+  const local = readJson(path.join(KIT, 'local.json')) || {};
+  const hasLocal = (Array.isArray(local.mavens) ? local.mavens : []).some((m) => m && m.home) || !!(isObj(local.maven) && local.maven.home);
+  let exe = '';
+  let from = '';
+  if (I.home) { exe = '"' + I.home + '/bin/mvn"'; from = 'Maven 用 IDEA 里配的：' + I.home; }
+  else if (I.kind === 'wrapper' && (exists(path.join(root, 'mvnw.cmd')) || exists(path.join(root, 'mvnw')))) { exe = process.platform === 'win32' && exists(path.join(root, 'mvnw.cmd')) ? '"./mvnw.cmd"' : '"./mvnw"'; from = 'Maven 用 IDEA 里选的 wrapper'; }
+  else if (I.kind === 'bundled' || (I.idea && !hasLocal && !mvnOnPath())) { const b = C.bundledHome(); if (b) { exe = '"' + b + '/bin/mvn"'; from = 'Maven 用 IDEA 自带的：' + b; } }
+  out.settings = I.settings; out.repo = I.repo;
+  out.cmd = [exe || 'mvn'].concat(I.settings ? ['-s "' + I.settings + '"'] : [], I.repo ? ['"-Dmaven.repo.local=' + I.repo + '"'] : []).join(' ');
+  const parts = [from, I.settings && 'settings.xml 用 IDEA 里配的：' + I.settings, I.repo && '本地仓库用 IDEA 里配的：' + I.repo].filter(Boolean);
+  if (parts.length) out.note = parts.join('，') + '（下面的命令已经带上了）';
+  if (I.jdkHome) {
+    const def = (Array.isArray(local.jdks) ? local.jdks : []).find((j) => j && String(j.name) === String(local.defaultJdk));
+    const isDefault = !!(def && def.path && same(def.path, I.jdkHome));
+    out.jdk = 'JDK 用 IDEA 里配的 ' + I.jdkName + '：' + I.jdkHome + (isDefault ? '' : '。跑构建、起服务要带上 JAVA_HOME（Git Bash：JAVA_HOME="' + I.jdkHome + '" <命令>；起服务：devserver.js start … --env "JAVA_HOME=' + I.jdkHome + '" -- <命令>）');
+  }
+  return out;
+}
 function jdkNote(java) {
   if (!java) return '';
   const local = readJson(path.join(KIT, 'local.json')) || {};
@@ -359,6 +395,7 @@ function facts(root) {
   const lines = [];
   const notes = [];
   const add = (k, v) => { if (v) lines.push([k, v]); };
+  const mv = mavenSetup(root);
   const pomFile = path.join(root, 'pom.xml');
   const gradle = ['build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts'].map((n) => path.join(root, n)).filter(exists);
   let kind = '';
@@ -397,16 +434,16 @@ function facts(root) {
     if (runnable.length) type += '；能跑起来的模块：' + runnable.map((m) => m.name).slice(0, 4).join('、');
     if (front && !same(frontDir, root)) type += '；前端在 ' + rel(root, frontDir) + '（' + [front.fw, front.bundler].filter(Boolean).join(' + ') + '）';
     add('类型', type);
-    add('环境', jdkNote(java));
-    add('快检', 'mvn -q -o compile' + NOT_RUN + '。离线编不过（父 pom、内部依赖只在私服上）就去掉 -o。嫌慢：照 /ttls-onboard 的 recipes 导出依赖清单，用 javac 只编改过的文件');
-    add('全量', 'mvn -q -DskipTests compile' + NOT_RUN);
+    add('环境', [mv.note, mv.jdk || jdkNote(java)].filter(Boolean).join('；'));
+    add('快检', mv.cmd + ' -q -o compile' + NOT_RUN + '。离线编不过（父 pom、内部依赖只在私服上）就去掉 -o。嫌慢：照 /ttls-onboard 的 recipes 导出依赖清单，用 javac 只编改过的文件');
+    add('全量', mv.cmd + ' -q -DskipTests compile' + NOT_RUN);
     const sf = springFacts(runMod ? runMod.dir : root, tracked);
     if (usesBoot) {
       const port = sf.port || '8080';
       // 启动快一点（问题表第 20 条、审核第五节，用户 2026-10-30 定的）：-o 不去私服查 SNAPSHOT，-Dmaven.test.skip=true 不编测试代码。
       // 有模块依赖别的模块的 test-jar 的不能跳过测试编译；离线起不来（父 pom、内部依赖只在私服上），devserver 自己去掉 -o 再起一次
       const testJar = [pomFile].concat(mods.map((m) => path.join(m.dir, 'pom.xml'))).some((f) => /<type>\s*test-jar\s*<\/type>|<classifier>\s*tests\s*<\/classifier>/.test(stripXmlComments(readText(f))));
-      add('启动', 'mvn -o spring-boot:run' + (testJar ? '' : ' -Dmaven.test.skip=true') + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '（离线起不来 devserver 会自己去掉 -o 再起一次）' + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + port + '，它认环境变量 SERVER_PORT，命令不用改');
+      add('启动', mv.cmd + ' -o spring-boot:run' + (testJar ? '' : ' -Dmaven.test.skip=true') + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '（离线起不来 devserver 会自己去掉 -o 再起一次）' + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + port + '，它认环境变量 SERVER_PORT，命令不用改');
       if (sf.active) notes.push('配置里写的当前环境是 ' + sf.active);
     } else if ((pom && pom.war) || mods.some((m) => m.war)) add('启动', '打成 war 放进 Tomcat，或者在 IDE 里启动' + NOT_RUN);
     else add('启动', '没认出怎么启动（不是 Spring Boot，也不是 war）：用到的时候问我');
@@ -419,6 +456,7 @@ function facts(root) {
     const text = gradle.map(readText).join('\n');
     const usesBoot = /org\.springframework\.boot/.test(text);
     add('类型', '代码工程。Gradle' + (usesBoot ? '，Spring Boot' : '') + (front && !same(frontDir, root) ? '；前端在 ' + rel(root, frontDir) + '（' + [front.fw, front.bundler].filter(Boolean).join(' + ') + '）' : ''));
+    add('环境', mv.jdk);
     add('快检', g + ' compileJava --offline -q' + NOT_RUN + '。离线不行就去掉 --offline');
     add('全量', g + ' compileJava -q' + NOT_RUN);
     if (usesBoot) { const sf = springFacts(root, tracked); add('启动', g + ' bootRun，端口 ' + (sf.port || '8080') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + (sf.port || '8080') + '，它认环境变量 SERVER_PORT，命令不用改'); }
@@ -443,6 +481,7 @@ function facts(root) {
       kind = 'legacy-web';
       if (classpath) tracked.add(path.join(root, '.classpath'));
       add('类型', '代码工程。没有 pom 的老式 Java Web（在 IDE 里配 Tomcat 启动）' + (webInf ? '，页面和 jar 在 ' + rel(root, path.dirname(webInf)) : ''));
+      add('环境', mv.jdk);
       add('快检', '还没备好：照 /ttls-onboard 的 recipes（"没有 pom 的老式 Java Web"一节）拼 javac 命令，跑通了记在这里');
       add('全量', '同上');
       add('启动', '在 IDE 里启动');
@@ -487,7 +526,7 @@ function facts(root) {
     for (const n of front.notes) notes.push(n);
   }
   add('编码', encodingFacts(root));
-  return { kind, lines, notes, tracked };
+  return { kind, lines, notes, tracked, idea: ideaDigest(root), maven: { cmd: mv.cmd, repo: mv.repo, settings: mv.settings } };
 }
 
 // ---------- 数据库、redis：只要开发环境的 ----------
@@ -870,7 +909,7 @@ function explore(root, why) {
     if (!noted && (first || out.changes.length)) { history.push({ at: Date.now(), why: out.why, changes: first ? ['第一次探索'] : out.changes.slice(0, 10) }); noted = true; }
     // 有文件读不出来、这次没并进去的：十分钟之后再来一遍（不记成"刚扫过"）
     const scanAt = unread || cur === null ? Date.now() - RESCAN_MS + 600000 : Date.now();
-    writeAtomic(recFile, JSON.stringify({ version: 1, at: rec.at || t0, updatedAt: Date.now(), scanAt, root, kind: f.kind, wroteProject: out.wroteProject, tracked: tr, lines: gen, memo,
+    writeAtomic(recFile, JSON.stringify({ version: 1, at: rec.at || t0, updatedAt: Date.now(), scanAt, root, kind: f.kind, idea: f.idea, maven: f.maven, wroteProject: out.wroteProject, tracked: tr, lines: gen, memo,
       dbOwners: [...dbGroups.keys()], redisOwners: [...rdGroups.keys()], skippedNonDev: skipped, driverSearchAt: driver.at, driverMiss: driver.miss, ms: Date.now() - t0, history: history.slice(-10) }, null, 1) + '\n');
   };
   // 先写出来（用户开口时就带得上），再去找驱动：仓库大、驱动又不在常见位置的时候，找一遍要十几秒

@@ -359,7 +359,7 @@
     <div class="pagehead"><h2>本机环境</h2><p>这台电脑上的 JDK、Maven、Tomcat 在哪。配一次，所有项目都用。</p></div>
     <div class="card" id="sec-readiness"><h2>项目就绪与本机耗时</h2><p class="hint">只核对来源文件、工具和登记，不运行项目脚本、不主动连库。识别结果不代表构建或测试成功。耗时仅保存在本机。</p><div class="row"><input id="readyProject" placeholder="项目完整路径" style="flex:1;min-width:220px;width:auto"><button class="btn" id="readyCheck">核对环境</button><button class="btn" id="performanceCheck">本机耗时</button></div><pre id="readyOutput" style="white-space:pre-wrap"></pre></div>
     <div class="card">
-      <div class="row between"><div><h2>开发环境</h2><p class="hint">只存在本机（<span class="mono" id="kitDir"></span>），不进仓库。保存后写进全局约定，Claude 每个会话都看得到。先点"自动探测"；没找到的点"选…"去硬盘上点选。</p></div><button class="btn primary" id="detect">自动探测</button></div>
+      <div class="row between"><div><h2>开发环境</h2><p class="hint">只存在本机（<span class="mono" id="kitDir"></span>），不进仓库。保存后写进全局约定，Claude 每个会话都看得到。先点"自动探测"（IDEA 里配的排在最前面）；没找到的点"选…"去硬盘上点选。项目自己在 IDEA 里配了 Maven、JDK 的，那个项目优先用 IDEA 里配的。</p></div><button class="btn primary" id="detect">自动探测</button></div>
       <div id="kitMissing" class="banner warn hide">这台电脑还没装 vibe-kit，保存了也不会写进全局约定。</div>
       <h3>JDK</h3>
       <div id="jdks"></div>

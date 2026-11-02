@@ -84,11 +84,15 @@ function jdkVersion(home) {
   return m ? m[1] : '';
 }
 const jdkMajor = (v) => { const m = String(v).match(/^1\.(\d+)/) || String(v).match(/^(\d+)/); return m ? m[1] : ''; };
-function detect() {
+function detect(kitDir) {
   const home = os.homedir();
+  // IDEA 里配的最准（问题表第 33 条）：登记的 JDK、最近打开过的项目配的 Maven 和 settings.xml、本地仓库，排在最前面
+  let idea = { mavens: [], jdks: [] };
+  try { idea = require(path.join(kitDir, 'lib', 'idea-config.js')).machine(); } catch (e) { /* 老版本没有、读不了 */ }
   const isJdk = (d) => exists(path.join(d, 'bin', 'javac.exe')) || exists(path.join(d, 'bin', 'javac'));
   const found = new Map();
   const addJdk = (d) => { if (d && isJdk(d) && !found.has(d.toLowerCase())) found.set(d.toLowerCase(), d); };
+  for (const j of idea.jdks) addJdk(j.home);
   for (const k of Object.keys(process.env)) if (/^(JAVA|JDK)[\w]*HOME$/i.test(k)) addJdk(process.env[k]);
   const roots = ['C:\\Program Files\\Java', 'C:\\Program Files (x86)\\Java', 'C:\\Program Files\\Eclipse Adoptium', 'C:\\Program Files\\Zulu', 'C:\\Program Files\\Microsoft', 'C:\\Program Files\\BellSoft', 'C:\\Java', 'D:\\Java', 'D:\\jdk', 'D:\\tools', 'D:\\soft', 'D:\\software', 'D:\\dev', 'D:\\develop', path.join(home, '.jdks'), '/usr/lib/jvm', '/Library/Java/JavaVirtualMachines'];
   for (const r of roots) for (const d of subdirs(r)) { addJdk(d); addJdk(path.join(d, 'Contents', 'Home')); }
@@ -97,15 +101,17 @@ function detect() {
   const isMaven = (d) => exists(path.join(d, 'bin', 'mvn.cmd')) || exists(path.join(d, 'bin', 'mvn'));
   const mvnHomes = new Map();
   const addMaven = (d) => { d = String(d || '').replace(/[\\/]+$/, ''); if (d && isMaven(d) && !mvnHomes.has(d.toLowerCase())) mvnHomes.set(d.toLowerCase(), d); };
+  for (const m of idea.mavens) addMaven(m.home);
   addMaven(process.env.MAVEN_HOME); addMaven(process.env.M2_HOME);
   for (const dir of String(process.env.PATH || '').split(path.delimiter)) if (dir && (exists(path.join(dir, 'mvn.cmd')) || exists(path.join(dir, 'mvn')))) addMaven(path.dirname(dir));
   for (const r of ['C:\\Program Files', 'D:\\Program Files', 'C:\\Program Files\\Apache Software Foundation', 'D:\\tools', 'D:\\soft', 'D:\\software', 'D:\\dev', 'D:\\develop', 'D:\\', 'C:\\', '/opt', '/usr/local']) for (const d of subdirs(r)) if (/maven/i.test(path.basename(d))) addMaven(d);
   const repoOf = (settings) => { try { const m = fs.readFileSync(settings, 'utf8').replace(/<!--[\s\S]*?-->/g, '').match(/<localRepository>\s*([^<]+?)\s*<\/localRepository>/); if (m) return m[1]; } catch (e) { /* 读不了 */ } return ''; };
   const userSettings = exists(path.join(home, '.m2', 'settings.xml')) ? path.join(home, '.m2', 'settings.xml') : '';
   const mavens = [...mvnHomes.values()].map((h) => {
-    const settings = userSettings || (exists(path.join(h, 'conf', 'settings.xml')) ? path.join(h, 'conf', 'settings.xml') : '');
+    const fromIdea = idea.mavens.find((m) => m.home.toLowerCase() === h.toLowerCase()) || {};
+    const settings = fromIdea.settings || userSettings || (exists(path.join(h, 'conf', 'settings.xml')) ? path.join(h, 'conf', 'settings.xml') : '');
     const v = (path.basename(h).match(/(\d+(?:\.\d+)+)/) || [])[1] || path.basename(h);
-    return { name: v, home: h, settings, repo: (settings && repoOf(settings)) || (exists(path.join(home, '.m2', 'repository')) ? path.join(home, '.m2', 'repository') : '') };
+    return { name: v, home: h, settings, repo: fromIdea.repo || (settings && repoOf(settings)) || (exists(path.join(home, '.m2', 'repository')) ? path.join(home, '.m2', 'repository') : '') };
   });
 
   const tomcats = [];
@@ -271,7 +277,7 @@ function runOp(op, a) {
   if (op === 'performance') { const S = require(path.join(a.kitDir, 'lib', 'session')); return { reviews: S.readState('review-local-metrics'), hooks: S.readState('hook-stats').byHook || {}, tools: toolUsage(a.kitDir) }; }
   if (op === 'browse') return browse(a.dir, a.file, a.ext);
   if (op === 'drivers') return driversOp(a);
-  if (op === 'detect') return detect();
+  if (op === 'detect') return detect(a.kitDir);
   if (op === 'lessons') return lessonsOp(a);
   throw new Error('没有这个操作：' + op);
 }
@@ -363,7 +369,7 @@ async function handle(method, url, body, kitDir, ctx) {
   }
   if (method === 'GET' && url === '/api/kit/hooks') return hookInfo(kitDir);
   if (method === 'GET' && url === '/api/kit/sessions') return { sessions: liveSessions(kitDir) };
-  if (method === 'GET' && url === '/api/kit/detect') return inWorker('detect', {}, '自动探测');
+  if (method === 'GET' && url === '/api/kit/detect') return inWorker('detect', { kitDir }, '自动探测');
   if (method === 'POST' && url === '/api/kit/local') { writeJson(localFile, cleanLocal(body)); const r = await sync(kitDir); return { ok: true, synced: r.ok, output: r.output }; }
   // 只改传进来的字段：在文件里现有的配置上合并，再整体清洗。页面上"离开输入框就自动保存"的那几项只传它自己管的，
   // 别的开关不会被页面打开时的旧值改回去。有的开关要重新生成全局约定、重新登记钩子才生效（全自动模式、钩子跑的方式、自动记忆），所以保存后同步一次

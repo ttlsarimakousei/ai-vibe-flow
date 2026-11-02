@@ -46,7 +46,7 @@ for (const need of ['kit/lib/session-state.js', 'kit/lib/session-transcript.js',
   'kit/hooks/source-hint.js', 'kit/hooks/guard-push.js', 'claude/commands/vk-go.md', 'claude/commands/vk-fix.md', 'claude/commands/vk-auto.md', 'kit/lib/router-smoke.js', 'kit/lib/perf.js', 'kit/lib/report.js', 'kit/lib/outputs.js', 'kit/lib/archive-extract.js', 'kit/lib/tidy.js', 'kit/tools/skills-check.js', 'kit/lib/usage.js', 'kit/lib/pull.js', 'kit/tools/diagnose.js', 'kit/page/probe-run.js',
   'claude/skills/ttls-onboard/SKILL.md', 'claude/skills/ttls-see-page/SKILL.md', 'claude/skills/ttls-cross-review/SKILL.md', 'claude/skills/ttls-handover/SKILL.md',
   // K3（2026-11-01）：只提交本会话改过的文件、失败摘要、检查点
-  'kit/lib/edited-files.js', 'kit/tools/commit.js', 'kit/lib/fail-summary.js', 'kit/lib/checkpoint.js', 'kit/tools/checkpoint.js', 'kit/lib/sql-check.js', 'kit/lib/fix-pass.js', 'kit/tools/doctor.js', 'kit/lib/stage-rules.js', 'kit/lib/diag.js', 'kit/lib/config-fields.js',
+  'kit/lib/edited-files.js', 'kit/tools/commit.js', 'kit/lib/fail-summary.js', 'kit/lib/checkpoint.js', 'kit/tools/checkpoint.js', 'kit/lib/sql-check.js', 'kit/lib/fix-pass.js', 'kit/lib/idea-config.js', 'kit/tools/doctor.js', 'kit/lib/stage-rules.js', 'kit/lib/diag.js', 'kit/lib/config-fields.js',
   'claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.class', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.java',
   'claude/skills/ttls-redis/SKILL.md', 'claude/skills/ttls-redis/scripts/redis.js']) {
   if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);

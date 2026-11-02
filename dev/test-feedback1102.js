@@ -130,6 +130,97 @@ const reason = (o) => H.reasonOf(o);
     H.ok('审查提示要求报类别和以后怎么避免', /"kind":"想当然\|/.test(text) && /"avoid":/.test(text) && typeof R.runsForLessons === 'function');
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('第 33 条：探索首选 IDEA 里配的 Maven、settings.xml、本地仓库、JDK');
+  {
+    const h = H.makeHome('t1102-idea', from);
+    const fwd = (p) => p.replace(/\\/g, '/');
+    const maven = (dir) => { H.write(path.join(dir, 'bin', 'mvn'), '#!/bin/sh\n'); H.write(path.join(dir, 'bin', 'mvn.cmd'), '@echo off\r\n'); return fwd(dir); };
+    const M = maven(path.join(h.root, 'tools', 'apache-maven-3.8.3'));
+    const settings = fwd(path.join(h.root, 'tools', 'settings-proj.xml')); H.write(settings, '<settings/>\n');
+    const repo = fwd(path.join(h.root, 'tools', 'repo')); fs.mkdirSync(repo, { recursive: true });
+    const jdk = fwd(path.join(h.root, 'tools', 'jdk8')); H.write(path.join(jdk, 'bin', 'javac.exe'), 'x');
+    // IDE 的配置目录在假用户目录里
+    const options = path.join(h.home, 'AppData', 'Roaming', 'JetBrains', 'IntelliJIdea2026.2', 'options');
+    H.write(path.join(options, 'jdk.table.xml'), '<application><component name="ProjectJdkTable"><jdk version="2"><name value="1.8" /><type value="JavaSDK" /><homePath value="' + jdk + '" /></jdk><jdk version="2"><name value="py" /><type value="Python SDK" /><homePath value="' + jdk + '" /></jdk></component></application>\n');
+    const pom = '<project><artifactId>demo</artifactId><parent><artifactId>spring-boot-starter-parent</artifactId><version>2.7.18</version></parent><properties><java.version>1.8</java.version></properties><build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>\n';
+    const general = (body) => '<project version="4"><component name="AutoImportSettings" /><component name="MavenImportPreferences"><option name="generalSettings"><MavenGeneralSettings>' + body + '</MavenGeneralSettings></option><option name="importingSettings"><MavenImportingSettings><option name="jdkForImporter" value="17" /></MavenImportingSettings></option></component></project>\n';
+    const misc = '<project version="4"><component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" default="true" project-jdk-name="1.8" project-jdk-type="JavaSDK" /></project>\n';
+    let seq = 0;
+    const project = (files, under) => H.makeRepo(path.join(under || h.work, 'p' + (++seq)), Object.assign({ '.gitignore': '.vibe/\n', 'pom.xml': pom }, files));
+    const onlyNode = { VIBE_KIT_NO_ONBOARD: undefined, PATH: path.dirname(process.execPath), VIBE_KIT_IDEA_ROOTS: '' };
+    const explore = (p, env) => { const r = H.node(h, path.join(h.kit, 'tools', 'onboard.js'), ['run', '--force', '--dir', p], { env: Object.assign({}, onlyNode, env) }); return H.read(path.join(p, '.vibe', 'project.md')) || ('没有项目说明：' + r.out + r.err); };
+    const line = (t, k) => (new RegExp('^- ' + k + '：(.*)$', 'm').exec(t) || [])[1] || '';
+
+    const a = explore(project({ '.idea/workspace.xml': general('<option name="customMavenHome" value="' + M + '" /><option name="localRepository" value="' + repo + '" /><option name="mavenHomeTypeForPersistence" value="CUSTOM" /><option name="userSettingsFile" value="' + settings + '" />'), '.idea/misc.xml': misc }));
+    const head = '"' + M + '/bin/mvn" -s "' + settings + '" "-Dmaven.repo.local=' + repo + '"';
+    H.ok('快检带上 IDEA 里配的 Maven、settings.xml、本地仓库', line(a, '快检').startsWith(head + ' -q -o compile'), a);
+    H.ok('全量带上', line(a, '全量').startsWith(head + ' -q'), a);
+    H.ok('启动带上', line(a, '启动').startsWith(head + ' -o spring-boot:run'), a);
+    H.ok('"环境"一行写明 Maven、settings.xml、本地仓库都是 IDEA 里配的', /Maven 用 IDEA 里配的：/.test(line(a, '环境')) && line(a, '环境').includes(settings) && line(a, '环境').includes(repo), line(a, '环境'));
+    H.ok('"环境"一行写明 JDK 用 IDEA 里配的，带目录和 JAVA_HOME 的写法', line(a, '环境').includes('JDK 用 IDEA 里配的 1.8：' + jdk) && /--env "JAVA_HOME=/.test(line(a, '环境')), line(a, '环境'));
+
+    const b = explore(project({ '.idea/workspace.xml': general('<option name="mavenHome" value="' + M + '" />') }));
+    H.ok('老版本 IDEA 写的 mavenHome 也认', line(b, '快检').startsWith('"' + M + '/bin/mvn" -q -o compile'), b);
+    H.ok('没写 settings.xml、本地仓库：不带这两个参数', !/ -s "|maven\.repo\.local/.test(line(b, '快检')), line(b, '快检'));
+
+    const shell = path.join(h.work, 'shell'); H.write(path.join(shell, '.idea', 'workspace.xml'), general('<option name="customMavenHome" value="' + M + '" />'));
+    const c = explore(project({}, shell));
+    H.ok('.idea 在上一层（壳子、聚合工程）：也认', line(c, '快检').startsWith('"' + M + '/bin/mvn"'), c);
+
+    const d = explore(project({}), { VIBE_KIT_IDEA_ROOTS: '' });
+    H.ok('没有 .idea：照旧写 mvn，没有"环境"一行', line(d, '快检').startsWith('mvn -q -o compile') && !line(d, '环境'), d);
+
+    const e = explore(project({ '.idea/workspace.xml': general('<option name="customMavenHome" value="' + fwd(path.join(h.root, 'gone')) + '" /><option name="userSettingsFile" value="' + fwd(path.join(h.root, 'gone.xml')) + '" /><option name="localRepository" value="' + fwd(path.join(h.root, 'gone-repo')) + '" />') }));
+    H.ok('配的目录、文件已经不在了：不算', line(e, '快检').startsWith('mvn -q -o compile'), e);
+
+    // IDEA 自带的 Maven
+    const jb = path.join(h.root, 'JB');
+    const B = maven(path.join(jb, 'IntelliJ IDEA 2026.2.3', 'plugins', 'maven-plugin', 'lib', 'maven3'));
+    const f = explore(project({ '.idea/workspace.xml': general('<option name="mavenHomeTypeForPersistence" value="BUNDLED3" />') }), { VIBE_KIT_IDEA_ROOTS: jb });
+    H.ok('选的是 IDEA 自带的：用自带的', line(f, '快检').startsWith('"' + B + '/bin/mvn"') && /IDEA 自带的/.test(line(f, '环境')), f);
+    const g = explore(project({ '.idea/misc.xml': misc }), { VIBE_KIT_IDEA_ROOTS: jb });
+    H.ok('有 .idea、没选过，PATH 和"本机环境"里都没有 Maven：用自带的', line(g, '快检').startsWith('"' + B + '/bin/mvn"'), g);
+    const pathDir = path.join(h.root, 'pathbin'); H.write(path.join(pathDir, 'mvn.cmd'), '@echo off\r\n');
+    const i = explore(project({ '.idea/misc.xml': misc }), { VIBE_KIT_IDEA_ROOTS: jb, PATH: path.dirname(process.execPath) + path.delimiter + pathDir });
+    H.ok('有 .idea、没选过，PATH 上有 Maven：照旧写 mvn', line(i, '快检').startsWith('mvn -q -o compile'), i);
+
+    const wrap = explore(project({ '.idea/workspace.xml': general('<option name="mavenHomeTypeForPersistence" value="WRAPPER" />'), 'mvnw.cmd': '@echo off\r\n', mvnw: '#!/bin/sh\n' }));
+    H.ok('选的是 wrapper：用项目的 mvnw', /^"\.\/mvnw(\.cmd)?" -q -o compile/.test(line(wrap, '快检')), wrap);
+
+    // 配的内容变了才重新探索；workspace.xml 只是别的地方变了不算
+    const p2 = project({ '.idea/workspace.xml': general('<option name="customMavenHome" value="' + M + '" />') + '<!-- 1 -->\n' });
+    explore(p2);
+    const due = () => { const r = H.node(h, path.join(h.kit, 'tools', 'onboard.js'), ['status', '--dir', p2, '--json'], { env: onlyNode }); try { return (JSON.parse(r.out).projects[0] || {}).due; } catch (err) { return '解析不了：' + r.out + r.err; } };
+    H.ok('刚探索过：不用再跑', due() === '', due());
+    H.write(path.join(p2, '.idea', 'workspace.xml'), general('<option name="customMavenHome" value="' + M + '" />') + '<!-- IDEA 开着，别的地方变了 -->\n');
+    H.ok('workspace.xml 别的地方变了：不重新探索', due() === '', due());
+    H.write(path.join(p2, '.idea', 'workspace.xml'), general('<option name="customMavenHome" value="' + M + '" /><option name="userSettingsFile" value="' + settings + '" />'));
+    H.ok('IDEA 里换了 settings.xml：要重新探索', /IDEA 里配的/.test(due()), due());
+    const again = explore(p2);
+    H.ok('重新探索后命令跟着变', line(again, '快检').includes('-s "' + settings + '"'), again);
+
+    // 这样的命令钩子还认得
+    const F = require(path.join(h.kit, 'lib', 'fail-summary.js'));
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    const Pol = require(path.join(h.kit, 'lib', 'flow-policy.js'));
+    const cmd = head + ' -q -o compile';
+    H.ok('失败摘要认得带路径的 Maven', F.kindOf(cmd) === 'Maven', F.kindOf(cmd));
+    H.ok('算跑过验证', S.VERIFY_CMD.test(cmd));
+    H.ok('编译不算自测', !Pol.testCommand(cmd, false));
+    H.ok('带路径的 spring-boot:run 算起服务', Pol.testCommand(head + ' -o spring-boot:run', false));
+
+    // 配置页"自动探测"：IDEA 知道的排最前面
+    H.write(path.join(options, 'recentProjects.xml'), '<application><component name="RecentProjectsManager"><option name="additionalInfo"><map><entry key="' + fwd(path.join(h.work, 'p1')) + '"><value /></entry></map></option></component></application>\n');
+    const probe = path.join(h.root, 'detect.js');
+    H.write(probe, 'const api = require(' + JSON.stringify(path.join(H.SRC, 'router', 'kit-api.js')) + ');console.log(JSON.stringify(api.detect(' + JSON.stringify(h.kit) + ')));');
+    const det = H.node(h, probe, [], { env: { PATH: path.dirname(process.execPath), MAVEN_HOME: undefined, M2_HOME: undefined, JAVA_HOME: undefined } });
+    let found = {}; try { found = JSON.parse(det.out); } catch (err) { found = {}; }
+    H.ok('自动探测：IDEA 登记的 JDK 排最前面', !!found.jdks && fwd(found.jdks[0].path) === jdk, det.out + det.err);
+    const fm = (found.mavens || [])[0] || {};
+    H.ok('自动探测：最近打开过的项目配的 Maven 排最前面，带它的 settings.xml、本地仓库', fwd(fm.home || '') === M && fwd(fm.settings || '') === settings && fwd(fm.repo || '') === repo, det.out + det.err);
+  }
+
   const wins = await watch.stop();
   H.ok('桌面上没有多出窗口', !wins.length, wins.join('；'));
   H.done('11-02 反馈');
