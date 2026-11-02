@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const S = require('./session');
+const Sc = require('./review-scope');
 const W = require('./workspace');
 const T = require('./task-types');
 const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return ''; } };
@@ -68,14 +69,17 @@ function fingerprint(dir, point) {
 // 记录带着变更目录的创建时间：旧变更归档后新建同名变更，路径一样，不能接着用旧轮数（2026-10-17 审核问题 5）。没有 born 的旧记录照认
 function live(dir, r) { return r && (!r.born || r.born === S.changeBorn(dir)) ? r : {}; }
 function record(dir, point) { return live(dir, S.readState('review-points')[key(dir, point)]); }
-function passed(dir, point) { const r = record(dir, point); return r.status === 'completed' && r.issues === 0 && r.fingerprint === fingerprint(dir, point) && require('./review-runner').inputsCurrent(r.materialInputs); }
+// 没有 P1、P2 就算过（问题表第 37 条，用户 2026-11-02 定的）：P3 记在审查记录里，不为它再审一轮。升级前的记录没有 blocking，按总数算
+const blockingOf = (r) => (r.blocking === undefined ? Number(r.issues) || 0 : Number(r.blocking) || 0);
+function passed(dir, point) { const r = record(dir, point); return r.status === 'completed' && blockingOf(r) === 0 && r.fingerprint === fingerprint(dir, point) && require('./review-runner').inputsCurrent(r.materialInputs); }
 function settled(dir, point) { const r = record(dir, point); return passed(dir, point) || r.status === 'resolved' && r.resolvedFingerprint === fingerprint(dir, point) && require('./review-runner').inputsCurrent(r.materialInputs); }
 const modeOfPoint = (p) => (['proposal', 'specs', 'design', 'tasks'].includes(p) ? 'proposal' : 'code');
 /**
  * 到了自动审查轮数上限、还没通过的点（问题表第 26 条，2026-10-31）：不再自动审，也不挡提交、不挡往下一组走；收工报告里写着没通过。
- * 用户自己说审，照样能审
+ * 用户自己说审，照样能审。
+ * 连续两轮 P1、P2 没减少（stalled，问题表第 37 条）也一样：再审多半还是这样，不用等到 20 轮
  */
-function exhausted(dir, point, cfg) { const r = record(dir, point); return r.status !== 'running' && (r.rounds || 0) >= limit(cfg || S.readConfig(), modeOfPoint(point)) && !settled(dir, point); }
+function exhausted(dir, point, cfg) { const r = record(dir, point); return r.status !== 'running' && ((r.rounds || 0) >= limit(cfg || S.readConfig(), modeOfPoint(point)) || !!r.stalled) && !settled(dir, point); }
 function pending(dir, mode) { return points(dir, mode).find(p => !settled(dir, p) && !exhausted(dir, p)) || ''; }
 /**
  * 这个点的审查"没收尾"：审出了问题、还没处理完（没到上限）。提交等它收尾（审查过程不进提交）。
@@ -85,23 +89,30 @@ function pending(dir, mode) { return points(dir, mode).find(p => !settled(dir, p
 // 会话开着自动时，"修了、还没复审"（needs_review）也算没收尾：自动会接着复审，等它审完一起提交（复审 V6）。人工模式不算：用户不让复审时会一直提交不了（第 25 条）
 function fixPending(dir, point, cfg) {
   const r = record(dir, point);
-  const open = r.status === 'completed' && Number(r.issues) > 0 || r.status === 'needs_review' && !!(cfg && cfg.autoMode);
+  const open = r.status === 'completed' && blockingOf(r) > 0 || r.status === 'needs_review' && !!(cfg && cfg.autoMode);
   return open && !settled(dir, point) && !exhausted(dir, point, cfg);
 }
 function allPassed(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p)); }
+/** 每个点都有结果了：过了，或者到上限、不收敛停了（自动模式靠它往下走，没过的写进报告） */
+function allDone(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p) || exhausted(dir, p)); }
 function limit(cfg, mode) { return Math.min(20, Math.max(1, Number(mode === 'proposal' ? cfg.requirementsReviewMaxRounds : cfg.applyReviewMaxRounds) || 3)); }
 // 轮数只数"审出问题、修了再审"这一串：上一轮零问题通过了，这次重审从头数（不然全程零问题也会被复审耗光轮数，2026-10-17 审核问题 4）。
 // 问题处理完（resolved）不清零（问题表第 26 条，2026-10-31）：以前处理完就清零，"审出问题→修→再审→又有问题"永远到不了上限，一天能审 23 轮。
 // 到了上限的点不再挡提交、不挡往下走（exhausted），所以不清零也不会把提交永久拦下
-function concluded(r) { return r.status === 'completed' && r.issues === 0; }
+function concluded(r) { return r.status === 'completed' && blockingOf(r) === 0; }
 function begin(dir, point, id, inputHash) {
-  S.updateState('review-points', o => { const k = key(dir, point); const previous = live(dir, o[k]); const base = concluded(previous) ? 0 : previous.rounds || 0; o[k] = { rounds: base + 1, status: 'running', key: id, fingerprint: inputHash, born: S.changeBorn(dir), at: Date.now() }; });
+  S.updateState('review-points', o => { const k = key(dir, point); const previous = live(dir, o[k]); const base = concluded(previous) ? 0 : previous.rounds || 0; o[k] = { rounds: base + 1, status: 'running', key: id, fingerprint: inputHash, born: S.changeBorn(dir), at: Date.now(), trend: concluded(previous) ? [] : previous.trend || [] }; });
 }
 function noteResult(dir, point, result, inputHash) {
   S.updateState('review-points', o => {
     const k = key(dir, point); const previous = live(dir, o[k]);
     const rounds = previous.key === result.id && previous.status === 'running' ? previous.rounds || 1 : (concluded(previous) ? 0 : previous.rounds || 0) + 1;
-    o[k] = { rounds, status: result.status, issues: result.issues.length, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, born: S.changeBorn(dir), at: Date.now() };
+    // 每轮挡通过的问题有几条。连续两轮没减少就是不收敛：再审多半还是这样（问题表第 37 条）。没审成的轮不算
+    const block = Sc.blocking(result.issues);
+    const trend = (previous.trend || []).concat(result.status === 'completed' ? [block] : []).slice(-20);
+    const t = trend.length;
+    const stalled = result.status === 'completed' && block > 0 && t >= 3 && trend[t - 1] >= trend[t - 2] && trend[t - 2] >= trend[t - 3];
+    o[k] = { rounds, status: result.status, issues: result.issues.length, blocking: block, trend, stalled, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, born: S.changeBorn(dir), at: Date.now() };
   });
 }
 function qualify(j, assessment) {
@@ -187,9 +198,10 @@ function planNext(j, c) {
 function instruction(dir, point, cfg) {
   const mode = point.startsWith('group-') ? 'code' : 'proposal'; const rec = record(dir, point); const max = limit(cfg, mode);
   // 最后一轮没审成（网关断、超时、只审了一部分）：照实说没审过，不说成"没通过"（复审 V7：以前连着失败到上限也按"问题没解决"往下走）
+  if (rec.stalled) return '当前审查点 ' + point + ' 连续两轮 P1、P2 没减少（' + (rec.trend || []).join('→') + '），不再自动审：停止自动循环并报告问题；用户主动要求仍可继续审查。';
   if ((rec.rounds || 0) >= max && rec.status && !['completed', 'needs_review', 'resolved'].includes(rec.status)) return '当前审查点 ' + point + ' 已经 ' + max + ' 轮，最后一轮没审成（' + rec.status + '）：这一组的代码可能根本没审过。停止自动循环，收工报告里写明"' + point + ' 没审成"，请用户决定要不要再审；用户主动要求仍可继续审查。';
   if ((rec.rounds || 0) >= max) return '当前审查点 ' + point + ' 已达到 ' + max + ' 轮上限且尚未通过，停止自动循环并报告问题；用户主动要求仍可继续审查。';
-  return selfTestFirst(dir, point, cfg) + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '。自动核验、修改、复验，最多 ' + max + ' 轮；当前已经 ' + (rec.rounds || 0) + ' 轮。需求变化先沟通并同步相关产物和用例。';
+  return selfTestFirst(dir, point, cfg) + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过，最多 ' + max + ' 轮；当前已经 ' + (rec.rounds || 0) + ' 轮。需求变化先沟通并同步相关产物和用例。';
 }
 /**
  * 自动模式按验收用例自测（用户 2026-10-17 定的）：用例写在 design.md 的"验收用例"一节，任务清单里不写测试任务。
@@ -324,7 +336,7 @@ function actionIssue(j) {
       const change = m && S.allChanges(j.cwd).find(c => c.name === m[1]);
       const mode = /--mode\s+proposal/.test(cmd) ? 'proposal' : 'code';
       if (change && !p) return '自动审查必须指定当前审查点 --point ' + (pending(change.dir, mode) || (mode === 'proposal' ? 'tasks' : 'group-1'));
-      if (change && p && (record(change.dir, p[1]).rounds || 0) >= limit(cfg, mode)) {
+      if (change && p && ((record(change.dir, p[1]).rounds || 0) >= limit(cfg, mode) || record(change.dir, p[1]).stalled)) {
         const permit = require('./permissions').allow(j, 'review', change.dir, j.tool_use_id);
         if (!permit.ok) return '该审查点已达到自动审查上限，停止自动循环并报告；用户主动要求可继续。' + permit.reason;
       }
@@ -448,4 +460,4 @@ function selfTestWords(words) {
   }
   return false;
 }
-module.exports = { groups, points, pointFiles, fingerprint, record, passed, settled, exhausted, fixPending, pending, allPassed, limit, begin, noteResult, qualify, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };
+module.exports = { groups, points, pointFiles, fingerprint, record, passed, settled, exhausted, fixPending, pending, allPassed, allDone, limit, begin, noteResult, qualify, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };

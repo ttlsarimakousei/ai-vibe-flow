@@ -312,7 +312,7 @@ function consentIssue(g, st, cfg, docs) {
   const S = require('../lib/session'); const P = require('../lib/flow-policy');
   const mode = S.commitModeOf(cfg);
   // 需求文档定稿：提交方式是"自动"才直接提交（需求自动生效时要四份都审过；人工时四份都写完，每份用户都看过）。询问、关都要用户点头（审核问题 2）
-  const planRoots = allChanges(st.cwd0).filter(c => flowChanges(j).includes(normKey(c.dir)) && P.points(c.dir, 'proposal').length === 4 && (!cfg.autoMode || P.allPassed(c.dir, 'proposal'))).map(c => normKey(c.dir) + '/');
+  const planRoots = allChanges(st.cwd0).filter(c => flowChanges(j).includes(normKey(c.dir)) && P.points(c.dir, 'proposal').length === 4 && (!cfg.autoMode || P.allDone(c.dir, 'proposal'))).map(c => normKey(c.dir) + '/');
   const automaticPlan = mode === 'auto' && fl.stage === 'plan' && files.length && files.every(f => planRoots.some(d => normKey(path.resolve(repoRoot(g.dir) || g.dir, f)).startsWith(d)));
   if (automaticPlan) return '';
   if (!approved && proposalCommit && fl.stage !== 'apply') return '[vibe-kit] 提案提交要单独确认：先交代定稿内容，问用户是否提交；开工许可不能代替提交许可。';

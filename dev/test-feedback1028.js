@@ -120,7 +120,8 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
       H.ok('结果里有每批用时', Array.isArray(r.batchTimes) && r.batchTimes.length === 1, r.batchTimes);
 
       mode = 'issue';
-      const r2 = await R.run({ cwd: p, mode: 'code', base });
+      // 文件没变，默认不发请求（第 37 条）：这里要整份再审一遍
+      const r2 = await R.run({ cwd: p, mode: 'code', base, full: true });
       H.ok('不带变更的审查报了一条', r2.status === 'completed' && r2.issues.length === 1, r2);
       const dec = path.join(h.root, 'decisions.json');
       H.write(dec, JSON.stringify({ findings: [{ id: 'r1', action: 'accepted', reason: '用户说这条不改：常量改动在提交信息里说明了' }] }));

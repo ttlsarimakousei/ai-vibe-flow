@@ -455,6 +455,8 @@ function revisionTodo(j, calls, isEdit, fileOf, turnId) {
     maxStage = Math.max(maxStage, stage);
   }
   if (!recorded) for (const r of revised.values()) { const f = path.join(r.art.dir, 'revisions.md'); const h = artifactHash(f); if (h && h !== files[normKey(f)]) { recorded = true; break; } }
+  // 还没开工、这个会话在审这个变更：按审查意见改文档，过程脚本记在 审查记录.md 里，不用再写 revisions（问题表第 37 条：以前每轮都要补记、在文档里写批注，文档越来越乱）
+  for (const [k, r] of revised) { if (!changeStarted(r.art.dir) && calls.some((c) => /^(Bash|PowerShell)$/.test(c.name) && /review\.js["']?\s+(?:run|resolve)\b/.test(String(c.input.command || '')) && String(c.input.command || '').includes(r.art.name))) revised.delete(k); }
   if (!revised.size || recorded) {
     if (dirs.size) {
       for (const d of dirs.values()) for (const f of artifactFiles(d)) files[normKey(f)] = artifactHash(f);
@@ -856,7 +858,7 @@ async function handle(j) {
   }
   if (cfg.autoMode && flowState(j).stage === 'plan') {
     for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {
-      if (policy.points(c.dir, 'proposal').length === 4 && policy.allPassed(c.dir, 'proposal')) { const msg = policy.planNext(j, c); if (msg) todo.push(msg); }
+      if (policy.points(c.dir, 'proposal').length === 4 && policy.allDone(c.dir, 'proposal')) { const msg = policy.planNext(j, c); if (msg) todo.push(msg); }
     }
   }
   // 提交：这一轮自己改成功的文件（.vibe、.claude 里的不算）在 git 里还是没提交的状态。每一轮只提一次。

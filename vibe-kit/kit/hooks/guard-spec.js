@@ -182,7 +182,8 @@ function handle(j, opts) {
     const earlier = policy.points(art.dir, 'proposal').filter(p => order.indexOf(p) < order.indexOf(point));
     if (cfg.autoMode) {
       // 自动：上一份审修过再写下一份
-      const prior = earlier.find(p => !policy.settled(art.dir, p));
+      // 到上限、不收敛停了的点不再挡：报告里写着没过，接着往下（第 26 条、第 37 条）
+      const prior = earlier.find(p => !policy.settled(art.dir, p) && !policy.exhausted(art.dir, p, cfg));
       if (prior) flow.push(policy.instruction(art.dir, prior, cfg) + '，完成后再生成下一产物。');
     } else if (earlier.length) {
       // 人工：上一份写完要停下给用户看。上一份最后一次写入之后用户说过话（"写下一份""审一下"之后的回复）才写下一份

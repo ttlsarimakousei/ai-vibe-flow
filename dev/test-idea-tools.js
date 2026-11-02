@@ -35,7 +35,7 @@ for (const [name, input] of [
 for (const [name, input] of [['build_project', { filesToRebuild: ['a.js'] }], ['lint_files', { files: ['a.js'] }], ['get_file_problems', { filePath: 'a.js' }], ['execute_tool', { command: 'build_project' }]]) H.ok('快检人工模式直接跑：' + name + (input.command ? ' ' + input.command : ''), call(name, input) === null);
 // 运行配置会起程序或跑测试，算自测：人工模式先 Ask（2026-10-14 用户定的），用户明确要求后照常通过；execute_tool 转发也一样。
 const selfTests = [['execute_run_configuration', { configurationName: 'app' }], ['execute_tool', { command: 'execute_run_configuration --configurationName "app"' }]];
-for (const [name, input] of selfTests) H.ok('人工模式自测先 Ask：' + name + (input.command ? ' ' + input.command : ''), denied(call(name, input)) && /人工模式/.test(H.reasonOf(call(name, input))));
+for (const [name, input] of selfTests) H.ok('人工模式自测先 Ask：' + name + (input.command ? ' ' + input.command : ''), denied(call(name, input)) && /用户这一轮没说要/.test(H.reasonOf(call(name, input))));
 H.transcript(transcript, [H.tr.user('运行测试')]);
 for (const [name, input] of selfTests) H.ok('明确要求自测后通过：' + name + (input.command ? ' ' + input.command : ''), call(name, input) === null);
 H.transcript(transcript, [H.tr.user('改代码')]);
@@ -82,7 +82,7 @@ for (const [label, name, input] of [
   ['路由里参数写了两遍', 'execute_tool', { command: 'read_file --file_path "a.js" --file_path "b.js"' }],
 ]) { const r = call(name, input); H.ok('不再拦：' + label, !denied(r), H.reasonOf(r)); }
 // 运行参数覆盖不再拦；跑运行配置照旧算自测：人工模式先问，用户说了自测就跑
-H.ok('运行参数覆盖：照自测先问（不是因为参数）', /人工模式/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))) && !/运行参数覆盖/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))));
+H.ok('运行参数覆盖：照自测先问（不是因为参数）', /用户这一轮没说要/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))) && !/运行参数覆盖/.test(H.reasonOf(call('execute_run_configuration', { configurationName: 'app', programArguments: '-e echo' }))));
 H.ok('IDEA 终端的 push 也先检查预览', denied(call('execute_terminal_command', { command: 'git push' })));
 H.transcript(transcript, [H.tr.user('推送')]);
 H.ok('当场说 push、仓库没有远端（目标对不上）：IDEA 终端里也不直接放，要确认', call('execute_tool', { command: 'execute_terminal_command --command "git push"' }) !== null);

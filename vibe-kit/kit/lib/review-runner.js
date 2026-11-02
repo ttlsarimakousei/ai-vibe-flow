@@ -8,6 +8,7 @@ const S = require('./session');
 const W = require('./workspace');
 const R = require('./redact');
 const store = require('./state-store');
+const Sc = require('./review-scope');
 const secretFile = (f) => /(^|[\\/])(secrets\.json|router-data|\.env(?:\.[^/]*)?|db-crud\.ini|redis\.json|login\.json)([\\/]|$)/i.test(f);
 function alive(pid) { try { process.kill(Number(pid), 0); return true; } catch (e) { return false; } }
 function changeOf(cwd, name) { return name ? S.allChanges(cwd).find((c) => c.name.toLowerCase() === String(name).toLowerCase()) : null; }
@@ -47,8 +48,9 @@ function proposalReferences(rows) {
   return { references, required, contextOnly: [...context].filter(ref => !references.has(ref)) };
 }
 function materials(opts, change) {
-  const items = [], skipped = [], excluded = [], files = new Set(), inputs = new Map(); let contextOnly = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
-  const add = (file, text, root, source) => {
+  const items = [], skipped = [], excluded = [], files = new Set(), inputs = new Map(), currents = new Map(); let contextOnly = []; const cfg = S.readConfig(); const maxFiles = Math.min(60, Math.max(1, Number(cfg.reviewMaxFiles) || 20));
+  // current：这个文件现在的内容，下一轮拿来比改了什么（代码的 text 还带着基线差异）；role：只用来核对、不审它本身的材料
+  const add = (file, text, root, source, role, current) => {
     if (files.has(file)) return;
     if (files.size >= maxFiles) { skipped.push({ file, reason: '超过本轮文件上限；在配置页提高审查文件上限（最多 60），或明确拆成独立变更后审查' }); return; }
     files.add(file);
@@ -60,7 +62,8 @@ function materials(opts, change) {
       line += (row.match(/\n/g) || []).length;
     }
     if (chunk || !chunks.length) chunks.push({ text: chunk, startLine: start });
-    chunks.forEach((c, i) => items.push({ file, root, source: source || path.resolve(root, file), text: c.text, startLine: c.startLine, part: i + 1, parts: chunks.length }));
+    chunks.forEach((c, i) => items.push(Object.assign({ file, root, source: source || path.resolve(root, file), text: c.text, startLine: c.startLine, part: i + 1, parts: chunks.length }, role ? { role } : {})));
+    currents.set(file, { text: R.material(current === undefined ? text : current), root, source: source || path.resolve(root, file), role });
   };
   const load = (file, root, label, allowMissing) => {
     const skip = (reason) => { skipped.push({ file: label, reason }); return null; };
@@ -85,7 +88,9 @@ function materials(opts, change) {
   if (opts.mode === 'proposal') {
     if (!change) throw new Error('提案审查需要有效变更名');
     const rows = artifacts().filter(r => !opts.point || require('./flow-policy').pointFiles(change.dir, opts.point).some(f => S.normKey(f) === S.normKey(path.resolve(change.dir, r.file))));
-    for (const row of rows) add(row.file, row.text, change.dir);
+    // 后面的点只审新写的文档，前面的只用来核对是否对齐（问题表第 37 条）
+    const upstream = (f) => ['proposal', 'specs', 'design', 'tasks'].includes(opts.point) && !(opts.point === 'specs' ? /^specs[\\/]/.test(f) : f === opts.point + '.md');
+    for (const row of rows) add(row.file, row.text, change.dir, undefined, upstream(row.file) ? '上游文档' : undefined);
     const art = { dir: change.dir, name: change.name, root: W.rootOf(change.dir) };
     const issues = rows.flatMap((r) => r.file === 'revisions.md' ? [] : require('./proposal-files').issuesIn(r.text, art));
     if (issues.length) throw new Error('提案材料交付检查未通过：' + issues.join('；'));
@@ -96,7 +101,7 @@ function materials(opts, change) {
         const f = path.resolve(/^(?:assets|references)\//.test(local) ? change.dir : art.root, local);
         const label = path.relative(change.dir, f).replace(/\\/g, '/');
         if (S.artifactOf(f) && !/^(?:assets|references)\//.test(label)) continue;
-        const loaded = load(f, change.dir, label); if (loaded) add(label, loaded.text, change.dir, f);
+        const loaded = load(f, change.dir, label); if (loaded) add(label, loaded.text, change.dir, f, '参考材料');
         continue;
       }
       let found = false;
@@ -106,7 +111,7 @@ function materials(opts, change) {
         found = true;
         if (!refs.required.has(ref) && fs.lstatSync(f).isDirectory() && S.underDir(S.realish(f), S.realish(root))) break; // 普通目录引用只是范围说明。
         const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const loaded = load(f, root, label);
-        if (loaded) add(label, loaded.text, root, f);
+        if (loaded) add(label, loaded.text, root, f, '参考材料');
         break;
       }
       if (!found && refs.required.has(ref)) skipped.push({ file: ref, reason: '明确指定的审查材料不存在或不在项目范围内；核对路径后再审' });
@@ -155,17 +160,17 @@ function materials(opts, change) {
         let text = diff ? '基线差异：\n' + diff + '\n当前文件：\n' + current.text : current.missing ? '文件已删除' : current.text;
         const oldDirty = saved && saved.repos.find((r) => S.normKey(r.root) === S.normKey(root));
         if (oldDirty && (oldDirty.dirtyFiles || []).includes(file)) text = '说明：该文件在开工前已有改动，不能全部认作本次助手改动。\n' + text;
-        add(label, text, root, f);
+        add(label, text, root, f, undefined, current.missing ? '' : current.text);
       }
     }
     // 不带等号的 --base 一个仓库都不认得：是写错了，不当成缺基线
     for (const b of bare) if (!used.has(b)) throw new Error('审查基线 ' + b + ' 不是本地提交（这几个仓库里都没有）；几个仓库各写各的：' + hint);
-    if (change) for (const row of artifacts().filter((r) => !/revisions\.md$/.test(r.file))) add(row.file, row.text, change.dir);
+    if (change) for (const row of artifacts().filter((r) => !/revisions\.md$/.test(r.file))) add(row.file, row.text, change.dir, undefined, '需求文档');
   }
   const batches = []; let batch = [], size = 0;
   for (const item of items) { if (size + item.text.length > 80000 && batch.length) { batches.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
   if (batch.length) batches.push(batch);
-  return { items, skipped, excluded, batches, contextOnly, inputs: [...inputs.values()] };
+  return { items, skipped, excluded, batches, contextOnly, inputs: [...inputs.values()], currents };
 }
 /** 随提案交付的补充材料变化后结论失效；实施源码的变化留给代码审查，不重开需求审查。 */
 function inputsCurrent(inputs) {
@@ -230,10 +235,26 @@ function parseReply(text, material) {
   }
   return { issues: R.tree(issues), skipped, summary: R.clip(result.summary || '', 1500), meta };
 }
-function ask(url, material, mode, ms, cancelled, received, maxTokens, concise) {
+/** 这一轮的要求：阶段、角度、是不是复审。round 没给（老的调用）就是最普通的一次审 */
+function promptOf(round, mode) {
+  const r = round || {};
+  return Sc.SEVERITY_NOTE + (r.stage || Sc.stageText(mode)) + Sc.ROLE_NOTE + (r.scoped ? Sc.RECHECK : '') + (r.lens ? r.lens.text : '');
+}
+/** 送给模型的内容：复审带上上一轮的问题；第一轮带上上游留给这一步的要点 */
+function contentOf(round, mode, material) {
+  const r = round || {};
+  const names = new Set(material.map((m) => String(m.file)));
+  const before = [];
+  if (r.scoped) {
+    before.push('上一轮的问题：\n' + JSON.stringify((r.open || []).filter((x) => names.has(String(x.file)))));
+    if ((r.closed || []).length) before.push('已处理：\n' + JSON.stringify(r.closed));
+  } else if ((r.carry || []).length) before.push('上游审查留给这一步的要点，这一步要覆盖到，没覆盖到的报 P2：\n' + JSON.stringify(r.carry));
+  return '模式：' + mode + (r.scoped ? '（复审）' : '') + '\n' + (before.length ? before.join('\n') + '\n' : '') + (r.scoped ? '本批材料（只有改过的地方）：\n' : '本批材料：\n') + JSON.stringify(material);
+}
+function ask(url, material, mode, ms, cancelled, received, maxTokens, concise, round) {
   return new Promise((resolve, reject) => {
     // model 只给本机路由分角色用（审查走 sonnet 那个角色），路由转发给网关时去掉（2026-10-28）
-    const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: maxTokens || OUTPUT_TOKENS, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议","kind":"想当然|没做到规格|边界|连带影响|项目约定|假验证|前端交互|权限|数据库|提案没说清|其他","avoid":"换个任务还会犯的写一句以后怎么避免，一次性的疏忽写 无"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。' + (concise ? CONCISE : ''), messages: [{ role: 'user', content: '模式：' + mode + '\n本批材料：\n' + JSON.stringify(material) }] });
+    const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: maxTokens || OUTPUT_TOKENS, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。' + promptOf(round, mode) + '返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议","kind":"想当然|没做到规格|边界|连带影响|项目约定|假验证|前端交互|权限|数据库|提案没说清|其他","avoid":"换个任务还会犯的写一句以后怎么避免，一次性的疏忽写 无"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。' + (concise ? CONCISE : ''), messages: [{ role: 'user', content: contentOf(round, mode, material) }] });
     // 每批都新开连接（agent: false）：Node 默认复用空闲连接，路由那头空闲几秒就关了它，或者两批之间路由重启过，
     // 复用到断掉的连接就报 ECONNRESET，这一批白白算失败（2026-10-16 机器忙时测试里遇到）。本机连接，新开几乎不花时间
     const req = http.request(url, { method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
@@ -275,13 +296,13 @@ function waive(opts) {
   return { status: 'dismissed' };
 }
 /** 一批审查：16000 → 只回思考就 32000 + 少想 → 还不行拆两半。返回 { done: [成功的片段], failed: [{ items, error }], issues, skipped, stat } */
-async function reviewBatch(batch, no, opts, cancelled, received, progress) {
+async function reviewBatch(batch, no, opts, cancelled, received, progress, round) {
   const stat = { batch: no, files: new Set(batch.map((x) => x.file)).size, parts: batch.length, chars: batch.reduce((n, x) => n + x.text.length, 0), attempts: [], ms: 0 };
   const t0 = Date.now();
   const attempt = async (items, tokens, concise, label) => {
     const a0 = Date.now();
     try {
-      const r = await ask(routerUrl(), items, opts.mode, HANG_MS, cancelled, received, tokens, concise);
+      const r = await ask(routerUrl(), items, opts.mode, HANG_MS, cancelled, received, tokens, concise, round);
       stat.attempts.push({ label, tokens, ms: Date.now() - a0, ok: true, outputTokens: r.meta.outputTokens, stopReason: r.meta.stopReason, model: r.meta.model });
       return { r };
     } catch (e) {
@@ -323,11 +344,29 @@ async function reviewBatch(batch, no, opts, cancelled, received, progress) {
     for (const part of [batch.slice(0, half), batch.slice(half)]) take(part, await once(part, RETRY_TOKENS, true, '拆半批'));
   } else take(batch, x);
   stat.ms = Date.now() - t0;
+  stat.retried = stat.attempts.length > 1;
   return out;
+}
+/**
+ * 第一轮几个角度同时审同一批（问题表第 37 条）：并发的独立请求，不是子代理。结果合起来，同一件事只留一条。
+ * 哪个片段至少有一个角度审成了就算覆盖；一个角度都没审成才算这一批失败
+ */
+async function reviewLenses(batch, no, opts, cancelled, received, progress, round) {
+  const lenses = round.lenses || [];
+  if (!lenses.length) return reviewBatch(batch, no, opts, cancelled, received, progress, round);
+  const outs = await Promise.all(lenses.map((lens) => reviewBatch(batch, no, opts, cancelled, received, progress, Object.assign({}, round, { lens }))));
+  const done = batch.filter((it) => outs.some((o) => o.done.includes(it)));
+  const failed = [];
+  for (const o of outs) for (const f of o.failed) { const items = f.items.filter((it) => !done.includes(it) && !failed.some((x) => x.items.includes(it))); if (items.length) failed.push({ items, error: f.error }); }
+  const seen = new Set();
+  const skipped = outs.flatMap((o) => o.skipped).filter((s) => { const k = s.file + '|' + s.reason; if (seen.has(k)) return false; seen.add(k); return true; });
+  const stat = { batch: no, files: outs[0].stat.files, parts: outs[0].stat.parts, chars: outs[0].stat.chars, ms: Math.max(...outs.map((o) => o.stat.ms)), retried: outs.some((o) => o.stat.retried), attempts: outs.flatMap((o, i) => o.stat.attempts.map((a) => Object.assign({}, a, { label: lenses[i].name + '：' + a.label }))) };
+  const lost = lenses.filter((l, i) => !outs[i].done.length).map((l) => l.name);
+  return { done, failed, issues: Sc.mergeIssues(outs.flatMap((o) => o.issues)), skipped, diagnostics: outs.flatMap((o) => o.diagnostics), stat, lost };
 }
 /** 每批的结果记进本机诊断（K1-8）：拿到结论、重试后才拿到、没拿到 */
 function noteBatches(stats) {
-  try { const D = require('./diag'); for (const b of stats) { if (!b.attempts.length) continue; D.note('审查批次', !b.attempts.some((a) => a.ok) ? '没拿到结论' : b.attempts.length > 1 ? '重试后拿到' : '拿到结论', b.ms); } } catch (e) { /* 老版本没有 */ }
+  try { const D = require('./diag'); for (const b of stats) { if (!b.attempts.length) continue; D.note('审查批次', !b.attempts.some((a) => a.ok) ? '没拿到结论' : b.retried ? '重试后拿到' : '拿到结论', b.ms); } } catch (e) { /* 老版本没有 */ }
 }
 /**
  * 审完对着配置页的"审查预期用时"看：超了，或者碰到了输出上限、有批次失败，就记一条问题反馈（用户 2026-10-28 定的，问题反馈表第 6、7 条），
@@ -344,7 +383,7 @@ function reportReview(result, opts, expectMs, stats) {
     const model = (stats.flatMap((b) => b.attempts).find((a) => a.model) || {}).model || '';
     const why = [];
     if (limited) why.push('模型把输出上限用在了思考上（' + stats.reduce((n, b) => n + b.attempts.filter((a) => a.stage === 'model-empty').length, 0) + ' 次只回思考），重试、拆半批都要多等');
-    if (stats.some((b) => b.attempts.length > 1)) why.push('重试了 ' + stats.filter((b) => b.attempts.length > 1).length + ' 批');
+    if (stats.some((b) => b.retried)) why.push('重试了 ' + stats.filter((b) => b.retried).length + ' 批');
     if (failedBatches.length) why.push(failedBatches.length + ' 批最后也没拿到结论：' + [...new Set(failedBatches.flatMap((b) => b.attempts.map((a) => a.stage || a.error)).filter(Boolean))].slice(0, 3).join('、'));
     if (over && !why.length) why.push('材料多（' + stats.length + ' 批、' + Math.round(stats.reduce((n, b) => n + b.chars, 0) / 1000) + ' 千字），或者模型回得慢（最慢一批 ' + sec(slow[0] ? slow[0].ms : 0) + ' 秒）');
     const lines = ['审查模式 ' + opts.mode + (opts.point ? '，审查点 ' + opts.point : '') + (opts.change ? '' : '（不走 OpenSpec）') + '，模型 ' + (model || '（回复里没写）'),
@@ -357,6 +396,16 @@ function reportReview(result, opts, expectMs, stats) {
     const sig = require('./feedback').sigOf(['review-report', opts.mode, over ? 'over' : '', limited ? 'limited' : '', failedBatches.length ? 'failed' : '', model]);
     return require('./feedback').record({ kind, hook: 'review.js', source: '审查自动记录', title, what: lines.join('\n'), why: '审查做完对着配置页的预期用时自动核对（用户 2026-10-28 定的：不截断审查，超了分析用时和原因上报，用来优化审查）。', cwd: opts.cwd, sig, note: lines[1] + '；' + lines[4] });
   } catch (e) { return null; } // 记不了不影响审查结果
+}
+/** 审完下一步怎么办，写在结果里（模型照着做，不用翻规范） */
+function nextStep(result, rec) {
+  if (!['completed', 'partial'].includes(result.status)) return '';
+  if (rec && rec.stalled) return '连续两轮 P1、P2 没减少（' + rec.trend.join('→') + '），不再自动审这个点：把没解决的写进收工报告，接着往下做。人工模式问用户怎么办。';
+  if (result.status === 'partial') return '有材料没审到，不算审完：看 skipped 里的原因，处理完再审一次。';
+  if (result.noChange) return '文件和上一轮审过的一样，这次没有发请求' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
+  if (!result.issues.length) return '没有问题，这个点过了。';
+  if (!result.blocking) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
+  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；实现细节归后面文档的标 deferred，不要现在写进这份文档。写好处理明细跑 review.js resolve，再跑一次 review.js run：下一轮只审改过的地方。';
 }
 async function run(opts, progress) {
   opts = Object.assign({ cwd: process.cwd(), mode: 'code' }, opts); opts.cwd = path.resolve(opts.cwd);
@@ -377,30 +426,47 @@ async function run(opts, progress) {
   const cancelled = () => { const job = S.readState('review-jobs')[key]; return !job || job.id !== id || job.status !== 'running'; };
   let result = { id, mode: opts.mode, status: 'failed', issues: [], covered: [], skipped: [], attemptedBatches: 0, receivedBatches: 0, completedBatches: 0, attemptedFiles: [], diagnostics: [], expectSeconds: expectMs / 1000 };
   const stats = [];
+  const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + (opts.point ? '-' + opts.point : '') + '.json');
+  const born = change ? S.changeBorn(change.dir) : 0;
+  let material = null; let plan = { scoped: false }; let prior = null; let roundNo = 1;
   try {
-    const material = materials(opts, change); result.skipped = material.skipped; result.excluded = material.excluded; result.contextOnly = material.contextOnly; result.materialInputs = material.inputs;
+    material = materials(opts, change); result.skipped = material.skipped; result.excluded = material.excluded; result.contextOnly = material.contextOnly; result.materialInputs = material.inputs;
     if (!material.batches.length) throw new Error('没有可审查材料或开工基线缺失');
-    const left = new Map(); for (const item of material.items) left.set(item.file, (left.get(item.file) || 0) + 1);
-    result.totalBatches = material.batches.length;
+    // 第一轮全量，后面只审修改点（问题表第 37 条）。--full 要整份再审一遍
+    prior = opts.full ? null : Sc.readPrior(file, born, opts.base);
+    plan = Sc.planRound(material, prior);
+    const prevRound = Sc.readPrior(file, born, opts.base);
+    roundNo = change && opts.point ? policy.record(change.dir, opts.point).rounds || 1 : (prevRound ? prevRound.round + 1 : 1);
+    const reviewItems = plan.scoped ? plan.items : material.items;
+    const reviewBatches = plan.scoped ? plan.batches : material.batches;
+    const lenses = plan.scoped ? [] : Sc.lensesFor(opts.mode, reviewBatches.length, cfg);
+    const round = { scoped: plan.scoped, open: plan.open, closed: plan.closed, stage: Sc.stageText(opts.mode, opts.point), lenses, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : [] };
+    if (plan.scoped && !plan.items.length) result.noChange = true;
+    result.scope = plan.scoped ? 'changes' : 'full'; result.round = roundNo; result.lenses = lenses.length || 1; if (plan.why) result.scopeWhy = plan.why; if (plan.scoped) result.changedFiles = plan.changed;
+    const left = new Map(); for (const item of reviewItems) left.set(item.file, (left.get(item.file) || 0) + 1);
+    result.totalBatches = reviewBatches.length;
     result.batching = '每片最多 40000 字符，每批最多 80000 字符；文件上限限制候选材料，批数不消耗额外审查轮数';
-    for (let i = 0; i < material.batches.length; i++) {
-      if (cancelled()) { for (const pending of material.batches.slice(i)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：审查已取消' }); throw new Error('审查已取消'); }
-      const batch = material.batches[i]; result.attemptedBatches++; result.attemptedFiles = [...new Set(result.attemptedFiles.concat(batch.map((x) => x.file)))];
+    for (let i = 0; i < reviewBatches.length; i++) {
+      if (cancelled()) { for (const pending of reviewBatches.slice(i)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：审查已取消' }); throw new Error('审查已取消'); }
+      const batch = reviewBatches[i]; result.attemptedBatches++; result.attemptedFiles = [...new Set(result.attemptedFiles.concat(batch.map((x) => x.file)))];
       S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], { attemptedBatches: result.attemptedBatches, attemptedFiles: result.attemptedFiles, totalBatches: result.totalBatches }); });
-      if (progress) progress('审查 ' + (i + 1) + '/' + material.batches.length + ' 批，本批 ' + new Set(batch.map((x) => x.file)).size + ' 个文件/' + batch.length + ' 个片段，已尝试 ' + result.attemptedFiles.length + ' 个文件，已覆盖 ' + result.covered.length + ' 个文件，已用 ' + Math.round((Date.now() - started) / 1000) + ' 秒（预期 ' + expectMs / 1000 + ' 秒）');
+      if (progress) progress((plan.scoped ? '复审（只审修改点）' : lenses.length ? lenses.length + ' 个角度同时审' : '审查') + ' ' + (i + 1) + '/' + reviewBatches.length + ' 批，本批 ' + new Set(batch.map((x) => x.file)).size + ' 个文件/' + batch.length + ' 个片段，已尝试 ' + result.attemptedFiles.length + ' 个文件，已覆盖 ' + result.covered.length + ' 个文件，已用 ' + Math.round((Date.now() - started) / 1000) + ' 秒（预期 ' + expectMs / 1000 + ' 秒）');
       // 一批里重试、拆半批会收到好几次回复：只算这一批收到过（"已收到"数的是批，和"已尝试""总批数"对得上）
       let got = false;
-      const out = await reviewBatch(batch, i + 1, opts, cancelled, () => { if (!got) { got = true; result.receivedBatches++; } }, progress);
+      const out = await reviewLenses(batch, i + 1, opts, cancelled, () => { if (!got) { got = true; result.receivedBatches++; } }, progress, round);
+      if (out.lost && out.lost.length) result.lostLenses = [...new Set((result.lostLenses || []).concat(out.lost))];
       stats.push(out.stat); result.diagnostics.push(...out.diagnostics);
-      if (out.stat.attempts.length > 1) result.retriedBatches = (result.retriedBatches || 0) + 1;
+      if (out.stat.retried) result.retriedBatches = (result.retriedBatches || 0) + 1;
       result.issues.push(...out.issues); result.skipped.push(...out.skipped);
       for (const f of out.failed) for (const item of f.items) result.skipped.push({ file: item.file, part: item.part, reason: '本批失败：' + R.clip(f.error.message, 300) });
       if (!out.failed.length) result.completedBatches++;
       for (const item of out.done) { left.set(item.file, left.get(item.file) - 1); if (!left.get(item.file)) result.covered.push(item.file); }
       S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id && o[key].status === 'running') { o[key].completedBatches = result.completedBatches; o[key].covered = result.covered.length; } });
-      if (cancelled()) { for (const pending of material.batches.slice(i + 1)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：审查已取消' }); throw new Error('审查已取消'); }
+      if (cancelled()) { for (const pending of reviewBatches.slice(i + 1)) for (const item of pending) result.skipped.push({ file: item.file, part: item.part, reason: '未尝试：审查已取消' }); throw new Error('审查已取消'); }
     }
     if (cancelled()) throw new Error('审查已取消或结果已迟到');
+    // 只审修改点时：没改过的文件上一轮审过了，算覆盖；没处理、文件也没改的问题照旧算没解决
+    if (plan.scoped) { result.covered = [...new Set(plan.kept.concat(result.covered))]; result.issues = Sc.mergeIssues(result.issues.concat(plan.carried)); }
     if ((opts.point ? policy.fingerprint(change.dir, opts.point) !== pointHash : W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all').hash !== before.hash) || !inputsCurrent(result.materialInputs)) { result.status = 'stale'; result.reason = '审查期间输入变更，本轮结果不能批准新版'; }
     else if (result.skipped.length) { result.status = result.completedBatches || result.covered.length ? 'partial' : 'failed'; result.reason = '还有失败或未覆盖材料，不能记为完整审查'; }
     else result.status = 'completed';
@@ -408,7 +474,8 @@ async function run(opts, progress) {
   // 没拿到正文的：说清是模型只输出了思考，给一句能照着做的话（以前只有"未收到审查者正文"，模型不知道下一步）
   const empty = result.diagnostics.filter((d) => d.stage === 'model-empty');
   if (empty.length && result.status !== 'completed') result.hint = '审查模型' + (empty[0].model ? '（' + empty[0].model + '）' : '') + (empty.some((d) => d.retry) ? '只输出了思考，到了输出上限（' + Math.max(...empty.map((d) => d.outputTokens || 0)) + ' token）还没写结论，加大上限、拆半批也没成' : '没给出正文') + '：缩小范围再审（按审查点 --point，或者少几个文件），或者在配置页把审查方式改成"原审查代理"、用兼容代理方式审。思考内容不是结论，不要从诊断片段里抽意见。已经自动记了一条问题反馈。';
-  result.issues = result.issues.map((x, i) => Object.assign({ id: 'r' + (i + 1) }, x));
+  result.issues = result.issues.map((x, i) => Object.assign({}, x, { id: 'r' + (i + 1) }));
+  result.blocking = Sc.blocking(result.issues);
   result.fingerprint = before.hash; result.spentMs = Date.now() - started; result.at = Date.now();
   result.batchTimes = stats.map((b) => ({ batch: b.batch, seconds: Math.round(b.ms / 1000), attempts: b.attempts.length }));
   let valid = false;
@@ -416,7 +483,6 @@ async function run(opts, progress) {
   if (!valid) { result.status = 'cancelled'; result.reason = '迟到结果已忽略'; return result; }
   noteBatches(stats);
   if (result.status !== 'cancelled') { const fb = reportReview(result, opts, expectMs, stats); if (fb && fb.id) result.reported = fb.id; }
-  const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + (opts.point ? '-' + opts.point : '') + '.json');
   try { if (!store.atomicWrite(file, result)) throw new Error('结果写入失败'); result.file = file; }
   catch (e) { result.status = 'failed'; result.reason = '审查结果未能保存，不能登记为完成'; S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], result); }); }
   try {
@@ -426,8 +492,18 @@ async function run(opts, progress) {
     if (result.status !== 'cancelled') { U.bump('review.' + (opts.mode === 'proposal' ? 'proposal' : 'code')); if (result.status === 'completed' && !result.issues.length) U.bump('review.clean'); }
   } catch (e) { /* 计数失败不改变结论 */ }
   if (change && opts.point) policy.noteResult(change.dir, opts.point, result, pointHash);
+  // 这一轮审成了才留作下一轮的比较对象；失败、取消、审查期间文件变了不动上一轮
+  if (material && ['completed', 'partial'].includes(result.status)) {
+    const covered = new Set(result.covered); const files = {};
+    for (const [f, cur] of material.currents) if (covered.has(f)) files[f] = cur.text;
+    try { Sc.writeSnapshot(store, file, { born, base: opts.base, round: roundNo, files, issues: result.issues, covered: result.covered }); } catch (e) { /* 存不了，下一轮按第一轮审 */ }
+  }
+  const model = (stats.flatMap((b) => b.attempts).find((a) => a.model) || {}).model || '';
+  const log = Sc.logRound(folder, { round: roundNo, point: opts.point, mode: opts.mode, at: result.at, scoped: plan.scoped, changed: plan.changed, lenses: result.lenses, why: plan.why, status: result.status, reason: result.reason, issues: result.issues, spentMs: result.spentMs, model });
+  if (log) result.log = log;
+  result.next = nextStep(result, change && opts.point ? policy.record(change.dir, opts.point) : null);
   if (change && result.status === 'completed' && (!opts.point || policy.allPassed(change.dir, opts.mode))) {
-    S.recordReview(opts.mode, change.dir, result.issues.length, id, Date.now(), true);
+    S.recordReview(opts.mode, change.dir, result.blocking, id, Date.now(), true);
     S.updateState(opts.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (opts.mode === 'code') r.fingerprint = before.hash; else { r.proposalHash = require('./apply-scope').planHash(change.dir); r.materialInputs = result.materialInputs; } r.reportFile = file; r.executor = 'direct'; r.covered = result.covered; } });
   }
   return result;
@@ -447,22 +523,29 @@ function resolve(opts) {
   const r = pointRec ? Object.assign({}, pointRec, { reportFile: pointRec.report }) : S.reviewRecord(kind, change.dir); if (!r || (!r.reportFile && r.executor !== 'agent')) throw new Error('没有可配对的完整审查报告');
   const report = r.reportFile ? JSON.parse(fs.readFileSync(r.reportFile, 'utf8')) : { id: r.key, fingerprint: r.fingerprint || W.fingerprint(opts.cwd, kind === 'proposal' ? 'all' : 'code').hash, issues: Array.from({ length: Number(r.issues) || 0 }, (_, i) => ({ id: 'r' + (i + 1) })) }; const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
-  for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected', 'accepted'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
+  // deferred：实现细节留给后面的文档，只有需求文档能用（问题表第 37 条）
+  const actions = kind === 'proposal' ? ['fixed', 'rejected', 'accepted', 'deferred'] : ['fixed', 'rejected', 'accepted'];
+  for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !actions.includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
   if (report.id !== r.key || !Array.isArray(report.issues)) throw new Error('审查报告不属于当前完整记录');
   if (decisions.findings.length !== report.issues.length || new Set(decisions.findings.map((x) => x.id)).size !== report.issues.length || decisions.findings.some((x) => !report.issues.some((i) => i.id === x.id))) throw new Error('处理记录必须恰好对应报告中的意见');
-  if (decisions.findings.some((x) => x.action === 'fixed') && !require('./evidence').commands(opts.cwd || process.cwd()).length) throw new Error('成立问题修复后还没有当前输入的成功复验证据');
+  // 改文档不用跑编译（窗口里见过：为了登记提案的修改先跑基线编译）；代码照旧要有复验证据
+  if (kind === 'code' && decisions.findings.some((x) => x.action === 'fixed') && !require('./evidence').commands(opts.cwd || process.cwd()).length) throw new Error('成立问题修复后还没有当前输入的成功复验证据');
+  // 只有 P1、P2 修了才要复审；P3 顺手改了不再审（问题表第 37 条）
+  const refix = decisions.findings.some((x) => x.action === 'fixed' && !/^P3$/i.test(String((report.issues.find((i) => i.id === x.id) || {}).severity || '')));
+  const noted = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) }));
+  if (r.reportFile) { try { Sc.noteDecisions(store, r.reportFile, noted); Sc.logDecisions(path.dirname(r.reportFile), opts.point || kind, noted); } catch (e) { /* 记不了不影响登记 */ } }
   const fingerprint = W.fingerprint(opts.cwd || process.cwd(), opts.mode === 'proposal' ? 'all' : 'code').hash;
   if (!opts.point && !decisions.findings.some((x) => x.action === 'fixed') && fingerprint !== report.fingerprint) throw new Error('输入在审查后变化；仅驳回或零问题记录不能批准新版，需要补审');
   if (opts.point) {
     const changed = pointRec.fingerprint !== policy.fingerprint(change.dir, opts.point);
     const fixed = decisions.findings.some(x => x.action === 'fixed');
     if (!fixed && changed) throw new Error('当前审查点输入已变化，先重新审查');
-    S.updateState('review-points', o => { const rec = o[S.normKey(change.dir) + '|' + opts.point]; if (rec && rec.key === r.key) { rec.decisions = decisions.findings; rec.status = fixed ? 'needs_review' : 'resolved'; rec.resolvedFingerprint = policy.fingerprint(change.dir, opts.point); } });
-    return { status: fixed ? 'needs_review' : 'resolved', count: report.issues.length };
+    S.updateState('review-points', o => { const rec = o[S.normKey(change.dir) + '|' + opts.point]; if (rec && rec.key === r.key) { rec.decisions = decisions.findings; rec.status = refix ? 'needs_review' : 'resolved'; rec.resolvedFingerprint = policy.fingerprint(change.dir, opts.point); } });
+    return { status: refix ? 'needs_review' : 'resolved', count: report.issues.length };
   }
   // 有"修了"的：和带审查点的一样要复审改过的地方，不直接算解决（审核 P34：以前有一条修了就记成已解决）
-  const fixedAny = decisions.findings.some((x) => x.action === 'fixed');
-  S.updateState(kind === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const rec = o[S.normKey(change.dir)]; if (rec && rec.key === r.key) { rec.resolved = !fixedAny; rec.needsReview = fixedAny; rec.resolvedAt = Date.now(); if (fixedAny) delete rec.resolvedFingerprint; else rec.resolvedFingerprint = fingerprint; rec.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) })); } });
+  const fixedAny = refix;
+  S.updateState(kind === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const rec = o[S.normKey(change.dir)]; if (rec && rec.key === r.key) { rec.resolved = !fixedAny; rec.needsReview = fixedAny; rec.resolvedAt = Date.now(); if (fixedAny) delete rec.resolvedFingerprint; else rec.resolvedFingerprint = fingerprint; rec.decisions = noted; } });
   return fixedAny ? { status: 'needs_review', count: report.issues.length, next: '登记好了。有改过的地方，下一步是复审：再跑一次 review.js run（同样的 --change、--mode），审过了才算处理完；不用再登记一次。' } : { status: 'resolved', count: report.issues.length };
 }
 /**
@@ -483,6 +566,7 @@ function resolvePlain(opts) {
   if (fixed && !require('./evidence').commands(cwd).length) throw new Error('成立问题修复后还没有当前输入的成功复验证据');
   if (!fixed && W.fingerprint(cwd, 'code').hash !== report.fingerprint) throw new Error('输入在审查后变化；仅驳回或接受的记录不能批准新版，需要补审');
   report.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) }));
+  try { Sc.noteDecisions(store, file, report.decisions); Sc.logDecisions(path.dirname(file), 'code', report.decisions); } catch (e) { /* 记不了不影响登记 */ }
   report.resolvedAt = Date.now(); report.resolvedFingerprint = W.fingerprint(cwd, 'code').hash;
   if (!store.atomicWrite(file, report)) throw new Error('处理记录没能写进审查结果');
   return { status: 'resolved', count: report.decisions.length, file };

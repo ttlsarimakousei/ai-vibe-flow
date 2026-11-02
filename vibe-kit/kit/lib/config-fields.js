@@ -32,6 +32,7 @@ const FIELDS = [
   { name: 'autoRequirements', type: 'bool', def: false, internal: true },
   { name: 'autoApply', type: 'bool', def: false, internal: true },
   { name: 'requirementsReviewMaxRounds', type: 'int', def: 20, min: 1, max: 20, internal: true },
+  { name: 'reviewLenses', type: 'int', def: 3, min: 1, max: 3, internal: true },
   { name: 'applyReviewMaxRounds', type: 'int', def: 20, min: 1, max: 20, internal: true },
   { name: 'autoHandover', type: 'bool', def: false, internal: true },
   { name: 'kitLock', type: 'bool', def: true, page: 'kit', doc: '禁止 Claude 自己改套件', since: '0923', defText: '开' },
