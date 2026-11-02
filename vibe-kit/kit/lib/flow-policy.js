@@ -349,16 +349,41 @@ function actionIssue(j) {
         + (v.waiting ? v.waiting : v.phase === '需求与提案' ? (cfg.autoApply && !cfg.autoRequirements ? '这个会话还在需求与提案阶段，Apply 自动要用户说"开工"（或"开始实施"、敲 /vk-go、/opsx:apply）之后才算' : '探索还没做完、范围还没确认（workflow.js qualify 还没过），或者需求文档还没写到能自动审修的那一步') : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
     } catch (e) { why = ''; }
   }
+  // 这段话用户也看得到（问题表第 32 条：只说了"启动OA"，看到"人工模式：先用 Ask 询问是否自测或复验及范围"摸不着头脑）：直说用户这一轮没要求什么。
+  // 只是起服务的单独说：问要不要起，不问范围
+  const statusNote = '用户问服务起着没有：先 devserver.js status，起着的直接给地址，没起的问一次要不要起，不分几次问。';
+  if (!review && shellTest && startCommand(cmd, name === 'PowerShell')) {
+    return '用户这一轮没说要起服务' + why + '：先用 Ask 问一次要不要起，得到用户明确要求后执行' + used + '。选项写成"起（服务名）"和"不用"，不问范围，用户选了起就直接起；用户在对话里说"启动 OA""重启后端""把服务起起来""我要看看系统"也算。' + statusNote + '用户放弃就继续，不记录未测试或待办。';
+  }
   // 说清楚用户怎么答才算（#210、#212：只说"先 Ask"，模型和用户都不知道哪句话算数，去翻套件源码找口令）
-  return '人工模式' + why + '：先用 Ask 询问是否' + (review ? '审查' : '自测或复验') + '及范围，得到用户明确要求后执行' + used + '。'
+  return '用户这一轮没说要' + (review ? '审查' : '自测') + why + '：先用 Ask 询问是否' + (review ? '审查' : '自测或复验') + '及范围，得到用户明确要求后执行' + used + '。'
     + (review ? '选项写成"审查（范围）"和"不用"，用户选了审查就直接执行；用户在对话里说"审查""审一下""再审一次"也算。'
-      : '选项写成"自测（范围）"和"不用"，用户选了自测就直接跑；用户在对话里说"自测""跑测试""跑复验""把服务起起来""我要看看系统"也算。用户问服务起着没有：先 devserver.js status，起着的直接给地址，没起的问一次要不要起，不分几次问。')
+      : '选项写成"自测（范围）"和"不用"，用户选了自测就直接跑；用户在对话里说"自测""跑测试""跑复验""把服务起起来""我要看看系统"也算。' + statusNote)
     + '用户放弃就继续，不记录未审查、未测试或待办。';
 }
 // 人工模式要先 Ask 的"自测"：跑测试、起服务、看页面。编译、类型检查、静态检查算写代码的一部分，直接跑（用户 2026-10-16 定的）。
 function testCommand(cmd, ps) {
   const G = require('../hooks/guard-commit');
   return G.splitCommand(G.preprocess(cmd, ps).s, ps).flat().some(seg => selfTestWords(G.words(seg, ps).map(w => w.text)));
+}
+/** 这条命令只是在起服务，没有跑测试（devserver start、spring-boot:run、npm run dev 这类） */
+function startCommand(cmd, ps) {
+  const G = require('../hooks/guard-commit');
+  const segs = G.splitCommand(G.preprocess(cmd, ps).s, ps).flat().map(seg => G.words(seg, ps).map(w => String(w.text)));
+  const hits = segs.filter(selfTestWords);
+  return hits.length > 0 && hits.every(startWords);
+}
+function startWords(words) {
+  const base = w => path.basename(String(w || '').replace(/\\/g, '/')).replace(/\.(?:exe|cmd|bat|sh)$/i, '').toLowerCase();
+  const low = words.map(w => String(w).toLowerCase());
+  // 前面的环境变量、env、cross-env 跳过（selfTestWords 也是这么看的）
+  let k = 0; while (/^[a-z_][a-z0-9_]*=/.test(low[k] || '') || /^(?:env|cross-env)$/.test(base(low[k]))) k++;
+  const exe = base(low[k]); const args = low.slice(k + 1);
+  if (exe === 'node') return args.some((a, i) => base(a) === 'devserver.js' && args[i + 1] === 'start');
+  if (/^mvnw?$/.test(exe)) return args.some(a => /^[\w.-]+:(?:run|start)$/.test(a)) && !args.some(a => /^(?:test|integration-test|verify)$/.test(a));
+  if (/^gradlew?$/.test(exe)) return args.some(a => /^(?:[\w:-]*:)?(?:bootrun|run|apprun)$/.test(a)) && !args.some(a => /^(?:test|check|build)$/.test(a));
+  if (/^(?:npm|pnpm|yarn)$/.test(exe)) return args.some(a => /^(?:dev|start|serve|preview)(?:[:_-].*)?$/.test(a));
+  return false;
 }
 const SCRIPT_EXT = /\.(?:[cm]?js|ts|py)$/i;
 // 脚本只看文件名，目录只认 test、tests、__tests__、spec：test-package/publish.js 不是自测

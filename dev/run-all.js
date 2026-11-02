@@ -67,6 +67,8 @@ suites.unshift(['1028 反馈', 'test-feedback1028.js', ['18797']]);
 // K3（2026-11-01）：体检、检查点、失败摘要、只提交本会话的、SQL 对表结构、团队的坑
 suites.unshift(['K3：只提交本会话改过的文件', 'test-commit-tool.js', []], ['K3：编译测试失败只给摘要', 'test-fail-summary.js', []], ['K3：检查点和一键回退', 'test-checkpoint.js', []], ['K3：SQL、Mapper 对表结构', 'test-sql-check.js', []], ['K3：团队的坑', 'test-team-lessons.js', []], ['K3：总体检和第一次使用的说明', 'test-doctor.js', []], ['J4：规范进流程时送、压缩后重送', 'test-stage-rules.js', []], ['K1-8：本机诊断指标', 'test-diag.js', []], ['K1-4、J2：开关字段表', 'test-config-fields.js', []]);
 suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
+// 2026-11-02（docs/feedback-20261102-1543.md）：11-02 导出议题和问题表第 32—34 条
+suites.unshift(['11-02 反馈', 'test-feedback1102.js', []]);
 // 2026-11-01（docs/feedback-20261101.md）：K1-6 依赖清单
 suites.unshift(['依赖清单', 'test-deps-manifest.js', []]);
 // F8 用户的补充不被更新覆盖

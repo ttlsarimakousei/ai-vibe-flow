@@ -429,6 +429,12 @@ add('K3：自动模式开工提醒存检查点', 'task-anchor', (kit) => {
   return { proj, j };
 }, /大改之前先存一个检查点：node \\"[^"]*checkpoint\.js\\" save --why/, V1102);
 
+// 11-02（问题表第 32 条）：起服务单独说，问要不要起、不问范围；提示里不再写"人工模式"
+for (const c of cases) {
+  if (/devserver\.js" start/.test(c.name)) { c.expect = /用户这一轮没说要起服务：先用 Ask 问一次要不要起[\s\S]*不问范围[\s\S]*devserver\.js status，起着的直接给地址/; c.since = NEXT; }
+  if (c.name === '反馈1007：env -C 跑套件场景脚本') { c.expect = /用户这一轮没说要自测：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = NEXT; }
+}
+
 let same = 0;
 let changed = 0;
 for (const c of cases) {
