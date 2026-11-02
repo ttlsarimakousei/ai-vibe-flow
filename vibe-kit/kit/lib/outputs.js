@@ -85,6 +85,8 @@ function exempt(file) {
   const name = segs[segs.length - 1];
   const dirs = segs.slice(0, -1);
   if (dirs.some((s) => EXEMPT_DIRS.has(s))) return true;
+  // 点开头的目录是工具自己的工作目录，不是给人看的产出（#269：ttls-vfb 规定写 .ttls-vfb/…/answer.md，换地方它的脚本读不到，子代理还没法问）
+  if (dirs.some((s) => s.length > 1 && s[0] === '.' && s !== '..')) return true;
   if (EXEMPT_NAMES.test(name) || BUILD_NAMES.test(name)) return true;
   if (dirs.some((s) => CODE_DIRS.has(s))) return true;
   if (/\.sql$/i.test(name) && dirs.some((s) => SQL_CODE_DIRS.has(s))) return true;
