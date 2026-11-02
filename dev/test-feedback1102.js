@@ -221,6 +221,103 @@ const reason = (o) => H.reasonOf(o);
     H.ok('自动探测：最近打开过的项目配的 Maven 排最前面，带它的 settings.xml、本地仓库', fwd(fm.home || '') === M && fwd(fm.settings || '') === settings && fwd(fm.repo || '') === repo, det.out + det.err);
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('第 35 条：devserver 起后端不每次拉依赖，缺的只拉缺的');
+  {
+    const h = H.makeHome('t1102-off', from);
+    const M = require(path.join(h.kit, 'lib', 'maven-offline.js'));
+    // Maven 3.9 的报错原文（2026-11-02 用真 Maven 跑出来的）
+    const dep39 = '[ERROR] Failed to execute goal on project demo: Could not resolve dependencies for project com.t:demo:jar:1.0\n[ERROR] dependency: org.apache.commons:commons-text:jar:1.10.0 (compile)\n[ERROR] \tCannot access central (https://repo.maven.apache.org/maven2) in offline mode and the artifact org.apache.commons:commons-text:jar:1.10.0 has not been downloaded from it before.\n[ERROR] dependency: com.google.guava:guava:jar:31.1-jre (compile)\n[ERROR] \tCannot access central (https://repo.maven.apache.org/maven2) in offline mode and the artifact com.google.guava:guava:jar:31.1-jre has not been downloaded from it before.\n';
+    const m39 = M.missingArtifacts(dep39);
+    H.ok('Maven 3.9：取出缺的两个依赖，不算项目自己', m39.list.map((x) => x.coord).join() === 'org.apache.commons:commons-text:1.10.0,com.google.guava:guava:31.1-jre' && !m39.blocked, JSON.stringify(m39));
+    const dep36 = '[ERROR] Failed to execute goal on project demo: Could not resolve dependencies for project com.t:demo:jar:1.0: The following artifacts could not be resolved: com.a:b:jar:1.0, com.c:d:jar:sources:2.0: Cannot access nexus (http://n/repo) in offline mode and the artifact com.a:b:jar:1.0 has not been downloaded from it before.';
+    H.ok('Maven 3.6：一行里列几个，带 classifier 的也认', M.missingArtifacts(dep36).list.map((x) => x.artifact).sort().join() === 'com.a:b:1.0:jar,com.c:d:2.0:jar:sources', JSON.stringify(M.missingArtifacts(dep36)));
+    H.ok('缺父 pom：不定向拉', /父 pom/.test(M.missingArtifacts('[FATAL] Non-resolvable parent POM for com.t:demo:1.0: The following artifacts could not be resolved: com.x:parent:pom:9 (absent): Cannot access central (https://x) in offline mode and the artifact com.x:parent:pom:9 has not been downloaded from it before.').blocked));
+    H.ok('缺插件：不定向拉', /插件/.test(M.missingArtifacts('[ERROR] Plugin org.apache.maven.plugins:maven-resources-plugin:3.4.0 or one of its dependencies could not be resolved:\n[ERROR] \tCannot access central (https://x) in offline mode and the artifact org.apache.maven.plugins:maven-resources-plugin:jar:3.4.0 has not been downloaded from it before.').blocked));
+    const c = M.fetchCommand('"F:/m a/bin/mvn" -s "C:/u/s x.xml" "-Dmaven.repo.local=D:/r" -o spring-boot:run -Dmaven.test.skip=true -pl app -am -P dev', 'com.a:b:1.0:jar');
+    H.ok('拉依赖的命令：同一套 Maven、settings.xml、本地仓库、profile，不带 -o 和原来的目标', c === '"F:/m a/bin/mvn" -s "C:/u/s x.xml" "-Dmaven.repo.local=D:/r" -P dev -B dependency:get "-Dartifact=com.a:b:1.0:jar"', c);
+    H.ok('不是 Maven 的命令：不拉', M.fetchCommand('node a.js -o', 'x:y:1:jar') === '');
+    H.ok('没写 -o：加上', M.addOffline('mvn spring-boot:run -pl app') === 'mvn -o spring-boot:run -pl app', M.addOffline('mvn spring-boot:run -pl app'));
+    H.ok('带路径、带引号的：加在 mvn 后面', M.addOffline('"F:/m a/bin/mvn" -s "s x.xml" tomcat7:run') === '"F:/m a/bin/mvn" -o -s "s x.xml" tomcat7:run', M.addOffline('"F:/m a/bin/mvn" -s "s x.xml" tomcat7:run'));
+    for (const same of ['mvn -o spring-boot:run', 'mvn --offline spring-boot:run', 'mvn -U spring-boot:run', 'mvn compile', 'npm run dev', 'mvn clean && mvn spring-boot:run', 'java -jar target/a.jar'])
+      H.ok('不加 -o：' + same, M.addOffline(same) === same, M.addOffline(same));
+
+    // 假的 mvn：缺依赖时和 Maven 一样报错；dependency:get 记一笔、把依赖"放进本地仓库"；起服务时答 HTTP
+    const dev = path.join(h.kit, 'tools', 'devserver.js');
+    const proj = H.makeRepo(path.join(h.work, 'proj'), { 'pom.xml': '<project/>\n', '.gitignore': '.vibe/\n' });
+    const bin = path.join(h.root, 'fakemvn');
+    const log = path.join(h.root, 'mvn-calls.txt');
+    const have = path.join(h.root, 'have.txt');
+    H.write(path.join(bin, 'mvn.cmd'), '@node "%~dp0fake.js" %*\r\n');
+    H.write(path.join(bin, 'fake.js'), [
+      "const fs = require('fs');",
+      "const LOG = " + JSON.stringify(log) + "; const HAVE = " + JSON.stringify(have) + ";",
+      "const a = process.argv.slice(2);",
+      "fs.appendFileSync(LOG, a.join(' ') + '\\n');",
+      "const has = () => { try { return fs.readFileSync(HAVE, 'utf8'); } catch (e) { return ''; } };",
+      "const need = process.env.FAKE_NEED || '';",
+      "if (a.includes('dependency:get')) {",
+      "  if (process.env.FAKE_FETCH_FAIL) { console.log('[ERROR] Could not transfer artifact'); process.exit(1); }",
+      "  if (!process.env.FAKE_FETCH_USELESS) fs.appendFileSync(HAVE, (a.find((x) => x.startsWith('-Dartifact=')) || '') + '\\n');",
+      "  console.log('[INFO] BUILD SUCCESS'); process.exit(0);",
+      "}",
+      "if (a.includes('-o') && need && !has().includes(need)) {",
+      "  const kind = process.env.FAKE_KIND || 'jar';",
+      "  if (kind === 'pom') console.log('[FATAL] Non-resolvable parent POM for com.t:demo:1.0: The following artifacts could not be resolved: com.x:parent:pom:9 (absent): Cannot access central (https://x) in offline mode and the artifact com.x:parent:pom:9 has not been downloaded from it before.');",
+      "  else console.log('[ERROR] Failed to execute goal on project demo: Could not resolve dependencies for project com.t:demo:jar:1.0\\n[ERROR] dependency: ' + need.replace(/^(.*:)([^:]+)$/, '$1jar:$2') + ' (compile)\\n[ERROR] \\tCannot access nexus (http://n/r) in offline mode and the artifact ' + need.replace(/^(.*:)([^:]+)$/, '$1jar:$2') + ' has not been downloaded from it before.');",
+      "  console.log('[INFO] BUILD FAILURE'); process.exit(1);",
+      "}",
+      "require('http').createServer((q, s) => s.end('ok')).listen(Number(process.env.PORT), '127.0.0.1', () => console.log('Started Demo in 0.5 seconds'));",
+    ].join('\n') + '\n');
+    const fwd = (p) => p.replace(/\\/g, '/');
+    const mvn = '"' + fwd(path.join(bin, 'mvn')) + '"';
+    const calls = () => (H.read(log) || '').trim().split(/\r?\n/).filter(Boolean);
+    const reset = () => { for (const f of [log, have]) { try { fs.unlinkSync(f); } catch (e) { /* 没有 */ } } };
+    const port = () => 32000 + Math.floor(Math.random() * 800);
+    const start = (name, p, command, env) => H.node(h, dev, ['start', '--name', name, '--port', String(p), '--wait', '40', '--', command], { cwd: proj, timeout: 120000, env });
+    const stop = () => H.node(h, dev, ['stop', '--all'], { cwd: proj, timeout: 60000 });
+
+    reset();
+    const p1 = port();
+    const r1 = start('a', p1, mvn + ' -s "' + fwd(path.join(bin, 's x.xml')) + '" "-Dmaven.repo.local=' + fwd(bin) + '/r" -o spring-boot:run', { FAKE_NEED: 'com.foo:bar:1.2' });
+    H.ok('pom 新加的依赖本地仓库没有：只拉它，再离线起，起来了', r1.code === 0 && /只拉这 1 个/.test(r1.out) && /起来了/.test(r1.out) && !/去掉 -o/.test(r1.out), r1.out.slice(-900));
+    const c1 = calls();
+    H.ok('调了三次：离线、拉那一个、再离线', c1.length === 3 && / -o /.test(c1[0]) && /dependency:get/.test(c1[1]) && /-Dartifact=com\.foo:bar:1\.2:jar/.test(c1[1]) && / -o /.test(c1[2]), c1.join(' | '));
+    H.ok('拉的时候不带 -o，带着同一个 settings.xml、本地仓库', !/ -o /.test(c1[1]) && /-s /.test(c1[1]) && /-Dmaven\.repo\.local=/.test(c1[1]), c1[1]);
+    const r1b = start('a', p1, mvn + ' -s "' + fwd(path.join(bin, 's x.xml')) + '" "-Dmaven.repo.local=' + fwd(bin) + '/r" -o spring-boot:run', { FAKE_NEED: 'com.foo:bar:1.2' });
+    H.ok('再 start：认得是在跑的那个', r1b.code === 0 && /已经在跑/.test(r1b.out) && calls().length === 3, r1b.out.slice(-400));
+    stop();
+
+    reset();
+    const p2 = port();
+    const r2 = start('b', p2, mvn + ' spring-boot:run', {});
+    H.ok('命令没写 -o：加上，说一声，起来了', r2.code === 0 && /加了 -o/.test(r2.out) && /起来了/.test(r2.out), r2.out.slice(-600));
+    H.ok('实际跑的带 -o，没去拉任何东西', calls().length === 1 && /^-o spring-boot:run/.test(calls()[0]), calls().join(' | '));
+    const r2b = start('b', p2, mvn + ' spring-boot:run', {});
+    H.ok('同一条没写 -o 的命令再 start：认得是在跑的那个，不停掉重来', r2b.code === 0 && /已经在跑/.test(r2b.out) && calls().length === 1, r2b.out.slice(-500));
+    stop();
+
+    reset();
+    const r3 = start('c', port(), mvn + ' -U spring-boot:run', {});
+    H.ok('写了 -U：不加 -o', r3.code === 0 && !/加了 -o/.test(r3.out) && /^-U spring-boot:run/.test(calls()[0] || ''), r3.out.slice(-400) + calls().join(' | '));
+    stop();
+
+    reset();
+    const r4 = start('d', port(), mvn + ' -o spring-boot:run', { FAKE_NEED: 'com.x:parent:9', FAKE_KIND: 'pom' });
+    H.ok('缺父 pom：不拉，去掉 -o 再起一次', r4.code === 0 && /缺的是父 pom/.test(r4.out) && /去掉 -o 再起一次/.test(r4.out) && !calls().some((x) => /dependency:get/.test(x)), r4.out.slice(-600));
+    stop();
+
+    reset();
+    const r5 = start('e', port(), mvn + ' -o spring-boot:run', { FAKE_NEED: 'com.foo:bar:1.2', FAKE_FETCH_FAIL: '1' });
+    H.ok('拉不到：退回去掉 -o 再起一次', r5.code === 0 && /定向拉取没成/.test(r5.out) && /去掉 -o 再起一次/.test(r5.out), r5.out.slice(-700));
+    stop();
+
+    reset();
+    const r6 = start('f', port(), mvn + ' -o spring-boot:run', { FAKE_NEED: 'com.foo:bar:1.2', FAKE_FETCH_USELESS: '1' });
+    H.ok('拉了还报缺：不一直转，退回去掉 -o', r6.code === 0 && /去掉 -o 再起一次/.test(r6.out) && calls().filter((x) => /dependency:get/.test(x)).length === 1, r6.out.slice(-700) + calls().join(' | '));
+    stop();
+  }
+
   const wins = await watch.stop();
   H.ok('桌面上没有多出窗口', !wins.length, wins.join('；'));
   H.done('11-02 反馈');

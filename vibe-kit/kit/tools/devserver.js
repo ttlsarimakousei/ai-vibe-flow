@@ -22,6 +22,8 @@
  *     端口只连不发请求；日志里认不出标志的，端口通了 3 秒发第一次 HTTP、之后每 10 秒一次（随便哪个状态码算答了），Tomcat 这类先占端口、后部署应用的，
  *     端口一通就返回会让紧接着的请求超时；一直不答 HTTP 的（不是网页服务）端口通了 60 秒也算起来。上一次没等到它答 HTTP（等超时、被打断）的，再 start 接着等。
  *     起不来把日志最后几十行打出来。日志在 .vibe/run/<名字>.log，记录在 .vibe/run/<名字>.json。
+ * Maven 先离线（问题表第 35 条）：起服务的 mvn 命令没写 -o、-U 的加上 -o；报本地仓库缺依赖，只拉缺的那几个（dependency:get），再离线起；
+ *   缺的是父 pom、插件，或者拉不到，才去掉 -o 再起一次。
  * 停的时候连子进程一起停（mvn → java 这种）；停完端口还被这个项目的进程占着的（Tomcat 的 startup.bat 这类会甩开父进程），也一起停；
  * 起来的时候记下它起的每个进程（.vibe/run/<名字>.json 的 tree），停的时候还活着的一个个结束：中间那层进程先退了的，
  * 下面的进程按父子关系找不到，以前会留下来（两个 java 一起跑，请求打到哪个不一定——问题反馈 F20260928-011）。
@@ -593,7 +595,7 @@ async function launch(name, port, command, meta) {
   child.unref();
   fs.closeSync(fd);
   invalidate();
-  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot') || hotOf(command, cwd), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl, snap, retriedOnline: !!(meta && meta.retriedOnline), asked: (meta && meta.asked) || command };
+  const rec = { name, pid: child.pid, port, cmd: command, cwd, startedAt: Date.now(), hot: flag('hot') || hotOf(command, cwd), log, auto: !!(meta && meta.auto), avoid: (meta && meta.avoid) || [], backendUrl, snap, retriedOnline: !!(meta && meta.retriedOnline), fetched: (meta && meta.fetched) || [], asked: (meta && meta.asked) || command };
   fs.writeFileSync(recFile(name), JSON.stringify(rec, null, 2));
   register(rec, recFile(name));
   return waitUp(rec, Number(opt('wait')) || 180);
@@ -635,6 +637,36 @@ const LOG_EVERY = 2000;     // 多久看一次日志、连一次端口（只连�
 const FIRST_HTTP_MS = 3000; // 日志里认不出"起好了"时，端口通了多久发第一次 HTTP
 const HTTP_EVERY = 10000;   // 之后多久发一次
 /**
+ * 日志里报本地仓库缺依赖：只拉缺的那几个。全拉到了返回这个服务拉过的清单（接着离线起），不能定向拉、拉不到返回 null。
+ * 拉过的又报缺（拉了也没用）不再拉：防止一直转
+ */
+async function fetchMissing(rec) {
+  const M = require('../lib/maven-offline');
+  const miss = M.missingArtifacts(logSince(rec.log, 0).text);
+  const done = Array.isArray(rec.fetched) ? rec.fetched : [];
+  if (miss.blocked) { console.log('离线（-o）起不来：' + miss.blocked + '，不能定向拉。'); return null; }
+  if (!miss.list.length || miss.list.some((x) => done.includes(x.coord)) || done.length + miss.list.length > 30) return null;
+  const env = Object.assign({}, process.env);
+  for (const kv of envs) { const i = kv.indexOf('='); if (i > 0) env[kv.slice(0, i)] = kv.slice(i + 1); }
+  console.log('离线（-o）起不来：本地仓库缺 ' + miss.list.map((x) => x.coord).join('、') + '。只拉这 ' + miss.list.length + ' 个，别的依赖不动。');
+  for (const x of miss.list) {
+    const cmd = M.fetchCommand(rec.cmd, x.artifact);
+    if (!cmd) return null;
+    const t0 = Date.now();
+    const r = await new Promise((resolve) => {
+      let out = '';
+      const c = spawn(cmd, { shell: true, windowsHide: true, cwd: rec.cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+      const timer = setTimeout(() => { try { killTree(c.pid); } catch (e) { /* 已经退了 */ } }, 300000);
+      c.stdout.on('data', (b) => { out = (out + b).slice(-4000); }); c.stderr.on('data', (b) => { out = (out + b).slice(-4000); });
+      c.on('error', () => { clearTimeout(timer); resolve({ code: 1, out }); });
+      c.on('close', (code) => { clearTimeout(timer); resolve({ code, out }); });
+    });
+    if (r.code !== 0) { console.log('定向拉取没成：' + cmd + '\n' + r.out.split(/\r?\n/).filter((l) => /ERROR/.test(l)).slice(0, 4).join('\n')); return null; }
+    console.log('拉好了 ' + x.coord + '（' + Math.round((Date.now() - t0) / 1000) + ' 秒）');
+  }
+  return done.concat(miss.list.map((x) => x.coord));
+}
+/**
  * 等它起来。0 = 起来了；1 = 没起来：进程退了、日志里报了起不来就删掉记录，等到超时进程还在就留着记录（多半还在启动，再 start 会接着等）。
  * 每 2 秒：读日志新增的内容、连一次端口。日志说起好了 → 发 HTTP 确认（答了就算起来）；日志报了起不来 → 停掉自己起的进程、贴日志返回；
  * 都认不出 → 端口通了 3 秒发第一次 HTTP、之后每 10 秒一次，60 秒一直不答也算起来（不是网页服务）
@@ -650,7 +682,7 @@ async function waitUp(rec, waitSec) {
     try { fs.writeFileSync(recFile(rec.name), JSON.stringify(Object.assign({}, rec, { tree, upAt: Date.now() }), null, 2)); } catch (e) { /* 记不了就按父子关系停 */ }
     const who = whoListens(rec.port);
     // 耗时异常自动发现、上报（问题表第 20 条，C7）：这次调用起的才算；接着等上一次没起完的不算
-    if (rec.startedAt >= T0 && !rec.retriedOnline) { try { const line = require('../lib/perf').noteStart({ kind: RESTART ? 'restart' : 'first', root: rec.cwd, command: rec.cmd, prepMs: rec.startedAt - T0, startMs: Date.now() - rec.startedAt, log: (() => { try { const b = fs.readFileSync(rec.log); return b.slice(Math.max(0, b.length - 2000000)).toString('utf8'); } catch (e) { return ''; } })() }); if (line) console.log(line); } catch (e) { /* 记不了不影响起服务 */ } }
+    if (rec.startedAt >= T0 && !rec.retriedOnline && !(rec.fetched && rec.fetched.length)) { try { const line = require('../lib/perf').noteStart({ kind: RESTART ? 'restart' : 'first', root: rec.cwd, command: rec.cmd, prepMs: rec.startedAt - T0, startMs: Date.now() - rec.startedAt, log: (() => { try { const b = fs.readFileSync(rec.log); return b.slice(Math.max(0, b.length - 2000000)).toString('utf8'); } catch (e) { return ''; } })() }); if (line) console.log(line); } catch (e) { /* 记不了不影响起服务 */ } }
     // 这一行放在最后：输出的最后一行就是结果
     console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
     console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (how ? '，' + how : '') + (rec.hot ? '。会热更新：改了代码不用重启，再 start 直接用' : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
@@ -673,9 +705,11 @@ async function waitUp(rec, waitSec) {
       if (alive(rec.pid)) killTree(rec.pid);
       for (const k of kids) if (alive(k.pid) && k.pid !== routerPid() && k.pid !== process.pid) killTree(k.pid);
       dropRec(rec.name);
-      // 离线（-o）缺依赖：去掉 -o 再起一次（C5，用户 2026-10-30 定的）
+      // 离线（-o）缺依赖：只拉缺的那几个，再离线起（问题表第 35 条，2026-11-02）。缺的是父 pom、插件，或者拉不到：去掉 -o 再起一次（C5，用户 2026-10-30 定的）
       const offline = /(?:^|\s)(?:-o|--offline)(?=\s|$)/.test(rec.cmd) && OFFLINE_MISS.test(logTail(rec.log));
       if (offline && !rec.retriedOnline) {
+        const fetched = await fetchMissing(rec);
+        if (fetched) return launch(rec.name, rec.port, rec.cmd, { auto: rec.auto, avoid: rec.avoid, fetched, asked: rec.asked });
         const cmd2 = rec.cmd.replace(/(^|\s)(?:-o|--offline)(?=\s|$)/, '$1').replace(/\s{2,}/g, ' ').trim();
         console.log('离线（-o）起不来：父 pom 或内部依赖只在私服上（日志里 "' + fail + '"）。去掉 -o 再起一次：' + cmd2);
         return launch(rec.name, rec.port, cmd2, { auto: rec.auto, avoid: rec.avoid, retriedOnline: true, asked: rec.asked || rec.cmd });
@@ -808,7 +842,10 @@ async function start() {
     for (const x of who) killTree(x.i.pid);
     if (!(await waitClosed(port, 8000))) { console.log('停不掉占着端口 ' + port + ' 的进程，没有起新的。'); return 1; }
   }
-  return launch(name, port, command, { auto, avoid });
+  // 不每次去私服查依赖（问题表第 35 条）：没写 -o 的 Maven 命令加上；比同一个服务时还看当初要求的命令
+  const offlineCmd = require('../lib/maven-offline').addOffline(command);
+  if (offlineCmd !== command) console.log('Maven 先离线起（加了 -o）：用本地仓库的依赖，不去私服查；缺了只拉缺的那几个。要更新 SNAPSHOT 就在命令里写 -U。');
+  return launch(name, port, offlineCmd, { auto, avoid, asked: offlineCmd !== command ? command : undefined });
 }
 
 /** 老版本用 IDEA 起、记成 mode: idea 的：套件不再管 IDEA 里的服务，不动进程，记录清掉 */

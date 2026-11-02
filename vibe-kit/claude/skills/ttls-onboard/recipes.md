@@ -4,8 +4,9 @@
 
 ## Maven（含 Spring Boot）
 
-- **全量**：`mvn -q -DskipTests compile`。
-  - 先试带 `-o`（离线）更快。如果报 `Non-resolvable parent POM`、`offline mode`、`Could not find artifact`，说明父 pom 或公司内部依赖只在私服上，去掉 `-o` 再来，并把"离线编不了"记进坑里。
+- **全量**：`mvn -q -o -DskipTests compile`。
+  - 先离线，不去私服查依赖。报 `offline mode` 缺某个依赖的（`the artifact g:a:jar:v has not been downloaded`），只拉那一个：`mvn dependency:get -Dartifact=g:a:v`，再离线编。
+  - 报 `Non-resolvable parent POM`、缺插件的，定向拉不了，去掉 `-o` 再来，并把"离线编不了"记进坑里。
 - **快检**：`mvn compile` 动辄几十秒，不适合改一处跑一次。做法是把依赖的 classpath 导出来缓存，之后用 javac 只编这一项任务里改过的文件（改了几个就一起传几个）：
   1. 导 classpath（只做一次，依赖变了才重做）：
      `mvn -q -DskipTests -DincludeScope=compile "-Dmdep.outputFile=<项目>/.vibe/cp.txt" compile dependency:build-classpath`

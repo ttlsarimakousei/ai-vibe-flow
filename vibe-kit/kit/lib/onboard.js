@@ -435,15 +435,15 @@ function facts(root) {
     if (front && !same(frontDir, root)) type += '；前端在 ' + rel(root, frontDir) + '（' + [front.fw, front.bundler].filter(Boolean).join(' + ') + '）';
     add('类型', type);
     add('环境', [mv.note, mv.jdk || jdkNote(java)].filter(Boolean).join('；'));
-    add('快检', mv.cmd + ' -q -o compile' + NOT_RUN + '。离线编不过（父 pom、内部依赖只在私服上）就去掉 -o。嫌慢：照 /ttls-onboard 的 recipes 导出依赖清单，用 javac 只编改过的文件');
-    add('全量', mv.cmd + ' -q -DskipTests compile' + NOT_RUN);
+    add('快检', mv.cmd + ' -q -o compile' + NOT_RUN + '。离线编不过：报缺某个依赖的，只拉那一个（' + mv.cmd + ' dependency:get -Dartifact=<group>:<artifact>:<version>）再离线编；缺父 pom、插件的才去掉 -o。嫌慢：照 /ttls-onboard 的 recipes 导出依赖清单，用 javac 只编改过的文件');
+    add('全量', mv.cmd + ' -q -o -DskipTests compile' + NOT_RUN + '。离线编不过同上');
     const sf = springFacts(runMod ? runMod.dir : root, tracked);
     if (usesBoot) {
       const port = sf.port || '8080';
       // 启动快一点（问题表第 20 条、审核第五节，用户 2026-10-30 定的）：-o 不去私服查 SNAPSHOT，-Dmaven.test.skip=true 不编测试代码。
       // 有模块依赖别的模块的 test-jar 的不能跳过测试编译；离线起不来（父 pom、内部依赖只在私服上），devserver 自己去掉 -o 再起一次
       const testJar = [pomFile].concat(mods.map((m) => path.join(m.dir, 'pom.xml'))).some((f) => /<type>\s*test-jar\s*<\/type>|<classifier>\s*tests\s*<\/classifier>/.test(stripXmlComments(readText(f))));
-      add('启动', mv.cmd + ' -o spring-boot:run' + (testJar ? '' : ' -Dmaven.test.skip=true') + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '（离线起不来 devserver 会自己去掉 -o 再起一次）' + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + port + '，它认环境变量 SERVER_PORT，命令不用改');
+      add('启动', mv.cmd + ' -o spring-boot:run' + (testJar ? '' : ' -Dmaven.test.skip=true') + (runMod ? ' -pl ' + runMod.name + ' -am（在根目录执行）' : '') + '（本地仓库缺依赖 devserver 只拉缺的那几个，再离线起）' + '，端口 ' + port + (sf.port ? '（' + sf.from + ' 里的 server.port）' : '（配置里没写，按默认的算）') + (sf.ctx ? '，上下文路径 ' + sf.ctx : '') + '，起来的标志是日志里出现 Started' + NOT_RUN + '。用 devserver.js 起：--port auto --avoid ' + port + '，它认环境变量 SERVER_PORT，命令不用改');
       if (sf.active) notes.push('配置里写的当前环境是 ' + sf.active);
     } else if ((pom && pom.war) || mods.some((m) => m.war)) add('启动', '打成 war 放进 Tomcat，或者在 IDE 里启动' + NOT_RUN);
     else add('启动', '没认出怎么启动（不是 Spring Boot，也不是 war）：用到的时候问我');
