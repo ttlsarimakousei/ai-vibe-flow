@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, flowDone, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
+const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, flowDone, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, refreshPlan, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 let tidy = null;
@@ -391,7 +391,11 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices) 
   return parts.length ? (final ? '收尾：这件事做完了，下面这些还留着。' : '') + parts.join('\n') : '';
 }
 
-/** 这一轮动过的变更不在 plan.md 里（中途加的新功能最容易漏记）：每个变更提醒一次加一行；不属于这个大需求的不用管 */
+/**
+ * 这一轮动过的变更不在 plan.md 里：收工时提醒用户一句，用户说要加才加（问题表第 38 条，用户 2026-11-02 定的）。
+ * 以前拦住收工让模型自己判断"属于这个大需求就加一行"：它判断不了，最省事的就是加，需求跑着跑着就去改 plan.md。
+ * 计划里的变更都做完了（全归档）：那个大需求结束了，新变更和它没关系，不提醒。每个变更只提醒一次
+ */
 function planUnlistedTodo(touched) {
   const out = [];
   updateState('plan-unlisted', (st) => {
@@ -401,7 +405,9 @@ function planUnlistedTodo(touched) {
       const unlisted = planUnlisted(osDir);
       if (!unlisted || !unlisted.includes(a.name)) continue;
       st[k] = Date.now();
-      out.push('变更 ' + a.name + ' 不在 ' + path.join(osDir, 'plan.md') + ' 里。它属于这个大需求（包括中途加的新功能）就在表里加一行，放在合适的位置，说明里写清是中途加的和起因；不属于这个大需求就不用管。');
+      const s = refreshPlan(osDir);
+      if (s && !s.active.length && !s.next) continue;
+      out.push('变更 ' + a.name + ' 不在计划表 ' + path.join(osDir, 'plan.md') + ' 里。它属于这个大需求的话，告诉 Claude 加一行；不属于就不用管。');
     }
   });
   return out;
@@ -738,6 +744,7 @@ async function handle(j) {
   const cwd = j.cwd || process.cwd();
   const sid = String(j.session_id || 'unknown');
   const notices = [];
+  let planTouched = null;
   // 收工的时候也看一眼要不要检查更新、上报问题（全自动模式下用户好几个小时不开口，只有这里会经过）
   try { require('../lib/updater.js').kick('收工'); } catch (e) { /* 老版本没有，或者甩不出去：不影响收工 */ }
   // 查库、查 redis 的工具自己报的毛病：读进来记成问题反馈（算这个会话的，交代里的"套件问题"会列出来）
@@ -941,7 +948,7 @@ async function handle(j) {
       // 逐产物审查在统一策略中调度，不再等整套文档齐全。
       if (todo.length > before) specChecked = true;
     }
-    if (touched.size) todo.push(...planUnlistedTodo(touched));
+    if (touched.size) planTouched = touched;
     try { todo.push(...archivedSpecTodo(j)); } catch (e) { hookLog('verify-gate 查归档后的主规格出错（不拦）：' + ((e && e.message) || e)); }
   }
   // 大需求的计划（openspec/plan.md）：归档、打勾之后计算最新汇总，不自动写回跟踪文件
@@ -978,6 +985,8 @@ async function handle(j) {
   // 验证的事都没落下，再看要不要问一句交接（两件事不挤在一起说）
   const ask = handoverQuestion(j, cfg, entries, wroteHo);
   if (ask) return blockOut('Stop', ask);
+  // 计划表的提醒放到真正收工这一刻：前面还有事要拦时提示送不到用户，又记成提醒过了
+  if (planTouched) notices.push(...planUnlistedTodo(planTouched));
   return notices.length ? { systemMessage: '[vibe-kit 提醒] ' + notices.join('\n') } : null;
 }
 

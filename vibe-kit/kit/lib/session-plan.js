@@ -14,7 +14,7 @@ const { codeReviewIssue, reviewLoopIssue } = require('./session-review');
 
 // ===================== 大需求的计划：openspec/plan.md =====================
 // 一个大需求拆成几个变更做，做完一个归档一个，模型下次怎么知道哪些做完了？靠 plan.md 这张表：模块 | 变更名 | 状态 | 说明。
-// 状态列不靠人记，钩子按 changes/ 和 changes/archive/ 的实际情况刷新；会话开头带上。
+// 状态不靠人记：会话开头的汇总按 changes/ 和 changes/archive/ 的实际情况算。钩子只算不写（不动跟踪文件），文件里的状态列跑 tools/plan.js 才更新。
 function readPlan(openspecDir) {
   const file = path.join(openspecDir, 'plan.md');
   let text; try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return null; }
