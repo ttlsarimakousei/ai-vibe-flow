@@ -425,7 +425,8 @@ const NOT_VERIFY_SEG = /^\s*(?:openspec(?:\.cmd)?\s|openspec$|node(?:\.exe)?\s+[
 /** 这条命令算不算跑过验证：去掉 openspec、套件自己的工具那几段，剩下的里有构建、编译、测试、脚本 */
 const VERIFY_CMD = {
   test(cmd) {
-    const rest = String(cmd || '').split(/&&|\|\||[;\n]/).filter((s) => !NOT_VERIFY_SEG.test(s)).join('\n');
+    // grep "java\|node" 里的 \| 不是管道（#276：tasklist | grep -i "java\|node" 被当成跑了 node）
+    const rest = String(cmd || '').replace(/\\\|/g, ' ').split(/&&|\|\||[;\n]/).filter((s) => !NOT_VERIFY_SEG.test(s)).join('\n');
     return VERIFY_RE.test(rest);
   },
 };

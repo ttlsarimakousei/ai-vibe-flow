@@ -389,6 +389,83 @@ const reason = (o) => H.reasonOf(o);
     H.ok('各处提示不再让人去配置页"数据库驱动"', !['claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/dbconf.py', 'claude/skills/ttls-db-crud/scripts/vibe.py', 'kit/lib/onboard.js'].some((f) => /配置页[^。\n]{0,6}数据库驱动/.test(fs.readFileSync(path.join(from, f), 'utf8'))));
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('git 超时和预算（#250、#260—#262、#264、#270、#275—#279）');
+  {
+    const h = H.makeHome('t1102-git', from);
+    const E = require(path.join(h.kit, 'lib', 'evidence.js'));
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    const W = require(path.join(h.kit, 'lib', 'workspace.js'));
+    const I = require(path.join(h.kit, 'lib', 'invocation.js'));
+    const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n' });
+    const real = (command, tool) => !!E.actual({ tool_name: tool || 'Bash', cwd: p, tool_use_id: 't', session_id: 's', tool_input: { command }, tool_response: { stdout: '' } });
+    for (const c of ['python -c "import json; print(1)"', '/f/x/.venv/Scripts/python.exe -m pip install -q -r /f/x/requirements.txt --index-url http://n/simple 2>&1 | tail -8', 'tasklist 2>/dev/null | grep -i "java\\|node" | head -10', 'node -e "console.log(1)"', 'npm install', 'pnpm add vue', 'mvn dependency:get "-Dartifact=a:b:1"', '"F:/m/bin/mvn" -s "C:/s.xml" dependency:get "-Dartifact=a:b:1"', 'mvn help:effective-pom', 'curl http://localhost:1'])
+      H.ok('不算验证、不算指纹：' + c.slice(0, 60), !real(c));
+    for (const c of ['mvn -q -o compile', '"F:/apache-maven-3.8.3/bin/mvn" -B -s C:/Users/x/.m2/settings-tz.xml -f pom.xml -q -DskipTests compile 2>&1 | tail -8', 'mvn dependency:get -Dartifact=a:b:1 && mvn compile', 'python -m pytest', 'python test_a.py', 'node dev/test-a.js', 'npx vue-tsc --noEmit', 'npm run build', 'cmd /c mvn test', 'JAVA_HOME=/x mvn compile', 'javac A.java', '.vibe/quick.bat', 'bash .vibe/quick.sh'])
+      H.ok('算验证：' + c.slice(0, 60), real(c), c);
+    H.ok('PowerShell 的 & 写法也算', real('& "C:\\m\\bin\\mvn.cmd" compile', 'PowerShell'));
+    H.ok('grep 参数里的工具名不算跑过验证', !S.VERIFY_CMD.test('tasklist | grep -i "java\\|node" | head'));
+    H.ok('真的管道接 node 还算', S.VERIFY_CMD.test('cat a | node b.js'));
+
+    // 不是 git 仓库、文件很多：不抛错；.venv 不算
+    const plain = path.join(h.work, 'plain');
+    H.write(path.join(plain, 'a.md'), '1\n');
+    H.write(path.join(plain, '.venv', 'lib', 'x.py'), 'x\n');
+    const f0 = W.fingerprint(plain, 'code').hash;
+    H.write(path.join(plain, '.venv', 'lib', 'y.py'), 'y\n');
+    H.ok('.venv 里变了：指纹不变', W.fingerprint(plain, 'code').hash === f0);
+    H.write(path.join(plain, 'a.md'), '2\n');
+    H.ok('项目文件变了：指纹变', W.fingerprint(plain, 'code').hash !== f0);
+    const big = path.join(h.work, 'big');
+    fs.mkdirSync(path.join(big, 'data'), { recursive: true });
+    for (let i = 0; i < 5100; i++) fs.writeFileSync(path.join(big, 'data', 'f' + i + '.txt'), 'x');
+    let fb = null; let thrown = '';
+    try { fb = W.fingerprint(big, 'code'); } catch (e) { thrown = e.message; }
+    H.ok('不是 git 仓库、超过上限：不抛"本机范围过大"', fb && !thrown && fb.files.length === 5000, thrown || (fb && fb.files.length));
+    const before = fb && fb.hash;
+    fs.writeFileSync(path.join(big, 'data', 'f0.txt'), 'changed-content');
+    H.ok('超过上限也能看出前面的文件变了（按大小和修改时间）', W.fingerprint(big, 'code').hash !== before);
+
+    // git 超时
+    const CP = require('child_process');
+    const orig = CP.execFileSync;
+    const fresh = () => { for (const m of ['workspace.js']) delete require.cache[require.resolve(path.join(h.kit, 'lib', m))]; return require(path.join(h.kit, 'lib', 'workspace.js')); };
+    let seen = 0;
+    CP.execFileSync = (cmd, args, opts) => { if (cmd === 'git') { seen = opts.timeout; const e = new Error('spawnSync git ETIMEDOUT'); e.code = 'ETIMEDOUT'; throw e; } return orig(cmd, args, opts); };
+    const W2 = fresh();
+    let code = '';
+    try { I.run(() => W2.checkedGit(p, ['diff', '--name-only']), { budgetMs: 12000 }); } catch (e) { code = e.code; }
+    H.ok('钩子里 git 超时：超时给的是剩下的预算，不是 5 秒', seen > 5000 && seen <= 12000, seen);
+    H.ok('钩子里 git 超时：算预算用完', code === 'VIBE_HOOK_BUDGET', code);
+    let swallowed = 'x';
+    try { swallowed = I.run(() => W2.git(p, ['diff', '--name-only']), { budgetMs: 12000 }); } catch (e) { swallowed = e.code; }
+    H.ok('预算用完不再被吞成"不是仓库"（#275）', swallowed === 'VIBE_HOOK_BUDGET', swallowed);
+    W2.git(p, ['status']);
+    H.ok('不在钩子里（命令行工具）：最多等一分钟', seen === 60000, seen);
+    CP.execFileSync = orig;
+    fresh();
+
+    // 预算用完、git 超时每道检查只算一条
+    const probe = path.join(h.root, 'slow.js');
+    H.write(probe, [
+      "const F = require(" + JSON.stringify(path.join(h.kit, 'lib', 'feedback.js')) + ");",
+      "const err = (m, c) => { const e = new Error(m); e.code = c; return e; };",
+      "F.recordHookError('after-tool 验证证据', { cwd: 'D:/a' }, err('钩子本机检查预算用完，阶段：Git config（jssslt-bpm）；本次放行，诊断已记本机', 'VIBE_HOOK_BUDGET'));",
+      "F.recordHookError('after-tool 验证证据', { cwd: 'D:/b' }, err('钩子本机检查预算用完，阶段：Git rev-parse（famous_trees）；本次放行，诊断已记本机', 'VIBE_HOOK_BUDGET'));",
+      "F.recordHookError('after-tool 验证证据', { cwd: 'D:/c' }, err('spawnSync git ETIMEDOUT', 'ETIMEDOUT'));",
+      "F.recordHookError('verify-gate', { cwd: 'D:/c' }, err('spawnSync git ETIMEDOUT', 'ETIMEDOUT'));",
+      "F.recordHookError('verify-gate', { cwd: 'D:/c' }, new Error('别的错'));",
+      "console.log(JSON.stringify(F.listRecords().map((r) => r.title)));",
+    ].join('\n') + '\n');
+    const out = H.node(h, probe, []);
+    let titles = []; try { titles = JSON.parse(out.out); } catch (e) { titles = []; }
+    H.ok('同一道检查的预算用完、git 超时只算一条', titles.filter((t) => /after-tool.*本机检查超时/.test(t)).length === 1, out.out + out.err);
+    H.ok('不同的检查各算各的，别的错照旧单独记', titles.filter((t) => /verify-gate.*本机检查超时/.test(t)).length === 1 && titles.some((t) => /verify-gate.*别的错/.test(t)), out.out + out.err);
+    const hw = fs.readFileSync(path.join(from, 'kit', 'lib', 'hook-worker.js'), 'utf8');
+    const hh = fs.readFileSync(path.join(from, 'kit', 'lib', 'hook-host.js'), 'utf8');
+    H.ok('工作线程记过的，路由那头不再记一条（#278）', /recorded: true/.test(hw) && /!m\.recorded\) noteFailure/.test(hh));
+  }
+
   const wins = await watch.stop();
   H.ok('桌面上没有多出窗口', !wins.length, wins.join('；'));
   H.done('11-02 反馈');

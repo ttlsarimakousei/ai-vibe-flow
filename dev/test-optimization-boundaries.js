@@ -92,7 +92,7 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
     H.setConfig(h, { kitLock: false });
     H.transcript(transcript, [H.tr.user('继续')]);
     const r1 = H.hook(h, 'guard-commit', j);
-    H.ok('--new-budget 不再报"审查预算"（没说审查照人工模式先问）', !/审查预算/.test(H.reasonOf(r1)) && /人工模式/.test(H.reasonOf(r1)), r1);
+    H.ok('--new-budget 不再报"审查预算"（没说审查照人工模式先问）', !/审查预算/.test(H.reasonOf(r1)) && /用户这一轮没说要审查/.test(H.reasonOf(r1)), r1);
     H.transcript(transcript, [H.tr.user('审查 add-x 的代码')]);
     const r2 = H.hook(h, 'guard-commit', j);
     H.ok('用户说了审查：带 --new-budget 的命令照常放行', r2 === null, r2);

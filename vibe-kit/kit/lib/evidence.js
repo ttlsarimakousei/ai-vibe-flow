@@ -9,6 +9,8 @@
  *     page（页面、接口场景）、other。现在只记下来；快检、修了审查问题的复验照旧认哪一类都行（只认后两类的话，人工模式用户不让测时修了的问题收不了尾）。
  *   - 环境指纹去掉 PATH：命令方式和 HTTP 方式的钩子 PATH 不一样，同一份证据换个方式就对不上。
  *   - 失败的命令不算指纹（本来就不算通过），只数次数。
+ * 2026-11-02（#260、#275、#276、#279）：python -c、node -e、pip 安装、npm install、mvn dependency:get，还有 grep "java\|node" 这种参数里带工具名的，不算验证。
+ *   以前这些都当验证记，每条都算一遍整个仓库的指纹，壳子里预算用完算一次钩子出错，记下来的"证据"也是假的。
  */
 const fs = require('fs');
 const path = require('path');
@@ -20,6 +22,42 @@ function environment(root) {
   const project = [];
   for (const f of ['db-crud.ini', 'redis.json', 'project.md']) { try { project.push(W.hash(fs.readFileSync(path.join(root || '.', '.vibe', f)))); } catch (e) { project.push('缺少'); } }
   return W.hash(Buffer.concat([Buffer.from(JSON.stringify([process.version, process.env.JAVA_HOME || '', process.env.VIBE_KIT_TEST_ENV || '', project])), Buffer.from(local)]));
+}
+const VIBE_SCRIPT = /\.vibe[\\/]\S*\.(?:bat|cmd|sh|ps1|js)$/i;
+/** 拆开的一段命令（词）：是不是真的在跑构建、测试、脚本 */
+function verifyWords(ws, ps, depth) {
+  const base = (w) => path.basename(String(w || '').replace(/\\/g, '/')).replace(/\.(?:exe|cmd|bat|sh)$/i, '').toLowerCase();
+  let k = 0;
+  for (let n = 0; n < 12 && k < ws.length; n++) {
+    const w = String(ws[k]); const b = base(w);
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w) || w === '&' || /^(?:env|cross-env|time|call|winpty)$/.test(b)) k++;
+    else if (b === 'timeout') k += 2;
+    else if (b === 'cmd' && /^\/c$/i.test(String(ws[k + 1] || ''))) k += 2;
+    else break;
+  }
+  if (VIBE_SCRIPT.test(String(ws[k] || ''))) return true;
+  const exe = base(ws[k]); const args = ws.slice(k + 1).map(String);
+  if (/^(?:bash|sh|powershell|pwsh)$/.test(exe)) {
+    const i = args.findIndex((a) => /^(?:-c|-lc|-command)$/i.test(a));
+    if (i >= 0 && args[i + 1] && depth < 2) return runsVerify(args[i + 1], /^(?:powershell|pwsh)$/.test(exe), depth + 1);
+    return VIBE_SCRIPT.test(args[0] || '');
+  }
+  if (/^(?:python3?|py)$/.test(exe)) {
+    if (args.includes('-c')) return false;
+    const m = args.indexOf('-m');
+    return m < 0 || !/^(?:pip\d?|venv|virtualenv|ensurepip|http\.server|json\.tool)$/i.test(args[m + 1] || '');
+  }
+  if (exe === 'node') return !args.some((a) => /^(?:-e|--eval|-p|--print)$/.test(a));
+  if (/^(?:npm|cnpm|pnpm|yarn)$/.test(exe)) return !/^(?:i|install|ci|add|remove|rm|uninstall|un|config|view|ls|list|outdated|cache|root|bin|init|audit|login|logout)$/.test(String(args.find((a) => !a.startsWith('-')) || '').toLowerCase());
+  if (/^mvnw?$/.test(exe)) return !(args.some((a) => /^["']?(?:dependency|help|versions):/.test(a)) && !args.some((a) => /^(?:validate|compile|test-compile|test|package|verify|install|deploy|[\w.-]+:(?:run|start|dev))$/.test(a)));
+  return /^(?:gradlew?|javac|java|npx|vue-tsc|tsc|eslint|pytest|go|dotnet|make|ant)$/.test(exe);
+}
+/** 整条命令里有没有一段真的在跑验证。解析不了的算有（和以前一样，宁可多记） */
+function runsVerify(command, ps, depth) {
+  try {
+    const G = require('../hooks/guard-commit');
+    return G.splitCommand(G.preprocess(command, ps).s, ps).flat().some((seg) => verifyWords(G.words(G.scanRedirects(seg).rest, ps).map((w) => w.text), ps, depth || 0));
+  } catch (e) { return true; }
 }
 function actual(j) {
   let input = j.tool_input || {}; let name = j.tool_name || ''; let root = j.cwd;
@@ -56,6 +94,7 @@ function actual(j) {
   const response = j.tool_response || {};
   if (response.isRunning || response.is_running || response.background_task_id || response.task_id || response.session_id || /(?:running in (?:the )?background|still running|后台运行|任务已启动)/i.test(JSON.stringify(response))) return null;
   if (!require('./session').VERIFY_CMD.test(command) || /\b(?:echo|printf|write-output|write-host)\s+['"]?(?:测试|Tests|BUILD)/i.test(command)) return null;
+  if (!runsVerify(command, name === 'PowerShell', 0)) return null;
   // 版本查询、curl 探一下：证明不了代码对不对，不记
   if (/^\s*"?(?:[^"\s]*[\\/])?(?:java|javac|node|npm|npx|pnpm|yarn|mvnw?|gradlew?|python3?|py|go|dotnet|tsc|ant|make)(?:\.exe|\.cmd|\.bat)?"?\s+(?:-v|-V|-version|--version|version)\s*$/i.test(command)) return null;
   if (/\bcurl(?:\.exe)?\b/i.test(command) && !require('./session').VERIFY_CMD.test(command.replace(/\bcurl(?:\.exe)?\b[^\n;&|]*/gi, ''))) return null;
