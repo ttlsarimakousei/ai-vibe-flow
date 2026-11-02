@@ -3,7 +3,7 @@
  * 数据库驱动（JDBC 的 jar）。ttls-db-crud 连库要用。
  *
  * 驱动不随安装包带：达梦、神通、金仓、Oracle 的驱动是厂商的，只限内部用。每台电脑自己备：
- *   配置页"数据库驱动"那一页："自动搜索"按"本机环境"里配的 Maven 本地仓库找；每种数据库那一行后面的"加一个版本"自己选一个 jar
+ *   查库时项目 pom 声明的版本直接从 Maven 本地仓库取（dbconf.py），不经过这里；这里管没声明版本的：后台探索到 Maven 本地仓库找、登记几个版本，连不上时按顺序换（问题表第 21、36 条）。配置页上的手动管理 2026-11-02 去掉了，命令行 tools/drivers.js 留着。
  *   命令行：node tools/drivers.js auto / scan / use <jar> / list
  *
  * 放在哪：
@@ -250,7 +250,7 @@ function repoOfSettings(file) {
 }
 /**
  * 这台电脑上的 Maven 本地仓库：[{ dir, from }]。
- * 先看配置页"本机环境"里配的每一套 Maven（填了本地仓库的用它，只填了 settings.xml 的读里面的 localRepository），
+ * 先看 IDEA 里配的（新项目默认设置、最近打开过的项目，问题表第 33 条），再看配置页"本机环境"里配的每一套 Maven（填了本地仓库的用它，只填了 settings.xml 的读里面的 localRepository），
  * 再看用户目录的 ~/.m2/settings.xml 和默认的 ~/.m2/repository。不存在的目录不算
  */
 function mavenRepos() {
@@ -261,6 +261,7 @@ function mavenRepos() {
     try { if (!fs.statSync(abs).isDirectory()) return; } catch (e) { return; }
     if (!out.some((x) => samePath(x.dir, abs))) out.push({ dir: abs, from });
   };
+  try { for (const m of require('./idea-config').machine().mavens) { if (m.repo) add(m.repo, 'IDEA 里配的本地仓库'); else if (m.settings) add(repoOfSettings(m.settings), 'IDEA 里配的 settings.xml'); } } catch (e) { /* 读不了就按没配 */ }
   const l = readLocal();
   let mavens = Array.isArray(l.mavens) ? l.mavens.filter(isObj) : [];
   if (!mavens.length && isObj(l.maven)) mavens = [Object.assign({ name: '默认' }, l.maven)];

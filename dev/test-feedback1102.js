@@ -318,6 +318,77 @@ const reason = (o) => H.reasonOf(o);
     stop();
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('第 36 条：项目声明的驱动直接从本地仓库取，不用登记；配置页不再手动管驱动');
+  {
+    const h = H.makeHome('t1102-drv', from);
+    const rt = H.runtime('auto');
+    const repo = path.join(h.home, '.m2', 'repository');
+    const inRepo = (g, a, v, ext, text) => { const f = path.join(repo, ...g.split('.'), a, v, a + '-' + v + '.' + (ext || 'jar')); H.write(f, text || 'x'); return f; };
+    const scripts = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+    if (!rt.python) console.log('    这台电脑上没有 Python，查库这半不测');
+    else {
+      // 返回 { jar, from } 或 { err }
+      const find = (proj, conn) => {
+        const py = 'import sys,json\nsys.dont_write_bytecode=True\nsys.path.insert(0,' + JSON.stringify(scripts) + ')\nimport dbconf\ntry:\n  r=dbconf.find_driver_jar(' + JSON.stringify(conn || { dialect: 'mysql' }) + ',' + JSON.stringify(proj) + ')\n  print(json.dumps({"jar":r[0],"from":r[1]},ensure_ascii=False))\nexcept dbconf.ConfError as e:\n  print(json.dumps({"err":str(e)},ensure_ascii=False))\n';
+        const r = H.run(h, rt.python, ['-c', py], { env: { PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' } });
+        try { return JSON.parse(r.out); } catch (e) { return { err: '跑不了：' + r.out + r.err }; }
+      };
+      const dep = (g, a, v) => '<dependency><groupId>' + g + '</groupId><artifactId>' + a + '</artifactId>' + (v ? '<version>' + v + '</version>' : '') + '</dependency>';
+      const pom = (body) => '<project><groupId>com.t</groupId><artifactId>demo</artifactId><version>1.0</version>' + body + '</project>';
+      let n = 0;
+      const proj = (files) => H.makeRepo(path.join(h.work, 'd' + (++n)), Object.assign({ '.gitignore': '.vibe/\n' }, files));
+      const j833 = inRepo('com.mysql', 'mysql-connector-j', '8.0.33');
+      inRepo('com.mysql', 'mysql-connector-j', '8.4.0');
+      const r1 = find(proj({ 'pom.xml': pom('<dependencies>' + dep('com.mysql', 'mysql-connector-j', '8.0.33') + '</dependencies>') }));
+      H.ok('pom 写明版本：直接从本地仓库取，不用登记', r1.jar && path.resolve(r1.jar) === path.resolve(j833) && /项目 pom 声明的版本/.test(r1.from), JSON.stringify(r1));
+      const r2 = find(proj({ 'pom.xml': pom('<properties><db.ver>8.0.33</db.ver></properties><dependencies>' + dep('com.mysql', 'mysql-connector-j', '${db.ver}') + '</dependencies>') }));
+      H.ok('版本写成属性：也认', r2.jar && /8\.0\.33/.test(r2.jar), JSON.stringify(r2));
+      // Spring Boot：版本在父 pom 一路往上的 BOM 里，父 pom 只在本地仓库
+      inRepo('org.springframework.boot', 'spring-boot-starter-parent', '2.7.18', 'pom', '<project><parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-dependencies</artifactId><version>2.7.18</version></parent><artifactId>spring-boot-starter-parent</artifactId></project>');
+      inRepo('org.springframework.boot', 'spring-boot-dependencies', '2.7.18', 'pom', '<project><artifactId>spring-boot-dependencies</artifactId><properties><mysql.version>8.0.33</mysql.version></properties><dependencyManagement><dependencies>' + dep('com.mysql', 'mysql-connector-j', '${mysql.version}') + '</dependencies></dependencyManagement></project>');
+      const r3 = find(proj({ 'pom.xml': pom('<parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>2.7.18</version><relativePath/></parent><dependencies>' + dep('com.mysql', 'mysql-connector-j') + '</dependencies>') }));
+      H.ok('Spring Boot：版本在父 pom 的 dependencyManagement 里，顺着本地仓库找到', r3.jar && /8\.0\.33/.test(r3.jar), JSON.stringify(r3));
+      const r3b = find(proj({ 'pom.xml': pom('<parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>2.7.18</version><relativePath/></parent><properties><mysql.version>8.4.0</mysql.version></properties><dependencies>' + dep('com.mysql', 'mysql-connector-j') + '</dependencies>') }));
+      H.ok('项目覆盖了版本属性：用项目的', r3b.jar && /8\.4\.0/.test(r3b.jar), JSON.stringify(r3b));
+      inRepo('com.corp', 'corp-bom', '3', 'pom', '<project><artifactId>corp-bom</artifactId><properties><v>8.0.33</v></properties><dependencyManagement><dependencies>' + dep('com.mysql', 'mysql-connector-j', '${v}') + '</dependencies></dependencyManagement></project>');
+      const r4 = find(proj({ 'pom.xml': pom('<dependencyManagement><dependencies><dependency><groupId>com.corp</groupId><artifactId>corp-bom</artifactId><version>3</version><type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement><dependencies>' + dep('com.mysql', 'mysql-connector-j') + '</dependencies>') }));
+      H.ok('版本在 import 的 BOM 里：也认', r4.jar && /8\.0\.33/.test(r4.jar), JSON.stringify(r4));
+      // 多模块：连接配置在 admin 模块，驱动写在 common 模块
+      const mm = proj({ 'pom.xml': pom('<packaging>pom</packaging><modules><module>admin</module><module>common</module></modules>'), 'admin/pom.xml': '<project><parent><groupId>com.t</groupId><artifactId>demo</artifactId><version>1.0</version></parent><artifactId>admin</artifactId></project>', 'common/pom.xml': '<project><parent><groupId>com.t</groupId><artifactId>demo</artifactId><version>1.0</version></parent><artifactId>common</artifactId><dependencies>' + dep('com.mysql', 'mysql-connector-j', '8.0.33') + '</dependencies></project>' });
+      const r5 = find(path.join(mm, 'admin'));
+      H.ok('驱动写在同一个工程的别的模块：也认', r5.jar && /8\.0\.33/.test(r5.jar), JSON.stringify(r5));
+      const r6 = find(proj({ 'pom.xml': pom('<dependencies>' + dep('com.mysql', 'mysql-connector-j', '5.1.49') + '</dependencies>') }));
+      H.ok('声明的版本本地仓库没有：给只拉这一个的命令，不拿别的版本代替', r6.err && /dependency:get "-Dartifact=com\.mysql:mysql-connector-j:5\.1\.49"/.test(r6.err) && /不拿别的版本代替/.test(r6.err), JSON.stringify(r6));
+      // IDEA 里配的本地仓库：探索记在 .vibe/onboard.json
+      const ideaRepo = path.join(h.root, 'idea-repo');
+      const ideaJar = path.join(ideaRepo, 'com', 'mysql', 'mysql-connector-j', '6.0.6', 'mysql-connector-j-6.0.6.jar'); H.write(ideaJar, 'x');
+      const onb = (o) => JSON.stringify({ version: 1, maven: o });
+      const r7 = find(proj({ 'pom.xml': pom('<dependencies>' + dep('com.mysql', 'mysql-connector-j', '6.0.6') + '</dependencies>'), '.vibe/onboard.json': onb({ cmd: '"F:/m/bin/mvn" -s "C:/s.xml"', repo: ideaRepo.replace(/\\/g, '/') }) }));
+      H.ok('项目在 IDEA 里配的本地仓库：先在那里找', r7.jar && path.resolve(r7.jar) === path.resolve(ideaJar), JSON.stringify(r7));
+      const r8 = find(proj({ 'pom.xml': pom('<dependencies>' + dep('com.mysql', 'mysql-connector-j', '7.7.7') + '</dependencies>'), '.vibe/onboard.json': onb({ cmd: '"F:/m/bin/mvn" -s "C:/s.xml"' }) }));
+      H.ok('拉依赖的命令用这个项目的 Maven 和 settings.xml', r8.err && r8.err.includes('"F:/m/bin/mvn" -s "C:/s.xml" dependency:get "-Dartifact=com.mysql:mysql-connector-j:7.7.7"'), JSON.stringify(r8));
+      // 版本解析不出来
+      const r9 = find(proj({ 'pom.xml': pom('<dependencies>' + dep('com.mysql', 'mysql-connector-j') + '</dependencies>') }));
+      H.ok('版本解析不出来、本地仓库有两个版本：让写 driver_jar，不猜', r9.err && /版本解析不出来/.test(r9.err) && /driver_jar/.test(r9.err), JSON.stringify(r9));
+      inRepo('com.oscar', 'oscarJDBC', '9.9');
+      const r10 = find(proj({ 'pom.xml': pom('<dependencies>' + dep('com.oscar', 'oscarJDBC') + '</dependencies>') }), { dialect: 'oscar' });
+      H.ok('版本解析不出来、本地仓库只有一个版本：就是它', r10.jar && /oscarJDBC-9\.9/.test(r10.jar), JSON.stringify(r10));
+      // 项目没声明：老项目的驱动放在 Tomcat 的 lib 里
+      const tomcat = path.join(h.root, 'tomcat'); H.write(path.join(tomcat, 'lib', 'kingbase8-8.6.0.jar'), 'x');
+      H.write(path.join(h.kit, 'local.json'), JSON.stringify({ tomcats: [{ name: '9', path: tomcat }] }));
+      const r11 = find(proj({ 'a.txt': 'x' }), { dialect: 'kingbase' });
+      H.ok('项目没声明、驱动在 Tomcat 的 lib 里：找得到', r11.jar && /kingbase8-8\.6\.0/.test(r11.jar), JSON.stringify(r11));
+      const r12 = find(proj({ 'a.txt': 'x' }), { dialect: 'dm' });
+      H.ok('哪都没有：报错里不再让人去配置页', r12.err && /找不到/.test(r12.err) && /driver_jar/.test(r12.err) && !/配置页/.test(r12.err), JSON.stringify(r12));
+    }
+    const ui = fs.readFileSync(path.join(from, 'router', 'ui.html'), 'utf8');
+    const api = fs.readFileSync(path.join(from, 'router', 'kit-api.js'), 'utf8');
+    H.ok('配置页：导航叫"查库"，没有"现在用的驱动"', /<button data-tab="data">查库<\/button>/.test(ui) && !/sec-drv|现在用的驱动|drvList/.test(ui));
+    H.ok('配置页的后端：手动管驱动的接口去掉了', !/api\/kit\/drivers/.test(api) && !/driversOp|runTool/.test(api));
+    H.ok('各处提示不再让人去配置页"数据库驱动"', !['claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/dbconf.py', 'claude/skills/ttls-db-crud/scripts/vibe.py', 'kit/lib/onboard.js'].some((f) => /配置页[^。\n]{0,6}数据库驱动/.test(fs.readFileSync(path.join(from, f), 'utf8'))));
+  }
+
   const wins = await watch.stop();
   H.ok('桌面上没有多出窗口', !wins.length, wins.join('；'));
   H.done('11-02 反馈');

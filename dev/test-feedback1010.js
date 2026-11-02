@@ -124,7 +124,7 @@ function jar(file, version) {
     H.ok('当前项目指定旧版就用旧版，不用全局默认新版', /8\.0\.33/.test(pr.out), pr.out + pr.err);
     H.write(path.join(proj, 'pom.xml'), '<project><dependencies><dependency><artifactId>mysql-connector-j</artifactId><version>5.1.49</version></dependency></dependencies></project>');
     const missing = H.run(h, rt.python, ['-c', py]);
-    H.ok('项目所需版本未登记时明确报缺少，不猜新版', missing.code !== 0 && /不能拿另一个版本代替/.test(missing.err), missing.out + missing.err);
+    H.ok('项目所需版本未登记时明确报缺少，不猜新版', missing.code !== 0 && /不拿别的版本代替/.test(missing.err), missing.out + missing.err);
     H.write(path.join(h.work, 'pom.xml'), '<project><dependencies><dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><version>8.4.0</version></dependency></dependencies></project>');
     H.write(path.join(proj, 'pom.xml'), '<project><parent><relativePath>../pom.xml</relativePath></parent><dependencies><dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><version>8.0.33</version></dependency></dependencies></project>');
     const child = H.run(h, rt.python, ['-c', py]);

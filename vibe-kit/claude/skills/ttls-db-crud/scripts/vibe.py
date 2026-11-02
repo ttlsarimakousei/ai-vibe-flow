@@ -270,7 +270,7 @@ schema = SYSDBA
 ; forbid = SYS_*, T_AUDIT_LOG
 ; hard_limit = 100000
 ;
-; 驱动在 vibe-kit 的配置页"数据库驱动"里管。这个连接要用别的版本就指路径：
+; 驱动不用配：项目 pom 声明的版本直接从 Maven 本地仓库取。这个连接要用别的版本就指路径：
 ; driver_jar = D:/path/to/your-driver.jar
 """
 

@@ -194,7 +194,7 @@
     <button data-tab="models" class="on">模型</button>
     <button data-tab="usage">用量</button>
     <button data-tab="local">本机环境</button>
-    <button data-tab="data">数据库驱动</button>
+    <button data-tab="data">查库</button>
     <button data-tab="kit">套件开关</button>
     <button data-tab="lessons">经验规则</button>
     <button data-tab="remote">更新和上报</button>
@@ -377,16 +377,8 @@
   </section>
 
   <section id="tab-data" class="tab hide">
-    <div class="pagehead"><h2>数据库驱动</h2><p>查库的技能（/ttls-db-crud）连库要用驱动。驱动是厂商的，不随安装包带，每台电脑在这里备一次。</p></div>
-    <p class="msg" id="drvMsg" style="margin:0 0 12px"></p>
-
-    <div class="card" id="sec-drv" data-sec="现在用的驱动">
-      <div class="row between"><div><h2>现在用的驱动</h2><p class="hint">每种数据库可以登记几个版本。登记在 <span class="mono" id="drvReg"></span>，装新版、卸载都不删。项目自己的 lib 目录里带着驱动的，查库时优先用项目的。</p></div><div class="row" style="flex-wrap:nowrap"><button class="btn primary" id="drvAuto">自动搜索</button><button class="btn" id="drvRefresh">刷新</button></div></div>
-      <p class="hint">点"加一个版本"添加，已有版本保留。查库先用连接里写的或项目自带的 jar，再按项目 pom 声明的版本选；没声明版本的用默认的，建连接失败、像是驱动的问题时，按下面列的顺序换下一个版本再试，换成功的记进项目连接配置的 driver_jar（口令不对、网络不通不换；pom 写明了版本的不换）。</p>
-      <div id="drvRepos" class="dim" style="margin-bottom:6px"></div>
-      <p class="msg" id="drvFindMsg" style="margin:0 0 8px"></p>
-      <div class="scroll"><table><thead><tr><th>数据库</th><th>驱动</th><th>版本</th><th>从哪来</th><th class="num">大小</th><th></th></tr></thead><tbody id="drvList"></tbody></table></div>
-    </div>
+    <div class="pagehead"><h2>查库</h2><p>查库的技能（/ttls-db-crud）用的驱动不用配：项目 pom 声明的版本直接从 Maven 本地仓库取，缺了只拉缺的那一个；项目没声明的，后台自动到 Maven 本地仓库找。都找不到时，它会问你 jar 在哪。</p></div>
+    <p class="msg" id="dataMsg" style="margin:0 0 12px"></p>
 
     <div class="card" id="sec-dbopt" data-sec="查库快一点">
       <h2>查库快一点</h2>
@@ -752,7 +744,7 @@
     if (b.dataset.tab === 'usage') loadUsage();
     // 每次切到这几页都重新读一遍开关：页面开着的时候别处改过的，这里跟着变（你在页面上改了还没保存的不动）
     if (['guide', 'local', 'data', 'kit', 'lessons', 'remote'].includes(b.dataset.tab)) loadKit(true).then(() => { if (b.dataset.tab === 'remote') loadRemote(true); renderBar(); });
-    if (b.dataset.tab === 'data') { loadDrivers(); loadToolUse(); }
+    if (b.dataset.tab === 'data') loadToolUse();
     if (b.dataset.tab === 'kit') { loadSessions(); loadFeedback(); }
     if (b.dataset.tab === 'lessons') loadLessons();
     if (b.dataset.tab === 'remote') loadFeedback();
@@ -1037,7 +1029,7 @@
       pk.entries = r.entries; $('pkMsg').textContent = '';
     } catch (err) { say($('pkMsg'), err.message, false); }
   }
-  // onPick：选中文件之后直接调它（数据库驱动那一页：点"加一个版本"选一个 jar 就登记）；title：弹窗的标题
+  // onPick：选中文件之后直接调它；title：弹窗的标题
   function openPicker(input, expect, file, ext, onPick, title) {
     pk = { input, expect, file, ext: ext || '', dir: '', entries: [], onPick: onPick || null };
     $('pkTitle').textContent = title || (file ? (ext === 'jar' ? '选驱动的 jar' : '选 settings.xml') : '选目录');
@@ -1359,91 +1351,7 @@
     } catch (e) { say($('lsMsg'), e.message, false); }
   });
 
-  // ---------- 数据库驱动 ----------
-  const mb = (n) => ((Number(n) || 0) / 1048576).toFixed(1) + ' MB';
-  const DRV_FROM = { maven: '自动搜索找到的', manual: '自己选的', rescue: '从旧的 urai-db-crud 技能里挪过来的' };
-  // 数据库的名字以后端给的为准（drvNames 在读到登记表之后更新）；后端还没回来之前用这一份
-  let drvNames = { dm: '达梦', oscar: '神通', mysql: 'MySQL', oracle: 'Oracle', kingbase: '人大金仓', postgresql: 'PostgreSQL' };
-  let drvJdk = 0;
-  const javaTag = (java) => (Number(java) > 8 ? ' <span class="tag ' + (drvJdk && Number(java) > drvJdk ? 'bad' : 'off') + '">要 Java ' + Number(java) + ' 以上' + (drvJdk && Number(java) > drvJdk ? '，默认的 JDK 是 ' + drvJdk + '，加载不了' : '') + '</span>' : '');
-  /** 进行中的、要一直留着的提示：不像 say 那样过 4 秒自己消失 */
-  const hold = (el, text, kind) => { el.textContent = text; el.className = 'msg ' + (kind || ''); };
-  function renderDrivers(s) {
-    if (!s || s.missing) { $('drvList').innerHTML = '<tr><td colspan="6" class="dim">这台电脑上装的套件还没有这个功能（版本太老），装新版就有了。</td></tr>'; return; }
-    $('drvReg').textContent = s.registry || '';
-    drvJdk = Number(s.jdk) || 0;
-    if ((s.drivers || []).length) { drvNames = {}; for (const d of s.drivers) drvNames[d.dialect] = d.name; }
-    const removed = s.removed || [];
-    // 每一行后面：加一个版本（去硬盘上选一个 jar，登记成默认的，原来的版本留着）；已经有驱动的还能"不用了"
-    const pick = (d, text) => '<button class="btn" data-drvpick="' + esc(d.dialect) + '" data-name="' + esc(d.name) + '" data-jar="' + esc(d.jar || '') + '">' + text + '</button>';
-    const drop = (d, text) => '<button class="btn danger" data-drvrm="' + esc(d.dialect) + '" data-name="' + esc(d.name) + '">' + text + '</button>';
-    const versions = (d) => '<details open><summary>登记了 ' + (d.versions || []).length + ' 个版本（连不上时默认的先试，再按这个顺序）</summary>' + (d.versions || []).map((v) => '<div class="mono">' + esc(v.version || '版本未知') + ' ' + esc(v.file) + (v.default ? ' 默认' : ' <button class="btn" data-drvuse="' + esc(v.jar) + '" data-dialect="' + esc(d.dialect) + '" data-name="' + esc(d.name) + '">设默认</button>') + ' <button class="btn danger" data-drvrm="' + esc(d.dialect) + '" data-rmjar="' + esc(v.jar) + '" data-name="' + esc(d.name) + '">去掉此版本</button></div>').join('') + '</details>';
-    $('drvList').innerHTML = (s.drivers || []).map((d) => '<tr><td style="white-space:nowrap"><b>' + esc(d.name) + '</b><div class="dim mono" style="font-size:12px">' + esc(d.url) + '…</div></td>'
-      + (d.ok ? '<td class="mono">' + esc(d.file) + javaTag(d.java) + '<div class="dim" style="font-size:12px;word-break:break-all">' + esc(d.jar) + '</div>' + versions(d) + '</td><td class="mono" style="white-space:nowrap">' + esc(d.version || '') + '</td><td style="white-space:nowrap">' + esc(DRV_FROM[d.from] || d.from || '') + '</td><td class="num">' + mb(d.size) + '</td><td style="white-space:nowrap">' + pick(d, '加一个版本') + ' ' + drop(d, '不用了') + '</td>'
-        : d.lost ? '<td colspan="4"><span class="tag bad">登记的文件不见了</span> <span class="mono dim">' + esc(d.jar) + '</span></td><td style="white-space:nowrap">' + pick(d, '加一个版本') + ' ' + drop(d, '去掉') + '</td>'
-        : '<td colspan="4"><span class="tag off">还没有驱动</span>' + (removed.includes(d.dialect) ? ' <span class="dim">你去掉过：后台不会自动登记它，要用的时候点"自动搜索"，或者点右边的"选驱动"</span>' : '') + '</td><td style="white-space:nowrap">' + pick(d, '选驱动') + '</td>') + '</tr>').join('');
-    const repos = s.repos || [];
-    $('drvRepos').innerHTML = repos.length ? '自动搜索会找这 ' + repos.length + ' 个仓库：' + repos.map((r) => '<span class="mono">' + esc(r.dir) + '</span>（' + esc(r.from) + '）').join('；') : '<span style="color:var(--warn)">这台电脑上没找到 Maven 本地仓库，自动搜索找不到东西。</span>先在"本机环境"里配一套 Maven，或者点每一行的"选驱动"自己选 jar。';
-  }
-  async function loadDrivers() { try { renderDrivers(await api('GET', '/api/kit/drivers')); } catch (e) { say($('drvMsg'), e.message, false); } }
-  /** 自动搜索：到 Maven 本地仓库里找，没有驱动的自动登记一个 */
-  async function drvAutoFind() {
-    const btn = $('drvAuto');
-    const label = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '正在找…';
-    const t0 = Date.now();
-    hold($('drvFindMsg'), '正在找，仓库大的话要等几十秒…');
-    const tick = setInterval(() => hold($('drvFindMsg'), '正在找，已经 ' + Math.round((Date.now() - t0) / 1000) + ' 秒。仓库大的话要等几十秒…'), 1000);
-    try {
-      const r = await api('POST', '/api/kit/drivers/auto', {});
-      clearInterval(tick);
-      // 工具没跑成（驱动目录写不了、磁盘满）、装的套件太老：把原因说出来
-      // 老版本没有这个工具时接口回 missing: true；自动登记的结果里 missing 是"还没有驱动的数据库"列表，不是这个意思
-      if (!r || r.failed || r.missing === true || r.ok === false) { hold($('drvFindMsg'), r && r.missing === true ? '装着的套件还没有这个功能，装新版就有了' : (r && (r.why || r.msg)) || '没找成', 'bad'); return; }
-      const scan = r.scan || {};
-      const used = r.used || [];
-      const miss = (r.missing || []).map((k) => drvNames[k] || k);
-      const tail = '看了 ' + (scan.scanned || 0) + ' 个目录，用了 ' + ((scan.ms || 0) / 1000).toFixed(1) + ' 秒' + (scan.timedOut ? '。到时间了，没看完' : '');
-      hold($('drvFindMsg'), (used.length ? '登记了 ' + used.length + ' 个：' + used.map((u) => u.name + (u.java > 8 ? '（要 Java ' + u.java + ' 以上）' : '')).join('、') + '。' : '没有新登记的。') + (miss.length ? '还是没有驱动的：' + miss.join('、') + '，点那一行的"选驱动"自己选 jar。' : '') + tail, scan.timedOut ? 'bad' : 'ok');
-      if (r.status) renderDrivers(r.status); else loadDrivers();
-    } catch (e) { clearInterval(tick); hold($('drvFindMsg'), e.message, 'bad'); } finally { clearInterval(tick); btn.disabled = false; btn.textContent = label; }
-  }
-  /** 加一个版本：把选中的 jar 登记成这种数据库的驱动（不是这种数据库的驱动会被挡回来） */
-  async function drvUse(jar, dialect, name) {
-    if (!jar) return;
-    hold($('drvMsg'), '登记中…');
-    try {
-      const r = await api('POST', '/api/kit/drivers/use', { jar, dialect: dialect || '' });
-      hold($('drvMsg'), (r && (r.msg || r.why)) || (r && r.ok ? name + '的驱动登记好了' : name + '的驱动没登记上'), r && r.ok ? 'ok' : 'bad');
-      if (r && r.status) renderDrivers(r.status);
-    } catch (e) { hold($('drvMsg'), e.message, 'bad'); }
-  }
-  $('drvRefresh').onclick = loadDrivers;
-  $('drvAuto').onclick = drvAutoFind;
-  // 上一次选 jar 的那个目录：换下一种数据库的驱动时从这里接着选
-  let drvLastDir = '';
-  $('tab-data').addEventListener('click', async (ev) => {
-    const t = ev.target;
-    if (!t || !t.dataset) return;
-    if (t.dataset.drvpick) {
-      const dialect = t.dataset.drvpick;
-      const name = t.dataset.name;
-      // 从现在登记的那个 jar 所在的目录开始；没有就从上一次选的目录开始
-      const start = { value: t.dataset.jar || (drvLastDir ? drvLastDir + '\\x' : '') };
-      return openPicker(start, '', true, 'jar', (p) => { drvLastDir = p.replace(/[\\/][^\\/]*$/, ''); drvUse(p, dialect, name); }, '选 ' + name + ' 的驱动 jar');
-    }
-    if (t.dataset.drvrm) {
-      if (t.dataset.rmjar) {
-        try { const r = await api('POST', '/api/kit/drivers/remove', { dialect: t.dataset.drvrm, jar: t.dataset.rmjar }); say($('drvMsg'), r.msg || '', !!r.ok); if (r.status) renderDrivers(r.status); }
-        catch (e) { say($('drvMsg'), e.message, false); }
-        return;
-      }
-      if (!confirm(t.dataset.name + '的驱动不用了？\n只是从登记表里去掉，jar 文件留在驱动目录里。\n去掉之后后台不会再自动登记它；要用的时候点"自动搜索"，或者点这一行的"选驱动"。')) return;
-      try { const r = await api('POST', '/api/kit/drivers/remove', { dialect: t.dataset.drvrm }); say($('drvMsg'), r.msg || '', !!r.ok); if (r.status) renderDrivers(r.status); } catch (e) { say($('drvMsg'), e.message, false); }
-    }
-    if (t.dataset.drvuse) drvUse(t.dataset.drvuse, t.dataset.dialect, t.dataset.name);
-  });
+  // ---------- 查库 ----------
   const dur = (ms) => (ms >= 1000 ? (ms / 1000).toFixed(1) + ' 秒' : Math.round(ms) + ' 毫秒');
   async function loadToolUse() {
     try {
@@ -1451,7 +1359,7 @@
       const t = r.tools || { stats: [], hints: [] };
       $('tuList').innerHTML = t.stats.length ? t.stats.map((x) => '<tr><td>' + esc(x.tool) + '</td><td class="mono">' + esc(x.cmd) + '</td><td class="num">' + x.n + '</td><td class="num">' + (x.fail || '') + '</td><td class="num">' + dur(x.avg) + '</td><td class="num">' + dur(x.max) + '</td><td class="num">' + (x.tool === 'ttls-db-crud' ? x.java : '') + '</td><td class="mono" style="font-size:12px">' + esc((x.errors || []).map((e) => e[0] + ' ×' + e[1]).join('，')) + '</td></tr>').join('') : '<tr><td colspan="8" class="dim">还没用过。</td></tr>';
       $('tuHints').innerHTML = (t.hints || []).map((x) => '<li><b>' + esc(x.what) + '</b>。' + esc(x.detail) + '</li>').join('');
-    } catch (e) { say($('drvMsg'), e.message, false); }
+    } catch (e) { say($('dataMsg'), e.message, false); }
   }
   $('tuRefresh').onclick = loadToolUse;
 

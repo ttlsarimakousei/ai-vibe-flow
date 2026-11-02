@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 数据库驱动：看现在用的是哪个、到 Maven 本地仓库里找、登记一个。配置页"数据库驱动"那一页做的是同样的事。
+ * 数据库驱动：看现在用的是哪个、到 Maven 本地仓库里找、登记一个。后台探索调的也是这几件事。
  *   node drivers.js list                      每种数据库现在用哪个驱动
  *   node drivers.js auto [--only dm,mysql] [--force] [--by-user]   到 Maven 本地仓库里找，没登记驱动的数据库自动登记一个
  *                                             （项目的 pom 里写明的版本 → 查库用的 JDK 加载得了的里面最新的）。

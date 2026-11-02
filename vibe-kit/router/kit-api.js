@@ -276,7 +276,6 @@ function runOp(op, a) {
   if (op === 'readiness') { const f = path.join(a.kitDir, 'lib', 'readiness.js'); return require(f).inspect(a.project); }
   if (op === 'performance') { const S = require(path.join(a.kitDir, 'lib', 'session')); return { reviews: S.readState('review-local-metrics'), hooks: S.readState('hook-stats').byHook || {}, tools: toolUsage(a.kitDir) }; }
   if (op === 'browse') return browse(a.dir, a.file, a.ext);
-  if (op === 'drivers') return driversOp(a);
   if (op === 'detect') return detect(a.kitDir);
   if (op === 'lessons') return lessonsOp(a);
   throw new Error('没有这个操作：' + op);
@@ -330,20 +329,6 @@ async function handle(method, url, body, kitDir, ctx) {
   if (method === 'POST' && url === '/api/kit/readiness') { const project = pathStr(body && body.project); if (!project || !path.isAbsolute(project)) throw new Error('填写项目完整路径'); return inWorker('readiness', { kitDir, project }, '核对环境'); }
   if (method === 'GET' && url === '/api/kit/performance') return inWorker('performance', { kitDir }, '读取本机耗时');
   if (method === 'POST' && url === '/api/kit/browse') return inWorker('browse', { dir: pathStr(body && body.dir), file: !!(body && body.file), ext: body && body.ext === 'jar' ? 'jar' : '' }, '列目录');
-  // 数据库驱动：看现在用的、到 Maven 本地仓库里找、登记一个。找和拷文件可能要几十秒，起一个进程去做，不在路由的进程里等
-  if (method === 'GET' && url === '/api/kit/drivers') return inWorker('drivers', { kitDir, action: 'status' }, '读驱动的登记表');
-  if (method === 'POST' && /^\/api\/kit\/drivers\/(scan|auto|use|remove)$/.test(url)) {
-    const act = url.split('/').pop();
-    if (!fs.existsSync(path.join(kitDir, 'tools', 'drivers.js'))) return { missing: true };
-    const args = [act];
-    // 页面上点的"找"：用户自己去掉过的那几种也照常登记（后台自动探索不登记它们）
-    if (act === 'auto') args.push('--by-user');
-    if (act === 'use') { const jar = pathStr(body && body.jar); if (!jar) throw new Error('要给 jar 的路径'); args.push(jar); const d = str(body && body.dialect); if (/^[a-z]{2,12}$/.test(d)) args.push('--dialect', d); }
-    if (act === 'remove') { const d = str(body && body.dialect); if (!/^[a-z]{2,12}$/.test(d)) throw new Error('要说是哪种数据库'); args.push(d); const jar = pathStr(body && body.jar); if (jar) args.push('--jar', jar); }
-    const r = await runTool(kitDir, 'drivers.js', args.concat('--json'), act === 'scan' || act === 'auto' ? 90000 : 30000);
-    if (act === 'use' || act === 'remove') r.status = await inWorker('drivers', { kitDir, action: 'status' }, '读驱动的登记表').catch(() => null);
-    return r;
-  }
   const claudeDir = path.dirname(kitDir);
   if (ctx && method === 'GET' && url === '/api/kit/link') return publicLink(claudeDir, ctx);
   if (ctx && method === 'POST' && url === '/api/kit/link') { const r = setLink(claudeDir, ctx, !!(body && body.on), !!(body && body.force)); return Object.assign(r, publicLink(claudeDir, ctx)); }
@@ -421,26 +406,6 @@ function loadRemote(kitDir) {
   if (!fs.existsSync(path.join(lib, 'updater.js')) || !fs.existsSync(path.join(lib, 'gitlab.js'))) return null;
   for (const m of ['updater.js', 'issues.js', 'gitlab.js', 'feedback.js', 'session.js']) { try { delete require.cache[require.resolve(path.join(lib, m))]; } catch (e) { /* 没载入过 */ } }
   return { gl: require(path.join(lib, 'gitlab.js')), up: require(path.join(lib, 'updater.js')), is: require(path.join(lib, 'issues.js')), session: require(path.join(lib, 'session.js')) };
-}
-/** 数据库驱动的登记表（在工作线程里读：登记的 jar 可能在断开的网络盘上）。老版本没有的返回 { missing: true } */
-function driversOp(a) {
-  const f = path.join(a.kitDir, 'lib', 'drivers.js');
-  if (!fs.existsSync(f)) return { missing: true };
-  try { delete require.cache[require.resolve(f)]; } catch (e) { /* 没载入过 */ }
-  return require(f).status();
-}
-/** 起一个进程跑套件 tools/ 里的工具，把它写出来的那一行 JSON 拿回来。没有窗口；路由的转发不受影响 */
-function runTool(kitDir, tool, args, timeoutMs) {
-  return new Promise((resolve) => {
-    const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: path.dirname(path.resolve(kitDir)) });
-    execFile(process.execPath, [path.join(kitDir, 'tools', tool)].concat(args), { timeout: timeoutMs, env, windowsHide: true, cwd: kitDir, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
-      const line = String(stdout || '').trim().split(/\r?\n/).filter(Boolean).pop() || '';
-      let j = null;
-      try { j = JSON.parse(line); } catch (e) { /* 不是 JSON */ }
-      if (j && typeof j === 'object') return resolve(j);
-      resolve({ ok: false, failed: true, why: err && err.killed ? '等了 ' + Math.round(timeoutMs / 1000) + ' 秒还没结果，先停了' : '没跑出结果' + (err ? '：' + String(err.message).split('\n')[0].slice(0, 200) : '') });
-    });
-  });
 }
 /** 起一个进程跑套件的 lib/updater.js <命令>，把它写出来的那一行 JSON 拿回来。没有窗口；路由的转发不受影响 */
 function runKit(kitDir, args, timeoutMs) {

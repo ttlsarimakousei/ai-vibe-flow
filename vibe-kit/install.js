@@ -1002,7 +1002,7 @@ if (mode === 'install') {
   if (!NO_ROUTER && fs.existsSync(path.join(SRC, 'router'))) { removeDir(path.join(KIT, 'router')); copyDir(path.join(SRC, 'router'), path.join(KIT, 'router')); }
   if (NO_ROUTER && fs.existsSync(path.join(KIT, 'router', 'service.js'))) {
     console.log('  [!] --no-router：以前装的模型路由没有更新，原样留着、照常运行（' + path.join(KIT, 'router') + '）。不想要它了，先在配置页点"断开"，再运行卸载');
-    console.log('      配置页也还是旧的：这一版新加的开关、"数据库驱动"那一页要等路由更新之后才有；在旧配置页上保存开关，新加的几个开关会回到默认值');
+    console.log('      配置页也还是旧的：这一版新加的开关、"查库"那一页要等路由更新之后才有；在旧配置页上保存开关，新加的几个开关会回到默认值');
   }
   // 套件代码的指纹：会话开始时比一遍，被改过的告诉模型和你、记一条问题反馈（算法和 kit/lib/session.js 的 kitCodeHashes 一样）
   {

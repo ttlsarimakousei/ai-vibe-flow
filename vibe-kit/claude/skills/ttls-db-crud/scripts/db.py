@@ -448,13 +448,13 @@ def _connect_hint(conn, result):
     if result.get("_driver_jar"):
         print("用的驱动：%s（%s）" % (result["_driver_jar"], result.get("_driver_from")), file=sys.stderr)
     if result.get("_driver_tried"):
-        print("登记的驱动都试过了，都建不了连接：%s。在 vibe-kit 配置页的「数据库驱动」里加一个和库版本对得上的，"
-              "或者把 jar 的路径写进这个连接的 driver_jar。" % "、".join(os.path.basename(x) for x in result["_driver_tried"]),
+        print("登记的驱动都试过了，都建不了连接：%s。问用户要一个和库版本对得上的 jar，"
+              "把路径写进这个连接的 driver_jar。" % "、".join(os.path.basename(x) for x in result["_driver_tried"]),
               file=sys.stderr)
     if conn["dialect"] == "oracle" and ("ora-28040" in low or "ora-12505" in low or "ora-12514" in low
                                         or "no matching authentication" in low or "unsupported" in low):
         print("Oracle 的驱动和库的版本要对得上：连 11g 用 ojdbc6 一带的，连 19c 以上用 ojdbc8 / ojdbc11。"
-              "换驱动：在 vibe-kit 配置页的「数据库驱动」里选，或者把 jar 的路径写进这个连接的 driver_jar。",
+              "换驱动：把 jar 的路径写进这个连接的 driver_jar。",
               file=sys.stderr)
     if ("access denied" in low or "password" in low or "口令" in err or "密码" in err
             or state == "28000" or "ora-01017" in low):
@@ -1260,7 +1260,7 @@ def cmd_doctor(args, project_root):
         tool = dbconf.drivers_tool()
         print("上面打 ✗ 的补齐之后再用。")
         if tool:
-            print("缺驱动：node \"%s\" auto（到 Maven 本地仓库里找），或者在 vibe-kit 配置页的「数据库驱动」里选。" % tool)
+            print("缺驱动：node \"%s\" auto（到 Maven 本地仓库里找），或者把 jar 的路径写进这个连接的 driver_jar。" % tool)
         print("别的怎么补，见 references/连接配置.md")
     return EXIT_OK if ok else EXIT_USAGE
 

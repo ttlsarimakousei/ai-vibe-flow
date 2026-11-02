@@ -12,7 +12,7 @@ dbconf.py —— 连接配置、驱动定位、Java 定位。只用 Python 标�
     jdbc = jdbc:dm://localhost:5236
     user = SYSDBA
     password = ${ENV:DM_PWD}
-    ; driver_jar 可以不写：用 vibe-kit 配置页"数据库驱动"里登记的那个
+    ; driver_jar 可以不写：项目 pom 声明的版本直接从 Maven 本地仓库取，没声明的用后台探索登记的
     driver_jar = C:/path/to/DmJdbcDriver18.jar
     ; 标成生产库之后，这个连接只能读不能写
     readonly = true
@@ -24,6 +24,7 @@ dbconf.py —— 连接配置、驱动定位、Java 定位。只用 Python 标�
 """
 import configparser
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -450,69 +451,227 @@ def find_java(env=None):
 
 # ============================================================ 找驱动 jar
 
-def project_driver_versions(project_root, patterns):
-    """只看当前项目及其本地父 pom，不借用兄弟项目的版本，也不连接数据库。"""
-    if not project_root:
-        return set()
-    p = pathlib.Path(project_root) / "pom.xml"
+def _read_pom(p):
+    try:
+        root = ET.parse(str(p)).getroot()
+    except (ET.ParseError, OSError):
+        return None
+    for e in root.iter():
+        e.tag = e.tag.split("}")[-1]
+    return root
+
+
+def _repo_file(repos, group, artifact, version, ext):
+    """本地仓库里这个坐标的文件。没有返回 None"""
+    if not (group and artifact and version):
+        return None
+    for base, _ in repos:
+        p = base.joinpath(*group.split(".")) / artifact / version / ("%s-%s.%s" % (artifact, version, ext))
+        if p.is_file():
+            return p
+    return None
+
+
+def _local_parent(p, root):
+    """本地的父 pom：按 relativePath 找，artifactId 对得上才算。没有返回 None"""
+    parent = root.find("parent")
+    if parent is None:
+        return None
+    rel = parent.find("relativePath")
+    if rel is not None and not (rel.text or "").strip():
+        return None
+    c = p.parent / ((rel.text or "").strip() if rel is not None else "../pom.xml")
+    if c.is_dir():
+        c = c / "pom.xml"
+    if not c.is_file():
+        return None
+    r = _read_pom(c)
+    want = parent.findtext("artifactId", "")
+    return c if r is not None and (not want or r.findtext("artifactId", "") == want) else None
+
+
+def _pom_chain(first, repos):
+    """这个 pom 和它一路的父 pom，近的在前。本地的找不到，到 Maven 本地仓库里找（spring-boot-starter-parent 这类）"""
     docs = []
     seen = set()
-    for _ in range(6):
-        if not p.is_file() or str(p.resolve()) in seen:
+    p = first
+    for _ in range(8):
+        if p is None or not p.is_file() or str(p.resolve()) in seen:
             break
         seen.add(str(p.resolve()))
-        try:
-            root = ET.parse(p).getroot()
-        except (ET.ParseError, OSError):
+        root = _read_pom(p)
+        if root is None:
             break
-        for e in root.iter():
-            e.tag = e.tag.split("}")[-1]
         docs.append(root)
         parent = root.find("parent")
         if parent is None:
             break
-        rel = parent.find("relativePath")
-        if rel is not None and not (rel.text or "").strip():
-            break
-        p = p.parent / ((rel.text or "").strip() if rel is not None else "../pom.xml")
+        p = _local_parent(p, root) or _repo_file(repos, parent.findtext("groupId", ""), parent.findtext("artifactId", ""), parent.findtext("version", ""), "pom")
+    return docs
+
+
+def _resolver(docs):
+    """把 ${xxx} 换成属性的值：近的 pom 盖远的。解析不出来的返回 ''"""
     props = {}
     for root in reversed(docs):
         props.update({e.tag: (e.text or "").strip() for e in root.findall("properties/*")})
+    if docs:
+        version = docs[0].findtext("version", "") or docs[0].findtext("parent/version", "")
+        props.update({"project.version": version, "pom.version": version, "version": version, "project.parent.version": docs[0].findtext("parent/version", "")})
+
     def resolve(v):
+        v = (v or "").strip()
         for _ in range(6):
             nv = re.sub(r"\$\{([^}]+)\}", lambda m: props.get(m[1], m[0]), v)
             if nv == v:
                 break
             v = nv
         return v if chr(36) + "{" not in v else ""
-    managed = {}
-    for root in reversed(docs):
+    return resolve
+
+
+def _managed_version(docs, resolve, repos, group, artifact, depth=0):
+    """dependencyManagement 管的版本：写明的优先（近的 pom 优先），再看 scope=import 的 BOM（到本地仓库里读）"""
+    boms = []
+    for root in docs:
         for d in root.findall("dependencyManagement/dependencies/dependency"):
-            managed[d.findtext("artifactId", "")] = resolve(d.findtext("version", ""))
-    direct = {}
+            g = resolve(d.findtext("groupId", ""))
+            a = resolve(d.findtext("artifactId", ""))
+            if d.findtext("scope", "") == "import" and d.findtext("type", "") == "pom":
+                boms.append((g, a, resolve(d.findtext("version", ""))))
+            elif a == artifact and (g == group or not group):
+                v = resolve(d.findtext("version", ""))
+                if v:
+                    return v
+    if depth < 3:
+        for g, a, v in boms:
+            p = _repo_file(repos, g, a, v, "pom")
+            chain = _pom_chain(p, repos) if p else []
+            if chain:
+                hit = _managed_version(chain, _resolver(chain), repos, group, artifact, depth + 1)
+                if hit:
+                    return hit
+    return ""
+
+
+def _driver_deps_in(docs, repos, patterns):
+    """一串 pom（模块和它的父 pom）里声明的驱动：{(group, artifact): version}"""
+    resolve = _resolver(docs)
+    out = {}
     for root in reversed(docs):
         for d in root.findall("dependencies/dependency"):
             artifact = resolve(d.findtext("artifactId", ""))
             if not any(re.search(x, artifact + ".jar", re.I) for x in patterns):
                 continue
-            version = resolve(d.findtext("version", "")) or managed.get(artifact, "")
             group = resolve(d.findtext("groupId", ""))
-            direct[(group, artifact)] = version
-    if any(not v for v in direct.values()):
-        raise ConfError("项目声明了驱动依赖，但版本需要外部 BOM、profile 或未解析的属性。请在连接里明确写 driver_jar，不拿默认版本代替。")
-    return set(direct.values())
+            out[(group, artifact)] = resolve(d.findtext("version", "")) or _managed_version(docs, resolve, repos, group, artifact)
+    return out
+
+
+def _reactor_poms(first):
+    """同一个工程的所有模块的 pom：从最上面的本地 pom 顺着 modules 往下，最多 60 个"""
+    top = first
+    for _ in range(8):
+        root = _read_pom(top)
+        up = _local_parent(top, root) if root is not None else None
+        if up is None:
+            break
+        top = up
+    out = []
+    todo = [top]
+    seen = set()
+    while todo and len(out) < 60:
+        p = todo.pop(0)
+        if not p.is_file() or str(p.resolve()) in seen:
+            continue
+        seen.add(str(p.resolve()))
+        root = _read_pom(p)
+        if root is None:
+            continue
+        out.append((p, root))
+        for m in root.findall("modules/module"):
+            c = p.parent / (m.text or "").strip()
+            todo.append(c / "pom.xml" if c.is_dir() else c)
+    return out
+
+
+def project_driver_deps(project_root, patterns):
+    """
+    项目 pom 声明的驱动：[(groupId, artifactId, version)]（问题表第 36 条：项目用哪个版本项目里都写着，探索到了直接用）。
+    版本写成属性、交给 dependencyManagement、从父 pom 或 BOM（spring-boot-dependencies 这类）继承的都顺着找：本地的按 relativePath，找不到的到 Maven 本地仓库里读。
+    当前模块和它的父 pom 里没有：看同一个工程的别的模块（驱动常放在 common、framework 模块里），几个模块版本不一样的当没声明。
+    不借用壳子里别的子项目的版本，也不连接数据库。解析不出版本的 version 是 ''（本地仓库里这个依赖只有一个版本的，就是它）
+    """
+    if not project_root:
+        return []
+    first = pathlib.Path(project_root) / "pom.xml"
+    if not first.is_file():
+        return []
+    repos = maven_repos(project_root)
+    found = _driver_deps_in(_pom_chain(first, repos), repos, patterns)
+    if not found:
+        for p, root in _reactor_poms(first):
+            names = [(d.findtext("artifactId", "") or "") + ".jar" for d in root.findall("dependencies/dependency")]
+            if any(re.search(x, n, re.I) for x in patterns for n in names):
+                found.update(_driver_deps_in(_pom_chain(p, repos), repos, patterns))
+        if len(set(found.values())) > 1:
+            return []
+    out = []
+    for (g, a), v in found.items():
+        if not v:
+            for base, _ in repos:
+                try:
+                    vs = [x.name for x in base.joinpath(*g.split("."), a).iterdir() if (x / ("%s-%s.jar" % (a, x.name))).is_file()]
+                except OSError:
+                    vs = []
+                if len(vs) == 1:
+                    v = vs[0]
+                    break
+        out.append((g, a, v))
+    return out
+
+
+def _versions_of(deps):
+    if any(not v for _, _, v in deps):
+        raise ConfError("项目声明了驱动依赖（%s），但版本解析不出来（外部 BOM、profile 或未解析的属性）。请在连接里明确写 driver_jar，不拿默认版本代替。"
+                        % "、".join("%s:%s" % (g, a) for g, a, v in deps if not v))
+    return {v for _, _, v in deps}
+
+
+def project_driver_versions(project_root, patterns):
+    """项目 pom 声明的驱动版本。声明了又解析不出来的报错，不拿默认版本代替"""
+    return _versions_of(project_driver_deps(project_root, patterns))
+
+
+def _project_maven(project_root):
+    """这个项目用哪套 Maven（后台探索记在 .vibe/onboard.json，IDEA 里配的优先）：{ cmd, repo, settings }。没有返回 {}"""
+    if not project_root:
+        return {}
+    d = pathlib.Path(project_root)
+    for _ in range(4):
+        try:
+            m = json.loads((d / ".vibe" / "onboard.json").read_text(encoding="utf-8")).get("maven")
+            if isinstance(m, dict):
+                return m
+        except (OSError, ValueError):
+            pass
+        if d.parent == d:
+            break
+        d = d.parent
+    return {}
 
 
 def registry_driver(key, project_root=None):
     """
     vibe-kit 的驱动登记表（~/.claude/vibe-kit/drivers.json）里这种数据库用哪个 jar。
-    在配置页"数据库驱动"里登记，或者用 tools/drivers.js。没登记、文件不在了返回 None。
+    后台探索自动登记，或者用 tools/drivers.js。没登记、文件不在了返回 None。
     key 是 driver_key() 给的：一般就是 dialect，jdbc:postgresql 的连接是 postgresql。
     """
     reg = vibe.kit_json("drivers.json", {}) or {}
     d = (reg.get("drivers") or {}).get(key) or {}
     info = DRIVER_ONLY.get(key) or DIALECT_INFO.get(key, {})
-    wanted = project_driver_versions(project_root, info.get("jar_patterns", ()))
+    deps = project_driver_deps(project_root, info.get("jar_patterns", ()))
+    wanted = _versions_of(deps)
     versions = d.get("versions") or ([d] if d.get("jar") else [])
     if len(wanted) > 1:
         raise ConfError("项目声明了多个%s驱动版本，不能猜用哪一个；在连接里明确写 driver_jar。" % key)
@@ -520,7 +679,11 @@ def registry_driver(key, project_root=None):
         version = next(iter(wanted))
         hit = [x for x in versions if x.get("version") == version and os.path.isfile(x.get("jar", ""))]
         if not hit:
-            raise ConfError("项目声明的%s驱动版本%s还没有登记。请添加该版本，不能拿另一个版本代替。" % (key, version))
+            cmd = _project_maven(project_root).get("cmd") or "mvn"
+            coords = ["%s:%s:%s" % x for x in deps]
+            raise ConfError("项目 pom 声明的%s驱动 %s，Maven 本地仓库里没有。只拉这一个，拉完再查：\n  %s\n"
+                            "拉不到的，问用户 jar 在哪，把路径写进这个连接的 driver_jar。不拿别的版本代替。"
+                            % (key, "、".join(coords), "\n  ".join('%s dependency:get "-Dartifact=%s"' % (cmd, c) for c in coords)))
         if len({x["jar"] for x in hit}) > 1:
             raise ConfError("同一版本有多个驱动文件，在连接里明确写 driver_jar。")
         return hit[0]["jar"]
@@ -651,8 +814,9 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
     按方言找 JDBC 驱动 jar。顺序：
       1. 配置里显式写的 driver_jar
       2. 被操作项目自己的 lib/、WEB-INF/lib/（版本和它连的库最匹配）
-      3. vibe-kit 的驱动登记表（配置页"数据库驱动"里选的）
-      4. ~/.db-crud/drivers/、套件的驱动目录、本机的 Maven 仓库
+      3. 项目 pom 声明的版本：按坐标直接到 Maven 本地仓库取，不用先登记
+      4. vibe-kit 的驱动登记表（后台探索自动登记的）
+      5. ~/.db-crud/drivers/、套件的驱动目录、本机的 Maven 仓库、"本机环境"里 Tomcat 的 lib
     返回 (jar 路径, 从哪找到的说明)。找不到就抛 ConfError，并把找过的地方说清楚。
 
     驱动不随技能带：达梦、神通、金仓、Oracle 的驱动是厂商的，只限内部使用。
@@ -673,7 +837,8 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
     regexes = [re.compile(p, re.I) for p in patterns]
 
     project_root = driver_project_root(conn, project_root)
-    wanted = project_driver_versions(project_root, patterns)
+    deps = project_driver_deps(project_root, patterns)
+    wanted = _versions_of(deps)
     if len(wanted) > 1:
         raise ConfError("项目声明了多个驱动版本，在连接里明确写 driver_jar。")
     version = next(iter(wanted)) if wanted else None
@@ -685,9 +850,15 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
         if hit:
             return hit, label
 
+    repos = maven_repos(project_root)
+    for g, a, v in deps:
+        hit = _repo_file(repos, g, a, v, "jar")
+        if hit:
+            return str(hit), "项目 pom 声明的版本（Maven 本地仓库）"
+
     reg = registry_driver(key, project_root)
     if reg:
-        return reg, "配置页里登记的"
+        return reg, "登记表里的"
     k = vibe.kit_dir()
     if k is not None:
         searched.append(str(k / "drivers.json") + "（登记表）")
@@ -697,7 +868,7 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
         jar, src = env.get_driver(key)
         if jar:
             return jar, src
-    for base, label in _fallback_dirs():
+    for base, label in _fallback_dirs(project_root):
         searched.append(str(base))
         hit = _scan_for_jar(base, regexes)
         if hit:
@@ -708,7 +879,7 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
     tool = drivers_tool()
     how = ("三选一：\n"
            "  · 让它到 Maven 本地仓库里找并登记：node \"%s\" auto --only %s\n"
-           "  · 手上有 jar：node \"%s\" use <jar 的路径>（也可以在 vibe-kit 配置页的「数据库驱动」里选）\n"
+           "  · 手上有 jar：node \"%s\" use <jar 的路径>\n"
            "  · 只给这一个连接用：把 jar 的路径写进配置的 driver_jar"
            % (tool, key, tool)) if tool else (
         "二选一：把驱动 jar 的路径写进配置的 driver_jar，或者把 jar 放进 ~/.db-crud/drivers/。")
@@ -732,10 +903,10 @@ def _project_dirs(project_root, extra_dirs):
     return [(p, label) for p, label in out if p.is_dir()]
 
 
-def maven_repos():
+def maven_repos(project_root=None):
     """
-    这台电脑上的 Maven 本地仓库。先看 vibe-kit 配置页"本机环境"里配的每一套 Maven，
-    再看默认的 ~/.m2/repository。
+    这台电脑上的 Maven 本地仓库。先看这个项目用的（IDEA 里配的，后台探索记下来的，问题表第 33 条），
+    再看 vibe-kit 配置页"本机环境"里配的每一套 Maven，最后是默认的 ~/.m2/repository。
     """
     out = []
 
@@ -746,6 +917,8 @@ def maven_repos():
         if path.is_dir() and all(str(path).lower() != str(x).lower() for x, _ in out):
             out.append((path, label))
 
+    project = _project_maven(project_root)
+    add(project.get("repo") or (_repo_of_settings(project["settings"]) if project.get("settings") else None), "项目在 IDEA 里配的 Maven 仓库")
     local = vibe.kit_json("local.json", {}) or {}
     mavens = [m for m in (local.get("mavens") or []) if isinstance(m, dict)]
     if not mavens and isinstance(local.get("maven"), dict):
@@ -772,14 +945,18 @@ def _repo_of_settings(settings):
     return m.group(1).replace("${user.home}", str(pathlib.Path.home()))
 
 
-def _fallback_dirs():
+def _fallback_dirs(project_root=None):
     out = []
     # 用户自己的驱动库（并进 vibe-kit 之前就有的位置，照样认）
     out.append((pathlib.Path.home() / ".db-crud" / "drivers", "~/.db-crud/drivers/"))
     k = vibe.kit_dir()
     if k is not None:
         out.append((k / "drivers", "vibe-kit 的驱动目录"))
-    out.extend(maven_repos())
+    out.extend(maven_repos(project_root))
+    # 老项目的驱动常放在 Tomcat 的 lib 里，项目里没有声明
+    for x in (vibe.kit_json("local.json", {}) or {}).get("tomcats") or []:
+        if isinstance(x, dict) and x.get("path"):
+            out.append((pathlib.Path(x["path"]) / "lib", "本机环境里配的 Tomcat 的 lib"))
     return [(p, label) for p, label in out if p.is_dir()]
 
 

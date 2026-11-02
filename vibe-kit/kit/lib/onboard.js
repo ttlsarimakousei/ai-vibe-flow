@@ -864,7 +864,7 @@ function explore(root, why) {
   } catch (e) { drv = null; need = []; }
   const missed = Array.isArray(rec.driverMiss) ? rec.driverMiss : [];
   const search = need.length > 0 && (why === '手动' || Date.now() - (Number(rec.driverSearchAt) || 0) > RESCAN_MS || need.some((k) => !missed.includes(k)));
-  const missNote = (list) => list.map((k) => DIALECT_NAME[k] || k).join('、') + '的数据库驱动还没有：Maven 本地仓库里没找到，在配置页"数据库驱动"里选一个 jar';
+  const missNote = (list) => list.map((k) => DIALECT_NAME[k] || k).join('、') + '的数据库驱动还没有：项目里没带，Maven 本地仓库里也没找到。查库时报错会说只拉哪一个；项目没声明版本的，问用户 jar 在哪，写进连接的 driver_jar';
   const driver = { at: Number(rec.driverSearchAt) || 0, miss: search ? [] : need.slice() };
 
   // 项目说明：没有就生成；有、是这里生成的就并进去；是别人写的（/ttls-onboard、人）只补数据库和 redis 两行。
@@ -918,7 +918,9 @@ function explore(root, why) {
   try { require('./session.js').ensureVibeIgnored(path.join(root, '.vibe')); for (const o of [...dbGroups.keys(), ...rdGroups.keys()]) require('./session.js').ensureVibeIgnored(path.join(o, '.vibe')); } catch (e) { /* 加不上不影响 */ }
   if (search) {
     try {
-      const r = drv.auto({ only: need, budgetMs: 20000, quick: true });
+      // 项目在 IDEA 里配的本地仓库先找（问题表第 33 条）
+      const own = f.maven.repo || (f.maven.settings ? drv.repoOfSettings(f.maven.settings) : '');
+      const r = drv.auto(Object.assign({ only: need, budgetMs: 20000, quick: true }, own ? { dirs: [{ dir: own, from: 'IDEA 里配的本地仓库' }].concat(drv.mavenRepos()) } : {}));
       out.drivers = r.used.map((u) => u.name + ' ' + path.basename(u.jar));
       driver.miss = r.missing.filter((k) => need.includes(k));
     } catch (e) { log('找驱动出错：' + ((e && e.message) || e)); driver.miss = need.slice(); }

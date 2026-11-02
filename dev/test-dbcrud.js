@@ -452,11 +452,11 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   try { fs.unlinkSync(path.join(proj, '.vibe', 'db-crud.env.json')); } catch (e) { /* 没有 */ }
   const n0 = usage().filter((u) => u.incident === 'no-driver').length;
   const nd = db(['conn', 'test']);
-  H.ok('没有驱动：说清找过哪里、怎么办（命令和配置页）', nd.code === 1 && /找不到MySQL的 JDBC 驱动 jar/.test(nd.err) && /drivers\.js" auto --only mysql/.test(nd.err) && /数据库驱动/.test(nd.err), nd.out + nd.err);
+  H.ok('没有驱动：说清找过哪里、怎么办（命令和写 driver_jar）', nd.code === 1 && /找不到MySQL的 JDBC 驱动 jar/.test(nd.err) && /drivers\.js" auto --only mysql/.test(nd.err) && /driver_jar/.test(nd.err), nd.out + nd.err);
   H.ok('记了一条"找不到驱动"（给套件收）', usage().filter((u) => u.incident === 'no-driver').length === n0 + 1, usage().slice(-3));
   fs.writeFileSync(path.join(h.kit, 'drivers.json'), JSON.stringify({ version: 1, drivers: { mysql: { jar: H2, from: 'manual' } } }));
   const rd = db(['conn', 'test']);
-  H.ok('登记了之后：用登记的那个', rd.code === 0 && /驱动来自 配置页里登记的/.test(rd.out), rd.out + rd.err);
+  H.ok('登记了之后：用登记的那个', rd.code === 0 && /驱动来自 登记表里的/.test(rd.out), rd.out + rd.err);
   fs.mkdirSync(path.join(proj, 'lib'), { recursive: true });
   fs.copyFileSync(H2, path.join(proj, 'lib', 'mysql-connector-j-9.9.9.jar'));
   const pl = db(['conn', 'test']);
