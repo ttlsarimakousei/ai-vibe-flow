@@ -395,7 +395,7 @@
     </div>
 
     <div class="card" id="sec-tooluse" data-sec="用得怎么样">
-      <div class="row between"><div><h2>用得怎么样</h2><p class="hint">查库、查 redis 的每条命令跑了多少次、多慢、哪种错多。只记工具的事，不记 SQL 和数据。导出的问题汇总里也有这张表。里面的错每天汇总一次，记成问题反馈（类型"工具报错"，只有类别和次数），跟着问题上报传到 GitLab。</p></div><button class="btn" id="tuRefresh">刷新</button></div>
+      <div class="row between"><div><h2>用得怎么样</h2><p class="hint">查库、查 redis 的每条命令跑了多少次、多慢、哪种错多。只记工具的事，不记 SQL 和数据。导出的问题汇总里也有这张表。SQL 语句本身的错（列名、表名、语法、类型）只在这里看，不上报；别的错每天汇总一次，记成问题反馈（类型"工具报错"，只有类别和次数），跟着问题上报传到 GitLab。</p></div><button class="btn" id="tuRefresh">刷新</button></div>
       <ul id="tuHints" class="plainlist"></ul>
       <div class="scroll"><table><thead><tr><th>工具</th><th>命令</th><th class="num">次数</th><th class="num">出错</th><th class="num">平均</th><th class="num">最慢</th><th class="num">平均起几次 java</th><th>出得最多的错</th></tr></thead><tbody id="tuList"></tbody></table></div>
     </div>

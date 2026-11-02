@@ -47,9 +47,13 @@ const INCIDENT = {
  * 各记成一条问题反馈（同一种只有一条；再出现就在那一条后面加一句这段时间的次数），和别的问题走同一条路上报到 GitLab：
  * 别的电脑报过同一种错的，在那条议题下面加一句。
  * 只有类别和次数：SQL、数据、表名、连接串、口令一概没有（工具那头就没记；数据库报的错只记 SQLSTATE 和厂商的错误码）。
+ * SQL 语句本身的错不上报（用户 2026-11-02 定的，替代 09-30 的"都报"）：列名、表名、语法、类型多半是模型写错了 SQL，议题里只有错误码和次数，修不了，关了又开，
+ * 11-02 导出的 45 条里占 22 条。配置页"用得怎么样"照样看得到。连不上、驱动、工具自己出错照旧报。
  */
 const REPORT_MS = 24 * 3600000;
 const REPORT_MAX = 20;
+// SQL 语句本身的错：SQLSTATE 42 语法和对象不存在、22 数据类型、21 子查询行数、23 约束、3F schema 名；Oracle 的 ORA-3xxxx 语句错 SQLSTATE 是 99999
+const STATEMENT_ERR = /^SQL_ERROR:(?:(?:42|22|21|23|3F)[0-9A-Z]{0,3}(?::|$)|99999:3\d{4}$)/i;
 // 不算出错的：被工具自己的规矩拦下（全自动模式下的写操作、禁止名单里的表）
 const SKIP_ERR = /^BLOCKED/;
 const ERR_NOTE = [
@@ -85,7 +89,7 @@ function reportErrors(now, every) {
   if (!fb) return [];
   const hours = Math.max(1, Math.round((t - Number(st.errsSince)) / 3600000));
   const ids = [];
-  const list = keys.map((k) => errs[k]).filter((x) => x && x.n > 0).sort((a, b) => b.n - a.n).slice(0, REPORT_MAX);
+  const list = keys.map((k) => errs[k]).filter((x) => x && x.n > 0 && !STATEMENT_ERR.test(String(x.code || ''))).sort((a, b) => b.n - a.n).slice(0, REPORT_MAX);
   for (const x of list) {
     const db = x.dialect ? (DIALECT_NAME[x.dialect] || x.dialect) : '';
     const cmds = Object.keys(x.cmds || {}).sort((a, b) => x.cmds[b] - x.cmds[a]).map((c) => c + ' ' + x.cmds[c] + ' 次').join('、');
