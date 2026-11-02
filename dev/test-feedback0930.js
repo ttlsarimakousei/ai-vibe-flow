@@ -526,8 +526,8 @@ H.section('工具的调用记录里的错：每天汇总一次，记成问题反
   const log = path.join(h.kit, 'state', 'tool-usage.jsonl');
   for (const n of ['tool-stats', 'tool-usage-pos']) dropState(n);
   const line = (o) => JSON.stringify(Object.assign({ at: Date.now(), exit: 2, ms: 900, java: 1, project: 'p' }, o)) + '\n';
-  fs.writeFileSync(log, line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:42S02:-2106'] }) + line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:42S02:-2106'] })
-    + line({ tool: 'ttls-db-crud', cmd: 'peek', dialect: 'dm', errors: ['SQL_ERROR:42S02:-2106'] }) + line({ tool: 'ttls-db-crud', cmd: 'exec', dialect: 'mysql', errors: ['BLOCKED'] , exit: 3 })
+  fs.writeFileSync(log, line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }) + line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] })
+    + line({ tool: 'ttls-db-crud', cmd: 'peek', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }) + line({ tool: 'ttls-db-crud', cmd: 'exec', dialect: 'mysql', errors: ['BLOCKED'] , exit: 3 })
     + line({ tool: 'ttls-redis', cmd: 'get', errors: ['CONN_REFUSED'], exit: 0 }) + line({ tool: 'ttls-db-crud', cmd: 'peek', dialect: 'dm', errors: [], exit: 0 }));
   const n0 = F.listRecords().length;
   const first = T.ingest(null);
@@ -538,14 +538,14 @@ H.section('工具的调用记录里的错：每天汇总一次，记成问题反
   const recs = F.listRecords().filter((r) => ids.includes(r.meta.id));
   const dm = recs.find((r) => /SQL_ERROR/.test(r.title)) || { meta: {}, text: '', title: '' };
   const rd = recs.find((r) => /CONN_REFUSED/.test(r.title)) || { meta: {}, text: '', title: '' };
-  H.ok('满一天：一种错一条，类型是"工具报错"', ids.length === 2 && dm.meta['类型'] === '工具报错' && dm.meta['涉及'] === 'ttls-db-crud' && dm.title === '达梦 SQL_ERROR:42S02:-2106' && rd.meta['涉及'] === 'ttls-redis', recs.map((r) => [r.title, r.meta['类型'], r.meta['涉及']]));
-  H.ok('写了次数、哪几条命令出的、这种错一般是怎么回事', /最近 25 小时出了 3 次（query 2 次、peek 1 次）/.test(dm.text) && /SQLSTATE 和厂商错误码/.test(dm.text) && /连不上/.test(rd.text), dm.text.slice(0, 500));
+  H.ok('满一天：一种错一条，类型是"工具报错"', ids.length === 2 && dm.meta['类型'] === '工具报错' && dm.meta['涉及'] === 'ttls-db-crud' && dm.title === '达梦 SQL_ERROR:08001:-2106' && rd.meta['涉及'] === 'ttls-redis', recs.map((r) => [r.title, r.meta['类型'], r.meta['涉及']]));
+  H.ok('写了次数、哪几条命令出的、这种错一般是怎么回事', /最近 25 小时出了 3 次（query 2 次、peek 1 次）/.test(dm.text) && /SQLSTATE 08 类是连接异常/.test(dm.text) && /连不上/.test(rd.text), dm.text.slice(0, 500));
   H.ok('不算到任何会话头上，不带项目名', !dm.meta['会话'] && dm.meta['项目'] === '（不知道）', dm.meta);
   H.ok('报完清零，下一个周期重新攒', Object.keys(state('tool-stats').errs || {}).length === 0 && state('tool-stats').reportAt > 0, state('tool-stats'));
   const I = require(path.join(h.kit, 'lib', 'issues.js'));
   H.ok('会跟着问题上报传到 GitLab（不算"不是问题的"）', !F.isNoise(dm) && typeof I.sync === 'function');
   // 下一个周期又出了同一种错：还是那一条，后面加一句
-  fs.appendFileSync(log, line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:42S02:-2106'] }));
+  fs.appendFileSync(log, line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }));
   T.ingest(null);
   const ids2 = T.reportErrors(Date.now() + 26 * 3600000);
   const again = F.listRecords().find((r) => r.meta.id === dm.meta.id);

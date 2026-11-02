@@ -1,5 +1,5 @@
 'use strict';
-/* #61、#63 只补诊断，不伪造真实神通或 Oracle 已修复。匿名汇总不携带语句和数据。 */
+/* #61、#63 只补诊断，不伪造真实神通或 Oracle 已修复。匿名汇总不携带语句和数据。SQL 语句本身的错 2026-11-02 起不上报（用户定的）。 */
 const fs = require('fs'); const path = require('path'); const H = require('./lib/harness');
 const h = H.makeHome('feedback1012-db', process.argv[3]);
 const S = require(path.join(h.kit, 'lib/session')); const T = require(path.join(h.kit, 'lib/toolstats')); const F = require(path.join(h.kit, 'lib/feedback'));
@@ -7,10 +7,7 @@ const errs = {};
 for (const [dialect, code] of [['oscar', 'SQL_ERROR:42S22'], ['oracle', 'SQL_ERROR:42000:904'], ['mysql', 'SQL_ERROR:42000:904']]) errs[dialect] = { tool: 'ttls-db-crud', dialect, code, n: 2, cmds: { query: 2 } };
 S.writeState('tool-stats', { errs, errsSince: Date.now() - 90000000 });
 const ids = T.reportErrors(); const records = F.listRecords().filter((r) => ids.includes(r.meta.id));
-const record = (name) => records.find((r) => r.title.startsWith(name)) || { text: '' };
-H.ok('神通错误提示先刷新结构且不认定缺陷', /columns --fresh/.test(record('神通').text) && /对应版本/.test(record('神通').text), record('神通').text);
-H.ok('Oracle 904 定向提示标识符核对', /无效标识符/.test(record('Oracle').text) && /别名/.test(record('Oracle').text), record('Oracle').text);
-H.ok('其它厂商同一数字码不冒用 Oracle 解释', !/无效标识符/.test(record('MySQL').text), record('MySQL').text);
+H.ok('SQL 语句本身的错（42S22、904）不再上报', records.length === 0, records.map((r) => r.title));
 if (process.argv[2] === 'auto') {
   const rt = H.runtime('auto');
   const db = path.join(h.cfg, 'skills/ttls-db-crud/scripts/db.py');
