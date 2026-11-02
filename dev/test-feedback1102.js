@@ -103,13 +103,19 @@ const reason = (o) => H.reasonOf(o);
     save(rejected);
     stop([H.tr.user('审一下'), run('--base HEAD', JSON.stringify(rejected)), edit()]);
     H.ok('登记了驳回：改过文件也不收', !list().some((c) => /数据权限/.test(c.text)), JSON.stringify(list()));
-    const fixed = { id: 'run-plain-2', mode: 'code', status: 'completed', at: Date.now(), issues: [issue({ problem: '导入没校验表头', avoid: '导入文件之前先校验表头和模板是否一致', kind: '边界' })], decisions: [{ id: 'r1', action: 'fixed', reason: '加了表头校验，复验通过' }] };
+    const fixed = { id: 'run-plain-2', mode: 'code', status: 'completed', at: Date.now() - 5000, issues: [issue({ problem: '导入没校验表头', avoid: '导入文件之前先校验表头和模板是否一致', kind: '边界' })], decisions: [{ id: 'r1', action: 'fixed', reason: '加了表头校验，复验通过' }] };
     save(fixed);
     stop([H.tr.user('审一下'), run('--base HEAD', JSON.stringify(fixed))]);
-    H.ok('登记了修了：会话里没看到改文件也收', list().some((c) => /校验表头/.test(c.text)), JSON.stringify(list()));
+    H.ok('登记了修了、文件确实动过：会话里没看到改文件也收', list().some((c) => /校验表头/.test(c.text)), JSON.stringify(list()));
+    const claimed = Object.assign({}, fixed, { id: 'run-plain-4', at: Date.now() + 60000, issues: [issue({ problem: '日志里打了完整手机号', avoid: '日志里的手机号要先打码再输出', kind: '安全' })] });
+    save(claimed);
+    stop([H.tr.user('审一下'), run('--base HEAD', JSON.stringify(claimed))]);
+    H.ok('登记了修了、文件在审查之后没动过：不收，不只听模型说修了', !list().some((c) => /先打码/.test(c.text)), JSON.stringify(list()));
     H.ok('不走 OpenSpec 的：出处写日期和小改动', list().filter((c) => /校验表头/.test(c.text)).every((c) => (c.sources || []).some((s) => /\d{4}-\d{2}-\d{2} 小改动/.test(s.from))), JSON.stringify(list()));
 
     // 放后台跑、命令输出里没有结论：读结果文件
+    const touch = () => { const abs = path.join(p, String(fixed.issues[0].file)); H.write(abs, (H.read(abs) || '') + '// 改过\n'); };
+    touch();
     const bg = { id: 'run-plain-3', mode: 'code', status: 'completed', at: Date.now() + 60000, issues: [issue({ problem: '分页参数没有上限', avoid: '分页接口要限制每页条数的上限', kind: '边界' })] };
     save(bg);
     stop([H.tr.user('审一下'), run('--base HEAD', '后台任务已启动'), edit()]);

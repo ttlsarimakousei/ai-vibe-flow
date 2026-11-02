@@ -587,7 +587,7 @@ function syncAgent(j) {
  * 这段会话记录里跑过的 review.js run 的结果，给经验规则自动收（lessons.autoCollect，问题表第 34 条）。
  * 默认的审查走这里，不走审查代理；以前自动收只认审查代理的回复，默认配置下一条问题也进不了经验规则，收工也不催模型自己记。
  * 结论先取命令的输出（同一个审查点审第二次会盖掉结果文件），取不到（放后台跑的、输出被截了）再读结果文件。
- * 登记过处理结果的按登记的算：驳回、接受不改的不收，修了的收。没登记的和审查代理一样：报了之后那个文件确实改过才收。
+ * 登记过处理结果的：驳回、接受不改的不收；修了的，那个文件在这次审查之后确实动过才收（按证据认，不只听模型说修了）。没登记的和审查代理一样：报了之后那个文件确实改过才收。
  * 返回 [{ source, mode, issues, findings, pos }]
  */
 function runsForLessons(calls, results, cwd) {
@@ -630,7 +630,9 @@ function runsForLessons(calls, results, cwd) {
       const d = decisions.find((y) => y.id === x.id);
       if (d && d.action !== 'fixed') continue;
       const abs = bases.map((b) => path.resolve(b, String(x.file || ''))).find((f) => fs.existsSync(f)) || path.resolve(project, String(x.file || ''));
-      findings.push({ file: abs, problem: x.problem, when: x.evidence, severity: x.severity, kind: x.kind, avoid: x.avoid, fixed: !!d });
+      let touched = false;
+      try { touched = fs.statSync(abs).mtimeMs > Number(report.at || 0); } catch (e) { touched = false; }
+      findings.push({ file: abs, problem: x.problem, when: x.evidence, severity: x.severity, kind: x.kind, avoid: x.avoid, fixed: !!d && touched });
     }
     if (findings.length) out.push({ source, mode, issues: findings.length, findings, pos: res ? res.pos : c.i });
   }
