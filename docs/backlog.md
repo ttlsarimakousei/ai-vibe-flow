@@ -4,7 +4,6 @@
 
 | 编号 | 问题 | 状态 | 在哪分析 | 下一步 |
 |---|---|---|---|---|
-| 审核 20261029 H 节第 6 项 | 更新时套件钩子条目的 timeout、matcher，状态栏的 refreshInterval 每次被重写，用户改过的要不要保留 | 待定（等仓库主人） | reviews/claude/20261029-vibe-kit-整体审核.md 第七节 H；feedback-20261101.md 交接细节 | 子代理做 F8 时提出 |
 | 复审 20261102 K-R8 | 跑 commit.js 的票只绑会话和仓库，"询问"模式用户拒绝后票还在，guard 认不出的写法能凭旧票提交，不再过提交方式这道检查 | 后做 | [reviews/claude/20261102-K批-复审.md](../reviews/claude/20261102-K批-复审.md) | 要特意构造，只影响提交方式 |
 | 复审 20261031 D-R6 | 壳子里 `mvn -f 子项目` 记的证据按子仓库记，review-runner 登记"修了"时按壳子查，对不上 | 后做 | [reviews/claude/20261031-C至J批-复审.md](../reviews/claude/20261031-C至J批-复审.md) | `evidence.commands` 认壳子下各子仓库的证据 |
 | 复审 20261031 D-R9 | `.vibe/db-crud.ini` 读改写没锁（换驱动记 driver_jar 和后台探索同时写） | 后做 | 同上 | 照 drivers.js 用 state-store 的锁 |
