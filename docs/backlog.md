@@ -9,6 +9,7 @@
 | 问题表第 34 条 | 经验和规则基本不更新、不产生，尤其是项目级的 | 待修 | [owner-issues.md](owner-issues.md) 第 34 条 | 仓库主人说修时再核对 |
 | 问题表第 35 条 | pom 添加依赖时先看库里有没有，没有的话定向拉取；devserver 启动后端不要每次拉依赖 | 待修 | [owner-issues.md](owner-issues.md) 第 35 条 | 仓库主人说修时再核对 |
 | 问题表第 36 条 | 每个项目用的数据库驱动版本项目里都有配置或引入，探索到了直接用；驱动配置这边是不是可以删 | 待定（等仓库主人） | [owner-issues.md](owner-issues.md) 第 36 条 | 仓库主人定了再改 |
+| 问题表第 37 条 | 一个需求文件审了 9 轮还在改，审查文件没记录所有过程 | 待定（等仓库主人） | [owner-issues.md](owner-issues.md) 第 37 条 | 仓库主人定了再改 |
 | 复审 20261102 K-R8 | 跑 commit.js 的票只绑会话和仓库，"询问"模式用户拒绝后票还在，guard 认不出的写法能凭旧票提交，不再过提交方式这道检查 | 后做 | [reviews/claude/20261102-K批-复审.md](../reviews/claude/20261102-K批-复审.md) | 要特意构造，只影响提交方式 |
 | 复审 20261031 D-R6 | 壳子里 `mvn -f 子项目` 记的证据按子仓库记，review-runner 登记"修了"时按壳子查，对不上 | 后做 | [reviews/claude/20261031-C至J批-复审.md](../reviews/claude/20261031-C至J批-复审.md) | `evidence.commands` 认壳子下各子仓库的证据 |
 | 复审 20261031 D-R9 | `.vibe/db-crud.ini` 读改写没锁（换驱动记 driver_jar 和后台探索同时写） | 后做 | 同上 | 照 drivers.js 用 state-store 的锁 |
