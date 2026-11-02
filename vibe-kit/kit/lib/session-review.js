@@ -270,7 +270,7 @@ function reviewRecord(kind, dir) {
  * 记一次审查。at 是结论送到的时间（不用记的这一刻：要拿它和任务打勾的时间比）。
  * 同一次审查（记账键一样）只记一次；比已经记着的那次更早的不覆盖（后台审查的结论可能晚到）
  */
-function recordReview(kind, dir, issues, reviewKey, at) {
+function recordReview(kind, dir, issues, reviewKey, at, counted) {
   const key = normKey(dir);
   const born = changeBorn(dir);
   const when = at || Date.now();
@@ -284,7 +284,7 @@ function recordReview(kind, dir, issues, reviewKey, at) {
     return o;
   });
   // 使用情况：新记上的一次审查（提案、代码，报"问题 0 条"的另数）
-  if (fresh) { try { const U = require('./usage.js'); U.bump('review.' + (kind === 'proposal' ? 'proposal' : 'code')); if (Number(issues) === 0) U.bump('review.clean'); } catch (e) { /* 数不了就算了 */ } }
+  if (fresh && !counted) { try { const U = require('./usage.js'); U.bump('review.' + (kind === 'proposal' ? 'proposal' : 'code')); if (Number(issues) === 0) U.bump('review.clean'); } catch (e) { /* 数不了就算了 */ } }
   return fresh;
 }
 

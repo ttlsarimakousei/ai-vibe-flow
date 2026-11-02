@@ -188,13 +188,17 @@ function routerUrl() {
  * deepseek-flash、MiniMax 这类先思考的模型，以前的 5000 常常全花在思考上，正文还没写就停了（只有 thinking 块）。先给 16000；
  * 只回思考、停在输出上限（或者没给停止原因）的，同一批用 32000、在要求里加一句"少想、直接给 JSON"再试；还是只有思考（#226 两次把 32000 全用在思考上），
  * 把这一批拆成两半各审一次。都不行的这一批记失败、接着审下一批，审完记一条问题反馈（用户 2026-10-28 定的：不拦，记下来上报，用来优化审查）。
+ * 正文写到一半到了上限（model-json 又停在 max_tokens，#263、#266）：同样的上限再来也是截断，走和只回思考一样的路。
+ * 上游临时出错（路由回 5xx、连接断了，#257：审了 281 秒，最后一次碰上 504，这一批就算失败）：等几秒同样再试一次。
  * 思考不是结论，不从思考里抽意见。"请求里关思考"网关认不认没法在这里验证，不加
  */
 const OUTPUT_TOKENS = 16000;
 const RETRY_TOKENS = 32000;
 // 单批请求等回复的保险：本机路由自己有首字节和空闲超时，这里只防路由整个没了、一直挂着。不是审查预算（总预算 2026-10-28 取消）
 const HANG_MS = 30 * 60000;
-const CONCISE = '这一批上次你只输出了思考、没写结论：这次少想，每个文件看一遍就下结论，直接输出 JSON，不要长篇推理。';
+const CONCISE = '这一批上次你把输出上限用完了、没写完结论：这次少想，每个文件看一遍就下结论，直接输出 JSON，不要长篇推理。';
+const TRANSIENT = /本机路由返回 5\d\d|ECONNRESET|ECONNREFUSED|socket hang up|ETIMEDOUT/;
+const RETRY_WAIT_MS = Number(process.env.VIBE_KIT_REVIEW_RETRY_MS) >= 0 && process.env.VIBE_KIT_REVIEW_RETRY_MS !== undefined ? Number(process.env.VIBE_KIT_REVIEW_RETRY_MS) : 5000;
 function parseReply(text, material) {
   const fail = (stage, reason, raw, extra) => { const e = new Error(reason + '，未记为完成'); e.diagnostic = Object.assign({ stage, excerpt: R.clip(R.material(raw), 1500) }, extra || {}); throw e; };
   let reply; try { reply = JSON.parse(text); } catch (e) { fail('router-json', '本机路由回复不是有效 JSON', text); }
@@ -274,7 +278,7 @@ function waive(opts) {
 async function reviewBatch(batch, no, opts, cancelled, received, progress) {
   const stat = { batch: no, files: new Set(batch.map((x) => x.file)).size, parts: batch.length, chars: batch.reduce((n, x) => n + x.text.length, 0), attempts: [], ms: 0 };
   const t0 = Date.now();
-  const once = async (items, tokens, concise, label) => {
+  const attempt = async (items, tokens, concise, label) => {
     const a0 = Date.now();
     try {
       const r = await ask(routerUrl(), items, opts.mode, HANG_MS, cancelled, received, tokens, concise);
@@ -286,24 +290,34 @@ async function reviewBatch(batch, no, opts, cancelled, received, progress) {
       return { e };
     }
   };
-  const thinkingOnly = (x) => !!(x.e && x.e.diagnostic && x.e.diagnostic.retry);
+  const once = async (items, tokens, concise, label) => {
+    let x = await attempt(items, tokens, concise, label);
+    if (x.e && !x.e.diagnostic && TRANSIENT.test(String(x.e.message)) && !cancelled()) {
+      if (progress) progress('第 ' + no + ' 批：上游临时出错，等一下再试一次');
+      await new Promise((r) => setTimeout(r, RETRY_WAIT_MS));
+      x = await attempt(items, tokens, concise, label + '（上游出错，再试）');
+    }
+    return x;
+  };
+  const cutOff = (x) => { const d = x.e && x.e.diagnostic; return !!(d && d.jsonRetry && /^(?:max_tokens|length)$/.test(String(d.stopReason || ''))); };
+  const thinkingOnly = (x) => !!(x.e && x.e.diagnostic && x.e.diagnostic.retry) || cutOff(x);
   const out = { done: [], failed: [], issues: [], skipped: [], diagnostics: [], stat };
   const take = (items, x) => { if (x.r) { out.done.push(...items); out.issues.push(...x.r.issues); out.skipped.push(...x.r.skipped); } else { out.failed.push({ items, error: x.e }); if (x.e.diagnostic) out.diagnostics.push(Object.assign({ batch: no }, x.e.diagnostic)); } };
   let x = await once(batch, OUTPUT_TOKENS, false, '第一次');
   // 回的不是 JSON（剥了代码块也解析不了）：原样再审一次（审核 P34：以前直接算这一批失败）
-  if (x.e && x.e.diagnostic && x.e.diagnostic.jsonRetry && !cancelled()) {
+  if (x.e && x.e.diagnostic && x.e.diagnostic.jsonRetry && !cutOff(x) && !cancelled()) {
     if (progress) progress('第 ' + no + ' 批：审查者回的不是 JSON，再审一次');
     out.diagnostics.push(Object.assign({ batch: no, retried: true }, x.e.diagnostic));
     x = await once(batch, OUTPUT_TOKENS, false, '回的不是 JSON，再来一次');
   }
   if (thinkingOnly(x) && !cancelled()) {
-    if (progress) progress('第 ' + no + ' 批：模型只输出了思考、到了输出上限，上限加到 ' + RETRY_TOKENS + '、要求少想直接给结论再试一次');
+    if (progress) progress('第 ' + no + ' 批：' + (cutOff(x) ? '模型的正文写到一半到了输出上限' : '模型只输出了思考、到了输出上限') + '，上限加到 ' + RETRY_TOKENS + '、要求少想直接给结论再试一次');
     out.diagnostics.push(Object.assign({ batch: no, retried: true }, x.e.diagnostic));
     x = await once(batch, RETRY_TOKENS, true, '加大上限、少想');
   }
   if (thinkingOnly(x) && batch.length > 1 && !cancelled()) {
     // 还是只有思考（#226）：材料少一半，要想的也少一半
-    if (progress) progress('第 ' + no + ' 批：还是只有思考，拆成两半各审一次');
+    if (progress) progress('第 ' + no + ' 批：还是没有完整结论，拆成两半各审一次');
     out.diagnostics.push(Object.assign({ batch: no, split: true }, x.e.diagnostic));
     const half = Math.ceil(batch.length / 2);
     for (const part of [batch.slice(0, half), batch.slice(half)]) take(part, await once(part, RETRY_TOKENS, true, '拆半批'));
@@ -405,10 +419,15 @@ async function run(opts, progress) {
   const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + (opts.point ? '-' + opts.point : '') + '.json');
   try { if (!store.atomicWrite(file, result)) throw new Error('结果写入失败'); result.file = file; }
   catch (e) { result.status = 'failed'; result.reason = '审查结果未能保存，不能登记为完成'; S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === id) Object.assign(o[key], result); }); }
-  try { const U = require('./usage'); U.bump(result.spentMs > expectMs ? 'review.timeout' : 'review.' + result.status); } catch (e) { /* 计数失败不改变结论 */ }
+  try {
+    const U = require('./usage');
+    U.bump(result.spentMs > expectMs ? 'review.timeout' : 'review.' + result.status);
+    // 每次审都算一轮（以前只有整个变更审完才数，使用情况里一直是"提案 0 轮，代码 0 轮"）
+    if (result.status !== 'cancelled') { U.bump('review.' + (opts.mode === 'proposal' ? 'proposal' : 'code')); if (result.status === 'completed' && !result.issues.length) U.bump('review.clean'); }
+  } catch (e) { /* 计数失败不改变结论 */ }
   if (change && opts.point) policy.noteResult(change.dir, opts.point, result, pointHash);
   if (change && result.status === 'completed' && (!opts.point || policy.allPassed(change.dir, opts.mode))) {
-    S.recordReview(opts.mode, change.dir, result.issues.length, id, Date.now());
+    S.recordReview(opts.mode, change.dir, result.issues.length, id, Date.now(), true);
     S.updateState(opts.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (opts.mode === 'code') r.fingerprint = before.hash; else { r.proposalHash = require('./apply-scope').planHash(change.dir); r.materialInputs = result.materialInputs; } r.reportFile = file; r.executor = 'direct'; r.covered = result.covered; } });
   }
   return result;

@@ -466,6 +466,74 @@ const reason = (o) => H.reasonOf(o);
     H.ok('工作线程记过的，路由那头不再记一条（#278）', /recorded: true/.test(hw) && /!m\.recorded\) noteFailure/.test(hh));
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('审查：正文写到一半被截、上游临时出错（#257、#263、#266）；使用情况的轮数（自审）');
+  {
+    const http = require('http');
+    const h = H.makeHome('t1102-rev', from, { reviewBudgetSeconds: 600 });
+    const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'b.js': 'let b=1;\n' });
+    const base = H.git(p, ['rev-parse', 'HEAD']).out.trim();
+    let script = []; const bodies = [];
+    const reply = (text, stop) => JSON.stringify({ id: 'm', model: 'deepseek-flash', content: [{ type: 'text', text }], stop_reason: stop || 'end_turn', usage: { input_tokens: 1, output_tokens: 16000 } });
+    const good = reply(JSON.stringify({ issues: [], summary: '审完了' }));
+    const server = http.createServer((req, res) => {
+      let body = ''; req.on('data', (b) => { body += b; }); req.on('end', () => {
+        bodies.push(JSON.parse(body));
+        const step = script.shift() || { body: good };
+        res.writeHead(step.status || 200); res.end(step.body);
+      });
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
+    process.env.VIBE_KIT_REVIEW_RETRY_MS = '10';
+    // review-runner 读这个环境变量是在载入时：设好了再载入
+    const R2 = require(path.join(h.kit, 'lib', 'review-runner.js'));
+    let n = 1;
+    const go = async (s) => { script = s; bodies.length = 0; H.write(path.join(p, 'a.js'), 'let a=' + (++n) + ';\n'); return R2.run({ cwd: p, mode: 'code', base }); };
+    try {
+      const cut = reply('{"issues":[{"severity":"P1","file":"a.js","problem":"写到一半', 'max_tokens');
+      let r = await go([{ body: cut }, { body: good }]);
+      H.ok('正文写到一半被截：加大上限、少想再来一次，拿到结论', r.status === 'completed' && bodies.length === 2 && bodies[1].max_tokens > bodies[0].max_tokens && /少想/.test(bodies[1].system), { status: r.status, tokens: bodies.map((b) => b.max_tokens), diag: r.diagnostics });
+      r = await go([{ body: reply('这不是 JSON', 'end_turn') }, { body: good }]);
+      H.ok('正常结束但不是 JSON：同样的上限再来一次', r.status === 'completed' && bodies.length === 2 && bodies[1].max_tokens === bodies[0].max_tokens, bodies.map((b) => b.max_tokens));
+      const up = { status: 503, body: JSON.stringify({ type: 'error', error: { type: 'api_error', message: '所有模型都不可用：DeepSeek（上游出错（504））' } }) };
+      r = await go([up, { body: good }]);
+      H.ok('上游临时出错（503）：等一下再试一次，拿到结论', r.status === 'completed' && bodies.length === 2, { status: r.status, n: bodies.length, reason: r.reason });
+      r = await go([up, up]);
+      H.ok('再试还是出错：只多试一次，这一批记失败', r.status === 'failed' && bodies.length === 2, { status: r.status, n: bodies.length });
+      r = await go([{ status: 400, body: JSON.stringify({ type: 'error', error: { message: '缺少必需的 model 参数' } }) }]);
+      H.ok('400 这种不是临时的：不重试', r.status === 'failed' && bodies.length === 1, { status: r.status, n: bodies.length });
+      r = await go([{ body: good }]);
+      const day = H.read(path.join(h.kit, 'state', 'usage.json')) || '';
+      H.ok('review.js 跑一次算一轮：使用情况里不再是 0 轮', /"review\.code":\s*[1-9]/.test(day), day.slice(0, 400));
+    } finally { server.close(); delete process.env.VIBE_KIT_REVIEW_PORT; delete process.env.VIBE_KIT_REVIEW_RETRY_MS; delete require.cache[require.resolve(path.join(h.kit, 'lib', 'review-runner.js'))]; }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  H.section('SQL 语句本身的错不再上报（用户 2026-11-02 定的）');
+  {
+    const h = H.makeHome('t1102-sql', from);
+    const probe = path.join(h.root, 'sql.js');
+    H.write(probe, [
+      "const S = require(" + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + ");",
+      "const T = require(" + JSON.stringify(path.join(h.kit, 'lib', 'toolstats.js')) + ");",
+      "const F = require(" + JSON.stringify(path.join(h.kit, 'lib', 'feedback.js')) + ");",
+      "const codes = process.argv.slice(2);",
+      "const errs = {}; for (const c of codes) errs['ttls-db-crud|oracle|' + c] = { tool: 'ttls-db-crud', dialect: 'oracle', code: c, n: 3, cmds: { query: 3 } };",
+      "S.writeState('tool-stats', { errs, errsSince: Date.now() - 1000 });",
+      "T.reportErrors(Date.now(), 0);",
+      "console.log(JSON.stringify({ titles: F.listRecords().map((r) => r.title), left: Object.keys(S.readState('tool-stats').errs || {}).length }));",
+    ].join('\n') + '\n');
+    const statement = ['SQL_ERROR:42S22', 'SQL_ERROR:42000', 'SQL_ERROR:42S02', 'SQL_ERROR:42703', 'SQL_ERROR:42P01', 'SQL_ERROR:42883', 'SQL_ERROR:42601', 'SQL_ERROR:42000:904', 'SQL_ERROR:42000:942', 'SQL_ERROR:42000:979', 'SQL_ERROR:42000:923', 'SQL_ERROR:42000:1790', 'SQL_ERROR:21000:1427', 'SQL_ERROR:22018', 'SQL_ERROR:99999:30482', 'SQL_ERROR:23505', 'SQL_ERROR:3F000'];
+    const keep = ['SQL_ERROR:08000:17410', 'SQL_ERROR:99999:28001', 'SQL_ERROR:61000:20', 'SQL_ERROR:40001', 'CONNECT_FAILED', 'DRIVER_FAILED', 'NO_CONN', 'AUTH_FAILED', 'RUNNER_ERROR'];
+    const r = H.node(h, probe, statement.concat(keep));
+    let out = {}; try { out = JSON.parse(r.out); } catch (e) { out = {}; }
+    const titles = out.titles || [];
+    H.ok('列名、表名、语法、类型这类不上报', !statement.some((c) => titles.some((t) => t.endsWith(' ' + c))), r.out + r.err);
+    H.ok('连不上、驱动、账号、工具自己出错照旧上报', keep.every((c) => titles.some((t) => t.includes(c))), r.out + r.err);
+    H.ok('报完清掉，语句错误不会攒着', out.left === 0, r.out);
+  }
+
   const wins = await watch.stop();
   H.ok('桌面上没有多出窗口', !wins.length, wins.join('；'));
   H.done('11-02 反馈');
