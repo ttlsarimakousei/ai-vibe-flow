@@ -10,7 +10,7 @@
 
 ## 在做的
 
-没有。下一批等仓库主人说；第 39 条（删除本地路由/模型配置，删除用量管理）他说下个版本再说，还没查代码，见 [owner-issues.md](owner-issues.md)。
+没有。下一批等仓库主人说；第 39 条（删除本地路由/模型配置，删除用量管理）仓库主人说下个版本再说，还没查代码，见 [owner-issues.md](owner-issues.md)。
 
 ## 待仓库主人做的
 
@@ -28,6 +28,7 @@
 - 测试里拿旧版比：`dev/baseline/20261102.2248/vibe-kit`；基线删了的用 `H.baselineDir(版本)` 从 git 标签取。
 - 几个会话同时跑测试会撞固定端口，报端口被占的先单独重跑。回归跑着时别改被测文件。
 - 补丁脚本里带反斜杠的不要用 heredoc 写（`\n` 会变成真换行），用 Write 写成文件再跑。
+- 已合并、可以清掉的 worktree：`.claude/worktrees/agent-a7c23950c55ccf840`、`agent-a95aa8abeac21f606`。
 - `hooks/` 下的文件不能删；`lib/idea-mcp.js` 的 `due()`、`sync()` 要留着。这台电脑没装 vibe-kit。
 
 ## 环境
