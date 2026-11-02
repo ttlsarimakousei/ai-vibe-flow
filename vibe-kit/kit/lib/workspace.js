@@ -80,7 +80,9 @@ function fingerprintOne(dir, kind) {
     }
     catch (e) { rows.push([n, '缺失']); }
   }
-  return { root, hash: hash(JSON.stringify(rows)), files: rows.map((r) => r[0]) };
+  // 不是 git 仓库、文件太多只看了前面这些：指纹里写明，调用方能说清后面的文件改了认不出来
+  const truncated = !hasGit && names.length >= PLAIN_MAX;
+  return { root, hash: hash(JSON.stringify(truncated ? rows.concat([['（只核对了前 ' + PLAIN_MAX + ' 个文件）', '']]) : rows)), files: rows.map((r) => r[0]), truncated };
 }
 function fingerprint(dir, kind) {
   return require('./invocation').memo('fingerprint|' + path.resolve(dir) + '|' + kind, () => fingerprintRaw(dir, kind));

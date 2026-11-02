@@ -443,6 +443,7 @@ const reason = (o) => H.reasonOf(o);
     W2.git(p, ['status']);
     H.ok('不在钩子里（命令行工具）：最多等一分钟', seen === 60000, seen);
     CP.execFileSync = orig;
+    H.ok('结果里写明只看了前面这些', fb && fb.truncated === true);
     fresh();
 
     // 预算用完、git 超时每道检查只算一条
