@@ -229,7 +229,7 @@ function parseReply(text, material) {
 function ask(url, material, mode, ms, cancelled, received, maxTokens, concise) {
   return new Promise((resolve, reject) => {
     // model 只给本机路由分角色用（审查走 sonnet 那个角色），路由转发给网关时去掉（2026-10-28）
-    const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: maxTokens || OUTPUT_TOKENS, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。' + (concise ? CONCISE : ''), messages: [{ role: 'user', content: '模式：' + mode + '\n本批材料：\n' + JSON.stringify(material) }] });
+    const body = JSON.stringify({ model: 'claude-sonnet-vibe-review', stream: false, max_tokens: maxTokens || OUTPUT_TOKENS, system: '你是独立审查者。只审提供的材料，不运行命令、不调用工具、不推测未提供的内容。找实际错误、风险和遗漏，正常情况不提建议凑数。简体中文直说。返回 JSON，格式 {"issues":[{"severity":"P1|P2|P3","file":"材料中的文件","line":1,"problem":"问题","evidence":"可核对依据","fix":"修复建议","kind":"想当然|没做到规格|边界|连带影响|项目约定|假验证|前端交互|权限|数据库|提案没说清|其他","avoid":"换个任务还会犯的写一句以后怎么避免，一次性的疏忽写 无"}],"summary":"覆盖和限制"}。没有问题 issues 为 []。' + (concise ? CONCISE : ''), messages: [{ role: 'user', content: '模式：' + mode + '\n本批材料：\n' + JSON.stringify(material) }] });
     // 每批都新开连接（agent: false）：Node 默认复用空闲连接，路由那头空闲几秒就关了它，或者两批之间路由重启过，
     // 复用到断掉的连接就报 ECONNRESET，这一批白白算失败（2026-10-16 机器忙时测试里遇到）。本机连接，新开几乎不花时间
     const req = http.request(url, { method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {
@@ -480,5 +480,58 @@ function syncAgent(j) {
   if (id && text && !S.toolResults(entries).has(id)) entries.push({ type: 'user', timestamp: new Date().toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: id, content: text }] } });
   return S.syncReviews(entries.slice(), j.cwd);
 }
+/**
+ * 这段会话记录里跑过的 review.js run 的结果，给经验规则自动收（lessons.autoCollect，问题表第 34 条）。
+ * 默认的审查走这里，不走审查代理；以前自动收只认审查代理的回复，默认配置下一条问题也进不了经验规则，收工也不催模型自己记。
+ * 结论先取命令的输出（同一个审查点审第二次会盖掉结果文件），取不到（放后台跑的、输出被截了）再读结果文件。
+ * 登记过处理结果的按登记的算：驳回、接受不改的不收，修了的收。没登记的和审查代理一样：报了之后那个文件确实改过才收。
+ * 返回 [{ source, mode, issues, findings, pos }]
+ */
+function runsForLessons(calls, results, cwd) {
+  const parser = require('../hooks/guard-commit');
+  const out = [];
+  for (const c of calls) {
+    if (!/^(Bash|PowerShell)$/.test(c.name) || !/review\.js/i.test(String(c.input.command || ''))) continue;
+    const ps = c.name === 'PowerShell';
+    let ws = null;
+    try {
+      for (const seg of parser.splitCommand(parser.preprocess(String(c.input.command), ps).s, ps).flat()) {
+        const w = parser.words(parser.scanRedirects(seg).rest, ps).map((x) => String(x.text));
+        if (/^node(?:\.exe)?$/i.test(path.basename(String(w[0] || '').replace(/\\/g, '/'))) && /(?:^|[\\/])review\.js$/i.test(String(w[1] || '')) && w[2] === 'run') { ws = w; break; }
+      }
+    } catch (e) { continue; }
+    if (!ws) continue;
+    const val = (k) => { const i = ws.indexOf(k); return i < 0 ? '' : S.expandHome(ws[i + 1] || ''); };
+    const project = path.resolve(cwd, val('--project') || '.');
+    const changeName = val('--change'); const mode = val('--mode') === 'proposal' ? 'proposal' : 'code'; const point = val('--point');
+    const reportFile = path.join(project, '.vibe', 'reviews', changeName || 'plain', mode + (point ? '-' + point : '') + '.json');
+    const res = results.get(c.id);
+    let report = null;
+    if (res) for (const l of String(res.text || '').split(/\r?\n/).reverse()) { if (!/^\s*\{/.test(l)) continue; try { const j = JSON.parse(l); if (j && Array.isArray(j.issues)) { report = j; break; } } catch (e) { /* 不是这一行 */ } }
+    if (!report) { try { const j = JSON.parse(fs.readFileSync(reportFile, 'utf8')); if (j && Array.isArray(j.issues) && Number(j.at) >= (Number(c.at) || 0)) report = j; } catch (e) { /* 没有结果 */ } }
+    if (!report || !report.issues.length || !report.id) continue;
+    const change = changeName ? changeOf(project, changeName) : null;
+    const day = new Date(Number(report.at) || Number(c.at) || Date.now()); const p2 = (n) => String(n).padStart(2, '0');
+    const source = changeName || (day.getFullYear() + '-' + p2(day.getMonth() + 1) + '-' + p2(day.getDate()) + ' 小改动');
+    let decisions = [];
+    try {
+      let rec = null;
+      if (change && point) rec = require('./flow-policy').record(change.dir, point);
+      else if (change) rec = S.reviewRecord(mode, change.dir);
+      else rec = Object.assign({ key: report.id }, JSON.parse(fs.readFileSync(reportFile, 'utf8')));
+      if (rec && (rec.key === report.id || rec.id === report.id) && Array.isArray(rec.decisions)) decisions = rec.decisions;
+    } catch (e) { decisions = []; }
+    const bases = [project].concat(change ? [change.dir] : []);
+    const findings = [];
+    for (const x of report.issues) {
+      const d = decisions.find((y) => y.id === x.id);
+      if (d && d.action !== 'fixed') continue;
+      const abs = bases.map((b) => path.resolve(b, String(x.file || ''))).find((f) => fs.existsSync(f)) || path.resolve(project, String(x.file || ''));
+      findings.push({ file: abs, problem: x.problem, when: x.evidence, severity: x.severity, kind: x.kind, avoid: x.avoid, fixed: !!d });
+    }
+    if (findings.length) out.push({ source, mode, issues: findings.length, findings, pos: res ? res.pos : c.i });
+  }
+  return out;
+}
 function instruction(name, mode, cfg) { return cfg.reviewExecutor === 'agent' ? '按 /ttls-cross-review 的兼容代理方式审查 ' + name + '，等它审完（预期 ' + cfg.reviewBudgetSeconds + ' 秒，超了不取消）' : '执行 review.js run --change ' + name + ' --mode ' + mode + '（预期 ' + cfg.reviewBudgetSeconds + ' 秒，超了不截断，套件会自动记问题反馈）'; }
-module.exports = { run, noteBatches, materials, inputsCurrent, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent, waived, waive, decisionIssue };
+module.exports = { runsForLessons, run, noteBatches, materials, inputsCurrent, baseline, status, stateFor, instruction, cancel, resolve, jobKey, budgetIssue, parseReply, syncAgent, waived, waive, decisionIssue };

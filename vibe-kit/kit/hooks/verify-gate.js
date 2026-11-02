@@ -783,11 +783,13 @@ async function handle(j) {
   const reviews = syncReviews(entries, cwd);
   // 审查报的问题自动收（开关 lessonAuto）：报了之后那个文件确实改过的才收。同样的问题在几个变更里反复出现就变成规则，不靠模型自觉去记
   try {
-    if (lessons && lessons.autoCollect && cfg.lessonAuto !== false && reviews.some((r) => r.issues > 0 && (r.change || r.source))) {
-      const all = toolCalls(entries, 0);
-      const res = toolResults(entries);
+    const all = toolCalls(entries, 0);
+    const res = toolResults(entries);
+    // 默认的 review.js 审查：结论不在审查代理的回复里，单独取（问题表第 34 条）
+    const direct = lessons && lessons.autoCollect && cfg.lessonAuto !== false ? require('../lib/review-runner').runsForLessons(all, res, cwd) : [];
+    if (lessons && lessons.autoCollect && cfg.lessonAuto !== false && (direct.length || reviews.some((r) => r.issues > 0 && (r.change || r.source)))) {
       const edits = all.filter((c) => /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(c.name) && (c.input.file_path || c.input.notebook_path) && res.get(c.id) && !res.get(c.id).error).map((c) => ({ file: String(c.input.file_path || c.input.notebook_path), pos: c.i }));
-      const got = lessons.autoCollect({ reviews, edits, cwd }, cfg);
+      const got = lessons.autoCollect({ reviews: reviews.concat(direct), edits, cwd }, cfg);
       if (got.stored) hookLog('verify-gate 自动收了 ' + got.stored + ' 条审查报的问题' + (got.promoted.length ? '，升成规则 ' + got.promoted.map((x) => x.id).join('、') : '') + (got.category.length ? '，按类别出的规则 ' + got.category.map((x) => x.id).join('、') : ''));
     }
   } catch (e) { hookLog('verify-gate 自动收审查问题出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（自动收审查问题）', j, e); }

@@ -22,7 +22,7 @@
  * 开关和数都在 config.json：lessons（on / collect / off）、lessonThreshold、lessonMaxPerGroup、lessonMaxChars、lessonPromote（ask / auto）、lessonAuto。
  *
  * 自动收（开关 lessonAuto，默认开）：不靠模型自觉。收工时脚本从会话记录里取出审查者报的每一条问题（位置、问题、类别、严重程度），
- * 报了之后那个文件确实改过的才算数（按证据认，不让模型说了算）。收下来的问题两种办法归并：
+ * 报了之后那个文件确实改过的才算数（按证据认，不让模型说了算）。默认的 review.js 审查（review-runner.js 的 runsForLessons）和兼容的审查代理都走这条路。收下来的问题两种办法归并：
  *   说的是同一件事（文字相近、类别一样）：当成同一条经验，在不同的变更里出现到门槛就变成规则，和模型记的走同一条路
  *   同一类（同一种文件、同一个类别）在好几个变更里反复出现：出一条"这一类要对照检查"的规则，带上最近的几个例子
  * 自动出来的规则在注释里标着"自动"，措辞是审查者的原话，配置页里能改能删。
@@ -883,8 +883,14 @@ function rejectedLines(cwd, source) {
   }
   return out;
 }
+/** review.js 报的一条问题（JSON）换成 parseFindings 的样子：P1 会出错、P2 有隐患、P3 建议；fixed 是用户或模型登记过"修了"，不用再看文件改没改 */
+function findingOfIssue(x) {
+  const sev = { P1: '会出错', P2: '有隐患', P3: '建议' }[String(x.severity || '').toUpperCase()] || '';
+  const av = oneLine(x.avoid);
+  return { where: String(x.file || ''), file: String(x.file || ''), problem: oneLine(x.problem), when: oneLine(x.when), severity: sev, kind: KINDS.find((k) => String(x.kind || '').includes(k)) || '', avoid: NO_AVOID.test(av) ? '无' : av, fixed: !!x.fixed };
+}
 /**
- * 自动收审查报的问题。o: { reviews（lib/session.js 的 reviewsIn 给的，带审查者的原话 text）, edits: [{ file, pos }]（会话里改成功了的文件和位置）, cwd }
+ * 自动收审查报的问题。o: { reviews（审查代理的：lib/session.js 的 reviewsIn 给的，带审查者的原话 text；review.js 的：runsForLessons 给的，带 findings）, edits: [{ file, pos }]（会话里改成功了的文件和位置）, cwd }
  * 只收：点名了变更的审查；严重程度是"会出错""有隐患"的；报了之后那个文件确实改过的。
  * 返回 { stored: 新收了几条, promoted: [升成规则的], category: [按类别出的规则], hit: [已经是规则、又被审出来的] }
  */
@@ -915,15 +921,15 @@ function autoCollectLocked(o, cfg) {
   const rejected = new Map();
   for (const r of o.reviews || []) {
     const source = r && (r.change ? r.change.name : r.source);
-    if (!r || !source || !(r.issues > 0) || !r.text) continue;
+    if (!r || !source || !(r.issues > 0) || (!r.text && !r.findings)) continue;
     if (!rejected.has(source)) rejected.set(source, rejectedLines(cwd, source));
-    for (const f of parseFindings(r.text)) {
+    for (const f of r.findings ? r.findings.map(findingOfIssue) : parseFindings(r.text)) {
       if (f.severity === '建议') continue;
       if (f.avoid === '无') continue;                // 审查者说了：一次性的疏忽，换个任务不会再犯
       const abs = locate(f.file);
       if (!abs) continue;
       const key = normKey(abs);
-      if (!edits.some((e) => e.key === key && e.pos > r.pos)) continue;       // 报了之后没改过：不算数
+      if (!f.fixed && !edits.some((e) => e.key === key && e.pos > r.pos)) continue;       // 报了之后没改过：不算数
       // 模型核对过、在 revisions.md 里写了"不成立"的：不算数
       if (rejected.get(source).some((l) => similarity(l, f.problem) >= 0.3)) continue;
       const group = groupOf(abs);

@@ -60,6 +60,76 @@ const reason = (o) => H.reasonOf(o);
     H.ok('普通目录的新文档照旧管', /产出位置/.test(doc) && /pending/.test(doc), doc);
   }
 
+  // ---------------------------------------------------------------------------------------------
+  H.section('第 34 条：默认的 review.js 审查报的问题进经验规则，到次数变成项目规则');
+  {
+    const h = H.makeHome('t1102-less', from);
+    const change = (n) => ['openspec/changes/' + n + '/proposal.md', '# ' + n + '\n'];
+    const p = H.makeRepo(path.join(h.work, 'p'), Object.fromEntries([['.gitignore', '.vibe/\n'], ['src/A.java', 'class A {}\n'], ['src/B.java', 'class B {}\n'], ['src/C.java', 'class C {}\n'], change('chg-a'), change('chg-b'), change('chg-c'), change('chg-d')]));
+    const A = path.join(p, 'src', 'A.java');
+    const cmd = (args) => 'node "$HOME/.claude/vibe-kit/tools/review.js" run ' + args + ' --mode code --project "' + p.replace(/\\/g, '/') + '"';
+    let seq = 0;
+    const issue = (o) => Object.assign({ id: 'r1', severity: 'P1', file: 'src/A.java', line: 1, problem: '批量查询之前没判断列表是不是空的', evidence: '第 3 行直接拼 in', fix: '先判断', kind: '边界', avoid: '按一批 id 查询之前：先判断列表是不是空的' }, o);
+    const report = (issues, id) => JSON.stringify({ id: id || 'run-' + (++seq), mode: 'code', status: 'completed', at: Date.now(), issues });
+    const stop = (entries) => {
+      const sid = 's-less-' + (++seq);
+      const tf = H.transcript(path.join(h.root, sid + '.jsonl'), entries);
+      return H.hook(h, 'verify-gate', { session_id: sid, hook_event_name: 'Stop', cwd: p, transcript_path: tf });
+    };
+    const cands = () => { try { return JSON.parse(fs.readFileSync(path.join(p, '.vibe', 'lessons', 'candidates.json'), 'utf8')); } catch (e) { return { items: [] }; } };
+    const list = () => { const c = cands(); return Array.isArray(c) ? c : c.items || []; };
+    const rule = () => H.read(path.join(p, '.claude', 'rules', 'ttls-lessons-java.md')) || '';
+    const edit = () => H.tr.ran('Edit', { file_path: A, old_string: 'x', new_string: 'y' }, 'ok');
+    const run = (args, text) => H.tr.ran('Bash', { command: cmd(args) }, text);
+
+    stop([H.tr.user('审一下'), run('--change chg-a --point group-1', report([issue()])), edit()]);
+    H.ok('第一个变更：报了、改了，进候选', list().some((c) => /先判断列表是不是空的/.test(c.text) && c.state === 'candidate'), JSON.stringify(cands()));
+    H.ok('第一个变更：还不是规则', !/先判断列表是不是空的/.test(rule()), rule());
+    stop([H.tr.user('审一下'), run('--change chg-b --point group-1', report([issue({ problem: '按 id 列表查询前没判断空列表' })])), edit()]);
+    H.ok('另一个变更又出现：写进项目的规则文件', /先判断列表是不是空的/.test(rule()), rule() + JSON.stringify(cands()));
+
+    const before = list().length;
+    stop([H.tr.user('审一下'), run('--change chg-c --point group-1', report([issue({ problem: '订单状态没校验', avoid: '改状态之前先校验当前状态是否允许流转' })]))]);
+    H.ok('报了但文件没改：不收', list().length === before, JSON.stringify(list()));
+    stop([H.tr.user('审一下'), run('--change chg-c --point group-1', report([issue({ severity: 'P3', problem: '变量名可以再清楚一点', avoid: '变量名写清楚用途，别缩写成一个字母' })])), edit()]);
+    H.ok('P3（建议）：不收', list().length === before, JSON.stringify(list()));
+    stop([H.tr.user('审一下'), run('--change chg-c --point group-1', report([issue({ problem: '这里手滑写错了字段', avoid: '无（一次性的疏忽）' })])), edit()]);
+    H.ok('写了"无"的一次性疏忽：不收', list().length === before, JSON.stringify(list()));
+
+    // 不走 OpenSpec 的审查：结果文件里登记了处理结果
+    const plain = path.join(p, '.vibe', 'reviews', 'plain', 'code.json');
+    const save = (o) => H.write(plain, JSON.stringify(o));
+    const rejected = { id: 'run-plain-1', mode: 'code', status: 'completed', at: Date.now(), issues: [issue({ problem: '导出没加权限判断', avoid: '导出接口都要先判断当前用户的数据权限', kind: '权限' })], decisions: [{ id: 'r1', action: 'rejected', reason: '这个接口只在内网用，确认不成立' }] };
+    save(rejected);
+    stop([H.tr.user('审一下'), run('--base HEAD', JSON.stringify(rejected)), edit()]);
+    H.ok('登记了驳回：改过文件也不收', !list().some((c) => /数据权限/.test(c.text)), JSON.stringify(list()));
+    const fixed = { id: 'run-plain-2', mode: 'code', status: 'completed', at: Date.now(), issues: [issue({ problem: '导入没校验表头', avoid: '导入文件之前先校验表头和模板是否一致', kind: '边界' })], decisions: [{ id: 'r1', action: 'fixed', reason: '加了表头校验，复验通过' }] };
+    save(fixed);
+    stop([H.tr.user('审一下'), run('--base HEAD', JSON.stringify(fixed))]);
+    H.ok('登记了修了：会话里没看到改文件也收', list().some((c) => /校验表头/.test(c.text)), JSON.stringify(list()));
+    H.ok('不走 OpenSpec 的：出处写日期和小改动', list().filter((c) => /校验表头/.test(c.text)).every((c) => (c.sources || []).some((s) => /\d{4}-\d{2}-\d{2} 小改动/.test(s.from))), JSON.stringify(list()));
+
+    // 放后台跑、命令输出里没有结论：读结果文件
+    const bg = { id: 'run-plain-3', mode: 'code', status: 'completed', at: Date.now() + 60000, issues: [issue({ problem: '分页参数没有上限', avoid: '分页接口要限制每页条数的上限', kind: '边界' })] };
+    save(bg);
+    stop([H.tr.user('审一下'), run('--base HEAD', '后台任务已启动'), edit()]);
+    H.ok('放后台跑的：从结果文件取', list().some((c) => /每页条数/.test(c.text)), JSON.stringify(list()));
+
+    // 同一类在几个变更里反复出现：多出一条"这一类要对照检查"
+    const texts = ['日期跨年没处理', '金额为负数没处理', '超长备注没处理'];
+    ['chg-a', 'chg-b', 'chg-d'].forEach((n, i) => stop([H.tr.user('审一下'), run('--change ' + n + ' --point group-2', report([issue({ file: 'src/B.java', problem: texts[i], avoid: '', kind: '想当然' })])), H.tr.ran('Edit', { file_path: path.join(p, 'src', 'B.java'), old_string: 'x', new_string: 'y' }, 'ok')]));
+    H.ok('同一类在 3 个变更里出现：出一条按类别的规则', /想当然类的问题在审查里反复出现/.test(rule()), rule());
+
+    H.setConfig(h, { lessonAuto: false });
+    const n = list().length;
+    stop([H.tr.user('审一下'), run('--change chg-d --point group-1', report([issue({ problem: '关着开关的问题', avoid: '关着开关时这一条不该进来' })])), edit()]);
+    H.ok('"审查报的问题自动收"关着：不收', list().length === n, JSON.stringify(list()));
+    H.setConfig(h, { lessonAuto: true });
+    const R = require(path.join(h.kit, 'lib', 'review-runner'));
+    const text = fs.readFileSync(path.join(h.kit, 'lib', 'review-runner.js'), 'utf8');
+    H.ok('审查提示要求报类别和以后怎么避免', /"kind":"想当然\|/.test(text) && /"avoid":/.test(text) && typeof R.runsForLessons === 'function');
+  }
+
   const wins = await watch.stop();
   H.ok('桌面上没有多出窗口', !wins.length, wins.join('；'));
   H.done('11-02 反馈');
