@@ -647,6 +647,8 @@ const reason = (o) => H.reasonOf(o);
       r = await go('c7', (b) => (lensOf(b) === '事实和范围' ? { issues: [iss({ problem: '只有这个角度回了' })] } : { fail: 400 }));
       H.ok('两个角度失败、一个审成：算审完，记下少了哪两个', r.status === 'completed' && r.issues.length === 1 && (r.lostLenses || []).length === 2, { status: r.status, lost: r.lostLenses });
       // 这一轮没审成：上一轮的问题不丢
+      const s4 = await go('c4', () => ({ fail: 400 }), { full: true });
+      H.ok('停了的点又跑一次没审成：还是停着，不会又自动审起来', s4.status === 'failed' && P.record(dirFor('c4'), 'proposal').stalled === true && P.exhausted(dirFor('c4'), 'proposal'), { status: s4.status, rec: P.record(dirFor('c4'), 'proposal') });
       edit('c7', '改了一下');
       r = await go('c7', () => ({ fail: 400 }));
       H.ok('复审没审成：failed', r.status === 'failed', r.status);
@@ -735,3 +737,25 @@ const reason = (o) => H.reasonOf(o);
   H.ok('桌面上没有多出窗口', !wins.length, wins.join('；'));
   H.done('11-02 反馈');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+    // 停了的点不卡死：全自动模式下接着打勾
+    {
+      const nm = 'c30'; const d = dirOf(nm); const tasks = path.join(d, 'tasks.md');
+      H.write(path.join(d, 'proposal.md'), doc);
+      H.write(path.join(d, 'specs', 'x', 'spec.md'), '# 规格\n\n## ADDED Requirements\n\n### Requirement: 一条\n\n#### Scenario: 场景\n- **WHEN** 甲\n- **THEN** 乙\n');
+      H.write(path.join(d, 'design.md'), '# Design\n\n## 验收用例\n\n1. 甲\n');
+      H.write(tasks, '## 1. 甲\n\n- [ ] 1.1 改 a.js；验：`mvn -q -o compile`\n\n## 2. 乙\n\n- [ ] 2.1 改 b.js；验：`mvn -q -o compile`\n');
+      const dir = dirFor(nm); const sid = 's-stall';
+      H.setConfig(h, { autoMode: true, autoApply: true }); H.inFlow(h, sid, [dir]);
+      const tick = (num) => { const tf = H.transcript(path.join(h.root, sid + '.jsonl'), [H.tr.user('开工')]); return reason(H.hook(h, 'pre-edit', { session_id: sid, hook_event_name: 'PreToolUse', cwd: p, transcript_path: tf, tool_name: 'Edit', tool_input: { file_path: tasks, old_string: '- [ ] ' + num, new_string: '- [x] ' + num }, tool_use_id: 'tu-' + num })); };
+      const stall = (point) => { const fp = P.fingerprint(dir, point); [3, 3, 3].forEach((c, i) => { const id = point + '-' + i; P.begin(dir, point, id, fp); P.noteResult(dir, point, { id, status: 'completed', issues: Array.from({ length: c }, () => ({ severity: 'P2' })), materialInputs: [] }, fp); }); };
+      H.ok('提案没审过：第一次打勾照旧拦', /提案还没审过/.test(tick('1.1')), tick('1.1'));
+      ['proposal', 'specs', 'design', 'tasks'].forEach(stall);
+      H.ok('需求文档都不收敛停了：第一次打勾不再拦"提案还没审过"', !/提案还没审过/.test(tick('1.1')), tick('1.1'));
+      H.ok('这时候流程能继续，但不算提案审过', S.reviewAllowed('proposal', dir) && !P.allPassed(dir, 'proposal'));
+      H.write(tasks, H.read(tasks).replace('- [ ] 1.1', '- [x] 1.1'));
+      H.ok('上一组还没审：打下一组的勾照旧拦', /先完成上一整组/.test(tick('2.1')), tick('2.1'));
+      stall('group-1');
+      H.ok('上一组不收敛停了：接着打下一组的勾，不卡死', !/先完成上一整组/.test(tick('2.1')), tick('2.1'));
+      H.setConfig(h, { autoMode: false, autoApply: false });
+    }

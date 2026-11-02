@@ -114,12 +114,13 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   }
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);
-  // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一整组并审修过
+  // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一整组并审修过。
+  // 到轮数、不收敛停了的组不挡（flow-policy.js 的 exhausted）：那一组不会再自动审了，这里再拦就卡死，没过的写在报告里
   if (!cfg.autoMode) return done([]);
   const policy = require('../lib/flow-policy');
   for (const t of ticked) {
     const m = t.match(/^(\d+)\./); if (!m) continue;
-    const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done || !policy.settled(art.dir, g.id));
+    const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done || (!policy.settled(art.dir, g.id) && !policy.exhausted(art.dir, g.id, cfg)));
     if (prior) return done(['先完成上一整组任务及审修：' + prior.id + '。' + (prior.done ? policy.instruction(art.dir, prior.id, cfg) : '当前组尚未完成。')]);
   }
   return done([]);

@@ -101,7 +101,7 @@ function limit(cfg, mode) { return Math.min(20, Math.max(1, Number(mode === 'pro
 // 到了上限的点不再挡提交、不挡往下走（exhausted），所以不清零也不会把提交永久拦下
 function concluded(r) { return r.status === 'completed' && blockingOf(r) === 0; }
 function begin(dir, point, id, inputHash) {
-  S.updateState('review-points', o => { const k = key(dir, point); const previous = live(dir, o[k]); const base = concluded(previous) ? 0 : previous.rounds || 0; o[k] = { rounds: base + 1, status: 'running', key: id, fingerprint: inputHash, born: S.changeBorn(dir), at: Date.now(), trend: concluded(previous) ? [] : previous.trend || [] }; });
+  S.updateState('review-points', o => { const k = key(dir, point); const previous = live(dir, o[k]); const base = concluded(previous) ? 0 : previous.rounds || 0; o[k] = { rounds: base + 1, status: 'running', key: id, fingerprint: inputHash, born: S.changeBorn(dir), at: Date.now(), trend: concluded(previous) ? [] : previous.trend || [], stalled: !concluded(previous) && !!previous.stalled }; });
 }
 function noteResult(dir, point, result, inputHash) {
   S.updateState('review-points', o => {
@@ -111,7 +111,8 @@ function noteResult(dir, point, result, inputHash) {
     const block = Sc.blocking(result.issues);
     const trend = (previous.trend || []).concat(result.status === 'completed' ? [block] : []).slice(-20);
     const t = trend.length;
-    const stalled = result.status === 'completed' && block > 0 && t >= 3 && trend[t - 1] >= trend[t - 2] && trend[t - 2] >= trend[t - 3];
+    // 这一轮没审成不改结论：不然停了的点碰上一次网关出错，又自动审起来
+    const stalled = result.status === 'completed' ? block > 0 && t >= 3 && trend[t - 1] >= trend[t - 2] && trend[t - 2] >= trend[t - 3] : !!previous.stalled;
     o[k] = { rounds, status: result.status, issues: result.issues.length, blocking: block, trend, stalled, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, born: S.changeBorn(dir), at: Date.now() };
   });
 }

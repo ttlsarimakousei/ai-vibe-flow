@@ -348,8 +348,8 @@ function reviewDiagnostics(entries, cwd) {
 /** 提案审过了吗 */
 function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir)) && require('./review-runner').inputsCurrent(r.materialInputs)); }
 
-/** 流程能否继续：完整审查或当前输入的真人跳过记录；展示仍区分审过和跳过。 */
-function reviewAllowed(kind, dir) { return require('./flow-policy').allPassed(dir, kind) || (kind === 'proposal' ? proposalReviewed(dir) : codeReviewed(dir)); }
+/** 流程能否继续：完整审查、当前输入的真人跳过记录，或者每个点都有结果了（到轮数、不收敛停了的不再自动审，这里再拦就卡死）；展示仍区分审过和跳过。 */
+function reviewAllowed(kind, dir) { return require('./flow-policy').allDone(dir, kind) || (kind === 'proposal' ? proposalReviewed(dir) : codeReviewed(dir)); }
 
 /**
  * 每项任务是什么时候打的勾（state/task-ticks.json，按变更目录记）。"代码审过了吗"要用：审查之后才打勾的任务，它的代码审到了没有。
