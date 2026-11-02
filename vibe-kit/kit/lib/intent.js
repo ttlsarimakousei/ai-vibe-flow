@@ -13,7 +13,11 @@ const DOC_OBJECT = '\\s*(?:一下|一遍|下)?\\s*(?:specs?\\b|proposal\\b|desig
 const NOT_APP = '(?!(?:mvnw?|gradlew?|npm|pnpm|yarn|npx|sql|javac|tsc|eslint|lint|build|compile|git|node|python\\d?|py|java|bat|sh|cmd|ps1)\\b)';
 const APP_NAME = '(?:' + NOT_APP + '[A-Za-z][\\w.-]{0,40}(?![\\w.-])|前后端|前端|后端|后台|前台|服务端|全部|所有|[\\u4e00-\\u9fa5]{1,8}?(?:服务|项目|应用|系统|工程|后台|前台|网关|平台))';
 const APP_KIND = '(?:项目|服务|应用|系统|工程)';
-const START_APP = '(?:重新启动|启动|重启|运行|起|跑)(?:一下|下)?\\s*' + APP_NAME + '(?:\\s*(?:[和与及、/+＋]|以及)\\s*' + APP_NAME + ')*(?:\\s*' + APP_KIND + ')?(?!\\s*' + APP_KIND + ')(?!\\s*(?:吗|么|呢|没|慢|不了|不起来|卡|超时|异常|错误))';
+// 名字后面要是这一句结束，或者接"看看""验证"这类："重启后端接口的逻辑要改""跑一下 SELECT 语句"说的不是起服务
+const startApp = (verbs) => '(?:' + verbs + ')(?:一下|下)?\\s*' + APP_NAME + '(?:\\s*(?:[和与及、/+＋]|以及)\\s*' + APP_NAME + ')*(?:\\s*' + APP_KIND + ')?(?!\\s*' + APP_KIND + ')(?!\\s*(?:吗|么|呢|没|慢|不了|不起来|卡|超时|异常|错误))(?=\\s*(?:$|[，,。；;！!\\n]|吧|了|一下|下|看看|看一下|看下|试试|验证|测试|自测|并|然后|再|后|前|之前|以前|先|等|晚点|稍后|暂缓|给我))';
+const START_APP = startApp('重新启动|启动|重启|运行|起|跑');
+// "做完之后再跑 migration"：跟在"之后""再"后面的"跑""运行"多半说的是别的，这里只认启动、重启（"改完之后重启后端"）
+const START_THEN = startApp('重新启动|启动|重启');
 const TOPIC = {
   // "审一下""审审"是最常见的说法（2026-10-16 端到端里用户说"审一下变更 add-export 的代码"没被认出，人工模式反被要求先问）
   // 审查的方式也算要审（#207、#213：提问框选"用 ttls-reviewer 审一次""use ttls-cross-review"）
@@ -93,10 +97,11 @@ function explicit(text, action) {
   // "推吧""推上去""把这几笔推上去"：单字"推"只认这几种句式（"推断""推荐"不算）
   if (action === 'push' && (/(?:^|[，,。；;\n])\s*(?:那就|好|好的|行|可以|直接)?[，,\s]*推(?:吧|一下|上去|到远端)(?:吧)?[\s。！!]*$/.test(s) || /(?:把|将)[^，,。；;！!?？\n]{1,30}推(?:上去|到远端)/.test(s))) return true;
   // 常见收尾："改好了，提交"；"自测没问题，归档吧"；带前置修改的明确执行指令。
-  const then = new RegExp('(?:然后|之后|以后|再|后|并且|并|和)\\s*' + op + '(?!\\s*' + NOUN + ')', 'i');
+  const opThen = action === 'test' ? op.split(START_APP).join(START_THEN) : op;
+  const then = new RegExp('(?:然后|之后|以后|再|后|并且|并|和)\\s*' + opThen + '(?!\\s*' + NOUN + ')', 'i');
   if (then.test(s) && !/(?:解释|讲解|举例|讨论|听说|他说|你说|之前说|之前会)/.test(s)) return true;
   // "修完审一下""改好跑一下测试"：只放宽审查和自测（认漏了只是多问一次）；提交、推送、归档的认法只能收紧
-  if ((action === 'review' || action === 'test') && new RegExp('(?:完|好)\\s*' + op + '(?!\\s*' + NOUN + ')', 'i').test(s) && !/(?:解释|讲解|举例|讨论|听说|他说|你说)/.test(s)) return true;
+  if ((action === 'review' || action === 'test') && new RegExp('(?:完|好)\\s*' + opThen + '(?!\\s*' + NOUN + ')', 'i').test(s) && !/(?:解释|讲解|举例|讨论|听说|他说|你说)/.test(s)) return true;
   if (action === 'apply') {
     if (/\bapply\b.*(?:功能|流程|命令|机制|时候|阶段|怎么|是否)|(?:提案|需求|规格|设计|任务清单|验法).*(?:修改|调整|改一下|不对|讨论)/i.test(s)) return false;
     return /(?:把|将)?\s*(?:任务\s*)?(?:\d+\.\d+|第\s*\d+\s*项)[^，,。！!?？\n]{0,12}(?:做了|做完|实现|开发|打勾)|^(?:按照现在的方案修改|开始吧|可以开始了|可以(?:做|开工|实现)了)[\s。！!]*$/i.test(s);
