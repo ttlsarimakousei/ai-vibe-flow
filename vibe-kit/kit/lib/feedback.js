@@ -255,13 +255,16 @@ function recordHookError(hook, j, err) {
 function recordHookErrorRaw(hook, j, err) {
   try {
     const msg = String((err && err.message) || err || '（没有错误信息）');
-    const stack = String((err && err.stack) || msg).split('\n').slice(0, 8).join('\n');
+    // 预算用完、git 超时是电脑慢，不是某一处写错了：每道检查只算一条，停在哪记在后面（#264、#276、#279：以前每个子项目、每个阶段各开一条议题）
+    const slow = !!(err && (err.code === 'VIBE_HOOK_BUDGET' || err.code === 'ETIMEDOUT')) || /钩子本机检查预算用完|spawnSync git ETIMEDOUT/.test(msg);
+    // 多留几层：只留 8 行时看不出是谁调的 git（#277）
+    const stack = String((err && err.stack) || msg).split('\n').slice(0, 14).join('\n');
     const inp = (j && j.tool_input) || {};
     const action = j && j.tool_name ? j.tool_name + '：' + (inp.command || inp.file_path || inp.notebook_path || inp.pattern || '') : String((j && j.hook_event_name) || '');
     record({
-      kind: '出错', hook, source: '钩子自动记录', title: hook + ' 出错：' + firstLine(msg).slice(0, 80),
+      kind: '出错', hook, source: '钩子自动记录', title: hook + ' 出错：' + (slow ? '本机检查超时（预算用完或 git 超时）' : firstLine(msg).slice(0, 80)),
       what: '钩子运行时抛了异常。出错时这道检查按放行处理（没有拦），用户和模型都看不到，只有这里有记录。',
-      action: clip(action, 500), stack, sig: errorSig(hook, msg, stack),
+      action: clip(action, 500), stack, sig: slow ? sigOf(['error', hook, 'slow']) : errorSig(hook, msg, stack), note: slow ? firstLine(msg).slice(0, 120) : undefined,
       sid: (j && j.session_id) || '', cwd: (j && j.cwd) || '', transcript: (j && j.transcript_path) || '',
     });
     hookLog(hook + ' 出错（记进了问题反馈）：' + firstLine(msg));

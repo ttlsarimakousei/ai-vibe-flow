@@ -171,7 +171,8 @@ function createHost(opts) {
       if (!m.ok && m.retry && !attempt) return run(name, input, 1);
       record(name, input, m, Date.now() - started);
       if (m.ok) return { status: 200, out: m.out };
-      noteFailure(name, input, m.error);
+      // 工作线程里抛的那边已经记过了（#277、#278：同一次出错开了两条议题）；这里只记超时、线程崩了这些它记不了的
+      if (!m.recorded) noteFailure(name, input, m.error);
       if (name === 'guard-commit' && pushLike(input)) {
         // 全自动模式没人点确认框：拦下、留给用户（复审 S7）；session.js 也载不进来时退回直接问
         let out = null;
