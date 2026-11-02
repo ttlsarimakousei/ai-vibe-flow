@@ -252,7 +252,7 @@ const SRCV = FROM || H.SRC;
       const r1 = await R.run({ cwd: plain, mode: 'code', base });
       H.ok('G3 回的 JSON 包在 ```json 里、前后带话：照样认，审完', r1.status === 'completed', { status: r1.status, reason: r1.reason, diag: r1.diagnostics });
       mode = 'garbage'; calls = 0;
-      const r2 = await R.run({ cwd: plain, mode: 'code', base });
+      const r2 = await R.run({ cwd: plain, mode: 'code', base, full: true });
       H.ok('G3 第一次回的不是 JSON：同一批再审一次，审完', r2.status === 'completed' && calls === 2, { status: r2.status, calls, reason: r2.reason });
       mode = 'issue';
       const dir = path.join(q, 'openspec', 'changes', 'add-a');
@@ -263,7 +263,7 @@ const SRCV = FROM || H.SRC;
       try { res = R.resolve({ cwd: q, change: 'add-a', mode: 'proposal', decisions: dec }); } catch (e) { err = e.message; }
       const recA = S.reviewRecord('proposal', dir);
       H.ok('G2 整套提案审查的意见：按提案的记录登记，记成已处理', r3.status === 'completed' && !!res && res.status === 'resolved' && !!recA && recA.resolved === true, err || { r3: [r3.status, r3.reason, r3.skipped], res, recA });
-      const r4 = await R.run({ cwd: q, change: 'add-a', mode: 'proposal' });
+      const r4 = await R.run({ cwd: q, change: 'add-a', mode: 'proposal', full: true });
       E.recordTool({ session_id: 'g3', tool_use_id: 'g3-1', tool_name: 'Bash', cwd: q, tool_input: { command: 'npm test' }, tool_response: { stdout: '1 passing' } }, true);
       H.write(dec, JSON.stringify({ findings: [{ id: 'r1', action: 'fixed', reason: '补了为什么，见 proposal.md 第 3 行' }] }));
       res = null; err = '';

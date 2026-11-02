@@ -6,7 +6,8 @@
  *   第一轮：2～3 个角度同时审（并发的独立请求，不是子代理），一次看全。材料超过 3 批的用 2 个角度。
  *   后面的轮：只审修改点。送上一轮的问题和这次的改动（和上一轮审过的内容比），只问"改对了没有""改出新问题没有"。
  *     改动超过六成（整个重写）按第一轮算；上一轮没审到的文件整份送。
- *     没处理、文件也没改过的问题不问模型，照旧算没解决：不会因为再审一次就消失。
+ *     没处理、文件也没改过的问题不问模型，照旧算没解决：不会因为再审一次就消失。登记修了、改的是别的文件的，连这个文件一起送去核对。
+ *     定过的问题（驳回、接受、留给后面）一直带着，模型又报一遍不算；这一轮没审到的文件，上一轮的内容和问题留着，下一轮接着比。
  *   按阶段给提示：提案只审需求、范围、验收和事实，算法步骤这些归 design。后面的点只审新写的文档，前面的只用来核对是否对齐。
  *   通过标准：没有 P1、P2 就算过，P3 记下来，不为它再审一轮。
  *   不收敛就停：连续两轮 P1、P2 没减少，停止这个点的自动循环（flow-policy.js 的 stalled）。
@@ -38,7 +39,7 @@ const LENSES = {
     { name: '安全和假验证', text: '这一次你只看一个角度：安全和假验证。权限、注入、路径穿越、敏感信息；测试是不是真的覆盖到了改动。' },
   ],
 };
-const RECHECK = '这是复审，不是重新审一遍。只做两件事：1. "上一轮的问题"逐条看现在改对了没有：改对了不报；没改对、只改了一部分的照旧报，severity 不变。2. 材料里这次的改动有没有改出新问题（改错了、改漏了、和上下文对不上）。没改过的内容不要审，看着有问题也不报。"已处理"里的问题已经定过了，不要再报。新问题只报 P1、P2。';
+const RECHECK = '这是复审，不是重新审一遍。只做两件事：1. "上一轮的问题"逐条看现在改对了没有：改对了不报；没改对、只改了一部分的照旧报，severity 不变。2. 材料里这次的改动有没有改出新问题（改错了、改漏了、和上下文对不上）。没改过的内容不要审，看着有问题也不报。"已处理"里的问题已经定过了，不要再报。新问题只报 P1、P2。材料里带 note 的照 note 说的做。';
 
 const P3 = /^P3$/i;
 /** 挡通过的问题有几条：除了 P3 都算（模型没写 severity 的当 P2） */
@@ -110,16 +111,16 @@ function lineDiff(oldText, newText, context) {
 const snapshotFile = (reportFile) => String(reportFile).replace(/\.json$/i, '') + '.snapshot.json';
 const baseKey = (base) => JSON.stringify([].concat(base || []).filter(Boolean));
 function readJson(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } }
-/** 上一轮：{ files, issues, decisions, covered, round }。没有、不是同一个变更（归档后重建）、基线换了，返回 null */
+/** 上一轮：{ files, issues, decisions, closed: 更早的轮里定过的, covered, round }。没有、不是同一个变更（归档后重建）、基线换了，返回 null */
 function readPrior(reportFile, born, base) {
   const p = readJson(snapshotFile(reportFile));
   if (!p || !p.files || typeof p.files !== 'object') return null;
   if (born && p.born && Math.abs(Number(p.born) - Number(born)) > 2000) return null;
   if (baseKey(base) !== String(p.base === undefined ? baseKey(base) : p.base)) return null;
-  return { files: p.files, issues: Array.isArray(p.issues) ? p.issues : [], decisions: Array.isArray(p.decisions) ? p.decisions : [], covered: Array.isArray(p.covered) ? p.covered : [], round: Number(p.round) || 1 };
+  return { files: p.files, issues: Array.isArray(p.issues) ? p.issues : [], decisions: Array.isArray(p.decisions) ? p.decisions : [], closed: Array.isArray(p.closed) ? p.closed : [], covered: Array.isArray(p.covered) ? p.covered : [], round: Number(p.round) || 1 };
 }
 function writeSnapshot(store, reportFile, o) {
-  return store.atomicWrite(snapshotFile(reportFile), { version: 1, born: o.born || 0, base: baseKey(o.base), at: Date.now(), round: o.round, files: o.files, issues: o.issues, decisions: [], covered: o.covered });
+  return store.atomicWrite(snapshotFile(reportFile), { version: 1, born: o.born || 0, base: baseKey(o.base), at: Date.now(), round: o.round, files: o.files, issues: o.issues, decisions: [], closed: o.closed || [], covered: o.covered });
 }
 /** 登记处理结果时记进上一轮：下一轮才知道哪些定过了 */
 function noteDecisions(store, reportFile, decisions) {
@@ -147,9 +148,16 @@ function batchesOf(items) {
 }
 const CLOSED = new Set(['rejected', 'accepted', 'deferred']);
 const brief = (x) => ({ severity: x.severity, file: x.file, line: x.line, problem: x.problem, fix: x.fix });
+const noted = (parts, note) => parts.map((it) => Object.assign(it, { note }));
+/** 留给后面文档的要点：整份重审（--full、改动太大）之后也不能丢 */
+function deferredOf(prior) {
+  if (!prior) return [];
+  const now = prior.decisions.filter((d) => d.action === 'deferred').map((d) => { const x = prior.issues.find((i) => i.id === d.id); return x && Object.assign(brief(x), { action: d.action, reason: d.reason }); }).filter(Boolean);
+  return prior.closed.filter((c) => c.action === 'deferred').concat(now);
+}
 /**
  * 这一轮审什么。prior 是 null：第一轮，{ scoped: false }。不然比出改过的地方：
- * { scoped: true, items, batches, open: 上一轮没定、文件改过的问题（送去核对）, closed: 定过的, carried: 没定、文件也没改的（照旧算没解决）, kept: 没改过、已经审过的文件, changed }。
+ * { scoped: true, items, batches, open: 上一轮没定、文件改过的问题（送去核对）, closed: 定过的（历轮累计）, carried: 没定、文件也没改的（照旧算没解决）, kept: 没改过、已经审过的文件, changed }。
  * 改动超过六成：{ scoped: false, why }
  */
 function planRound(material, prior) {
@@ -161,9 +169,11 @@ function planRound(material, prior) {
     const n = lines(cur.text).length;
     totalLines += n;
     const old = prior.files[file];
-    if (old === undefined || !covered.has(file)) { changed.push(file); changedLines += n; items.push(...chunkItems(file, cur.text, cur.root, cur.source, cur.role)); continue; }
+    if (old === undefined || !covered.has(file)) { changed.push(file); changedLines += n; items.push(...noted(chunkItems(file, cur.text, cur.root, cur.source, cur.role), '这个文件上一轮没审到，这次整份审，不限于改动')); continue; }
     if (old === cur.text) { kept.push(file); continue; }
     const d = lineDiff(old, cur.text);
+    // 只有换行符不一样：不算改过
+    if (!d.changed) { kept.push(file); continue; }
     changed.push(file); changedLines += d.changed;
     items.push(...chunkItems(file, '这次的改动（- 是改之前，+ 是改之后，其余是上下文）：\n' + d.text, cur.root, cur.source, cur.role));
   }
@@ -174,15 +184,18 @@ function planRound(material, prior) {
   }
   if (totalLines && changedLines / totalLines > 0.6) return { scoped: false, why: '改动超过六成，按第一轮全量审' };
   const decided = new Map(prior.decisions.map((d) => [d.id, d]));
-  const open = []; const closed = []; const carried = [];
+  const open = []; const closed = prior.closed.slice(-50); const carried = []; const also = new Set();
   for (const x of prior.issues) {
     const d = decided.get(x.id);
     if (d && CLOSED.has(d.action)) { closed.push(Object.assign(brief(x), { action: d.action, reason: d.reason })); continue; }
     // 修了的要核对；没登记的也要：文件改过的送去问，没改过的不用问
     if (changed.includes(x.file)) open.push(brief(x));
+    // 登记修了、改的是别的文件（问题在 design.md，改在 specs 里）：连这个文件一起送去核对。不然这个文件不变，问题永远关不掉
+    else if (d && d.action === 'fixed' && changed.length && material.currents.has(x.file)) { open.push(brief(x)); also.add(x.file); }
     else { const c = Object.assign({}, x); delete c.id; carried.push(c); }
   }
-  return { scoped: true, items, batches: batchesOf(items), open, closed, carried, kept, changed };
+  for (const file of also) { const cur = material.currents.get(file); items.push(...noted(chunkItems(file, cur.text, cur.root, cur.source, cur.role), '这个文件这次没改，只核对"上一轮的问题"里写它的那几条，别的不审')); }
+  return { scoped: true, items, batches: batchesOf(items), open, closed, carried, kept: kept.filter((f) => !also.has(f)), changed };
 }
 // ---------- 几个角度的结果合起来 ----------
 function bigrams(s) { const t = String(s || '').replace(/[\s，,。.；;：:、"'“”（）()]+/g, ''); const out = new Set(); for (let i = 0; i + 1 < t.length; i++) out.add(t.slice(i, i + 2)); return out; }
@@ -191,26 +204,46 @@ function alike(a, b) {
   if (!A.size || !B.size) return false;
   let n = 0;
   for (const x of A) if (B.has(x)) n++;
-  return (2 * n) / (A.size + B.size) >= 0.55;
+  return (2 * n) / (A.size + B.size) >= 0.7;
 }
+// 都写了行号才比：隔得远的是两处
+const near = (a, b) => { const x = Number(a.line); const y = Number(b.line); return !x || !y || Math.abs(x - y) <= 5; };
+const sameIssue = (a, b) => String(a.file) === String(b.file) && near(a, b) && alike(a.problem, b.problem);
 const rank = (x) => { const s = String((x && x.severity) || '').toUpperCase(); return s === 'P1' ? 1 : s === 'P3' ? 3 : 2; };
-/** 同一个文件、说的是同一件事的合成一条，留最严重的那个说法 */
-function mergeIssues(list) {
+/**
+ * 几个角度的结果合起来（groups：每个角度一组）。只合不同角度之间的，同一个角度自己报的两条就是两件事。
+ * 同一个文件、行号挨着、说的是同一件事的合成一条，留最严重的；另一个说法接在后面，万一是两件事也不丢
+ */
+function mergeIssues(groups) {
   const out = [];
-  for (const x of list || []) {
-    const hit = out.findIndex((y) => String(y.file) === String(x.file) && alike(y.problem, x.problem));
-    if (hit < 0) out.push(x);
-    else if (rank(x) < rank(out[hit])) out[hit] = x;
-  }
-  return out;
+  (groups || []).forEach((list, g) => {
+    for (const x of list || []) {
+      const hit = out.find((y) => !y.from.has(g) && sameIssue(y.first, x));
+      if (!hit) { out.push({ first: x, issue: x, from: new Set([g]) }); continue; }
+      hit.from.add(g);
+      const worse = rank(x) < rank(hit.issue);
+      const keep = worse ? x : hit.issue;
+      const other = worse ? hit.issue : x;
+      hit.issue = String(keep.problem).includes(String(other.problem)) ? keep : Object.assign({}, keep, { problem: keep.problem + '（另一个角度的说法：' + other.problem + '）' });
+    }
+  });
+  return out.map((o) => o.issue);
+}
+/** 已经定过的问题（驳回、接受、留给后面）模型又报了：不算，不然驳回了也挡通过 */
+function dropClosed(issues, closed) {
+  const kept = []; const dropped = [];
+  for (const x of issues || []) ((closed || []).some((c) => sameIssue(c, x)) ? dropped : kept).push(x);
+  return { kept, dropped };
 }
 /** 第一轮要带给这一步的：上游审查标了"留给 design"的问题 */
 function carryover(folder, points) {
   const out = [];
   for (const point of points) {
     const p = readJson(path.join(folder, 'proposal-' + point + '.snapshot.json'));
-    if (!p || !Array.isArray(p.decisions)) continue;
-    for (const d of p.decisions) { if (d.action !== 'deferred') continue; const x = (p.issues || []).find((i) => i.id === d.id); if (x) out.push({ from: point, problem: x.problem, fix: x.fix }); }
+    if (!p) continue;
+    // 更早的轮里定的（closed）也算：复审之后 decisions 清空了，留给后面的要点不能跟着丢
+    for (const c of Array.isArray(p.closed) ? p.closed : []) if (c.action === 'deferred') out.push({ from: point, problem: c.problem, fix: c.fix });
+    for (const d of Array.isArray(p.decisions) ? p.decisions : []) { if (d.action !== 'deferred') continue; const x = (p.issues || []).find((i) => i.id === d.id); if (x) out.push({ from: point, problem: x.problem, fix: x.fix }); }
   }
   return out;
 }
@@ -233,6 +266,8 @@ function logRound(folder, o) {
   const out = ['', '## 第 ' + o.round + ' 轮 · ' + (o.point || o.mode) + ' · ' + stamp(o.at), ''];
   out.push('- 怎么审的：' + (o.scoped ? '只审修改点（改过 ' + (o.changed || []).length + ' 个文件：' + (o.changed || []).join('、') + '）' : '全量' + (o.lenses > 1 ? '，' + o.lenses + ' 个角度同时审' : '')) + (o.why ? '（' + o.why + '）' : ''));
   out.push('- 结果：' + o.status + (o.reason ? '（' + oneLine(o.reason) + '）' : '') + '；P1 ' + c.P1 + ' 条、P2 ' + c.P2 + ' 条、P3 ' + c.P3 + ' 条；用时 ' + Math.round((o.spentMs || 0) / 1000) + ' 秒' + (o.model ? '；模型 ' + o.model : ''));
+  if ((o.lost || []).length) out.push('- 没审成的角度：' + o.lost.join('、'));
+  if (o.repeated) out.push('- 又报了已经定过的问题 ' + o.repeated + ' 条，不算');
   for (const x of o.issues || []) out.push('- ' + x.id + ' ' + (x.severity || 'P2') + ' ' + x.file + (x.line ? ':' + x.line : '') + '：' + oneLine(x.problem));
   return appendLog(folder, out.join('\n') + '\n');
 }
@@ -244,4 +279,4 @@ function logDecisions(folder, point, findings) {
   return appendLog(folder, out.join('\n') + '\n');
 }
 
-module.exports = { SEVERITY_NOTE, ROLE_NOTE, RECHECK, blocking, countBySeverity, stageText, lensesFor, lineDiff, snapshotFile, readPrior, writeSnapshot, noteDecisions, planRound, batchesOf, mergeIssues, carryover, appendLog, logRound, logDecisions, LOG_NAME };
+module.exports = { SEVERITY_NOTE, ROLE_NOTE, RECHECK, blocking, countBySeverity, stageText, lensesFor, lineDiff, snapshotFile, readPrior, writeSnapshot, noteDecisions, planRound, batchesOf, mergeIssues, dropClosed, deferredOf, carryover, appendLog, logRound, logDecisions, LOG_NAME };

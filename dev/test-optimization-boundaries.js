@@ -71,7 +71,7 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
     H.ok('报告落盘为可读取的结构化对象', report && typeof report === 'object' && Array.isArray(report.issues) && report.id === clean.id);
     H.write(decisions, JSON.stringify({ findings: [] })); H.write(path.join(p, 'a.js'), 'const a=3;\n');
     H.ok('零问题报告不能批准后来变更的代码', !!rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
-    H.write(path.join(p, 'a.js'), 'const a=2;\n'); mode = 'issue'; await R.run(opts);
+    H.write(path.join(p, 'a.js'), 'const a=2;\n'); mode = 'issue'; await R.run(Object.assign({}, opts, { full: true }));
     H.write(decisions, JSON.stringify({ findings: [{ id: 'r1', action: 'rejected', reason: '核对设计要求后，该值符合已确认规则，不成立。' }] }));
     H.ok('同版不成立意见可登记可核对理由', !rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
     H.write(path.join(p, 'a.js'), 'const a=4;\n');
@@ -80,9 +80,9 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
     H.ok('成立问题未复验不能登记完成', !!rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
     E.recordTool({ cwd: p, session_id: 'fixed', tool_use_id: 'fix-verify', tool_name: 'Bash', tool_input: { command: 'node a.js' }, hook_event_name: 'PostToolUse', tool_response: { exit_code: 0, stdout: '通过' } }, true);
     H.ok('修复和当前版复验可登记完成', !rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
-    mode = 'issue'; await R.run(opts);
+    mode = 'issue'; await R.run(Object.assign({}, opts, { full: true }));
     H.ok('重新审查不继承上一轮意见处理许可', !S.reviewRecord('code', d).resolved && !S.reviewRecord('code', d).resolvedFingerprint);
-    mode = 'hang'; const pending = R.run(opts); await H.sleep(350); R.cancel(opts); const cancelled = await pending; const firstSpent = R.status(opts).spentMs;
+    mode = 'hang'; const pending = R.run(Object.assign({}, opts, { full: true })); await H.sleep(350); R.cancel(opts); const cancelled = await pending; const firstSpent = R.status(opts).spentMs;
     H.ok('取消审查记下用了多久', cancelled.status === 'cancelled' && firstSpent >= 300, firstSpent);
     const key = R.jobKey(p, 'add-x', 'code'); const interrupted = Object.assign({}, R.status(opts), { id: 'dead-review', status: 'running', pid: 999999, started: Date.now() - 800, deadline: Date.now() + 5000 }); S.updateState('review-jobs', (s) => { s[key] = interrupted; });
     H.ok('执行进程退出了的审查记成中断', R.status(opts).status === 'interrupted' && R.status(opts).spentMs >= 700, R.status(opts));

@@ -46,7 +46,7 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `feedback.js` | 问题反馈的记录（`~/.claude/vibe-kit/feedback/`），拦截编号和通行证，拦得最多的规矩、放行记录、开关改动记录 |
 | `report.js` | 全自动模式的报告 |
 | `lessons.js` | 经验规则：审查里反复出现的问题沉淀成 `.claude/rules/ttls-lessons-*.md` |
-| `review-scope.js` | 审查怎么分轮（2026-11-02，问题表第 37 条）：第一轮几个角度、后面只审修改点（和上一轮的内容比）、按阶段的提示、合并问题、审查记录。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json` |
+| `review-scope.js` | 审查怎么分轮（2026-11-02，问题表第 37 条）：第一轮几个角度、后面只审修改点（和上一轮的内容比）、按阶段的提示、合并问题（只合不同角度之间的）、定过的问题历轮累计（`closed`）、审查记录。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json` |
 | `maven-offline.js` | devserver 起后端先离线、缺依赖只拉缺的（问题表第 35 条）：加 `-o`、从 Maven 报错里取缺的依赖、拼 `dependency:get` |
 | `outputs.js` | 代码之外的产出位置 |
 | `tidy.js` | `.vibe` 的整理和过程文件的清理 |
