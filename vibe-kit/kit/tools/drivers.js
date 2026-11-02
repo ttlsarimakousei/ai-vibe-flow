@@ -4,11 +4,11 @@
  *   node drivers.js list                      每种数据库现在用哪个驱动
  *   node drivers.js auto [--only dm,mysql] [--force] [--by-user]   到 Maven 本地仓库里找，没登记驱动的数据库自动登记一个
  *                                             （项目的 pom 里写明的版本 → 查库用的 JDK 加载得了的里面最新的）。
- *                                             用户在配置页里去掉过的不登记，除非带 --by-user（配置页上点的带这个）
+ *                                             用户用 remove 去掉过的不登记，除非带 --by-user
  *   node drivers.js scan [--repo <目录>]      只找不登记：列出找到的
  *   node drivers.js use <jar 的路径>          用这个 jar（自己会认它是哪种数据库的驱动）
  *   node drivers.js remove <数据库>           从登记表里去掉
- * 加 --json 输出一行 JSON（给配置页用）。
+ * 加 --json 输出一行 JSON。
  */
 const path = require('path');
 const D = require('../lib/drivers.js');
@@ -34,7 +34,7 @@ function listText(s) {
   L.push('');
   L.push(s.repos.length ? 'Maven 本地仓库：' + s.repos.map((r) => r.dir + '（' + r.from + '）').join('；') : '这台电脑上没找到 Maven 本地仓库（在配置页"本机环境"里配，或者用 use 直接指定 jar）');
   const miss = s.drivers.filter((d) => !d.ok);
-  if (miss.length) L.push('没有驱动的：先试 node "' + __filename + '" auto；找不到就 node "' + __filename + '" use <jar 的路径>，或者在配置页"数据库驱动"里选。');
+  if (miss.length) L.push('没有驱动的：先试 node "' + __filename + '" auto；找不到就 node "' + __filename + '" use <jar 的路径>，或者把路径写进连接的 driver_jar。');
   return L.join('\n');
 }
 function scanText(r) {
@@ -64,10 +64,10 @@ try {
     const r = D.auto({ dirs: repo ? [{ dir: path.resolve(repo), from: '指定的目录' }] : undefined, only, force: has('--force'), byUser: has('--by-user'), prefer, budgetMs: Number(valOf('--budget')) || undefined });
     const L = [];
     for (const u of r.used) L.push('  ✓ ' + u.msg + '  来自 ' + u.source + (u.why ? '（' + u.why + '）' : ''));
-    if (r.skipped.length) L.push('  没有自动登记：' + r.skipped.map((k) => D.DIALECTS[k].name).join('、') + '。这' + (r.skipped.length > 1 ? '几种' : '一种') + '的驱动是用户在配置页里去掉的：告诉用户，让他在配置页"数据库驱动"里选一个。');
+    if (r.skipped.length) L.push('  没有自动登记：' + r.skipped.map((k) => D.DIALECTS[k].name).join('、') + '。这' + (r.skipped.length > 1 ? '几种' : '一种') + '的驱动是用户以前去掉的，不自动登记：要用就带 --by-user 再跑一次，或者 use <jar 的路径>。');
     if (r.kept.length) L.push('  已经登记过、没动的：' + r.kept.map((k) => D.DIALECTS[k].name).join('、') + '（要换成仓库里最新的加 --force）');
     const none = r.missing.filter((k) => !r.skipped.includes(k));
-    if (none.length) L.push('  还是没有驱动的：' + none.map((k) => D.DIALECTS[k].name).join('、') + '。Maven 仓库里没找到，用 use <jar 的路径> 指定，或者在配置页"数据库驱动"里选。');
+    if (none.length) L.push('  还是没有驱动的：' + none.map((k) => D.DIALECTS[k].name).join('、') + '。Maven 仓库里没找到，用 use <jar 的路径> 指定，或者把路径写进连接的 driver_jar。');
     if (!r.scan.dirs.length) L.push('  这台电脑上没找到 Maven 本地仓库。');
     out(Object.assign({ status: D.status() }, r), L.join('\n') || '没有要做的。');
     process.exitCode = r.missing.length ? 1 : 0;

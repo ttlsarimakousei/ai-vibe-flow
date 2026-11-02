@@ -949,7 +949,7 @@ function removeAbsorbed(man) {
     if (done[x.name]) { console.log('  [!] 以前单独装的 ' + x.name + ' 技能又装回来了（上次已经并进套件，叫 ' + x.now + '）。这次没有动它；不要了就删掉 ' + d); continue; }
     let moved = [];
     if (x.drivers) {
-      try { moved = require(path.join(KIT, 'lib', 'drivers.js')).rescueFrom(d); } catch (e) { console.log('  [!] 旧技能自带的驱动没挪成（' + ((e && e.message) || e) + '）。旧技能整个留在 ' + RETIRED + ' 里，驱动在它的 drivers 目录下，可以在配置页"数据库驱动"里选'); }
+      try { moved = require(path.join(KIT, 'lib', 'drivers.js')).rescueFrom(d); } catch (e) { console.log('  [!] 旧技能自带的驱动没挪成（' + ((e && e.message) || e) + '）。旧技能整个留在 ' + RETIRED + ' 里，驱动在它的 drivers 目录下，可以用 drivers.js use <jar 的路径> 登记'); }
     }
     const to = moveAway(d, x.name, true);
     if (!to) { console.log('  [!] ' + d + ' 被别的程序占着，这次没挪走（下次装的时候再挪）'); continue; }

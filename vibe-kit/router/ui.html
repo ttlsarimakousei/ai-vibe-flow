@@ -1017,34 +1017,34 @@
   let pk = null;
   async function pkGo(dir) {
     try {
-      const r = await api('POST', '/api/kit/browse', { dir, file: pk.file, ext: pk.ext || '' });
+      const r = await api('POST', '/api/kit/browse', { dir, file: pk.file });
       pk.dir = r.dir;
       $('pkPath').textContent = r.dir || '这台电脑';
       $('pkUp').disabled = !r.dir; pk.parent = r.parent;
       $('pkChoose').classList.toggle('hide', !!pk.file); $('pkChoose').disabled = !r.dir;
       const e = EXPECT[pk.expect];
-      if (e && r.dir) say($('pkMark'), r.marks[e[0]] ? '✓ ' + e[1] : e[2], !!r.marks[e[0]]); else $('pkMark').textContent = pk.file ? '点一个 .' + (pk.ext || 'xml') + ' 文件就选中它' : '';
+      if (e && r.dir) say($('pkMark'), r.marks[e[0]] ? '✓ ' + e[1] : e[2], !!r.marks[e[0]]); else $('pkMark').textContent = pk.file ? '点一个 .xml 文件就选中它' : '';
       if (e && r.marks[e[0]]) $('pkMark').style.fontWeight = '600'; else $('pkMark').style.fontWeight = '';
-      $('pkList').innerHTML = r.entries.map((x, i) => '<div class="pk" data-i="' + i + '">' + (x.dir ? '📁 ' : '📄 ') + esc(x.name) + '</div>').join('') || '<div class="pk dim">（这里面没有' + (pk.file ? '子目录和 .' + (pk.ext || 'xml') + ' 文件' : '子目录') + '）</div>';
+      $('pkList').innerHTML = r.entries.map((x, i) => '<div class="pk" data-i="' + i + '">' + (x.dir ? '📁 ' : '📄 ') + esc(x.name) + '</div>').join('') || '<div class="pk dim">（这里面没有' + (pk.file ? '子目录和 .xml 文件' : '子目录') + '）</div>';
       pk.entries = r.entries; $('pkMsg').textContent = '';
     } catch (err) { say($('pkMsg'), err.message, false); }
   }
   // onPick：选中文件之后直接调它；title：弹窗的标题
-  function openPicker(input, expect, file, ext, onPick, title) {
-    pk = { input, expect, file, ext: ext || '', dir: '', entries: [], onPick: onPick || null };
-    $('pkTitle').textContent = title || (file ? (ext === 'jar' ? '选驱动的 jar' : '选 settings.xml') : '选目录');
+  function openPicker(input, expect, file) {
+    pk = { input, expect, file, dir: '', entries: [] };
+    $('pkTitle').textContent = file ? '选 settings.xml' : '选目录';
     $('pkJump').value = '';
     $('picker').showModal();
     const cur = input.value.trim();
     pkGo(cur ? (file ? cur.replace(/[\\/][^\\/]*$/, '') : cur) : '').then(() => { if (!pk.dir && cur) pkGo(''); });
   }
-  $('pkList').onclick = (ev) => { const el = ev.target.closest('[data-i]'); if (!el) return; const x = pk.entries[+el.dataset.i]; if (x.dir) pkGo(x.path); else { pk.input.value = x.path; $('picker').close(); if (pk.onPick) pk.onPick(x.path); } };
+  $('pkList').onclick = (ev) => { const el = ev.target.closest('[data-i]'); if (!el) return; const x = pk.entries[+el.dataset.i]; if (x.dir) pkGo(x.path); else { pk.input.value = x.path; $('picker').close(); } };
   $('pkUp').onclick = () => pkGo(pk.parent || '');
   // 粘贴一个路径：是目录就打开它；选文件的时候粘贴的就是那个文件，直接选中
   async function pkJump() {
     const v = $('pkJump').value.trim().replace(/^["']+|["']+$/g, '');
     if (!v || !pk) return;
-    if (pk.file && v.toLowerCase().endsWith('.' + (pk.ext || 'xml'))) { pk.input.value = v; $('picker').close(); if (pk.onPick) pk.onPick(v); return; }
+    if (pk.file && v.toLowerCase().endsWith('.xml')) { pk.input.value = v; $('picker').close(); return; }
     await pkGo(v);
   }
   $('pkJumpGo').onclick = pkJump;

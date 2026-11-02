@@ -243,8 +243,8 @@ function liveSessions(kitDir) {
  * 给配置页的"选目录"弹窗列目录。网页自己拿不到硬盘上的完整路径（浏览器的限制），路由就跑在本机，由它来列。
  * 只列名字，不读文件内容；接口只接受本机连接。顺手标出当前目录是不是一个 JDK / Maven / Tomcat，免得选错层级。
  */
-function browse(dir, wantFile, ext) {
-  const fileRe = ext === 'jar' ? /\.jar$/i : /\.xml$/i;
+function browse(dir, wantFile) {
+  const fileRe = /\.xml$/i;
   const home = os.homedir();
   if (!dir) {
     const roots = [];
@@ -275,7 +275,7 @@ function browse(dir, wantFile, ext) {
 function runOp(op, a) {
   if (op === 'readiness') { const f = path.join(a.kitDir, 'lib', 'readiness.js'); return require(f).inspect(a.project); }
   if (op === 'performance') { const S = require(path.join(a.kitDir, 'lib', 'session')); return { reviews: S.readState('review-local-metrics'), hooks: S.readState('hook-stats').byHook || {}, tools: toolUsage(a.kitDir) }; }
-  if (op === 'browse') return browse(a.dir, a.file, a.ext);
+  if (op === 'browse') return browse(a.dir, a.file);
   if (op === 'detect') return detect(a.kitDir);
   if (op === 'lessons') return lessonsOp(a);
   throw new Error('没有这个操作：' + op);
@@ -328,7 +328,7 @@ function inWorker(op, args, what) {
 async function handle(method, url, body, kitDir, ctx) {
   if (method === 'POST' && url === '/api/kit/readiness') { const project = pathStr(body && body.project); if (!project || !path.isAbsolute(project)) throw new Error('填写项目完整路径'); return inWorker('readiness', { kitDir, project }, '核对环境'); }
   if (method === 'GET' && url === '/api/kit/performance') return inWorker('performance', { kitDir }, '读取本机耗时');
-  if (method === 'POST' && url === '/api/kit/browse') return inWorker('browse', { dir: pathStr(body && body.dir), file: !!(body && body.file), ext: body && body.ext === 'jar' ? 'jar' : '' }, '列目录');
+  if (method === 'POST' && url === '/api/kit/browse') return inWorker('browse', { dir: pathStr(body && body.dir), file: !!(body && body.file) }, '列目录');
   const claudeDir = path.dirname(kitDir);
   if (ctx && method === 'GET' && url === '/api/kit/link') return publicLink(claudeDir, ctx);
   if (ctx && method === 'POST' && url === '/api/kit/link') { const r = setLink(claudeDir, ctx, !!(body && body.on), !!(body && body.force)); return Object.assign(r, publicLink(claudeDir, ctx)); }

@@ -64,7 +64,7 @@ const ERR_NOTE = [
   [/^SQL_ERROR:3F/, 'SQLSTATE 3F 类是 schema 名称问题，核对当前用户和 schema。只有错误码，无法证明是套件缺陷。'],
   // 10-30 起执行器把建连接这一步的失败单独报（以前也算 SQL_ERROR），查库工具遇到像驱动问题的会换登记的下一个驱动再试
   [/^CONNECT_FAILED/, '建连接这一步失败（还没执行任何语句）：库没起、地址或网络不通、账号口令不对，或者驱动和库的版本对不上。像驱动问题的工具已经换登记的其他版本试过；只有错误码，不能判断是套件问题。'],
-  [/^DRIVER_FAILED/, '驱动类加载不了：jar 坏了、不是这种数据库的驱动，或者驱动要的 Java 比查库用的 JDK 新。工具已经换登记的其他版本试过；在配置页"数据库驱动"里换一个，或者在"本机环境"里换新的 JDK。'],
+  [/^DRIVER_FAILED/, '驱动类加载不了：jar 坏了、不是这种数据库的驱动，或者驱动要的 Java 比查库用的 JDK 新。工具已经换登记的其他版本试过；用 drivers.js use <jar 的路径> 换一个，或者在配置页"本机环境"里换新的 JDK。'],
   [/^SQL_ERROR/, '数据库报了错误，后面两段是 SQLSTATE 和厂商错误码。这里只记录类别和次数，没有语句和连接现场，无法判断是配置、SQL 写法还是套件问题；需在本机核对错误详情。'],
   [/^(NO_CONFIG|NO_CONN)/, '找不到连接配置：后台自动探索没认出项目里的连接（配置文件的名字、写法不认识），或者模型写错了连接名。'],
   [/^(TIMEOUT|CMD_TIMEOUT|CONN_REFUSED|CONN_LOST|HOST_UNRESOLVED|NET_UNREACHABLE|EAI_AGAIN)/, '连不上：库没起、要走 VPN，或者探索到的是别的环境的地址。'],
@@ -259,7 +259,7 @@ function hints() {
   const db = all.filter((s) => s.tool === 'ttls-db-crud' && s.java > 0);
   const dbN = db.reduce((a, s) => a + s.n, 0);
   const dbMs = db.reduce((a, s) => a + s.avg * s.n, 0);
-  if (dbN >= 20 && dbMs / dbN >= 1500 && cfg.dbcrudDaemon !== true) out.push({ what: '查库的命令平均每条 ' + (dbMs / dbN / 1000).toFixed(1) + ' 秒（共 ' + dbN + ' 条）', detail: '时间多半花在起 java、连库上。配置页"数据库驱动"那一页的"查库快一点"里可以打开后台执行器：连接留着，几分钟不用自己退。' });
+  if (dbN >= 20 && dbMs / dbN >= 1500 && cfg.dbcrudDaemon !== true) out.push({ what: '查库的命令平均每条 ' + (dbMs / dbN / 1000).toFixed(1) + ' 秒（共 ' + dbN + ' 条）', detail: '时间多半花在起 java、连库上。配置页"查库"那一页的"查库快一点"里可以打开后台执行器：连接留着，几分钟不用自己退。' });
   for (const s of all) {
     if (s.n >= 5 && s.avg >= 5000) out.push({ what: s.tool + ' 的 ' + s.cmd + ' 平均 ' + (s.avg / 1000).toFixed(1) + ' 秒（' + s.n + ' 次，最慢 ' + (s.max / 1000).toFixed(1) + ' 秒）', detail: '慢在哪要看具体的库和语句：大表上不带条件的查询、find 扫整个库的字段。' });
     for (const [e, n] of s.errors) {

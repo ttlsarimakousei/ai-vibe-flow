@@ -17,7 +17,7 @@
  * 自动登记挑哪一个（auto）：
  *   1. 项目的 pom 里写明了版本的那一个（它和项目实际连的库对得上：Oracle 11.2 的库用太新的驱动连不上）
  *   2. 查库用的 JDK 加载得了的里面最新的（ojdbc11 要 Java 11，默认 JDK 是 8 的话加载不了）
- * 用户在配置页里去掉的那一种，后台自动探索不再登记回来；用户自己点"自动搜索"、自己选 jar 的照常登记。
+ * 用户去掉过的那一种（drivers.js remove），后台自动探索不再登记回来；auto --by-user、use 的照常登记。
  */
 const fs = require('fs');
 const os = require('os');
@@ -145,7 +145,7 @@ function variants(rec) {
   const list = rec && Array.isArray(rec.versions) ? rec.versions : (rec && rec.jar ? [rec] : []);
   return list.filter((x) => isObj(x) && typeof x.jar === 'string' && x.jar).map((x) => { const v = Object.assign({}, x); delete v.versions; return v; });
 }
-/** 用户在配置页里去掉过的那几种数据库：后台自动探索不再自动登记回来 */
+/** 用户去掉过的那几种数据库：后台自动探索不再自动登记回来 */
 function removedByUser() {
   const r = readRaw().removed;
   return isObj(r) ? Object.keys(r).filter((k) => DIALECTS[k]) : [];
@@ -159,7 +159,7 @@ function writeRegistry(drivers, removed) {
   try { fs.renameSync(tmp, REGISTRY); } catch (e) { fs.writeFileSync(REGISTRY, fs.readFileSync(tmp)); try { fs.unlinkSync(tmp); } catch (e2) { /* 忽略 */ } }
 }
 /**
- * 读登记表、改、写回这一段独占着做（Codex 审核 C10）：配置页、后台探索、命令行几个进程同时登记时，以前各读各的旧表再写回，
+ * 读登记表、改、写回这一段独占着做（Codex 审核 C10）：后台探索、命令行几个进程同时登记时，以前各读各的旧表再写回，
  * 后写的盖掉先写的，登记的版本、默认版本、"用户去掉过"的标记会丢。锁 5 秒拿不到照旧做（不能因为锁把登记卡死），记一行日志
  */
 function locked(fn) {
@@ -292,7 +292,7 @@ const nameLooksLike = (file) => { for (const k of Object.keys(DIALECTS)) if (DIA
 
 /**
  * 在几个目录里找驱动。o: { dirs: [{dir, from}], budgetMs（默认 25 秒）, maxDepth（默认 10）,
- *   enough: [数据库…]（这几种在常见位置里都找到了就不再整仓扫：后台自动探索用，配置页上的"找一遍"不给） }
+ *   enough: [数据库…]（这几种在常见位置里都找到了就不再整仓扫：后台自动探索用，命令行手动找不给） }
  * 返回 { found: { 数据库: [{ jar, version, size, from, mtime, java }]（新的在前） }, scanned: 看了多少个目录, timedOut, dirs }
  * 常见坐标下面的 jar 都打开看里面有没有驱动类；别处的先看名字像不像，像的才打开：一个大仓库也只要几秒
  */
@@ -355,7 +355,7 @@ function pick(list, prefer, jdk) {
 }
 /**
  * 自动找、自动登记：每种还没登记驱动的数据库（only 给了就只管那几种，force 为真时已经登记的也换）。挑哪一个见 pick。
- * byUser 为真（用户自己在配置页上点的）：他去掉过的那几种也照常登记；不然跳过它们。
+ * byUser 为真（用户在命令行带 --by-user）：他去掉过的那几种也照常登记；不然跳过它们。
  * 返回 { used: [...], kept, missing: [还是没有的], skipped: [用户去掉过、这次没登记的], scan }
  */
 function auto(o) {
@@ -440,7 +440,7 @@ function rescueFrom(skillDir) {
   return out;
 }
 
-/** 给配置页和命令行：每种数据库现在用的是哪个驱动 */
+/** 给命令行：每种数据库现在用的是哪个驱动 */
 function status() {
   const reg = readRegistry();
   const list = Object.keys(DIALECTS).map((k) => {

@@ -878,7 +878,7 @@ def find_driver_jar(conn, project_root=None, extra_dirs=(), env=None):
 
     tool = drivers_tool()
     how = ("三选一：\n"
-           "  · 让它到 Maven 本地仓库里找并登记：node \"%s\" auto --only %s\n"
+           "  · 让它到 Maven 本地仓库里找并登记：node \"%s\" auto --only %s --by-user\n"
            "  · 手上有 jar：node \"%s\" use <jar 的路径>\n"
            "  · 只给这一个连接用：把 jar 的路径写进配置的 driver_jar"
            % (tool, key, tool)) if tool else (
