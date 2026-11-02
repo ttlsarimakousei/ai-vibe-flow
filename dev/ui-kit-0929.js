@@ -106,7 +106,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('一句话说明都不超过 90 个字（以前最长的六百多字）', longest <= 90, opts.filter((o) => o.d.trim().length > 90).map((o) => o.t + ' ' + o.d.trim().length));
     H.ok('细节默认折着', (await page.locator('#tab-kit details.more[open]').count()) === 0 && (await page.locator('#tab-kit details.more').count()) >= 4);
     const autoMore = await page.locator('#sec-auto').innerText();
-    H.ok('自动模式一节：说明无法执行时如实报告，上限固定 20 轮', /验不了/.test(autoMore) && /固定 20 轮/.test(autoMore), autoMore);
+    H.ok('自动模式一节：说明无法执行时如实报告，每个审查点审到 10 轮就停', /验不了/.test(autoMore) && /审到 10 轮就停/.test(autoMore), autoMore);
     H.ok('自动模式没有开关了（2026-11-02 起）；自动开关不在配置页（2026-10-31 起每个会话 /vk-auto 开）', (await page.locator('#k_requirementsReviewMaxRounds, #k_applyReviewMaxRounds, #k_autoVerify, #k_autoSeePage, #k_autoHandover, #k_specGate, #k_autoOnboard, #k_autoRequirements, #k_autoApply').count()) === 0 && /\/vk-auto/.test(autoMore));
     H.ok('固定的规矩里写了后台自动探索、提案打勾归档的门槛', /后台自动探索/.test(await page.locator('#sec-guide-fixed').textContent()) && /提案、打勾、归档有门槛/.test(await page.locator('#sec-guide-fixed').textContent()));
     await shot('2-kit');

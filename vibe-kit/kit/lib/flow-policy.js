@@ -77,7 +77,7 @@ const modeOfPoint = (p) => (['proposal', 'specs', 'design', 'tasks'].includes(p)
 /**
  * 到了自动审查轮数上限、还没通过的点（问题表第 26 条，2026-10-31）：不再自动审，也不挡提交、不挡往下一组走；收工报告里写着没通过。
  * 用户自己说审，照样能审。
- * 连续两轮 P1、P2 没减少（stalled，问题表第 37 条）也一样：再审多半还是这样，不用等到 20 轮
+ * 连续两轮 P1、P2 没减少（stalled，问题表第 37 条）也一样：再审多半还是这样，不用等到 10 轮
  */
 function exhausted(dir, point, cfg) { const r = record(dir, point); return r.status !== 'running' && ((r.rounds || 0) >= limit(cfg || S.readConfig(), modeOfPoint(point)) || !!r.stalled) && !settled(dir, point); }
 function pending(dir, mode) { return points(dir, mode).find(p => !settled(dir, p) && !exhausted(dir, p)) || ''; }
@@ -95,7 +95,8 @@ function fixPending(dir, point, cfg) {
 function allPassed(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p)); }
 /** 每个点都有结果了：过了，或者到上限、不收敛停了（自动模式靠它往下走，没过的写进报告） */
 function allDone(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p) || exhausted(dir, p)); }
-function limit(cfg, mode) { return Math.min(20, Math.max(1, Number(mode === 'proposal' ? cfg.requirementsReviewMaxRounds : cfg.applyReviewMaxRounds) || 3)); }
+// 每件事（每个审查点）自动审到 10 轮就停，不是设置（用户 2026-11-02 定的，替代固定 20 轮）。手写的值只给测试和排查，不能超过 10
+function limit(cfg, mode) { return Math.min(10, Math.max(1, Number(mode === 'proposal' ? cfg.requirementsReviewMaxRounds : cfg.applyReviewMaxRounds) || 10)); }
 // 轮数只数"审出问题、修了再审"这一串：上一轮零问题通过了，这次重审从头数（不然全程零问题也会被复审耗光轮数，2026-10-17 审核问题 4）。
 // 问题处理完（resolved）不清零（问题表第 26 条，2026-10-31）：以前处理完就清零，"审出问题→修→再审→又有问题"永远到不了上限，一天能审 23 轮。
 // 到了上限的点不再挡提交、不挡往下走（exhausted），所以不清零也不会把提交永久拦下

@@ -614,7 +614,7 @@ function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'
 // 两阶段各有独立的审查上限；每个产物、每个整组任务分别计数。
 function reviewModeText() {
   const c = kitConfig();
-  return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 20) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 20) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做；用户主动要求审查不受自动上限限制。';
+  return '需求阶段每个产物最多 ' + (c.requirementsReviewMaxRounds || 10) + ' 轮；Apply 每整组 1.x 最多 ' + (c.applyReviewMaxRounds || 10) + ' 轮。材料分批不另占轮数。自动核验、修改、复验；到上限还没解决就报告并停止该点自动循环。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做；用户主动要求审查不受自动上限限制。';
 }
 const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动逐产物审修；Apply 按已授权范围逐整组任务审修、自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
 const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';

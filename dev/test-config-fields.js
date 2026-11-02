@@ -4,7 +4,7 @@
  *   默认值只有一份：钩子、配置页后端拿到的一样，每个默认值都过得了自己的取值检查
  *   字段表和配置页对得上：有控件的字段都有控件、在写着的那一页、取值和范围一样；页面上每个开关都在字段表里；手册的表和字段表一致
  *   清洗：合规的收、乱填的保持原值，每个字段都试一遍
- *   第 29—31 条：自动自测、自动验证页面、后台自动探索、门槛不做开关，审核上限固定 20，到交接线先写交接记录取消；升级时清一次，之后手写的还认
+ *   第 29—31 条：自动自测、自动验证页面、后台自动探索、门槛不做开关，审核到 10 轮就停，到交接线先写交接记录取消；升级时清一次，之后手写的还认
  *   J2：旧配置（五个开关）按原值显示成两项；两项写回四项；旧名字传进来还认；钩子读到的值照旧
  * 用法：node dev/test-config-fields.js
  */
@@ -142,7 +142,7 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
   H.section('第 29—31 条：不做开关的、固定的值');
   {
     const D = CF.DEFAULT_CONFIG;
-    H.ok('默认：一直开、上限 20、不写交接记录', D.autoVerify === true && D.autoSeePage === true && D.specGate === true && D.autoOnboard === true && D.requirementsReviewMaxRounds === 20 && D.applyReviewMaxRounds === 20 && D.autoHandover === false, D);
+    H.ok('默认：一直开、上限 10、不写交接记录', D.autoVerify === true && D.autoSeePage === true && D.specGate === true && D.autoOnboard === true && D.requirementsReviewMaxRounds === 10 && D.applyReviewMaxRounds === 10 && D.autoHandover === false, D);
     const f = (n) => CF.FIELDS.find((x) => x.name === n);
     H.ok('都标了内部字段（配置页、手册的开关表都没有）', CF.FIXED.every((n) => f(n) && f(n).internal && !f(n).doc), CF.FIXED);
     H.ok('页面上这几个控件都没了', CF.FIXED.every((n) => !page.includes('id="k_' + n + '"')));
@@ -164,12 +164,12 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
     H.ok('升级：别的开关不动', c.commitMode === 'ask' && c.handoverPercent === 66, c);
     H.ok('记了只清一次', fs.existsSync(marker));
     const st = JSON.parse(H.node(h, '-e', ['const c = require(' + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + ').readConfig(); console.log(JSON.stringify({ v: c.autoVerify, g: c.specGate, r: c.applyReviewMaxRounds, h: c.autoHandover }))'], { cwd: h.root }).out.trim());
-    H.ok('钩子读到的：一直开、上限 20、不写交接记录', st.v === true && st.g === true && st.r === 20 && st.h === false, st);
+    H.ok('钩子读到的：一直开、上限 10、不写交接记录', st.v === true && st.g === true && st.r === 10 && st.h === false, st);
     fs.writeFileSync(cfgFile, JSON.stringify(Object.assign(c, { autoVerify: false }), null, 2));
     inst(pkgB);
     H.ok('清过一次之后：手写的还认（排查用），再更新不动', JSON.parse(fs.readFileSync(cfgFile, 'utf8')).autoVerify === false);
     const md = (H.read(path.join(h.kit, 'hook-rules.md')) || '');
-    H.ok('规范里写的上限是 20 轮', /需求阶段每个产物最多 20 轮；Apply 每整组 1\.x 最多 20 轮/.test(md), md.slice(0, 200));
+    H.ok('规范里写的上限是 10 轮', /需求阶段每个产物最多 10 轮；Apply 每整组 1\.x 最多 10 轮/.test(md), md.slice(0, 200));
   }
 
   H.section('配置页：五项合成两项');

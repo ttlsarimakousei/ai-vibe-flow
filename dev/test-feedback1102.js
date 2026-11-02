@@ -759,3 +759,9 @@ const reason = (o) => H.reasonOf(o);
       H.ok('上一组不收敛停了：接着打下一组的勾，不卡死', !/先完成上一整组/.test(tick('2.1')), tick('2.1'));
       H.setConfig(h, { autoMode: false, autoApply: false });
     }
+    // 10 轮：不是设置，手写的值只能更小
+    H.ok('每个审查点自动审到 10 轮就停（默认）', P.limit({}, 'proposal') === 10 && P.limit({}, 'code') === 10);
+    H.ok('手写更大的值也不超过 10', P.limit({ requirementsReviewMaxRounds: 20, applyReviewMaxRounds: 99 }, 'proposal') === 10 && P.limit({ requirementsReviewMaxRounds: 20, applyReviewMaxRounds: 99 }, 'code') === 10);
+    const CF = require(path.join(h.kit, 'lib', 'config-fields.js'));
+    H.ok('字段表：默认 10、配置页上没有', ['requirementsReviewMaxRounds', 'applyReviewMaxRounds'].every((name) => { const x = CF.FIELDS.find((y) => y.name === name); return x && x.def === 10 && x.max === 10 && x.internal === true; }) && !/k_requirementsReviewMaxRounds|k_applyReviewMaxRounds/.test(fs.readFileSync(path.join(from, 'router', 'ui.html'), 'utf8')));
+

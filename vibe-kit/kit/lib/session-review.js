@@ -451,7 +451,7 @@ function codeReviewIssue(dir) {
   return '代码审查之后又做了 ' + late.length + ' 项任务，这部分代码没审到：' + late.slice(0, 3).map((x) => '"' + x.task.slice(0, 30) + '"（' + x.files.slice(0, 2).map(rel).join('、') + '）').join('；') + '。再按 /ttls-cross-review 的代码模式审一遍这几项的改动（审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
 }
 
-const reviewMax = (cfg) => Math.min(20, Math.max(1, Number(cfg.reviewMaxRounds) || 3));
+const reviewMax = (cfg) => Math.min(10, Math.max(1, Number(cfg.reviewMaxRounds) || 3));
 
 /**
  * 把这份会话记录里做完的审查计进轮数（每次审查只计一次），再看每个还没审完的，这次审查之后改了什么。

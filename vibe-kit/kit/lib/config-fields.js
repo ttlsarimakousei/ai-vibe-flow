@@ -13,7 +13,7 @@
  *   自动更新装回旧版也读得懂。两个新项只是这四个的另一种说法：读的时候算出来（contextView），保存时写回去（contextFromView）。
  *
  * 不做开关的（问题表第 29—31 条，用户 2026-11-02 定的，internal）：自动自测、自动验证页面、后台自动探索、提案打勾归档的门槛一直开；
- * 自动审核上限固定 20；到交接线先写交接记录取消（默认 false）。配置页、手册的开关表都没有。升级时清掉文件里以前存的（install.js），文件里手写的还认，给排查和测试用。
+ * 自动审核到 10 轮就停（每个审查点，2026-11-02 从 20 改的，不是设置）；到交接线先写交接记录取消（默认 false）。配置页、手册的开关表都没有。升级时清掉文件里以前存的（install.js），文件里手写的还认，给排查和测试用。
  *
  * 只用 Node 自带的模块；不依赖 session（路由也载它）。
  */
@@ -31,9 +31,9 @@ const FIELDS = [
   { name: 'autoMode', type: 'bool', def: false, internal: true },
   { name: 'autoRequirements', type: 'bool', def: false, internal: true },
   { name: 'autoApply', type: 'bool', def: false, internal: true },
-  { name: 'requirementsReviewMaxRounds', type: 'int', def: 20, min: 1, max: 20, internal: true },
+  { name: 'requirementsReviewMaxRounds', type: 'int', def: 10, min: 1, max: 10, internal: true },
   { name: 'reviewLenses', type: 'int', def: 3, min: 1, max: 3, internal: true },
-  { name: 'applyReviewMaxRounds', type: 'int', def: 20, min: 1, max: 20, internal: true },
+  { name: 'applyReviewMaxRounds', type: 'int', def: 10, min: 1, max: 10, internal: true },
   { name: 'autoHandover', type: 'bool', def: false, internal: true },
   { name: 'kitLock', type: 'bool', def: true, page: 'kit', doc: '禁止 Claude 自己改套件', since: '0923', defText: '开' },
   { name: 'kitBypass', type: 'enum', def: 'ask', values: ['ask', 'auto', 'off'], page: 'kit', doc: '被检查拦住、它又确信是套件拦错了（自动模式下不用点，选"不许放行"的除外）', since: '0924.1848', defText: '要我点同意' },
