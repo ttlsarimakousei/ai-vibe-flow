@@ -255,6 +255,8 @@ const reason = (o) => H.reasonOf(o);
     const log = path.join(h.root, 'mvn-calls.txt');
     const have = path.join(h.root, 'have.txt');
     H.write(path.join(bin, 'mvn.cmd'), '@node "%~dp0fake.js" %*\r\n');
+    const c2 = M.fetchCommand('mvn -Pdev --settings=C:/s.xml -o spring-boot:run -fae', 'com.a:b:1.0:jar');
+    H.ok('贴着写的 -Pdev、--settings=：也带上；-fae 不带', c2 === 'mvn -Pdev --settings=C:/s.xml -B dependency:get "-Dartifact=com.a:b:1.0:jar"', c2);
     H.write(path.join(bin, 'fake.js'), [
       "const fs = require('fs');",
       "const LOG = " + JSON.stringify(log) + "; const HAVE = " + JSON.stringify(have) + ";",

@@ -60,7 +60,8 @@ function fetchCommand(cmd, artifact) {
   for (let k = i + 1; k < t.length; k++) {
     const x = unq(t[k]);
     if (/^(?:-s|--settings|-gs|--global-settings|-f|--file|-P|--activate-profiles)$/.test(x)) { keep.push(t[k]); if (t[k + 1]) keep.push(t[++k]); continue; }
-    if (/^-Dmaven\.repo\.local=/.test(x)) keep.push(t[k]);
+    // 贴着写的：-Pdev、-s/x/settings.xml、--settings=…（-f 不认贴着写的，-fae、-ff 是别的参数）
+    if (/^(?:-Dmaven\.repo\.local=|-P.|-s.|-gs.|--(?:settings|global-settings|file|activate-profiles)=)/.test(x)) keep.push(t[k]);
   }
   return keep.concat('-B', 'dependency:get', '"-Dartifact=' + artifact + '"').join(' ');
 }
