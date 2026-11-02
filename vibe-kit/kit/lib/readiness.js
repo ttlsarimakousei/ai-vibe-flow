@@ -18,7 +18,9 @@ function inspect(root) {
   const dependencyState = roots.map((r) => [r, fs.existsSync(path.join(r, 'node_modules')), fs.existsSync(path.join(r, 'gradlew')), fs.existsSync(path.join(r, 'gradlew.bat'))]);
   const drivers = require('./drivers').readRegistry();
   const driverStats = Object.values(drivers).flatMap((r) => require('./drivers').variants(r).map((v) => { try { const st = fs.statSync(v.jar); return [v.jar, st.size, st.mtimeMs]; } catch (e) { return [v.jar, '缺少']; } }));
-  const fingerprint = W.hash(JSON.stringify([marks, notes, localText, toolStats, dependencyState, driverStats, read(path.join(S.KIT, 'drivers.json')), process.env.PATH || '']));
+  // IDEA 里改了 Maven、JDK 也要重算
+  let ideaMarks = []; try { ideaMarks = roots.map((r) => require('./idea-config').digest(r)); } catch (e) { /* 读不了就按没配 */ }
+  const fingerprint = W.hash(JSON.stringify([marks, notes, localText, toolStats, dependencyState, driverStats, read(path.join(S.KIT, 'drivers.json')), process.env.PATH || '', ideaMarks]));
   const cached = S.readState('readiness')[S.normKey(root)]; if (cached && cached.fingerprint === fingerprint) return cached;
   const identified = [...new Set(marks.map(([f]) => /pom\.xml$/.test(f) ? 'Maven' : /build\.gradle$/.test(f) ? 'Gradle' : /package\.json$/.test(f) ? 'Node' : /pyproject\.toml$/.test(f) ? 'Python' : '').filter(Boolean))];
   const dirs = String(process.env.PATH || '').split(path.delimiter);

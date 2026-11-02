@@ -185,6 +185,14 @@ const reason = (o) => H.reasonOf(o);
     const B = maven(path.join(jb, 'IntelliJ IDEA 2026.2.3', 'plugins', 'maven-plugin', 'lib', 'maven3'));
     const f = explore(project({ '.idea/workspace.xml': general('<option name="mavenHomeTypeForPersistence" value="BUNDLED3" />') }), { VIBE_KIT_IDEA_ROOTS: jb });
     H.ok('选的是 IDEA 自带的：用自带的', line(f, '快检').startsWith('"' + B + '/bin/mvn"') && /IDEA 自带的/.test(line(f, '环境')), f);
+    H.ok('带引号的路径：说了 PowerShell 里要加 &', /PowerShell 工具里前面要加 &/.test(line(a, '环境')), line(a, '环境'));
+    const Rd = require(path.join(h.kit, 'lib', 'readiness.js'));
+    const p4 = project({ '.idea/workspace.xml': general('<option name="customMavenHome" value="' + M + '" />') });
+    const fp1 = Rd.inspect(p4).fingerprint;
+    H.ok('环境就绪的缓存：IDEA 没变，不重算', !!fp1 && Rd.inspect(p4).fingerprint === fp1, fp1);
+    H.write(path.join(p4, '.idea', 'workspace.xml'), general('<option name="customMavenHome" value="' + M + '" /><option name="userSettingsFile" value="' + settings + '" />'));
+    H.ok('环境就绪的缓存：IDEA 里改了配置，要重算', Rd.inspect(p4).fingerprint !== fp1);
+
     const g = explore(project({ '.idea/misc.xml': misc }), { VIBE_KIT_IDEA_ROOTS: jb });
     H.ok('有 .idea、没选过，PATH 和"本机环境"里都没有 Maven：用自带的', line(g, '快检').startsWith('"' + B + '/bin/mvn"'), g);
     const pathDir = path.join(h.root, 'pathbin'); H.write(path.join(pathDir, 'mvn.cmd'), '@echo off\r\n');

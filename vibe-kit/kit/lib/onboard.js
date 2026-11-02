@@ -369,7 +369,7 @@ function mavenSetup(root) {
   out.settings = I.settings; out.repo = I.repo;
   out.cmd = [exe || 'mvn'].concat(I.settings ? ['-s "' + I.settings + '"'] : [], I.repo ? ['"-Dmaven.repo.local=' + I.repo + '"'] : []).join(' ');
   const parts = [from, I.settings && 'settings.xml 用 IDEA 里配的：' + I.settings, I.repo && '本地仓库用 IDEA 里配的：' + I.repo].filter(Boolean);
-  if (parts.length) out.note = parts.join('，') + '（下面的命令已经带上了）';
+  if (parts.length) out.note = parts.join('，') + '（下面的命令已经带上了）' + (exe ? '。命令开头是带引号的路径，在 PowerShell 工具里前面要加 &' : '');
   if (I.jdkHome) {
     const def = (Array.isArray(local.jdks) ? local.jdks : []).find((j) => j && String(j.name) === String(local.defaultJdk));
     const isDefault = !!(def && def.path && same(def.path, I.jdkHome));
