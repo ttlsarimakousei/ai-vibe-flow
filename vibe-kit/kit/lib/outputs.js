@@ -86,7 +86,10 @@ function exempt(file) {
   const dirs = segs.slice(0, -1);
   if (dirs.some((s) => EXEMPT_DIRS.has(s))) return true;
   // 点开头的目录是工具自己的工作目录，不是给人看的产出（#269：ttls-vfb 规定写 .ttls-vfb/…/answer.md，换地方它的脚本读不到，子代理还没法问）
-  if (dirs.some((s) => s.length > 1 && s[0] === '.' && s !== '..')) return true;
+  // 不在 git 里、但有项目说明的，只看项目里面这一段：项目放在 ~/.work/proj 这种点开头的目录下不算
+  const pm = root ? '' : nearestProjectMd(existingDir(file));
+  const inner = pm ? normKey(file).slice(normKey(path.dirname(path.dirname(pm))).length).replace(/^\/+/, '').split('/').slice(0, -1) : dirs;
+  if (inner.some((s) => s.length > 1 && s[0] === '.' && s !== '..')) return true;
   if (EXEMPT_NAMES.test(name) || BUILD_NAMES.test(name)) return true;
   if (dirs.some((s) => CODE_DIRS.has(s))) return true;
   if (/\.sql$/i.test(name) && dirs.some((s) => SQL_CODE_DIRS.has(s))) return true;

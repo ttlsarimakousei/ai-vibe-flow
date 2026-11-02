@@ -58,6 +58,11 @@ const reason = (o) => H.reasonOf(o);
     H.ok('别的点开头目录一样：不拦', !reason(write(path.join(p, '.tool-work', 'report.md'))));
     const doc = reason(write(path.join(p, 'docs', '报告.md')));
     H.ok('普通目录的新文档照旧管', /产出位置/.test(doc) && /pending/.test(doc), doc);
+    const inDot = path.join(h.work, '.work', 'proj2');
+    H.write(path.join(inDot, '.vibe', 'project.md'), '# 项目\n');
+    const docDot = reason(write(path.join(inDot, 'docs', '报告.md')));
+    H.ok('项目放在点开头的目录下（不在 git 里、有项目说明）：项目里的文档照旧管', /产出位置/.test(docDot), docDot);
+    H.ok('这种项目里的工具目录照旧不拦', !reason(write(path.join(inDot, '.tool-work', 'r.md'))));
   }
 
   // ---------------------------------------------------------------------------------------------
