@@ -177,4 +177,73 @@ function addSuggestion(task, text, from) {
 }
 function suggestions(task) { try { return fs.readFileSync(suggestFile(task), 'utf8').split(/\r?\n/).filter((l) => l.trim()); } catch (e) { return []; } }
 
-module.exports = { specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
+// ---------- 状态栏的步骤条（用户 2026-11-03 定的，问题表第 46、47 条） ----------
+const DOC_STEPS = [['proposal', '提案'], ['specs', '规格'], ['design', '设计'], ['tasks', '任务']];
+/** 审查状态：◆审过 ◇在审 ✗N 有 N 条 P1、P2 待修。用记录值，不调 git（状态栏刷新得勤） */
+function reviewMark(P, dir, point) {
+  const r = P.record(dir, point);
+  if (r.status === 'running' || r.status === 'needs_review') return '◇';
+  if (r.status === 'resolved') return '◆';
+  if (r.status !== 'completed') return '';
+  const n = r.blocking === undefined ? Number(r.issues) || 0 : Number(r.blocking) || 0;
+  return n ? '✗' + n : '◆';
+}
+function changeSteps(dir) {
+  const P = require('./flow-policy');
+  const have = P.points(dir, 'proposal');
+  const parts = []; let open = false;
+  for (const [id, label] of DOC_STEPS) {
+    if (have.includes(id)) { parts.push(label + '✓' + reviewMark(P, dir, id)); continue; }
+    parts.push(label + (open ? '○' : '●')); open = true;
+  }
+  const groups = P.groups(dir);
+  const cur = groups.findIndex((g) => !g.done);
+  // 组太多折叠成一个
+  if (groups.length > 6) {
+    const k = cur < 0 ? groups.length : cur + 1; const g = groups[k - 1];
+    parts.push('组 ' + k + '/' + groups.length + (cur < 0 ? '✓' : '●') + reviewMark(P, dir, g.id));
+  } else groups.forEach((g, i) => parts.push(g.id.slice(6) + '组' + (g.done ? '✓' : i === cur ? '●' : '○') + reviewMark(P, dir, g.id)));
+  return parts.join(' ');
+}
+const shortName = (s) => { const n = String(s); return n.length > 16 ? n.slice(0, 15) + '…' : n; };
+/**
+ * 这个会话在流程里：{ steps: 步骤条, next: 下一项或等什么 }；不在流程里 null（目录里有没勾完的 change 也不显示，第 46 条）。
+ * 探索✓ │ c2-api(2/3) 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○
+ */
+function bar(j) {
+  const S = require('./session');
+  if (!flowState(j).on) return null;
+  const task = forSession(j);
+  const T = require('./task-types');
+  const P = require('./flow-policy');
+  let ph; let list; let dir = '';
+  if (task) {
+    ph = phaseOf(task); list = task.changes;
+    const c = ph.change ? list.find((x) => x.name === ph.change) : null;
+    if (c && c.exists) dir = c.dir;
+  } else {
+    const dirs = flowChanges(j);
+    const hit = S.allChanges(j.cwd || process.cwd()).filter((c) => dirs.includes(normKey(c.dir)));
+    if (!hit.length) return { steps: '', next: '' };
+    dir = hit[0].dir; list = hit.map((c) => ({ name: c.name }));
+    const tasks = T.tasks(dir); const done = tasks.filter((x) => x.done).length;
+    ph = { phase: !tasks.length || !done ? 'plan' : done < tasks.length ? 'apply' : 'verify', change: hit[0].name };
+  }
+  const name = ph.change || (list.length ? list[list.length - 1].name : '');
+  const idx = list.findIndex((x) => x.name === name) + 1;
+  const after = { explore: 0, plan: 1, apply: 1, selftest: 2, verify: 3, archive: 4, done: 5 }[ph.phase];
+  const mark = (n) => (after > n ? '✓' : after === n ? '●' : '○');
+  const mid = name ? shortName(name) + (list.length ? '(' + (idx || list.length) + '/' + list.length + ')' : '') + (dir ? ' ' + changeSteps(dir) : '') : '';
+  const steps = [task ? '探索' + mark(0) : '', mid, '自测' + mark(2) + ' 核验' + mark(3) + ' 归档' + mark(4)].filter(Boolean).join(' │ ');
+  let next = '';
+  if (ph.phase === 'explore') next = '探索中';
+  else if (ph.phase === 'plan' && dir) { const miss = DOC_STEPS.find(([id]) => !P.points(dir, 'proposal').includes(id)); next = miss ? '下一份 ' + miss[1] : ''; }
+  else if (ph.phase === 'plan' || ph.phase === 'apply') { const left = dir ? T.automatedLeft(dir) : []; next = left.length ? '下一项 ' + left[0].text : ''; }
+  else if (ph.phase === 'selftest') next = '下一步 全面自测';
+  else if (ph.phase === 'verify') next = '等你核验：看完说归档或 /vk-archive';
+  else if (ph.phase === 'archive') next = '下一步 按 plan.md 的顺序归档 ' + ph.change;
+  if (!next && dir) { const left = T.automatedLeft(dir); if (left.length) next = '下一项 ' + left[0].text; }
+  return { steps, next };
+}
+
+module.exports = { bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
