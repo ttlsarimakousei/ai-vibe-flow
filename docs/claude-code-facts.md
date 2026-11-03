@@ -164,3 +164,16 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 
 - 没有步骤工具时调 `TodoWrite` 报 `No such tool available`。2.1.289 设 `CLAUDE_CODE_ENABLE_TASKS=1` 没用，工具不出现。
 - 官方工具文档写明步骤工具默认只在 Opus 4.7、Sonnet 4.6、Haiku 4.5 和更早的模型上开，别的模型设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`。探针没记模型名，内网走 cc-switch 时模型名不同，要在内网再看一次。
+
+## 几个 change 都不归档时的 OpenSpec（2026-11-03 实测）
+
+自带的 OpenSpec 1.14.3，`dev/probes/os-cross-change.js`。c1 新增一条需求，c2 用 MODIFIED 改同一条，两个都没归档。
+
+| 操作 | 结果 |
+|---|---|
+| `validate c2 --strict`、`validate --all --strict` | 通过，只多一条 INFO，说归档时会拒绝 |
+| 先 `archive c2` | 退出码 1，提示目标规格不存在，没有文件被改，c2 还在 |
+| 先 `archive c1` 再 `archive c2` | 都成功，主规格里是 c2 改后的那句 |
+| `openspec/plan.md`、`openspec/explore/` | `list`、`validate`、`archive` 都不受影响，归档后还在 |
+
+所以一个大任务最后一起归档时要按拆分表的顺序。顺序错了不会改坏文件。
