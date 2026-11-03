@@ -361,4 +361,6 @@
 
 原话："vk-auto开着的情况还是询问题，我问Claude：vk-auto开着为什么还是询问我，它回答现在是需求阶段，我们的vk-atuo对需求无效吗？而且我看已经在动代码了"
 
+原话："和我说什么vk-auto开着（autoRequirements/autoApply都true，会话级sessionAuto-true），但是这个会话流程状态还是on：false/stage：plan--没进apply，然后又提示让我选择开工"
+
 这次只记，没有改。
