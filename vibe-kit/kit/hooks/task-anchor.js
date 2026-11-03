@@ -362,7 +362,7 @@ function anchorLines(j, cfg, note) {
 }
 
 /** 会话自动模式开了：送一次怎么做（问题表第 28 条，用户 2026-10-31 定的）。不写进每个请求都带的全局约定（硬规矩 8） */
-const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。先把探索做完：读相关代码和现状，和用户确认目标、范围、验收标准和疑问，写进探索记录（openspec/explore/<大任务>.md），"还没定的"清空才开始自动；'
+const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。还没进流程的，先用提问框问一次是否 /opsx:explore 探索，选了才进。先把探索做完：读相关代码和现状，和用户确认目标、范围、验收标准和疑问，写进探索记录（openspec/explore/<大任务>.md），"还没定的"清空才开始自动；'
   + '之后自动逐份写需求文档、审修、定稿、开工，每整组任务做完审查，一个 change 做完按 plan.md 接下一个，全部做完全面自测、修改、复验，按提交方式提交，收工交报告。'
   + '只做探索记录和用户材料里有的，不自己加需求（"这里加个按钮更好"这种不加）；做法上的取舍自己定，记进 revisions.md（起因：自动模式决定），不停下来问；'
   + '用户中途报的问题、改的需求照改，记进 revisions.md，接着自动做。只有用户的描述或材料让你完全走不下去时，先自己探索，还不行再问。归档、push 照旧要用户点头；改库、写 redis 照技能里全自动的规矩（留得下备份的工具会说不用等人，别的留给用户）。';
@@ -386,6 +386,8 @@ async function handle(j) {
     if (m && m[1].trim()) j = Object.assign({}, j, { prompt: m[1].trim() });
   }
   const cfg = readConfig(j);
+  // 前台子代理被 Esc 打断、用户接着说话：死了的角度当场算没交，再审不会被说"正在跑"（复审 20261104 R13）
+  try { if (j.transcript_path && Object.values(readState('review-jobs')).some((x) => x && x.status === 'running')) require('../lib/review-runner').sweep(tailEntries(j.transcript_path, 3000000), j.cwd || process.cwd()); } catch (e) { /* 收工时还会看一次 */ }
   // 记下这个会话在哪个目录、会话记录在哪：记问题反馈的工具（tools/feedback.js）拿不到会话号，靠这个找
   try { require('../lib/feedback.js').noteSession(j); } catch (e) { /* 记不了不影响对话 */ }
   // 下面都是项目级的事（探索、进行中的变更、交接记录）：照会话的启动目录来，不照现在所在的目录（模型单独 cd 过就变了）
