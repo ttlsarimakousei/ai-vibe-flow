@@ -147,3 +147,20 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 - PostToolUseFailure 的 `hookSpecificOutput.additionalContext` 送得到模型（和 PostToolUse 一样，下一次请求里带着）。
 - PreToolUse 不拦、只给 `additionalContext`：工具照常执行，那句话随工具结果一起送到模型。模型读到它时工具已经跑完了，所以"动手之前提醒"不能靠它，要在用户开口、收工这些时机说。
 - Bash 工具起的进程里：2.1.289 有环境变量 `CLAUDE_CODE_SESSION_ID`（就是会话号），2.1.120 没有。两版都是：命令执行时，这条 tool_use 已经写进了会话记录（最后一条），记录里带着当前目录 `cwd`。没有环境变量时，工具按"最近改过的会话记录里还没有结果的那条命令"认出自己（lib/edited-files.js 的 findSession）。
+
+## 中途打断和步骤显示（2026-11-03 实测）
+
+交互界面，假用户目录加假网关，`dev/probes/cc-interrupt.js`，权限写 `disableAutoMode`。
+
+| 行为 | 2.1.120 | 2.1.259 | 2.1.289 |
+|---|---|---|---|
+| 工具跑着时发一句，什么时候送到模型 | 同一轮的下一次请求，放在工具结果的 system-reminder 里 | 同一轮的下一次请求，单独一段文字 | 同左 |
+| 这一句触发 UserPromptSubmit 吗 | 不触发 | 按回车就触发，工具还在跑 | 同左 |
+| 这一轮 Stop 触发几次 | 一次，在轮末 | 一次，在轮末 | 一次，在轮末 |
+| 工具跑着时按 Esc | 工具被终止，Stop 不触发 | 工具被拒绝，Stop 不触发 | 同左 |
+| Esc 之后再说一句 | 新一轮，UserPromptSubmit 触发 | 同左 | 同左 |
+| 默认给模型的步骤工具 | `TaskCreate` 这一组，系统提示里也让它用 | 没有 | 没有 |
+| 设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` | 没测 | 有 `TaskCreate` 这一组，屏幕显示步骤 | 同左 |
+
+- 没有步骤工具时调 `TodoWrite` 报 `No such tool available`。2.1.289 设 `CLAUDE_CODE_ENABLE_TASKS=1` 没用，工具不出现。
+- 官方工具文档写明步骤工具默认只在 Opus 4.7、Sonnet 4.6、Haiku 4.5 和更早的模型上开，别的模型设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`。探针没记模型名，内网走 cc-switch 时模型名不同，要在内网再看一次。
