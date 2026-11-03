@@ -179,7 +179,7 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     fs.writeFileSync(path.join(u.kit, 'gitlab.json'), JSON.stringify({ repo: gl.url }));
     // 发版保护（K2，2026-11-01）起，没勾"先装新版"的要等新版发布满 24 小时才装；这一套测的是发现就装，所以这台算尝鲜组。
     // 等 24 小时、查"有没有问题"的那些在 test-update-canary.js
-    setCfg(u, { reviewMaxRounds: 4, updateEarly: true });
+    setCfg(u, { tmpKeepDays: 9, updateEarly: true });
     gl.clearLogs();
     const c = run(['check']);
     H.ok('检查：发现仓库里是 B', c.code === 0 && c.json && c.json.remote === B && c.json.installed === A && c.json.differs && c.json.behind && c.json.lastCheckOk, c.out + c.err);
@@ -196,7 +196,7 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     const st = state(u);
     H.ok('记了一笔', st.lastApplied && st.lastApplied.to === B && st.history.length === 1 && st.history[0].ok, st);
     H.ok('日志里说了', /已更新到/.test(H.read(path.join(u.kit, 'update', 'update.log')) || '') && fs.existsSync(path.join(u.kit, 'update', 'last-install.log')));
-    H.ok('自己的开关、仓库地址都还在', readJson(path.join(u.kit, 'config.json')).reviewMaxRounds === 4 && readJson(path.join(u.kit, 'gitlab.json')).repo === gl.url);
+    H.ok('自己的开关、仓库地址都还在', readJson(path.join(u.kit, 'config.json')).tmpKeepDays === 9 && readJson(path.join(u.kit, 'gitlab.json')).repo === gl.url);
     const line = H.node(u, path.join(u.kit, 'statusline.js'), [], { input: '{}' });
     H.ok('状态栏说"已更新到 B"', line.out.includes('已更新到 ' + B), line.out);
     const r2 = run(['run', '--print']);

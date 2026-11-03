@@ -268,9 +268,9 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
       const ro = [];
       for (const u of ['/health', '/version', '/busy', '/stats']) ro.push([(await call('GET', u)).status, (await call('GET', u, img('cross-site'))).status]);
       H.ok('/health、/version、/busy、/stats：程序照常问，别的网站的页面不给', ro.every((x) => x[0] === 200 && x[1] === 403), ro);
-      const save = await call('POST', '/api/kit/config', { 'x-vibe-router': '1', 'sec-fetch-site': 'same-origin', origin: 'http://127.0.0.1:' + PORT }, { reviewMaxRounds: 4 });
-      const forged = await call('POST', '/api/kit/config', { 'x-vibe-router': '1', 'sec-fetch-site': 'cross-site' }, { reviewMaxRounds: 5 });
-      H.ok('配置页自己保存开关照常；别的网站的页面发的不收', save.status === 200 && forged.status === 403 && readJson(path.join(h.kit, 'config.json')).reviewMaxRounds === 4, [save.status, save.text.slice(0, 200), forged.status]);
+      const save = await call('POST', '/api/kit/config', { 'x-vibe-router': '1', 'sec-fetch-site': 'same-origin', origin: 'http://127.0.0.1:' + PORT }, { tmpKeepDays: 9 });
+      const forged = await call('POST', '/api/kit/config', { 'x-vibe-router': '1', 'sec-fetch-site': 'cross-site' }, { tmpKeepDays: 8 });
+      H.ok('配置页自己保存开关照常；别的网站的页面发的不收', save.status === 200 && forged.status === 403 && readJson(path.join(h.kit, 'config.json')).tmpKeepDays === 9, [save.status, save.text.slice(0, 200), forged.status]);
     }
     try { router.kill(); } catch (e) { /* 已经退了 */ }
     await H.sleep(600);

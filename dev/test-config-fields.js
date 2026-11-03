@@ -49,7 +49,7 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
     const known = new Set(all.map((f) => f.name));
     // 页面上收进保存条的开关：fBool、fSel、fNum 登记的
     const reg = [...page.matchAll(/\bf(Bool|Sel|Num)\('(\w+)'(?:,\s*'[^']*')?(?:,\s*(\[[^\]]*\]|\d+))?(?:,\s*(\d+))?(?:,\s*(true))?\)/g)];
-    H.ok('（认出了页面上的开关）', reg.length >= 30, reg.length);
+    H.ok('（认出了页面上的开关）', reg.length >= 28, reg.length);
     const extra = reg.filter((m) => !known.has(m[2])).map((m) => m[2]);
     H.ok('页面上每个开关都在字段表里', extra.length === 0, extra);
     const internal = reg.filter((m) => { const f = all.find((x) => x.name === m[2]); return f && (f.internal || f.noControl); }).map((m) => m[2]);
@@ -84,8 +84,8 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
     }
     H.ok('合规的收，乱填的保持原值', bads.length === 0, bads);
     H.ok('int 的边界：空串不当 0', A.cleanConfig({ tmpKeepDays: '' }).tmpKeepDays === CF.DEFAULT_CONFIG.tmpKeepDays && A.cleanConfig({ tmpKeepDays: 0 }).tmpKeepDays === 0);
-    H.ok('带 zero 的能填 0，不带的不行', A.cleanConfig({ contextLimitTokens: 0 }).contextLimitTokens === 0 && A.cleanConfig({ reviewMaxFiles: 0 }).reviewMaxFiles === CF.DEFAULT_CONFIG.reviewMaxFiles);
-    H.ok('小数取整', A.cleanConfig({ reviewMaxFiles: 7.6 }).reviewMaxFiles === 8);
+    H.ok('带 zero 的能填 0，不带的不行', A.cleanConfig({ contextLimitTokens: 0 }).contextLimitTokens === 0 && A.cleanConfig({ reviewBudgetSeconds: 0 }).reviewBudgetSeconds === CF.DEFAULT_CONFIG.reviewBudgetSeconds);
+    H.ok('小数取整', A.cleanConfig({ reviewBudgetSeconds: 77.6 }).reviewBudgetSeconds === 78);
     H.ok('hints、maintainerHosts 不写回去', !('hints' in A.cleanConfig({}, { hints: [] })) && !('maintainerHosts' in A.cleanConfig({}, { maintainerHosts: 'x' })));
     H.ok('autoMode 旧名还认', A.cleanConfig({ autoMode: true }).autoApply === true);
   }
@@ -142,7 +142,7 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
   H.section('第 29—31 条：不做开关的、固定的值');
   {
     const D = CF.DEFAULT_CONFIG;
-    H.ok('默认：一直开、上限 10、不写交接记录', D.autoVerify === true && D.autoSeePage === true && D.specGate === true && D.autoOnboard === true && D.requirementsReviewMaxRounds === 10 && D.applyReviewMaxRounds === 10 && D.autoHandover === false, D);
+    H.ok('默认：一直开、不写交接记录', D.autoVerify === true && D.autoSeePage === true && D.specGate === true && D.autoOnboard === true && D.autoHandover === false, D);
     const f = (n) => CF.FIELDS.find((x) => x.name === n);
     H.ok('都标了内部字段（配置页、手册的开关表都没有）', CF.FIXED.every((n) => f(n) && f(n).internal && !f(n).doc), CF.FIXED);
     H.ok('页面上这几个控件都没了', CF.FIXED.every((n) => !page.includes('id="k_' + n + '"')));
@@ -164,12 +164,12 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
     H.ok('升级：别的开关不动', c.commitMode === 'ask' && c.handoverPercent === 66, c);
     H.ok('记了只清一次', fs.existsSync(marker));
     const st = JSON.parse(H.node(h, '-e', ['const c = require(' + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + ').readConfig(); console.log(JSON.stringify({ v: c.autoVerify, g: c.specGate, r: c.applyReviewMaxRounds, h: c.autoHandover }))'], { cwd: h.root }).out.trim());
-    H.ok('钩子读到的：一直开、上限 10、不写交接记录', st.v === true && st.g === true && st.r === 10 && st.h === false, st);
+    H.ok('钩子读到的：一直开、不写交接记录', st.v === true && st.g === true && st.h === false, st);
     fs.writeFileSync(cfgFile, JSON.stringify(Object.assign(c, { autoVerify: false }), null, 2));
     inst(pkgB);
     H.ok('清过一次之后：手写的还认（排查用），再更新不动', JSON.parse(fs.readFileSync(cfgFile, 'utf8')).autoVerify === false);
     const md = (H.read(path.join(h.kit, 'hook-rules.md')) || '');
-    H.ok('规范里写的上限是 10 轮', /需求阶段每个产物最多 10 轮；Apply 每整组 1\.x 最多 10 轮/.test(md), md.slice(0, 200));
+    H.ok('规范里不写次数上限', !/最多 10 轮/.test(md) && /没有 P1、P2 就算过/.test(md), md.slice(0, 200));
   }
 
   H.section('配置页：五项合成两项');

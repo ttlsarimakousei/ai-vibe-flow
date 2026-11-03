@@ -127,9 +127,9 @@ H.section('第 25 条：提交方式"自动"，任务都勾完以后改完用户
   H.ok('任务都勾完、改完一处用户报的问题：提交放行（以前"还没做完一件事"一直挡着）', !blocked(r), H.reasonOf(r));
 }
 
-H.section('第 26 条：问题处理完再审，轮数接着数；到上限不再自动审、不挡提交');
+H.section('第 26 条：问题处理完再审，轮数接着数；不设上限；处理完的不挡提交');
 {
-  const h = H.makeHome('tas-26', FROM, Object.assign({}, QUIET, { commitMode: 'auto', autoApply: true, applyReviewMaxRounds: 3 }));
+  const h = H.makeHome('tas-26', FROM, Object.assign({}, QUIET, { commitMode: 'auto', autoApply: true }));
   const S = require(path.join(h.kit, 'lib', 'session.js'));
   const P = require(path.join(h.kit, 'lib', 'flow-policy.js'));
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE(true)));
@@ -144,15 +144,15 @@ H.section('第 26 条：问题处理完再审，轮数接着数；到上限不�
   }
   H.write(path.join(p, 'src', 'A.java'), 'class A { int v9; }\n');
   H.ok('处理完问题后再审，轮数接着数（以前每次清零，一天能审 23 轮）', P.record(dir, 'group-1').rounds === 3, P.record(dir, 'group-1'));
-  H.ok('到 3 轮上限、没通过：不再算待审（不再自动审）', !!P.exhausted && P.exhausted(dir, 'group-1') && P.pending(dir, 'code') === '', { pending: P.pending(dir, 'code') });
+  H.ok('不设上限：3 轮之后还算待审（用户 2026-11-03 定的）', !P.halted(dir, 'group-1') && P.pending(dir, 'code') === 'group-1', { pending: P.pending(dir, 'code') });
   H.inFlow(h, 's26', [dir], true, 'apply');
   const r = H.hook(h, 'guard-commit', { session_id: 's26', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git add src/A.java && git commit -m "fix: 处理审查意见"' }, transcript_path: H.transcript(path.join(h.root, 't26.jsonl'), [H.tr.user('接着做'), H.tr.say('改好了')]) });
-  H.ok('到上限的点不挡提交（以前一直"审查还没收尾"）', !blocked(r), H.reasonOf(r));
+  H.ok('处理完、文件又变了的点不挡提交（以前一直"审查还没收尾"）', !blocked(r), H.reasonOf(r));
 }
 
-H.section('复审 V6—V9：自动开着时修了没复审不提交；连着没审成的照实说；到上限不挡归档；没写任务的变更不算勾完');
+H.section('复审 V6—V9：自动开着时修了没复审不提交；连着没审成的照实说；停了的不挡归档；没写任务的变更不算勾完');
 {
-  const h = H.makeHome('tas-v6', FROM, Object.assign({}, QUIET, { commitMode: 'auto', autoApply: true, applyReviewMaxRounds: 3 }));
+  const h = H.makeHome('tas-v6', FROM, Object.assign({}, QUIET, { commitMode: 'auto', autoApply: true }));
   const S = require(path.join(h.kit, 'lib', 'session.js'));
   const P = require(path.join(h.kit, 'lib', 'flow-policy.js'));
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE(true)));
@@ -167,12 +167,12 @@ H.section('复审 V6—V9：自动开着时修了没复审不提交；连着没�
   H.inFlow(h, 'v6', [dir], true, 'apply');
   const r6 = commit('v6', 1);
   H.ok('V6 自动开着、修了还没复审：先不提交，等复审', blocked(r6) && /审查还没收尾/.test(H.reasonOf(r6)), H.reasonOf(r6));
-  // V7：连着三轮没审成
-  S.updateState('review-points', (o) => { o[k].status = 'failed'; o[k].rounds = 3; });
-  H.ok('V7 连着到上限都没审成：照实说"没审成"，不说成"没通过"', /没审成/.test(P.instruction(dir, 'group-1', S.readConfig())), P.instruction(dir, 'group-1', S.readConfig()));
-  // V8：唯一的审查点到了上限没通过：归档的审查检查不再挡
-  S.updateState('review-points', (o) => { o[k].status = 'completed'; o[k].issues = 2; o[k].rounds = 3; });
-  H.ok('V8 审查点到上限：归档的审查检查不挡（没解决的写进报告）', P.exhausted(dir, 'group-1') && S.codeReviewIssue(dir) === '', S.codeReviewIssue(dir));
+  // V7：子代理连着三次没交结论
+  S.updateState('review-points', (o) => { o[k].status = 'failed'; o[k].failStreak = 3; });
+  H.ok('V7 连着没审成：照实说"没审成"，不说成"没通过"', /没审成/.test(P.instruction(dir, 'group-1')), P.instruction(dir, 'group-1'));
+  // V8：唯一的审查点停了：归档的审查检查不再挡
+  S.updateState('review-points', (o) => { o[k].status = 'completed'; o[k].issues = 2; });
+  H.ok('V8 审查点停了：归档的审查检查不挡（没解决的写进报告）', P.halted(dir, 'group-1') && S.codeReviewIssue(dir) === '', S.codeReviewIssue(dir));
   // V9：另一个变更还没写 tasks：不算都勾完
   const dir2 = path.join(p, 'openspec', 'changes', 'feat-029');
   H.write(path.join(dir2, 'proposal.md'), '## Why\n\n要打印。\n\n## What Changes\n\n- 改 src/A.java\n');

@@ -13,12 +13,14 @@
  *   自动更新装回旧版也读得懂。两个新项只是这四个的另一种说法：读的时候算出来（contextView），保存时写回去（contextFromView）。
  *
  * 不做开关的（问题表第 29—31 条，用户 2026-11-02 定的，internal）：自动自测、自动验证页面、后台自动探索、提案打勾归档的门槛一直开；
- * 自动审核到 10 轮就停（每个审查点，2026-11-02 从 20 改的，不是设置）；到交接线先写交接记录取消（默认 false）。配置页、手册的开关表都没有。升级时清掉文件里以前存的（install.js），文件里手写的还认，给排查和测试用。
+ * 审查次数、文件数不设上限（2026-11-03 取消，用户定的）；到交接线先写交接记录取消（默认 false）。配置页、手册的开关表都没有。升级时清掉文件里以前存的（install.js），文件里手写的还认，给排查和测试用。
  *
  * 只用 Node 自带的模块；不依赖 session（路由也载它）。
  */
 // 不做开关、升级时从 config.json 里清掉的（问题表第 29—31 条）
-const FIXED = ['autoVerify', 'autoSeePage', 'specGate', 'autoOnboard', 'requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'autoHandover'];
+const FIXED = ['autoVerify', 'autoSeePage', 'specGate', 'autoOnboard', 'autoHandover'];
+// 不再有的开关（审查次数、文件数、方式，用户 2026-11-03 定的）：字段表里没有了，升级时也从 config.json 里清掉
+const REMOVED = ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewLoop', 'reviewMaxRounds', 'reviewExecutor', 'reviewMaxFiles'];
 const FIELDS = [
   { name: 'autoVerify', type: 'bool', def: true, internal: true },
   { name: 'autoSeePage', type: 'bool', def: true, internal: true },
@@ -26,14 +28,10 @@ const FIELDS = [
   { name: 'commitCheck', type: 'bool', def: true, page: 'kit', doc: '提交不合规范 → 拦下（本版起不再查像密码的内容）', since: '最早就有', defText: '开' },
   { name: 'specGate', type: 'bool', def: true, internal: true },
   { name: 'tmpKeepDays', type: 'int', def: 7, min: 0, max: 90, page: 'kit', doc: '过程文件多少天没动就清', since: '0924 中午', defText: '7 天' },
-  { name: 'reviewLoop', type: 'bool', def: false, internal: true },
-  { name: 'reviewMaxRounds', type: 'int', def: 3, min: 1, max: 5, internal: true },
   { name: 'autoMode', type: 'bool', def: false, internal: true },
   { name: 'autoRequirements', type: 'bool', def: false, internal: true },
   { name: 'autoApply', type: 'bool', def: false, internal: true },
-  { name: 'requirementsReviewMaxRounds', type: 'int', def: 10, min: 1, max: 10, internal: true },
   { name: 'reviewLenses', type: 'int', def: 3, min: 1, max: 3, internal: true },
-  { name: 'applyReviewMaxRounds', type: 'int', def: 10, min: 1, max: 10, internal: true },
   { name: 'autoHandover', type: 'bool', def: false, internal: true },
   { name: 'kitLock', type: 'bool', def: true, page: 'kit', doc: '禁止 Claude 自己改套件', since: '0923', defText: '开' },
   { name: 'kitBypass', type: 'enum', def: 'ask', values: ['ask', 'auto', 'off'], page: 'kit', doc: '被检查拦住、它又确信是套件拦错了（自动模式下不用点，选"不许放行"的除外）', since: '0924.1848', defText: '要我点同意' },
@@ -65,9 +63,7 @@ const FIELDS = [
   { name: 'usageReport', type: 'enum', def: 'on', values: ['on', 'off'], page: 'remote', doc: '使用情况上报（开 / 关）', since: '1001', defText: '开' },
   { name: 'perfReport', type: 'enum', def: 'on', values: ['on', 'local', 'off'], page: 'remote', doc: '耗时异常上报 perfReport（上报 / 只记本机 / 关）', since: '2026-10-31 那一版', defText: '上报' },
   { name: 'ccAutoMode', type: 'enum', def: 'off', values: ['off', 'on'], page: 'kit', doc: 'Claude Code 自带的"自动模式"（关掉 / 不管它）', since: '1005', defText: '关掉' },
-  { name: 'reviewExecutor', type: 'enum', def: 'direct', values: ['direct', 'agent'], page: 'kit', doc: '审查方式 reviewExecutor', since: '1017', defText: '独立模型审查' },
   { name: 'reviewBudgetSeconds', type: 'int', def: 300, min: 10, max: 1800, page: 'kit', doc: '审查预期用时 reviewBudgetSeconds（1028 这一版起不截断，超了自动记问题反馈；以前叫"审查总预算"）', since: '1017', defText: '300 秒' },
-  { name: 'reviewMaxFiles', type: 'int', def: 20, min: 1, max: 60, page: 'kit', doc: '审查文件上限 reviewMaxFiles', since: '1017', defText: '20 个' },
 ];
 // 配置页上有、文件里不存的两项（J2）：说明写在手册里，取值在这里
 const VIEW_FIELDS = [
@@ -111,4 +107,4 @@ function contextFromView(action, percent) {
   return { contextStrategy: 'handover', handoverPercent: p, handoverAsk: action === 'ask' ? 'ask' : 'off', autoCompactPercent: Math.min(95, Math.max(50, p + 15)) };
 }
 
-module.exports = { FIXED, FIELDS, VIEW_FIELDS, DEFAULT_CONFIG, accept, applyFields, contextView, contextFromView };
+module.exports = { FIXED, REMOVED, FIELDS, VIEW_FIELDS, DEFAULT_CONFIG, accept, applyFields, contextView, contextFromView };

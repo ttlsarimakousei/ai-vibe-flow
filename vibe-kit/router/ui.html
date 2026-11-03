@@ -455,18 +455,11 @@
     <div class="card" id="sec-spec" data-sec="全局：审查与产物">
       <h2>全局：审查与产物</h2>
       <div class="opt">
-        <div><div class="t">审查方式</div><div class="d">人工整套审查用哪种方式。独立模型审查：分批发给"模型"页 sonnet 那一条指向的模型，挂了按换模型的顺序换。自动逐点审查固定用这种。只审了一部分不算审完。</div></div>
-        <div class="ctl"><select id="k_reviewExecutor"><option value="direct">独立模型审查</option><option value="agent">原审查代理</option></select></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">审查预期用时</div><div class="d">不截断审查，每批都审完；审完超过这个时间，自动记一条问题反馈给维护的人优化审查。</div>
-          <details class="more"><summary>细节</summary><ul><li>超时、有批次只回了思考、有批次最后没拿到结论，都记一条：总用时、每批用时、重试、输出多少 token、停在哪、原因，不带材料原文。</li><li>一次审查请求最多让模型输出 16000 token；只回了思考、没写结论的，加到 32000、要求少想再试，还不行就把这一批拆成两半各审一次。</li></ul></details></div>
+        <div><div class="t">审查预期用时</div><div class="d">不截断审查，子代理都审完；审完超过这个时间，自动记一条问题反馈给维护的人优化审查。</div>
+          <details class="more"><summary>细节</summary><ul><li>超时、有角度没交结论，都记一条：总用时、每个角度的用时、文件数、字数。</li><li>不带材料原文和审查意见。</li></ul></details></div>
         <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
       </div>
-      <div class="opt">
-        <div><div class="t">每轮最多审文件数</div><div class="d">超出时列为未覆盖，不把部分审查记成完整结果。</div></div>
-        <div class="ctl"><input type="number" id="k_reviewMaxFiles" min="1" max="60" step="1"></div>
-      </div>
+    </div>
     </div>
 
     <div class="card" id="sec-auto" data-sec="自动模式">
@@ -1080,8 +1073,7 @@
   fNum('contextPercent', '到百分之多少', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true);
   fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
   fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
-  fSel('reviewExecutor', '审查方式', ['direct', 'agent']);
-  fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800); fNum('reviewMaxFiles', '审查文件上限', 1, 60);
+  fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);
