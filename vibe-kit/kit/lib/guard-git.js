@@ -311,10 +311,16 @@ function consentIssue(g, st, cfg, docs) {
   const proposalCommit = files.some(f => PROPOSAL_FILE.test(f));
   const S = require('../lib/session'); const P = require('../lib/flow-policy');
   const mode = S.commitModeOf(cfg);
-  // 需求文档定稿：提交方式是"自动"才直接提交（需求自动生效时要四份都审过；人工时四份都写完，每份用户都看过）。询问、关都要用户点头（审核问题 2）
-  const planRoots = allChanges(st.cwd0).filter(c => flowChanges(j).includes(normKey(c.dir)) && P.points(c.dir, 'proposal').length === 4 && (!cfg.autoMode || P.allDone(c.dir, 'proposal'))).map(c => normKey(c.dir) + '/');
-  const automaticPlan = mode === 'auto' && fl.stage === 'plan' && files.length && files.every(f => planRoots.some(d => normKey(path.resolve(repoRoot(g.dir) || g.dir, f)).startsWith(d)));
+  // 需求文档定稿：提交方式是"自动"才直接提交（需求自动生效时要四份都审过；人工时四份都写完，每份用户都看过）。范围按大任务算，plan.md、探索记录算同一笔
+  let task = null; try { task = require('../lib/big-task').forSession(j); } catch (e) { task = null; }
+  const mine = (c) => (task ? task.changes.some((x) => normKey(x.dir) === normKey(c.dir)) : flowChanges(j).includes(normKey(c.dir)));
+  const planRoots = allChanges(st.cwd0).filter(c => mine(c) && P.points(c.dir, 'proposal').length === 4 && (!cfg.autoMode || P.allDone(c.dir, 'proposal'))).map(c => normKey(c.dir) + '/');
+  const planFiles = task ? [normKey(task.planFile)].concat(task.explore ? [normKey(task.explore)] : []) : [];
+  const automaticPlan = mode === 'auto' && fl.stage === 'plan' && files.length && files.every(f => { const k = normKey(path.resolve(repoRoot(g.dir) || g.dir, f)); return planFiles.includes(k) || planRoots.some(d => k.startsWith(d)); });
   if (automaticPlan) return '';
+  // 全自动下提案提交照提交方式走（第 42 条，用户 2026-11-03 定的）：关任何情况都不自动提交，询问在全自动下不问，都不让模型去问用户
+  const autoOn = cfg.autoMode || S.readConfig(j).autoSession === true;
+  if (!approved && proposalCommit && autoOn && mode !== 'auto') return mode === 'off' ? '[vibe-kit] 提交方式是"关"：任何情况下都不自动提交，也不问。接着做，用户说了"提交"再提交。' : '[vibe-kit] 提交方式是"询问"，全自动下不问：先不提交，接着做，收工时列进全自动报告。';
   if (!approved && proposalCommit && fl.stage !== 'apply') return '[vibe-kit] 提案提交要单独确认：先交代定稿内容，问用户是否提交；开工许可不能代替提交许可。';
   if (approved) return '';
   if (mode === 'off') return '[vibe-kit] 提交方式是"关"：不自动提交，也不问。用户说了"提交"再提交，没说就留给用户自己提交，接着做别的。';

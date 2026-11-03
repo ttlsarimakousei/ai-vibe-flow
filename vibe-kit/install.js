@@ -604,7 +604,7 @@ const COMMIT_MODE_TEXT = {
 const SEE_PAGE_TEXT = { on: '，页面按已准备的验收场景验证', off: '；页面只在用户要求时验证' };
 const SEE_PAGE_SPEC_TEXT = { on: '自动阶段按验收用例验证接口和页面；人工阶段先 Ask，用户放弃后继续，不记待办。', off: '页面由用户决定是否验证；人工阶段的接口自测也先 Ask。' };
 const PAGE_VERIFY_TEXT = { on: '<命令或验收场景及预期>', off: '<命令或人工验收步骤及预期>' };
-const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例逐份完善，定稿后按提交方式一起提交一次 docs: 提案 <名字>。两阶段均自动且用户未限定只写需求时，定稿提交后自动 apply；其他情况用 Ask 给出 apply 选项。';
+const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例逐份完善，定稿后按提交方式一起提交一次 docs: 提案 <名字>（全自动下关、询问都不提交也不问）。开着自动且用户没限定只写需求时，定稿后直接 apply；其他情况用 Ask 给出 apply 选项。';
 const COMMIT_RHYTHM_TEXT = PROPOSAL_COMMIT + ' 实施按提交方式提交；归档、验收节点单独保留，用户说了推送才 push。';
 function kitConfig() {
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t) || {}; } catch (e) { return {}; }
