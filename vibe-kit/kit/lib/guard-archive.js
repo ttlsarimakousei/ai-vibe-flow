@@ -64,6 +64,17 @@ function archiveIssue(t, dir, j) {
   const cfg = readConfigFor(j);
   // 归档命令点到的变更：算这个会话在流程里动手做的（收工时照着它往下催、写进报告）
   if (cfg.autoSwitch && flowState(j).on) flowTouch(j, chDir);
+  // 大任务：按表的顺序归档，归档前要预演过（用户 2026-11-03 定的）
+  try {
+    const B = require('../lib/big-task');
+    const task = B.ofChange(path.resolve(chDir, '../../..'), name);
+    if (task && !task.legacy) {
+      const first = task.changes.find((c) => !c.archived);
+      if (first && first.name !== name) return { name, msg: '[vibe-kit] 大任务 ' + task.name + ' 要按 plan.md 表的顺序归档：下一个是 ' + first.name + '，不是 ' + name + '。后面的 change 依赖前面的需求，顺序错了 OpenSpec 会拒绝。' };
+      const ck = B.taskState(task).archiveCheck;
+      if (task.changes.every((c) => !c.archived) && (!ck || ck.specs !== B.specsHash(task))) return { name, msg: '[vibe-kit] 归档前先预演：node "' + path.join(__dirname, '..', 'tools', 'workflow.js') + '" archive-check --task ' + task.name + ' --project ' + path.resolve(chDir, '../../..') + '。在临时副本里按表的顺序跑一遍归档，过了才动真目录。' };
+    }
+  } catch (e) { /* 算不了不挡归档 */ }
   const issues = [];
   let waiting = 0;
   try {

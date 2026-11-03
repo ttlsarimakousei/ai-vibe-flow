@@ -160,4 +160,21 @@ function progressText(task) {
   return parts.join('，');
 }
 
-module.exports = { tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
+/** 大任务全部 change 的需求增量和探索记录的指纹：预演过之后这些变了就要重新预演 */
+function specsHash(task) {
+  const rows = [];
+  const walk = (d) => { let names = []; try { names = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; } for (const n of names) { const p = path.join(d, n.name); if (n.isDirectory()) walk(p); else { try { rows.push([normKey(p), fs.readFileSync(p, 'utf8')]); } catch (e) { /* 读不了 */ } } } };
+  for (const c of task.changes) if (c.exists) walk(path.join(c.dir, 'specs'));
+  return require('crypto').createHash('sha1').update(JSON.stringify(rows)).digest('hex');
+}
+/** 范围外建议（用户 2026-11-03 定的）：探索记录里没有的新东西不加，记下来，人工核验时列给用户。放项目的 .vibe，不进仓库 */
+function suggestFile(task) { return path.join(path.dirname(task.osDir), '.vibe', 'big-task', task.name.replace(/[\\/:*?"<>|\s]+/g, '-') + '-范围外建议.md'); }
+function addSuggestion(task, text, from) {
+  const f = suggestFile(task);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.appendFileSync(f, '- ' + String(text).replace(/\s+/g, ' ').trim() + (from ? '（' + from + '）' : '') + '\n');
+  return f;
+}
+function suggestions(task) { try { return fs.readFileSync(suggestFile(task), 'utf8').split(/\r?\n/).filter((l) => l.trim()); } catch (e) { return []; } }
+
+module.exports = { specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };

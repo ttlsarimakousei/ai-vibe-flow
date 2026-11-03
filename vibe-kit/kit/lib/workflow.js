@@ -35,4 +35,50 @@ function commitPlan(root, j) {
   return { mode: S.commitModeOf(cfg), effectiveAuto: cfg.autoMode, at: Date.now(), repositories: roots.map((r) => ({ root: r, branch: W.git(r, ['branch', '--show-current']).trim(), fingerprint: W.fingerprint(r, 'all').hash, files: W.git(r, ['status', '--porcelain']).split('\n').filter(Boolean).map((l) => l.slice(3)), existingChanges: [...new Set(baselines.filter((b) => S.normKey(b.root) === S.normKey(r)).flatMap((b) => b.dirtyFiles || []))], verification: require('./evidence').commands(r), review: S.allChanges(r).map((c) => ({ change: c.name, ready: T.readyForReview(c.dir), reviewed: S.codeReviewed(c.dir), tasks: T.tasks(c.dir).filter((t) => t.done && !['review', 'review-fix', 'user'].includes(t.kind)).map((t) => t.text) })) })), confirmation: cfg.autoMode && cfg.autoCommit !== 'off' ? '仅当前明确 apply 范围按档位提交，纯审查轮次不单独提交；已有改动先确认归属，不整文件混入' : '普通任务与提案提交先交代结果，用户确认后提交；apply、归档、push 各自授权' };
 }
 function selfTest(root) { const f = facts(root); return { services: f.services, verified: f.evidence, pending: f.changes.filter((c) => c.userPending), limits: '服务记录仅核对进程存活，接口和页面预期来自已确认规格；只列实际执行的用例和结果；用户放弃的自测不列未测试或待办，也不冒充通过。交付验收用例供用户自行测试。' }; }
-module.exports = { facts, brief, services, deliver, taskTemplate, decisionIssues, commitPlan, selfTest };
+/**
+ * 全面自测登记（用户 2026-11-03 定的）：所有 change 的任务做完才行；每条用例要有结果，有没过的不登记；真跑过命令才算（本机证据）。
+ * results：[{ case, result: 'pass' | 'fail' | 'manual', note }]。登记了就进人工核验；之后改了代码退回（verify-gate 比 code 指纹）。
+ */
+function taskSelfTest(root, name, resultsFile) {
+  const B = require('./big-task');
+  const task = B.named(root, name); if (!task) throw new Error('没有叫 ' + name + ' 的大任务（openspec/plan.md）');
+  const phase = B.phaseOf(task).phase;
+  if (phase === 'explore' || phase === 'plan' || phase === 'apply') throw new Error('还有 change 没做完（' + B.progressText(task) + '），全部做完才全面自测');
+  let list; try { list = JSON.parse(fs.readFileSync(resultsFile, 'utf8')); } catch (e) { throw new Error('结果文件读不了，要 JSON 数组：[{"case":"AC-01","result":"pass","note":"实际结果"}]'); }
+  if (!Array.isArray(list) || !list.length) throw new Error('结果文件是空的：每条用例写一条，[{"case":"AC-01","result":"pass","note":"实际结果"}]');
+  const bad = list.filter((x) => !x || !x.case || !['pass', 'fail', 'manual'].includes(x.result));
+  if (bad.length) throw new Error('有 ' + bad.length + ' 条写法不对：case、result（pass、fail、manual）都要有');
+  const fail = list.filter((x) => x.result === 'fail');
+  if (fail.length) return { ok: false, failed: fail.map((x) => x.case), next: '有没过的用例：改完记进对应 change 的 revisions.md，重跑受影响 change 的用例和整体用例，再登记。' };
+  const cwdRoot = path.dirname(task.osDir);
+  let ran = 0; try { ran = require('./evidence').commands(cwdRoot).length; } catch (e) { ran = 0; }
+  const auto = list.filter((x) => x.result === 'pass').length;
+  if (auto && !ran) throw new Error('这个项目里还没有本机跑过的验证命令记录，说 pass 对不上：先真跑用例（测试命令、接口、页面场景）再登记');
+  B.setTaskState(task, { selfTest: { at: Date.now(), count: list.length, code: W.fingerprint(cwdRoot, 'code').hash, manual: list.filter((x) => x.result === 'manual').map((x) => x.case) } });
+  return { ok: true, count: list.length, next: '全面自测登记了。把测试清单、实际结果、' + (B.suggestions(task).length ? '范围外建议、' : '') + '留给人工的用例交给用户，等用户人工核验，用户说归档才归档。' };
+}
+/** 归档前预演：拷 openspec/ 到临时目录，按表的顺序跑一遍归档，全过才记下来（改名对不上这种到归档才报错，停在一半，用户 2026-11-03 定的） */
+function archiveCheck(root, name) {
+  const B = require('./big-task');
+  const task = B.named(root, name); if (!task) throw new Error('没有叫 ' + name + ' 的大任务（openspec/plan.md）');
+  const projectRoot = path.dirname(task.osDir);
+  const tmp = path.join(projectRoot, '.vibe', 'tmp', 'archive-check-' + task.name.replace(/[\\/:*?"<>|\s]+/g, '-'));
+  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.mkdirSync(tmp, { recursive: true });
+  fs.cpSync(task.osDir, path.join(tmp, 'openspec'), { recursive: true });
+  const O = require('./openspec');
+  const failed = [];
+  try {
+    for (const c of task.changes) {
+      if (c.archived) continue;
+      // 自带的用不了（Node 版本不够）退回用户自己装的，和钩子改写命令的规矩一样
+      const opts = { cwd: tmp, encoding: 'utf8', windowsHide: true, timeout: 120000, input: '', env: Object.assign({}, process.env, { OPENSPEC_TELEMETRY: '0' }) };
+      const r = O.usable() ? require('child_process').spawnSync(process.execPath, [O.BIN, 'archive', c.name, '-y'], opts) : require('child_process').spawnSync('openspec archive ' + c.name + ' -y', Object.assign({ shell: true }, opts));
+      if (r.status !== 0) { failed.push({ change: c.name, why: String(r.stdout || '').concat(r.stderr || '').replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^(at |Node\.js v|\}$)/.test(l)).slice(-5).join(' ').slice(0, 400) }); break; }
+    }
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  if (failed.length) return { ok: false, failed, next: '预演没过，真目录没动：' + failed[0].change + '：' + failed[0].why + '。改对应 change 的文档（前面改了需求名的，后面对齐），再预演。' };
+  B.setTaskState(task, { archiveCheck: { at: Date.now(), specs: B.specsHash(task) } });
+  return { ok: true, order: task.changes.filter((c) => !c.archived).map((c) => c.name), next: '预演过了，按这个顺序归档。' };
+}
+module.exports = { facts, brief, services, deliver, taskTemplate, decisionIssues, commitPlan, selfTest, taskSelfTest, archiveCheck };

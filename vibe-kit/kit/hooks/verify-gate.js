@@ -16,6 +16,7 @@ try { feedback = require('../lib/feedback.js'); } catch (e) { /* 老版本没有
 let lessons = null;
 try { lessons = require('../lib/lessons.js'); } catch (e) { /* 老版本没有 */ }
 
+const KIT_DIR = path.join(__dirname, '..');
 const PAGE =/\.(vue|jsx|tsx|html?|css|scss|sass|less|styl)$/i;
 const CODE = /\.(java|kt|groovy|js|mjs|cjs|ts|py|go|cs|xml|sql)$/i;
 const SAID_UNVERIFIED = /没有?验证|未验证|无法验证|没法验证|验证不了/;
@@ -392,6 +393,47 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices) 
 }
 
 /**
+ * 大任务走到哪、下一步干什么（用户 2026-11-03 定的）：一个 change 做完先记落地偏差，开着自动接下一个，没开用提问框问；
+ * 全部做完全面自测（改过代码退回重跑）；自测过了等人工核验，自动也停。每句话只说一次。
+ */
+function nextStepTodo(j, cfg, turnId, policy) {
+  const st = flowState(j);
+  if (!st.on || st.paused) return [];
+  const B = require('../lib/big-task');
+  const task = B.forSession(j);
+  if (!task) return [];
+  try { B.noteAuto(j, !!cfg.autoSession); } catch (e) { /* 记不了：接回时不恢复自动 */ }
+  const root = path.dirname(task.osDir);
+  const state = B.taskState(task);
+  if (state.selfTest && state.selfTest.code) {
+    let now = ''; try { now = require('../lib/workspace').fingerprint(root, 'code').hash; } catch (e) { now = ''; }
+    if (now && now !== state.selfTest.code) B.setTaskState(task, { selfTest: null });
+  }
+  const fresh = B.named(root, task.name) || task;
+  const ph = B.phaseOf(fresh);
+  const open = fresh.changes.filter((c) => c.exists && !c.archived);
+  // 代码审查还没收尾的不往下走：stop() 在催
+  if (open.some((c) => c.total && !c.todo && policy.pending(c.dir, 'code'))) return [];
+  if (ph.phase === 'plan' && st.stage === 'apply') {
+    setFlow(j, true, '接下一个 change ' + ph.change, 'plan');
+    const prev = fresh.changes[fresh.changes.findIndex((c) => c.name === ph.change) - 1];
+    const note = prev ? prev.name + ' 做完了，先在探索记录"落地偏差"写下和计划不一样的地方（' + fresh.explore + '）。' : '';
+    if (cfg.autoSession === true) return [policy.oncePrompt(j, 'next|' + ph.change, 'next', note + '接着做 ' + ph.change + '：读探索记录的公共几节、' + ph.change + ' 那一节和前面 change 的 design、revisions，用 /opsx:new 或 openspec new change 建变更，一份一份写需求。')].filter(Boolean);
+    return [policy.oncePrompt(j, 'next|' + ph.change, 'next', note + '用提问框问用户要不要接着做 ' + ph.change + '（选项写"接着做 ' + ph.change + '""先停"）。')].filter(Boolean);
+  }
+  if (ph.phase === 'selftest') {
+    const sig = 'selftest:' + fresh.changes.map((c) => c.name + c.done).join();
+    const how = '所有 change 的任务都做完了：全面自测。跑所有 design.md "验收用例"和探索记录"整体验收用例"里 Claude 能跑的，把结果写成 JSON（[{"case":"AC-01","result":"pass","note":"实际结果"}]，要人看的 result 写 manual），跑 node "' + path.join(KIT_DIR, 'tools', 'workflow.js') + '" selftest --task ' + fresh.name + ' --results <文件> --project ' + root + ' 登记。有问题改完记进对应 change 的 revisions.md 再复验。';
+    return [policy.oncePrompt(j, 'selftest|' + fresh.name, sig, cfg.autoSession === true ? how : '所有 change 的任务都做完了：用提问框问用户要不要全面自测（选项写"全面自测""不用"）。选全面自测就照这个做：' + how)].filter(Boolean);
+  }
+  if (ph.phase === 'verify') {
+    const sug = B.suggestions(fresh);
+    return [policy.oncePrompt(j, 'verify|' + fresh.name, 'verify:' + (B.taskState(fresh).selfTest || {}).at, '全面自测过了，现在停下等人工核验：把测试清单、用例的实际结果、留给人工的用例' + (sug.length ? '，和范围外建议（' + B.suggestFile(fresh) + '，共 ' + sug.length + ' 条，没做，用户要哪条再走需求）' : '') + '交给用户。用户发现问题就改，记进对应 change 的 revisions.md 再复验；用户说归档才归档，先跑 workflow.js archive-check，按表的顺序。')].filter(Boolean);
+  }
+  return [];
+}
+
+/**
  * 这一轮动过的变更不在 plan.md 里：收工时提醒用户一句，用户说要加才加（问题表第 38 条，用户 2026-11-02 定的）。
  * 以前拦住收工让模型自己判断"属于这个大需求就加一行"：它判断不了，最省事的就是加，需求跑着跑着就去改 plan.md。
  * 计划里的变更都做完了（全归档）：那个大需求结束了，新变更和它没关系，不提醒。每个变更只提醒一次
@@ -484,6 +526,7 @@ function revisionTodo(j, calls, isEdit, fileOf, turnId) {
     + '- 起因：主观 / 客观 / 用户要求 / 需求变化 / 审查 / 自动模式决定 之一，加一句具体的（比如：客观，order 表没有 status 字段，设计里假设有）\n'
     + '- 改了：<文件>：<改了什么>\n'
     + '- 影响：<上下游哪些跟着改了、关联用例；哪些不用改，原因；不写套件钩子、命令、预算或失败诊断>\n'
+    + '- 影响 change：<大任务里还影响哪些 change，例：c2-api；没有写"无">\n'
     + '记完再收工。';
 }
 /** 提案里列的能力都要有对应的规格文件（提案写完、tasks 也有了之后才查） */
@@ -615,8 +658,8 @@ function autoReport(j, cfg, entries, lastSaid, changes) {
   // 这一轮只是答了句话（问句不退出流程了，2026-11-03）：不交报告，也不拿这句话盖掉交代。正在要交代的那一次（stop_hook_active）照常
   const S0 = require('../lib/session');
   const busy = S0.toolCalls(entries, S0.turnStart(entries).start).some((c) => /^(Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell)$/.test(c.name));
-  if (!busy && !j.stop_hook_active && (st.delivered || !st.items.length)) return '';
   const fresh = st.items.length > st.deliveredCount;
+  if (!busy && !j.stop_hook_active && ((st.delivered && !fresh) || !st.round)) return '';
   if (st.delivered && (!fresh || st.times >= 3)) { report.saveFinal(j, lastSaid); return ''; }
   let mine = [];
   try { mine = sessionChanges(j.session_id, entries, changes); } catch (e) { mine = []; }
@@ -860,6 +903,8 @@ async function handle(j) {
   // 这一轮最后一次改代码、页面的时间：用户说了不审不测之后又改了，才再问（#220）
   const lastEditAt = Math.max(0, ...calls.filter((c) => isSource(c, CODE) || isSource(c, PAGE)).map((c) => c.at || 0));
   todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId, quickPending, lastEditAt));
+  try { if (j.session_id) writeState(String(j.session_id) + '-last-stop', { at: Date.now() }); } catch (e) { /* 记不了：探索记录的边界按用户的话算 */ }
+  try { todo.push(...nextStepTodo(j, cfg, turnId, policy)); Object.assign(cfg, readConfigFor(j)); } catch (e) { hookLog('verify-gate 算大任务下一步出错（不拦）：' + ((e && e.message) || e)); }
   if (policy.automaticApply(j)) {
     Object.assign(cfg, readConfigFor(j));
     // 自动开工：大改之前先存检查点（K3 M07，只送一次）
