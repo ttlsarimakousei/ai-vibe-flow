@@ -1,10 +1,8 @@
 'use strict';
 /*
- * vibe-kit 安装脚本。一次装好两样东西：
- *   套件：约定、规范、技能、审查代理、钩子、状态栏、看页面的执行器，装进 ~/.claude
- *   模型路由：在后台启动（没有窗口，任务栏里没有东西），登录后自动启动，最后自己验证配置页打得开
- *   node install.js             安装或更新（从安装包目录运行）。--no-open 不自动打开配置页；
- *                               --no-router 不装、不更新路由（以前装过的路由原样留着、照常运行，卸载时照样停它）
+ * vibe-kit 安装脚本：约定、规范、技能、审查代理、钩子、状态栏、看页面的执行器，装进 ~/.claude。
+ *   node install.js             安装或更新（从安装包目录运行）。以前装过模型路由的，手动安装装完当场收回（lib/router-retire.js）；
+ *                               自动更新时等新代码第一次跑 session-start 再收：自检不过装回旧版时路由还在
  *   node install.js --sync      只根据 ~/.claude/vibe-kit 里的约定、规范、你的补充（user/）和本机环境（local.json）重新生成全局约定
  *   node install.js --uninstall 卸载（你自己加的规范文件和备份会留着）
  * 原则：先检查后动手，settings.json 读不懂、全局 CLAUDE.md 不是 UTF-8，就什么都不动；只添加不删改；要覆盖你改过的东西之前先备份（只留最近 20 份），
@@ -22,8 +20,8 @@ const FROM_PACKAGE = fs.existsSync(path.join(SRC, 'claude')) && fs.existsSync(pa
 // 不看环境变量——配置页保存时由路由调它，路由可能是登录时拉起来的，那时的环境变量和用户开 Claude Code 的终端不一样
 const CLAUDE = FROM_PACKAGE ? (process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')) : path.dirname(SRC);
 const KIT = path.join(CLAUDE, 'vibe-kit');
-// 新版删掉了的套件文件（相对 vibe-kit 目录）：装新版时把旧版留下的删掉。2026-10-28：IDEA 起服务、合并推送整条去掉
-const DROPPED_FILES = ['lib/idea-run.js', 'lib/merge-push.js', 'tools/merge-push.js'];
+// 新版删掉了的套件文件（相对 vibe-kit 目录）：装新版时把旧版留下的删掉。2026-10-28：IDEA 起服务、合并推送整条去掉；2026-11-03：路由、IDEA MCP
+const DROPPED_FILES = ['lib/idea-run.js', 'lib/merge-push.js', 'tools/merge-push.js', 'lib/idea-mcp.js', 'lib/idea-tools.js', 'lib/hook-host.js', 'lib/hook-worker.js', 'lib/hook-health.js', 'lib/router-smoke.js'];
 const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。自己的约定写在 ~/.claude/vibe-kit/user/ 里的 .md（更新不碰），然后运行 node ~/.claude/vibe-kit/install.js --sync -->';
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
@@ -44,15 +42,13 @@ const ABSORBED = [
   { name: 'redis', now: 'ttls-redis', is: (d) => skillName(d) === 'redis' && (fs.existsSync(path.join(d, 'assets', 'redis-client.js')) || /redis-client\.js/.test((() => { try { return fs.readFileSync(path.join(d, 'SKILL.md'), 'utf8'); } catch (e) { return ''; } })())) },
 ];
 const HOOK_MARK = 'vibe-kit/hooks/';
-// 走 HTTP 的钩子打到路由的这个路径上：http://127.0.0.1:<端口>/vibe-kit/hook/<名字>
+// 老版本走 HTTP 的钩子登记成这个地址：升级时认出来摘掉
 const HOOK_URL = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\/vibe-kit\/hook\//i;
 let mode = process.argv.includes('--uninstall') ? 'uninstall' : (process.argv.includes('--sync') ? 'sync' : 'install');
 // 装进去的那份 install.js 旁边没有安装包，不带参数运行就当成 --sync
 if (mode === 'install' && !FROM_PACKAGE) mode = 'sync';
-const NO_ROUTER = process.argv.includes('--no-router');
-// 退出码（自动更新 lib/updater.js 照着它判断）：1 装到一半出错；ROUTER_FAILED 文件都装好了、路由起不来或配置页打不开（要装回上一版）；
+// 退出码（自动更新 lib/updater.js 照着它判断）：1 装到一半出错；
 // REFUSED 什么都没动（settings.json 读不懂、全局约定不是 UTF-8、Node 太老）：装回上一版也没用，不算装坏（审核 P43）
-const ROUTER_FAILED = 3;
 const REFUSED = 4;
 
 // 做到一半出错（文件只读、被占用、没有权限、磁盘满）：不甩一屏英文堆栈，用中文说清出了什么事、现在是什么状态、怎么办
@@ -237,48 +233,7 @@ function secretDenyRules() {
   return ['Read(' + base + '/secrets.json)', 'Read(' + base + '/router-data/**)'];
 }
 
-/** 路由监听的端口（router-data/config.json 里的 listen.port，默认 15730）：HTTP 钩子打到这里 */
-function routerPort() {
-  try { let t = fs.readFileSync(path.join(KIT, 'router-data', 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); const p = Number((JSON.parse(t).listen || {}).port); return p > 0 && p < 65536 ? Math.round(p) : 15730; } catch (e) { return 15730; }
-}
-/**
- * 钩子怎么跑（配置页"钩子运行方式"，config.json 的 hookTransport）：
- *   auto（默认）装了路由就走 HTTP，没装走命令；http 固定走 HTTP（没装路由时还是走命令）；command 固定走命令。
- * HTTP：改文件、跑命令、提问框、读文件提醒、收工检查这五个高频钩子由路由在工作线程里跑，不用每次起一个 node 进程（每次省零点几秒）。
- * 会话开始、用户开口两个钩子一直走命令：它们负责把路由拉起来、检查 HTTP 钩子有没有生效（路由不在时 HTTP 钩子一律放行）
- */
-function hookTransport() {
-  const want = kitConfig().hookTransport;
-  if (want === 'command') return 'command';
-  // 路由程序得是认得钩子请求的版本（--no-router 时留着的可能是老版本）
-  let canHttp = false;
-  try { canHttp = fs.readFileSync(path.join(KIT, 'router', 'router.js'), 'utf8').includes('/vibe-kit/hook/') && fs.existsSync(path.join(KIT, 'lib', 'hook-host.js')) && fs.existsSync(path.join(KIT, 'lib', 'hook-worker.js')); } catch (e) { canHttp = false; }
-  return canHttp ? 'http' : 'command';
-}
 const isOurHook = (h) => isObj(h) && (String(h.command || '').includes(HOOK_MARK) || (h.type === 'http' && HOOK_URL.test(String(h.url || ''))));
-/**
- * 卸载时替用户点一次"断开"：在配置页点过"接上"的，settings.json 的 ANTHROPIC_BASE_URL 指着这个路由，卸载停了路由，不改回去 Claude Code 就连不上了。
- * 按配置页"接上"时记下的（router-data/claude-link.json）恢复原来的地址，去掉占位的 token。返回说明，没指着这个路由返回空串
- */
-const PLACEHOLDER_TOKEN = 'vibe-kit-router';
-function unlinkRouter(s) {
-  const env = isObj(s.env) ? s.env : null;
-  if (!env || !env.ANTHROPIC_BASE_URL) return '';
-  const port = routerPort();
-  let isRouter = false;
-  try { const u = new URL(String(env.ANTHROPIC_BASE_URL)); isRouter = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname.toLowerCase()) && String(u.port || 80) === String(port); } catch (e) { /* 不是网址 */ }
-  if (!isRouter) return '';
-  const memoFile = path.join(KIT, 'router-data', 'claude-link.json');
-  // 不是配置页"接上"改的（没有记录）：可能是你自己配的（比如以前别的路由也用这个端口），不替你改，只提醒
-  if (!fs.existsSync(memoFile)) { unlinkRouter.note = 'settings.json 里的 ANTHROPIC_BASE_URL 还指着 ' + env.ANTHROPIC_BASE_URL + '（不是配置页"接上"改的，没动它）。路由停了，Claude Code 会连不上：改回原来的网关地址，或者删掉这一项'; return ''; }
-  let memo = {};
-  try { memo = JSON.parse(fs.readFileSync(memoFile, 'utf8')) || {}; } catch (e) { /* 读不懂：当原来没有设置 */ }
-  const prev = memo.prevBaseUrl ? String(memo.prevBaseUrl) : '';
-  if (prev) env.ANTHROPIC_BASE_URL = prev; else delete env.ANTHROPIC_BASE_URL;
-  if (env.ANTHROPIC_AUTH_TOKEN === PLACEHOLDER_TOKEN) delete env.ANTHROPIC_AUTH_TOKEN;
-  try { fs.unlinkSync(memoFile); } catch (e) { /* 没有 */ }
-  return prev ? 'Claude Code 连的地址已恢复成接上路由之前的 ' + prev : 'Claude Code 连路由的设置（ANTHROPIC_BASE_URL）已去掉，接上路由之前没有设置这一项';
-}
 /**
  * Claude Code 自带的"自动记忆"：模型自己往 ~/.claude/projects/<项目>/memory/ 里记东西，索引每个请求都带着，条数不受套件控制；
  * 它的说明文字也每个请求都占系统提示（实测 2.1.120 占 1.2 万字符，2.1.259 占 2300 字符）。套件有自己的经验规则（lib/lessons.js），
@@ -312,7 +267,7 @@ function autoMemoryNote(r) {
  * 自动压缩的窗口（config.json 的 autoCompactPercent，默认 70；0 = 不管，照 Claude Code 自己的）。
  * 2.1.259 这类新版本，没设窗口时不按用量自己压缩，要等接口报"请求太长"才补救；内网网关、内网模型的报错它认不出，
  * 上下文一直涨，过了 100% 也不压缩（2026-10-01 用户遇到的，真的 Claude Code 加假模型实测过）。设了之后它在"窗口 − 3.3 万"处压缩。
- * 窗口 = 上下文上限 × 百分比 + 3.3 万，钳到 10 万到 96 万（和 lib/session.js 的 autoCompactWindowOf 一样的算法；为什么最大 96 万见那里）。
+ * 窗口 = 上下文上限 × 百分比 + 3.3 万，钳到 10 万到 96 万（2.1.259 实测窗口设到 97.7 万以上，还没压缩就先报 Prompt is too long）。
  * 写在 settings.json 的 autoCompactWindow（Claude Code 自己的设置，2.1.120、2.1.259 都认）。这一项归配置页管：
  * 在 Claude Code 里用 /autocompact 改过的，下次保存开关、升级时换回配置页算出来的值。
  * 关掉（填 0）、卸载时，只收回自己写的那个值（installed.json 的 autoCompactWindow 记着）；装之前你自己设过的，记在 autoCompactWindowOrig，收回时还给你。
@@ -418,28 +373,20 @@ function mergeSettings(s, remove, hooksOnly) {
   const before = JSON.stringify(s);
   const kitPath = (rel) => path.join(KIT, rel).split(path.sep).join('/');
   const hook = (file) => ({ type: 'command', command: 'node "' + kitPath('hooks/' + file) + '"' });
-  const transport = hookTransport();
-  const port = routerPort();
-  // HTTP 钩子写明等 30 秒：不写是 600 秒，端口被一个只收连接不回话的程序占着时，每次调工具都要卡 10 分钟（审核 P37）。
-  // 路由那边一个检查最多 25 秒（lib/hook-host.js），30 秒内一定有回话
-  const fast = (name) => (transport === 'http' ? { type: 'http', url: 'http://127.0.0.1:' + port + '/vibe-kit/hook/' + name, timeout: 30 } : hook(name + '.js'));
-  // push 的兜底（用户 2026-10-30 定的：push 只留钩子这一道确认）：钩子走路由时，路由不在 Claude Code 就当放行。
-  // 另登记一个命令方式的 guard-push，带 if：命令里有 push、发布字样才起进程（实测见 docs/claude-code-facts.md），路由不在时由它来查
-  const pushGuard = (rule) => Object.assign(hook('guard-push.js'), { command: hook('guard-push.js').command + ' ' + port, if: rule, timeout: 60 });
-  const PUSH_RULES = ['Bash(*push*)', 'Bash(*publish*)', 'Bash(*发布到*)', 'PowerShell(*push*)', 'PowerShell(*publish*)', 'PowerShell(*发布到*)'];
+  const fast = (name) => hook(name + '.js');
   const OURS = {
     // 改文件的三个检查（套件文件不许改、编码保护、OpenSpec 门槛）合成一个入口 pre-edit：一次编辑只起一个进程（或只发一次请求）
     PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand|Agent|Task', hooks: [fast('guard-ask')] },
       // 搜文件内容：范围里有放令牌、放模型 key 的地方就拦（权限规则管不到"对着上级目录搜"）
-      { matcher: 'Grep', hooks: [fast('guard-read')] }].concat(transport === 'http' ? [{ matcher: 'Bash|PowerShell', hooks: PUSH_RULES.map(pushGuard) }] : []),
+      { matcher: 'Grep', hooks: [fast('guard-read')] }],
     // 读文件时提醒（提示规则）2026-09-30 去掉了。以前这里还有一个空的 PostToolUse 键，被下面那个同名键盖掉、从来没起作用（审核 P07），删了：
     // 以前登记过的读文件提醒照样摘得掉，靠的是登记时按套件的钩子文件名整个替换
     // 用户开口的钩子，Claude Code 默认只等 30 秒（官方文档：UserPromptSubmit 上命令钩子的默认超时从 600 秒降到了 30 秒），到点就结束它、丢掉输出。
     // 开工前拉代码在这个钩子里：连远端最多 15 秒，合并做到一半又不能被结束（会留下 index.lock 和改了一半的工作区），所以写明等 300 秒
     UserPromptSubmit: [{ hooks: [Object.assign(hook('task-anchor.js'), { timeout: 300 })] }],
     SessionStart: [{ hooks: [hook('session-start.js')] }],
-    PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|Agent|Task|TaskOutput|TaskResult|mcp__.*', hooks: [fast('after-tool')] }],
-    PostToolUseFailure: [{ matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('after-tool')] }],
+    PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit', hooks: [fast('after-tool')] }],
+    PostToolUseFailure: [{ matcher: 'Bash|PowerShell', hooks: [fast('after-tool')] }],
     Stop: [{ hooks: [fast('verify-gate')] }],
     SubagentStop: [{ hooks: [fast('review-stop')] }],
   };
@@ -457,7 +404,6 @@ function mergeSettings(s, remove, hooksOnly) {
     if (!s.hooks[ev].length) delete s.hooks[ev];
   }
   if (!Object.keys(s.hooks).length) delete s.hooks;
-  if (!remove) mergeSettings.transport = transport;
   if (hooksOnly) {
     // --sync（配置页保存开关时走这里）：自动记忆的开关也跟着走
     const man0 = readManifest();
@@ -476,8 +422,8 @@ function mergeSettings(s, remove, hooksOnly) {
   // 状态栏：你已经配过别的就不动
   const mine = isObj(s.statusLine) && String(s.statusLine.command || '').includes('vibe-kit/statusline.js');
   if (remove) { if (mine) delete s.statusLine; }
-  // refreshInterval：没有新消息的时候也 30 秒刷新一次（今天的用量、全自动开没开，在配置页改了也跟着变）
-  else if (!s.statusLine || mine) s.statusLine = { type: 'command', command: 'node "' + kitPath('statusline.js') + '"', refreshInterval: 30 };
+  // refreshInterval：没有新消息的时候也 10 秒刷新一次（步骤条、自动开没开，实测 2.1.120、2.1.289 都准）
+  else if (!s.statusLine || mine) s.statusLine = { type: 'command', command: 'node "' + kitPath('statusline.js') + '"', refreshInterval: 10 };
   else console.log('  [!] 你已经配了别的状态栏，没有覆盖。想用这个，把 settings.json 里的 statusLine 删掉再装一次');
 
   const man = readManifest();
@@ -542,8 +488,6 @@ function mergeSettings(s, remove, hooksOnly) {
     mergeSettings.autoCompact = applyAutoCompact(s, man, false);
     mergeSettings.ccAutoMode = applyCcAutoMode(s, man, false);
   } else {
-    // 路由要停了：先把 Claude Code 连路由的设置改回去
-    mergeSettings.unlinked = unlinkRouter(s);
     // 只收回清单里记着是自己加的；env 只在值没被你改过时才删。
     // 令牌（secrets.json）和模型的 key（router-data）卸载时留着不删：那两条"不许读"的规则也留着，不然卸完之后 Read、Grep 就能读到它们
     const secretsLeft = ['secrets.json', 'router-data'].some((n) => fs.existsSync(path.join(KIT, n)));
@@ -852,22 +796,15 @@ if (mode === 'uninstall') {
   // 自带的 OpenSpec 生成的命令和技能（清单里记着的）
   for (const rel of Array.isArray(man.openspec) ? man.openspec : []) { try { fs.unlinkSync(path.join(CLAUDE, rel)); } catch (e) { /* 已经没了 */ } }
   const finish = async () => {
-    try {
-      const f = path.join(KIT, 'lib', 'idea-mcp.js');
-      if (fs.existsSync(f)) {
-        const r = await require(f).sync({ claudeDir: CLAUDE, remove: true });
-        if (r.busy || r.status !== 'off') console.log('  [!] IDEA MCP 登记没能收回，请在 Claude Code 的 /mcp 里检查；用户配置没有覆盖。');
-      }
-    } catch (e) { console.log('  [!] IDEA MCP 登记没能收回，请在 Claude Code 的 /mcp 里检查。'); }
+    // 还没收回的路由（升级之后没开过 Claude Code）：卸载时一起收
+    try { const Rt = require(path.join(KIT, 'lib', 'router-retire.js')); if (Rt.pending()) { const r = await Rt.run(); for (const n of r.notes) console.log('  [OK] ' + n); } } catch (e) { console.log('  [!] 路由没收回：' + (e && e.message)); }
     // 基础约定你改过（和装进去的原样不一样）：删之前先备份
     const kitMd = path.join(KIT, 'CLAUDE.md');
     if (fs.existsSync(kitMd) && !same(kitMd, path.join(KIT, 'pristine', 'CLAUDE.md'))) console.log('  [!] 你改过 ' + kitMd + '，删除前备份在 ' + backup(kitMd, 'vibe-kit/CLAUDE.md'));
     // results：老版本看页面的执行器没写 --out 时把结果放在这里
     // update：自动更新从仓库拉下来的暂存处和日志
-    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js', 'deps.json', 'hook-rules.md']) removeDir(path.join(KIT, n));
+    for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'ui', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js', 'deps.json', 'hook-rules.md']) removeDir(path.join(KIT, n));
     console.log('  [OK] 已卸载：约定块、钩子、状态栏、技能，以及安装时加的权限和环境变量都收回了。');
-    if (mergeSettings.unlinked) console.log('  [OK] 在配置页点过"接上"：' + mergeSettings.unlinked + '（替你点了一次"断开"）。');
-    if (unlinkRouter.note && hadRouter) console.log('  [!] ' + unlinkRouter.note + '。');
     console.log('  留着没删的：你自己的约定和规范（user/，还有 rules/ 里你自己加的）、本机环境（local.json）、开关（config.json）、数据库驱动（drivers、drivers.json）、路由的数据（router-data，里面有配好的模型和 key）、问题反馈（feedback）、跨项目的经验记录（lessons）、GitLab 的仓库地址和令牌（gitlab.json、secrets.json）、以前单独装的技能（retired）和备份，都在 ' + KIT);
     if (['secrets.json', 'router-data'].some((n) => fs.existsSync(path.join(KIT, n)))) {
       console.log('  [!] 令牌（secrets.json）和模型的 key（router-data）还在，套件卸了之后它们不再受保护：挡命令读取的钩子已经没了。'
@@ -878,15 +815,7 @@ if (mode === 'uninstall') {
     try { const rd = path.join(CLAUDE, 'rules'); const n = fs.readdirSync(rd).filter((f) => /^(ttls|vibe)-lessons-.*\.md$/i.test(f)).length; if (n) console.log('  用户级的经验规则也留着（' + rd + ' 里的 ttls-lessons-*.md，' + n + ' 个文件）：Claude Code 自己会按文件类型加载，不想要就手动删掉。各个项目里的 .claude/rules/ttls-lessons-*.md 跟着仓库走，没有动'); } catch (e) { /* 没有规则目录 */ }
     process.exit(0);
   };
-  // 路由：装的时候装了（installed.json 里 router: true；老版本没记，就看程序目录在不在）才去停、取消登录后自动启动，而且只停这一份安装自己的
-  const hadRouter = man.router === true || (man.router === undefined && fs.existsSync(path.join(KIT, 'router', 'service.js')));
-  if (!hadRouter) finish();
-  else {
-    stopOwnRouter(man.router === true).then((r) => {
-      if (r.error) console.log('  [!] 停路由时出错：' + r.error);
-      else console.log('  [OK] 模型路由' + (r.stopped ? '已停止' : r.foreign ? '没有停：端口 ' + r.port + ' 上在跑的不是这一份安装的路由' : r.unsure ? '没有停：认不出端口 ' + r.port + ' 上在跑的是不是这一份安装的路由' : '本来没在运行') + (r.autostartRemoved ? '，登录后自动启动已取消' : ''));
-    }).catch((e) => console.log('  [!] 停路由时出错：' + (e && e.message))).then(finish);
-  }
+  finish();
 }
 
 /**
@@ -997,13 +926,6 @@ if (mode === 'install') {
   // 新版删掉了的文件：拷贝不会删，旧版留下的要清掉（自检会挨个载 lib 下的每个文件）。hooks 下的文件不删（AGENTS.md 硬规矩第 11 条）
   for (const rel of DROPPED_FILES) { try { fs.unlinkSync(path.join(KIT, rel)); } catch (e) { /* 没有 */ } }
   for (const f of ['install.js', 'settings.fragment.json']) copyFile(path.join(SRC, f), path.join(KIT, f));
-  // 路由的程序目录整个换新（数据在 router-data，不在这里），免得留下上一版的旧文件。
-  // --no-router 不拷、不动：以前装过的路由原样留着（Claude Code 可能正连着它，删了就用不了），照常运行
-  if (!NO_ROUTER && fs.existsSync(path.join(SRC, 'router'))) { removeDir(path.join(KIT, 'router')); copyDir(path.join(SRC, 'router'), path.join(KIT, 'router')); }
-  if (NO_ROUTER && fs.existsSync(path.join(KIT, 'router', 'service.js'))) {
-    console.log('  [!] --no-router：以前装的模型路由没有更新，原样留着、照常运行（' + path.join(KIT, 'router') + '）。不想要它了，先在配置页点"断开"，再运行卸载');
-    console.log('      配置页也还是旧的：这一版新加的开关、"查库"那一页要等路由更新之后才有；在旧配置页上保存开关，新加的几个开关会回到默认值');
-  }
   // 套件代码的指纹：会话开始时比一遍，被改过的告诉模型和你、记一条问题反馈（算法和 kit/lib/session.js 的 kitCodeHashes 一样）
   {
     const files = {};
@@ -1015,7 +937,7 @@ if (mode === 'install') {
     try { fs.unlinkSync(path.join(KIT, 'state', 'kit-drift.json')); } catch (e) { /* 没有 */ }
   }
   const cfgFile = path.join(KIT, 'config.json');
-  // 默认开关只写在 kit/lib/session.js 一处（配置页后端 router/kit-api.js 里的那份由测试核对是不是一样）
+  // 默认开关只写在 kit/lib/config-fields.js 一处
   if (!fs.existsSync(cfgFile)) fs.writeFileSync(cfgFile, JSON.stringify(require(path.join(SRC, 'kit', 'lib', 'session.js')).DEFAULT_CONFIG, null, 2) + '\n');
   // "维护套件的电脑"2026-10-01 起写死在代码里（kit/lib/gitlab.js），不再是开关：老版本写进 config.json 的那一项去掉，别人打开文件也看不到
   else {
@@ -1244,105 +1166,16 @@ if (mode === 'install') {
   const openspecFiles = installOpenSpec(man0);
   const man = mergeSettings(s, false);
   man.openspec = openspecFiles;
-  console.log('  [OK] 钩子：编码保护、提交检查、令牌保护、打断后提醒、会话开始核对项目说明和当前事实、收工检查'
-    + (mergeSettings.transport === 'http' ? '。改文件、跑命令、收工这几个检查在模型路由里跑（HTTP 方式，不用每次起进程）' : ''));
+  console.log('  [OK] 钩子：编码保护、提交检查、令牌保护、打断后提醒、会话开始核对项目说明和当前事实、收工检查');
   autoMemoryNote(mergeSettings.autoMemory);
   autoCompactNote(mergeSettings.autoCompact, s);
   ccAutoModeNote(mergeSettings.ccAutoMode);
   if (mergeSettings.javaOpts) { console.log('  [OK] ' + mergeSettings.javaOpts + '。改了系统里的值，下次更新时跟着重新算'); noticeItems.push(mergeSettings.javaOpts); }
-  // 这一份安装里有没有路由程序（这次装的，或者 --no-router 时以前装的还留着）：卸载时有才去停
-  man.router = fs.existsSync(path.join(KIT, 'router', 'service.js'));
+  man.router = false;
   man.absorbed = man0.absorbed;
   saveManifest(man);
-  // 版本号挪到安装收尾、全局约定写完之后再写（审核 P03）：以前在这里写，后面写约定、撤 IDEA MCP 的时候被打断，
+  // 版本号挪到安装收尾、全局约定写完之后再写（审核 P03）：以前在这里写，后面写约定的时候被打断，
   // 版本号已经是新的，自动更新就不再重装
-}
-
-/** 模型路由：用刚拷进去的新文件在后台重新启动，设好登录后自动启动，再自己验证一遍配置页打得开 */
-function httpGet(url) {
-  return new Promise((resolve) => {
-    const r = require('http').get(url, { timeout: 3000 }, (res) => { let b = ''; res.on('data', (c) => { b += c; }); res.on('end', () => resolve({ status: res.statusCode, body: b })); });
-    r.on('timeout', () => r.destroy());
-    r.on('error', () => resolve({ status: 0, body: '' }));
-  });
-}
-function openInBrowser(url) {
-  try {
-    const { spawn } = require('child_process');
-    const sys32 = path.join(process.env.SystemRoot || process.env.windir || 'C:\\Windows', 'System32');
-    const cmdExe = fs.existsSync(path.join(sys32, 'cmd.exe')) ? path.join(sys32, 'cmd.exe') : 'cmd';
-    const c = process.platform === 'win32' ? spawn(cmdExe, ['/c', 'start', '', url], { detached: true, stdio: 'ignore', windowsHide: true })
-      : spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { detached: true, stdio: 'ignore' });
-    c.on('error', () => {});
-    c.unref();
-  } catch (e) { /* 打不开就让用户自己开 */ }
-}
-/** 两个路径是不是同一个文件：按真实路径比，目录联接、大小写不同都算同一个 */
-function samePath(a, b) {
-  const real = (p) => { const d = path.dirname(path.resolve(p)); let r = d; try { r = fs.realpathSync.native(d); } catch (e) { /* 不存在就按原样比 */ } return path.join(r, path.basename(p)); };
-  const x = real(a);
-  const y = real(b);
-  return process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
-}
-/**
- * 停这一份安装自己的路由，取消它的登录后自动启动。端口按它 router-data 里的配置；还要确认端口上那个路由用的正是这份配置
- * （/api/state 里的 configPath）：别的安装（另一个用户目录、测试目录）的路由就算在同一个端口上也不停。
- * trusted：installed.json 明确记着装了路由，端口上的路由认不出是谁的（没有 configPath）时也停
- */
-async function stopOwnRouter(trusted) {
-  const out = { stopped: false, foreign: false, unsure: false, autostartRemoved: false, port: 0, error: '' };
-  const svcFile = path.join(KIT, 'router', 'service.js');
-  if (!fs.existsSync(svcFile)) return out;
-  let svc;
-  try { svc = require(svcFile); } catch (e) { out.error = '读不了 ' + svcFile + '：' + e.message; return out; }
-  out.port = typeof svc.portOf === 'function' ? svc.portOf() : 15730;
-  const st = await httpGet('http://127.0.0.1:' + out.port + '/api/state');
-  if (st.status) {
-    let cfg = '';
-    try { cfg = String(JSON.parse(st.body).configPath || ''); } catch (e) { /* 认不出 */ }
-    const mine = cfg ? samePath(cfg, path.join(KIT, 'router-data', 'config.json')) : trusted;
-    if (!mine) { if (cfg) out.foreign = true; else out.unsure = true; }
-    else {
-      const r = await svc.stop();
-      if (!r || !r.ok) { out.error = (r && r.reason) || ('停不掉端口 ' + out.port + ' 上的路由'); return out; }
-      out.stopped = !!r.wasRunning;
-    }
-  }
-  try { out.autostartRemoved = !!svc.disableAutostart().removed; } catch (e) { /* 取消不了就算了 */ }
-  return out;
-}
-async function setupRouter(svc) {
-  // 上一版安装包把路由装在 ~/.claude/model-router。在那里配过模型的话搬过来，别让人白填一遍
-  const oldDir = path.join(CLAUDE, 'model-router');
-  try {
-    if (fs.existsSync(path.join(oldDir, 'config.json')) && !fs.existsSync(svc.CONFIG)) { fs.mkdirSync(svc.DATA_DIR, { recursive: true }); copyFile(path.join(oldDir, 'config.json'), svc.CONFIG); console.log('  [OK] 上一版装在 ' + oldDir + ' 的路由配置已经搬到 ' + svc.DATA_DIR); }
-    const oldJs = path.join(oldDir, 'router.js');
-    if (fs.existsSync(oldJs) && /const VERSION = '3\./.test(fs.readFileSync(oldJs, 'utf8'))) console.log('  [!] ' + oldDir + ' 是上一版安装包留下的，现在不用了，可以整个删掉');
-  } catch (e) { /* 搬不了就让用户在配置页里重新填 */ }
-  await svc.stop();
-  const r = await svc.start();
-  // 路由起不来、配置页打不开：退出码 ROUTER_FAILED，自动更新据此装回上一版（以前只打印一行 [X]、退出码照样 0，Codex C07）
-  // 端口被另一个安装的路由占着（远程桌面多人共用一台电脑，E1）：套件本身装好了，只是路由要换端口。不算装坏，免得自动更新为这个装回旧版
-  if (!r.ok && r.foreign) { console.log('  [!] 模型路由没启动：' + r.reason); return; }
-  if (!r.ok) { console.log('  [X] 模型路由没启动：' + r.reason); process.exitCode = ROUTER_FAILED; return; }
-  const base = 'http://127.0.0.1:' + r.port;
-  const page = await httpGet(base + '/ui');
-  if (page.status === 200 && page.body.includes('模型路由')) console.log('  [OK] 模型路由 v' + r.version + ' 已在后台运行，没有窗口。配置页（已验证能打开）：' + base + '/ui');
-  else { console.log('  [X] 路由起来了，但配置页打不开（' + base + '/ui 返回 ' + page.status + '）。看 ' + path.join(svc.DATA_DIR, 'router.out.log')); process.exitCode = ROUTER_FAILED; }
-  // 上次装的时候设好了登录后自动启动、现在"启动"文件夹里那个文件却没了：是用户删的，记下来，不再加回来
-  const man = readManifest();
-  if (man.autostart === true && typeof svc.autostartOn === 'function' && !svc.autostartOn() && typeof svc.refuseAutostart === 'function') svc.refuseAutostart('"启动"文件夹里的 vibe-kit-router.vbs 被删掉了');
-  const a = svc.enableAutostart();
-  console.log(a.ok ? '  [OK] 登录后自动在后台启动，同样没有窗口（' + a.file + '）'
-    : a.refused ? '  [OK] ' + a.reason + '。不要紧：打开 Claude Code 时发现路由没在跑，会悄悄把它拉起来'
-      : '  [!] 没能设置登录后自动启动：' + a.reason + '。不要紧：打开 Claude Code 时发现路由没在跑，会悄悄把它拉起来');
-  try { man.autostart = !!a.ok; saveManifest(man); } catch (e) { /* 记不下：下次按没设过算 */ }
-  let usable = 0;
-  try { usable = (JSON.parse((await httpGet(base + '/health')).body).providers || []).length; } catch (e) { /* 当成没有 */ }
-  if (!usable) {
-    console.log('  还没有配模型。两步：① 在配置页"添加模型"（网关地址和 key）；② 点页面最上面的"接上"，让 Claude Code 走这个路由。');
-    if (!process.argv.includes('--no-open')) { openInBrowser(base + '/ui'); console.log('  配置页已经帮你在浏览器里打开了。'); }
-  }
 }
 
 async function finishInstall() {
@@ -1354,9 +1187,9 @@ try { if (block.hookRules) writeAtomic(path.join(KIT, 'hook-rules.md'), block.ho
 const changed = writeGlobalMd(block.text);
 if (changed === null) { explainNotUtf8('全局约定没写进去；其余部分（钩子、技能、审查代理、状态栏、权限）都已经就位。转好之后运行 node "' + path.join(KIT, 'install.js') + '" --sync 补上。'); process.exitCode = 1; }
 else console.log('  [OK] 全局约定' + (changed ? '已写入' : '没有变化') + '；启用的规范：' + (block.rules.length ? block.rules.join('，') : '（无）') + (block.mine.length ? '；你的补充（user/）：' + block.mine.join('，') : ''));
-// 钩子跑的方式（HTTP / 命令）、自动记忆的开关改了之后，settings.json 里的登记要跟着变
+// 自动记忆的开关改了之后，settings.json 里的登记要跟着变
 if (mode === 'sync') mergeSettings(readSettings(), false, true);
-// 都装好了（约定也写了），最后写版本号；路由起不来由更新器按退出码处理
+// 都装好了（约定也写了），最后写版本号
 if (mode === 'install') {
   copyFile(path.join(SRC, 'kit', 'VERSION'), path.join(KIT, 'VERSION'));
   // 装完了记一笔：自动更新据此知道"装坏了、没装回去"之后有没有人重新装好过（复审 U-R3）。
@@ -1375,20 +1208,19 @@ if (mode === 'install') {
     if (FIRST_INSTALL) writeAtomic(path.join(KIT, 'state', 'welcome.json'), JSON.stringify({ pending: true, at: rec.at }));
   } catch (e) { /* 记不了：状态栏可能多报一次装坏 */ }
 }
-// 不再接 IDEA 的 MCP（用户 2026-10-28 定的）：以前套件登记的 vibe-idea-<端口>，没被改过的撤掉；你自己登记的不动。失败不影响安装
-try {
-  const r = await require(path.join(KIT, 'lib', 'idea-mcp.js')).retract({ claudeDir: CLAUDE });
-  if (r.removed.length) console.log('  [OK] 套件不再接 IDEA 的 MCP，以前登记的 ' + r.removed.join('、') + ' 已撤掉；重新打开 Claude Code 生效。');
-  if (r.kept.length) console.log('  [!] ' + r.kept.join('、') + ' 是套件以前登记的 IDEA MCP，你改过，留着没动；不用了在 Claude Code 里 /mcp 删掉。');
-  if (r.status !== 'off') console.log('  [!] 以前登记的 IDEA MCP 这次没撤成（Claude Code 的用户配置' + (r.status === 'config-error' ? '解析不了' : '正在变化') + '），下次更新再撤。');
-} catch (e) { console.log('  [!] 以前登记的 IDEA MCP 这次没撤成，下次更新再撤；套件其余部分照常安装。'); }
 const tail = () => {
   console.log('');
   console.log('  加规范、改约定：写在 ' + USER_DIR + ' 里的 .md（更新不碰；要去掉套件约定里的某一句，原样抄进那里的 remove.txt），再运行 node "' + path.join(KIT, 'install.js') + '" --sync');
-  console.log('  钩子、约定和技能：已经开着的 Claude Code 不用重开，也不用 /clear。钩子立刻生效；约定和技能变了的部分，在你下一次发消息时由钩子带给它。MCP 登记按上面的提示重新打开 Claude Code。');
+  console.log('  钩子、约定和技能：已经开着的 Claude Code 不用重开，也不用 /clear。钩子立刻生效；约定和技能变了的部分，在你下一次发消息时由钩子带给它。开关在配置页改：敲 /vk-config。MCP 登记按上面的提示重新打开 Claude Code。');
 };
-const svcFile = path.join(KIT, 'router', 'service.js');
-if (mode !== 'install' || NO_ROUTER || !fs.existsSync(svcFile)) return tail();
-setupRouter(require(svcFile)).catch((e) => { console.log('  [X] 模型路由没装好：' + ((e && e.message) || e)); process.exitCode = ROUTER_FAILED; }).then(tail);
+// 手动安装：装完当场收回路由。自动更新不在这里收（VIBE_KIT_AUTO_UPDATE）：更新器还要自检，不过要装回旧版，等新代码第一次跑 session-start
+if (mode === 'install' && !process.env.VIBE_KIT_AUTO_UPDATE) {
+  try {
+    const r = await require(path.join(KIT, 'lib', 'router-retire.js')).run();
+    for (const n of r.notes) console.log('  [OK] ' + n);
+    if (r.errors.length) console.log('  [!] 模型路由这次没收完，下次打开 Claude Code 再试：' + r.errors[0]);
+  } catch (e) { console.log('  [!] 模型路由这次没收完，下次打开 Claude Code 再试：' + ((e && e.message) || e)); }
+}
+tail();
 }
 if (mode !== 'uninstall') finishInstall().catch((e) => { console.error('  [X] 安装收尾失败：' + e.message); process.exitCode = 1; });

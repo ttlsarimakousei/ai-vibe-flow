@@ -52,12 +52,12 @@ function refsOf(abs, kitRefs) {
   if (!kitRefs) return out;
   const kit = path.join(REPO, KIT);
   // 'tools', 'x.js'、'kit', 'page', 'x.js'、'lib/x.js'：套件里的文件
-  for (const m of text.matchAll(/['"](?:kit['"]\s*,\s*['"])?(lib|hooks|tools|router|page)['"]\s*,\s*['"]([\w.-]+)['"]/g)) add(path.join(kit, m[1], m[2]));
-  for (const m of text.matchAll(/['"](lib|hooks|tools|router|page)\/([\w.-]+\.js)['"]/g)) add(path.join(kit, m[1], m[2]));
+  for (const m of text.matchAll(/['"](?:kit['"]\s*,\s*['"])?(lib|hooks|tools|ui|page)['"]\s*,\s*['"]([\w.-]+)['"]/g)) add(path.join(kit, m[1], m[2]));
+  for (const m of text.matchAll(/['"](lib|hooks|tools|ui|page)\/([\w.-]+\.js)['"]/g)) add(path.join(kit, m[1], m[2]));
   // Python：k / "tools" / "onboard.js"
-  for (const m of text.matchAll(/["'](lib|hooks|tools|router)["']\s*\/\s*["']([\w.-]+\.js)["']/g)) add(path.join(kit, m[1], m[2]));
+  for (const m of text.matchAll(/["'](lib|hooks|tools|ui)["']\s*\/\s*["']([\w.-]+\.js)["']/g)) add(path.join(kit, m[1], m[2]));
   // 说明里明写的配套关系："和 kit/lib/drivers.js 里的 DIALECTS 对着"
-  for (const m of text.matchAll(/\bkit\/(lib|hooks|tools|router|page)\/([\w.-]+\.js)\b/g)) add(path.join(kit, m[1], m[2]));
+  for (const m of text.matchAll(/\bkit\/(lib|hooks|tools|ui|page)\/([\w.-]+\.js)\b/g)) add(path.join(kit, m[1], m[2]));
   // 测试里调钩子：H.hook(h, 'guard-commit' …)、hook('pre-edit' …)
   for (const m of text.matchAll(/\bhook\(\s*(?:[\w.]+\s*,\s*)?['"]([a-z][\w-]*)['"]/g)) add(path.join(kit, 'hooks', m[1] + '.js'));
   return out;

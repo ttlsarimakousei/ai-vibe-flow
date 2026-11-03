@@ -3,7 +3,7 @@
  * 总体检（K3 M05，2026-11-01）：一条命令看套件装得对不对、现在哪里不对、怎么改。用户和模型都能跑：
  *   node "$HOME/.claude/vibe-kit/tools/doctor.js" [--json]
  * 每项一行：[好] [注意]（能用，但要知道）[坏]（有东西不工作，后面写着怎么改）[没查成]（这一项自己出错了，不算坏）。有 [坏] 时退出码是 1。
- * 只读：不连外网、不改配置和代码、不留进程（查路由只问本机端口，载文件在一个用完就退的子进程里；跑一次状态栏，它会更新自己的缓存）。
+ * 只读：不连外网、不改配置和代码、不留进程（载文件在一个用完就退的子进程里）。
  * 令牌、key 只说有没有，不读内容，输出再过一遍遮盖（硬规矩 6）。
  */
 const fs = require('fs');
@@ -66,31 +66,14 @@ function settings() {
   const f = path.join(CFG_DIR, 'settings.json');
   let s;
   try { s = readJson(f); } catch (e) { return bad(f + (e.code === 'ENOENT' ? ' 不存在' : ' 读不懂（JSON 写坏了）') + '，钩子都不会生效', e.code === 'ENOENT' ? INSTALL_AGAIN : '先把这个文件改对，再' + INSTALL_AGAIN); }
-  const HH = require('../lib/hook-health');
-  const n = HH.ourHooks(s).length;
+  const n = Object.values(s.hooks || {}).flat().flatMap((g) => (g && g.hooks) || []).filter((h) => /vibe-kit[\\/]hooks[\\/]/.test(String((h && h.command) || ''))).length;
   if (!n) return bad('settings.json 里没有登记套件的钩子，所有检查都不生效', INSTALL_AGAIN);
   const deny = (s.permissions && Array.isArray(s.permissions.deny) ? s.permissions.deny : []).map(String);
   const lost = [['secrets.json', '令牌'], ['router-data', '模型的 key']].filter(([k]) => !deny.some((d) => d.includes(k))).map((x) => x[1]);
   if (lost.length) return bad('settings.json 里"不许读' + lost.join('、') + '"的权限规则没了', INSTALL_AGAIN);
   const line = s.statusLine && String(s.statusLine.command || '').includes('statusline.js');
-  const how = HH.registeredTransport(CFG_DIR);
-  const text = '登记了 ' + n + ' 个钩子（' + (how === 'http' ? '走路由' : how === 'mixed' ? '路由和命令混着' : '命令方式') + '），令牌保护的规则在';
+  const text = '登记了 ' + n + ' 个钩子，令牌保护的规则在';
   return line ? good(text) : warn(text + '，状态栏不是套件的', '你自己配的可以不管；要套件的状态栏，把 settings.json 的 statusLine 删掉再' + INSTALL_AGAIN);
-}
-/** 模型路由：只问本机端口 */
-async function router() {
-  const file = path.join(KIT, 'router', 'service.js');
-  if (!fs.existsSync(file)) return good('没装路由（装的时候选了不带），不查');
-  const svc = require(file);
-  const port = svc.portOf();
-  const p = await svc.probe(port);
-  const how = require('../lib/hook-health').registeredTransport(CFG_DIR);
-  const kitV = version();
-  if (p.foreign) return warn('端口 ' + port + ' 被这台电脑上另一个安装的路由占着（远程桌面多人共用时会碰上）', '在 router-data\\config.json 里把 listen.port 换一个，再到配置页"断开""接上"一次');
-  if (p.ours) return p.version && kitV && p.version !== kitV ? warn('路由在跑（端口 ' + port + '），但还是 ' + p.version + '，套件是 ' + kitV, '等它空闲时自动换；急用就重开电脑或者重新运行安装包') : good('路由在跑，端口 ' + port + '，配置页 http://127.0.0.1:' + port + '/ui');
-  if (p.listening) return bad('端口 ' + port + ' 被别的程序占着，路由起不来', '关掉那个程序，或者在 router-data\\config.json 里把 listen.port 换一个');
-  if (how === 'http' || how === 'mixed') return bad('路由没在跑，钩子却登记成走路由：改文件、跑命令的检查现在不生效', '开一个 Claude Code 会话，会自动拉起来；拉不起来会切回命令方式');
-  return warn('路由没在跑（端口 ' + port + '）', '开一个 Claude Code 会话会自动拉起来；用模型路由的话要它在跑才有配置页');
 }
 /** 自动更新：只看状态文件，不连网 */
 function update() {
@@ -98,10 +81,9 @@ function update() {
   if (u.broken) return bad('新版 ' + u.broken.version + ' 没装好，也没能装回上一版 ' + (u.broken.from || ''), INSTALL_AGAIN);
   if (u.refused) return bad('新版 ' + u.refused.version + ' 装不上：' + (u.refused.why || ''), '把电脑上的问题改好，6 小时内会再试，或者在配置页"更新和上报"点"立即更新"');
   if (u.pin) return warn('固定在 ' + u.pin + '，不自动更新' + (u.differs ? '（仓库里是 ' + u.remote + '）' : ''), '要更新，到配置页"更新和上报"点"取消固定"');
-  if (u.failed && u.differs) return warn('新版 ' + u.failed.version + (u.failed.observed ? ' 装完出错变多，已装回上一版' : ' 没装上') + '：' + (u.failed.why || ''), '详情在配置页"更新和上报"');
+  if (u.failed && u.differs) return warn('新版 ' + u.failed.version + ' 没装上' + '：' + (u.failed.why || ''), '详情在配置页"更新和上报"');
   if (u.mode === 'off') return warn('自动更新关着', '要开到配置页"更新和上报"');
   if (u.lastCheckAt && !u.lastCheckOk) return warn('上次检查更新没成功：' + (u.lastError || ''), '到配置页"更新和上报"点"测试连接"');
-  if (u.observe) return good('刚更新到 ' + u.observe.version + '，观察中');
   if (u.differs) return good('装着 ' + u.installed + '，仓库里是 ' + u.remote + (u.hold === 'wait' ? '，等尝鲜组先试' : u.hold === 'flag' ? '，尝鲜组报了有问题，先不装' : u.hold === 'skip' ? '，跳过了这一版' : ''));
   return good(u.remote ? '和仓库里一样（' + u.remote + '）' : '还没查过更新');
 }
@@ -156,7 +138,7 @@ function state() {
   if (mb > 200) return warn('状态目录有 ' + mb + ' MB（' + count + ' 个文件），偏大', '告诉维护的人，记一条问题反馈');
   return good('状态目录写得了，' + count + ' 个文件');
 }
-/** 最近 7 天的本机诊断（lib/diag.js）：钩子预算用完、锁等待、审查批次、路由首字节 */
+/** 最近 7 天的本机诊断（lib/diag.js）：钩子预算用完、锁等待 */
 function diag() {
   const r = require('../lib/diag').recent(7);
   const sum = (o) => Object.values(o || {}).reduce((a, v) => ({ n: a.n + v.n, total: a.total + v.total, max: Math.max(a.max, v.max) }), { n: 0, total: 0, max: 0 });
@@ -164,20 +146,13 @@ function diag() {
   const parts = [];
   const budget = r['钩子预算'] || {};
   const lock = sum(r['锁等待']);
-  const failed = (r['审查批次'] || {})['没拿到结论'];
-  const first = sum(r['路由首字节']);
-  const wait = sum(r['路由等待']);
-  if (first.n) parts.push('路由 ' + first.n + ' 次请求，首字节平均 ' + sec(first.total / first.n) + '、最长 ' + sec(first.max));
-  if (wait.n) parts.push('被限流等了 ' + wait.n + ' 次，共 ' + sec(wait.total));
-  const batches = sum(r['审查批次']);
-  if (batches.n) parts.push('审查 ' + batches.n + ' 批' + (failed ? '，' + failed.n + ' 批没拿到结论' : ''));
   if (lock.n) parts.push('等锁超过 0.2 秒 ' + lock.n + ' 次，最长 ' + sec(lock.max));
   const stops = Object.entries(budget).sort((a, b) => b[1].n - a[1].n);
   const n = stops.reduce((a, x) => a + x[1].n, 0);
   if (n) parts.unshift('钩子预算用完 ' + n + ' 次（最多的停在"' + stops[0][0] + '"，这些次检查放行了）');
   if (!parts.length) return good('最近 7 天没有要说的（只记本机，不上报）');
   const text = '最近 7 天：' + parts.join('；');
-  return n || failed ? warn(text, '次数多的话记一条问题反馈，把这一行带上') : good(text);
+  return n ? warn(text, '次数多的话记一条问题反馈，把这一行带上') : good(text);
 }
 /** 跑体检的这个目录：是不是项目、OpenSpec 初始化了没有、.vibe 忽略了没有 */
 function project() {
@@ -196,7 +171,7 @@ function project() {
   return good(notes.join('，'));
 }
 
-const CHECKS = [['环境', env], ['套件文件', files], ['随包依赖', deps], ['Claude Code 设置', settings], ['模型路由', router], ['自动更新', update], ['工具', tools], ['开关', config], ['代码指纹', drift], ['问题上报', issues], ['状态目录', state], ['本机诊断', diag], ['当前项目', project]];
+const CHECKS = [['环境', env], ['套件文件', files], ['随包依赖', deps], ['Claude Code 设置', settings], ['自动更新', update], ['工具', tools], ['开关', config], ['代码指纹', drift], ['问题上报', issues], ['状态目录', state], ['本机诊断', diag], ['当前项目', project]];
 
 async function examine() {
   const out = [];

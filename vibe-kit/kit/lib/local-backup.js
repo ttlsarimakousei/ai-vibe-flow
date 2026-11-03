@@ -23,8 +23,8 @@ function save(kit, folder) {
     if (fs.existsSync(tmp)) fs.rmSync(tmp, { recursive: true }); fs.mkdirSync(tmp, { recursive: true });
     const copy = (src, dst, rel) => { if (!safe(rel) || !fs.existsSync(src)) return; const st = fs.lstatSync(src); if (st.isSymbolicLink()) return; if (st.isDirectory()) { fs.mkdirSync(dst, { recursive: true }); for (const n of fs.readdirSync(src)) copy(path.join(src, n), path.join(dst, n), rel + '/' + n); } else { fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst); } };
     // openspec：2026-10-17 起套件自带 OpenSpec，安装器缺它就不装；不拷的话断网时恢复不了上一版
-    for (const n of ['hooks', 'lib', 'tools', 'page', 'openspec', 'statusline.js', '.ignore', 'VERSION', 'deps.json']) copy(path.join(kit, n), path.join(tmp, 'kit', n), 'kit/' + n);
-    copy(path.join(kit, 'router'), path.join(tmp, 'router'), 'router'); copy(path.join(kit, 'pristine'), path.join(tmp, 'claude'), 'claude');
+    for (const n of ['hooks', 'lib', 'tools', 'ui', 'page', 'openspec', 'statusline.js', '.ignore', 'VERSION', 'deps.json']) copy(path.join(kit, n), path.join(tmp, 'kit', n), 'kit/' + n);
+    copy(path.join(kit, 'pristine'), path.join(tmp, 'claude'), 'claude');
     copy(path.join(kit, 'install.js'), path.join(tmp, 'install.js'), 'install.js'); copy(path.join(kit, 'settings.fragment.json'), path.join(tmp, 'settings.fragment.json'), 'settings.fragment.json');
     if (!fs.existsSync(path.join(tmp, 'claude', 'CLAUDE.md')) || !fs.existsSync(path.join(tmp, 'install.js'))) throw new Error('缺原始模板或安装器');
     const dirs = []; const manifest = { version: fs.readFileSync(path.join(kit, 'VERSION'), 'utf8').trim(), files: list(tmp, '', {}, dirs, false), dirs: dirs.sort() }; const text = JSON.stringify(manifest); fs.writeFileSync(path.join(tmp, 'backup-manifest.json'), text);

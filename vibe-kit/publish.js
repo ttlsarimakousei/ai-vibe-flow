@@ -21,7 +21,7 @@
  *   node publish.js --dry-run       只看不推：说出会做什么
  *   node publish.js --rollback      仓库里的比这个新也发（全员退回这一版），不再问
  *   node publish.js --force         仓库里不是套件的安装包也发
- *   --no-router、--no-open          原样传给安装器
+ *   --no-open                       原样传给安装器
  *
  * 要推送权限：令牌要勾 write_repository；走 SSH 的话账号在项目里至少是 Developer，分支受保护的要 Maintainer。
  */
@@ -91,7 +91,7 @@ function fixedIssues(version) {
     console.log('');
     say('第一步：先在这台电脑上装一遍');
     // VIBE_KIT_NO_UPDATE：安装器装完不甩后台的更新进程（这台电脑不用自动更新；攒下的问题反馈由之后的钩子去传）
-    const r = spawnSync(process.execPath, [path.join(SRC, 'install.js')].concat(args.filter((a) => a === '--no-router' || a === '--no-open')), { cwd: SRC, stdio: 'inherit', windowsHide: true, env: Object.assign({}, process.env, { VIBE_KIT_NO_UPDATE: '1' }) });
+    const r = spawnSync(process.execPath, [path.join(SRC, 'install.js')].concat(args.filter((a) => a === '--no-open')), { cwd: SRC, stdio: 'inherit', windowsHide: true, env: Object.assign({}, process.env, { VIBE_KIT_NO_UPDATE: '1' }) });
     if (r.status !== 0) stop('这台电脑上没装成，发布停了：自己都装不上的包不能发给别人。先看上面安装器说了什么');
     if (readText(path.join(KIT, 'VERSION')) !== version) stop('装完之后版本号对不上（装着的是 ' + (readText(path.join(KIT, 'VERSION')) || '没有版本号') + '），发布停了');
     console.log('');
@@ -146,7 +146,7 @@ function fixedIssues(version) {
   G(['symbolic-ref', 'HEAD', 'refs/heads/publish']);
   // 只放安装包本来的内容：在解压出来的包目录里开过 Claude Code、跑过测试留下的 .vibe、临时文件、Python 缓存不推上去
   // （-f 连 .gitignore 挡住的也会加，所以按清单挑，不能 add .）
-  const PACKAGE = ['install.js', 'settings.fragment.json', 'publish.js', 'README.md', '手册', '更新说明-历史.md', '更新说明.md', '.gitattributes', 'kit', 'claude', 'router'].concat(fs.readdirSync(SRC).filter((n) => /\.bat$/i.test(n)));
+  const PACKAGE = ['install.js', 'settings.fragment.json', 'publish.js', 'README.md', '手册', '更新说明-历史.md', '更新说明.md', '.gitattributes', 'kit', 'claude'].concat(fs.readdirSync(SRC).filter((n) => /\.bat$/i.test(n)));
   const junk = fs.readdirSync(SRC).filter((n) => !PACKAGE.includes(n));
   if (junk.length) say('包目录里有这些不是安装包的东西，不发：' + junk.slice(0, 8).join('、') + (junk.length > 8 ? ' 等 ' + junk.length + ' 项' : ''));
   const add = G(['add', '-f', '--'].concat(PACKAGE.filter((n) => fs.existsSync(path.join(SRC, n))), [':(exclude)**/__pycache__', ':(exclude)**/*.pyc', ':(exclude)**/.vibe', ':(exclude)kit/state', ':(exclude)kit/feedback', ':(exclude)kit/config.json', ':(exclude)kit/secrets.json', ':(exclude)kit/router-data']), { timeout: 600000 });

@@ -60,9 +60,9 @@ const snapshot = (dir) => { const out = {}; const walk = (d) => { for (const n o
     const j = h.checks();
     H.ok('--json 能解析，ok 是真', j.ok === true && j.version === V, j);
     const names = (j.checks || []).map((c) => c.name);
-    H.ok('每一项都有结果', ['环境', '套件文件', '随包依赖', 'Claude Code 设置', '模型路由', '自动更新', '工具', '开关', '代码指纹', '问题上报', '状态目录', '当前项目'].every((n) => names.includes(n)), names);
+    H.ok('每一项都有结果', ['环境', '套件文件', '随包依赖', 'Claude Code 设置', '自动更新', '工具', '开关', '代码指纹', '问题上报', '状态目录', '当前项目'].every((n) => names.includes(n)), names);
     H.ok('没有自己出错的项', !(j.checks || []).some((c) => c.level === '没查成'), j.checks);
-    H.ok('没装路由：不算问题', (j.checks || []).some((c) => c.name === '模型路由' && c.level === '好' && /没装路由/.test(c.text)), j.checks);
+    H.ok('不再有模型路由这一项', !names.includes('模型路由'), names);
     const after = snapshot(h.kit);
     // 跑状态栏时它自己记的缓存不算
     const changed = Object.keys(after).filter((f) => after[f] !== before[f] && !/hooks\.log|update\.log|changes-cache/.test(f));
@@ -117,23 +117,6 @@ const snapshot = (dir) => { const out = {}; const walk = (d) => { for (const n o
     H.ok('固定在这一版：说了，还说怎么取消', u.level === '注意' && u.text.includes('固定在 ' + V) && /取消固定/.test(u.fix), u);
     H.ok('退出码 0', h.checks().code === 0);
     setCfg(h, { updatePin: '' });
-    fs.mkdirSync(path.join(h.kit, 'router'), { recursive: true });
-    H.copyDir(path.join(pkg, 'router'), path.join(h.kit, 'router'));
-    // 端口上是另一个安装的路由
-    const port = 18781;
-    H.write(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port }, providers: [{ apiKey: 'sk-不许打印的key-123456' }] }));
-    H.write(path.join(h.kit, 'router-data', 'install-id'), 'mine');
-    // 单独起一个进程当别人的路由：这里跑体检是同步等着的，同一个进程里的服务答不了话
-    const srv = spawn(process.execPath, ['-e', "require('http').createServer((q, s) => { s.setHeader('content-type', 'application/json'); s.end(JSON.stringify({ version: '20260101.0000', install: 'someone-else' })); }).listen(" + port + ", '127.0.0.1')"], { stdio: 'ignore', windowsHide: true });
-    let listening = false;
-    for (let i = 0; i < 40 && !listening; i++) { await H.sleep(150); listening = await new Promise((res) => { const c = http.get({ host: '127.0.0.1', port, path: '/version', timeout: 500 }, (x) => { x.resume(); res(true); }); c.on('error', () => res(false)); c.on('timeout', () => { c.destroy(); res(false); }); }); }
-    H.ok('（别人的路由起来了）', listening);
-    const r1 = h.item('模型路由');
-    H.ok('端口上是别的安装的路由：说得出来，不当成路由在跑', /端口 18781/.test(r1.text) && /另一个安装/.test(r1.text) && r1.level === '注意', r1);
-    srv.kill();
-    await H.sleep(400);
-    const r2 = h.item('模型路由');
-    H.ok('端口上没人：说路由没在跑', /没在跑/.test(r2.text), r2);
   }
 
   H.section('不打印令牌、key');

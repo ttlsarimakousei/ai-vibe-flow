@@ -38,21 +38,17 @@ const sha = (f) => crypto.createHash('sha1').update(fs.readFileSync(f)).digest('
 const RUNTIME = ['kit/secrets.json', 'kit/gitlab.json', 'kit/update', 'kit/issue-exports', 'secrets.json', 'gitlab.json', '.git', 'kit/state', 'kit/feedback', 'kit/lessons', 'kit/config.json', 'kit/local.json', 'kit/installed.json', 'kit/backup', 'kit/pristine', 'kit/router-data', 'router/config.json', 'router/router.pid', 'router/usage.json', 'kit/drivers', 'kit/drivers.json', 'kit/user'];
 const stray = RUNTIME.filter((r) => fs.existsSync(path.join(SRC, r)));
 if (stray.length) fail('源目录里有运行时才该有的东西：' + stray.join('、') + '。多半是测试跑到源目录里了，清掉再打包');
-for (const need of ['kit/lib/big-task.js', 'kit/lib/guard-explore.js', 'kit/lib/session-state.js', 'kit/lib/session-transcript.js', 'kit/lib/session-config.js', 'kit/lib/session-flow.js', 'kit/lib/session-voice.js', 'kit/lib/session-out.js', 'kit/lib/session-projects.js', 'kit/lib/session-proposal.js', 'kit/lib/session-plan.js', 'kit/lib/session-review.js', 'kit/lib/session-kitfiles.js', 'kit/lib/shell-words.js', 'kit/lib/guard-git.js', 'kit/lib/guard-kit.js', 'kit/lib/guard-process.js', 'kit/lib/guard-archive.js', 'kit/lib/apply-scope.js', 'kit/lib/entry-check.js', 'kit/lib/evidence.js', 'kit/lib/feedback.js', 'kit/lib/hook-health.js', 'kit/lib/hook-host.js', 'kit/lib/hook-worker.js', 'kit/lib/invocation.js', 'kit/lib/local-backup.js', 'kit/lib/permissions.js', 'kit/lib/readiness.js', 'kit/lib/redact.js', 'kit/lib/review-runner.js', 'kit/lib/task-types.js', 'kit/lib/work-sessions.js', 'kit/lib/workflow.js', 'kit/lib/workspace.js', 'kit/hooks/after-tool.js', 'kit/tools/review.js', 'kit/tools/workflow.js', 'kit/hooks/guard-read.js', 'kit/.ignore', 'publish.js', '发布到 GitLab（双击我）.bat', '.gitattributes', 'kit/lib/gitlab.js', 'kit/lib/updater.js', 'kit/lib/issues.js', 'install.js', 'README.md', '更新说明.md',
-  '手册/保护和放行.md', '手册/审查和自测.md', '手册/提交和推送.md', '手册/开关一览.md', '手册/查库和redis.md', '手册/自动更新和上报.md', '手册/上下文和token.md', '手册/模型路由和配置.md', '手册/项目说明和自动探索.md',
-  '安装（双击我）.bat', 'settings.fragment.json', 'claude/CLAUDE.md', 'kit/lib/session.js', 'kit/lib/flow-policy.js', 'kit/lib/openspec.js', 'kit/openspec/package.json', 'kit/openspec/node_modules/@fission-ai/openspec/bin/openspec.js', 'kit/lib/lessons.js', 'kit/tools/lesson.js', 'router/router.js', 'router/ui.html', 'kit/page/node_modules/playwright-core/package.json', 'kit/page/node_modules/pixelmatch/package.json', 'kit/page/node_modules/pngjs/package.json', 'kit/page/node_modules/playwright/package.json',
-  'kit/lib/deps.js', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.build.json', 'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/lib/proposal-files.js', 'kit/lib/idea-mcp.js', 'kit/lib/idea-tools.js', 'kit/lib/state-store.js', 'kit/lib/intent.js', 'kit/lib/connection-lifecycle.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/ttls-reviewer.md',
+for (const need of ['kit/lib/big-task.js', 'kit/lib/guard-explore.js', 'kit/lib/session-state.js', 'kit/lib/session-transcript.js', 'kit/lib/session-config.js', 'kit/lib/session-flow.js', 'kit/lib/session-voice.js', 'kit/lib/session-out.js', 'kit/lib/session-projects.js', 'kit/lib/session-proposal.js', 'kit/lib/session-plan.js', 'kit/lib/session-review.js', 'kit/lib/session-kitfiles.js', 'kit/lib/shell-words.js', 'kit/lib/guard-git.js', 'kit/lib/guard-kit.js', 'kit/lib/guard-process.js', 'kit/lib/guard-archive.js', 'kit/lib/apply-scope.js', 'kit/lib/entry-check.js', 'kit/lib/evidence.js', 'kit/lib/feedback.js', 'kit/lib/invocation.js', 'kit/lib/local-backup.js', 'kit/lib/permissions.js', 'kit/lib/readiness.js', 'kit/lib/redact.js', 'kit/lib/review-runner.js', 'kit/lib/task-types.js', 'kit/lib/work-sessions.js', 'kit/lib/workflow.js', 'kit/lib/workspace.js', 'kit/hooks/after-tool.js', 'kit/tools/review.js', 'kit/tools/workflow.js', 'kit/hooks/guard-read.js', 'kit/.ignore', 'publish.js', '发布到 GitLab（双击我）.bat', '.gitattributes', 'kit/lib/gitlab.js', 'kit/lib/updater.js', 'kit/lib/issues.js', 'install.js', 'README.md', '更新说明.md',
+  '手册/保护和放行.md', '手册/审查和自测.md', '手册/提交和推送.md', '手册/开关一览.md', '手册/查库和redis.md', '手册/自动更新和上报.md', '手册/上下文和token.md', '手册/配置页.md', '手册/项目说明和自动探索.md',
+  '安装（双击我）.bat', 'settings.fragment.json', 'claude/CLAUDE.md', 'kit/lib/session.js', 'kit/lib/flow-policy.js', 'kit/lib/openspec.js', 'kit/openspec/package.json', 'kit/openspec/node_modules/@fission-ai/openspec/bin/openspec.js', 'kit/lib/lessons.js', 'kit/tools/lesson.js', 'kit/ui/ui.html', 'kit/ui/kit-api.js', 'kit/ui/kit-worker.js', 'kit/lib/config-page.js', 'kit/lib/router-retire.js', 'kit/lib/guard-mcp.js', 'kit/page/node_modules/playwright-core/package.json', 'kit/page/node_modules/pixelmatch/package.json', 'kit/page/node_modules/pngjs/package.json', 'kit/page/node_modules/playwright/package.json',
+  'kit/lib/deps.js', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.build.json', 'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/lib/proposal-files.js', 'kit/lib/state-store.js', 'kit/lib/intent.js', 'kit/lib/connection-lifecycle.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/ttls-reviewer.md',
   // source-hint.js 是个空壳，但不能没有：20260930.1505 和更早的版本自动更新到新版时，装后自检（跑的是旧版的代码）要载它，载不到就装回旧版，永远升不上来
-  'kit/hooks/source-hint.js', 'kit/hooks/guard-push.js', 'kit/hooks/review-stop.js', 'claude/commands/vk-go.md', 'claude/commands/vk-resume.md', 'claude/commands/vk-fix.md', 'claude/commands/vk-auto.md', 'kit/lib/router-smoke.js', 'kit/lib/perf.js', 'kit/lib/report.js', 'kit/lib/outputs.js', 'kit/lib/archive-extract.js', 'kit/lib/tidy.js', 'kit/tools/skills-check.js', 'kit/lib/usage.js', 'kit/lib/pull.js', 'kit/tools/diagnose.js', 'kit/page/probe-run.js',
+  'kit/hooks/source-hint.js', 'kit/hooks/guard-push.js', 'kit/hooks/review-stop.js', 'claude/commands/vk-go.md', 'claude/commands/vk-resume.md', 'claude/commands/vk-config.md', 'claude/commands/vk-fix.md', 'claude/commands/vk-auto.md', 'kit/lib/perf.js', 'kit/lib/report.js', 'kit/lib/outputs.js', 'kit/lib/archive-extract.js', 'kit/lib/tidy.js', 'kit/tools/skills-check.js', 'kit/lib/usage.js', 'kit/lib/pull.js', 'kit/tools/diagnose.js', 'kit/page/probe-run.js',
   'claude/skills/ttls-onboard/SKILL.md', 'claude/skills/ttls-see-page/SKILL.md', 'claude/skills/ttls-cross-review/SKILL.md', 'claude/skills/ttls-handover/SKILL.md',
   // K3（2026-11-01）：只提交本会话改过的文件、失败摘要、检查点
   'kit/lib/edited-files.js', 'kit/tools/commit.js', 'kit/lib/fail-summary.js', 'kit/lib/checkpoint.js', 'kit/tools/checkpoint.js', 'kit/lib/sql-check.js', 'kit/lib/fix-pass.js', 'kit/lib/idea-config.js', 'kit/lib/maven-offline.js', 'kit/lib/review-scope.js', 'kit/tools/doctor.js', 'kit/lib/stage-rules.js', 'kit/lib/diag.js', 'kit/lib/config-fields.js',
   'claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.class', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.java',
   'claude/skills/ttls-redis/SKILL.md', 'claude/skills/ttls-redis/scripts/redis.js']) {
-  if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);
-}
-// 路由按块拆成了几个文件（2026-11-01，K1-1），router.js 只留入口：这些漏打进包，路由就起不来（router.js、ui.html 在上面那一串里）
-for (const need of ['router/service.js', 'router/base.js', 'router/config-file.js', 'router/health.js', 'router/usage.js', 'router/forward.js', 'router/access.js', 'router/api.js', 'router/hook-entry.js', 'router/install-id.js']) {
   if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);
 }
 // 必备清单只列了一部分钩子和库（审核 P06）：再扫一遍 kit 里所有 .js 的相对 require，指到的文件都得在，漏了一个库、删错一个钩子都查得出来
@@ -61,10 +57,7 @@ for (const need of ['router/service.js', 'router/base.js', 'router/config-file.j
   const walkJs = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.name === 'node_modules') continue; const p = path.join(d, e.name); if (e.isDirectory()) walkJs(p); else if (/\.js$/.test(e.name)) {
     const text = fs.readFileSync(p, 'utf8');
     for (const m of text.matchAll(/require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g)) {
-      let t = path.resolve(path.dirname(p), m[1]);
-      // 装好以后路由在 ~/.claude/vibe-kit/router（和 hooks、lib 同级），源码里在 vibe-kit/router
-      const inKitRouter = path.relative(path.join(SRC, 'kit', 'router'), t);
-      if (!inKitRouter.startsWith('..') && !path.isAbsolute(inKitRouter)) t = path.join(SRC, 'router', inKitRouter);
+      const t = path.resolve(path.dirname(p), m[1]);
       if (![t, t + '.js', path.join(t, 'index.js')].some((x) => fs.existsSync(x))) missing.push(path.relative(SRC, p).split(path.sep).join('/') + ' → ' + m[1]);
     }
   } } };
@@ -97,8 +90,13 @@ for (const f of code) {
   const r = spawnSync(process.execPath, ['--check', path.join(SRC, f)], { encoding: 'utf8', windowsHide: true });
   if (r.status !== 0) fail('语法错：' + f + '\n' + r.stderr);
 }
+// 删了的东西有没有残留（用户 2026-11-03："彻底删除干净"）：扫不过不打包
 {
-  const m = fs.readFileSync(path.join(SRC, 'router', 'ui.html'), 'utf8').match(/<script>([\s\S]*?)<\/script>/);
+  const r = spawnSync(process.execPath, [path.join(__dirname, 'test-no-leftovers.js')], { encoding: 'utf8', windowsHide: true, timeout: 300000 });
+  if (r.status !== 0) fail('残留扫描没过（dev/test-no-leftovers.js）：\n' + String(r.stdout).slice(-1500));
+}
+{
+  const m = fs.readFileSync(path.join(SRC, 'kit', 'ui', 'ui.html'), 'utf8').match(/<script>([\s\S]*?)<\/script>/);
   const tmp = path.join(os.tmpdir(), 'vk-pack-ui-' + process.pid + '.js');
   fs.writeFileSync(tmp, m ? m[1] : '');
   const r = spawnSync(process.execPath, ['--check', tmp], { encoding: 'utf8', windowsHide: true });
