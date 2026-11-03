@@ -31,25 +31,18 @@ const H = require('./lib/harness');
   H.ok('明确指定的缺失文件不静默漏掉', m.skipped.some(x => x.file === 'src/missing.js'));
   H.write(path.join(d, 'design.md'), design);
   H.write(path.join(d, 'assets/example.json'), '{"password":"FAKE_CONTEXT_SECRET","example":true}');
-  let calls = 0; const bodies = [];
-  const server = http.createServer((req, res) => { let text = ''; req.on('data', b => text += b); req.on('end', () => { calls++; bodies.push(text); res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ issues: [], summary: '提供的材料已审' }) }] })); }); });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const oldPort = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
-  try {
-    const r = await R.run(opts);
+  {
+    const scopes = [];
+    const r = await H.fakeReview(R, opts, (l, s) => { scopes.push(s); return { issues: [], summary: '提供的材料已审' }; });
     H.ok('明确范围审查可完整完成', r.status === 'completed' && r.covered.length === 7, r.status);
     H.ok('报告保留探索路径清单', r.contextOnly && r.contextOnly.length === 29);
-    const sent = bodies.flatMap(b => JSON.parse(JSON.parse(b).messages[0].content.split('\n本批材料：\n')[1]));
-    H.ok('实际请求未读取非指定探索源码', !sent.some(x => x.file === 'src/read-0.js') && sent.some(x => x.file === 'src/read-29.js'));
-    H.ok('补充材料仍遮盖假凭据', !bodies.join('').includes('FAKE_CONTEXT_SECRET'));
+    H.ok('范围文件没列非指定探索源码', !scopes.join('').includes('src/read-0.js') && scopes.join('').includes('src/read-29.js'), scopes.join('').slice(0, 600));
+    H.ok('范围文件不带材料原文，假凭据不外流', !scopes.join('').includes('FAKE_CONTEXT_SECRET'));
     H.ok('原材料下的提案审查有效', S.proposalReviewed(d));
     H.write(path.join(d, 'assets/example.json'), '{"example":false}');
     H.ok('补充材料修改后旧结论失效', !S.proposalReviewed(d));
-    H.setConfig(h, { reviewMaxFiles: 4 });
-    const partial = await R.run(opts);
-    H.ok('必要材料超过限额仍明确部分覆盖', partial.status === 'partial' && partial.skipped.some(x => /required/.test(x.file)));
-    const before = calls;
-    const noMaterial = await R.run({ cwd: p, mode: 'code', newBudget: true });
-    H.ok('确无材料时不发请求', calls === before && noMaterial.attemptedBatches === 0 && noMaterial.status !== 'completed');
-  } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise(r => server.close(r)); }
+    const noMaterial = R.prepare({ cwd: p, mode: 'code' });
+    H.ok('确无材料时不开子代理', !noMaterial.agents && noMaterial.status !== 'completed', noMaterial);
+  }
   H.done('1013 提案探索材料范围');
 })().catch(e => { console.error(e); H.cleanup(); process.exitCode = 1; });

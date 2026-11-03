@@ -59,19 +59,17 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
   const opts = { cwd: p, change: 'add-x', mode: 'code', base: 'HEAD', newBudget: true };
   const materials = R.materials(opts, S.allChanges(p).find((c) => c.name === 'add-x'));
   H.ok('代码审查不读取目录链接外的材料', !JSON.stringify(materials.items).includes('FAKE_EXTERNAL_REVIEW_VALUE'));
-  H.ok('外部链接明确列为未覆盖', materials.skipped.some((x) => /example\.js/.test(x.file)));
-  H.ok('二进制或无效编码明确列为未覆盖', materials.skipped.some((x) => /invalid\.js/.test(x.file)));
+  H.ok('外部链接明确列为未覆盖', materials.uncovered.some((x) => /example\.js/.test(x.file)));
+  H.ok('二进制或无效编码明确列为未覆盖', materials.uncovered.some((x) => /invalid\.js/.test(x.file)));
   fs.rmSync(path.join(p, 'links'), { recursive: true }); H.write(path.join(p, 'links/example.js'), 'const source=1;\n'); fs.unlinkSync(path.join(p, 'invalid.js'));
-  let mode = 'clean';
-  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { if (mode === 'hang') return; const issues = mode === 'issue' ? [{ severity: 'P2', file: 'a.js', line: 1, problem: '测试问题', evidence: 'const a=2', fix: '核对 a 的值' }] : []; res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ issues, summary: '有限材料完成' }) }] })); }); });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r)); const oldPort = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
   const decisions = path.join(p, '.vibe/decisions.json');
-  try {
-    const clean = await R.run(opts); const report = JSON.parse(H.read(clean.file));
+  const issueReply = () => ({ issues: [{ severity: 'P2', file: 'a.js', line: 1, problem: '测试问题', evidence: 'const a=2', fix: '核对 a 的值' }] });
+  {
+    const clean = await H.fakeReview(R, opts); const report = JSON.parse(H.read(clean.file));
     H.ok('报告落盘为可读取的结构化对象', report && typeof report === 'object' && Array.isArray(report.issues) && report.id === clean.id);
     H.write(decisions, JSON.stringify({ findings: [] })); H.write(path.join(p, 'a.js'), 'const a=3;\n');
     H.ok('零问题报告不能批准后来变更的代码', !!rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
-    H.write(path.join(p, 'a.js'), 'const a=2;\n'); mode = 'issue'; await R.run(Object.assign({}, opts, { full: true }));
+    H.write(path.join(p, 'a.js'), 'const a=2;\n'); await H.fakeReview(R, Object.assign({}, opts, { full: true }), issueReply);
     H.write(decisions, JSON.stringify({ findings: [{ id: 'r1', action: 'rejected', reason: '核对设计要求后，该值符合已确认规则，不成立。' }] }));
     H.ok('同版不成立意见可登记可核对理由', !rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
     H.write(path.join(p, 'a.js'), 'const a=4;\n');
@@ -80,23 +78,23 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
     H.ok('成立问题未复验不能登记完成', !!rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
     E.recordTool({ cwd: p, session_id: 'fixed', tool_use_id: 'fix-verify', tool_name: 'Bash', tool_input: { command: 'node a.js' }, hook_event_name: 'PostToolUse', tool_response: { exit_code: 0, stdout: '通过' } }, true);
     H.ok('修复和当前版复验可登记完成', !rejected(() => R.resolve(Object.assign({}, opts, { decisions }))));
-    mode = 'issue'; await R.run(Object.assign({}, opts, { full: true }));
+    await H.fakeReview(R, Object.assign({}, opts, { full: true }), issueReply);
     H.ok('重新审查不继承上一轮意见处理许可', !S.reviewRecord('code', d).resolved && !S.reviewRecord('code', d).resolvedFingerprint);
-    mode = 'hang'; const pending = R.run(Object.assign({}, opts, { full: true })); await H.sleep(350); R.cancel(opts); const cancelled = await pending; const firstSpent = R.status(opts).spentMs;
+    R.prepare(Object.assign({}, opts, { full: true })); await H.sleep(350); const cancelled = R.cancel(opts); const firstSpent = R.status(opts).spentMs;
     H.ok('取消审查记下用了多久', cancelled.status === 'cancelled' && firstSpent >= 300, firstSpent);
-    const key = R.jobKey(p, 'add-x', 'code'); const interrupted = Object.assign({}, R.status(opts), { id: 'dead-review', status: 'running', pid: 999999, started: Date.now() - 800, deadline: Date.now() + 5000 }); S.updateState('review-jobs', (s) => { s[key] = interrupted; });
-    H.ok('执行进程退出了的审查记成中断', R.status(opts).status === 'interrupted' && R.status(opts).spentMs >= 700, R.status(opts));
-    // 2026-10-28 起没有累计预算（用户定的，问题反馈表第 6 条）：--new-budget 不再单独要许可，照普通审查的规矩走
-    const transcript = path.join(h.root, 'budget.jsonl'); const command = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --project "' + p.replace(/\\/g, '/') + '" --change add-x --mode code --base HEAD --new-budget';
+    const key = R.jobKey(p, 'add-x', 'code'); const interrupted = Object.assign({}, R.status(opts), { id: 'dead-review', status: 'running', started: Date.now() - 800, deadline: Date.now() - 1 }); S.updateState('review-jobs', (s) => { s[key] = interrupted; });
+    H.ok('过了期限还没交齐的审查记成中断', R.status(opts).status === 'interrupted' && R.status(opts).spentMs >= 700, R.status(opts));
+    // 2026-10-28 起没有累计预算（用户定的，问题反馈表第 6 条）：照普通审查的规矩走
+    const transcript = path.join(h.root, 'budget.jsonl'); const command = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --project "' + p.replace(/\\/g, '/') + '" --change add-x --mode code --base HEAD';
     const j = { cwd: p, session_id: 'budget', transcript_path: transcript, tool_name: 'Bash', hook_event_name: 'PreToolUse', tool_input: { command }, tool_use_id: 'budget-run' };
     H.setConfig(h, { kitLock: false });
     H.transcript(transcript, [H.tr.user('继续')]);
     const r1 = H.hook(h, 'guard-commit', j);
-    H.ok('--new-budget 不再报"审查预算"（没说审查照人工模式先问）', !/审查预算/.test(H.reasonOf(r1)) && /用户这一轮没说要审查/.test(H.reasonOf(r1)), r1);
+    H.ok('不报"审查预算"（没说审查照人工模式先问）', !/审查预算/.test(H.reasonOf(r1)) && /用户这一轮没说要审查/.test(H.reasonOf(r1)), r1);
     H.transcript(transcript, [H.tr.user('审查 add-x 的代码')]);
     const r2 = H.hook(h, 'guard-commit', j);
-    H.ok('用户说了审查：带 --new-budget 的命令照常放行', r2 === null, r2);
-  } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
+    H.ok('用户说了审查：命令照常放行', r2 === null, r2);
+  }
   const cp = require('child_process'); const originalExec = cp.execFileSync; let gitCalls = 0;
   try {
     cp.execFileSync = (...args) => { if (args[0] === 'git') gitCalls++; return originalExec(...args); };

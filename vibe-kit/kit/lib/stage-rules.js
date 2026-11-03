@@ -37,11 +37,11 @@ function stageRules(j, stage, cfg) {
   const head = spec ? spec + '\n\n' : '';
   // 会话开着自动（复审 V10）：初次探索、范围和疑问跟用户确认完以后逐份写、逐份审修，不停下等用户；没开的照旧写完一份停下
   const oneByOne = cfg && cfg.autoSwitch ? '需求文档一份一份写（这个会话开着自动：初次探索、范围和疑问跟用户确认完以后，每份写完按审查点审修，接着写下一份，不停下等用户）' : '需求文档一份一份写，写完一份停下给用户看，用户说了再写下一份（/opsx:continue）';
-  if (stage === 'plan') return head + '写需求这一段的规矩（照做就不会被拦）：' + oneByOne + '；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；审查带审查点：' + tool('review.js') + ' run --change <变更名> --mode proposal --point <proposal|specs|design|tasks>。';
+  if (stage === 'plan') return head + '写需求这一段的规矩（照做就不会被拦）：' + oneByOne + '；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；审查带审查点：' + tool('review.js') + ' prepare --change <变更名> --mode proposal --point <proposal|specs|design|tasks>。';
   // 这个会话开着自动：开工前先存检查点（K3 M07，lib/checkpoint.js；和收工钩子共用"只送一次"的记录，不进全局约定）
   let ckpt = '';
   if (cfg && cfg.autoSwitch) { try { ckpt = require('./checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; } }
-  return head + (ckpt ? ckpt + '\n' : '') + '做任务这一段的规矩（照做就不会被拦）：起服务自测走 ' + tool('devserver.js') + ' start --name <名字> --port auto -- <原来的命令>，不直接跑 mvn spring-boot:run、npm run dev、catalina；新建的文件提交前要 git add，只 add 这次改的（不用 git add -A、git add .），或者用 ' + tool('commit.js') + ' -m "类型: 内容" 只提交这个会话改过的文件；命令里不串 cd，用 git -C <目录>、mvn -f <目录>/pom.xml、npm --prefix <目录>；审查带审查点：' + tool('review.js') + ' run --change <变更名> --mode code --point group-<组号>。';
+  return head + (ckpt ? ckpt + '\n' : '') + '做任务这一段的规矩（照做就不会被拦）：起服务自测走 ' + tool('devserver.js') + ' start --name <名字> --port auto -- <原来的命令>，不直接跑 mvn spring-boot:run、npm run dev、catalina；新建的文件提交前要 git add，只 add 这次改的（不用 git add -A、git add .），或者用 ' + tool('commit.js') + ' -m "类型: 内容" 只提交这个会话改过的文件；命令里不串 cd，用 git -C <目录>、mvn -f <目录>/pom.xml、npm --prefix <目录>；审查带审查点：' + tool('review.js') + ' prepare --change <变更名> --mode code --point group-<组号>。';
 }
 /** 压缩、/clear 之后：清掉"送过了"的记录。压缩后还在流程里的，返回要马上重送的（规范和当前这一段），别的返回 '' */
 function afterCompact(j, cfg) {

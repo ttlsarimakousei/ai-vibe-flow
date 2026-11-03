@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const { Worker } = require('worker_threads');
 
-const NAMES = new Set(['pre-edit', 'guard-commit', 'guard-ask', 'guard-read', 'source-hint', 'verify-gate', 'after-tool']);
+const NAMES = new Set(['pre-edit', 'guard-commit', 'guard-ask', 'guard-read', 'source-hint', 'verify-gate', 'after-tool', 'review-stop']);
 const MAX_WORKERS = 3;
 const CALL_TIMEOUT_MS = 25000;
 const SESSION_KEEP_MS = 3 * 86400000;

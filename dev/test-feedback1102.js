@@ -137,8 +137,8 @@ const reason = (o) => H.reasonOf(o);
     H.ok('"审查报的问题自动收"关着：不收', list().length === n, JSON.stringify(list()));
     H.setConfig(h, { lessonAuto: true });
     const R = require(path.join(h.kit, 'lib', 'review-runner'));
-    const text = fs.readFileSync(path.join(h.kit, 'lib', 'review-runner.js'), 'utf8');
-    H.ok('审查提示要求报类别和以后怎么避免', /"kind":"想当然\|/.test(text) && /"avoid":/.test(text) && typeof R.runsForLessons === 'function');
+    const text = H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || '';
+    H.ok('审查提示要求报类别和以后怎么避免', /\*\*kind\*\*：想当然/.test(text) && /\*\*avoid\*\*/.test(text) && typeof R.runsForLessons === 'function');
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -489,46 +489,16 @@ const reason = (o) => H.reasonOf(o);
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('审查：正文写到一半被截、上游临时出错（#257、#263、#266）；使用情况的轮数（自审）');
+  H.section('使用情况的轮数（自审）');
   {
-    const http = require('http');
     const h = H.makeHome('t1102-rev', from, { reviewBudgetSeconds: 600 });
     const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'b.js': 'let b=1;\n' });
     const base = H.git(p, ['rev-parse', 'HEAD']).out.trim();
-    let script = []; const bodies = [];
-    const reply = (text, stop) => JSON.stringify({ id: 'm', model: 'deepseek-flash', content: [{ type: 'text', text }], stop_reason: stop || 'end_turn', usage: { input_tokens: 1, output_tokens: 16000 } });
-    const good = reply(JSON.stringify({ issues: [], summary: '审完了' }));
-    const server = http.createServer((req, res) => {
-      let body = ''; req.on('data', (b) => { body += b; }); req.on('end', () => {
-        bodies.push(JSON.parse(body));
-        const step = script.shift() || { body: good };
-        res.writeHead(step.status || 200); res.end(step.body);
-      });
-    });
-    await new Promise((r) => server.listen(0, '127.0.0.1', r));
-    process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
-    process.env.VIBE_KIT_REVIEW_RETRY_MS = '10';
-    // review-runner 读这个环境变量是在载入时：设好了再载入
     const R2 = require(path.join(h.kit, 'lib', 'review-runner.js'));
-    let n = 1;
-    const go = async (s) => { script = s; bodies.length = 0; H.write(path.join(p, 'a.js'), 'let a=' + (++n) + ';\n'); return R2.run({ cwd: p, mode: 'code', base }); };
-    try {
-      const cut = reply('{"issues":[{"severity":"P1","file":"a.js","problem":"写到一半', 'max_tokens');
-      let r = await go([{ body: cut }, { body: good }]);
-      H.ok('正文写到一半被截：加大上限、少想再来一次，拿到结论', r.status === 'completed' && bodies.length === 2 && bodies[1].max_tokens > bodies[0].max_tokens && /少想/.test(bodies[1].system), { status: r.status, tokens: bodies.map((b) => b.max_tokens), diag: r.diagnostics });
-      r = await go([{ body: reply('这不是 JSON', 'end_turn') }, { body: good }]);
-      H.ok('正常结束但不是 JSON：同样的上限再来一次', r.status === 'completed' && bodies.length === 2 && bodies[1].max_tokens === bodies[0].max_tokens, bodies.map((b) => b.max_tokens));
-      const up = { status: 503, body: JSON.stringify({ type: 'error', error: { type: 'api_error', message: '所有模型都不可用：DeepSeek（上游出错（504））' } }) };
-      r = await go([up, { body: good }]);
-      H.ok('上游临时出错（503）：等一下再试一次，拿到结论', r.status === 'completed' && bodies.length === 2, { status: r.status, n: bodies.length, reason: r.reason });
-      r = await go([up, up]);
-      H.ok('再试还是出错：只多试一次，这一批记失败', r.status === 'failed' && bodies.length === 2, { status: r.status, n: bodies.length });
-      r = await go([{ status: 400, body: JSON.stringify({ type: 'error', error: { message: '缺少必需的 model 参数' } }) }]);
-      H.ok('400 这种不是临时的：不重试', r.status === 'failed' && bodies.length === 1, { status: r.status, n: bodies.length });
-      r = await go([{ body: good }]);
-      const day = H.read(path.join(h.kit, 'state', 'usage.json')) || '';
-      H.ok('review.js 跑一次算一轮：使用情况里不再是 0 轮', /"review\.code":\s*[1-9]/.test(day), day.slice(0, 400));
-    } finally { server.close(); delete process.env.VIBE_KIT_REVIEW_PORT; delete process.env.VIBE_KIT_REVIEW_RETRY_MS; delete require.cache[require.resolve(path.join(h.kit, 'lib', 'review-runner.js'))]; }
+    H.write(path.join(p, 'a.js'), 'let a=2;\n');
+    await H.fakeReview(R2, { cwd: p, mode: 'code', base });
+    const day = H.read(path.join(h.kit, 'state', 'usage.json')) || '';
+    H.ok('审一次算一轮：使用情况里不再是 0 轮', /"review\.code":\s*[1-9]/.test(day), day.slice(0, 400));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -557,9 +527,8 @@ const reason = (o) => H.reasonOf(o);
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('第 37 条：第一轮几个角度同时审，后面只审修改点；没有 P1、P2 就算过；不收敛就停；过程脚本记');
+  H.section('第 37 条：第一轮几个角度同时审，后面只审修改点；没有 P1、P2 就算过；过程脚本记');
   {
-    const http = require('http');
     const h = H.makeHome('t1102-round', from, { reviewBudgetSeconds: 600, reviewLenses: 3 });
     const docLines = ['# Proposal', '', '## Why', '', '顶上这一行不会改：UNCHANGED-MARKER。'].concat(Array.from({ length: 30 }, (_, i) => '第 ' + i + ' 行说明，这几行都不改。'), ['', '## What Changes', '', '- 要改的这一行：第一版。']);
     const doc = docLines.join('\n') + '\n';
@@ -570,25 +539,17 @@ const reason = (o) => H.reasonOf(o);
     const iss = (o) => Object.assign({ severity: 'P2', file: 'proposal.md', line: 1, problem: '默认的问题', evidence: '依据', fix: '修法' }, o);
     let answer = () => ({ issues: [] });
     const bodies = [];
-    const server = http.createServer((req, res) => {
-      let body = ''; req.on('data', (b) => { body += b; }); req.on('end', () => {
-        const b = JSON.parse(body); bodies.push(b);
-        const a = answer(b, bodies.length);
-        if (a && a.fail) { res.writeHead(a.fail); return res.end(JSON.stringify({ type: 'error', error: { message: '假的出错' } })); }
-        res.writeHead(200); res.end(JSON.stringify({ id: 'm', model: 'fake-model', content: [{ type: 'text', text: JSON.stringify(Object.assign({ summary: '审完了' }, a)) }], stop_reason: 'end_turn', usage: { output_tokens: 100 } }));
-      });
-    });
-    await new Promise((r) => server.listen(0, '127.0.0.1', r));
-    process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
-    process.env.VIBE_KIT_REVIEW_RETRY_MS = '5';
     const R = require(path.join(h.kit, 'lib', 'review-runner.js'));
     const P = require(path.join(h.kit, 'lib', 'flow-policy.js'));
     const S = require(path.join(h.kit, 'lib', 'session.js'));
     const dirFor = (n) => S.allChanges(p).find((c) => c.name === n).dir;
-    const go = async (n, a, extra) => { answer = a || (() => ({ issues: [] })); bodies.length = 0; return R.run(Object.assign({ cwd: p, change: n, mode: 'proposal', point: 'proposal' }, extra)); };
+    let planBase = () => undefined;
+    const feed = (lens, scope) => { const b = { lens, scope }; bodies.push(b); return answer(b, bodies.length); };
+    const go = async (n, a, extra) => { answer = a || (() => ({ issues: [] })); bodies.length = 0; return H.fakeReview(R, Object.assign({ cwd: p, change: n, mode: 'proposal', point: 'proposal' }, extra), feed); };
+    const goCode = async (a) => { answer = a; bodies.length = 0; return H.fakeReview(R, { cwd: p, mode: 'code', base: planBase() }, feed); };
     const decide = (n, findings) => { const f = path.join(h.root, n + '-d.json'); H.write(f, JSON.stringify({ findings })); return R.resolve({ cwd: p, change: n, mode: 'proposal', point: 'proposal', decisions: f }); };
-    const lensOf = (b) => (/只看一个角度：([^。]+)/.exec(b.system) || [])[1] || '';
-    try {
+    const lensOf = (b) => (/只看一个角度：([^。]+)/.exec(b.scope) || [])[1] || '';
+    {
       // 第一轮：三个角度同时审，同一件事合成一条
       fresh('c1');
       let r = await go('c1', (b) => {
@@ -597,9 +558,9 @@ const reason = (o) => H.reasonOf(o);
         if (l === '场景和风险') return { issues: [iss({ severity: 'P1', problem: '验收条件没法核对，没写怎么才算通过' }), iss({ severity: 'P3', problem: '第二段的说法可以再清楚一点' })] };
         return { issues: [] };
       });
-      H.ok('第一轮：3 个角度各发一个请求', bodies.length === 3 && new Set(bodies.map(lensOf)).size === 3 && r.lenses === 3 && r.scope === 'full', { n: bodies.length, lenses: r.lenses, scope: r.scope });
-      H.ok('提示按阶段：提案只审提案该管的事，实现细节不审', bodies.every((b) => /这是提案/.test(b.system) && /不审实现细节/.test(b.system)), bodies[0].system);
-      H.ok('提示写清 P1、P2、P3 的标准', /P3 说法、写法/.test(bodies[0].system));
+      H.ok('第一轮：3 个角度各开一个子代理', bodies.length === 3 && new Set(bodies.map(lensOf)).size === 3 && r.lenses === 3 && r.scope === 'full', { n: bodies.length, lenses: r.lenses, scope: r.scope });
+      H.ok('提示按阶段：提案只审提案该管的事，实现细节不审', bodies.every((b) => /这是提案/.test(b.scope) && /不审实现细节/.test(b.scope)), bodies[0].scope);
+      H.ok('提示写清 P1、P2、P3 的标准', /P3 说法、写法/.test(bodies[0].scope));
       H.ok('同一件事合成一条，留最严重的；ID 重排', r.issues.length === 2 && r.issues.find((x) => /核对/.test(x.problem)).severity === 'P1' && r.issues.map((x) => x.id).join() === 'r1,r2', r.issues);
       H.ok('P1、P2 算挡通过的：这个点没过', r.blocking === 1 && !P.settled(dirFor('c1'), 'proposal'), { blocking: r.blocking });
       H.ok('结果里写清下一步', /逐条核实/.test(r.next) && /deferred/.test(r.next), r.next);
@@ -612,11 +573,11 @@ const reason = (o) => H.reasonOf(o);
       const rv = decide('c1', firstIssues.map((x) => /核对/.test(x.problem) ? { id: x.id, action: 'fixed', reason: '补了验收条件，写明怎么算通过' } : { id: x.id, action: 'rejected', reason: '说法没问题，这句就是这个意思' }));
       H.ok('提案修了 P1：要再审一轮；没有跑过编译也能登记', rv.status === 'needs_review', rv);
       r = await go('c1', () => ({ issues: [] }));
-      const c = String(bodies[0].messages[0].content);
-      H.ok('第二轮：只发一个请求，不分角度', bodies.length === 1 && !lensOf(bodies[0]) && r.scope === 'changes', { n: bodies.length, scope: r.scope });
-      H.ok('第二轮：提示写明只看改对没有、改出新问题没有', /这是复审/.test(bodies[0].system) && /没改过的内容不要审/.test(bodies[0].system), bodies[0].system);
-      H.ok('第二轮：带上一轮修了的问题', /上一轮的问题：[\s\S]*核对/.test(c), c.slice(0, 500));
-      H.ok('第二轮：驳回的放在"已处理"，说了不要再报', /已处理：[\s\S]*说法可以再清楚/.test(c) && !/上一轮的问题：\n\[[^\]]*说法可以再清楚/.test(c), c.slice(0, 500));
+      const c = bodies[0].scope;
+      H.ok('第二轮：只开一个子代理，不分角度', bodies.length === 1 && !lensOf(bodies[0]) && r.scope === 'changes', { n: bodies.length, scope: r.scope });
+      H.ok('第二轮：提示写明只看改对没有、改出新问题没有', /这是复审/.test(bodies[0].scope) && /没改过的内容不要审/.test(bodies[0].scope), bodies[0].scope);
+      H.ok('第二轮：带上一轮修了的问题', /上一轮的问题[\s\S]*核对/.test(c), c.slice(0, 500));
+      H.ok('第二轮：驳回的放在"已处理"，说了不要再报', /已处理[\s\S]*说法可以再清楚/.test(c) && !/上一轮的问题\n\n```json\n\[[^\]]*说法可以再清楚/.test(c), c.slice(0, 500));
       H.ok('第二轮：材料里有改的那一行，没有没改的内容', /第二版/.test(c) && /第一版/.test(c) && !/UNCHANGED-MARKER/.test(c), c.slice(0, 800));
       H.ok('第二轮没有问题：这个点过了', r.status === 'completed' && P.settled(dirFor('c1'), 'proposal') && r.round === 2, { status: r.status, round: r.round });
       H.ok('审查记录有第 2 轮，也有第 1 轮的处理结果', /只审修改点/.test(H.read(log)) && /## 第 2 轮/.test(H.read(log)) && /处理结果/.test(H.read(log)) && /r1 修了/.test(H.read(log)) && /不成立/.test(H.read(log)), H.read(log));
@@ -635,27 +596,6 @@ const reason = (o) => H.reasonOf(o);
       await go('c3', () => ({ issues: [iss({ severity: 'P1', problem: '范围里漏了导出接口' })] }));
       const n3 = await go('c3', () => ({ issues: [] }));
       H.ok('没处理、文件也没改：不问模型，问题照旧算没解决', bodies.length === 0 && n3.blocking === 1 && /漏了导出/.test(n3.issues[0].problem) && !P.settled(dirFor('c3'), 'proposal'), { n: bodies.length, issues: n3.issues });
-
-      // 不收敛就停
-      fresh('c4');
-      await go('c4', () => ({ issues: [iss({ problem: '问题甲' }), iss({ problem: '问题乙乙乙' })] }));
-      edit('c4', '改了一次');
-      await go('c4', () => ({ issues: [iss({ problem: '换了个问题丙' }), iss({ problem: '又一个问题丁丁' })] }));
-      H.ok('两轮一样多：还没停', !P.record(dirFor('c4'), 'proposal').stalled);
-      edit('c4', '又改了一次');
-      const s3 = await go('c4', () => ({ issues: [iss({ problem: '还有问题戊' }), iss({ problem: '再来个问题己己' }), iss({ problem: '多了个问题庚庚庚' })] }));
-      H.ok('连续两轮 P1、P2 没减少：停', P.record(dirFor('c4'), 'proposal').stalled === true && P.exhausted(dirFor('c4'), 'proposal'), P.record(dirFor('c4'), 'proposal'));
-      H.ok('停了不挡往下走', P.pending(dirFor('c4'), 'proposal') === '' && P.allDone(dirFor('c4'), 'proposal') && !P.allPassed(dirFor('c4'), 'proposal'));
-      H.ok('结果和提示说清楚（2→2→3），不算通过', /2→2→3/.test(s3.next) && /2→2→3/.test(P.instruction(dirFor('c4'), 'proposal', S.readConfig())) && !P.settled(dirFor('c4'), 'proposal'), s3.next);
-      const s4 = await go('c4', () => ({ fail: 400 }), { full: true });
-      H.ok('停了的点又跑一次没审成：还是停着，不会又自动审起来', s4.status === 'failed' && P.record(dirFor('c4'), 'proposal').stalled === true && P.exhausted(dirFor('c4'), 'proposal'), { status: s4.status, rec: P.record(dirFor('c4'), 'proposal') });
-      fresh('c5');
-      await go('c5', () => ({ issues: [iss({ problem: '问题一一' }), iss({ problem: '问题二二' }), iss({ problem: '问题三三' })] }));
-      edit('c5', '改一次');
-      await go('c5', () => ({ issues: [iss({ problem: '问题四四' }), iss({ problem: '问题五五' })] }));
-      edit('c5', '再改一次');
-      await go('c5', () => ({ issues: [iss({ problem: '问题六六' }), iss({ problem: '问题七七' })] }));
-      H.ok('一直在减少（3→2→2 只差一轮）：不停', !P.record(dirFor('c5'), 'proposal').stalled, P.record(dirFor('c5'), 'proposal'));
 
       // 复审里报到没改过的文件：不算数，也不算没审完
       H.write(path.join(dirOf('c11'), 'proposal.md'), doc);
@@ -678,11 +618,11 @@ const reason = (o) => H.reasonOf(o);
       decide('c13', [{ id: 'r1', action: 'rejected', reason: '核对过了，这个问题不成立' }]);
       edit('c13', '第二版');
       await go('c13', () => ({ issues: [iss({ problem: '第二轮冒出来的另一件事' })] }));
-      H.ok('第二轮：驳回的在"已处理"里', /已处理：[\s\S]*第一轮就驳回/.test(String(bodies[0].messages[0].content)));
+      H.ok('第二轮：驳回的在"已处理"里', /已处理[\s\S]*第一轮就驳回/.test(bodies[0].scope));
       edit('c13', '第三版');
       decide('c13', [{ id: 'r1', action: 'fixed', reason: '第二轮的新问题已经改了' }]);
       await go('c13', () => ({ issues: [] }));
-      H.ok('第三轮：第一轮驳回的还在"已处理"里，不会再被报一遍', /已处理：[\s\S]*第一轮就驳回/.test(String(bodies[0].messages[0].content)), String(bodies[0].messages[0].content).slice(0, 400));
+      H.ok('第三轮：第一轮驳回的还在"已处理"里，不会再被报一遍', /已处理[\s\S]*第一轮就驳回/.test(bodies[0].scope), bodies[0].scope.slice(0, 400));
 
       // 驳回过的问题模型又报一遍
       fresh('c16');
@@ -708,20 +648,20 @@ const reason = (o) => H.reasonOf(o);
       H.ok('有修了的：复审之后这个点过了', P.settled(dirFor('c14'), 'proposal'));
       H.write(path.join(dirOf('c14'), 'design.md'), '# Design\n\n## 验收用例\n\n1. 甲\n');
       await go('c14', () => ({ issues: [] }), { point: 'design' });
-      H.ok('复审过的点：留给 design 的要点还在', /上游审查留给这一步的要点[\s\S]*重试次数要写清楚/.test(String(bodies[0].messages[0].content)), String(bodies[0].messages[0].content).slice(0, 300));
+      H.ok('复审过的点：留给 design 的要点还在', /上游审查留给这一步的要点[\s\S]*重试次数要写清楚/.test(bodies[0].scope), bodies[0].scope.slice(0, 300));
       await go('c14', () => ({ issues: [] }), { full: true });
       await go('c14', () => ({ issues: [] }), { point: 'design', full: true });
-      H.ok('整份重审之后：留给 design 的要点还在', /上游审查留给这一步的要点[\s\S]*重试次数要写清楚/.test(String(bodies[0].messages[0].content)), String(bodies[0].messages[0].content).slice(0, 300));
+      H.ok('整份重审之后：留给 design 的要点还在', /上游审查留给这一步的要点[\s\S]*重试次数要写清楚/.test(bodies[0].scope), bodies[0].scope.slice(0, 300));
       // 登记修了、改的是别的文件
       const spec = (n, name, text) => H.write(path.join(dirOf(n), 'specs', name, 'spec.md'), '# 规格\n\n## ADDED Requirements\n\n### Requirement: 一条\n\n#### Scenario: 场景\n- **WHEN** ' + text + '\n- **THEN** 乙\n');
       fresh('c15'); spec('c15', 'x', '甲'); spec('c15', 'y', '丙');
-      r = await go('c15', (b) => { const mat = JSON.parse(String(b.messages[0].content).split('本批材料：\n')[1]); return { issues: [iss({ file: mat.find((m) => /specs[\\/]x/.test(m.file)).file, problem: '这一条和 y 的规格矛盾' })] }; }, { point: 'specs' });
+      r = await go('c15', () => ({ issues: [iss({ file: 'specs/x/spec.md', problem: '这一条和 y 的规格矛盾' })] }), { point: 'specs' });
       H.ok('规格有问题：报在 x 上', r.issues.length === 1 && /specs[\\/]x/.test(r.issues[0].file), r.issues);
       spec('c15', 'y', '丙改了');
       const d15 = path.join(h.root, 'c15-d.json'); H.write(d15, JSON.stringify({ findings: [{ id: 'r1', action: 'fixed', reason: '矛盾的地方改在 y 的规格里了' }] }));
       R.resolve({ cwd: p, change: 'c15', mode: 'proposal', point: 'specs', decisions: d15 });
       r = await go('c15', () => ({ issues: [] }), { point: 'specs' });
-      const c15 = String(bodies[0].messages[0].content);
+      const c15 = bodies[0].scope;
       H.ok('登记修了、改在别的文件：问题送去核对，连这个文件一起送，核对过就关了', /这一条和 y 的规格矛盾/.test(c15) && /这次没改，只核对/.test(c15) && r.status === 'completed' && r.issues.length === 0, { c: c15.slice(0, 500), status: r.status, issues: r.issues });
       fresh('c20');
       await go('c20', () => ({ issues: [iss({ problem: '说修了其实什么都没改' })] }));
@@ -746,32 +686,9 @@ const reason = (o) => H.reasonOf(o);
       await go('c6', () => ({ issues: [iss({ problem: '大改之前的问题' })] }));
       H.write(path.join(dirOf('c6'), 'proposal.md'), Array.from({ length: 40 }, (_, i) => '整个重写之后的第 ' + i + ' 行').join('\n') + '\n');
       r = await go('c6', () => ({ issues: [] }));
-      H.ok('改动超过六成：按第一轮，3 个角度全量审', bodies.length === 3 && r.scope === 'full' && /整个重写/.test(String(bodies[0].messages[0].content)), { n: bodies.length, scope: r.scope });
+      H.ok('改动超过六成：按第一轮，3 个角度全量审', bodies.length === 3 && r.scope === 'full', { n: bodies.length, scope: r.scope });
       r = await go('c6', () => ({ issues: [] }), { full: true });
       H.ok('--full：整份再审一遍', bodies.length === 3 && r.scope === 'full');
-
-      // 角度丢了：至少一半审成才算审过
-      fresh('c7');
-      r = await go('c7', (b) => (lensOf(b) === '事实和范围' ? { fail: 400 } : { issues: [iss({ problem: '只有这两个角度回了' })] }));
-      H.ok('一个角度失败、两个审成：算审完，记下少了哪个', r.status === 'completed' && r.issues.length === 1 && (r.lostLenses || []).join() === '事实和范围', { status: r.status, lost: r.lostLenses });
-      // 这一轮没审成：上一轮的问题不丢
-      edit('c7', '改了一下');
-      r = await go('c7', () => ({ fail: 400 }));
-      H.ok('复审没审成：failed', r.status === 'failed', r.status);
-      r = await go('c7', () => ({ issues: [] }));
-      H.ok('上一轮的问题还在，接着只审修改点', r.scope === 'changes' && /只有这两个角度回了/.test(String(bodies[0].messages[0].content)), String(bodies[0] && bodies[0].messages[0].content).slice(0, 300));
-      fresh('c17');
-      r = await go('c17', (b) => (lensOf(b) === '事实和范围' ? { issues: [iss({ problem: '只有这个角度回了' })] } : { fail: 400 }));
-      H.ok('两个角度失败、一个审成：不算审过', r.status !== 'completed' && r.issues.length === 1 && (r.lostLenses || []).length === 2 && !P.settled(dirFor('c17'), 'proposal'), { status: r.status, lost: r.lostLenses });
-      H.ok('审查记录写了没审成的角度', /没审成的角度：/.test(H.read(path.join(p, '.vibe', 'reviews', 'c17', '审查记录.md')) || ''), H.read(path.join(p, '.vibe', 'reviews', 'c17', '审查记录.md')));
-      r = await go('c17', () => ({ issues: [] }));
-      H.ok('下一轮：这个文件没审到，按第一轮全量审', r.scope === 'full' && bodies.length === 3 && r.status === 'completed', { scope: r.scope, n: bodies.length, status: r.status });
-      fresh('c19');
-      r = await go('c19', (b) => (lensOf(b) === '事实和范围' ? { fail: 400 } : { issues: [] }));
-      H.ok('丢一个角度、别的没问题：过了，结果里说了少了哪个，也记了问题反馈', r.status === 'completed' && /事实和范围 这个角度没审成/.test(r.next) && !!r.reported, { next: r.next, reported: r.reported });
-      fresh('c8');
-      r = await go('c8', () => ({ fail: 400 }));
-      H.ok('第一轮三个角度都失败：failed，下一轮还是第一轮', r.status === 'failed' && !fs.existsSync(path.join(p, '.vibe', 'reviews', 'c8', 'proposal-proposal.snapshot.json')), r.status);
 
       // 后面的点只审新写的
       fresh('c9');
@@ -780,44 +697,29 @@ const reason = (o) => H.reasonOf(o);
       H.ok('deferred：留给后面的文档，这个点算处理完，不用再审', d9.status === 'resolved' && P.settled(dirFor('c9'), 'proposal'), d9);
       H.write(path.join(dirOf('c9'), 'specs', 'x', 'spec.md'), '# 规格\n\n## ADDED Requirements\n\n### Requirement: 一条\n\n#### Scenario: 场景\n- **WHEN** 甲\n- **THEN** 乙\n');
       r = await go('c9', () => ({ issues: [] }), { point: 'specs' });
-      const mat = JSON.parse(String(bodies[0].messages[0].content).split('本批材料：\n')[1]);
-      H.ok('specs 这个点：提案是上游文档，只用来核对', mat.find((m) => m.file === 'proposal.md').role === '上游文档' && !mat.find((m) => /spec\.md$/.test(m.file)).role && /这是规格/.test(bodies[0].system) && /只用来核对/.test(bodies[0].system), mat.map((m) => [m.file, m.role]));
+      H.ok('specs 这个点：提案是上游文档，只用来核对', /proposal\.md（上游文档/.test(bodies[0].scope) && /- specs\/x\/spec\.md(?:：|\n)/.test(bodies[0].scope) && /这是规格/.test(bodies[0].scope) && /只用来核对/.test(bodies[0].scope), bodies[0].scope.slice(0, 800));
       H.write(path.join(dirOf('c9'), 'design.md'), '# Design\n\n## 验收用例\n\n1. 甲\n');
       r = await go('c9', () => ({ issues: [] }), { point: 'design' });
-      H.ok('design 第一轮：带上提案留给它的要点', /上游审查留给这一步的要点[\s\S]*魔数表要写全/.test(String(bodies[0].messages[0].content)), String(bodies[0].messages[0].content).slice(0, 300));
+      H.ok('design 第一轮：带上提案留给它的要点', /上游审查留给这一步的要点[\s\S]*魔数表要写全/.test(bodies[0].scope), bodies[0].scope.slice(0, 300));
 
       // 代码：第二轮只看改动
       const base = H.git(p, ['rev-parse', 'HEAD']).out.trim();
+      planBase = () => base;
       H.write(path.join(p, 'a.js'), 'let a=2;\n');
       H.write(path.join(p, 'b.js'), 'let b=2;\n// B-FILE-MARKER\n');
-      r = await R.run({ cwd: p, mode: 'code', base, _unused: (answer = () => ({ issues: [iss({ file: 'a.js', problem: 'a 的初值不对' })] }), bodies.length = 0, 0) });
-      H.ok('代码第一轮：3 个角度', bodies.length === 3 && r.scope === 'full' && /只看一个角度：(?:需求和连带影响|边界和异常|安全和假验证)/.test(bodies[0].system), { n: bodies.length });
+      r = await goCode(() => ({ issues: [iss({ file: 'a.js', problem: 'a 的初值不对' })] }));
+      H.ok('代码第一轮：3 个角度', bodies.length === 3 && r.scope === 'full' && /只看一个角度：(?:需求和连带影响|边界和异常|安全和假验证)/.test(bodies[0].scope), { n: bodies.length });
       const plainFirst = r.issues[0];
       H.write(path.join(p, 'a.js'), 'let a=3;\n');
-      answer = () => ({ issues: [] }); bodies.length = 0;
-      r = await R.run({ cwd: p, mode: 'code', base });
-      const cc = String(bodies[0].messages[0].content);
+      r = await goCode(() => ({ issues: [] }));
+      const cc = bodies[0].scope;
       H.ok('代码第二轮：只有改过的 a.js，没有 b.js', bodies.length === 1 && r.scope === 'changes' && /let a=3/.test(cc) && !/B-FILE-MARKER/.test(cc), cc.slice(0, 400));
       H.ok('代码第二轮：带上一轮的问题；没改的文件算覆盖', cc.includes(plainFirst.problem) && r.covered.includes('b.js') && r.status === 'completed', { covered: r.covered, status: r.status });
-      // 复审那批没审成、别的文件没改：上一轮的内容和问题留着，下一轮接着比
-      H.write(path.join(p, 'a.js'), 'let a=4;\n');
-      answer = () => ({ issues: [iss({ file: 'a.js', problem: 'a 的初值还是不对' })] }); bodies.length = 0;
-      r = await R.run({ cwd: p, mode: 'code', base });
-      H.write(path.join(p, 'a.js'), 'let a=5;\n');
-      answer = () => ({ fail: 400 }); bodies.length = 0;
-      r = await R.run({ cwd: p, mode: 'code', base });
-      H.ok('复审那批没审成、别的文件没改：部分覆盖', r.status === 'partial' && r.covered.includes('b.js') && !r.covered.includes('a.js'), { status: r.status, covered: r.covered });
-      answer = () => ({ issues: [] }); bodies.length = 0;
-      r = await R.run({ cwd: p, mode: 'code', base });
-      const c4 = String(bodies[0].messages[0].content);
-      H.ok('下一轮接着比：还是只送改动，上一轮的问题还在', bodies.length === 1 && r.scope === 'changes' && /这次的改动/.test(c4) && /let a=4/.test(c4) && /初值还是不对/.test(c4), c4.slice(0, 500));
-    } finally { server.close(); delete process.env.VIBE_KIT_REVIEW_PORT; delete process.env.VIBE_KIT_REVIEW_RETRY_MS; }
+    }
 
-    // 10 轮：不是设置，手写的值只能更小
-    H.ok('每个审查点自动审到 10 轮就停（默认）', P.limit({}, 'proposal') === 10 && P.limit({}, 'code') === 10);
-    H.ok('手写更大的值也不超过 10', P.limit({ requirementsReviewMaxRounds: 20, applyReviewMaxRounds: 99 }, 'proposal') === 10 && P.limit({ requirementsReviewMaxRounds: 20, applyReviewMaxRounds: 99 }, 'code') === 10);
+    // 次数不设上限（用户 2026-11-03 定的）：字段表里没有了，升级时从配置文件清掉
     const CF = require(path.join(h.kit, 'lib', 'config-fields.js'));
-    H.ok('字段表：默认 10、配置页上没有', ['requirementsReviewMaxRounds', 'applyReviewMaxRounds'].every((name) => { const x = CF.FIELDS.find((y) => y.name === name); return x && x.def === 10 && x.max === 10 && x.internal === true; }) && !/k_requirementsReviewMaxRounds|k_applyReviewMaxRounds/.test(fs.readFileSync(path.join(from, 'router', 'ui.html'), 'utf8')));
+    H.ok('字段表：审查次数、文件数都没有了', ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewMaxFiles', 'reviewExecutor', 'reviewLoop', 'reviewMaxRounds'].every((name) => !CF.FIELDS.find((y) => y.name === name) && CF.REMOVED.includes(name)));
 
     // 定稿前按审查意见改文档：不再要求写 revisions
     const n = 'c10'; const f = path.join(dirOf(n), 'proposal.md');
@@ -826,13 +728,13 @@ const reason = (o) => H.reasonOf(o);
     const ask = (sid, withReview) => {
       S.writeState(sid + '-artifacts', { files: { [key]: S.artifactHash(f) }, checkedAt: 0 });
       H.write(f, doc.replace('第一版', '按意见改了 ' + sid));
-      const entries = [H.tr.user('接着做')].concat(withReview ? [H.tr.ran('Bash', { command: 'node "$HOME/.claude/vibe-kit/tools/review.js" run --change ' + n + ' --mode proposal --point proposal' }, '{}')] : [], [H.tr.ran('Edit', { file_path: f, old_string: 'a', new_string: 'b' }, 'ok')]);
+      const entries = [H.tr.user('接着做')].concat(withReview ? [H.tr.ran('Bash', { command: 'node "$HOME/.claude/vibe-kit/tools/review.js" prepare --change ' + n + ' --mode proposal --point proposal' }, '{}')] : [], [H.tr.ran('Edit', { file_path: f, old_string: 'a', new_string: 'b' }, 'ok')]);
       return reason(H.hook(h, 'verify-gate', { session_id: sid, hook_event_name: 'Stop', cwd: p, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }));
     };
     H.ok('没在审查时改了提案：照旧要写 revisions', /revisions\.md/.test(ask('rev-a', false)));
     H.ok('审查期间按意见改提案：不再要求写 revisions', !/revisions\.md 末尾追加/.test(ask('rev-b', true)), ask('rev-c', true));
     const G = fs.readFileSync(path.join(from, 'kit', 'hooks', 'guard-spec.js'), 'utf8');
-    H.ok('到上限、不收敛的点不再挡写下一份文档', /!policy\.exhausted\(art\.dir, p, cfg\)/.test(G));
+    H.ok('子代理连续没交结论停了的点不再挡写下一份文档', /!policy\.halted\(art\.dir, p\)/.test(G));
 
     // 停了的点不卡死：全自动模式下接着打勾
     {
@@ -844,15 +746,15 @@ const reason = (o) => H.reasonOf(o);
       const dir = dirFor(nm); const sid = 's-stall';
       H.setConfig(h, { autoMode: true, autoApply: true }); H.inFlow(h, sid, [dir]);
       const tick = (num) => { const tf = H.transcript(path.join(h.root, sid + '.jsonl'), [H.tr.user('开工')]); return reason(H.hook(h, 'pre-edit', { session_id: sid, hook_event_name: 'PreToolUse', cwd: p, transcript_path: tf, tool_name: 'Edit', tool_input: { file_path: tasks, old_string: '- [ ] ' + num, new_string: '- [x] ' + num }, tool_use_id: 'tu-' + num })); };
-      const stall = (point) => { const fp = P.fingerprint(dir, point); [3, 3, 3].forEach((c, i) => { const id = point + '-' + i; P.begin(dir, point, id, fp); P.noteResult(dir, point, { id, status: 'completed', issues: Array.from({ length: c }, () => ({ severity: 'P2' })), materialInputs: [] }, fp); }); };
+      const stall = (point) => { const fp = P.fingerprint(dir, point); P.begin(dir, point, point + '-x', fp); [1, 2, 3].forEach(() => P.noteFail(dir, point)); };
       H.ok('提案没审过：第一次打勾照旧拦', /提案还没审过/.test(tick('1.1')), tick('1.1'));
       ['proposal', 'specs', 'design', 'tasks'].forEach(stall);
-      H.ok('需求文档都不收敛停了：第一次打勾不再拦"提案还没审过"', !/提案还没审过/.test(tick('1.1')), tick('1.1'));
+      H.ok('需求文档都停了（子代理连续没交）：第一次打勾不再拦"提案还没审过"', !/提案还没审过/.test(tick('1.1')), tick('1.1'));
       H.ok('这时候流程能继续，但不算提案审过', S.reviewAllowed('proposal', dir) && !P.allPassed(dir, 'proposal'));
       H.write(tasks, H.read(tasks).replace('- [ ] 1.1', '- [x] 1.1'));
       H.ok('上一组还没审：打下一组的勾照旧拦', /先完成上一整组/.test(tick('2.1')), tick('2.1'));
       stall('group-1');
-      H.ok('上一组不收敛停了：接着打下一组的勾，不卡死', !/先完成上一整组/.test(tick('2.1')), tick('2.1'));
+      H.ok('上一组停了：接着打下一组的勾，不卡死', !/先完成上一整组/.test(tick('2.1')), tick('2.1'));
       H.setConfig(h, { autoMode: false, autoApply: false });
     }
   }

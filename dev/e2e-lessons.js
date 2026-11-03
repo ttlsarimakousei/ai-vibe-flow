@@ -62,11 +62,23 @@ function reply(body, res, block, stop) {
 const say = (body, res, text) => reply(body, res, { type: 'text', text }, 'end_turn');
 let toolSeq = 0;
 const tool = (body, res, name, input) => reply(body, res, { type: 'tool_use', id: 'toolu_e2e_' + (++toolSeq), name, input }, 'tool_use');
+// prepare 的输出里有 agents：假模型当场替子代理交结论（真的子代理由 e2e-subagent.js 测）
+const fed = new Set();
+function feedReview(body) {
+  const R = require(path.join(h.kit, 'lib', 'review-runner.js'));
+  for (const m of body.messages || []) for (const c of (typeof m.content === 'string' ? [] : m.content || [])) {
+    if (c.type !== 'tool_result') continue;
+    const text = typeof c.content === 'string' ? c.content : (c.content || []).map((x) => x.text || '').join('');
+    let j = null; try { j = JSON.parse(text.trim().split('\n').pop()); } catch (e) { continue; }
+    if (!j || !Array.isArray(j.agents) || fed.has(j.id)) continue;
+    fed.add(j.id);
+    for (const a of j.agents) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '调 selectByIds 之前没有判空', evidence: '传空列表，拼出 in ()，SQL 报错', fix: '先判空', kind: '边界', avoid: '按一批 id 查询之前：先判断列表是不是空的' }], summary: '看完了' }));
+  }
+}
 function answer(body, res) {
   const names = (body.tools || []).map((t) => t.name);
+  feedReview(body);
   const sys = Array.isArray(body.system) ? body.system.map((s) => s.text || '').join('\n') : String(body.system || '');
-  // 审查代理：只读的那几个工具，系统提示里有它的人设
-  if (/你是审查者/.test(sys)) return say(body, res, '- 位置：src/main/java/com/x/OrderService.java:3\n- 问题：调 selectByIds 之前没有判空\n- 什么情况下会出错：传空列表，拼出 in ()，SQL 报错\n- 严重程度：会出错\n- 类别：边界\n- 以后怎么避免：' + RULE_TEXT + '\n\n结论：问题 1 条（会出错 1，有隐患 0，建议 0）');
   if (!names.includes('Read') || !names.includes('Bash')) return say(body, res, 'ok');
   const shell = 'Bash';
   const done = uses(body);
@@ -81,14 +93,8 @@ function answer(body, res) {
     if (!done.some((u) => u.name === 'Read')) return tool(body, res, 'Read', { file_path: JAVA });
     return say(body, res, '读完了。');
   }
-  // 兼容代理入口：审查、修复和经验照常；故意未经确认尝试提交，必须拦截，后续真人确认再提交。
-  if (!done.some((u) => u.name === 'Agent' || u.name === 'Task')) {
-    const agent = (body.tools || []).find((t) => t.name === 'Agent' || t.name === 'Task');
-    const props = Object.keys(((agent || {}).input_schema || {}).properties || {});
-    const input = { description: '审查代码', subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：openspec/changes/' + s.change + '/\n改了 src/main/java/com/x/OrderService.java，仓库在 ' + proj };
-    if (props.includes('run_in_background')) input.run_in_background = false;
-    return tool(body, res, agent ? agent.name : 'Agent', input);
-  }
+  // 审查、修复和经验照常；故意未经确认尝试提交，必须拦截，后续真人确认再提交。
+  if (!ran(/review\.js" prepare/)) return tool(body, res, shell, { command: 'node "' + path.join(h.kit, 'tools', 'review.js').replace(/\\/g, '/') + '" prepare --change ' + s.change + ' --mode code --project "' + proj.replace(/\\/g, '/') + '" --base HEAD', description: '备审查' });
   if (!done.some((u) => u.name === 'Edit')) {
     if (!done.some((u) => u.name === 'Read')) return tool(body, res, 'Read', { file_path: JAVA });
     return tool(body, res, 'Edit', { file_path: JAVA, old_string: '  // FILE-ORDER-SERVICE', new_string: '  // FILE-ORDER-SERVICE\n  // 判空：' + s.change });
@@ -153,7 +159,7 @@ const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
   const r1 = await runClaude(port, '审一下变更 add-export 的代码，有问题就改', { kind: 'review', change: 'add-export' });
   console.log('    退出码 ' + r1.code + (r1.killed ? '（超时被结束）' : '') + '，' + r1.ms + ' ms，主会话 ' + mains(r1).length + ' 个请求；跑过的命令：' + commandsIn(r1).map((c) => c.slice(0, 50)).join(' ｜ '));
   H.ok('系统提示里没有自动记忆那一节（已关掉）', mains(r1).length > 0 && !/^# (auto memory|Memory)\s*$/im.test((mains(r1)[0].body.system || []).map((s) => s.text || '').join('\n')));
-  H.ok('审查代理真的跑了', r1.requests.some((r) => r.body && /你是审查者/.test(JSON.stringify(r.body.system || ''))));
+  H.ok('备了审查', r1.requests.some((r) => r.body && /review\.js\\?" prepare/.test(JSON.stringify(r.body.messages || ''))));
   if (AUTO) {
     H.ok('收工时没有催它记经验', !seen(r1, /各记一条经验/), commandsIn(r1));
     H.ok('它没有去跑 lesson.js', !commandsIn(r1).some((c) => /lesson\.js/.test(c)), commandsIn(r1));

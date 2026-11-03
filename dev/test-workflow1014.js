@@ -11,7 +11,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const j = { cwd: p, session_id: 'manual', transcript_path: tf([H.tr.user('修改 a.js')]), tool_use_id: 'r1', tool_name: 'Bash', tool_input: { command: 'node test-order.js' } };
   const runHook = (name, patch) => H.hook(h, name, Object.assign({}, j, patch));
   H.ok('人工自测先 Ask', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit'))));
-  const review = { tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js') + '" run --change add-a --mode proposal --point proposal' } };
+  const review = { tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js') + '" prepare --change add-a --mode proposal --point proposal' } };
   H.ok('人工审查先 Ask', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', review))));
   H.ok('明确自测要求直接执行', !/用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', { transcript_path: tf([H.tr.user('运行测试')]) }))));
   H.ok('明确主动审查不拒绝', !/用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('审核一下')]) })))));
@@ -26,9 +26,6 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   H.ok('用户说把服务起起来就直接起', runHook('guard-commit', { transcript_path: tf([H.tr.user('把服务起起来')]), tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } }) === null);
   H.ok('查服务状态不算自测', runHook('guard-commit', { tool_input: { command: kitTool('devserver.js') + ' list' } }) === null);
   H.ok('编译人工模式直接跑', runHook('guard-commit', { tool_input: { command: 'mvn -q -o compile' } }) === null);
-  const beforeTasks = H.read(path.join(d, 'tasks.md'));
-  const waiver = R.waive({ cwd: p, change: 'add-a', mode: 'code', reason: '用户已经明确决定这次不再审查' });
-  H.ok('放弃不写任务或未审查状态', waiver.status === 'dismissed' && H.read(path.join(d, 'tasks.md')) === beforeTasks && !Object.keys(S.readState('review-waivers')).length && !S.reviewAllowed('code', d));
   const template = require(path.join(h.kit, 'lib/workflow')).taskTemplate();
   H.ok('任务模板没有套件执行安排', !/代码审查|用户验收|联合验证|测试准备/.test(template));
   const spec = H.read(path.join(d, 'specs/order/spec.md')) + '\n' + '这是业务规则的详细说明。\n'.repeat(260);
@@ -43,11 +40,12 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   else {
     const P = require(pf); const A = require(path.join(h.kit, 'lib/apply-scope'));
     H.ok('两自动默认分别关闭', S.DEFAULT_CONFIG.autoRequirements === false && S.DEFAULT_CONFIG.autoApply === false);
+  const beforeTasks = H.read(path.join(d, 'tasks.md'));
     H.write(path.join(d, 'tasks.md'), beforeTasks.replace('1.1 修改', '1.1 修改').replace('- [ ] 1.1', '- [x] 1.1'));
     H.ok('半组任务不能进入代码审查点', P.points(d, 'code').length === 0);
     H.write(path.join(d, 'tasks.md'), H.read(path.join(d, 'tasks.md')).replace('- [ ] 1.2', '- [x] 1.2'));
     H.ok('整组 1.x 完成只产生一个审查点', P.points(d, 'code').join() === 'group-1');
-    cfg({ autoApply: true, autoRequirements: true, requirementsReviewMaxRounds: 2, applyReviewMaxRounds: 4 });
+    cfg({ autoApply: true, autoRequirements: true });
     S.setFlow(j, true, '需求', 'plan'); S.flowTouch(j, d);
     H.ok('需求开关开启但未探索不自动', !S.readConfigFor(j).autoMode);
     j.transcript_path = tf([H.tr.user('实现订单查询'), H.tr.ran('Read', { file_path: path.join(p, 'a.js') }, 'let a=1;')]);
@@ -69,7 +67,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     S.updateState('review-points', o => { delete o[S.normKey(d) + '|proposal']; });
     const good = { id: 'ok', status: 'completed', issues: [] };
     for (const point of ['proposal', 'specs', 'design', 'tasks', 'group-1']) P.noteResult(d, point, good, P.fingerprint(d, point));
-    H.ok('需求与 Apply 点次数不共享', P.record(d, 'proposal').rounds === 1 && P.record(d, 'group-1').rounds === 1 && P.limit(S.readConfig(), 'proposal') === 2 && P.limit(S.readConfig(), 'code') === 4);
+    H.ok('需求与 Apply 点次数不共享', P.record(d, 'proposal').rounds === 1 && P.record(d, 'group-1').rounds === 1);
     H.write(path.join(p, 'b.js'), 'let b=2;\n');
     H.ok('修改组内文件使该组结果失效', !P.passed(d, 'group-1') && P.passed(d, 'design'));
     P.noteResult(d, 'group-1', good, P.fingerprint(d, 'group-1'));
@@ -88,9 +86,6 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
       cfg({ autoRequirements: req, autoApply: apply });
       H.ok('Apply 阶段只看 Apply 开关：' + req + '/' + apply, S.readConfigFor(j).autoMode === apply);
     }
-    const limitKey = 'code|' + S.normKey(d);
-    S.writeState('review-rounds', { [limitKey]: { rounds: 4, issues: 1, pendingFix: true, done: false } });
-    H.ok('旧兼容循环到上限仍不登记通过', /停止自动循环/.test(S.reviewLoopIssue('code', d, { reviewLoop: true, reviewMaxRounds: 4, autoMode: true })) && !S.readState('review-rounds')[limitKey].done);
     cfg({ autoApply: false, autoRequirements: false });
     const first = P.stop(j, [d], true), second = P.stop(j, [d], true);
     H.ok('人工只提示一次，放弃不被同输入反复催', first.some(x => /Ask|提问框/.test(x)) && second.length === 0);
@@ -102,14 +97,11 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const r3 = asks('turn-2');
     H.write(path.join(p, 'a.js'), 'let a=13;\n'); const r4 = asks('turn-2');
     H.ok('同一要求里再改不再问，新要求没改动不问，有新改动再问一次', r1 && !r2 && !r3 && r4, [r1, r2, r3, r4]);
-    // 真实执行器与本机假路由：一次 run 的多个批次只计一次独立点。
-    let calls = 0; const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; res.end(JSON.stringify({ content: [{ type: 'text', text: '{"issues":[],"summary":"完成"}' }] })); }); });
-    await new Promise(r => server.listen(0, '127.0.0.1', r)); const prev = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
-    try { const prev = P.record(d, 'proposal'); const r = await R.run({ cwd: p, change: 'add-a', mode: 'proposal', point: 'proposal' });
+    // 真实脚本，子代理的回复由测试代替：一次审查只计一次独立点。
+    { const prev = P.record(d, 'proposal'); const r = await H.fakeReview(R, { cwd: p, change: 'add-a', mode: 'proposal', point: 'proposal' });
       // 上一轮零问题通过、或已处理完，这次重审从 1 数；否则接着加 1（2026-10-17 审核问题 4）
       const expect = (prev.status === 'completed' && prev.issues === 0) || prev.status === 'resolved' ? 1 : (prev.rounds || 0) + 1;
-      H.ok('审查执行器登记当前点与独立报告', r.status === 'completed' && calls > 0 && P.record(d, 'proposal').rounds === expect && /proposal-proposal.json$/.test(r.file), { prev, now: P.record(d, 'proposal') }); }
-    finally { if (prev === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = prev; server.closeAllConnections(); await new Promise(r => server.close(r)); }
+      H.ok('审查脚本登记当前点与独立报告', r.status === 'completed' && P.record(d, 'proposal').rounds === expect && /proposal-proposal.json$/.test(r.file), { prev, now: P.record(d, 'proposal') }); }
     // 部分覆盖的审查没有审完全部材料：只驳回其中的意见，不能把这个点登记成已处理。
     const partialFile = path.join(p, '.vibe/reviews/add-a/code-group-1-partial.json');
     H.write(partialFile, JSON.stringify({ id: 'partial-1', issues: [{ id: 'r1', text: '空列表没有处理' }] }));
@@ -167,19 +159,17 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const later = stop([H.tr.user('页面在哪看？'), H.tr.say('在订单页')], '在订单页');
     H.ok('验收等待中再问一句不重复交报告、不覆盖交代', !/全自动报告/.test(H.reasonOf(later)) && /c 做完，等你按用例自测/.test(H.read(report) || ''), H.reasonOf(later));
   }
-  // 自动模式审查点到上限：没有用户要求就停下；用户明确要求再审时不被上限拒绝（2026-10-14 决定，10-16 补测试）
+  // 审查不设次数上限（用户 2026-11-03 定的）：审了多少轮都不拦 prepare
   {
-    const h5 = H.makeHome('workflow1014-limit', process.argv[2], { autoApply: true, autoMode: true, applyReviewMaxRounds: 2, autoCommit: 'off', commitMode: 'off', lessons: 'off', autoOnboard: false, pullBeforeWork: false, outputGate: false, vibeTidy: false });
+    const h5 = H.makeHome('workflow1014-limit', process.argv[2], { autoApply: true, autoMode: true, autoCommit: 'off', commitMode: 'off', lessons: 'off', autoOnboard: false, pullBeforeWork: false, outputGate: false, vibeTidy: false });
     const p5 = H.makeRepo(path.join(h5.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'openspec/changes/c/proposal.md': '# 目标\n订单查询。\n', 'openspec/changes/c/tasks.md': '## 1. 实现\n- [x] 1.1 修改 a.js；验：node --check a.js\n' });
     const c5 = path.join(p5, 'openspec/changes/c'); const sid = 'limit';
     H.inFlow(h5, sid, [c5]);
     const P5 = require(path.join(h5.kit, 'lib/flow-policy'));
     for (const id of ['r1', 'r2']) P5.noteResult(c5, 'group-1', { id, status: 'completed', issues: [{ id: 'r1' }] }, P5.fingerprint(c5, 'group-1'));
-    const run = (said, id) => H.hook(h5, 'guard-commit', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command: 'node "' + path.join(h5.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --change c --mode code --point group-1' }, transcript_path: H.transcript(path.join(h5.root, 'l.jsonl'), [H.tr.user(said)]) });
-    const limited = run('继续', 'toolu_limit_1');
-    H.ok('自动审查到上限后没有用户要求就停下', /已达到自动审查上限/.test(H.reasonOf(limited)), H.reasonOf(limited));
-    const asked = run('再审查一次', 'toolu_limit_2');
-    H.ok('用户主动要求再审时不被自动上限拒绝', asked === null, H.reasonOf(asked));
+    const run = (said, id) => H.hook(h5, 'guard-commit', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command: 'node "' + path.join(h5.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change c --mode code --point group-1' }, transcript_path: H.transcript(path.join(h5.root, 'l.jsonl'), [H.tr.user(said)]) });
+    const again = run('继续', 'toolu_limit_1');
+    H.ok('审了几轮都不拦', again === null, H.reasonOf(again));
     // 2026-10-14 起自动模式可以用提问框问业务疑问，不再拦下记进报告（端到端用 -p 跑没人回答，放在这里测）
     const ask = H.hook(h5, 'guard-ask', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出的文件名用哪种格式？', header: '文件名', multiSelect: false, options: [{ label: '带日期', description: '文件名带日期' }, { label: '不带日期', description: '固定文件名' }] }] }, transcript_path: H.transcript(path.join(h5.root, 'ask.jsonl'), [H.tr.user('继续')]) });
     H.ok('自动模式生效时提问框照常可用', !(ask && (ask.decision === 'block' || ask.hookSpecificOutput && ask.hookSpecificOutput.permissionDecision === 'deny')), ask);

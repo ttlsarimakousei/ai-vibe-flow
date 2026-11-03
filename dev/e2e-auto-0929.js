@@ -2,10 +2,10 @@
 /*
  * 端到端（0929）：真的 Claude Code + 按脚本回复的假模型，Apply 自动模式走一遍。
  *   直接起服务被拦（要走 devserver）→ 自己申请放行 → 再跑一次，照样放行（2026-10-17 起打勾不查验法，原来用的"打勾被拦"换成这一道）；打勾照常
- *   整组 1.x 做完用 review.js 逐点审查，报了问题、改了；下一个会话里复审，工具调用的 id 和上一个会话那次一样（内网的网关就是这样）→ 照样计成第 2 轮
+ *   整组 1.x 做完用 review.js prepare 逐点审查，报了问题、改了；下一个会话里复审，工具调用的 id 和上一个会话那次一样（内网的网关就是这样）→ 照样计成第 2 轮
  *   收工 → 套件交报告 → 它照着交代 → 它的交代接在报告后面；复审通过但用户没说归档，不归档
  * 2026-10-14 起：自动模式可以用提问框问业务疑问，不再拦下记进报告；-p 跑时没人回答，这一步不在端到端里测（放行由 test-workflow1014 测）。
- * 自动审查不走兼容代理，走 review.js 的有限材料请求：假模型同时扮演本机路由的审查请求（VIBE_KIT_REVIEW_PORT 指过来）。
+ * 审查的结论：假模型照 prepare 的输出直接交（真的子代理由 e2e-subagent.js 测）。
  * 同一个对话里 Claude Code 自己不认重复的 id（第二次调用会被它换成"Tool use interrupted"），所以重复只会出现在两个会话之间。
  * 套件用真的 install.js 装进假的用户目录（--no-router，钩子走命令方式）。
  * 用法：node dev/e2e-auto-0929.js <claude.exe 的路径> [标签]
@@ -38,8 +38,7 @@ const proj = H.makeRepo(path.join(root, 'w', 'proj'), {
 const JAVA = path.join(proj, 'src', 'main', 'java', 'com', 'x', 'OrderService.java');
 const TASKS = path.join(proj, 'openspec', 'changes', 'a1', 'tasks.md');
 const FEEDBACK = path.join(kit, 'tools', 'feedback.js').replace(/\\/g, '/');
-const REVIEW = 'node "' + path.join(kit, 'tools', 'review.js').replace(/\\/g, '/') + '" run --change a1 --mode code --point group-1';
-const isReviewBody = (b) => !!b && (b.model === 'claude-sonnet-vibe-review' || /你是独立审查者/.test(JSON.stringify(b.system || '')));
+const REVIEW = 'node "' + path.join(kit, 'tools', 'review.js').replace(/\\/g, '/') + '" prepare --change a1 --mode code --point group-1';
 const FINAL = '## 做了什么\na1 的 1.1 做完了，代码审过一轮、改了。\n## 留给你做的\n没有。\n## 库里改过的\n没有。\n## 自己定的事\n导出的文件名按带日期的做。\n## 没验证的\n1.1 的对照场景没跑：要先改库。\n## 放行的检查\n起服务检查一次。\n## 套件问题\n没有。';
 
 // ---------- 假模型 ----------
@@ -64,11 +63,22 @@ let toolSeq = 0;
 const tool = (body, res, name, input, id) => reply(body, res, { type: 'tool_use', id: id || 'toolu_e2e_' + (++toolSeq), name, input }, 'tool_use');
 // 内网的网关给的就是这种 id，两个会话里会重复
 const DUP = 'chatcmpl-tool-b9a8989979ffa5ac';
-let reviewCalls = 0;
+// prepare 的输出里有 agents：假模型当场替子代理交结论（真的子代理由 e2e-subagent.js 测）
+const fed = new Set();
+function feedReview(body) {
+  const R = require(path.join(kit, 'lib', 'review-runner.js'));
+  for (const m of body.messages || []) for (const c of (typeof m.content === 'string' ? [] : m.content || [])) {
+    if (c.type !== 'tool_result') continue;
+    const text = typeof c.content === 'string' ? c.content : (c.content || []).map((x) => x.text || '').join('');
+    let j = null; try { j = JSON.parse(text.trim().split('\n').pop()); } catch (e) { continue; }
+    if (!j || !Array.isArray(j.agents) || fed.has(j.id)) continue;
+    fed.add(j.id);
+    for (const a of j.agents) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: fed.size === 1 ? [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '角色写死了', evidence: '角色改成 aqbmy', fix: '角色从配置读' }] : [], summary: '看完了' }));
+  }
+}
 function answer(body, res) {
   const names = (body.tools || []).map((t) => t.name);
-  // review.js 的有限材料审查请求：第一次报 1 条，之后报 0 条
-  if (isReviewBody(body)) return say(body, res, JSON.stringify(++reviewCalls === 1 ? { issues: [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '角色写死了', evidence: '角色改成 aqbmy', fix: '角色名从配置里读' }], summary: '1 条' } : { issues: [], summary: '上一轮的问题改对了，没有新问题' }));
+  feedReview(body);
   if (!names.includes('Edit') || !names.includes('Bash')) return say(body, res, 'ok');
   const done = uses(body);
   const ran = (re) => done.some((u) => u.name === 'Bash' && re.test(String((u.input || {}).command || '')));
@@ -76,7 +86,7 @@ function answer(body, res) {
   const read = (f) => done.some((u) => u.name === 'Read' && path.resolve(String((u.input || {}).file_path || '')).toLowerCase() === path.resolve(f).toLowerCase());
   const everything = allText(body);
   const last = afterLastAssistant(body);
-  const reviewed = ran(/review\.js" run/);
+  const reviewed = ran(/review\.js" prepare/);
   const finish = () => {
     if (/\[vibe-kit 全自动报告\]/.test(everything)) return say(body, res, FINAL);
     if (/\[vibe-kit 收工检查\]/.test(last)) return say(body, res, '复审留到下一个会话做，这个会话先收工。没验证：1.1 的对照场景要先改库。');
@@ -128,7 +138,7 @@ const server = http.createServer((req, res) => {
 function runClaude(port, promptText) {
   return new Promise((resolve) => {
     requests = [];
-    const env = H.envFor(h, { ANTHROPIC_BASE_URL: 'http://127.0.0.1:' + port, ANTHROPIC_AUTH_TOKEN: 'e2e-token', VIBE_KIT_REVIEW_PORT: String(port), NO_PROXY: '127.0.0.1,localhost', DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', CLAUDE_CODE_GIT_BASH_PATH: 'C:\\Program Files\\Git\\bin\\bash.exe',
+    const env = H.envFor(h, { ANTHROPIC_BASE_URL: 'http://127.0.0.1:' + port, ANTHROPIC_AUTH_TOKEN: 'e2e-token', NO_PROXY: '127.0.0.1,localhost', DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', CLAUDE_CODE_GIT_BASH_PATH: 'C:\\Program Files\\Git\\bin\\bash.exe',
       APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local') });
     for (const k of ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']) delete env[k];
     fs.mkdirSync(env.APPDATA, { recursive: true }); fs.mkdirSync(env.LOCALAPPDATA, { recursive: true });
@@ -142,8 +152,7 @@ function runClaude(port, promptText) {
     p.on('error', (e) => { clearTimeout(timer); resolve({ code: -1, killed, ms: Date.now() - t0, out, err: String(e), requests: requests.slice() }); });
   });
 }
-const isReviewer = (r) => isReviewBody(r.body);
-const mains = (run) => run.requests.filter((r) => r.body && !isReviewer(r) && Array.isArray(r.body.tools) && r.body.tools.some((t) => t.name === 'Edit') && r.body.tools.some((t) => t.name === 'Bash'));
+const mains = (run) => run.requests.filter((r) => r.body && Array.isArray(r.body.tools) && r.body.tools.some((t) => t.name === 'Edit') && r.body.tools.some((t) => t.name === 'Bash'));
 const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } };
 
@@ -152,7 +161,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   const watch = await H.watchWindows('e2e-auto-win');
   const inst = H.node(h, path.join(H.SRC, 'install.js'), ['--no-router', '--no-open'], { cwd: root, timeout: 180000 });
   H.ok('套件装进了假的用户目录', inst.code === 0, inst.out + inst.err);
-  H.setConfig(h, { autoApply: true, applyReviewMaxRounds: 3, autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, autoUpdate: 'off', issueUpload: 'off' });
+  H.setConfig(h, { autoApply: true, autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, autoUpdate: 'off', issueUpload: 'off' });
   const sync = H.node(h, path.join(kit, 'install.js'), ['--sync'], { cwd: root, timeout: 180000 });
   const md = H.read(path.join(cfg, 'CLAUDE.md')) || '';
   // 2026-10-14 起：需求自动和 Apply 自动两套，约定最前面说以本轮提醒的生效阶段为准，开着自动时带"自动执行范围"一节
@@ -194,7 +203,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
 
   H.section('整组做完，逐点审查报了 1 条，改了');
   const p1 = point();
-  H.ok('有限材料的审查请求真的发出了', r.requests.some((x) => isReviewer(x)) && cmds.some((c) => /review\.js" run --change a1 --mode code --point group-1/.test(c)), cmds);
+  H.ok('备了审查', cmds.some((c) => /review\.js" prepare --change a1 --mode code --point group-1/.test(c)), cmds);
   H.ok('审查点 group-1 记成第 1 轮，1 条问题，还没收尾', p1.rounds === 1 && p1.issues === 1 && p1.status === 'completed' && !P.settled(a1, 'group-1'), p1);
 
   H.section('收工：交报告');

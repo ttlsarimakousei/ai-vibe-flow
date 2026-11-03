@@ -14,16 +14,6 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const commit = H.hook(h, 'guard-commit', { cwd: p, session_id: 'metadata', transcript_path: transcript, tool_name: 'Bash', tool_input: { command: 'git commit -m "docs: 更新经验规则"' } });
   H.ok('#112 非提案暂存文件不套提案提交许可', !/提案提交要单独确认/.test(JSON.stringify(commit)), commit);
   H.write(path.join(p, 'large.js'), 'const value=1;\n'.repeat(15000));
-  const R = require(path.join(h.kit, 'lib/review-runner')); let calls = 0;
-  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; res.writeHead(200); res.end(JSON.stringify(calls === 1 ? { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '模拟空正文' }] } : { content: [{ type: 'text', text: '{"issues":[],"summary":"本批完成"}' }] })); }); });
-  // 回 end_turn：模型自己停了、不是到了输出上限，1025 起的"加上限重试一次"不触发，这一批照旧算失败
-  await new Promise(r => server.listen(0, '127.0.0.1', r)); const prev = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
-  try {
-    const result = await R.run({ cwd: p, mode: 'proposal', change: 'add-a', newBudget: true });
-    H.ok('#116 首批失败后继续后续独立批次', result.totalBatches > 1 && result.attemptedBatches === result.totalBatches && result.completedBatches > 0, result);
-    H.ok('#113 空正文不冒充无材料', result.diagnostics.some(x => x.stage === 'model-empty') && result.attemptedFiles.length > 0);
-    H.ok('#116 失败批次有真实原因且不算完整通过', result.status !== 'completed' && result.skipped.some(x => /失败/.test(x.reason)) && !result.skipped.some(x => /超过本轮文件上限/.test(x.reason)), result.skipped);
-  } finally { if (prev === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = prev; server.closeAllConnections(); await new Promise(r => server.close(r)); }
   const feedback = require(path.join(h.kit, 'lib/feedback'));
   feedback.record({ kind: '出错', hook: 'test', source: '钩子自动记录', title: '详细问题标题不应进入收尾', what: '模拟', sid: 'summary', cwd: p });
   const out = H.hook(h, 'verify-gate', { cwd: p, session_id: 'summary', hook_event_name: 'Stop', transcript_path: H.transcript(path.join(h.root, 'done.jsonl'), [H.tr.user('处理结束')]), last_assistant_message: '已经完成。' });

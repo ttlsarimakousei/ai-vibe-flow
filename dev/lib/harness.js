@@ -89,7 +89,7 @@ function makeHome(name, from, config, opts) {
   const age = (p) => { let st; try { st = fs.statSync(p); } catch (e) { return; } if (st.isDirectory()) { for (const n of fs.readdirSync(p)) age(path.join(p, n)); } else { try { fs.utimesSync(p, old, old); } catch (e) { /* 拨不了就算了 */ } } };
   for (const p of [path.join(cfg, 'skills'), path.join(cfg, 'agents'), path.join(kit, 'CLAUDE.md'), path.join(kit, 'rules')]) age(p);
   fs.mkdirSync(path.join(kit, 'state'), { recursive: true });
-  fs.writeFileSync(path.join(kit, 'config.json'), JSON.stringify(Object.assign({ hookTransport: 'command', autoUpdate: 'off', issueUpload: 'off', requirementsReviewMaxRounds: 3, applyReviewMaxRounds: 3, autoHandover: true, reviewLenses: 1 }, config || {}), null, 2));
+  fs.writeFileSync(path.join(kit, 'config.json'), JSON.stringify(Object.assign({ hookTransport: 'command', autoUpdate: 'off', issueUpload: 'off', autoHandover: true, reviewLenses: 1 }, config || {}), null, 2));
   // 封条：测试里要关禁改、开自动放行时才认
   fs.writeFileSync(path.join(kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: !(config && config.kitLock === false), kitBypass: (config && config.kitBypass) || 'ask', autoMode: !!(config && (config.autoApply === true || config.autoMode === true)), autoApply: !!(config && (config.autoApply === true || config.autoMode === true)), autoRequirements: !!(config && config.autoRequirements === true), at: Date.now() }));
   return { root, home, cfg, kit, work: path.join(root, 'work') };
@@ -457,6 +457,32 @@ function inFlow(h, sid, changes, on, stage) {
   write(f, JSON.stringify({ on: on !== false, why: '测试', at: Date.now(), was: Date.now(), changes: (changes || []).map(norm), stage: stage || 'apply' }));
 }
 
+/**
+ * 代替真的子代理审一轮：R.prepare，再把每个角度的回复交给 R.submit（和 review-stop 钩子走同一条路）。
+ * reply(lens, 范围文件的文字, prepare 的结果) 返回 { issues, summary } 或原样的回复文字；不给就是没有问题。返回最后一次 submit 的结果（交齐了就是审查结果）
+ */
+async function fakeReview(R, opts, reply) {
+  const p = await R.prepare(opts);
+  if (p.status !== 'prepared') return p;
+  let last = p;
+  for (const a of p.agents) {
+    const scope = /范围文件：(.+)/.exec(a.prompt);
+    const out = reply ? await reply(a.lens, scope ? read(scope[1].trim()) : '', p) : { issues: [] };
+    const text = typeof out === 'string' ? out : '审查任务：' + p.id + '/' + a.lens + '\n```json\n' + JSON.stringify(Object.assign({ issues: [], summary: '' }, out)) + '\n```';
+    last = R.submit(p.id, a.lens, text);
+  }
+  return last;
+}
+/**
+ * 一次审查留下的东西：结果文件，和会话记录里那条 review.js prepare（经验规则靠它们认这次审查）。返回会话记录的条目。
+ * o: { recheck: 复审, mode: 'proposal' }
+ */
+let fakeReports = 0;
+function reviewedTurn(h, proj, change, issues, o) {
+  const mode = (o && o.mode) || 'code';
+  write(path.join(proj, '.vibe', 'reviews', change || 'plain', mode + '.json'), JSON.stringify({ id: 'fake-' + (++fakeReports), at: Date.now(), status: 'completed', scope: o && o.recheck ? 'changes' : 'full', issues: issues.map((x, i) => Object.assign({ id: 'r' + (i + 1) }, x)) }));
+  return tr.ran('Bash', { command: 'node "' + path.join(h.kit, 'tools', 'review.js').replace(/\\/g, '/') + '" prepare' + (change ? ' --change ' + change : '') + ' --mode ' + mode + ' --project "' + proj.replace(/\\/g, '/') + '"' }, '{"status":"prepared"}');
+}
 /** 报告和提交用例的前提：模拟当前每个审查点已经取得完整零问题结果。 */
 function reviewPoints(h, dir, mode) {
   const file = path.join(h.kit, 'lib/flow-policy.js'); if (!fs.existsSync(file)) return;
@@ -464,4 +490,4 @@ function reviewPoints(h, dir, mode) {
   for (const point of p.points(dir, mode || 'code')) p.noteResult(dir, point, { id: 'fixture-' + point, status: 'completed', issues: [] }, p.fingerprint(dir, point));
 }
 
-module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, baselineDir, makePackage, runtime, inFlow, reviewPoints, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done, stubDeps };
+module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, baselineDir, makePackage, runtime, inFlow, reviewPoints, fakeReview, reviewedTurn, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done, stubDeps };

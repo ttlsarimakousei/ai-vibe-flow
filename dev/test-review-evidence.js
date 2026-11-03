@@ -24,32 +24,29 @@ const H = require('./lib/harness');
   H.ok('别的仓库命令不借当前仓库证据', E.actual(Object.assign({}, j, { tool_input: { command: 'git -C "../other" status; node a.js' } })) === null);
   H.write(path.join(p, 'a.js'), 'const a=3;\n'); H.ok('代码变化使旧验证失效', E.commands(p).length === 0);
   j.tool_use_id = 'test-2'; E.recordTool(j, false); H.ok('失败不能成为通过证据', E.commands(p).length === 0);
-  let mode = 'ok'; let calls = 0;
-  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => { calls++; if (mode === 'hang') return; if (mode === 'slow') { setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ issues: [], summary: '本批审完' }) }], usage: { output_tokens: 20 } })); }, 10600); return; } if (mode === 'stale') H.write(path.join(p, 'a.js'), 'const a=4;\n'); if (mode === 'bad') { res.writeHead(200); return res.end('{bad'); } res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ issues: [], summary: '本批审完' }) }] })); }); });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r)); const oldPort = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
-  try {
-    const opts = { cwd: p, change: 'add-x', mode: 'code', base: 'HEAD', newBudget: true };
-    const r = await R.run(opts); H.ok('有限请求完成独立审查', r.status === 'completed' && r.covered.includes('a.js'), r.status);
+  {
+    const opts = { cwd: p, change: 'add-x', mode: 'code', base: 'HEAD' };
+    const good = (x) => '审查任务：' + x.id + '/' + x.agents[0].lens + '\n```json\n{"issues":[],"summary":"本批审完"}\n```';
+    const r = await H.fakeReview(R, opts); H.ok('子代理交齐完成审查', r.status === 'completed' && r.covered.includes('a.js'), r.status);
     H.ok('完整结果可勾审查和零意见处理', T.tickIssue('[代码审查] 审查', d, { cwd: p }) === '' && T.tickIssue('[审查意见处理] 处理', d, { cwd: p }) === '');
     H.ok('模型测试不能代替用户验收', !!T.tickIssue('[用户验收] 自测', d, { cwd: p }));
     const before = S.codeReviewed(d); H.write(path.join(d, 'tasks.md'), H.read(path.join(d, 'tasks.md')).replace('[ ] 3.1', '[x] 3.1'));
     H.ok('勾审查任务不让已审代码失效', before && S.codeReviewed(d));
-    mode = 'stale'; const stale = await R.run(opts); H.ok('审查期间输入变化不批准新版', stale.status === 'stale');
+    const stale = await H.fakeReview(R, opts, () => { H.write(path.join(p, 'a.js'), 'const a=4;\n'); return { issues: [] }; }); H.ok('审查期间输入变化不批准新版', stale.status === 'stale');
     H.ok('旧审查结果不能给新版打勾', !!T.tickIssue('[代码审查] 审查', d, { cwd: p }));
-    mode = 'bad'; const bad = await R.run(opts); H.ok('不认识的回复不能算审完', bad.status === 'failed');
-    mode = 'hang'; const pending = R.run(opts); setTimeout(() => R.cancel(opts), 100); const cancelled = await pending;
-    H.ok('取消后迟到结果不记审查', cancelled.status === 'cancelled' && R.status(opts).status === 'cancelled');
+    const bp = R.prepare(opts); const bad = R.submit(bp.id, bp.agents[0].lens, '不是 JSON'); H.ok('不认识的回复不能算审完', bad.ok === false && R.status(opts).status === 'running', bad);
+    R.cancel(opts); const late = R.submit(bp.id, bp.agents[0].lens, good(bp));
+    H.ok('取消后迟到结果不记审查', late.late === true && R.status(opts).status === 'cancelled', late);
     // 2026-10-28 起不截断（用户定的，问题反馈表第 6 条）：慢过预期用时也等它审完，审完记一条问题反馈
-    mode = 'slow'; const start = Date.now(); const slow = await R.run(Object.assign({}, opts, { budgetSeconds: 10 }));
-    H.ok('不截断：慢过预期用时也等它审完', slow.status === 'completed' && Date.now() - start >= 10500, slow.status + ' ' + slow.reason);
+    const sp = R.prepare(Object.assign({}, opts, { budgetSeconds: 10 }));
+    S.updateState('review-jobs', (o) => { for (const k of Object.keys(o)) if (o[k].id === sp.id) o[k].started = Date.now() - 60000; });
+    const slow = R.submit(sp.id, sp.agents[0].lens, good(sp));
+    H.ok('不截断：慢过预期用时也等它审完', slow.status === 'completed', slow.status + ' ' + slow.reason);
     H.ok('超出预期用时：自动记了一条问题反馈', !!slow.reported, slow);
-    H.setConfig(h, { reviewMaxFiles: 1 }); H.write(path.join(p, 'b.js'), 'const b=1;\n'); mode = 'ok';
-    const partial = await R.run(opts); H.ok('覆盖不足明确为部分结果', partial.status === 'partial' && partial.skipped.length > 0);
-    H.ok('没有自主工具或重试请求', calls <= 7, calls);
-    H.setConfig(h, { reviewMaxFiles: 20 }); H.write(path.join(d, 'proposal.md'), '需求'.repeat(30000));
+        H.write(path.join(d, 'proposal.md'), '需求'.repeat(30000));
     const tooLong = R.materials(opts, S.allChanges(p).find((c) => c.name === 'add-x'));
     H.ok('大需求材料分片完整送审', tooLong.items.filter((x) => x.file === 'proposal.md').length > 1 && !tooLong.skipped.some((x) => x.file === 'proposal.md'));
     H.ok('审查材料不删除鉴权代码逻辑', require(path.join(h.kit, 'lib/redact')).material('token = validate(input); password = "FAKE_REVIEW_PASSWORD"').includes('token = validate(input)') && !require(path.join(h.kit, 'lib/redact')).material('password = "FAKE_REVIEW_PASSWORD"').includes('FAKE_REVIEW_PASSWORD'));
-  } finally { if (oldPort === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = oldPort; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
+  }
   H.done('审查和证据');
 })();

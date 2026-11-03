@@ -26,36 +26,15 @@ const H = require('./lib/harness');
   H.ok('分片含行号和总片数', chunks.length > 1 && chunks.every((x, i) => x.part === i + 1 && x.parts === chunks.length && x.startLine > 0));
   const secretChunks = material.items.filter((x) => x.file === 'src/boundary.js');
   H.ok('跨片凭据字面值先脱敏', secretChunks.length > 1 && !secretChunks.map((x) => x.text).join('').includes('FAKE_REVIEW_BOUNDARY_VALUE'));
-  let shape = 'outer', calls = 0; const bodies = [];
-  const server = http.createServer((req, res) => { let body = ''; req.on('data', (b) => body += b); req.on('end', () => {
-    calls++; bodies.push(JSON.parse(body)); res.writeHead(200);
-    if (shape === 'outer') return res.end('{bad');
-    const text = shape === 'body' ? '正文错误 password="FAKE_REVIEW_SECRET"' : JSON.stringify({ issues: shape === 'file' ? [{ file: 'not-in-batch.js', problem: '模拟问题', evidence: '模拟依据' }] : [], summary: '已审本批' });
-    res.end(JSON.stringify({ content: [{ type: 'text', text }] }));
-  }); });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r)); const old = process.env.VIBE_KIT_REVIEW_PORT; process.env.VIBE_KIT_REVIEW_PORT = String(server.address().port);
-  try {
-    for (shape of ['outer', 'body']) {
-      const result = await R.run({ cwd: p, change: 'add-a', mode: 'proposal', newBudget: true });
-      H.ok('解析阶段可分辨：' + shape, result.diagnostics && result.diagnostics[0].stage === (shape === 'outer' ? 'router-json' : 'model-json'), result);
-      H.ok('已收到回复和已覆盖分开：' + shape, result.attemptedBatches === result.totalBatches && result.receivedBatches === result.totalBatches && result.covered.length === 0);
-      H.ok('本机诊断不含假秘密：' + shape, !JSON.stringify(result).includes('FAKE_REVIEW_SECRET'));
-    }
-    shape = 'file'; const partial = await R.run({ cwd: p, change: 'add-a', mode: 'proposal', newBudget: true });
-    H.ok('无效意见路径只记部分结果', partial.status === 'partial' && partial.skipped.some((x) => /意见路径/.test(x.reason)), partial.status);
-    shape = 'ok'; const progress = []; const full = await R.run({ cwd: p, change: 'add-a', mode: 'proposal', newBudget: true }, (s) => progress.push(s));
-    H.ok('所有分片成功后完整覆盖大文件', full.status === 'completed' && full.covered.filter((f) => f === 'src/large.js').length === 1, full.status);
-    H.ok('进度展示片段与尝试数', progress.every((s) => /片段.*已尝试/.test(s)), progress);
-    H.ok('请求有明确 JSON 结构要求', bodies.every((b) => /返回 JSON/.test(b.system)));
-    const sentChunks = bodies.flatMap((b) => JSON.parse(b.messages[0].content.split('\n本批材料：\n')[1])).filter((m) => m.file === 'src/boundary.js');
-    H.ok('所有实际请求不含跨片假凭据', !sentChunks.map((m) => m.text).join('').includes('FAKE_REVIEW_BOUNDARY_VALUE'));
-    H.ok('确有独立请求', calls >= 4);
-  } finally { if (old === undefined) delete process.env.VIBE_KIT_REVIEW_PORT; else process.env.VIBE_KIT_REVIEW_PORT = old; server.closeAllConnections(); await new Promise((r) => server.close(r)); }
-  const input = { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：openspec/changes/add-a/' };
-  const output = H.hook(h, 'after-tool', { cwd: p, session_id: 'agent', hook_event_name: 'PostToolUse', tool_name: 'Agent', tool_use_id: 'actual-agent', tool_input: input, tool_response: { content: [{ type: 'text', text: '已独立审查\n问题 0 条' }] } });
-  H.ok('真实完成事件立即登记兼容审查', S.reviewRecord('code', d) && S.reviewRecord('code', d).executor === 'agent', output);
-  const transcript = H.transcript(path.join(h.root, 'agent.jsonl'), [H.tr.user('审代码'), H.tr.ran('Agent', input, '结论：问题 0 条')]);
-  const sync = H.node(h, path.join(h.kit, 'tools/review.js'), ['sync', '--project', p, '--transcript', transcript]);
-  H.ok('可核对记录可显式补登记', sync.code === 0 && /已识别完整结论/.test(sync.out), sync);
+  const bp = R.prepare({ cwd: p, change: 'add-a', mode: 'proposal' });
+  const badText = '审查任务：' + bp.id + '/' + bp.agents[0].lens + '\n正文错误 password="FAKE_REVIEW_SECRET"';
+  const bad = R.submit(bp.id, bp.agents[0].lens, badText);
+  H.ok('回复不是 JSON：不入账，说清楚', bad.ok === false && /JSON/.test(bad.error) && R.status({ cwd: p, change: 'add-a', mode: 'proposal' }).status === 'running', bad);
+  H.ok('诊断不含假秘密', !JSON.stringify(R.status({ cwd: p, change: 'add-a', mode: 'proposal' })).includes('FAKE_REVIEW_SECRET'));
+  const scope = H.read(/范围文件：(.+)/.exec(bp.agents[0].prompt)[1].trim());
+  H.ok('范围文件要求 JSON，不带材料原文', /JSON/.test(scope) && !scope.includes('FAKE_REVIEW_BOUNDARY_VALUE'), scope.slice(0, 300));
+  const full = await H.fakeReview(R, { cwd: p, change: 'add-a', mode: 'proposal' }, () => ({ issues: [{ file: 'not-in-batch.js', problem: '范围外文件的问题', evidence: '模拟依据' }] }));
+  H.ok('角度交齐后完整覆盖大文件', full.status === 'completed' && full.covered.filter((f) => f === 'src/large.js').length === 1, full.status);
+  H.ok('报到材料之外的文件也算（子代理自己会读，连带影响常在别的文件）', full.issues.some((x) => x.file === 'not-in-batch.js'), full.issues);
   H.done('1013 审查诊断、材料与兼容结果');
 })();

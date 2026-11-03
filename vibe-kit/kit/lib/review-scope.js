@@ -3,14 +3,14 @@
  * 审查怎么分轮（问题表第 37 条，2026-11-02 用户定的）。起因：一份提案审了 8 轮，问题数还在 5—11 条之间晃：
  *   每轮都从头全量审、不带上一轮的结论，0 条问题才算过，提示不分阶段，模型把实现细节全往提案里塞，越改越长、问题越多，过程也没留下来。
  * 现在：
- *   第一轮：2～3 个角度同时审（并发的独立请求，不是子代理），一次看全。材料超过 3 批的用 2 个角度。
+ *   第一轮：2～3 个角度同时审（一条回复里开几个子代理，2026-11-03 起），一次看全。材料超过 3 批的用 2 个角度。
  *   后面的轮：只审修改点。送上一轮的问题和这次的改动（和上一轮审过的内容比），只问"改对了没有""改出新问题没有"。
  *     改动超过六成（整个重写）按第一轮算；上一轮没审到的文件整份送。
  *     没处理、文件也没改过的问题不问模型，照旧算没解决：不会因为再审一次就消失。登记修了、改的是别的文件的，连这个文件一起送去核对。
  *     定过的问题（驳回、接受、留给后面）一直带着，模型又报一遍不算；这一轮没审到的文件，上一轮的内容和问题留着，下一轮接着比。
  *   按阶段给提示：提案只审需求、范围、验收和事实，算法步骤这些归 design。后面的点只审新写的文档，前面的只用来核对是否对齐。
- *   通过标准：没有 P1、P2 就算过，P3 记下来，不为它再审一轮。
- *   不收敛就停：连续两轮 P1、P2 没减少，停止这个点的自动循环（flow-policy.js 的 stalled）。
+ *   通过标准：没有 P1、P2 就算过，P3 记下来，不为它再审一轮。审修不设次数上限（用户 2026-11-03 定的）。
+ *   不自己加（第 43 条）：需求和探索记录里有的才算问题，写出来的错了照报；别的标 scope: out，不挡通过，人工核验时列给用户。
  *   过程脚本记：每轮追加到 .vibe/reviews/<变更>/审查记录.md，不靠模型自觉，也不会被下一轮盖掉。
  * 上一轮的内容和问题存在 <结果文件>.snapshot.json（.vibe 不进仓库；文本遮过口令）。这一轮没审成（失败、取消、审查期间文件变了）不动它。
  * 只用 Node 自带的模块。
@@ -20,8 +20,8 @@ const path = require('path');
 
 const SEVERITY_NOTE = 'severity：P1 上线会出事故、丢数据或有安全漏洞；P2 功能做不到、会出错；P3 说法、写法、可有可无的改进。别把 P3 说成 P1、P2。';
 const STAGE = {
-  proposal: '这是提案，只审提案该管的事：要解决什么问题说清了没有；做什么、不做什么划清了没有；验收条件能不能核对；写的事实和材料对不对得上（说存在的文件、接口、配置是不是真的那样）；有没有明显漏掉的场景。不审实现细节：算法步骤、字段规则、日志格式、魔数、错误文案这些归 design，提案里写了也不要挑它们的毛病，缺了也不要求补。',
-  specs: '这是规格，只审规格该管的事：每条需求有没有写清场景，WHEN、THEN 能不能核对；和提案的范围对不对得上；异常、空数据、无权限这些场景漏没漏。不审怎么实现。',
+  proposal: '这是提案，只审提案该管的事：要解决什么问题说清了没有；做什么、不做什么划清了没有；验收条件能不能核对；写的事实和材料对不对得上（说存在的文件、接口、配置是不是真的那样）；用户说了的场景漏没漏。不审实现细节：算法步骤、字段规则、日志格式、魔数、错误文案这些归 design，提案里写了也不要挑它们的毛病，缺了也不要求补。',
+  specs: '这是规格，只审规格该管的事：每条需求有没有写清场景，WHEN、THEN 能不能核对；和提案的范围对不对得上；需求和探索记录里说了的场景漏没漏。不审怎么实现。',
   design: '这是设计：技术方案能不能落地；决策有没有写默认怎么做和理由；和规格的场景对不对得上；边界和异常怎么处理；有没有绕过或回归的风险；验收用例是否覆盖了规格的场景。',
   tasks: '这是任务清单，只审任务清单该管的事：是不是只写实现、一项是不是一次提交的量、顺序依赖对不对、有没有落不到设计上的任务、设计里的决策有没有任务去做。不重新审设计本身。',
   code: '这是代码：规格的场景做到了没有；有没有改错、改漏；连带影响；边界和异常。只审这次改动和它直接影响的地方。',
@@ -30,7 +30,7 @@ const ROLE_NOTE = '材料里带 role 的（上游文档、需求文档、参考�
 const LENSES = {
   doc: [
     { name: '事实和范围', text: '这一次你只看一个角度：事实和范围。写的事实和材料对不对得上，做什么、不做什么划清了没有，有没有超出或漏掉需求。' },
-    { name: '场景和风险', text: '这一次你只看一个角度：场景和风险。异常、空数据、无权限、并发、重复提交有没有考虑到，验收能不能核对，有没有绕过或回归的风险。' },
+    { name: '场景和风险', text: '这一次你只看一个角度：场景和风险。需求和探索记录里说了的异常、权限、并发场景写清了没有，验收能不能核对，有没有绕过或回归的风险。' },
     { name: '自洽和对齐', text: '这一次你只看一个角度：自洽和对齐。文档自己前后矛盾没有，和上游文档对不对得上，别人拿到能不能照着做。' },
   ],
   code: [
@@ -41,9 +41,16 @@ const LENSES = {
 };
 const RECHECK = '这是复审，不是重新审一遍。只做两件事：1. "上一轮的问题"逐条看现在改对了没有：改对了不报；没改对、只改了一部分的照旧报，severity 不变。2. 材料里这次的改动有没有改出新问题（改错了、改漏了、和上下文对不上）。没改过的内容不要审，看着有问题也不报。"已处理"里的问题已经定过了，不要再报。新问题只报 P1、P2。材料里带 note 的照 note 说的做。';
 
+// 不自己加（用户 2026-11-03 定的，第 43 条）
+const SCOPE_NOTE = '只报这次需求和探索记录里有的事：要做的没做到、写出来的代码或文档错了，照报。需求和探索记录里没有、你觉得还可以加的，scope 写 out，不算问题，人工核验时列给用户；别因为"更完善"要求加东西。';
 const P3 = /^P3$/i;
-/** 挡通过的问题有几条：除了 P3 都算（模型没写 severity 的当 P2） */
-function blocking(issues) { return (issues || []).filter((x) => !P3.test(String((x && x.severity) || ''))).length; }
+/** 挡通过的问题有几条：除了 P3、范围外建议都算（模型没写 severity 的当 P2） */
+function blocking(issues) { return (issues || []).filter((x) => !P3.test(String((x && x.severity) || '')) && !/^out$/i.test(String((x && x.scope) || ''))).length; }
+/** 这一轮的要求：阶段、角度、是不是复审。写进范围文件 */
+function requirements(round, mode, lensText) {
+  const r = round || {};
+  return [SEVERITY_NOTE, r.stage || stageText(mode), ROLE_NOTE, SCOPE_NOTE, r.scoped ? RECHECK : '', lensText || ''].filter(Boolean).join('\n\n');
+}
 function countBySeverity(issues) {
   const c = { P1: 0, P2: 0, P3: 0 };
   for (const x of issues || []) { const s = String((x && x.severity) || '').toUpperCase(); if (s === 'P1') c.P1++; else if (s === 'P3') c.P3++; else c.P2++; }
@@ -279,4 +286,4 @@ function logDecisions(folder, point, findings) {
   return appendLog(folder, out.join('\n') + '\n');
 }
 
-module.exports = { SEVERITY_NOTE, ROLE_NOTE, RECHECK, blocking, countBySeverity, stageText, lensesFor, lineDiff, snapshotFile, readPrior, writeSnapshot, noteDecisions, planRound, batchesOf, mergeIssues, dropClosed, deferredOf, carryover, appendLog, logRound, logDecisions, LOG_NAME };
+module.exports = { SEVERITY_NOTE, ROLE_NOTE, RECHECK, SCOPE_NOTE, requirements, blocking, countBySeverity, stageText, lensesFor, lineDiff, snapshotFile, readPrior, writeSnapshot, noteDecisions, planRound, batchesOf, mergeIssues, dropClosed, deferredOf, carryover, appendLog, logRound, logDecisions, LOG_NAME };
