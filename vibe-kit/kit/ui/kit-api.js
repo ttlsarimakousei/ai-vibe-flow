@@ -185,7 +185,6 @@ function browse(dir, wantFile) {
 /** 工作线程里实际执行的那几件事（kit-worker.js 调它） */
 function runOp(op, a) {
   if (op === 'readiness') { const f = path.join(a.kitDir, 'lib', 'readiness.js'); return require(f).inspect(a.project); }
-  if (op === 'performance') { const S = require(path.join(a.kitDir, 'lib', 'session')); return { hooks: S.readState('hook-stats').byHook || {}, tools: toolUsage(a.kitDir) }; }
   if (op === 'browse') return browse(a.dir, a.file);
   if (op === 'detect') return detect(a.kitDir);
   if (op === 'lessons') return lessonsOp(a);
@@ -238,7 +237,6 @@ function inWorker(op, args, what) {
 
 async function handle(method, url, body, kitDir) {
   if (method === 'POST' && url === '/api/kit/readiness') { const project = pathStr(body && body.project); if (!project || !path.isAbsolute(project)) throw new Error('填写项目完整路径'); return inWorker('readiness', { kitDir, project }, '核对环境'); }
-  if (method === 'GET' && url === '/api/kit/performance') return inWorker('performance', { kitDir }, '读取本机耗时');
   if (method === 'POST' && url === '/api/kit/browse') return inWorker('browse', { dir: pathStr(body && body.dir), file: !!(body && body.file) }, '列目录');
   const localFile = path.join(kitDir, 'local.json');
   const configFile = path.join(kitDir, 'config.json');

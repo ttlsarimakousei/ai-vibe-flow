@@ -63,7 +63,12 @@ function serve() {
       try { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "frame-ancestors 'none'" }); return res.end(fs.readFileSync(UI)); }
       catch (e) { return res.end('找不到配置页文件 ' + UI); }
     }
-    if (url === '/api/ping') { lastBeat = Date.now(); return json(res, 200, { ok: true, app: 'vibe-kit-config', kit: KIT }); }
+    if (url === '/api/ping') {
+      lastBeat = Date.now();
+      // 状态文件是可以按时间清的：开着的页面要让它一直算新的，不然开了三天被清掉，再敲 /vk-config 会另起一份
+      try { const now = new Date(); fs.utimesSync(STATE, now, now); } catch (e) { /* 没有 */ }
+      return json(res, 200, { ok: true, app: 'vibe-kit-config', kit: KIT });
+    }
     if (url.startsWith('/api/kit')) {
       lastBeat = Date.now();
       try {
@@ -75,9 +80,11 @@ function serve() {
   });
   const quit = () => { try { const s = JSON.parse(fs.readFileSync(STATE, 'utf8')); if (s.pid === process.pid) fs.unlinkSync(STATE); } catch (e) { /* 没有 */ } process.exit(0); };
   const restart = () => {
+    const port = server.address().port;
     server.close(() => {
       try { fs.unlinkSync(STATE); } catch (e) { /* 没有 */ }
-      spawn(process.execPath, [__filename, 'serve'], { detached: true, stdio: 'ignore', windowsHide: true, cwd: KIT }).unref();
+      // 还用现在这个端口（固定端口被占、在随机端口上的也是）：开着的页面接得上
+      spawn(process.execPath, [__filename, 'serve'], { detached: true, stdio: 'ignore', windowsHide: true, cwd: KIT, env: Object.assign({}, process.env, { VIBE_KIT_CONFIG_PORT: String(port) }) }).unref();
       process.exit(0);
     });
     server.closeAllConnections();

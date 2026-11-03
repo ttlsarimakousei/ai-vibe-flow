@@ -76,8 +76,8 @@ const until = async (fn, ms) => { for (let i = 0; i < (ms || 5000) / 100; i++) {
   }
   H.section('敲 /vk-config：钩子起配置页、拦下这句话，不发模型请求');
   for (const prompt of ['/vk-config', '<command-message>vk-config</command-message>\n<command-name>/vk-config</command-name>']) {
-    const out = H.hook(h, 'task-anchor', { session_id: 's-cfg', cwd: h.root, hook_event_name: 'UserPromptSubmit', prompt }, { env: { VIBE_KIT_CONFIG_PORT: String(PORT), VIBE_KIT_NO_BROWSER: '1' } });
-    const j = (() => { try { return JSON.parse(out); } catch (e) { return out || {}; } })();
+    const out = H.node(h, path.join(h.kit, 'hooks', 'task-anchor.js'), [], { cwd: h.root, env: { VIBE_KIT_CONFIG_PORT: String(PORT) }, input: JSON.stringify({ session_id: 's-cfg', cwd: h.root, hook_event_name: 'UserPromptSubmit', prompt }) }).out.trim();
+    const j = (() => { try { return JSON.parse(out); } catch (e) { return {}; } })();
     H.ok('拦下，理由里是地址：' + prompt.slice(0, 20), j.decision === 'block' && /配置页：http:\/\/127\.0\.0\.1:\d+\/ui/.test(j.reason), out);
     if (fs.existsSync(stateFile)) { const p = pidOf(); process.kill(p); await until(() => !alive(p)); try { fs.unlinkSync(stateFile); } catch (e) { /* 没有 */ } }
   }
@@ -98,12 +98,38 @@ const until = async (fn, ms) => { for (let i = 0; i < (ms || 5000) / 100; i++) {
     fs.unlinkSync(path.join(h.kit, 'update', 'lock.json'));
     H.ok('放了锁：换了进程', await until(() => fs.existsSync(stateFile) && pidOf() !== p.pid && !alive(p.pid), 12000));
     H.ok('新的还在原来的端口上答话', await until(async () => (await call(PORT, 'GET', '/api/ping')).status === 200, 5000));
+    // 先停再改回版本号：不然它看见版本号又变了，再重起一次
     const q = pidOf();
+    process.kill(q);
+    await until(() => !alive(q));
     H.write(ver, old);
-    await H.sleep(5500);
-    const r = fs.existsSync(stateFile) ? pidOf() : 0;
-    try { process.kill(r || q); } catch (e) { /* 已经退了 */ }
-    await until(() => !alive(r || q));
+    try { fs.unlinkSync(stateFile); } catch (e) { /* 没有 */ }
+  }
+
+  H.section('固定端口被占、在别的端口上：重起还在那个端口（复审 R8）');
+  {
+    const holder = http.createServer((q, s) => s.end('x'));
+    const P2 = PORT + 1; // 上一节连过 PORT，Windows 上 TIME_WAIT 没过去 bind 不上
+    await new Promise((r) => holder.listen(P2, '127.0.0.1', r));
+    const p = serve({ VIBE_KIT_CONFIG_PORT: String(P2), VIBE_KIT_CONFIG_IDLE_MS: '60000', VIBE_KIT_CONFIG_NOBODY_MS: '60000' });
+    await until(() => fs.existsSync(stateFile) && pidOf() === p.pid);
+    const port0 = portOf();
+    H.ok('（固定端口被占，在别的端口上）', port0 !== P2, port0);
+    const old = new Date(Date.now() - 5 * 86400000);
+    fs.utimesSync(stateFile, old, old);
+    await call(port0, 'GET', '/api/ping');
+    H.ok('心跳把状态文件摸新：开着的页面不会被按时间清掉', Date.now() - fs.statSync(stateFile).mtimeMs < 60000);
+    const ver = path.join(h.kit, 'VERSION');
+    const keep = H.read(ver) || '';
+    H.write(ver, '20991231.0001\n');
+    H.ok('换了进程', await until(() => fs.existsSync(stateFile) && pidOf() !== p.pid && !alive(p.pid), 12000));
+    H.ok('端口不变', portOf() === port0, [portOf(), port0]);
+    const q = pidOf();
+    process.kill(q);
+    await until(() => !alive(q));
+    H.write(ver, keep);
+    holder.close();
+    try { fs.unlinkSync(stateFile); } catch (e) { /* 没有 */ }
   }
 
   H.section('首页：流程图放进来，离线能看');

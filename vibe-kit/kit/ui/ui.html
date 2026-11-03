@@ -525,7 +525,7 @@
 
   <section id="tab-local" class="tab hide">
     <div class="pagehead"><h2>本机环境</h2><p>这台电脑上的 JDK、Maven、Tomcat 在哪。配一次，所有项目都用。</p></div>
-    <div class="card" id="sec-readiness"><h2>项目就绪与本机耗时</h2><p class="hint">只核对来源文件、工具和登记，不运行项目脚本、不主动连库。识别结果不代表构建或测试成功。耗时仅保存在本机。</p><div class="row"><input id="readyProject" placeholder="项目完整路径" style="flex:1;min-width:220px;width:auto"><button class="btn" id="readyCheck">核对环境</button><button class="btn" id="performanceCheck">本机耗时</button></div><pre id="readyOutput" style="white-space:pre-wrap"></pre></div>
+    <div class="card" id="sec-readiness"><h2>项目就绪</h2><p class="hint">只核对来源文件、工具和登记，不运行项目脚本、不主动连库。识别结果不代表构建或测试成功。耗时仅保存在本机。</p><div class="row"><input id="readyProject" placeholder="项目完整路径" style="flex:1;min-width:220px;width:auto"><button class="btn" id="readyCheck">核对环境</button></div><pre id="readyOutput" style="white-space:pre-wrap"></pre></div>
     <div class="card">
       <div class="row between"><div><h2>开发环境</h2><p class="hint">只存在本机（<span class="mono" id="kitDir"></span>），不进仓库。保存后写进全局约定，Claude 每个会话都看得到。先点"自动探测"（IDEA 里配的排在最前面）；没找到的点"选…"去硬盘上点选。项目自己在 IDEA 里配了 Maven、JDK 的，那个项目优先用 IDEA 里配的。</p></div><button class="btn primary" id="detect">自动探测</button></div>
       <div id="kitMissing" class="banner warn hide">这台电脑还没装 vibe-kit，保存了也不会写进全局约定。</div>
@@ -641,7 +641,7 @@
 
       <div class="opt">
         <div><div class="t">提交方式</div><div class="d">人工、自动都用。做完一件完整的事时：<b>询问</b>交代改了什么、怎么验的，问你"提交 / 还要改"；<b>自动</b>直接提交；<b>关</b>不问也不提交，你说"提交"才提交。</div>
-          <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾（审到 10 轮、不收敛停了的不挡）；任务都勾完以后，改完你报的一处问题；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>自动模式时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾（子代理连续没交结论停了的不挡）；任务都勾完以后，改完你报的一处问题；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>自动模式时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
         <div class="ctl"><select id="k_commitMode"><option value="ask">询问：到了时机问我</option><option value="auto">自动：到了时机直接提交</option><option value="off">关：不问也不提交，我说了才提交</option></select></div>
       </div>
       <div class="opt">
@@ -808,7 +808,7 @@
     </div>
     <div class="card" id="sec-usage-report" data-sec="使用情况">
       <h2>使用情况上报</h2>
-      <p class="hint">每天用套件的次数，第二天传到仓库里这台电脑的那条"[使用情况] 电脑名"的 issue 下面，一天一条。给改套件的人看哪里能优化：哪道检查拦得多、放行多，上下文涨到多少、自动压缩了没有，审了几轮，拉代码成没成，各个模型失败、切换多不多。</p>
+      <p class="hint">每天用套件的次数，第二天传到仓库里这台电脑的那条"[使用情况] 电脑名"的 issue 下面，一天一条。给改套件的人看哪里能优化：哪道检查拦得多、放行多，上下文涨到多少、自动压缩了没有，审了几轮，拉代码成没成。</p>
       <div class="opt">
         <div><div class="t">使用情况上报</div><div class="d">只有次数和版本号。不传路径、项目名、文件名、提交信息、提示词、代码、模型的回答、令牌。关着：本机照样数，不传。</div></div>
         <div class="ctl"><select id="k_usageReport"><option value="on">开：每天传一次</option><option value="off">关</option></select></div>
@@ -1084,7 +1084,6 @@
     } catch (e) { say($('localMsg'), e.message, false); }
   };
   $('readyCheck').onclick = async () => { try { const r = await api('POST', '/api/kit/readiness', { project: $('readyProject').value.trim() }); $('readyOutput').textContent = '识别工程：' + (r.identified.join('、') || '普通工程') + '\n缺工具：' + (r.missing.join('、') || '所需工具文件存在') + '\n项目说明：' + (r.projectNotes ? '已找到' : '尚未找到') + '\n驱动：' + (r.drivers.map(d => d.artifact + ' ' + d.version + ' ' + (d.registered ? '文件已登记' : '需补齐或核对')).join('；') || '项目未声明') + '\n' + r.verification; } catch (e) { $('readyOutput').textContent = e.message; } };
-  $('performanceCheck').onclick = async () => { try { const r = await api('GET', '/api/kit/performance'); $('readyOutput').textContent = '钩子：' + Object.entries(r.hooks).map(([name,h]) => name + ' ' + h.n + ' 次，出错 ' + (h.errors || 0) + ' 次').join('；') + '\n耗时与诊断明细只留本机，不上报。'; } catch (e) { $('readyOutput').textContent = e.message; } };
   $('saveLocal').onclick = async () => {
     try { const r = await api('POST', '/api/kit/local', readLocal()); say($('localMsg'), r.synced ? '已保存并写进全局约定，新开的会话生效' : '已保存。' + (r.output || ''), r.synced); } catch (e) { say($('localMsg'), e.message, false); }
   };
@@ -1404,7 +1403,7 @@
     else if (c.skipped) say($('ruMsg'), '后台正好有一个在跑，等它跑完看上面的结果', true);
     else {
       const x = d.update;
-      const next = x.hold === 'pin' ? '。固定着，不自动装；要更新先点"取消固定"' : x.hold === 'skip' ? '。跳过了这一版，不自动装；要装就点"立即更新"' : x.hold === 'flag' ? '。尝鲜组报了这一版有问题，先不自动装；要装就点"立即更新"' : x.hold === 'wait' ? '。等尝鲜组先试，' + soon(x.waitUntil) + ' 以后' + (x.mode === 'auto' ? '自动装' : '再装更稳') + '；急用就点"立即更新"' : x.mode === 'auto' ? '。等空闲时会自动装，也可以点"立即更新"' : '。点"立即更新"装上';
+      const next = x.hold === 'pin' ? '。固定着，不自动装；要更新先点"取消固定"' : x.hold === 'skip' ? '。跳过了这一版，不自动装；要装就点"立即更新"' : x.hold === 'flag' ? '。尝鲜组报了这一版有问题，先不自动装；要装就点"立即更新"' : x.hold === 'wait' ? '。等尝鲜组先试，' + soon(x.waitUntil) + ' 以后' + (x.mode === 'auto' ? '自动装' : '再装更稳') + '；急用就点"立即更新"' : x.mode === 'auto' ? '。会自动装，也可以点"立即更新"' : '。点"立即更新"装上';
       say($('ruMsg'), x.lastCheckOk ? (x.differs ? '仓库里是 ' + x.remote + '，这台电脑装着 ' + x.installed + next : '已经和仓库里一样了') : '没查成，原因在上面', !!x.lastCheckOk);
     }
   });
