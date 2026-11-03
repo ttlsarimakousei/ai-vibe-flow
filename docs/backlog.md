@@ -9,6 +9,7 @@
 | 问题表第 42 条 | guard-commit 拦截提案的自动提交，全自动模式下提案也无法自动提交 | 待修 | [owner-issues.md](owner-issues.md) 第 42 条 | 仓库主人说修时再核对 |
 | 问题表第 43 条 | 禁止发散：需求没说、探索阶段也没说过的点，需求、编码和自测阶段不许自己加 | 待修 | [owner-issues.md](owner-issues.md) 第 43 条 | 仓库主人说修时再核对 |
 | 问题表第 44 条 | vk-auto 开着还在询问，Claude 说现在是需求阶段，但已经在动代码 | 待定 | [owner-issues.md](owner-issues.md) 第 44 条 | 等仓库主人定 |
+| 问题表第 45 条 | 取消所有审核相关的次数上限、文件上限 | 待定 | [owner-issues.md](owner-issues.md) 第 45 条 | 等仓库主人定 10 轮和不收敛停不停 |
 | 复审 20261102 K-R8 | 跑 commit.js 的票只绑会话和仓库，"询问"模式用户拒绝后票还在，guard 认不出的写法能凭旧票提交，不再过提交方式这道检查 | 后做 | [reviews/claude/20261102-K批-复审.md](../reviews/claude/20261102-K批-复审.md) | 要特意构造，只影响提交方式 |
 | 复审 20261031 D-R6 | 壳子里 `mvn -f 子项目` 记的证据按子仓库记，review-runner 登记"修了"时按壳子查，对不上 | 后做 | [reviews/claude/20261031-C至J批-复审.md](../reviews/claude/20261031-C至J批-复审.md) | `evidence.commands` 认壳子下各子仓库的证据 |
 | 复审 20261031 D-R9 | `.vibe/db-crud.ini` 读改写没锁（换驱动记 driver_jar 和后台探索同时写） | 后做 | 同上 | 照 drivers.js 用 state-store 的锁 |
