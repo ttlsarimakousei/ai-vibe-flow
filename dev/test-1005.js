@@ -157,19 +157,19 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     for (const p of ['不要停，把剩下的做完', '不用问我，按你的判断做完', '别等我，做完就归档', '别停']) { say('f1', p); H.ok('在流程里说"' + p + '"：还在流程里', flow('f1').on === true, flow('f1')); }
     const ask = H.hook(h, 'guard-ask', { session_id: 'f1', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '接着做哪个？', options: [{ label: 'A' }, { label: 'B' }] }] } });
   H.ok('自动阶段允许提问澄清', ask === null);
-    for (const p of ['停', '等等，先别提交', '不用了', '别做了', '先停一下，我看看日志', '暂停']) { say('f1', '/opsx:apply add-export'); say('f1', p); H.ok('说"' + p + '"：出了流程', flow('f1').on === false, flow('f1')); }
+    for (const p of ['停', '等等，先别提交', '不用了', '别做了', '先停一下，我看看日志', '暂停']) { say('f1', '/opsx:apply add-export'); say('f1', p); H.ok('说"' + p + '"：还在流程里，这一轮不催', flow('f1').on === true && flow('f1').paused === true || flow('f1').stage === 'plan', flow('f1')); }
     say('f1', '继续');
-    H.ok('停了之后说"继续"：不能恢复已撤回的 apply 许可', flow('f1').on === false, flow('f1'));
+    H.ok('停了之后说"继续"：接着做', flow('f1').on === true && !flow('f1').paused, flow('f1'));
     say('f1', '/opsx:apply add-export');
     H.ok('重新明确 apply 才能恢复实施流程', flow('f1').on === true && flow('f1').stage === 'apply', flow('f1'));
     say('f2', '不要停');
     H.ok('本来就不在流程里的会话说"不要停"：不算进流程', flow('f2').on === false, flow('f2'));
     const r1 = say('f3', '停车场管理加一个导出功能');
-    H.ok('"停车场管理加一个导出功能"是需求，不是让它停', flow('f3').on === true && /这像一条需求/.test(r1), [flow('f3'), r1]);
+    H.ok('"停车场管理加一个导出功能"：不按句子进流程', !flow('f3').on && !/这像一条需求/.test(r1), [flow('f3'), r1]);
     const r2 = say('f4', '不用写提案，直接在 OrderService 加导出接口');
-    H.ok('"不用写提案，直接在…加导出接口"是需求', flow('f4').on === true && /这像一条需求/.test(r2), [flow('f4'), r2]);
+    H.ok('"不用写提案，直接在…加导出接口"：不进流程', !flow('f4').on && !/这像一条需求/.test(r2), [flow('f4'), r2]);
     const r3 = say('f5', '好友列表页面加一个搜索功能');
-    H.ok('"好友列表页面加一个搜索功能"：开头的"好"不算应一声', /这像一条需求/.test(r3), r3);
+    H.ok('"好友列表页面加一个搜索功能"：不按句子进流程', !flow('f5').on);
     const r4 = say('f6', '好的，谢谢');
     H.ok('"好的，谢谢"还是闲话', !/这像一条需求/.test(r4) && flow('f6').on === false, r4);
   }

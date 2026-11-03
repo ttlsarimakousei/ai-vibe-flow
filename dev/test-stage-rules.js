@@ -3,7 +3,7 @@
  * J4 后半（2026-11-01，docs/feedback-20261101.md）：OpenSpec 规范改成进流程时由钩子送，压缩后重送。
  *   安装器  标着"钩子送"的规范不进全局约定，填好占位符写成 hook-rules.md；--sync 也写；remove.txt 去掉的句子也去掉；卸载删掉
  *   全局约定留一句指路的
- *   开口    提需求、敲 /opsx:propose、开工第一次送规范和这一段的规矩；同一个会话不重复；不进流程的不送
+ *   开口    敲 /opsx:explore、/opsx:propose、开工第一次送规范和这一段的规矩；同一个会话不重复；不进流程的不送
  *   工具    模型没经过这些入口，自己跑 openspec、改 openspec/ 下的文件：工具跑完送一次规范
  *   压缩    还在流程里的马上重送当前这一段；不在流程里的不送，下次进流程再送；/clear 之后记录清掉
  * 用法：node dev/test-stage-rules.js [旧版的 vibe-kit 目录]（给了就拿旧版的安装包跑，看哪些项不过）
@@ -47,7 +47,7 @@ H.section('安装器：规范不进全局约定，写成 hook-rules.md');
   const g = globalMd(h);
   H.ok('全局约定里没有 OpenSpec 规范', !g.includes(SPEC) && !g.includes('逐个生成 proposal') && !g.includes('修订与需求回归'), g.length);
   H.ok('全局约定没有标记', !g.includes('vibe-kit:钩子送'));
-  H.ok('全局约定留了一句指路的', /走 OpenSpec（`\/opsx:propose`/.test(g));
+  H.ok('全局约定留了一句指路的', /`\/opsx:explore`/.test(g));
   H.ok('提交规范照旧在全局约定里', /git/i.test(g) && fs.existsSync(path.join(h.kit, 'rules', '20-git-commit.md')) && g.includes((H.read(path.join(h.kit, 'rules', '20-git-commit.md')) || '').split('\n')[0].trim()), g.slice(-400));
   const t = H.read(hookFile(h)) || '';
   H.ok('hook-rules.md 有规范，占位符填好了，不带标记', t.includes(SPEC) && t.includes('修订与需求回归') && !/\{\{[A-Z_]+\}\}/.test(t) && !t.includes('vibe-kit:钩子送'), t.slice(0, 300));
@@ -67,20 +67,20 @@ H.section('开口：进流程第一次送规范和这一段的规矩，不重复
   const h = machine('sr-say');
   const q = h.say('s-none', '这个 A 类是干什么的？');
   H.ok('问个问题：不送', !q.includes(SPEC), q.slice(0, 300));
-  const a = h.say('s-need', '做一个订单导出的功能，导出成 xlsx');
-  H.ok('提需求：送规范和写需求这一段的规矩', a.includes(SPEC) && /写需求这一段的规矩/.test(a), a.slice(0, 400));
+  const a = h.say('s-need', '/opsx:explore 做一个订单导出的功能，导出成 xlsx');
+  H.ok('敲 /opsx:explore：送规范和写需求这一段的规矩', a.includes(SPEC) && /写需求这一段的规矩/.test(a), a.slice(0, 400));
   const b = h.say('s-need', '再加一个按日期筛选的需求');
   H.ok('同一个会话第二次：都不重复', !b.includes(SPEC) && !/写需求这一段的规矩/.test(b), b.slice(0, 300));
   const c = h.say('s-need', '开工 feat-019');
   H.ok('开工：送做任务这一段的，规范不再送', /做任务这一段的规矩/.test(c) && !c.includes(SPEC), c.slice(0, 400));
   const d = h.say('s-opsx', '/opsx:propose 加一个导出接口');
   H.ok('敲 /opsx:propose：送规范', d.includes(SPEC) && /写需求这一段的规矩/.test(d), d.slice(0, 400));
-  const e = h.say('s-go', '开工 feat-019');
+  const e = h.say('s-go', '/vk-go feat-019');
   H.ok('直接开工的会话：规范和做任务这一段一起送', e.includes(SPEC) && /做任务这一段的规矩/.test(e), e.slice(0, 400));
   const later = h.say('s-go', '接着做');
   H.ok('在流程里接着说：不重复', !later.includes(SPEC), later.slice(0, 300));
   fs.unlinkSync(hookFile(h));
-  const f = h.say('s-nofile', '做一个订单导入的功能，从 xlsx 导入');
+  const f = h.say('s-nofile', '/opsx:explore 做一个订单导入的功能，从 xlsx 导入');
   H.ok('hook-rules.md 不在（老版本、生成失败）：照样送这一段的规矩，不出错', /写需求这一段的规矩/.test(f), f.slice(0, 300));
 }
 
@@ -100,7 +100,7 @@ H.section('工具：模型没经过这些入口就开始走 OpenSpec，工具跑
 H.section('压缩：还在流程里的马上重送；不在流程里的下次进流程再送；/clear 之后记录清掉');
 {
   const h = machine('sr-compact');
-  h.say('s-c', '开工 feat-019');
+  h.say('s-c', '/vk-go feat-019');
   const c = h.start('s-c', 'compact');
   H.ok('做任务时压缩：重送规范和做任务这一段', c.includes(SPEC) && /做任务这一段的规矩/.test(c), c.slice(0, 400));
   const next = h.say('s-c', '接着做');

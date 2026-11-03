@@ -55,23 +55,22 @@ function bugFixFirstIssue(j) {
   if (!v || v.kind !== 'prompt' || !BUG_REPORT.test(v.text) || WANTS_PROPOSAL.test(v.text)) return '';
   return '我报的是做完的功能上的问题，没说要走提案，先别新建变更：' + SMALL_FIX_TEXT;
 }
+/** 新建提案：这个会话要在流程里（或者这一轮用户明确要走）；要有探索记录，短的也行（用户 2026-11-03 定的）；要真读过项目里的代码 */
 function exploreFirstIssue(j, art, cfg) {
+  const fl = flowState(j);
+  if (!fl.on && !require('../lib/session').entryVoice(j)) return '用户没说要走 OpenSpec，不写提案。改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"；选探索再写。';
+  const B = require('../lib/big-task');
+  const task = B.ofChange(art.root, art.name);
+  const tool = 'node "' + path.join(__dirname, '..', 'tools', 'plan.js') + '" new --task <大任务名> --changes ' + art.name;
+  if (!task) return '变更 ' + art.name + ' 不在 openspec/plan.md 的大任务里，也就没有探索记录。先跑 ' + tool + '，把探索结果写进 openspec/explore/<大任务名>.md（短的也行），再写提案。';
+  const left = B.exploreIssues(task, art.name);
+  if (left.length) return left.join('；') + '。写进探索记录再写提案，例：## change: ' + art.name + ' 这一节写目标、边界、依赖。';
   if (!j.transcript_path) return '';
   const roots = [art.root].concat(nestedRepos(art.root));
   if (!roots.some((r) => looksLikeProject(r))) return '';
   const entries = tailEntries(j.transcript_path, 8000000).filter((e) => e && !e.isSidechain);
-  const { start, prompt } = turnStart(entries);
-  const earlier = toolCalls(entries, 0, start);
-  const before = projectReads(earlier);
-  const now = projectReads(toolCalls(entries, start));
-  if (!before.length && !now.length) return '这个会话里还没读过项目里的任何代码、表、接口，不能直接写提案。先用 /opsx:explore 的方式探索：读会碰到的代码、表结构（有查库的技能就用它）、接口、配置，把现状' + (cfg.autoMode ? '写进设计的 Context' : '写给我看（读了什么、发现什么、和需求对不上的、还不知道的），我确认了范围') + '再写提案。';
-  if (cfg.autoMode) return '';
-  const req = j.session_id ? readState(j.session_id + '-requirement') : {};
-  const afterReq = req.at ? projectReads(earlier.filter((c) => (Date.parse((entries[c.i] || {}).timestamp || '') || 0) >= req.at)) : before;
-  if (afterReq.length) return '';
-  if (recentHandover(j.cwd) && handoverReadIn(entries)) return '';
-  if (/<command-name>\s*\/?(opsx:propose|openspec-propose|openspec:propose)\s*<\/command-name>/i.test(prompt)) return '';
-  return '探索完先停下：把现状（读了什么、发现什么、和需求对不上的、还不知道的）写给我看，这一轮到此为止；我确认了范围再出提案。（我自己敲 /opsx:propose 的时候才可以探索完直接写。）';
+  if (!projectReads(toolCalls(entries, 0)).length) return '这个会话里还没读过项目里的任何代码、表、接口，不能直接写提案。先读探索记录和会碰到的代码、表结构（有查库的技能就用它）、接口、配置，再写。';
+  return '';
 }
 
 /** 项目里有没有叫这个名字的场景文件（.vibe/scenarios/<名字>.json，各个根目录、当前目录都看） */
@@ -216,7 +215,7 @@ function handle(j, opts) {
     if (tk) flow.push(...tk.issues);
     // 还在写提案那一段（用户没说开工）就打勾：拦下。用户 2026-10-07 定的：任务清单要他看过、他说了开工才开始做（规矩见 lib/session.js"流程分两段"）
     if (tk && tk.ticked.length) {
-      const fl = flowState(j); if (fl.on && fl.stage === 'plan') notStarted = true;
+      const fl = flowState(j); if (fl.on && fl.stage === 'plan' && !(cfg.autoSwitch && require('../lib/flow-policy').automaticApply(j))) notStarted = true;
       // 用户说了开工、却没认下来（#214）：说出原因，不再说"我还没说开工"
       let why = ''; try { why = notStarted ? require('../lib/apply-scope').refusal(j) : ''; } catch (e) { why = ''; }
       if (notStarted) flow.unshift(why ? '我说了开工，但' + why + '。认下来之前先不打勾' : '我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工""还要改""先不做"）；我说开工、或者我自己敲 /vk-go（或 /opsx:apply）之后再做');

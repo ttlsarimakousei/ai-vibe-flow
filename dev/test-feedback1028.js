@@ -153,8 +153,8 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     let seq = 0;
     const tf = (es) => H.transcript(path.join(h.root, 'a' + (++seq) + '.jsonl'), es);
     const prompt = (sid, text, es) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt: text, transcript_path: tf(es) });
-    let es = [H.tr.user('做一个导出功能，写需求')];
-    prompt('s-auto', '做一个导出功能，写需求', es);
+    let es = [H.tr.user('/opsx:explore 做一个导出功能，写需求')];
+    prompt('s-auto', '/opsx:explore 做一个导出功能，写需求', es);
     es = es.concat([H.tr.say('feat-019 的提案、规格、设计、任务都写完了，能开工吗？')]);
     H.setConfig(h, { autoApply: true });
     // 还在需求阶段时去审查：提示写清 Apply 自动开着、为什么这一轮不算

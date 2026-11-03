@@ -2,12 +2,12 @@
 /*
  * PreToolUse 钩子（AskUserQuestion、Skill、SlashCommand）。
  *   AskUserQuestion：始终允许；人工动作、需求疑问、自动审查到限都需要用户选择。
- *   Skill / SlashCommand：模型自己调了 OpenSpec 的技能（用户用大白话让它出提案、接着做）——这个会话从这时起算进了 OpenSpec 流程，
+ *   Skill / SlashCommand：模型调 OpenSpec 的技能，不在流程里时要有用户的话（话里明确有 openspec，或者提问框选了探索，用户 2026-11-03 定的），不然拦下让它先问；
  *     调 propose / explore / new 回到提案阶段；archive / verify 不授予 apply。交接技能需要当前用户明确要求。
  *     调 /opsx:apply 的技能：用户还没说开工（不在流程里，或者还在写提案那一段）就拦下——提案、任务清单要他看过、他说了开工才做
  *     双自动满足探索、逐点审修、定稿提交条件时允许衔接，其余情况需要真人开工许可。
  */
-const { readConfigFor, flowState, setFlow, FLOW_SKILL, blockOut, hookLog, cli, confirmApply } = require('../lib/session');
+const { readConfigFor, flowState, setFlow, FLOW_SKILL, blockOut, hookLog, cli, confirmApply, entryVoice } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 
@@ -38,15 +38,17 @@ function handle(j) {
         if (/^(opsx:|openspec[-:])apply\b/i.test(first)) {
           // 提问框的答案不触发 UserPromptSubmit，开工许可要在用技能前补读。技能参数里写了变更名的，用它认开哪个
           if (confirmApply(j, { args: name.trim().split(/\s+/).slice(1).join(' ') + ' ' + String(inp.args || '') }) || require('../lib/flow-policy').automaticApply(j)) {
-            st.stage = 'apply';
             const now = readConfigFor(j);
             out = { systemMessage: '[vibe-kit] 开始 apply：全自动模式' + (now.autoMode ? '开着，只管实现、验证和审查；提交照你选的提交方式。' : '关着。') };
           }
-          if (!st.on || st.stage === 'plan') out = applyGate(j);
+          // 上面两个判断可能刚把流程写成 apply：重读，别拿旧的那份拦（第 44 条：on:false 时一直拦成"选择开工"）
+          const fresh = flowState(j);
+          if (!fresh.on || fresh.stage === 'plan') out = applyGate(j);
         } else if (/^(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b/i.test(first)) {
           if (!st.on) setFlow(j, true, '调了 ' + first, 'plan');
         } else {
-          // 探索、提案、建变更：进流程，在写提案那一段（已经在做任务的会话里再调 propose，也回到这一段：下一个变更的提案也要用户看）
+          // 探索、提案、建变更：不在流程里要有用户的话才进；进了在写提案那一段（已经在做任务的会话里再调 propose，也回到这一段：下一个变更的提案也要用户看）
+          if (!st.on && !entryVoice(j)) return blockOut('PreToolUse', '[vibe-kit] 用户没说要走 OpenSpec。改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"；选探索再调。不用走流程的改动直接改。');
           setFlow(j, true, '调了 ' + first, 'plan');
         }
         if (cfg.autoSwitch && !out) hookLog('全自动模式 这个会话调了 ' + first.slice(0, 40) + (st.on ? '' : '，进了 OpenSpec 流程') + (/^(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i.test(first) ? '' : '：在写提案那一段，照有人在的样子来'));

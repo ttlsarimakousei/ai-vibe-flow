@@ -243,6 +243,19 @@ function saidBefore(entries, pos) {
   return '';
 }
 
+const ENTRY_WORD = /openspec|opsx/i;
+const ENTRY_NOT = /(?:不走|不用|别用|别走|不要|不需要|跳过|先不)\s*(?:走\s*)?(?:openspec|opsx)/i;
+const EXPLORE_WORD = /探索|explore/i;
+/** 这一轮用户明确要进流程：话里有 openspec（"不走 openspec"不算），或者提问框问探索、选了探索（用户 2026-11-03 定的，不按模糊的话猜） */
+function entryVoice(j) {
+  if (!j || !j.transcript_path) return false;
+  for (const v of turnVoices(tailEntries(j.transcript_path, 3000000))) {
+    if (v.kind === 'prompt' && ENTRY_WORD.test(v.text) && !ENTRY_NOT.test(v.text)) return true;
+    if (v.kind === 'answer' && v.answers.some((a) => EXPLORE_WORD.test(a.q) && EXPLORE_WORD.test(a.a) && !/^(?:不|别|先不|直接改)/.test(String(a.a).trim()))) return true;
+  }
+  return false;
+}
+
 /**
  * 提问框不触发用户开口钩子：用技能、打勾、改代码前补读最新的真实开工答案（旧第 2 类：pre-edit 以前没补读，提问框选了开工、改代码还是拦）。
  * more.hint：这一步要改的文件；more.args：/opsx:apply 技能的参数（用户只说"开工"、有几个变更时，用它们认是哪个，#214）
@@ -331,4 +344,4 @@ function atHome(j) {
   return normKey(home) === normKey(cur) ? j : Object.assign({}, j, { cwd: home, realCwd: cur });
 }
 
-module.exports = { ANSWERED, lastUserVoice, turnVoices, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, saidBefore, confirmApply, sessionHome, noteSessionHome, atHome };
+module.exports = { ANSWERED, lastUserVoice, turnVoices, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, saidBefore, confirmApply, entryVoice, sessionHome, noteSessionHome, atHome };

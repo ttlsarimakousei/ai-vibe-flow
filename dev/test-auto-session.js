@@ -56,7 +56,7 @@ H.section('第 28 条：自动模式按会话开，/vk-auto 开、/vk-auto off �
   say('s-words', '这个需求自动做');
   H.ok('说"这个需求自动做"也算开', sa('s-words') === true);
   const r3 = say('s-req', '/vk-auto 做一个订单导出的功能，导出成 xlsx');
-  H.ok('/vk-auto 带着需求：开了，后面的话照需求认（进了写需求那一段）', sa('s-req') === true && /这像一条需求|写需求这一段的规矩/.test(textOf(r3)) && S.flowState({ session_id: 's-req' }).on === true, textOf(r3).slice(0, 500));
+  H.ok('/vk-auto 带着需求：开了，不按句子进流程（改动大的由模型问要不要探索）', sa('s-req') === true && !S.flowState({ session_id: 's-req' }).on, textOf(r3));
   // 安装器：配置里旧的两个开关清掉，正在流程里的会话补一个会话开关
   const pkg = (() => { if (!FROM) return H.makePackage('tas-pkg', '20261031.1200'); const d = path.join(H.tempDir('tas-pkg'), 'vibe-kit'); H.copyDir(FROM, d, (x) => x === 'node_modules' || x === '.git'); H.stubDeps(d); return d; })();
   const u = H.freshHome('tas-inst');

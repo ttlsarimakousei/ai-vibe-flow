@@ -436,6 +436,15 @@ for (const c of cases) {
   if (c.name === '反馈1007：env -C 跑套件场景脚本') { c.expect = /用户这一轮没说要自测：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = V11022248; }
 }
 
+// 2026-11-03：进流程只有三种门（敲 /opsx:…、话里明确有 openspec、提问框选探索）；问句、"停"不退出流程；新建提案要有探索记录
+for (const c of cases) {
+  if (c.name === '没探索就写提案') { c.expect = /用户没说要走 OpenSpec/; c.since = NEXT; }
+  if (['开口：提需求', '开口：开头是"不用"的需求', '开口：开头是"好"字的需求'].includes(c.name)) { c.expect = /放行，没有输出/; c.since = NEXT; }
+  // 话里点变更的名字不是进流程的门（接回用 /vk-resume），只照旧提醒有进行中的变更
+  if (c.name === '开口：说"开工"（点名变更）') { c.expect = /进行中的 OpenSpec 变更：add-export/; c.since = NEXT; }
+  if (c.name === '开口：让它停') { c.expect = /写需求这一段的规矩|放行，没有输出/; c.since = NEXT; }
+}
+
 let same = 0;
 let changed = 0;
 for (const c of cases) {

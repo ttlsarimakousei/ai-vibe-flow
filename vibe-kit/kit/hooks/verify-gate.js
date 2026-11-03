@@ -612,6 +612,10 @@ function autoReport(j, cfg, entries, lastSaid, changes) {
   if (!cfg.autoMode && !closing) return '';
   const st = report.stateOf(j);
   if (closing && !st.round) return '';
+  // 这一轮只是答了句话（问句不退出流程了，2026-11-03）：不交报告，也不拿这句话盖掉交代。正在要交代的那一次（stop_hook_active）照常
+  const S0 = require('../lib/session');
+  const busy = S0.toolCalls(entries, S0.turnStart(entries).start).some((c) => /^(Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell)$/.test(c.name));
+  if (!busy && !j.stop_hook_active && (st.delivered || !st.items.length)) return '';
   const fresh = st.items.length > st.deliveredCount;
   if (st.delivered && (!fresh || st.times >= 3)) { report.saveFinal(j, lastSaid); return ''; }
   let mine = [];

@@ -133,8 +133,8 @@ H.section('A10 会被拦的规矩提前说：进写需求、做任务这两段�
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE));
   let n = 0;
   const say = (sid, prompt) => { n++; const r = H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'a10-' + n + '.jsonl'), [H.tr.user(prompt)]) }); return typeof r === 'string' ? r : JSON.stringify(r || ''); };
-  const t1 = say('s-a10', '做一个订单导出的功能，导出成 xlsx');
-  H.ok('提需求：说了写需求这一段的规矩（一份一份写、审查带审查点）', /写需求这一段的规矩/.test(t1) && /一份一份写/.test(t1) && /--point/.test(t1), t1.slice(0, 600));
+  const t1 = say('s-a10', '/opsx:explore 做一个订单导出的功能，导出成 xlsx');
+  H.ok('进流程：说了写需求这一段的规矩（一份一份写、审查带审查点）', /写需求这一段的规矩/.test(t1) && /一份一份写/.test(t1) && /--point/.test(t1), t1.slice(0, 600));
   const t2 = say('s-a10', '再加一个按日期筛选的需求');
   H.ok('同一个会话第二次提需求：不再重复', !/写需求这一段的规矩/.test(t2), t2.slice(0, 300));
   const t3 = say('s-a10', '开工 feat-019');

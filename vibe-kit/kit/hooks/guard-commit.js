@@ -269,9 +269,8 @@ function check(j) {
   const I = require('../lib/invocation');
   I.phase('命令：读开关');
   let cfg = readConfigFor(j);
-  // 全自动模式开着、这个会话还没进 OpenSpec 流程，这条命令在建变更（用户用大白话让它出提案，它照 OpenSpec 的步骤做）：从这时起算进了流程
-  // 建变更是写提案那一段（plan）：全自动还不算数，用户要看过提案、说了开工才算
-  if (cfg.autoSwitch && !cfg.autoMode && !flowState(j).on && /(^|[\s;&|("'])openspec(\.cmd)?\s+new\s+change\b/i.test(cmd)) { setFlow(j, true, '建了变更', 'plan'); hookLog('全自动模式 这个会话进了 OpenSpec 流程：建了变更（写提案那一段，照有人在的样子来）'); cfg = readConfigFor(j); }
+  // 建变更：不在流程里要有用户的话才行（用户 2026-11-03 定的：不按模糊的话进流程）
+  if (!flowState(j).on && /(^|[\s;&|("'])openspec(\.cmd)?\s+new\s+change\b/i.test(cmd) && !require('../lib/session').entryVoice(j)) return blockOut('PreToolUse', '[vibe-kit] 用户没说要走 OpenSpec，不建变更。改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"；选探索再建。');
   // 查库、查 redis 的工具只看得到开关，看不到这个会话在不在流程里：跑它们之前留一张条子（按当前目录记，工具那头两分钟内认），
   // 说这个会话现在算不算全自动。不留的话，开关开着、用户却在场的会话里，工具会照"用户不在"来
   if (cfg.autoSwitch && /\b(db\.py|redis\.js)\b/i.test(cmd)) noteToolFlow(j, cfg);

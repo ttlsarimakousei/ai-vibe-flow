@@ -141,7 +141,7 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     const tf = H.transcript(path.join(u.root, 't.jsonl'), [H.tr.user('开始')]);
     H.hook(u, 'session-start', { session_id: 's-us', cwd: p, hook_event_name: 'SessionStart', source: 'startup', transcript_path: tf });
     H.hook(u, 'session-start', { session_id: 's-us', cwd: p, hook_event_name: 'SessionStart', source: 'compact', transcript_path: tf });
-    H.hook(u, 'task-anchor', { session_id: 's-us', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '做一个导出客户名单的功能', transcript_path: tf });
+    H.hook(u, 'task-anchor', { session_id: 's-us', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '/opsx:explore 做一个导出客户名单的功能', transcript_path: tf });
     H.hook(u, 'task-anchor', { session_id: 's-us', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '继续', transcript_path: tf });
     H.hook(u, 'task-anchor', { session_id: 's-us', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '/ttls-handover', transcript_path: tf });
     const x = (readJson(path.join(u.kit, 'state', 'usage.json')).days || {})[dayOf(0)] || { n: {} };

@@ -13,6 +13,7 @@ const path = require('path');
 const { changeRoots } = require('./session-projects');
 const { readPlan } = require('./session-plan');
 const { readState, updateState, normKey } = require('./session-state');
+const { flowState, flowChanges } = require('./session-flow');
 
 const TICK_DONE = /^\s*[-*]\s*\[[xX]\]/gm;
 const TICK_TODO = /^\s*[-*]\s*\[ \]/gm;
@@ -47,8 +48,11 @@ function build(osDir, plan, name, explore, rows) {
 /** 这个目录能看到的所有大任务（壳子里每个子项目各算） */
 function tasks(cwd) {
   const out = [];
-  for (const changes of changeRoots(cwd)) {
-    const osDir = path.dirname(changes);
+  const dirs = changeRoots(cwd).map((c) => path.dirname(c));
+  // 还没建过变更的项目没有 changes/，plan.md 已经在了（探索时建的）
+  const here = path.join(cwd, 'openspec');
+  if (!dirs.some((d) => normKey(d) === normKey(here)) && fs.existsSync(path.join(here, 'plan.md'))) dirs.push(here);
+  for (const osDir of dirs) {
     const plan = readPlan(osDir);
     if (!plan) continue;
     const named = new Set();
@@ -99,6 +103,23 @@ function exploreIssues(task, change) {
   return out;
 }
 
+/** 这个会话在做哪个大任务：接回时记的名字；动过的变更属于哪个；都没有时目录里只有一个没做完的就是它 */
+function forSession(j) {
+  const all = tasks((j && j.cwd) || process.cwd());
+  const st = flowState(j);
+  if (st.task) { const t = all.find((x) => x.name === st.task); if (t) return t; }
+  const dirs = flowChanges(j);
+  const hit = all.find((t) => t.changes.some((c) => dirs.includes(normKey(c.dir))));
+  if (hit) return hit;
+  const open = all.filter((t) => t.changes.some((c) => !c.archived) || !t.changes.length);
+  return open.length === 1 ? open[0] : null;
+}
+/** 自动开没开记到大任务上：死机后 /vk-resume 接回时恢复（用户 2026-11-03 定的"接回就接着开"） */
+function noteAuto(j, on) {
+  const t = forSession(j);
+  if (t && taskState(t).auto !== !!on) setTaskState(t, { auto: !!on });
+}
+
 const keyOf = (task) => normKey(task.explore || (task.planFile + '#' + task.name));
 function taskState(task) { return readState('big-task')[keyOf(task)] || {}; }
 function setTaskState(task, patch) {
@@ -139,4 +160,4 @@ function progressText(task) {
   return parts.join('，');
 }
 
-module.exports = { tasks, ofChange, named, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
+module.exports = { tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };

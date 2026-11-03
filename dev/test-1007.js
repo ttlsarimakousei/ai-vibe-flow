@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 2026-10-07 这一批（用户用下来提的四件事）：
- *   产出不算流程      全自动开着、会话在流程里，说"帮我生成一个文件记一下""写一份接口文档"：这一轮不在流程里，放哪照常问，全自动不作数
+ *   产出不算流程      全自动开着、会话在流程里，说"帮我生成一个文件记一下""写一份接口文档"：还在流程里，这一轮放哪照常问，全自动不作数（2026-11-03 起不退出流程）
  *   公共配置被盖掉    application.yml 里的库被 application-dev.yml 用同一个键换掉了：公共配置那一条不算开发库（redis 一样）
  *   自动挑端口        devserver --port auto：30000 到 39999，离 --avoid 的端口远，同一个服务每次同一个端口，{port} 和环境变量
  *   提交方式          2026-10-17 起关 / 询问 / 自动三档：自动做完一项就催提交，询问在自动模式下记进报告
@@ -29,7 +29,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     say('f1', '/opsx:apply add-export');
     H.ok('（敲了 /opsx:apply：在流程里）', flow('f1').on === true, flow('f1'));
     const r1 = say('f1', '帮我生成一个文件用来记录这次改动的要点');
-    H.ok('在流程里让它生成一个文件记东西：这一轮不在流程里', flow('f1').on === false, flow('f1'));
+    H.ok('在流程里让它生成一个文件记东西：还在流程里，这一轮全自动不作数', flow('f1').on === true && flow('f1').aside === true, flow('f1'));
     H.ok('提醒它开工前先定好放哪，是问我的说法，不是全自动的"先放 pending"', /开工前先定好放哪/.test(r1) && /用提问框问我/.test(r1) && !/pending/.test(r1), r1);
     const w = H.hook(h, 'pre-edit', { session_id: 'f1', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(proj, '改动要点.md'), content: '# 要点\n' } });
     // 20261031 起（用户 10-30 定的，feedback-20261030 J1）：人工模式也先写到 .vibe/pending/、收尾时用一个提问框问放哪，不再新建时停下来问
@@ -37,13 +37,13 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     say('f1', '继续');
     H.ok('说"继续"接回流程', flow('f1').on === true, flow('f1'));
     say('f1', '写一份接口文档');
-    H.ok('"写一份接口文档"也不算流程里的活', flow('f1').on === false, flow('f1'));
+    H.ok('"写一份接口文档"也一样', flow('f1').on === true && flow('f1').aside === true, flow('f1'));
     say('f1', '做一个导出订单的功能');
-    H.ok('"做一个导出订单的功能"照旧算需求、进流程', flow('f1').on === true, flow('f1'));
+    H.ok('"做一个导出订单的功能"：还在流程里，全自动恢复', flow('f1').on === true && flow('f1').aside === false, flow('f1'));
     const r2 = say('f2', '帮我做一个记录问题的 excel');
     H.ok('新会话里让它做个 excel：不当需求（不提"先探索再提案"），提醒先定放哪', flow('f2').on === false && !/这像一条需求/.test(r2) && /先定好放哪/.test(r2), [flow('f2'), r2]);
     const r3 = say('f3', '做一个文件上传功能');
-    H.ok('"做一个文件上传功能"是代码的活，照旧是需求', flow('f3').on === true && /这像一条需求/.test(r3), [flow('f3'), r3]);
+    H.ok('"做一个文件上传功能"：不按句子进流程', !flow('f3').on && !/这像一条需求/.test(r3), [flow('f3'), r3]);
   }
 
   // ---------------------------------------------------------------------------------------------

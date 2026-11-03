@@ -16,14 +16,14 @@ const { allChanges } = require('./session-projects');
 /*
  * 用户 2026-09-30 定的。起因：全自动开着，另开一个窗口做检索，那个窗口收工时自己去接着做没做完的变更，差点和正在做这个变更的窗口打架；
  * 只敲了 /ttls-onboard，收工检查却催着"直接开始 /opsx:apply"（议题 #9）。
- * 每个会话记一份"现在是不是在走 OpenSpec 流程"（state/<会话>-flow.json），用户开口时定（hooks/task-anchor.js）：
- *   敲了 /opsx:…、/openspec-…；提了要走提案的需求；接着交接记录做；点了没归档的变更的名字让它做  → 在流程里
- *   "继续""好"这类话，"不要停""别等我，做完再说"                                               → 跟上一轮一样（上一轮是插进来的一句问话，就跟再上一轮）
- *   已经在流程里，又说了一句不是问句的话（"3.3 我执行过了，接着归档"）                           → 还在流程里
- *   自己敲 /ttls-cross-review、/ttls-see-page、/ttls-handover                                   → 跟上一轮一样
- *   问句、别的斜杠命令（/ttls-onboard…）、让它停的话（"停""等等，先别提交""不用了"）            → 不在流程里
- *   让它出一份代码之外的东西（说明、报告、清单，"生成一个文件记一下"）                        → 不在流程里（放哪照常问，全自动不作数）
- * 这一轮里模型自己调了 OpenSpec 的技能、建了变更（用户用大白话让它出提案），也算进了流程（hooks/guard-ask.js、guard-commit.js）。
+ * 每个会话记一份"现在是不是在走 OpenSpec 流程"（state/<会话>-flow.json）。用户 2026-11-03 定的：进流程只有三种：
+ *   用户敲 /opsx:…（hooks/task-anchor.js）；话里明确有 openspec，模型去调；模型判断改动较大、提问框问了、用户选了探索（hooks/guard-ask.js、guard-spec.js 核对）
+ * 不按句子猜需求，不因为话里点了变更的名字就进（接回用 /vk-resume）。进了之后中途怎么说都不退出：
+ *   问句、插话、别的斜杠命令、"继续"       → 不动
+ *   "停""等等"                             → 不动，记 paused：这一轮收工不催，下一句话接着做
+ *   "先别开工""只写需求"                   → 回到写需求那一段，清开工范围，不自动开工
+ *   让它出一份代码之外的东西               → 不动，记 aside：这一轮放哪照常问用户，全自动不作数
+ *   变更都归档了、"退出流程"               → 退出
  * 流程又分两段（stage，见下面"流程分两段"）：写提案那一段 plan，做任务那一段 apply。全自动只在 apply 那一段算开着。
  * 不在流程里时，钩子拿到的 cfg.autoMode 是 false：照有人在的样子来（能问、不催着往下做、不出全自动报告）。cfg.autoSwitch 是开关本身。
  * 开关关着的时候也照样定、照样记：这一轮做到一半才在配置页打开全自动的，照这一轮开头定的算。
@@ -190,9 +190,11 @@ function flowView(j) {
   const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code'));
   // 会话里开了自动（问题表第 24 条，2026-10-31）：任务做完、等用户验收时照样算自动，用户报的问题自动改、审、测，归档照旧等用户说。
   // 用户改了需求（范围变化）在 apply-scope.valid 里按用户的话重定范围，不退回人工
-  const waiting = st.waiting || (!scope.ok ? '范围变化，等用户确认' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
+  const waiting = st.waiting || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
+  // 写需求那一段的自动：探索记录写完了才算（"还没定的"清空、范围写了）。老会话 planReady 还认
+  const planOk = () => { if (st.planReady) return true; try { const B = require('./big-task'); const t = B.forSession(j); return !!t && !t.legacy && B.exploreIssues(t).length === 0; } catch (e) { return false; } };
   // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。配置开关开着时自动不再生效，但收工还要交这一轮的报告；会话开关开着时照样自动
-  return { session: cfg.autoSession === true, switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!((st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && st.planReady) && st.on === true && !over && !waiting), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
+  return { session: cfg.autoSession === true, switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!(st.on === true && !over && !waiting && !st.aside && (st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && planOk())), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
 }
 
 /**

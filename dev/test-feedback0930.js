@@ -278,7 +278,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   H.ok('流程里：催的是这个会话在流程里做的那个变更', /继续当前范围的下一项 1\.1/.test(H.reasonOf(r3)) && !/other-window-change/.test(H.reasonOf(r3)));
   // 流程里插了一句问话，再说"继续"
   prompt(s3, '这个变更为什么要加两个字段？');
-  H.ok('流程里插一句问话：这一轮不在流程里', flow(s3).on === false && flow(s3).was > 0, flow(s3));
+  H.ok('流程里插一句问话：还在流程里', flow(s3).on === true, flow(s3));
   H.ok('问话的这一轮：提问框能用', ask(s3) === null);
   prompt(s3, '继续');
   H.ok('再说"继续"：接回流程', flow(s3).on === true, flow(s3));
@@ -287,18 +287,18 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   prompt(s3, '/ttls-cross-review add-ec-expiry-remind');
   H.ok('流程里自己敲 /ttls-cross-review：跟上一轮一样', flow(s3).on === true);
   prompt(s3, '等等，先停一下');
-  H.ok('说"等等"：出了流程', flow(s3).on === false);
+  H.ok('说"等等"：还在流程里，这一轮不催', flow(s3).on === true && (flow(s3).paused === true || flow(s3).stage === 'plan'), flow(s3));
   // 没在流程里的会话说"继续"：不算
   const s4 = 's-cont';
   prompt(s4, '继续');
   H.ok('从来没进过流程的会话说"继续"：不算', flow(s4).on === false, flow(s4));
   prompt(s4, '新增一个证照临期提醒的功能，要发短信');
-  H.ok('提了一条要走提案的需求：进流程', flow(s4).on === true && /提了需求/.test(flow(s4).why), flow(s4));
+  H.ok('提了一条需求：不按句子进流程', flow(s4).on === false, flow(s4));
   // 任务全打了勾、等着复审和归档的变更：点了它的名字也算进流程（端到端测出来的：第二个会话说这句话没进流程，不催也不交报告）
   const s8 = 's-named-done';
   mkChange(proj, 'a1-done', '- [x] 1.1 改 src/A.java；验：`mvn -q -o compile`\n');
   prompt(s8, '接着做：复审 a1-done 的代码，没问题就归档');
-  H.ok('点了名的变更任务全打了勾、还没归档：也算进流程', flow(s8).on === true && /点了变更 a1-done/.test(flow(s8).why) && (flow(s8).changes || []).some((d) => /a1-done$/.test(d)), flow(s8));
+  H.ok('话里点了变更的名字：不进流程（接回用 /vk-resume）', !flow(s8).on, flow(s8));
   // /opsx:apply 没带名字：它照 OpenSpec 的步骤先跑 openspec status --change <名字>，这个变更就算它在流程里做的；只是读过 tasks.md 的不算
   const s9 = 's-apply-noname';
   prompt(s9, '/opsx:apply');
@@ -307,12 +307,12 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   // 大白话让它出提案：它自己调了 OpenSpec 的技能、建了变更
   const s5 = 's-skill';
   prompt(s5, '看一下这个');
-  H.hook(h, 'guard-ask', { session_id: s5, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: 'openspec-propose' } });
-  H.ok('它自己调了 OpenSpec 的技能：从这时起算进了流程', flow(s5).on === true && /调了 openspec-propose/.test(flow(s5).why), flow(s5));
+  const r5 = H.hook(h, 'guard-ask', { session_id: s5, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: 'openspec-propose' } });
+  H.ok('它自己调 OpenSpec 的技能：用户没说就拦下，不进流程', !flow(s5).on && /用户没说要走 OpenSpec/.test(H.reasonOf(r5)), [flow(s5), r5]);
   const s6 = 's-newchange';
   prompt(s6, '看一下这个');
-  H.hook(h, 'guard-commit', { session_id: s6, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'openspec new change add-something' } });
-  H.ok('它建了变更：从这时起算进了流程', flow(s6).on === true && /建了变更/.test(flow(s6).why), flow(s6));
+  const r6 = H.hook(h, 'guard-commit', { session_id: s6, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'openspec new change add-something' } });
+  H.ok('它自己建变更：用户没说就拦下，不进流程', !flow(s6).on && /用户没说要走 OpenSpec/.test(H.reasonOf(r6)), [flow(s6), r6]);
   // 在流程里写了变更的产物：记成这个会话做的
   const s7 = 's-touch';
   prompt(s7, '/opsx:propose 加一个临期提醒');

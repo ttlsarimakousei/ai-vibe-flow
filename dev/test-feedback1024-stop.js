@@ -33,7 +33,7 @@ H.section('#219 只读过的旧变更不算这个会话在做的');
   const p = H.makeRepo(path.join(h.work, 'readonly'), Object.assign({ 'package.json': '{}\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n',
     'openspec/changes/old-ref/proposal.md': '## Why\n\n老变更。\n\n## What Changes\n\n- 老的\n', 'openspec/changes/old-ref/tasks.md': '## 1. 老任务\n\n没有复选框。\n' }));
   const sid = 's-readonly';
-  const u = H.tr.user('做一个智能物资分发的需求，新建变更 smart-dist');
+  const u = H.tr.user('/opsx:explore 做一个智能物资分发的需求，新建变更 smart-dist');
   prompt(p, sid, u.message.content, [u]);
   const es = [u, ...H.tr.ran('Bash', { command: 'cat openspec/changes/old-ref/proposal.md openspec/changes/old-ref/tasks.md' }, '## Why ...'), ...H.tr.ran('Bash', { command: 'grep -n "Why" openspec/changes/old-ref/proposal.md' }, '1:## Why')];
   const chg = path.join(p, 'openspec/changes/smart-dist');

@@ -145,9 +145,9 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const flow = (sid) => readJson(path.join(h.kit, 'state', sid + '-flow.json'));
     const ask = (sid) => H.hook(h, 'guard-ask', { session_id: sid, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出用哪种格式？', options: [{ label: 'csv' }, { label: 'xlsx' }] }] } });
     const skill = (sid, name) => H.hook(h, 'guard-ask', { session_id: sid, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: name } });
-    const r1 = say('p1', '做一个导出订单的功能');
-    H.ok('提了需求：在流程里，写提案那一段', flow('p1').on === true && flow('p1').stage === 'plan', flow('p1'));
-    H.ok("需求提醒说先探索、确认范围才自动", /先探索/.test(r1) && /先探索并和用户确认范围/.test(r1));
+    const r1 = say('p1', '/opsx:explore 做一个导出订单的功能');
+    H.ok('敲 /opsx:explore：在流程里，写提案那一段', flow('p1').on === true && flow('p1').stage === 'plan', flow('p1'));
+    H.ok('不再按句子说"这像一条需求"', !/这像一条需求/.test(r1), r1);
     H.ok('写提案那一段：提问框能用（全自动不算数）', ask('p1') === null, ask('p1'));
     say('p2', '/opsx:propose add-y');
     H.ok('敲 /opsx:propose：写提案那一段', flow('p2').stage === 'plan', flow('p2'));
@@ -158,11 +158,11 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const r3 = say('p1', '继续');
     H.ok('说"继续"：还在做任务那一段，不再说一遍开工', flow('p1').stage === 'apply' && !/开始 apply/.test(r3), [flow('p1'), r3]);
     say('p1', '这个字段为什么这么写？');
-    H.ok('问句：出了流程，记着的段不变', flow('p1').on === false && flow('p1').stage === 'apply', flow('p1'));
+    H.ok('问句：还在流程，段不变', flow('p1').on === true && flow('p1').stage === 'apply', flow('p1'));
     say('p1', '继续');
-    H.ok('"继续"接回去：还是做任务那一段', flow('p1').on === true && flow('p1').stage === 'apply', flow('p1'));
+    H.ok('"继续"：还是做任务那一段', flow('p1').on === true && flow('p1').stage === 'apply', flow('p1'));
     say('p1', '提案里 X 不对，改一下');
-    H.ok('说的是提案的事：回到写提案那一段，提问框又能用了', flow('p1').stage === 'plan' && ask('p1') === null, flow('p1'));
+    H.ok('说的是提案的事：段不变，改了需求由开工范围管，提问框能用', flow('p1').stage === 'apply' && ask('p1') === null, flow('p1'));
     say('p1', '把 add-y 的 1.1 做了');
     H.ok('"把 1.1 做了"：做任务那一段', flow('p1').stage === 'apply', flow('p1'));
     const r4 = say('p3', '/opsx:apply add-y');
@@ -170,9 +170,9 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const r5 = say('p4', '/opsx:apply going-z');
     H.ok('点名接着做一个已经打过勾的变更：做任务那一段，也告诉我', flow('p4').stage === 'apply' && /开始 apply：全自动模式开着/.test(r5), [flow('p4'), r5]);
     say('p5', 'add-y 的提案改一下，去掉导出');
-    H.ok('点名一个没开工的变更、说的是提案：写提案那一段', flow('p5').on === true && flow('p5').stage === 'plan', flow('p5'));
+    H.ok('点名一个变更：不进流程', !flow('p5').on, flow('p5'));
     say('p6', '归档 going-z');
-    H.ok('点名让它归档：不当成开工（不说"开始 apply"）', flow('p6').on === true && !/开始 apply/.test(say('p6', '归档 going-z')), flow('p6'));
+    H.ok('点名让它归档：不进流程，不当成开工', !flow('p6').on && !/开始 apply/.test(say('p6', '归档 going-z')), flow('p6'));
     H.setConfig(h, { autoMode: false });
     const r6 = say('p7', '/opsx:apply add-y');
     H.ok('全自动关着时敲 /opsx:apply：告诉我关着', /开始 apply：全自动模式关着/.test(r6) && /现在开始 apply（做任务）：全自动模式关着/.test(r6), r6);
@@ -256,12 +256,12 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('审完了：照旧催提交', !!r3 && /还没提交|尚未提交/.test(H.reasonOf(r3)), H.reasonOf(r3));
     // 开工那一句：先把提案的产物提交一次
     const say = (sid, prompt, cfgPatch) => { if (cfgPatch) H.setConfig(h, cfgPatch); const o = H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
-    H.ok('开工不能补提案提交许可', /没有明确提交许可时不在开工节点补提案提交/.test(say('v3', '提案看过了，开工 add-x')));
+    H.ok('开工不能补提案提交许可', /没有明确提交许可时不在开工节点补提案提交/.test(say('v3', '/vk-go add-x')));
     H.ok('提交方式"关"：不提', !/开工前先把/.test(say('v4', '开工 add-x', { commitMode: 'off' })));
     H.setConfig(h, { commitMode: 'auto' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = (H.read(path.join(h.cfg, 'CLAUDE.md')) || '') + (H.read(path.join(h.kit, 'hook-rules.md')) || '');
-    H.ok('提交说明：文档定稿后按提交方式提交一次', /定稿后按提交方式一起提交一次/.test(md) && /同一套文档定稿后提交一次/.test(md), md.slice(0, 300));
+    H.ok('提交说明：文档定稿后按提交方式提交一次', /定稿后按提交方式一起提交一次/.test(md) && /同一套文档定稿后按提交方式提交一次/.test(md), md.slice(0, 300));
     H.ok('交叉审查的技能也改了说法', /人工/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))) && /Ask/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))));
     // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
     const later = '1.2 做完了，验证过了。打勾攒着等这一阶段提交时一起勾。';

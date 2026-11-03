@@ -21,18 +21,10 @@
 const fs = require('fs');
 const path = require('path');
 const intent = require('../lib/intent');
-const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, planIntent, changeStarted, handoverStage, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, syncReviews, sessionChanges, KIT, cli } = require('../lib/session');
+const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, syncReviews, sessionChanges, KIT, cli } = require('../lib/session');
 let hookHealth = () => '';
 try { hookHealth = require('../lib/hook-health.js').check; } catch (e) { /* 老版本没有 */ }
 
-/**
- * 用户提了一条需求（不是问句、不是斜杠命令）：提醒它先探索再提案，别凭印象直接写提案或改代码。
- * 判断只看用词，宁可多提醒一句也不漏：提醒的话里已经说明了不用提案的小改动直接改。开关 specGate。
- */
-const NEED = /(需求|功能|想要|想做|要做|做一个|做个|加一个|加个|新增|新建|新做|实现|支持|改成|改为|改造|重做|优化|重构|增加|开发|页面|接口|导出|导入|报表|统计|集成|对接)/;
-const QUESTION = /(为什么|为啥|是什么|什么意思|怎么看|怎么理解|吗[？?]?$|[？?]$|解释|说明一下|看看|看一下|查一下|查查|检查|核对|对比)/;
-// 闲话：整句就是应一声（"好的""行，就这样"）。开头碰巧是这几个字的不算（"好友列表加个搜索""行程管理做个导出"）；"继续…"后面跟什么都是接着做，不是新需求
-const SMALL_TALK = /^继续|^(好|好的|嗯|行|可以|ok|okay|谢谢)(的|吧|啊|呀|了|哦)*([\s，,。.！!？?~～…、]|$)/i;
 // "不要停""别等我，做完再说""不用问我"：开头是"不 / 别"，意思却是接着做
 const KEEP_GOING = /^(不要|不用|别|甭|不必|无需)再?(停|等|问|管我|确认|请示|汇报|担心)/;
 // 让它停的话，只认两种。以前只看开头是不是"不用 / 不要 / 别 / 停"："不要停，把剩下的做完"也被当成停，全自动这一轮就按没开算，提问框不拦，活停在那里等人
@@ -44,83 +36,100 @@ function isStop(p) {
   if (KEEP_GOING.test(p)) return false;
   return HALT.test(p) || (SHORT_NO.test(p) && p.replace(/[\s，,。.！!？?~～…、；;:：]/g, '').length <= 8);
 }
-/** 这句话像不像一条需求（不是问句、不是闲话、不是让它停、不是让它出一份文档、不是斜杠命令） */
-function looksLikeRequirement(p) {
-  if (!p || p.length < 6 || p.length > 3000 || /^\s*\//.test(p) || SMALL_TALK.test(p) || isStop(p) || looksLikeOutputRequest(p) || QUESTION.test(p) || !NEED.test(p)) return false;
-  return !/接着上一个会话的交接记录继续/.test(p);
-}
+const EXIT_FLOW = /^(退出流程|不走流程了|不走 ?openspec 了?)[\s。！!，,.~～]*$/i;
+const ONLY_PLAN = /只写需求|只(?:写|出)(?:提案|文档)/;
+const ASKING = /(?:[？?]|吗|么|呢)[\s。.!！~～]*$/;
 /**
- * 全自动模式开着时，这句话算不算在走 OpenSpec 流程（规矩见 lib/session.js"全自动模式只在走 OpenSpec 流程时算开着"）。
- * 定下来记进 state/<会话>-flow.json，别的钩子照着它算 autoMode。resumed：这句话接上了一份刚写的交接记录
- */
-const CONTINUE_WORDS = /^(继续|接着|接着做|继续做|往下做|下一步|好|好的|嗯|行|可以|ok|okay|go on|continue|next|做吧|开始吧)[\s。！!，,.~～]*$/i;
-// 流程里会用到的那几个技能（审查、看页面、交接）：用户自己敲它们，不算进流程也不算出流程，跟上一轮一样
-// 套件的许可命令（/vk-commit、/vk-push、/vk-archive、/vk-review、/vk-test，用户 2026-10-30 定的）也跟上一轮一样：在流程里就还在
-const SAME_SLASH = /^\s*\/(?:(ttls-)?(cross-review|see-page|handover)|vk-(?:commit|push|archive|review|test|auto))(\s|$)/i;
-// 敲的是 /opsx:apply（不是 archive、verify 这些）；或者在说归档的事（点了名让它归档，不算开工）
-const APPLY_CMD = /^\s*\/(opsx:|openspec[-:])apply\b|<command-name>\s*\/?(opsx:|openspec[-:])apply\b/i;
-const ARCHIVE_TALK = /^\s*\/(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b|<command-name>\s*\/?(opsx:|openspec[-:])(archive|bulk-archive|verify|sync)\b|归档|archive/i;
-/**
- * 返回 { on: 这一轮在不在流程里, cont: 是不是"继续"这类话接回去的（不算新开工：不拉代码、不数"进流程"）,
- *   stage: 在流程的哪一段（plan 写提案 / apply 做任务，规矩见 lib/session.js"流程分两段"）, applyStart: 这句话开工了（要告诉用户全自动开没开） }
+ * 这句话之后在不在流程里、在哪一段（用户 2026-11-03 定的，规矩见 lib/session-flow.js 开头）。
+ * 返回 { on, cont: 接着原来的流程（不算新进）, stage: plan 写需求 / apply 做任务, applyStart: 这句话开工了（要告诉用户全自动开没开） }
  */
 function decideFlow(j, cfg, note, resumed) {
   let prev = flowState(j);
-  // 装这一版之前就开着的会话头一回开口：先照以前的算法接过来（它动过变更就算在流程里），"继续"才接得上
+  // 装这一版之前就开着的会话头一回开口：先照以前的算法接过来（它动过变更就算在流程里）
   if (prev.at === undefined && cfg.autoSwitch) prev = flowAdopt(j);
-  // 它动过的变更都归档了：流程走完了，"继续""好"不再接回去（点名新的变更、敲 /opsx:… 照样进；收工时已经记成不在流程里的，这里把"上一轮在流程里"的时间也抹掉）
-  if (flowDone(j)) { if (prev.on) setFlow(j, false, '变更归档了'); prev = Object.assign({}, prev, { on: false, was: 0 }); }
+  // 它动过的变更都归档了：流程走完了
+  if (flowDone(j)) { if (prev.on) setFlow(j, false, '变更归档了'); prev = Object.assign({}, prev, { on: false }); }
   const prevStage = prev.stage === 'apply' ? 'apply' : 'plan';
   // 后台任务做完的通知不是用户说的话：跟原来一样
   if (note) return { on: !!prev.on, cont: true, stage: prevStage, applyStart: false };
   const p = String(j.prompt || '').trim();
-  let named = [];
-  // 点了名的变更：没归档的都算。任务全打了勾、等着复审和归档的也是流程里的事（"接着做：复审 a1 的代码，没问题就归档"）
-  try { named = allChanges(j.cwd || process.cwd()).filter((c) => mentionsChange(p, c.name)); } catch (e) { named = []; }
-  let on = false;
-  let why = '';
-  let cont = false;
-  // 在流程的哪一段：默认跟上一轮一样（没记过的还是没记，按 apply 算）
+  const applyCmd = APPLY_SLASH.test(p) || APPLY_TAG.test(p);
+  const flowCmd = FLOW_SLASH.test(p) || FLOW_TAG.test(p) || applyCmd;
+  let on = !!prev.on;
+  let why = prev.why || '';
   let stage = prevStage;
-  // 这句话是让它做任务（开工）还是在说提案那一段的事：开工算 apply，改提案算 plan，都不是就用给定的那个
-  const stageOf = (fallback) => (applyIntent(p) ? 'apply' : planIntent(p) ? 'plan' : fallback);
-  // 上一轮在流程里；或者上一轮只是插进来问了一句、再上一轮在流程里（一天之内）
-  const going = !!prev.on || (!!prev.was && Date.now() - prev.was < 86400000);
-  if (FLOW_SLASH.test(p) || FLOW_TAG.test(p) || APPLY_SLASH.test(p) || APPLY_TAG.test(p)) { on = true; why = '敲了 OpenSpec 的命令'; stage = APPLY_SLASH.test(p) || APPLY_TAG.test(p) ? 'apply' : 'plan'; }
-  else if (SAME_SLASH.test(p)) { on = !!prev.on; why = on ? '接着上一轮' : ''; }
-  // 别的斜杠命令（/ttls-onboard、自己的命令）：这一轮做的是那件事，不在流程里（议题 #9）
-  else if (/^\s*\//.test(p)) { on = false; }
+  let paused = false; let aside = false; let drop = false;
+  if (flowCmd) { on = true; why = '敲了 OpenSpec 的命令'; stage = applyCmd ? 'apply' : 'plan'; }
   else if (resumed) { on = true; why = '用户明确选择手动交接'; stage = 'plan'; }
-  // "不要停，把剩下的做完""别等我"：接着做。原来不在流程里的不算，照下面的规矩看这句话本身
-  else if (KEEP_GOING.test(p) && going) { on = true; why = '接着上一轮'; cont = true; }
-  else if (isStop(p) || intent.denied(p, 'apply')) { on = false; stage = 'plan'; }
-  // "继续"：上一轮在流程里就接着；上一轮只是插进来问了一句的，跟再上一轮（一天之内）
-  else if (CONTINUE_WORDS.test(p)) { on = going; why = on ? '接着上一轮' : ''; cont = true; }
-  // 问句只回答：这一轮不在流程里（说"继续"就接回去）
-  else if (QUESTION.test(p)) { on = false; }
-  // 让它出一份代码之外的东西（说明、报告、清单，或者"生成一个文件记一下"）：也是插进来的一句，不在流程里——放哪照常问用户，全自动不作数。
-  // 以前"正在流程里，又说了一句不是问句的话"把这种也算在流程里，全自动开着时就不问、自己挑地方放了（用户 2026-10-07 反馈）
-  else if (looksLikeOutputRequest(p)) { on = false; }
-  // 正在流程里，又说了一句不是问句的话（"3.3 我执行过了，接着归档""字段名不对，应该是 X"）：还在流程里。说了开工就进 apply，说的是提案的事就回到 plan
-  else if (prev.on) { on = true; why = '接着上一轮'; stage = stageOf(prev.stage); }
-  else if (looksLikeRequirement(p)) { on = true; why = '提了需求'; stage = 'plan'; }
-  // 点了名的变更：让它开工、或者这个变更已经打过勾的算 apply；还没开工的、说的是提案的事算 plan
-  else if (named.length && p.length <= 3000) { on = true; why = '点了变更 ' + named[0].name; stage = stageOf('plan'); }
+  else if (on) {
+    if (EXIT_FLOW.test(p)) { on = false; why = '用户说退出流程'; }
+    else if (ASKING.test(p) || /^\s*\//.test(p)) { /* 问句、斜杠命令不动阶段 */ }
+    else if (intent.denied(p, 'apply')) { stage = 'plan'; drop = true; }
+    else if (isStop(p)) paused = true;
+    else if (looksLikeOutputRequest(p)) aside = true;
+    else if (applyIntent(p)) stage = 'apply';
+  }
   setFlow(j, on, why, on ? stage : undefined);
-  if (on && stage === 'apply' && applyIntent(p)) {
+  // 命令里点了名的变更：算这个会话在做的（收工时只催它）
+  if (flowCmd) { try { for (const c of allChanges(j.cwd || process.cwd())) if (mentionsChange(p, c.name)) flowTouch(j, c.dir); } catch (e) { /* 记不了：写它的产物时还会记 */ } }
+  const hold = drop || (on && ONLY_PLAN.test(p));
+  require('../lib/session').updateState(String(j.session_id) + '-flow', (s) => {
+    s.paused = paused; s.aside = aside;
+    if (hold) s.holdApply = true; else if (applyCmd || (applyIntent(p) && !ASKING.test(p))) s.holdApply = false;
+    if (drop) delete s.applyScope;
+  });
+  if (on && stage === 'apply' && applyIntent(p) && !ASKING.test(p)) {
     // 用户只说"开工"、有几个变更时，看模型刚才那段话点的是哪个（#214）
     let said = '';
     try { const es = j.transcript_path ? tailEntries(j.transcript_path, 3000000) : []; const v = require('../lib/session').lastUserVoice(es); said = require('../lib/session').saidBefore(es, v && v.kind === 'prompt' && v.text === p ? v.pos : es.length); } catch (e) { said = ''; }
     const permit = require('../lib/apply-scope').grant(j, p, '', { said });
     if (!permit.ok) { stage = 'plan'; setFlow(j, true, permit.reason, 'plan'); }
   }
-  if (isStop(p) || intent.denied(p, 'apply')) require('../lib/session').updateState(String(j.session_id) + '-flow', (s) => { s.was = 0; s.stage = 'plan'; delete s.applyScope; });
-  if (on) for (const c of named) flowTouch(j, c.dir);
   const nowStage = stage === 'apply' ? 'apply' : 'plan';
-  // 这句话开工了：敲了 /opsx:apply，或者上一轮还不在做任务那一段。点名让它归档的不算
-  const applyStart = on && nowStage === 'apply' && applyIntent(p);
-  if (cfg.autoSwitch && (!!prev.on !== on || (on && prevStage !== nowStage))) hookLog('全自动模式 ' + (on ? '这个会话' + (prev.on ? '' : '进了 OpenSpec 流程：' + why + '，') + (nowStage === 'apply' ? '在做任务那一段（全自动算数）' : '在写提案那一段（照有人在的样子来）') : '这一轮不在 OpenSpec 流程里，照有人在的样子来'));
-  return { on, cont, stage: nowStage, applyStart };
+  const applyStart = on && nowStage === 'apply' && applyIntent(p) && !ASKING.test(p);
+  if (cfg.autoSwitch && (!!prev.on !== on || (on && prevStage !== nowStage))) hookLog('全自动模式 这个会话' + (on ? (prev.on ? '' : '进了 OpenSpec 流程：' + why + '，') + (nowStage === 'apply' ? '在做任务那一段' : '在写需求那一段') : '不在流程里了'));
+  return { on, cont: !flowCmd && !resumed && !!prev.on, stage: nowStage, applyStart };
+}
+/** /vk-resume：接回没做完的大任务（用户 2026-11-03 定的）。阶段从文件算；死机前开着自动就接着开；提交、推送、归档的许可不恢复 */
+const RESUME_CMD = /^\s*\/vk-resume(?:\s+([\s\S]*?))?\s*$/i;
+const RESUME_TAG = /<command-name>\s*\/?vk-resume\s*<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/i;
+function resumeTask(j) {
+  const raw = String(j.prompt || '');
+  const m = RESUME_CMD.exec(raw) || RESUME_TAG.exec(raw);
+  if (!m) return null;
+  const S = require('../lib/session'); const B = require('../lib/big-task');
+  const want = String(m[1] || '').trim();
+  const open = B.tasks(j.cwd || process.cwd()).filter((t) => B.phaseOf(t).phase !== 'done');
+  if (!open.length) return { user: '[vibe-kit] 没有没做完的大任务。', model: '用户敲了 /vk-resume，但 openspec/plan.md 里没有没做完的大任务。告诉用户，不用做别的。' };
+  const task = want ? open.find((t) => t.name === want || t.changes.some((c) => c.name === want)) : open.length === 1 ? open[0] : null;
+  if (!task) {
+    const list = open.map((t) => t.name + '（' + B.progressText(t) + '）').join('；');
+    return { user: '[vibe-kit] ' + (want ? '没找到 ' + want + '。' : '') + '没做完的大任务：' + list + '。敲 /vk-resume <名字> 接回。', model: '用户敲了 /vk-resume，' + (want ? '没找到 ' + want + '，' : '') + '有几个没做完的大任务：' + list + '。列给用户，等用户敲 /vk-resume <名字>，不要自己选。' };
+  }
+  const ph = B.phaseOf(task);
+  const stage = ph.phase === 'explore' || ph.phase === 'plan' ? 'plan' : 'apply';
+  S.setFlow(j, true, '接回大任务 ' + task.name, stage);
+  S.updateState(String(j.session_id) + '-flow', (s) => { s.task = task.name; s.paused = false; s.aside = false; s.holdApply = false; });
+  for (const c of task.changes) if (c.exists) S.flowTouch(j, c.dir);
+  const autoBack = B.taskState(task).auto === true;
+  if (autoBack) S.setSessionAuto(j, true, '/vk-resume 接回');
+  if (stage === 'apply') { try { require('../lib/apply-scope').grant(j, ph.change || (task.changes.find((c) => c.exists) || {}).name || '', ''); } catch (e) { /* 开工范围记不了：改代码时会说 */ } }
+  const STEP = { explore: '接着探索，把结果写进探索记录', plan: '写 ' + ph.change + ' 的需求', apply: '接着做 ' + ph.change + ' 的任务', selftest: '任务都做完了：全面自测', verify: '等用户人工核验', archive: '接着按表的顺序归档 ' + ph.change };
+  const rel = task.explore ? '探索记录 ' + task.explore + '（公共几节和 ' + (ph.change || '要做的 change') + ' 那一节）、' : '';
+  return {
+    user: '[vibe-kit] 接回大任务 ' + task.name + '：' + B.progressText(task) + (autoBack ? '；自动已恢复' : '') + '。下一步：' + STEP[ph.phase] + '。',
+    model: '用户敲了 /vk-resume，接回大任务 ' + task.name + '：' + B.progressText(task) + '。先读 ' + task.planFile + '、' + rel + '前面 change 的 design 和 revisions，再' + STEP[ph.phase] + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。',
+  };
+}
+/** 有没做完的大任务、这个会话又没在流程里：第一句话告诉用户一次（模型知道用户不知道，死机回来找不到） */
+function resumeHint(j) {
+  const k = String(j.session_id || 'unknown') + '-resume-hint';
+  if (readState(k).at) return '';
+  writeState(k, { at: Date.now() });
+  const B = require('../lib/big-task');
+  const open = B.tasks(j.cwd || process.cwd()).filter((t) => !t.legacy && B.phaseOf(t).phase !== 'done');
+  if (!open.length) return '';
+  return '[vibe-kit] 有没做完的大任务：' + open.map((t) => t.name + '（' + B.progressText(t) + '）').join('；') + '。要接着做，敲 /vk-resume。';
 }
 /**
  * 开工（apply 开始）的那一句：用户 2026-10-07 要的——不管是他敲的 /opsx:apply 还是让它开工，都告诉他这次全自动开没开，不打断干活。
@@ -135,14 +144,6 @@ function applyNotice(cfg) {
       + '提案提交许可和 apply 开工许可分别判断；没有明确提交许可时不在开工节点补提案提交。',
   };
 }
-function requirementHint(j, cfg) {
-  const p = String(j.prompt || '').trim();
-  if (!looksLikeRequirement(p)) return '';
-  // 全自动只管 apply 之后：提需求、探索、写提案这一段用户在，照有人在的说法（这时 cfg.autoMode 本来就是 false）
-  return '这像一条需求。要走提案的（新功能、改行为、改接口、改表结构）先探索再提案：用 /opsx:explore 的方式在项目里读会碰到的代码、表结构（有查库的技能就用它）、接口、配置，把现状写下来（读了什么、发现什么、和需求对不上的地方、还不知道什么）给我看，明确范围后按当前需求自动条件逐产物生成；不要凭印象直接写提案或改代码。不用提案的小改动直接改。'
-    + (cfg && cfg.autoSwitch ? '这个会话开着自动：先探索并和用户确认范围、疑问（qualify 过了）才开始自动，之后整套文档审修定稿提交后自动开工；只写需求的不开工。' : '');
-}
-
 /**
  * 这句话要的东西里像是有代码之外的产出（DDL、说明文档、分析报告、表格）：开工前先定好放哪。
  * 写文件那一刻钩子（guard-output）还会查一次，这里是让它在动手之前就想到，别写完了才被拦。开关 outputGate
@@ -370,9 +371,9 @@ function anchorLines(j, cfg, note) {
 }
 
 /** 会话自动模式开了：送一次怎么做（问题表第 28 条，用户 2026-10-31 定的）。不写进每个请求都带的全局约定（硬规矩 8） */
-const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。先把探索做完：读相关代码和现状，和用户确认目标、范围、验收标准和疑问，写评估并用 workflow.js qualify 过了才开始自动；'
-  + '之后自动逐份写需求文档、审修、定稿、开工，每整组任务做完先审查、按验收用例自测、修改、复验，再做下一组，按提交方式提交，收工交报告。'
-  + '只做用户的描述和材料里有的，不自己加需求（"这里加个按钮更好"这种不加）；做法上的取舍自己定，记进 revisions.md（起因：自动模式决定），不停下来问；'
+const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。先把探索做完：读相关代码和现状，和用户确认目标、范围、验收标准和疑问，写进探索记录（openspec/explore/<大任务>.md），"还没定的"清空才开始自动；'
+  + '之后自动逐份写需求文档、审修、定稿、开工，每整组任务做完审查，一个 change 做完按 plan.md 接下一个，全部做完全面自测、修改、复验，按提交方式提交，收工交报告。'
+  + '只做探索记录和用户材料里有的，不自己加需求（"这里加个按钮更好"这种不加）；做法上的取舍自己定，记进 revisions.md（起因：自动模式决定），不停下来问；'
   + '用户中途报的问题、改的需求照改，记进 revisions.md，接着自动做。只有用户的描述或材料让你完全走不下去时，先自己探索，还不行再问。归档、push 照旧要用户点头；改库、写 redis 照技能里全自动的规矩（留得下备份的工具会说不用等人，别的留给用户）。';
 const AUTO_OFF_TEXT = '这个会话的自动模式关了（用户刚说的）：照人工来，审查、自测、复验先问用户。';
 async function handle(j) {
@@ -402,6 +403,8 @@ async function handle(j) {
   // 开关关着也定、也记：这一轮做到一半才在配置页打开全自动的，别的钩子照这一轮开头定的算
   cfg.autoSwitch = cfg.autoApply || cfg.autoRequirements;
   // 上一轮在不在流程里（装这一版之前就开着的会话先照以前的算法接过来，和 decideFlow 里一样）：数"进流程"、定要不要拉代码用
+  let resumed2 = null;
+  if (!note) { try { resumed2 = resumeTask(j); } catch (e) { try { require('../lib/feedback.js').recordHookError('task-anchor /vk-resume', j, e); } catch (e2) { /* 记不了 */ } } }
   let prevOn = false;
   try { let st = flowState(j); if (st.at === undefined && cfg.autoSwitch) st = flowAdopt(j); prevOn = !!st.on; } catch (e) { prevOn = false; }
   let on = false;
@@ -412,14 +415,15 @@ async function handle(j) {
   try { const d = decideFlow(j, cfg, note, resumed); on = d.on; cont = d.cont; stage = d.stage; applyStart = d.applyStart; } catch (e) { on = false; }
   // 全自动只在做任务那一段（apply）算开着；写提案那一段用户在
   cfg.autoMode = require('../lib/session').flowView(j).effective;
+  if (!note && on) { try { require('../lib/big-task').noteAuto(j, !!cfg.autoSession); } catch (e) { /* 记不了：接回时不恢复自动 */ } }
   // 用户开口了：全自动报告新开一轮（后台任务的通知不算用户开口）
   // 只剩用户验收时自动已不生效，但这一轮的报告也要从头记（2026-10-17：任务全做完、审过就算等用户验收）
-  if (!note && (cfg.autoMode || require('../lib/session').flowView(j).awaitingUser)) { try { require('../lib/report.js').begin(j); } catch (e) { /* 老版本没有，或者记不了：不影响对话 */ } }
+  // 问句不新开一轮：问句不退出流程了（2026-11-03），不能每问一句交一次报告
+  if (!note && !ASKING.test(String(j.prompt || '').trim()) && (cfg.autoMode || require('../lib/session').flowView(j).awaitingUser)) { try { require('../lib/report.js').begin(j); } catch (e) { /* 老版本没有，或者记不了：不影响对话 */ } }
   if (applyStart) {
     try { const named = allChanges(j.cwd).filter((c) => mentionsChange(j.prompt, c.name)); const targets = named.length ? named : allChanges(j.cwd); if (targets.length === 1 || named.length) require('../lib/review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 基线未知时审查明确要求 --base */ }
   }
   const said = String(j.prompt || '').trim();
-  if (!note && planIntent(said)) { require('../lib/session').updateState(String(j.session_id) + '-flow', s => { s.planReady = false; s.waiting = ''; s.explorationAt = Date.now(); }); cfg.autoMode = false; }
   // 使用情况：开口、进流程、接着交接记录做、写交接记录各几次（只数次数）
   if (!note) {
     try {
@@ -439,7 +443,13 @@ async function handle(j) {
   const lines = [...anchored];
   if (autoSaid === 'on') lines.unshift(AUTO_ON_TEXT);
   else if (autoSaid === 'off') lines.unshift(AUTO_OFF_TEXT);
-  if (!note && on && stage === 'plan' && cfg.autoRequirements && !flowState(j).planReady) lines.push('自动模式开着，但先探索并沟通目标、范围、验收与疑问；条件明确后把 description、scope、acceptance、unresolved（未解问题数组）、onlyPlan 写入本机 .vibe/tmp/<事由>/评估.json，再运行 workflow.js qualify --session ' + j.session_id + ' --transcript <当前会话记录> --assessment <评估文件>。有疑问必须 Ask，不能因为开关开启而猜需求。');
+  if (!note && on && stage === 'plan' && cfg.autoRequirements) {
+    try {
+      const B = require('../lib/big-task'); const task = B.forSession(j);
+      const left = task ? B.exploreIssues(task) : ['还没有探索记录'];
+      if (left.length) lines.push('自动模式开着，但探索还没完：' + left.join('；') + '。写进探索记录（没有就跑 node "' + path.join(KIT, 'tools', 'plan.js') + '" new --task <大任务名> --changes <变更名，逗号分隔>）才开始自动。有疑问用提问框问，不猜需求。');
+    } catch (e) { /* 算不了不影响开口 */ }
+  }
   if (!note) { try { const conflicts = require('../lib/work-sessions').touch(j); if (conflicts.length) lines.push('同一变更还有活跃实施会话：' + conflicts.join('、') + '。先核对各自负责的文件，避免覆盖；检索照常。共享工作区未被隔离。'); } catch (e) { /* 冲突记录失败不阻断工作 */ } }
   // 放松保护的开关被绕开配置页改了：没按它来，告诉它；每个会话记一次问题反馈
   if (cfg._tampered) {
@@ -464,18 +474,9 @@ async function handle(j) {
   try { const hh = await hookHealth(j, cfg); if (hh) lines.unshift(hh); } catch (e) { /* 自检失败不影响对话 */ }
   // 报的是做完的功能上的问题：先溯源再修（这时就不提"先探索再提案"，修 bug 不用提案）
   const th = note ? '' : traceHint(j, cfg);
-  let rhSent = false;
   if (cfg.specGate !== false && !note) {
     // 用户开口这一刻，把各个变更产物的指纹记下来：收工时比对，改了产物没在 revisions.md 记录就拦
     writeState(String(j.session_id || 'unknown') + '-artifacts', { at: Date.now(), files: snapshotArtifacts(j.cwd || process.cwd()) });
-    // 过了交接线还提新需求：不再提"先探索再提案"，新需求留给新会话
-    const rh = slash || anchored.overLine || th ? '' : requirementHint(j, cfg);
-    rhSent = !!rh;
-    if (rh) {
-      lines.push(rh);
-      // 提需求的时刻：写提案时"先探索再提案"只认这之后的探索（会话里更早读过的不相干的文件不算）
-      writeState(String(j.session_id || 'unknown') + '-requirement', { at: Date.now() });
-    }
   }
   if (th) lines.push(th);
   if (!note && intent.explicit(j.prompt, 'push')) {
@@ -488,17 +489,18 @@ async function handle(j) {
   const oh = note || anchored.overLine ? '' : outputHint(j, cfg);
   if (oh) lines.push(oh);
   // 开工了：告诉用户这次全自动开没开（systemMessage 给人看，additionalContext 给模型）
-  const notice = applyStart ? applyNotice(cfg) : null;
+  let notice = applyStart ? applyNotice(cfg) : resumed2;
+  if (!notice && !note && !on) { try { const rh = resumeHint(j); if (rh) notice = { user: rh, model: '' }; } catch (e) { /* 提示不了不影响开口 */ } }
   // 规矩提前说（lib/stage-rules.js，第一次进流程时带上 OpenSpec 规范）：开工时送做任务这一段的；提需求、敲 /opsx:propose、explore、new、continue 时送写需求这一段的；
   // 这个会话已经在流程里的（换了个说法接着做、压缩后的下一句）按它现在在哪一段送
   try {
     const SR = require('../lib/stage-rules');
-    const sr = applyStart ? SR.stageRules(j, 'apply', cfg) : (rhSent || /^\s*\/(?:opsx:|openspec-)(?:propose|explore|new|continue)\b/i.test(String(j.prompt || ''))) ? SR.stageRules(j, 'plan', cfg) : on ? SR.stageRules(j, stage === 'apply' ? 'apply' : 'plan', cfg) : '';
+    const sr = applyStart ? SR.stageRules(j, 'apply', cfg) : (/^\s*\/(?:opsx:|openspec-)(?:propose|explore|new|continue)\b/i.test(String(j.prompt || ''))) ? SR.stageRules(j, 'plan', cfg) : on ? SR.stageRules(j, stage === 'apply' ? 'apply' : 'plan', cfg) : '';
     if (sr) lines.push(sr);
   } catch (e) { /* 送不了不影响开口 */ }
-  if (notice) lines.unshift(notice.model);
+  if (notice && notice.model) lines.unshift(notice.model);
   const text = lines.length ? '[vibe-kit 提醒] ' + lines.join('\n') + '\n' : null;
-  if (notice) return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text }, systemMessage: notice.user };
+  if (notice) return Object.assign(text ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } } : {}, { systemMessage: notice.user });
   return text;
 }
 

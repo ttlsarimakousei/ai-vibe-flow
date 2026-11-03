@@ -50,12 +50,13 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     cfg({ autoApply: true, autoRequirements: true, requirementsReviewMaxRounds: 2, applyReviewMaxRounds: 4 });
     S.setFlow(j, true, '需求', 'plan'); S.flowTouch(j, d);
     H.ok('需求开关开启但未探索不自动', !S.readConfigFor(j).autoMode);
-    const assessment = { description: '查询订单空列表行为', scope: '只修改查询对应实现', acceptance: '订单为空返回空列表', unresolved: ['是否分页'] };
-    let denied = false; try { P.qualify(j, assessment); } catch (e) { denied = true; }
-    H.ok('没有探索记录不能自动资格登记', denied);
     j.transcript_path = tf([H.tr.user('实现订单查询'), H.tr.ran('Read', { file_path: path.join(p, 'a.js') }, 'let a=1;')]);
-    H.ok('未决需求继续沟通', !P.qualify(j, assessment).ready && !S.readConfigFor(j).autoMode);
-    H.ok('探索且没有疑问后需求自动生效', P.qualify(j, { ...assessment, unresolved: [] }).ready && S.readConfigFor(j).autoMode);
+    const exploreFile = path.join(p, 'openspec', 'explore', '订单.md');
+    H.write(path.join(p, 'openspec', 'plan.md'), '# 计划\n\n## 订单\n\n探索记录：explore/订单.md\n\n| 模块 | 变更名 | 状态 | 说明 |\n|---|---|---|---|\n| | ' + path.basename(d) + ' | | |\n');
+    H.write(exploreFile, '# 探索\n\n## 还没定的\n\n是否分页\n\n## 范围\n\n只修改查询对应实现\n');
+    H.ok('未决需求继续沟通', !S.readConfigFor(j).autoMode);
+    H.write(exploreFile, '# 探索\n\n## 还没定的\n\n## 范围\n\n只修改查询对应实现\n');
+    H.ok('探索记录写完后需求自动生效', S.readConfigFor(j).autoMode);
     for (const [req, apply] of [[false, false], [false, true], [true, false], [true, true]]) {
       cfg({ autoRequirements: req, autoApply: apply });
       H.ok('需求阶段只看需求开关：' + req + '/' + apply, S.readConfigFor(j).autoMode === req);
@@ -75,13 +76,13 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.write(path.join(d, 'design.md'), H.read(path.join(d, 'design.md')) + '\n修订：空列表要包含总数。\n');
     H.ok('设计修订使关联任务组结果失效', !P.passed(d, 'group-1') && !P.passed(d, 'tasks') && P.passed(d, 'proposal'));
     for (const point of ['design', 'tasks']) P.noteResult(d, point, good, P.fingerprint(d, point));
-    // 询问、自动两档要等文档提交了再开工；关档本来就不等（2026-10-17 提交方式三档）
-    H.setConfig(h, { commitMode: 'ask' });
-    H.ok('定稿未提交不自动 apply', !P.automaticApply(j));
+    // "自动"档等文档提交一次再开工；关、询问在全自动下不等（用户 2026-11-03 定的）
+    H.setConfig(h, { commitMode: 'auto' });
+    H.ok('"自动"档：定稿未提交不自动 apply', !P.automaticApply(j));
     H.git(p, ['add', 'openspec/changes/add-a/design.md', 'openspec/changes/add-a/tasks.md']); H.git(p, ['commit', '-qm', 'docs: 提案 add-a']);
-    S.updateState(j.session_id + '-flow', o => { o.planAssessment.onlyPlan = true; });
+    S.updateState(j.session_id + '-flow', o => { o.holdApply = true; });
     H.ok('仅要求需求文档，即使双自动也不开工', !P.automaticApply(j));
-    S.updateState(j.session_id + '-flow', o => { o.planAssessment.onlyPlan = false; });
+    S.updateState(j.session_id + '-flow', o => { o.holdApply = false; });
     H.ok('双自动在文档定稿提交后衔接 Apply', P.automaticApply(j) && S.flowState(j).stage === 'apply' && (H.setConfig(h, { commitMode: 'off' }), true), { flow: S.flowState(j), dirs: S.flowChanges(j), points: P.points(d, 'proposal').map(p => [p, P.passed(d, p)]), status: H.git(p, ['status', '--porcelain', '--', 'openspec/changes/add-a']), cfg: [S.readConfig().autoApply, S.readConfig().autoRequirements] });
     for (const [req, apply] of [[false, false], [false, true], [true, false], [true, true]]) {
       cfg({ autoRequirements: req, autoApply: apply });
