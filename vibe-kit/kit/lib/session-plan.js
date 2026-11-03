@@ -13,26 +13,34 @@ const { normTicks, artifactFiles } = require('./session-proposal');
 const { codeReviewIssue, reviewLoopIssue } = require('./session-review');
 
 // ===================== 大需求的计划：openspec/plan.md =====================
-// 一个大需求拆成几个变更做，做完一个归档一个，模型下次怎么知道哪些做完了？靠 plan.md 这张表：模块 | 变更名 | 状态 | 说明。
+// 一个大需求拆成几个变更做，模型下次怎么知道哪些做完了？靠 plan.md：每个大任务一节（## 名字、探索记录：路径、模块 | 变更名 | 状态 | 说明 的表）。
 // 状态不靠人记：会话开头的汇总按 changes/ 和 changes/archive/ 的实际情况算。钩子只算不写（不动跟踪文件），文件里的状态列跑 tools/plan.js 才更新。
+// 老的 plan.md 没有分节，整张表算一个大任务（lib/big-task.js 按老任务算）。
 function readPlan(openspecDir) {
   const file = path.join(openspecDir, 'plan.md');
   let text; try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return null; }
   const eol = /\r\n/.test(text) ? '\r\n' : '\n';
   const lines = text.split(/\r?\n/);
   const rows = [];
+  const sections = [];
+  let section = null;
   let cols = null;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
+    const h = /^##\s+(.+?)\s*$/.exec(l);
+    if (h) { section = { name: h[1], explore: '', line: i }; sections.push(section); cols = null; continue; }
+    const ex = /^探索记录[：:]\s*(.+?)\s*$/.exec(l);
+    if (ex) { if (section) section.explore = ex[1]; cols = null; continue; }
     if (!/^\s*\|/.test(l)) { cols = null; continue; }
     const cells = l.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((s) => s.trim());
     if (!cols) { const c = cells.findIndex((x) => /变更|change/i.test(x)); const s = cells.findIndex((x) => /状态|status/i.test(x)); if (c >= 0 && s >= 0) cols = { change: c, status: s }; continue; }
     if (cells.every((x) => /^:?-*:?$/.test(x))) continue;
     const name = (cells[cols.change] || '').replace(/`/g, '').trim();
     if (!name) continue;
-    rows.push({ line: i, name, status: cells[cols.status] || '', cells, cols });
+    rows.push({ line: i, name, status: cells[cols.status] || '', cells, cols, task: section ? section.name : '' });
   }
-  return { file, eol, lines, rows };
+  const title = (/^#\s+(?:计划[：:]?)?\s*(.*)$/m.exec(text) || [])[1] || '';
+  return { file, eol, lines, rows, sections, title: title.trim() };
 }
 
 /** 计划展示任务进度与审查门槛；任务全勾不等于获准归档。 */
@@ -66,15 +74,19 @@ function refreshPlan(openspecDir, write) {
   if (!p || !p.rows.length) return null;
   const changesDir = path.join(openspecDir, 'changes');
   let changed = false; let archived = 0; const active = []; let next = '';
+  const byTask = new Map();
   for (const r of p.rows) {
     const s = planStatusOf(r.name, changesDir);
-    if (/^已归档/.test(s)) archived++;
-    else if (/^(进行中|已完成|已提案|提案中)/.test(s)) active.push(r.name + '（' + s + '）');
-    else if (!next) next = r.name;
+    if (!byTask.has(r.task)) byTask.set(r.task, { name: r.task, total: 0, archived: 0, active: [], next: '' });
+    const t = byTask.get(r.task);
+    t.total++;
+    if (/^已归档/.test(s)) { archived++; t.archived++; }
+    else if (/^(进行中|已完成|已提案|提案中)/.test(s)) { active.push(r.name + '（' + s + '）'); t.active.push(r.name + '（' + s + '）'); }
+    else { if (!next) next = r.name; if (!t.next) t.next = r.name; }
     if (s !== r.status) { r.cells[r.cols.status] = s; p.lines[r.line] = '| ' + r.cells.join(' | ') + ' |'; changed = true; }
   }
   if (changed && write) { try { fs.writeFileSync(p.file, p.lines.join(p.eol)); } catch (e) { /* 写不了就只汇总 */ } }
-  return { file: p.file, total: p.rows.length, archived, active, next, changed };
+  return { file: p.file, total: p.rows.length, archived, active, next, changed, tasks: [...byTask.values()] };
 }
 
 function planSummary(dir) {
@@ -100,10 +112,47 @@ function planInit(openspecDir, days) {
   const changesDir = path.join(openspecDir, 'changes');
   const rows = archivedChanges(changesDir, days).map((a) => a.name);
   for (const n of changeNames(changesDir)) if (!rows.includes(n)) rows.push(n);
-  const lines = ['# 计划：<大需求的名字>', '', '<一两句话：这个大需求要做什么，PRD 在哪。>', '', '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(rows.map((n) => '| <模块> | ' + n + ' | | |'), ['']);
+  const lines = ['# 计划', '', '## <大任务的名字>', '', '<一两句话：这个大任务要做什么，PRD 在哪。>', '', '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(rows.map((n) => '| <模块> | ' + n + ' | | |'), ['']);
   fs.writeFileSync(file, lines.join('\n'));
   refreshPlan(openspecDir, true);
   return { file, created: true, rows };
+}
+
+const safeName = (s) => String(s).trim().replace(/[\\/:*?"<>|\s]+/g, '-');
+const EXPLORE_TEMPLATE = (name, changes) => ['# 探索记录：' + name, '', '写给接手的会话：换一个新会话，读公共几节和要做的 change 那一节，不用再问用户就能写 proposal。具体改哪些文件、任务清单不写在这里，开始这个 change 时才写。', '',
+  '## 原话和材料', '<!-- 用户的原话、PRD 和材料的路径 -->', '', '## 定了的', '<!-- 决定和理由，用户说的写原话 -->', '', '## 否了的', '<!-- 否掉的方案和为什么 -->', '', '## 还没定的', '<!-- 写了就不能开工；定了就挪到"定了的" -->', '',
+  '## 现状', '<!-- 读过哪些路径，看到了什么 -->', '', '## 范围', '<!-- 做什么、不做什么。需求、apply、自测都对着这一节，没写的不加 -->', '', '## 跨 change 约定', '<!-- 业务规则、接口、数据结构 -->', '']
+  .concat(changes.flatMap((c) => ['## change: ' + c, '<!-- 目标、边界（做什么、不做什么）、依赖谁、留给后面的接口、要的验收场景 -->', '']), ['## 整体验收用例', '<!-- 所有 change 都做完后，一起跑的用例 -->', '', '## 落地偏差', '<!-- 每做完一个 change 追加：和上面写的不一样的地方 -->', '']).join('\n');
+
+/** 探索时建大任务：plan.md 加一节、建探索记录。已经有的不动，表里缺的 change 补上。tools/plan.js new 调 */
+function planAddTask(openspecDir, name, changes) {
+  const file = path.join(openspecDir, 'plan.md');
+  const base = safeName(name);
+  const rel = 'explore/' + base + '.md';
+  let p = readPlan(openspecDir);
+  if (!p) { fs.mkdirSync(openspecDir, { recursive: true }); fs.writeFileSync(file, '# 计划\n'); p = readPlan(openspecDir); }
+  const row = (c) => '| | ' + c + ' | | |';
+  const sec = p.sections.find((s) => s.name === name);
+  let text = fs.readFileSync(file, 'utf8');
+  const eol = p.eol;
+  if (!sec) {
+    text = text.replace(/\s*$/, eol) + eol + ['## ' + name, '', '探索记录：' + rel, '', '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(changes.map(row)).join(eol) + eol;
+  } else {
+    const have = new Set(p.rows.filter((r) => r.task === name).map((r) => r.name));
+    const add = changes.filter((c) => !have.has(c));
+    if (add.length) {
+      const lines = text.split(/\r?\n/);
+      const own = p.rows.filter((r) => r.task === name);
+      const at = own.length ? own[own.length - 1].line + 1 : sec.line + 1;
+      lines.splice(at, 0, ...(own.length ? add.map(row) : ['', '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(add.map(row))));
+      text = lines.join(eol);
+    }
+  }
+  fs.writeFileSync(file, text);
+  const explore = path.resolve(openspecDir, (sec && sec.explore) || rel);
+  let created = false;
+  if (!fs.existsSync(explore)) { fs.mkdirSync(path.dirname(explore), { recursive: true }); fs.writeFileSync(explore, EXPLORE_TEMPLATE(name, changes)); created = true; }
+  return { plan: file, explore, created };
 }
 
 /** 有 plan.md 时：进行中却不在表里的变更（中途加的新功能最容易漏记）。没有 plan.md 返回 null */
@@ -146,4 +195,4 @@ function snapshotArtifacts(dir) {
   return files;
 }
 
-module.exports = { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planUnlisted, artifactHash, snapshotArtifacts };
+module.exports = { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, artifactHash, snapshotArtifacts };

@@ -159,7 +159,8 @@ async function handle(j) {
       const s = refreshPlan(osDir);
       if (s) {
         const unlisted = planUnlisted(osDir) || [];
-        out.push('计划 ' + s.file + '：共 ' + s.total + ' 个变更，已归档 ' + s.archived + (s.active.length ? '，进行中：' + s.active.join('、') : '') + (s.next ? '，下一个未开始：' + s.next : '，都做完了') + '。这里的汇总是按实际情况算的，文件里的状态列跑 plan.js 才更新，不用手改；做下一个之前先读它。没有用户的话，不要自己往表里加行、改行。'
+        const each = (x) => (x.name ? '大任务 ' + x.name + '：' : '') + '共 ' + x.total + ' 个变更，已归档 ' + x.archived + (x.active.length ? '，进行中：' + x.active.join('、') : '') + (x.next ? '，下一个未开始：' + x.next : '，都做完了');
+        out.push('计划 ' + s.file + '：' + (s.tasks || [s]).map(each).join('；') + '。这里的汇总是按实际情况算的，文件里的状态列跑 plan.js 才更新，不用手改；做下一个之前先读它。没有用户的话，不要自己往表里加行、改行。'
           + (unlisted.length ? '不在计划里的变更：' + unlisted.join('、') + '。用户说它属于这个大需求，再加一行。' : ''));
         continue;
       }

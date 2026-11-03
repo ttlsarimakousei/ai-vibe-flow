@@ -4,12 +4,29 @@
  *   node plan.js [项目目录或 openspec 目录] [--days 60]
  *     不写目录就是当前目录；--days：骨架里带最近多少天归档的变更，默认 60，0 表示全部
  * 骨架里已归档的按日期排在前面、进行中的在后面，状态填好；大需求的名字、每行的模块和说明、还没开始的模块留给模型补。
+ *   node plan.js new --task <大任务名> --changes c1,c2 [项目目录]
+ *     探索时建大任务：plan.md 加一节，建 openspec/explore/<大任务名>.md。已经有的不动，表里缺的 change 补上。
  */
 const fs = require('fs');
 const path = require('path');
-const { changeRoots, planInit, refreshPlan } = require('../lib/session');
+const { changeRoots, planInit, planAddTask, refreshPlan } = require('../lib/session');
 
 const args = process.argv.slice(2);
+if (args[0] === 'new') {
+  const flag = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] || '' : ''; };
+  const name = flag('--task').trim();
+  const changes = flag('--changes').split(/[,，\s]+/).filter(Boolean);
+  if (!name || !changes.length) { console.log('用法：node plan.js new --task <大任务名> --changes c1,c2 [项目目录]'); process.exit(1); }
+  const skip = new Set([args.indexOf('--task') + 1, args.indexOf('--changes') + 1]);
+  const dir = path.resolve(args.slice(1).find((a) => !a.startsWith('--') && !skip.has(args.indexOf(a))) || process.cwd());
+  let root = dir;
+  try { root = require('../lib/openspec').ensureRoot(dir) || dir; } catch (e) { /* 建不了 openspec/ 就按当前目录 */ }
+  const osDir = path.basename(root).toLowerCase() === 'openspec' ? root : path.join(root, 'openspec');
+  fs.mkdirSync(path.join(osDir, 'changes'), { recursive: true });
+  const r = planAddTask(osDir, name, changes);
+  console.log('大任务 ' + name + '：计划 ' + r.plan + '；探索记录 ' + r.explore + (r.created ? '（新建）' : '（已有）') + '。边谈边写进探索记录，定一件写一件。');
+  process.exit(0);
+}
 const dir = path.resolve(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--days') || process.cwd());
 const di = args.indexOf('--days');
 const days = di >= 0 ? Number(args[di + 1]) || 0 : 60;
