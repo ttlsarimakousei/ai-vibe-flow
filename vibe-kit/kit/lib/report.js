@@ -305,9 +305,7 @@ function build(j, cfg, mine) {
   if (!commits.length) L.push('没有。');
   for (const c of commits) { L.push('- ' + c.repo); for (const l of c.list) L.push('  - ' + l); }
   L.push('');
-  let issuePort = 15730;
-  try { issuePort = require('../router/service').portOf(); } catch (e) { /* 无路由时保留默认详情地址 */ }
-  const kitSummary = '套件问题 ' + kit.length + ' 条，[查看详情](http://127.0.0.1:' + issuePort + '/ui#sec-issues)。';
+  const kitSummary = '套件问题 ' + kit.length + ' 条，详情敲 /vk-config 看。';
   sec('套件问题', kit.length ? [kitSummary] : [], '没有。');
   const text = L.join('\n');
 

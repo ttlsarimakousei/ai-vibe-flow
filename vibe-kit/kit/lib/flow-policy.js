@@ -250,8 +250,6 @@ function applyingNow(j, dir) {
 function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   const quick = () => typeof quickPending === 'function' && quickPending() ? QUICK_ASK : '';
   const cfg = S.readConfigFor(j); const out = [];
-  // 自动模式快到网关上限不再发审查指令：再起一轮，请求体超了网关直接 413（2026-10-17 审核问题 9）
-  if (cfg.autoMode) { const used = S.lastUsageTokens(entriesOf(j)); if (used && S.nearGatewayLimit(used)) return out; }
   // 这一轮用户最后的表态是不审、不测（提问框选了"就这样定稿""直接写下一份""不用"，或者原话说了不用）：那一份不再问
   const noReview = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'review');
   const noTest = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'test');
@@ -325,16 +323,13 @@ function reviewRun(j, cmd, ps) {
 }
 function actionIssue(j) {
   const cfg = S.readConfigFor(j); let inp = j.tool_input || {}; let name = String(j.tool_name || '');
-  // IDEA 的 execute_tool 按路由里的实际工具判断（转发的运行配置照样算自测）。
-  if (/^mcp__.+__execute_tool$/.test(name)) { const r = require('./idea-tools').route(inp.command); if (r) { name = name.replace(/execute_tool$/, r.name); inp = r.input; } }
   const cmd = String(inp.command || '');
   const runsReview = /^(Bash|PowerShell)$/.test(name) && reviewRun(j, cmd, name === 'PowerShell');
   const reviewer = /^(Agent|Task)$/.test(name) && /(?:ttls|vibe)-reviewer/.test(inp.subagent_type || '');
   const reviewTask = reviewer ? require('./review-runner').taskOf(inp.prompt) : null;
   const review = reviewer || runsReview || name === 'Skill' && /cross-review/.test(inp.skill || '');
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
-  // IDEA 的编译、文件检查、lint 是快检，直接跑；运行配置会起程序或跑测试，算自测。
-  const test = !review && (shellTest || /execute_run_configuration/.test(name) || name === 'Skill' && /see-page/.test(inp.skill || ''));
+  const test = !review && (shellTest || name === 'Skill' && /see-page/.test(inp.skill || ''));
   if (!review && !test) return '';
   // 裸开审查子代理拦下：结论对不上任务，入不了账（手工模式也一样）
   if (reviewer && !reviewTask) return '审查子代理要用 review.js prepare 输出的提示（第三行"审查任务：…"）：先跑 review.js prepare，再照它的 agents 开。任务已经交齐或作废的不用再开。';

@@ -28,7 +28,6 @@
  * 起来的时候记下它起的每个进程（.vibe/run/<名字>.json 的 tree），停的时候还活着的一个个结束：中间那层进程先退了的，
  * 下面的进程按父子关系找不到，以前会留下来（两个 java 一起跑，请求打到哪个不一定——问题反馈 F20260928-011）。
  * 输出的最后一行就是结果："起来了：…""没起来：…""停了：…"。用 && 把 stop 和 start 串起来也行：stop 等端口空出来才返回。
- * 模型路由（~/.claude/vibe-kit/router-data/router.pid）无论如何不停。
  *
  * 认得自己起过的服务（用户 2026-10-28 定的，问题反馈表第 17 条："你总是忘记自己启动过哪个服务"）：
  *   每个项目的 .vibe/run 按"在哪个目录跑的 devserver、叫什么名字"记，换个目录（壳子根和子项目）、换个名字就找不到，以前会另起一份，
@@ -238,7 +237,6 @@ function procInfo(pid) {
     return { pid, name: path.basename(cmd.split(' ')[0] || ''), created: Date.parse(lstart) || 0, cmd };
   } catch (e) { return { pid, name: '', created: 0, cmd: '' }; }
 }
-function routerPid() { try { return Number(JSON.parse(fs.readFileSync(path.join(KIT, 'router-data', 'router.pid'), 'utf8')).pid) || 0; } catch (e) { return 0; } }
 /** 这台电脑上现在所有的进程：[{ pid, ppid, name, created, cmd }]。查不了返回空。Windows 上一次调用里 3 秒内复用（fresh 为真时重取） */
 let TABLE = null;
 const TABLE_MS = 3000;
@@ -285,7 +283,7 @@ const normPath = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').
  * 按时间认只在这条记录的服务还活着的时候用（live）：记录过期了（电脑重启过），之后起的进程全都"比记录晚"，不能都当成它的
  */
 function belongs(info, rec, live) {
-  if (!info || !info.pid || info.pid === routerPid() || info.pid === process.pid) return false;
+  if (!info || !info.pid || info.pid === process.pid) return false;
   const d = normPath(dir);
   const cmd = normPath(info.cmd);
   const at = cmd.indexOf(d);
@@ -349,7 +347,7 @@ function sameProc(rec) {
 }
 function killTree(pid) {
   invalidate();
-  if (!alive(pid) || pid === routerPid()) return;
+  if (!alive(pid)) return;
   try {
     if (WIN) execFileSync(path.join(SYS32, 'taskkill.exe'), ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
     else { try { process.kill(-pid, 'SIGTERM'); } catch (e) { process.kill(pid, 'SIGTERM'); } }
@@ -374,7 +372,7 @@ async function stopRec(rec) {
     if (now && (!p.created || !now.created || Math.abs(now.created - p.created) < 3000)) mine.set(p.pid, now);
   }
   if (live) { killTree(rec.pid); killed.push({ pid: rec.pid, name: '看管进程' }); }
-  for (const p of mine.values()) { if (p.pid === routerPid() || p.pid === process.pid || !alive(p.pid)) continue; killTree(p.pid); killed.push({ pid: p.pid, name: p.name }); }
+  for (const p of mine.values()) { if (p.pid === process.pid || !alive(p.pid)) continue; killTree(p.pid); killed.push({ pid: p.pid, name: p.name }); }
   if (rec.port && !(await waitClosed(rec.port, 5000))) {
     // 端口还被占着：只停这个服务那段时间起来的（记录还活着的时候才按时间认），和它起的、命令行里有项目目录的。
     // 记录过期了的，端口上的进程只报告、不动：多半是别的程序后来占了这个端口
@@ -703,7 +701,7 @@ async function waitUp(rec, waitSec) {
       const kids = descendants(rec.pid, procTable(true));
       for (let i = 0; i < 6 && alive(rec.pid); i++) await sleep(500);
       if (alive(rec.pid)) killTree(rec.pid);
-      for (const k of kids) if (alive(k.pid) && k.pid !== routerPid() && k.pid !== process.pid) killTree(k.pid);
+      for (const k of kids) if (alive(k.pid) && k.pid !== process.pid) killTree(k.pid);
       dropRec(rec.name);
       // 离线（-o）缺依赖：只拉缺的那几个，再离线起（问题表第 35 条，2026-11-02）。缺的是父 pom、插件，或者拉不到：去掉 -o 再起一次（C5，用户 2026-10-30 定的）
       const offline = /(?:^|\s)(?:-o|--offline)(?=\s|$)/.test(rec.cmd) && OFFLINE_MISS.test(logTail(rec.log));
@@ -822,7 +820,7 @@ async function start() {
     const mine = infos.filter(ours);
     const others = infos.filter((i) => !ours(i));
     if (!pids.length || others.length) {
-      const who = others.length ? others.map((i) => (i.name || '进程') + '（PID ' + i.pid + (i.pid === routerPid() ? '，这是模型路由' : '') + '）' + (i.cmd ? '：' + i.cmd.slice(0, 200) : '')).join('；') : '查不到是哪个进程';
+      const who = others.length ? others.map((i) => (i.name || '进程') + '（PID ' + i.pid + '）' + (i.cmd ? '：' + i.cmd.slice(0, 200) : '')).join('；') : '查不到是哪个进程';
       console.log('端口 ' + port + ' 被占着：' + who + '。无法确认它归这个项目（' + dir + '）管，没有动它。可能是用户在 IDEA 或终端里启动的服务；先核实来源和用途，不要直接结束它。');
       return 1;
     }

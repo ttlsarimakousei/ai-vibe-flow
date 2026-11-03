@@ -12,7 +12,7 @@ const { KIT, stateFile, readState, writeState } = require('./session-state');
 const { DEFAULT_CONFIG } = require('./config-fields');
 
 /**
- * 套件开关（~/.claude/vibe-kit/config.json），可以在路由的配置页里改，也可以手改。
+ * 套件开关（~/.claude/vibe-kit/config.json），可以在配置页里改，也可以手改。
  * 三个"放松保护"的（kitLock 关掉、kitBypass 改成 auto、autoMode 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
  * 文件里是放松的、封条里不是（多半是被程序绕开配置页直接改的），按安全的值算，并在 _tampered 里写明是哪几个
  * （状态栏、用户开口时提醒，记进问题反馈）。收紧（打开禁改、不许放行、关掉全自动）怎么改都认。

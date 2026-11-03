@@ -14,7 +14,7 @@
  * 断言（expect 开头的）可以和动作写在同一步里：先做动作，再查。登录这种"失败了也返回 200"的接口，就在等响应的那一步里直接查返回的字段。
  *   以前同一步里的断言会被悄悄忽略，登录没成功场景照样往下走（问题反馈 F20260929-017）。
  *   同一步里写了两个动作（不是断言）的，只做第一个，结果里记一条提醒。
- * 模型路由自己的地址（配置页、套件的接口）不许打开、调用：退出码 2。
+ * 配置页的地址（套件的接口）不许打开、调用：退出码 2。
  */
 const fs = require('fs');
 const path = require('path');
@@ -71,22 +71,24 @@ const urlSteps = scenario.steps.filter((st) => st && typeof st === 'object').map
 const relUrl = urlSteps.find((u) => !isAbsUrl(u));
 if (!BASE && relUrl !== undefined) { console.error('场景里的 goto / request 是相对地址（' + JSON.stringify(relUrl) + '），但没给站点地址：命令里加上 --base http://127.0.0.1:<端口>（前端服务或后端接口的地址）。本地的 HTML 文件写成 file:/// 开头的完整地址就不用 --base'); process.exit(2); }
 
-// 配置页和路由的接口不是被测的项目：场景不许打开、调用它们（那里能点"清空""断开"、改套件的开关）
-function routerPort() {
-  try { const c = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'router-data', 'config.json'), 'utf8').replace(/^\uFEFF/, '')); const p = Number((c.listen || {}).port); return p > 0 && p < 65536 ? Math.round(p) : 15730; } catch (e) { return 15730; }
+// 配置页不是被测的项目：场景不许打开、调用它（那里能改套件的开关）
+function configPorts() {
+  const out = [15731];
+  try { out.push(Number(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'state', 'config-page.json'), 'utf8')).port)); } catch (e) { /* 配置页没起 */ }
+  return out;
 }
-function isRouterUrl(u) {
+function isConfigUrl(u) {
   try {
     const x = new URL(u);
     if (!/^https?:$/.test(x.protocol)) return false;
     const h = x.hostname.toLowerCase().replace(/^\[|\]$/g, '');
     const loop = h === 'localhost' || h === '::1' || h === '0.0.0.0' || /^127\./.test(h);
-    return loop && Number(x.port || (x.protocol === 'https:' ? 443 : 80)) === routerPort();
+    return loop && configPorts().includes(Number(x.port || (x.protocol === 'https:' ? 443 : 80)));
   } catch (e) { return false; }
 }
-const ROUTER_MSG = '是模型路由自己的地址（配置页、套件的接口），不是被测的项目。场景只能打开、调用你自己起的服务';
-const hitRouter = (BASE && isRouterUrl(BASE)) ? BASE : urlSteps.map((u) => (isAbsUrl(u) ? u : BASE + (u.startsWith('/') ? '' : '/') + u)).find(isRouterUrl);
-if (hitRouter) { console.error(hitRouter + ' ' + ROUTER_MSG + '。'); process.exit(2); }
+const CONFIG_MSG = '是套件配置页的地址，不是被测的项目。场景只能打开、调用你自己起的服务';
+const hitConfig = (BASE && isConfigUrl(BASE)) ? BASE : urlSteps.map((u) => (isAbsUrl(u) ? u : BASE + (u.startsWith('/') ? '' : '/') + u)).find(isConfigUrl);
+if (hitConfig) { console.error(hitConfig + ' ' + CONFIG_MSG + '。'); process.exit(2); }
 // 只调接口、不看页面的场景：不开浏览器
 const API_STEPS = ['request', 'expectStatus', 'expectJson', 'readJson', 'wait', 'note'];
 const apiOnly = scenario.steps.every((st) => st && typeof st === 'object' && Object.keys(st).filter((k) => !['as', 'note', 'json', 'form', 'headers', 'params', 'method', 'equals', 'contains', 'exists', 'gte', 'lte', 'timeout'].includes(k)).every((k) => API_STEPS.includes(k)) && (st.wait === undefined || typeof st.wait === 'number'));
@@ -253,7 +255,7 @@ async function runStep(ctx, st) {
   if (st.request !== undefined) {
     const { method, url } = requestOf(st);
     const full = resolveUrl(String(subst(url)));
-    if (isRouterUrl(full)) throw new Error(full + ' ' + ROUTER_MSG);
+    if (isConfigUrl(full)) throw new Error(full + ' ' + CONFIG_MSG);
     const opts = { method, failOnStatusCode: false, ignoreHTTPSErrors: true, timeout: capTimeout(st.timeout || scenario.timeout) || 10000 };
     if (st.headers) opts.headers = subst(st.headers);
     if (st.params) opts.params = subst(st.params);
@@ -310,7 +312,7 @@ async function runStep(ctx, st) {
 
   if (st.goto !== undefined) {
     const full = resolveUrl(String(subst(String(st.goto))));
-    if (isRouterUrl(full)) throw new Error(full + ' ' + ROUTER_MSG);
+    if (isConfigUrl(full)) throw new Error(full + ' ' + CONFIG_MSG);
     ctx.frameSel = null; await page.goto(full); return '打开 ' + page.url();
   }
   if (st.frame !== undefined) { ctx.frameSel = st.frame ? String(st.frame) : null; return ctx.frameSel ? '后续步骤在 iframe ' + ctx.frameSel + ' 内' : '回到主页面'; }

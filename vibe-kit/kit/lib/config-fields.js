@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 开关字段表（K1-4，2026-11-01）：config.json 里每个开关只在这里定义一次。
- *   lib/session-config.js 的 DEFAULT_CONFIG、router/kit-api.js 的默认值和 cleanConfig、手册"开关一览"的表都从这里来；
+ *   lib/session-config.js 的 DEFAULT_CONFIG、ui/kit-api.js 的默认值和 cleanConfig、手册"开关一览"的表都从这里来；
  *   手册的表由 dev/config-doc.js 生成，配置页的说明和控件是手写的，dev/test-config-fields.js 核对（名字、取值范围、在哪一页）。
  *
  * 字段：name 名字；type 类型（bool、enum、int、version）；def 默认；values 取值（enum）；min、max 范围（int）；zero 除了范围还能填 0（int）；
@@ -15,12 +15,12 @@
  * 不做开关的（问题表第 29—31 条，用户 2026-11-02 定的，internal）：自动自测、自动验证页面、后台自动探索、提案打勾归档的门槛一直开；
  * 审查次数、文件数不设上限（2026-11-03 取消，用户定的）；到交接线先写交接记录取消（默认 false）。配置页、手册的开关表都没有。升级时清掉文件里以前存的（install.js），文件里手写的还认，给排查和测试用。
  *
- * 只用 Node 自带的模块；不依赖 session（路由也载它）。
+ * 只用 Node 自带的模块；不依赖 session。
  */
 // 不做开关、升级时从 config.json 里清掉的（问题表第 29—31 条）
 const FIXED = ['autoVerify', 'autoSeePage', 'specGate', 'autoOnboard', 'autoHandover'];
 // 不再有的开关（审查次数、文件数、方式，用户 2026-11-03 定的）：字段表里没有了，升级时也从 config.json 里清掉
-const REMOVED = ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewLoop', 'reviewMaxRounds', 'reviewExecutor', 'reviewMaxFiles'];
+const REMOVED = ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewLoop', 'reviewMaxRounds', 'reviewExecutor', 'reviewMaxFiles', 'statusUsage', 'hookTransport'];
 const FIELDS = [
   { name: 'autoVerify', type: 'bool', def: true, internal: true },
   { name: 'autoSeePage', type: 'bool', def: true, internal: true },
@@ -35,7 +35,6 @@ const FIELDS = [
   { name: 'autoHandover', type: 'bool', def: false, internal: true },
   { name: 'kitLock', type: 'bool', def: true, page: 'kit', doc: '禁止 Claude 自己改套件', since: '0923', defText: '开' },
   { name: 'kitBypass', type: 'enum', def: 'ask', values: ['ask', 'auto', 'off'], page: 'kit', doc: '被检查拦住、它又确信是套件拦错了（自动模式下不用点，选"不许放行"的除外）', since: '0924.1848', defText: '要我点同意' },
-  { name: 'hookTransport', type: 'enum', def: 'auto', values: ['auto', 'http', 'command'], page: 'kit', doc: '检查在哪里跑（自动 / HTTP / 命令）', since: '0924 上午', defText: '自动' },
   { name: 'contextLimitTokens', type: 'int', def: 1000000, min: 50000, max: 10000000, zero: true, page: 'kit', doc: '上下文上限 contextLimitTokens', since: '0921', defText: '100 万 token' },
   { name: 'handoverPercent', type: 'int', def: 70, min: 30, max: 95, internal: true },
   { name: 'handoverAsk', type: 'enum', def: 'off', values: ['ask', 'off'], internal: true },
@@ -59,7 +58,6 @@ const FIELDS = [
   { name: 'lessonAuto', type: 'bool', def: true, page: 'lessons', doc: '审查报的问题自动收', since: '0930', defText: '开' },
   { name: 'dbcrudDaemon', type: 'bool', def: false, page: 'data', doc: '查库的后台执行器；多久没人用就退出', since: '0930', defText: '关、5 分钟' },
   { name: 'dbcrudDaemonIdleMinutes', type: 'int', def: 5, min: 1, max: 60, page: 'data', sameRow: 'dbcrudDaemon' },
-  { name: 'statusUsage', type: 'bool', def: true, page: 'kit', doc: '状态栏显示今天的用量', since: '1001', defText: '开' },
   { name: 'usageReport', type: 'enum', def: 'on', values: ['on', 'off'], page: 'remote', doc: '使用情况上报（开 / 关）', since: '1001', defText: '开' },
   { name: 'perfReport', type: 'enum', def: 'on', values: ['on', 'local', 'off'], page: 'remote', doc: '耗时异常上报 perfReport（上报 / 只记本机 / 关）', since: '2026-10-31 那一版', defText: '上报' },
   { name: 'ccAutoMode', type: 'enum', def: 'off', values: ['off', 'on'], page: 'kit', doc: 'Claude Code 自带的"自动模式"（关掉 / 不管它）', since: '1005', defText: '关掉' },

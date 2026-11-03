@@ -112,7 +112,7 @@ function lastUsageTokens(entries) {
 }
 
 /**
- * 上下文用了百分之几。分母是配置里的"上下文上限"（contextLimitTokens，默认 100 万，在路由配置页里改）和 Claude Code 自己报的窗口里较小的那个：
+ * 上下文用了百分之几。分母是配置里的"上下文上限"（contextLimitTokens，默认 100 万，在配置页里改）和 Claude Code 自己报的窗口里较小的那个：
  * Claude Code 对不认识的模型名按 20 万算，到 19 万它自己就报 Prompt is too long，这时按 100 万显示 19% 会让会话直接撞墙。
  * 上限填 0 表示只跟着 Claude Code 报的窗口走。交接线（handoverPercent）就是按这个分母算的。
  * 每次都现读配置，所以在配置页里改了之后，下一次状态栏刷新、下一条消息就按新值算，不用重开会话。
@@ -123,54 +123,6 @@ function contextPercent(used, windowSize, cfg) {
   let size = limit > 0 ? limit : (win || 200000);
   if (limit > 0 && win > 0 && win < limit) size = win;
   return { size, pct: size ? used * 100 / size : 0 };
-}
-
-/**
- * 自动压缩的窗口（写进 settings.json 的 autoCompactWindow，Claude Code 自己的设置，2.1.120、2.1.259 都认）。0 = 不设，照 Claude Code 自己的。
- * 为什么要设：2.1.259 这类新版本，没设这个窗口时不按用量自己压缩，要等接口报"请求太长"才补救；内网网关、内网模型的报错它认不出，
- * 上下文就一直涨，过了 100% 也不压缩（2026-10-01 用户遇到的，真的 Claude Code 加假模型实测过）。设了之后它在"窗口 − 2 万（留给输出）− 1.3 万"处压缩。
- * 所以窗口 = 上下文上限 × 自动压缩线（autoCompactPercent，默认 70%）+ 3.3 万：用到上限的 70% 左右压缩。
- * 上限填 0（跟着 Claude Code 报的窗口走）的按 100 万算：Claude Code 取它和模型窗口里小的那个。Claude Code 只认 10 万到 100 万。
- * 窗口最大只写到 96 万（用到 92.7 万压缩）：2.1.259 上实测窗口设到 97.7 万以上，还没压缩就先报 Prompt is too long 了，
- * 正是这个功能要防的事；压缩线和那条线之间还要留出一轮对话涨的量。压缩线填 95%、上限填得比 100 万大的，都落在这个数上
- */
-const COMPACT_RESERVE = 33000;
-
-const COMPACT_WINDOW_MAX = 960000;
-
-function autoCompactWindowOf(cfg) {
-  const p = Number(cfg && cfg.autoCompactPercent);
-  if (!(p > 0)) return 0;
-  const limit = Number(cfg && cfg.contextLimitTokens) > 0 ? Number(cfg.contextLimitTokens) : 1000000;
-  return Math.max(100000, Math.min(COMPACT_WINDOW_MAX, Math.round(limit * Math.min(p, 95) / 100) + COMPACT_RESERVE));
-}
-
-/** 这个会话用到多少 token 时 Claude Code 会自己压缩：自动压缩窗口和 Claude Code 报的窗口里小的那个，减去它留的余量。没设窗口返回 0 */
-function autoCompactAt(cfg, windowSize) {
-  const w = autoCompactWindowOf(cfg);
-  if (!w) return 0;
-  const win = Number(windowSize) > 0 ? Math.min(w, Number(windowSize)) : w;
-  return Math.max(0, win - COMPACT_RESERVE);
-}
-
-/**
- * 路由实测到的网关限制（state/gateway.json，由路由写）。
- * 内网网关对单次请求的大小有上限，超了直接拒绝（413），和模型的上下文长度无关。这个上限不写死、不猜：
- * 路由真的被拒过一次，才记下当时的请求大小；平时顺手统计"每个 token 大约多少字节"，两者一除就是上限大约合多少 token。
- * 没被拒过就返回 null，什么都不提。
- */
-function gatewayLimit() {
-  try {
-    const g = JSON.parse(fs.readFileSync(path.join(KIT, 'state', 'gateway.json'), 'utf8'));
-    if (!(g.limitBytes > 0) || !(g.bytesPerToken > 0)) return null;
-    return { limitBytes: g.limitBytes, bytesPerToken: g.bytesPerToken, limitTokens: Math.round(g.limitBytes / g.bytesPerToken), at: g.limitAt || '' };
-  } catch (e) { return null; }
-}
-
-/** 离网关实测上限还有多远：到 85% 就该走了（被拒是硬墙，撞上了这个会话就发不出去了） */
-function nearGatewayLimit(used) {
-  const g = gatewayLimit();
-  return g && used >= g.limitTokens * 0.85 ? g : null;
 }
 
 /** 这条是不是用户真说的话：不是自动附带的（isMeta，Stop 钩子的反馈也是这种）、不是压缩摘要、不是工具结果 */
@@ -259,4 +211,4 @@ function projectReads(calls) {
   return out;
 }
 
-module.exports = { uniquifyToolIds, tailEntries, textOf, lastUsageTokens, contextPercent, autoCompactWindowOf, autoCompactAt, gatewayLimit, nearGatewayLimit, isUserTurn, turnStart, toolResults, isTaskNote, isTaskNotePrompt, toolCalls, READ_CMD, projectReads };
+module.exports = { uniquifyToolIds, tailEntries, textOf, lastUsageTokens, contextPercent, isUserTurn, turnStart, toolResults, isTaskNote, isTaskNotePrompt, toolCalls, READ_CMD, projectReads };

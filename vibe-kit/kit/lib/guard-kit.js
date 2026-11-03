@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 改套件、读令牌和模型的 key、改经验规则、直接调路由的 /api 的检查（2026-11-01 从 guard-commit 拆出来，K 批）。
+ * 改套件、读令牌和模型的 key、改经验规则、直接调配置页接口的检查（2026-11-01 从 guard-commit 拆出来，K 批）。
  * 规矩写在 hooks/guard-commit.js 开头第 5 条；令牌和 key 什么时候都不给读（硬规矩 6），不看"禁止改套件"开关。
  */
 const fs = require('fs');
@@ -379,11 +379,11 @@ const lessonMsg = (p) => '[vibe-kit] 这条命令会改到经验规则的文件�
 const kitMsg = (p) => '[vibe-kit] 这条命令会动到 vibe-kit 套件在用户目录里的东西（' + p + '），不许改：钩子、规范、技能、配置、settings.json、全局 CLAUDE.md 只能用户自己改。只读的命令（cat、Get-Content、ls…）和跑套件自带的工具（page/、tools/ 里的脚本）可以。你要是觉得钩子拦错了，把原因告诉用户，让用户来定；不要绕过。';
 
 /*
- * 不许直接调路由的接口（配置页后端 /api、钩子入口 /vibe-kit/hook/）：出现路由要的请求头 x-vibe-router、钩子入口的路径，
- * 或者本机地址（127.x、localhost、[::1]、0.0.0.0）后面跟的端口按数值等于路由的端口（015730、0x3d72 这种写法也认），就拦
+ * 不许直接调配置页的接口（/api/kit）：出现配置页要的请求头 x-vibe-router、老版本钩子入口的路径，
+ * 或者本机地址（127.x、localhost、[::1]、0.0.0.0）后面跟的端口按数值等于配置页的端口（015731、0x3d73 这种写法也认），就拦
  */
-function routerApiIssue(cmd, ps, cwd) {
-  const msg = '[vibe-kit] 不许直接调路由的接口改套件：模型、开关、本机环境、问题反馈只能用户在配置页里改。你想改什么，告诉用户。';
+function configApiIssue(cmd, ps, cwd) {
+  const msg = '[vibe-kit] 不许直接调配置页的接口改套件：开关、本机环境、问题反馈只能用户在配置页里改（/vk-config）。你想改什么，告诉用户。';
   // 跑套件自带的工具（记问题反馈）的那一段不看：它的参数里提到配置页的地址是在描述问题，不是在调接口
   const { s, docs } = preprocess(cmd, ps);
   const dir = path.resolve(cwd || process.cwd());
@@ -400,16 +400,16 @@ function routerApiIssue(cmd, ps, cwd) {
   }
   const text = parts.join('\n');
   if (/x-vibe-router|\/vibe-kit\/hook\//i.test(text)) return msg;
-  let port = 15730;
-  try { port = require(path.join(KIT, 'router', 'service.js')).portOf() || 15730; } catch (e) { /* 没装路由 */ }
+  const ports = new Set([15731]);
+  try { ports.add(Number(JSON.parse(fs.readFileSync(path.join(KIT, 'state', 'config-page.json'), 'utf8')).port)); } catch (e) { /* 配置页没起 */ }
   const re = /(?:127(?:\.\d+){0,3}|localhost|\[[0:]*:1\]|\[::\]|0\.0\.0\.0)\s*:\s*(0x[0-9a-f]+|\d+)/gi;
   let m;
-  while ((m = re.exec(text))) { const p = /^0x/i.test(m[1]) ? parseInt(m[1], 16) : parseInt(m[1], 10); if (p === port) return msg; }
+  while ((m = re.exec(text))) { const p = /^0x/i.test(m[1]) ? parseInt(m[1], 16) : parseInt(m[1], 10); if (ports.has(p)) return msg; }
   return '';
 }
 
 /** 整条命令都是只读的（每一段的命令名都在只读名单里、没有往文件写的重定向、没有包着别的命令） */
-/** cwd：命令在哪个目录跑（审核 P12：HTTP 方式下 process.cwd() 是路由的数据目录，不是项目目录，脚本路径会解析错） */
+/** cwd：命令在哪个目录跑（审核 P12） */
 function readOnlyCommand(cmd, ps, cwd) {
   const { s, docs } = preprocess(cmd, ps);
   for (const group of splitCommand(s, ps)) {
@@ -442,4 +442,4 @@ function hasReaderIn(cmd, ps, depth, cwd) {
   return false;
 }
 
-module.exports = { easyListing, mayTouchSecret, keyFileIssue, kitIssue, lessonIssue, routerApiIssue, readOnlyCommand, hasReaderIn };
+module.exports = { easyListing, mayTouchSecret, keyFileIssue, kitIssue, lessonIssue, configApiIssue, readOnlyCommand, hasReaderIn };

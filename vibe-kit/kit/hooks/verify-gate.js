@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, flowDone, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, refreshPlan, turnStart, toolCalls, toolResults, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
+const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, flowDone, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, refreshPlan, turnStart, toolCalls, toolResults, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 let tidy = null;
@@ -221,9 +221,7 @@ function kitIssueTodo(j, lastSaid) {
   const key = j.session_id + '-kitissues';
   if (readState(key).sig === sig) return '';
   writeState(key, { sig, at: Date.now() });
-  let port = 15730;
-  try { port = require('../router/service').portOf(); } catch (e) { /* 未安装路由时使用默认页面地址 */ }
-  return '收尾只写：套件问题 ' + recs.length + ' 条，[查看详情](http://127.0.0.1:' + port + '/ui#sec-issues)。不要逐条列套件诊断；真正影响本次交付的限制写在对应交付项。';
+  return '收尾只写：套件问题 ' + recs.length + ' 条，详情敲 /vk-config 看。不要逐条列套件诊断；真正影响本次交付的限制写在对应交付项。';
 }
 
 /*
@@ -552,7 +550,7 @@ function usageOf(j, cfg, entries) {
   const used = (fresh && st.used) || lastUsageTokens(entries);
   if (!used) return null;
   const { size, pct } = contextPercent(used, fresh ? st.windowSize : 0, cfg);
-  return { used, size, pct: Math.round(pct), line: Number(cfg.handoverPercent) || 70, gw: nearGatewayLimit(used) };
+  return { used, size, pct: Math.round(pct), line: Number(cfg.handoverPercent) || 70 };
 }
 const tok = (n) => (n >= 1000000 ? String(Math.round(n / 100000) / 10) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(n));
 function handoverQuestion(j, cfg, entries, wroteHo) {
@@ -560,21 +558,19 @@ function handoverQuestion(j, cfg, entries, wroteHo) {
   if ((cfg.handoverAsk || 'off') === 'off' || cfg.autoMode || !j.session_id) return '';
   const u = usageOf(j, cfg, entries);
   if (!u) return '';
-  const { used, size, pct, line, gw } = u;
-  if (!gw && pct < line) return '';
+  const { used, size, pct, line } = u;
+  if (pct < line) return '';
   const key = j.session_id + '-handover';
   const asked = readState(key);
   // 这一轮刚写过交接记录（用户自己说了"交接一下"也算）：不再问，涨 10 个百分点之后再说
-  if (wroteHo) { writeState(key, Object.assign({}, asked, { askedAtPct: pct }, gw ? { gwAsked: true } : {}, { at: Date.now() })); return ''; }
-  if (gw ? asked.gwAsked : (asked.askedAtPct != null && pct < asked.askedAtPct + 10)) return '';
-  writeState(key, Object.assign({}, asked, gw ? { gwAsked: true } : { askedAtPct: pct }, { at: Date.now() }));
-  const why = gw
-    ? '这个会话的请求快到内网网关能接受的大小了（上次大约 ' + tok(gw.limitTokens) + ' token 时被网关直接拒绝，撞上之后这个会话就发不出去了）'
-    : '上下文已经用了 ' + pct + '%（' + tok(used) + ' / ' + tok(size) + '），过了 ' + line + '% 的交接线';
+  if (wroteHo) { writeState(key, Object.assign({}, asked, { askedAtPct: pct, at: Date.now() })); return ''; }
+  if (asked.askedAtPct != null && pct < asked.askedAtPct + 10) return '';
+  writeState(key, Object.assign({}, asked, { askedAtPct: pct, at: Date.now() }));
+  const why = '上下文已经用了 ' + pct + '%（' + tok(used) + ' / ' + tok(size) + '），过了 ' + line + '% 的交接线';
   return '[vibe-kit 交接] ' + why + '。现在只做一件事：调用 AskUserQuestion 工具问我，不要说别的话。\n'
-    + '问题："' + (gw ? '快到网关的请求大小上限了' : '上下文已用 ' + pct + '%') + '，现在交接吗？"；header："交接"；两个选项：\n'
+    + '问题："' + '上下文已用 ' + pct + '%' + '，现在交接吗？"；header："交接"；两个选项：\n'
     + '  1. label "现在交接"，description "写好交接记录；然后我输入 /clear，再说一句继续，新会话就接着干"\n'
-    + '  2. label "再做一会儿"，description "' + (gw ? '有风险：撞上上限后这个会话就发不出去了' : '再涨 10% 时再问') + '"\n'
+    + '  2. label "再做一会儿"，description "' + '再涨 10% 时再问' + '"\n'
     + '我选"现在交接"：执行 /ttls-handover 写交接记录，写完只回我一句"交接记录写好了。输入 /clear，然后说一句"继续"，新会话会先读交接记录再接着干"。\n'
     + '我选"再做一会儿"：什么都不用做，直接结束这一轮。\n'
     + '（如果你没有 AskUserQuestion 这个工具，就用一句话直接问我。）';
@@ -589,9 +585,6 @@ const under = (file, dir) => { const f = normKey(file); const d = normKey(dir); 
  */
 function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
   if (!cfg.autoMode || saidStuck(lastSaid)) return [];
-  // 快到网关上限不催：再催一项，请求体超了网关直接 413（39870c5 删掉过这一行，2026-10-17 审核问题 9 加回）
-  const used = lastUsageTokens(entries);
-  if (used && nearGatewayLimit(used)) return [];
   const flow = flowChanges(j); const policy = require('../lib/flow-policy');
   for (const c of sessionChanges(j.session_id, entries, changes).filter(c => flow.includes(normKey(c.dir)))) {
     if (busy && busy(c.dir, 'code') || policy.pending(c.dir, 'code')) continue;
@@ -711,14 +704,6 @@ function autoHandover(j, cfg, entries, wroteHo) {
   if (!u) return out;
   const key = j.session_id + '-handover';
   const h = readState(key);
-  if (u.gw) {
-    out.quiet = true;
-    if (!h.gwStop && !wroteHo) {
-      writeState(key, Object.assign({}, h, { gwStop: true, at: Date.now() }));
-      out.stop = '[vibe-kit 交接] 这个会话的请求快到内网网关能接受的大小了（上次大约 ' + tok(u.gw.limitTokens) + ' token 时被网关直接拒绝，撞上了这个会话就发不出去了）。全自动模式也得停：现在执行 /ttls-handover 写交接记录（没提交的、没审的、下一步都写清楚），写完就停下，交代里说清停下的原因，等我回来开新会话接着做。';
-    }
-    return out;
-  }
   if (u.pct < u.line || cfg.autoHandover === false) return out;
   if (wroteHo) { writeState(key, Object.assign({}, h, { autoAtPct: u.pct, at: Date.now() })); return out; }
   if (h.autoAtPct != null && u.pct < h.autoAtPct + 10) return out;
