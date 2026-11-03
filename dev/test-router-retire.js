@@ -34,9 +34,9 @@ const setOf = (h) => JSON.parse(H.read(path.join(h.cfg, 'settings.json')));
 const cfgOf = (h) => JSON.parse(H.read(path.join(h.kit, 'config.json')));
 
 /** 假路由：/internal/shutdown 带对令牌才退出 */
-function fakeRouter(port, token) {
-  const code = "const http=require('http');http.createServer((q,s)=>{if(q.url==='/internal/shutdown'&&q.headers['x-vibe-token']===process.argv[1]){s.end('{}');setTimeout(()=>process.exit(0),50);return;}s.statusCode=403;s.end('no');}).listen(Number(process.argv[2]),'127.0.0.1');";
-  const p = spawn(process.execPath, ['-e', code, token, String(port)], { stdio: 'ignore', windowsHide: true });
+function fakeRouter(port, token, version, mode) {
+  const code = "const http=require('http');http.createServer((q,s)=>{if(q.url==='/internal/shutdown'&&q.headers['x-vibe-token']===process.argv[1]){s.end('{}');setTimeout(()=>process.exit(0),50);return;}if(q.url==='/version'&&process.argv[3]){s.end(process.argv[3]);return;}if(process.argv[4]==='hang')return;s.statusCode=403;s.end('no');}).listen(Number(process.argv[2]),'127.0.0.1');";
+  const p = spawn(process.execPath, ['-e', code, token, String(port), version || '', mode || ''], { stdio: 'ignore', windowsHide: true });
   return p;
 }
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
@@ -87,13 +87,63 @@ const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { 
     await H.sleep(300);
     H.ok('令牌对：请它退出了', !alive(p.pid) && r.notes.some((n) => /停了/.test(n)), r);
     void h;
-    const q = fakeRouter(PORT + 1, 'other');
+    const q = fakeRouter(PORT + 1, 'other', JSON.stringify({ version: '3.0', install: 'someone-else' }));
     await H.sleep(600);
     const o = scene('foreign', {});
     H.write(path.join(o.data, 'router.pid'), JSON.stringify({ pid: q.pid, port: PORT + 1, token: 'mine' }));
     const r2 = await o.Rt.run();
     H.ok('令牌不对：不停，只收自己的文件', alive(q.pid) && r2.done && r2.notes.some((n) => /没有停/.test(n)), r2);
     try { q.kill(); } catch (e) { /* 已经退了 */ }
+    // 老版本的路由：pid 文件没有令牌，/version 不带标识（复审 R5）
+    const u = fakeRouter(PORT + 2, 'x', JSON.stringify({ version: '3.0' }));
+    await H.sleep(600);
+    const o2 = scene('old-no-token', {});
+    H.write(path.join(o2.data, 'router.pid'), JSON.stringify({ pid: u.pid, port: PORT + 2 }));
+    const r3 = await o2.Rt.run();
+    await H.sleep(300);
+    H.ok('没有令牌的老路由：认出来是自己的，停了', !alive(u.pid) && r3.done && r3.notes.some((n) => /停了/.test(n)), r3);
+    // 路由忙到不答话：不能把 pid 文件删了，下次再试
+    const v = fakeRouter(PORT + 3, 'y', '', 'hang');
+    await H.sleep(600);
+    const o3 = scene('hang', {});
+    H.write(path.join(o3.data, 'router.pid'), JSON.stringify({ pid: v.pid, port: PORT + 3, token: 'mine' }));
+    const r4 = await o3.Rt.run();
+    H.ok('不答话：这次不算收完，文件留着，下次还会试', !r4.done && o3.Rt.pending() && fs.existsSync(path.join(o3.data, 'router.pid')) && r4.notes.some((n) => /下次再试/.test(n)), r4);
+    try { v.kill(); } catch (e) { /* 已经退了 */ }
+    await H.sleep(300);
+    const r5 = await o3.Rt.run();
+    H.ok('进程没了之后：收完', r5.done && !fs.existsSync(o3.data), r5);
+    // 进程号被复用：端口上没人
+    const w = spawn(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], { stdio: 'ignore', windowsHide: true });
+    const o4 = scene('reused', {});
+    H.write(path.join(o4.data, 'router.pid'), JSON.stringify({ pid: w.pid, port: PORT + 4, token: 'mine' }));
+    const r6 = await o4.Rt.run();
+    H.ok('进程号被复用（端口上没人）：不动那个进程，照收', alive(w.pid) && r6.done, r6);
+    try { w.kill(); } catch (e) { /* 已经退了 */ }
+  }
+
+  H.section('老 service.js 写的 UTF-16 自启动脚本认得出（复审 R6）');
+  {
+    const a = scene('vbs16', {});
+    const text = 'If fso.FileExists("' + path.join(a.h.kit, 'router', 'router.js') + '") Then sh.Run\r\n';
+    H.write(path.join(a.startup, 'x'), '');
+    fs.writeFileSync(path.join(a.startup, 'vibe-kit-router.vbs'), String.fromCharCode(0xFEFF) + text, 'utf16le');
+    H.ok('认出来是自己的', !!a.Rt.ownVbs(), a.Rt.ownVbs());
+    await a.Rt.run();
+    H.ok('撤了', !fs.existsSync(path.join(a.startup, 'vibe-kit-router.vbs')));
+  }
+
+  H.section('写 settings.json 先备份（复审 R7）；还连着路由说清楚（复审 R4）');
+  {
+    const b = scene('bak', { url: 'http://127.0.0.1:' + PORT, memo: { prevBaseUrl: 'https://gw.example/v1' } });
+    const r = await b.Rt.run();
+    H.ok('备份了原来的 settings.json', /127\.0\.0\.1/.test(H.read(path.join(b.h.kit, 'backup', 'settings-before-router-retire.json')) || ''));
+    H.ok('说了要重开', r.notes.some((n) => /重开/.test(n)), r.notes);
+    const c = scene('conn', {});
+    process.env.ANTHROPIC_BASE_URL = 'http://127.0.0.1:' + PORT;
+    const r2 = await c.Rt.run();
+    delete process.env.ANTHROPIC_BASE_URL;
+    H.ok('这个会话的环境还指着路由：说要用 cch 切、重开', r2.notes.some((n) => /cch/.test(n) && /重开/.test(n)), r2.notes);
   }
 
   H.section('别人的东西不动');

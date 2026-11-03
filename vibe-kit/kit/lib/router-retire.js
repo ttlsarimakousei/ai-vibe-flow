@@ -29,7 +29,13 @@ const startupVbs = () => { const dir = process.env.VIBE_KIT_STARTUP_DIR || (proc
 /** 开机自启的 .vbs 是这份安装的才算：同一个"启动"文件夹里可能是别的安装放的 */
 function ownVbs() {
   const f = startupVbs();
-  try { return f && fs.existsSync(f) && fs.readFileSync(f, 'utf8').toLowerCase().includes(ROUTER.toLowerCase()) ? f : ''; } catch (e) { return ''; }
+  try {
+    if (!f || !fs.existsSync(f)) return '';
+    // 老 service.js 写的是带 BOM 的 UTF-16（wscript 认）
+    const b = fs.readFileSync(f);
+    const text = b[0] === 0xFF && b[1] === 0xFE ? b.toString('utf16le') : b.toString('utf8');
+    return text.toLowerCase().includes(ROUTER.toLowerCase()) ? f : '';
+  } catch (e) { return ''; }
 }
 const oldModelRouter = () => {
   const dir = path.join(CLAUDE, 'model-router');
@@ -62,16 +68,40 @@ function askShutdown(port, token) {
   });
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-/** 停这份安装的路由：pid 文件的令牌对得上才算自己的。令牌对不上（别的安装占着端口）不停 */
+/** /version 答的是什么；不答、不是 JSON 返回 null */
+function versionOf(port) {
+  return new Promise((resolve) => {
+    const r = http.get({ host: '127.0.0.1', port, path: '/version', timeout: 1500, agent: false }, (res) => { let b = ''; res.on('data', (c) => { b += c; }); res.on('end', () => { try { const j = JSON.parse(b); resolve(res.statusCode === 200 && j && j.version ? j : null); } catch (e) { resolve(null); } }); });
+    r.on('timeout', () => { r.destroy(); resolve(null); });
+    r.on('error', () => resolve(null));
+  });
+}
+/** 这份安装的标识：还在的 router/install-id.js 算（老版本没有这个文件返回 ''） */
+function ownInstallId() { try { return require(path.join(ROUTER, 'install-id.js')).installId(KIT); } catch (e) { return ''; } }
+/**
+ * 停这份安装的路由。返回 false：进程还在、这次没停成，文件先留着（pid 文件没了以后就再也找不到它），下次再试（复审 20261104 R5）。
+ * 令牌对不上时看 /version 认人：标识是别的安装的不停；是这份安装的（老版本不带标识的也算）直接结束进程；端口上没人是进程号被复用了，不动它。
+ */
 async function stopOwn(notes) {
   const rec = readJson(path.join(DATA, 'router.pid'));
-  if (!rec || !(Number(rec.pid) > 0)) return;
+  if (!rec || !(Number(rec.pid) > 0)) return true;
   const pid = Number(rec.pid); const port = Number(rec.port) || portOf();
   let alive = false; try { process.kill(pid, 0); alive = true; } catch (e) { alive = !!e && e.code === 'EPERM'; }
-  if (!alive) return;
-  if (!rec.token || !(await askShutdown(port, String(rec.token)))) { notes.push('端口 ' + port + ' 上的路由没认这份安装的令牌，没有停它（可能是别的安装的）'); return; }
-  for (let i = 0; i < 25 && await portOpen(port); i++) await sleep(200);
-  notes.push('模型路由停了');
+  if (!alive) return true;
+  const closed = async () => { for (let i = 0; i < 25 && await portOpen(port); i++) await sleep(200); return !(await portOpen(port)); };
+  if (rec.token && await askShutdown(port, String(rec.token))) { await closed(); notes.push('模型路由停了'); return true; }
+  const who = await versionOf(port);
+  if (who) {
+    const mine = ownInstallId();
+    if (who.install && who.install !== mine) { notes.push('端口 ' + port + ' 上的路由是别的安装的，没有停它'); return true; }
+    try { process.kill(pid); } catch (e) { notes.push('模型路由的进程 ' + pid + ' 结束不了，下次再试'); return false; }
+    if (await closed()) { notes.push('模型路由停了'); return true; }
+    notes.push('模型路由还没退出，下次再试');
+    return false;
+  }
+  if (!(await portOpen(port))) return true;
+  notes.push('模型路由在端口 ' + port + ' 上不答话，这次没收，下次再试');
+  return false;
 }
 /** 配置页"接上"过的恢复原来的地址。没有记录、原地址为空的不动（这种机器已经提前切走），说一句 */
 function restoreSettings(notes) {
@@ -86,8 +116,13 @@ function restoreSettings(notes) {
   if (!prev) { notes.push('settings.json 的 ANTHROPIC_BASE_URL 还指着本机路由（' + env.ANTHROPIC_BASE_URL + '），没有接上之前的地址，没动它：路由已经删了，请用 cch 切到网关'); return; }
   env.ANTHROPIC_BASE_URL = prev;
   if (env.ANTHROPIC_AUTH_TOKEN === PLACEHOLDER_TOKEN) delete env.ANTHROPIC_AUTH_TOKEN;
-  fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2) + '\n');
-  notes.push('Claude Code 连的地址恢复成接上路由之前的 ' + prev);
+  // 先留一份，再原子写：写到一半被杀，settings.json 不能坏
+  const bak = path.join(KIT, 'backup'); fs.mkdirSync(bak, { recursive: true });
+  fs.copyFileSync(SETTINGS, path.join(bak, 'settings-before-router-retire.json'));
+  const tmp = SETTINGS + '.retire-' + process.pid + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(s, null, 2) + '\n');
+  fs.renameSync(tmp, SETTINGS);
+  notes.push('Claude Code 连的地址恢复成接上路由之前的 ' + prev + '，开着的 Claude Code 窗口要重开才连得上');
 }
 function cleanConfig() {
   const f = path.join(KIT, 'config.json'); const c = readJson(f);
@@ -109,7 +144,11 @@ async function run() {
   const notes = []; const errors = [];
   const step = async (fn) => { try { await fn(); } catch (e) { errors.push(String((e && e.message) || e)); } };
   if (!pending()) return { done: true, notes, errors };
-  await step(() => stopOwn(notes));
+  // 这个会话还连着路由：已经读进环境变量了，收完要重开才连得上（复审 20261104 R4）
+  try { const u = new URL(String(process.env.ANTHROPIC_BASE_URL || '')); if (['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname.toLowerCase()) && String(u.port || 80) === String(portOf())) notes.push('这个会话还连着模型路由，路由停了之后连不上模型：用 cch 切到网关，重开 Claude Code'); } catch (e) { /* 没设，或者不是网址 */ }
+  let stopped = true;
+  await step(async () => { stopped = await stopOwn(notes); });
+  if (!stopped) return { done: false, notes, errors };
   await step(() => { const f = ownVbs(); if (f) fs.unlinkSync(f); });
   await step(() => restoreSettings(notes));
   await step(cleanConfig);
