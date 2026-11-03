@@ -38,7 +38,7 @@ const temps = () => fs.readdirSync(os.tmpdir()).filter((n) => /^(vkt|vke|vkz)-/.
 
 const before = windows();
 const suites = [['内网反馈 1007', 'test-feedback1007.js', [rt || 'none']], ['内网反馈 0928', 'test-feedback0928.js', []], ['内网反馈 0929', 'test-feedback0929.js', []], ['内网反馈 0930', 'test-feedback0930.js', []], ['1001：压缩、状态栏、拉代码', 'test-1001.js', []], ['1005：自动模式、约定、路由', 'test-1005.js', ['18787'].concat(before1005 ? [before1005] : [])], ['1007：产出、公共配置、端口、按阶段提交', 'test-1007.js', ['18757']], ['1008：归档、提交要点头，全自动只管 apply', 'test-1008.js', ['18737']],['看页面 0929', 'test-page-0929.js', ['18771']], ['起服务 0929', 'test-devserver-0929.js', ['18781']], ['配置页 0929', 'ui-kit-0929.js', ['18791']],
-  ['查 redis', 'test-redis.js', ['18761']], ['后台自动探索', 'test-onboard.js', rt ? [rt] : []], ['自动归并、工具用量', 'test-auto-0930.js', []], ['全仓审查之后改的', 'test-review-0930.js', []], ['拦截类钩子（0930 审查）', 'test-guard-0930.js', []], ['配置页：数据库驱动', 'ui-data-0930.js', ['18795']], ['经验规则', 'test-lessons.js', []], ['安装、升级、卸载', 'test-install-0928.js', old ? [old] : []], ['配置页的经验规则', 'ui-lessons.js', ['18733', '0']], ['HTTP 方式的钩子', 'test-http-hooks.js', ['18734']], ['令牌保护、发布确认', 'test-secrets.js', []], ['自动更新和发布', 'test-update.js', ['18741']], ['问题上报和导出', 'test-issues.js', ['18743']], ['配置页的更新和上报', 'ui-update.js', ['18745', '0', '18746']]];
+  ['查 redis', 'test-redis.js', ['18761']], ['后台自动探索', 'test-onboard.js', rt ? [rt] : []], ['自动归并、工具用量', 'test-auto-0930.js', []], ['全仓审查之后改的', 'test-review-0930.js', []], ['拦截类钩子（0930 审查）', 'test-guard-0930.js', []], ['配置页：数据库驱动', 'ui-data-0930.js', ['18795']], ['经验规则', 'test-lessons.js', []], ['安装、升级、卸载', 'test-install-0928.js', old ? [old] : []], ['配置页的经验规则', 'ui-lessons.js', ['18733', '0']], ['令牌保护、发布确认', 'test-secrets.js', []], ['自动更新和发布', 'test-update.js', ['18741']], ['问题上报和导出', 'test-issues.js', ['18743']], ['配置页的更新和上报', 'ui-update.js', ['18745', '0', '18746']]];
 suites.unshift(['内网反馈 1010、提交和多版本驱动', 'test-feedback1010.js', [rt || 'none']]);
 suites.unshift(['提案材料和相似入口', 'test-proposal-files.js', []]);
 suites.unshift(['1017：任务只写实现、验收用例、一份一份来、自带 OpenSpec', 'test-1017.js', []]);
@@ -46,9 +46,9 @@ suites.unshift(['1012 流程反馈', 'test-feedback1012-workflow.js', []], ['101
 suites.unshift(['1012 数据库诊断', 'test-feedback1012-db.js', [rt || 'none']]);
 suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'decisions', 'states', 'context'].map((name) => ['1013 反馈 ' + name, 'test-feedback1013-' + name + '.js', []]));
 suites.unshift(['提案审查结果有效性', 'test-proposal-review-state.js', []]);
-suites.unshift(['大任务', 'test-big-task.js', []], ['进流程和流程状态', 'test-flow-entry.js', []], ['接回 /vk-resume', 'test-vk-resume.js', []], ['一个大任务多个 change', 'test-multi-change.js', []], ['审查全部用子代理', 'test-review-subagent.js', []]);
+suites.unshift(['大任务', 'test-big-task.js', []], ['进流程和流程状态', 'test-flow-entry.js', []], ['接回 /vk-resume', 'test-vk-resume.js', []], ['一个大任务多个 change', 'test-multi-change.js', []], ['审查全部用子代理', 'test-review-subagent.js', []], ['收回模型路由', 'test-router-retire.js', []], ['配置页用时才起', 'test-config-page.js', []], ['MCP 工具的令牌保护', 'test-guard-mcp.js', []], ['状态栏步骤条', 'test-statusline-bar.js', []], ['删干净了没有', 'test-no-leftovers.js', []]);
 suites.unshift(...['apply', 'stop', 'review-scope', 'review-command', 'budget', 'output', 'push'].map((name) => ['1024 反馈 ' + name, 'test-feedback1024-' + name + '.js', []]));
-suites.push(['发版保护（尝鲜组、观察期、固定和跳过）', 'test-update-canary.js', ['18755']]);
+suites.push(['发版保护（尝鲜组、固定和跳过）', 'test-update-canary.js', ['18755']]);
 if (old) suites.push(['旧版复现', 'check-old-repro.js', [old]]);
 if (old0929) suites.push(['旧版复现 0929', 'check-old-repro-0929.js', [old0929]]);
 if (oldNames) suites.push(['改名和并进来的技能', 'test-ttls.js', [oldNames]]);
@@ -62,13 +62,11 @@ for (const c of claudes) suites.push(['端到端（审查子代理）' + path.ba
 // 不给 --rt 的话查库那几项不测（第三个参数给一个不存在的目录）
 claudes.forEach((c, i) => suites.push(['端到端（0930）' + path.basename(path.resolve(c, '../../../../..')), 'e2e-0930.js', [c, path.basename(path.resolve(c, '../../../../..')), rt || path.join(__dirname, '没有运行环境'), String(18765 + 100 * i)]]));
 
-suites.unshift(['IDEA MCP 接入撤掉', 'test-idea-mcp.js', []]);
 // 2026-10-30 统一修改（docs/feedback-20261030.md）加的几套；复审 S8：以前没进清单，全量回归不跑
 suites.unshift(['自动模式不会被悄悄关掉', 'test-auto-mode-kept.js', []], ['push 只留钩子一道', 'test-push-gate.js', []], ['同一件事不再确认第二遍', 'test-confirm-once.js', []], ['认用户说法的语料', 'test-intent-corpus.js', []], ['查库、redis 的保护', 'test-db-guards.js', []], ['devserver 起 Tomcat 的中文', 'test-devserver-encoding.js', []], ['devserver 提速', 'test-devserver-speed.js', []], ['自动模式按会话开', 'test-auto-session.js', []], ['耗时异常上报', 'test-perf.js', []], ['10-31 零散修复', 'test-fixes-1031.js', []]);
 suites.unshift(['1028 反馈', 'test-feedback1028.js', ['18797']]);
 // K3（2026-11-01）：体检、检查点、失败摘要、只提交本会话的、SQL 对表结构、团队的坑
 suites.unshift(['K3：只提交本会话改过的文件', 'test-commit-tool.js', []], ['K3：编译测试失败只给摘要', 'test-fail-summary.js', []], ['K3：检查点和一键回退', 'test-checkpoint.js', []], ['K3：SQL、Mapper 对表结构', 'test-sql-check.js', []], ['K3：团队的坑', 'test-team-lessons.js', []], ['K3：总体检和第一次使用的说明', 'test-doctor.js', []], ['J4：规范进流程时送、压缩后重送', 'test-stage-rules.js', []], ['K1-8：本机诊断指标', 'test-diag.js', []], ['K1-4、J2：开关字段表', 'test-config-fields.js', []]);
-suites.unshift(['IDEA MCP 保护入口', 'test-idea-tools.js', []]);
 // 2026-11-02（docs/feedback-20261102-1543.md）：11-02 导出议题和问题表第 32—34 条
 suites.unshift(['11-02 反馈', 'test-feedback1102.js', []]);
 // 2026-11-01（docs/feedback-20261101.md）：K1-6 依赖清单
@@ -82,7 +80,6 @@ suites.unshift(['使用情况匿名标识', 'test-usage-identity.js', []]);
 suites.unshift(['归档解包的临时目录', 'test-archive-extract.js', []]);
 suites.unshift(['服务实际地址', 'test-service-address.js', []]);
 // 2026-11-01 这一批的路由（K1-1 拆分、E1 安装标识、E3 断在半截）
-suites.unshift(['11-01 路由', 'test-router-k.js', []]);
 // 2026-11-01 这一批主会话做的（H2、H4、H5、K1-5……）和测试按契约索引（dev/contracts.md）对不对得上
 suites.unshift(['11-01 主会话', 'test-k-batch.js', []], ['测试契约索引', 'contracts.js', ['--check']]);
 for (const [name, file] of [['状态并发和恢复', 'test-workflow-state.js'], ['用户意图与许可', 'test-workflow-intent.js'], ['许可与上下文', 'test-workflow-permissions.js'], ['连接生命周期', 'test-connection-lifecycle.js'], ['诊断脱敏', 'test-diagnostic-redaction.js'], ['审查和执行证据', 'test-review-evidence.js'], ['运行流程优化', 'test-optimization-runtime.js'], ['优化边界', 'test-optimization-boundaries.js']]) suites.unshift([name, file, []]);
