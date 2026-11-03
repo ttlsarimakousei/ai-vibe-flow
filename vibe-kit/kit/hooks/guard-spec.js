@@ -73,6 +73,28 @@ function exploreFirstIssue(j, art, cfg) {
   return '';
 }
 
+/** 后面的 change 用 MODIFIED 改前面没归档 change 新增的需求：直接改前面的文档（用户 2026-11-03 定的；不然前面的改了名，到归档才报错、停在一半） */
+function crossChangeIssues(art, text, isAdded) {
+  const out = [];
+  try {
+    const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.name);
+    if (!task) return out;
+    const before = task.changes.slice(0, task.changes.findIndex((c) => c.name === art.name)).filter((c) => c.exists);
+    const lines = text.split('\n'); let inModified = false;
+    lines.forEach((l, i) => {
+      if (/^##\s/.test(l)) inModified = /^##\s+MODIFIED/i.test(l);
+      const m = /^###\s+Requirement:\s*(.+?)\s*$/.exec(l);
+      if (!m || !inModified || !isAdded(i)) return;
+      for (const c of before) {
+        const spec = path.join(c.dir, 'specs', path.basename(path.dirname(art.dir ? path.join(art.dir, art.rel) : '')), 'spec.md');
+        let other = ''; try { other = fs.readFileSync(spec, 'utf8'); } catch (e) { continue; }
+        if (other.includes('### Requirement: ' + m[1])) out.push('第 ' + (i + 1) + ' 行：需求"' + m[1] + '"是 ' + c.name + ' 新增的，它还没归档：直接改 ' + c.name + ' 的文档，不在这里写 MODIFIED。');
+      }
+    });
+  } catch (e) { /* 算不了不挡 */ }
+  return out;
+}
+
 /** 项目里有没有叫这个名字的场景文件（.vibe/scenarios/<名字>.json，各个根目录、当前目录都看） */
 function scenarioFinder(roots) {
   return (name) => {
@@ -115,6 +137,11 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   if (special.length) return done(special);
   // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一整组并审修过。
   // 到轮数、不收敛停了的组不挡（flow-policy.js 的 exhausted）：那一组不会再自动审了，这里再拦就卡死，没过的写在报告里
+  // 按表的顺序（用户 2026-11-03 定的）：回改前面的 change 补了任务，先做它，再回来
+  try {
+    const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.name);
+    if (task) { const at = task.changes.findIndex((c) => c.name === art.name); const before = task.changes.slice(0, at).find((c) => !c.archived && c.todo > 0 && c.done > 0); if (before) return done(['按 openspec/plan.md 表的顺序做：' + before.name + ' 还有没勾的任务（' + before.done + '/' + before.total + '），先做完它，再回 ' + art.name + '。']); }
+  } catch (e) { /* 算不了不挡打勾 */ }
   if (!cfg.autoMode) return done([]);
   const policy = require('../lib/flow-policy');
   for (const t of ticked) {
@@ -221,7 +248,7 @@ function handle(j, opts) {
       if (notStarted) flow.unshift(why ? '我说了开工，但' + why + '。认下来之前先不打勾' : '我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工""还要改""先不做"）；我说开工、或者我自己敲 /vk-go（或 /opsx:apply）之后再做');
     }
   }
-  if (art.kind === 'spec') format.push(...checkSpec(newText, isAdded));
+  if (art.kind === 'spec') { format.push(...checkSpec(newText, isAdded)); flow.push(...crossChangeIssues(art, newText, isAdded)); }
   if (art.kind === 'design') format.push(...checkDesign(newText, isAdded, roots, !existed, isDeclared));
   if (art.kind === 'proposal' && !existed) { let b = ''; try { b = bugFixFirstIssue(j); } catch (e) { b = ''; } if (b) flow.push(b); const e = exploreFirstIssue(j, art, cfg); if (e) flow.push(e); }
   const issues = flow.concat(format);
