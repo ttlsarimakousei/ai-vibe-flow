@@ -154,7 +154,7 @@ const server = http.createServer((req, res) => {
     H.ok('模型的 key 那串字从头到尾没发给模型', !all.includes(KEY_MARK), res);
     for (const i of [0, 1, 2]) H.ok('Read 第 ' + (i + 1) + ' 次：被权限规则挡住', res[i] && res[i].err && /denied|permission|不允许|拒绝/i.test(res[i].text), res[i]);
     for (const i of [3, 4, 7]) H.ok('Grep 对着上级目录搜内容（第 ' + (i + 1) + ' 步）：被钩子挡住', res[i] && /里有放令牌、放模型 key 的文件/.test(res[i].text), res[i]);
-    for (const i of [5, 6]) H.ok('Grep 直接对着那两处搜（第 ' + (i + 1) + ' 步）：挡住了（钩子先拦；没有钩子时权限规则也会拦）', res[i] && res[i].err && /denied|permission|放令牌、放模型 key/i.test(res[i].text), res[i]);
+    for (const i of [5, 6]) H.ok('Grep 直接对着那两处搜（第 ' + (i + 1) + ' 步）：挡住了（钩子先拦；没有钩子时权限规则也会拦）；router-data 第一个会话就收回了，目录不在也算', res[i] && res[i].err && /denied|permission|放令牌、放模型 key|does not exist/i.test(res[i].text), res[i]);
     H.ok('Grep 只看文件名：照常能用，列不出那两处', res[8] && !res[8].err && /config\.json/.test(res[8].text) && !/secrets\.json|router-data/.test(res[8].text), res[8]);
     for (const i of [9, 10, 11]) H.ok('命令第 ' + (i - 8) + ' 次：被钩子挡住', res[i] && /令牌或者模型的 key|放令牌、放模型 key/.test(res[i].text), res[i]);
     H.ok('读开关（config.json）照常能读', res[12] && !res[12].err && /kitLock/.test(res[12].text), res[12]);

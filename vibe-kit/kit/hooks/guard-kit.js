@@ -2,11 +2,11 @@
 /*
  * PreToolUse 钩子（改文件时）：套件自己的文件不许模型改，也不许用项目设置把钩子关掉。
  * 实际发生过：模型嫌钩子碍事，自己去改 ~/.claude/vibe-kit 里的钩子。套件是用户的，模型只能用不能改。
- * 保护的范围：~/.claude/vibe-kit 整个目录（钩子、规范、配置、状态、路由）、settings.json（钩子登记在这里）、全局 CLAUDE.md、
+ * 保护的范围：~/.claude/vibe-kit 整个目录（钩子、规范、配置、状态）、settings.json（钩子登记在这里）、全局 CLAUDE.md、
  * 套件装进去的技能和代理。~/.claude 是目录联接时，真实路径和用户看到的路径都认。项目里的东西（.vibe/、代码、openspec）不在此列。
  * 另外：往任何 .claude/settings*.json（项目级的也算）里写 disableAllHooks，会让所有钩子失效，一律拦（实测 2.1.259）。
  * 经验规则的文件（项目和用户目录的 .claude/rules/ttls-lessons-*.md、.vibe/lessons/）也不许直接改，要通过 tools/lesson.js。
- * 开关：config.json 的 kitLock（默认开）。命令行那一路（rm、Remove-Item、重定向、curl 调路由接口）在 guard-commit.js 里拦。
+ * 开关：config.json 的 kitLock（默认开）。命令行那一路（rm、Remove-Item、重定向、curl 调配置页接口）在 guard-commit.js 里拦。
  */
 const path = require('path');
 const { readConfig, blockOut, isKitPath, isClaudeSettingsFile, hookLog, cli } = require('../lib/session');

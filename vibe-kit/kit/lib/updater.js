@@ -205,7 +205,6 @@ function check() {
   return status();
 }
 
-// ---------- 空闲 ----------
 // ---------- 安装、自检、装回上一版 ----------
 /**
  * 要装的比装着的旧（维护者把所有人退回旧版、或者装回上一版）：旧版的安装器只认它那时的技能名字，
@@ -372,7 +371,7 @@ function apply() {
   const to = stagedVersion();
   if (!to) return { ok: false, why: '暂存处里没有可装的包，先检查一次' };
   if (to === from) return { ok: true, same: true, version: to };
-  // 锁已经不是自己的了（等空闲等得太久，别的进程接手了）：不装，免得两个安装器同时拷文件
+  // 锁已经不是自己的了（别的进程接手了）：不装，免得两个安装器同时拷文件
   if (!ownLock()) return { ok: false, why: '更新的锁被别的进程拿走了，这次不装' };
   touchLock();
   log('开始安装 ' + to + '（现在是 ' + (from || '没有版本号') + '）');
@@ -469,7 +468,7 @@ function kick(why) {
     const st = readState('update');
     const now = Date.now();
     const dueUpdate = modeOf(cfg) !== 'off' && now - (st.lastCheckAt || 0) >= hoursOf(cfg) * 3600000;
-    // 已经下载好、还没装上的（上次一直没等到空闲）：十分钟后再试一次
+    // 已经下载好、还没装上的：十分钟后再试一次
     const dueApply = modeOf(cfg) === 'auto' && now - (st.lastKickAt || 0) >= 10 * 60000 && needInstall();
     let dueIssues = false;
     if (cfg.issueUpload !== 'off') { const d = readState('issues-dirty'); const i = readState('issues'); dueIssues = (d.at || 0) > (i.lastSyncAt || 0) && now >= (i.blockedUntil || 0) && now - (i.lastTryAt || 0) >= 5 * 60000; }

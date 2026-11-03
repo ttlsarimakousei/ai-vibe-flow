@@ -174,7 +174,7 @@ function handle(j, opts) {
   const cfg = readConfigFor(j);
   if (cfg.specGate === false) return null;
   const inp = j.tool_input || {};
-  // 相对路径按会话的目录算：HTTP 方式下这个进程的当前目录是路由的，不是项目的
+  // 相对路径按会话的目录算：这个进程的当前目录不一定是项目的
   let file = String(inp.file_path || '');
   if (file && !path.isAbsolute(file) && j.cwd) file = path.resolve(j.cwd, file);
   const art = artifactOf(file);

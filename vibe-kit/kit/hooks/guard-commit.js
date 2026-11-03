@@ -17,7 +17,6 @@
  *  13. 跑 tools/commit.js（只提交本会话改过的文件，2026-11-01 K3）：按它要提交的文件和提交信息合成 git add、git commit，上面 2、3、8、9、12 条照查；
  *      没拦下的记一张票，commit.js 凭票提交，钩子没跑就不提交（lib/guard-git.js 的 commitToolRun、lib/edited-files.js）。
  *   5. 禁止改套件（开关 kitLock）：命令动到套件的文件、直接调配置页的 /api、命令里出现 disableAllHooks，都拦。
- *   6. （结束 node 进程保护路由的那一条，随路由 2026-11-03 删了）
  *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（固定，不做开关）：同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000。
  *   8. 过程文件别落在项目里（固定，不做开关）：cp 出来的备份、备份目录、重定向出来的日志这类，放 .vibe/tmp/<事由>/；git add 过程文件也拦。同一个路径只拦一次。
  *      临时查看 JAR、ZIP、TAR、7z 等归档的直接解包命令检查实际目标目录，目录联接也查；不能靠重复执行落到项目根。只读列表和流式读取放行。

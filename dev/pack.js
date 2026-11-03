@@ -92,7 +92,9 @@ for (const f of code) {
 }
 // 删了的东西有没有残留（用户 2026-11-03："彻底删除干净"）：扫不过不打包
 {
-  const r = spawnSync(process.execPath, [path.join(__dirname, 'test-no-leftovers.js')], { encoding: 'utf8', windowsHide: true, timeout: 300000 });
+  // test-deps-manifest 在临时目录里只拼了 pack.js 和 lib：没有这个测试的不跑
+  const scan = path.join(__dirname, 'test-no-leftovers.js');
+  const r = fs.existsSync(scan) ? spawnSync(process.execPath, [scan], { encoding: 'utf8', windowsHide: true, timeout: 300000 }) : { status: 0 };
   if (r.status !== 0) fail('残留扫描没过（dev/test-no-leftovers.js）：\n' + String(r.stdout).slice(-1500));
 }
 {
