@@ -10,7 +10,7 @@
 
 ## 在做的
 
-在和仓库主人谈流程：探索→需求→apply→自测→人工核验，中途任意打断不影响，针对 CLI 2.1.120 起。已定的见 decisions.md 2026-11-03；别的还在谈，代码没改。实测见 claude-code-facts.md 最后一节。下一批等仓库主人说；第 39 条（删除本地路由/模型配置，删除用量管理）仓库主人说下个版本再说，还没查代码；第 41 条（开着 vk-auto 还卡在问是否开工）、第 42 条（全自动下 guard-commit 拦提案的自动提交）、第 43 条（需求没说的不许自己加）、第 44 条（vk-auto 开着还在询问，说是需求阶段却在动代码）只记了，没改，都见 [owner-issues.md](owner-issues.md)。
+下个版本的方案谈定了，代码没改，等仓库主人说开工。流程：探索→[需求→apply]×N→全面自测→人工核验→按顺序归档，中途打断不影响，针对 CLI 2.1.120 起。定的事见 decisions.md 2026-11-03，全局图和留删清单见全局页 https://claude.ai/artifact/UNhvaRSEFqGtBLj6hHfHew（用 Artifact 工具 read），实测见 claude-code-facts.md 最后两节。第 39 条（连路由进程一起删）这批做；第 41 条（开着 vk-auto 还卡在问是否开工）、第 42 条（全自动下 guard-commit 拦提案的自动提交）、第 43 条（需求没说的不许自己加）、第 44 条（vk-auto 开着还在询问，说是需求阶段却在动代码）只记了，没改，都见 [owner-issues.md](owner-issues.md)。
 
 ## 待仓库主人做的
 

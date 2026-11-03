@@ -4,7 +4,7 @@
 
 | 编号 | 问题 | 状态 | 在哪分析 | 下一步 |
 |---|---|---|---|---|
-| 问题表第 39 条 | 删除本地路由/模型配置，删除用量管理 | 后做 | [owner-issues.md](owner-issues.md) 第 39 条 | 仓库主人说了下个版本再说，到时候再核对 |
+| 问题表第 39 条 | 删除本地路由/模型配置，删除用量管理 | 后做 | [owner-issues.md](owner-issues.md) 第 39 条 | 11-03 定了连路由进程一起删，下一批做，见 [decisions.md](decisions.md) 2026-11-03 |
 | 问题表第 41 条 | 开着 vk-auto，早上发现还是卡在问是否开工 | 待修 | [owner-issues.md](owner-issues.md) 第 41 条 | 仓库主人说修时再核对 |
 | 问题表第 42 条 | guard-commit 拦截提案的自动提交，全自动模式下提案也无法自动提交 | 待修 | [owner-issues.md](owner-issues.md) 第 42 条 | 仓库主人说修时再核对 |
 | 问题表第 43 条 | 禁止发散：需求没说、探索阶段也没说过的点，需求和编码阶段不许自己加 | 待修 | [owner-issues.md](owner-issues.md) 第 43 条 | 仓库主人说修时再核对 |
