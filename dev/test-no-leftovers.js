@@ -65,6 +65,7 @@ const KEEP = [
   ['dev/test-feedback1102.js', 'reviewLoop', '测旧开关不在字段表里', OLD_UPDATERS],
   ['dev/test-update-canary.js', 'flagVersion', '测自动报的入口和观察期都没了', OLD_UPDATERS],
   ['dev/test-update-canary.js', '观察期', '测自动报的入口和观察期都没了', OLD_UPDATERS],
+  ['dev/probes/up-no-router.js', 'vibe-kit-router', '测真装着旧路由的电脑升级', OLD_UPDATERS],
   ['dev/ui-update.js', 'vibe-kit-router', '测不写开机自启', OLD_UPDATERS],
 ];
 // 整个文件都是历史或者就是在讲这些的

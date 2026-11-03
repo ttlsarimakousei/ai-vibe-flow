@@ -147,6 +147,7 @@ node dev/pack.js
 | `test-statusline-bar.js [旧套件目录]` | 状态栏（第 46、47 条）：没进流程一行，流程里步骤条和下一项，折叠、截断、缓存 |
 | `test-no-leftovers.js [旧套件目录]` | 删干净了没有：扫已删的名字（留着的进白名单，写理由和能删的条件）、session.js 没人用的导出、假用户目录真装一遍。`dev/pack.js` 打包前也跑 |
 | `probes/cc-vk-config.js` | 探测：敲 /vk-config 发不发模型请求、屏幕上有没有地址 |
+| `probes/up-no-router.js [旧版本号] [端口]` | 探测：真装着旧路由的电脑升到这一版（自动更新、手动安装两条路）：自检不过要用的东西留到新代码跑起来才收 |
 | `lib/hook-thread.js` | `H.hook` 在工作线程里调钩子用的线程脚本 |
 | `lib/fake-gitlab.js` | 假 GitLab：git 的 http 通道加 issue 的接口 |
 | `lib/fake-ssh.js` | 假 ssh：拉仓库、推仓库、申请令牌 |
