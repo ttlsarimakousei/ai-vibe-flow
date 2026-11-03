@@ -86,7 +86,7 @@ process.stdin.on('end', () => {
 
   // 自动模式按会话开（问题表第 28 条）
   const flowJ = { session_id: j.session_id, cwd };
-  const fl = require('./lib/session').flowView(flowJ);
+  let fl = {}; try { fl = require('./lib/session').flowView(flowJ) || {}; } catch (e) { fl = {}; }
   line1.push(fl.switchOn ? C.yellow + '自动 开' + C.reset : C.dim + '自动 关' + C.reset);
   // 步骤条和下一项按会话缓存 5 秒：状态栏刷新得勤，大任务每次都读一遍 tasks.md、plan.md 太慢
   let steps = ''; let next = '';

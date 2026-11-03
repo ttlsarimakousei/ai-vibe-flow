@@ -104,6 +104,16 @@ H.section('有才出现的一行');
   H.setConfig(h, { kitLock: true });
 }
 
+H.section('流程状态读不了：照样出一行（复审 R14）');
+{
+  const p = project(['c1']);
+  const bad = path.join(h.kit, 'state', 'session', 's-bad');
+  require('fs').mkdirSync(bad, { recursive: true });
+  require('fs').writeFileSync(path.join(bad, 'flow.json'), '{坏了');
+  const ls = run({}, p.proj, 's-bad');
+  H.ok('有第一行', /上下文/.test(ls[0]), ls);
+}
+
 H.section('缓存：5 秒内不读文件');
 {
   const list = Array.from({ length: 200 }, (_, i) => '- [ ] 1.' + (i + 1) + ' 改 f' + i).join('\n') + '\n';

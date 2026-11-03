@@ -17,7 +17,7 @@ const path = require('path');
 const SRC = __dirname;
 const FROM_PACKAGE = fs.existsSync(path.join(SRC, 'claude')) && fs.existsSync(path.join(SRC, 'kit'));
 // 从安装包运行：装进 CLAUDE_CONFIG_DIR 或 ~/.claude。装进去的那份（~/.claude/vibe-kit/install.js）：用户目录就是它上一层，
-// 不看环境变量——配置页保存时由路由调它，路由可能是登录时拉起来的，那时的环境变量和用户开 Claude Code 的终端不一样
+// 不看环境变量——配置页保存时调它，配置页的环境变量和用户开 Claude Code 的终端可能不一样
 const CLAUDE = FROM_PACKAGE ? (process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')) : path.dirname(SRC);
 const KIT = path.join(CLAUDE, 'vibe-kit');
 // 新版删掉了的套件文件（相对 vibe-kit 目录）：装新版时把旧版留下的删掉。2026-10-28：IDEA 起服务、合并推送整条去掉；2026-11-03：路由、IDEA MCP
@@ -208,7 +208,7 @@ const FIRST_INSTALL = !fs.existsSync(MANIFEST);
 /**
  * installed.json：allow / ask / env 是自己加进 settings.json、现在还在的（卸载时只收回这些）；
  * known 是装过的各个版本带过的全部条目，不管当时是自己加的还是你本来就有。升级时 known 里有、settings.json 里没有的，是你删掉或挪走的，不再补；
- * router 是这次装没装路由（卸载时只有装了才去停）。老版本写的没有 known 和 router
+ * router 恒为假（路由 2026-11-03 删了）：装回旧版时旧的安装器读它，不把路由装回来。老版本写的没有 known 和 router
  */
 function readManifest() {
   let m = {};
@@ -515,7 +515,7 @@ function mergeSettings(s, remove, hooksOnly) {
 }
 
 // ---------- 全局约定：基础约定 + 启用的规范，写进 CLAUDE.md 的标记块 ----------
-/** 本机环境（local.json，在路由配置页里填，或者手改）→ 全局约定里的一节。每台机器不一样，所以不放进任何仓库 */
+/** 本机环境（local.json，在配置页里填，或者手改）→ 全局约定里的一节。每台机器不一样，所以不放进任何仓库 */
 function localSection() {
   let l;
   try { let t = fs.readFileSync(path.join(KIT, 'local.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); l = JSON.parse(t); } catch (e) { return ''; }
@@ -805,7 +805,7 @@ if (mode === 'uninstall') {
     // update：自动更新从仓库拉下来的暂存处和日志
     for (const n of ['page', 'openspec', 'hooks', 'tools', 'lib', 'ui', 'router', 'state', 'pristine', 'results', 'update', '.ignore', 'statusline.js', 'CLAUDE.md', 'installed.json', 'settings.fragment.json', 'VERSION', 'install.js', 'deps.json', 'hook-rules.md']) removeDir(path.join(KIT, n));
     console.log('  [OK] 已卸载：约定块、钩子、状态栏、技能，以及安装时加的权限和环境变量都收回了。');
-    console.log('  留着没删的：你自己的约定和规范（user/，还有 rules/ 里你自己加的）、本机环境（local.json）、开关（config.json）、数据库驱动（drivers、drivers.json）、路由的数据（router-data，里面有配好的模型和 key）、问题反馈（feedback）、跨项目的经验记录（lessons）、GitLab 的仓库地址和令牌（gitlab.json、secrets.json）、以前单独装的技能（retired）和备份，都在 ' + KIT);
+    console.log('  留着没删的：你自己的约定和规范（user/，还有 rules/ 里你自己加的）、本机环境（local.json）、开关（config.json）、数据库驱动（drivers、drivers.json）、问题反馈（feedback）、跨项目的经验记录（lessons）、GitLab 的仓库地址和令牌（gitlab.json、secrets.json）、以前单独装的技能（retired）和备份，都在 ' + KIT);
     if (['secrets.json', 'router-data'].some((n) => fs.existsSync(path.join(KIT, n)))) {
       console.log('  [!] 令牌（secrets.json）和模型的 key（router-data）还在，套件卸了之后它们不再受保护：挡命令读取的钩子已经没了。'
         + (mergeSettings.keptDeny && mergeSettings.keptDeny.length ? 'settings.json 里那两条"不许读"的规则留着（挡 Read、Grep 工具）。' : '')
@@ -930,7 +930,7 @@ if (mode === 'install') {
   {
     const files = {};
     const add = (rel) => { try { files[rel] = require('crypto').createHash('sha1').update(fs.readFileSync(path.join(KIT, rel))).digest('hex'); } catch (e) { /* 读不了 */ } };
-    for (const d of ['hooks', 'lib', 'tools', 'page']) { let es = []; try { es = fs.readdirSync(path.join(KIT, d), { withFileTypes: true }); } catch (e) { continue; } for (const e of es) if (e.isFile() && /\.js$/i.test(e.name)) add(d + '/' + e.name); }
+    for (const d of ['hooks', 'lib', 'tools', 'page', 'ui']) { let es = []; try { es = fs.readdirSync(path.join(KIT, d), { withFileTypes: true }); } catch (e) { continue; } for (const e of es) if (e.isFile() && /\.js$/i.test(e.name)) add(d + '/' + e.name); }
     if (fs.existsSync(path.join(KIT, 'statusline.js'))) add('statusline.js');
     fs.mkdirSync(path.join(KIT, 'state'), { recursive: true });
     fs.writeFileSync(path.join(KIT, 'state', 'kit-hash.json'), JSON.stringify({ files, at: Date.now() }));
