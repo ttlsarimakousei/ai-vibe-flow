@@ -27,6 +27,17 @@ H.ok('.claude.json', blocked(call({ path: path.join(h.home, '.claude.json') })))
 H.ok('目录级 grep：不带文件名，也拦', blocked(call({ command: 'grep -r token "' + h.kit.replace(/\\/g, '/') + '"' })), call({ command: 'grep -r token "' + h.kit.replace(/\\/g, '/') + '"' }));
 H.ok('用户目录整个搜：范围里有令牌，拦', blocked(call({ path: h.cfg })));
 
+H.section('字段名不在名单里也查（复审 20261104 R3）');
+H.ok('directoryToSearch 指到套件目录', blocked(call({ directoryToSearch: h.kit })));
+H.ok('directoryPath 指到 ~/.claude', blocked(call({ directoryPath: h.cfg })));
+H.ok('folder 指到套件目录', blocked(call({ folder: h.kit })));
+H.ok('带 glob 的目录搜索', blocked(call({ globPattern: '**/secrets*', directoryToSearch: h.kit })));
+H.ok('directoryToSearch 指到用户目录', blocked(call({ directoryToSearch: h.home })));
+H.ok('相对路径按同一次调用的 projectPath 算', blocked(call({ projectPath: proj, subDirectoryRelativePath: path.relative(proj, h.kit) })), path.relative(proj, h.kit));
+H.ok('相对路径按 projectPath 算，别的目录放行', call({ projectPath: proj, subDirectoryRelativePath: 'src/main' }) === null);
+H.ok('字段里只是一段话，没路径：放行', call({ query: 'find all orders' }) === null);
+H.ok('字段里是网址：放行', call({ link: 'http://example.com/a/b' }) === null);
+
 H.section('写套件目录也拦');
 H.ok('改套件的钩子', blocked(call({ file_path: path.join(h.kit, 'hooks', 'verify-gate.js'), new_string: 'x' }, 'mcp__ide__edit')));
 
