@@ -104,3 +104,5 @@ node dev/stamp-and-pack.js
 2. 把导出文件交给改套件的人（或 AI）。先分三类：真毛病、规矩和全自动模式打架、不是问题。议题后面附的钩子流水账要看，信息往往比议题本身多。
 3. 能复现的先在旧版上复现（拿 `dev/baseline/` 里的上一版跑同样的输入），再改，再加测试。
 4. 修了的在《更新说明.md》里写"修了 #编号"。
+
+升级自带的 OpenSpec 时，核对 `kit/openspec/.../workflows/explore.js` 里"决定留在对话里、写文件前确认"那两句还在：`lib/openspec.js` 的 `KIT_EXPLORE_RULE` 是冲着它们写的。

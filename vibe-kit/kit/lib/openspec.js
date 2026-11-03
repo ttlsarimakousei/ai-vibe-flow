@@ -171,10 +171,14 @@ function ensureRoot(cwd) {
 const PROPOSE_FILE = /(?:^|\/)(?:openspec-propose\/SKILL\.md|opsx\/propose\.md)$/i;
 const KIT_PROPOSE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：需求文档一份一份写。这个命令只建变更、写 proposal.md，写完停下给用户看；'
   + '用户说了再用 /opsx:continue 写下一份（specs、design、tasks），每份写完都停。下面原文里"一步生成全部"的部分不照做（用户 2026-10-17 定的"一份一份来"）。\n\n';
+const EXPLORE_FILE = /(?:^|\/)(?:openspec-explore\/SKILL\.md|opsx\/explore\.md)$/i;
+// 自带模板要求决定留在对话里、写文件前单独确认，死机探索结果就没了（用户 2026-11-03 定的：探索结果要全记）
+const KIT_EXPLORE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：探索结果边谈边写进文件，不留在对话里，死机了也能接回。第一次有结论时跑 `node "$HOME/.claude/vibe-kit/tools/plan.js" new --task <大任务名> --changes <变更名，逗号分隔>`，建 `openspec/plan.md` 的一节和 `openspec/explore/<大任务名>.md`，之后定一件写一件。'
+  + '写这两个文件不用单独问用户，不算下面原文说的"写文件要确认"；别的照原文：不写代码、不建变更。颗粒度：换一个新会话，只读公共几节和这个 change 那一节，不用再问用户就能写 proposal；具体改哪些文件、任务清单不写，开始这个 change 时才写。\n\n';
 /** 在命令、技能文件的 frontmatter 后面插套件的规矩；没有 frontmatter 的放最前面 */
-function withKitRule(t) {
+function withKitRule(t, rule) {
   const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n/.exec(t);
-  return m ? t.slice(0, m[0].length) + '\n' + KIT_PROPOSE_RULE + t.slice(m[0].length).replace(/^\r?\n/, '') : KIT_PROPOSE_RULE + t;
+  return m ? t.slice(0, m[0].length) + '\n' + rule + t.slice(m[0].length).replace(/^\r?\n/, '') : rule + t;
 }
 function installClaudeFiles(claudeDir, beforeOverwrite) {
   if (!usable()) return { ok: false, why: 'Node ' + process.versions.node + ' 低于 OpenSpec ' + ((info() || {}).version || '') + ' 要求的 ' + ((info() || {}).node || '') + '，用你自己装的 OpenSpec', files: [] };
@@ -195,7 +199,8 @@ function installClaudeFiles(claudeDir, beforeOverwrite) {
         const to = path.join(claudeDir, r2); fs.mkdirSync(path.dirname(to), { recursive: true });
         const name = r2.split(path.sep).join('/');
         // /opsx:propose 原文是"一步生成全部文档"，和套件的"一份一份写"冲突，模型照着写会被拦（审核 R3）：插一段套件的规矩
-        const text = PROPOSE_FILE.test(name) ? withKitRule(fs.readFileSync(p, 'utf8')) : null;
+        const rule = PROPOSE_FILE.test(name) ? KIT_PROPOSE_RULE : EXPLORE_FILE.test(name) ? KIT_EXPLORE_RULE : '';
+        const text = rule ? withKitRule(fs.readFileSync(p, 'utf8'), rule) : null;
         const same = () => (text != null ? fs.readFileSync(to, 'utf8') === text : fs.readFileSync(to).equals(fs.readFileSync(p)));
         // 已经有同名文件、内容又不一样：先让调用方处理（安装器拿它备份你自己的同名命令）
         if (beforeOverwrite && fs.existsSync(to) && !same()) beforeOverwrite(name, to);
