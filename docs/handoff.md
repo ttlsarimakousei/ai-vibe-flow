@@ -29,7 +29,7 @@
 - 几个会话同时跑测试会撞固定端口，报端口被占的先单独重跑。回归跑着时别改被测文件。
 - 补丁脚本里带反斜杠的不要用 heredoc 写（`\n` 会变成真换行），用 Write 写成文件再跑。
 - 已合并、可以清掉的 worktree：`.claude/worktrees/agent-a7c23950c55ccf840`、`agent-a95aa8abeac21f606`。
-- `hooks/` 下的文件不能删；`lib/idea-mcp.js` 的 `due()`、`sync()` 要留着。这台电脑没装 vibe-kit。
+- `hooks/` 下的文件不能删。`lib/idea-mcp.js` 下一批删（第 48 条，旧版调用核对过）。这台电脑没装 vibe-kit。
 
 ## 环境
 

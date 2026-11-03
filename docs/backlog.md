@@ -12,6 +12,7 @@
 | 问题表第 45 条 | 取消每个审查点 10 轮就停、不收敛就停、文件上限，审查全部用子代理 | 待修 | [owner-issues.md](owner-issues.md) 第 45 条 | 下一批做，见 [decisions.md](decisions.md) 2026-11-03 |
 | 问题表第 46 条 | 状态栏没开始任何工作也显示一个 change | 待修 | [owner-issues.md](owner-issues.md) 第 46 条 | 下一批做 |
 | 问题表第 47 条 | 用量那一行改成步骤条，每个点中间显示审查状态 | 待修 | [owner-issues.md](owner-issues.md) 第 47 条 | 下一批做 |
+| 问题表第 48 条 | idea-mcp 相关的彻底删除 | 待修 | [owner-issues.md](owner-issues.md) 第 48 条 | 下一批做 |
 | 复审 20261102 K-R8 | 跑 commit.js 的票只绑会话和仓库，"询问"模式用户拒绝后票还在，guard 认不出的写法能凭旧票提交，不再过提交方式这道检查 | 后做 | [reviews/claude/20261102-K批-复审.md](../reviews/claude/20261102-K批-复审.md) | 要特意构造，只影响提交方式 |
 | 复审 20261031 D-R6 | 壳子里 `mvn -f 子项目` 记的证据按子仓库记，review-runner 登记"修了"时按壳子查，对不上 | 后做 | [reviews/claude/20261031-C至J批-复审.md](../reviews/claude/20261031-C至J批-复审.md) | `evidence.commands` 认壳子下各子仓库的证据 |
 | 复审 20261031 D-R9 | `.vibe/db-crud.ini` 读改写没锁（换驱动记 driver_jar 和后台探索同时写） | 后做 | 同上 | 照 drivers.js 用 state-store 的锁 |
