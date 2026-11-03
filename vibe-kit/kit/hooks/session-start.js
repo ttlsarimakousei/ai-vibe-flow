@@ -8,9 +8,8 @@
  * 输出用 hookSpecificOutput.additionalContext。任何异常都静默退出。
  *
  * 默认自动压缩优先，不生成自动续接消息；历史记录不恢复动作许可。
- * 顺带两件事：当前目录和各个子项目里已经有 .vibe/ 的，确保它在 .gitignore 里；给模型路由兜底：
- *   Claude Code 指着本机的路由、路由却没在跑（登录后自动启动被公司策略拦了、进程被杀了），
- * 就悄悄在后台把它拉起来，没有窗口。不等它起好——它不到一秒就能起来，而你打完第一句话要好几秒。
+ * 顺带两件事：当前目录和各个子项目里已经有 .vibe/ 的，确保它在 .gitignore 里；自动更新上来的机器，在这里收回模型路由（lib/router-retire.js）：
+ *   到这一步说明新代码跑得起来。更新器还拿着锁（可能还在自检，不过要装回旧版）时不收，下次再说。
  */
 const fs = require('fs');
 const path = require('path');
@@ -34,26 +33,14 @@ function portOpen(port) {
   });
 }
 
-/** 设置里有没有登记走路由的 HTTP 钩子（那时路由必须活着，检查才生效） */
-function httpHooksRegistered() {
-  try { return require('../lib/hook-health.js').httpRegistered(); } catch (e) { return false; }
-}
-async function ensureRouter() {
+/** 收回路由：返回给用户看的话。收不了不影响会话，下次再试 */
+async function retireRouter() {
   try {
-    const svcFile = path.join(KIT, 'router', 'service.js');
-    if (!fs.existsSync(svcFile)) return;
-    const svc = require(svcFile);
-    // Claude Code 指着这个路由、或者钩子走的是这个路由，才管
-    let base = process.env.ANTHROPIC_BASE_URL || '';
-    if (!base) { try { base = String((JSON.parse(read(path.join(path.dirname(KIT), 'settings.json'))).env || {}).ANTHROPIC_BASE_URL || ''); } catch (e) { /* 没有 */ } }
-    let pointed = false;
-    try { const u = new URL(base); pointed = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname) && String(u.port || 80) === String(svc.portOf()); } catch (e) { /* 没指 */ }
-    if (!pointed && !httpHooksRegistered()) return;
-    // 端口上是另一个安装的路由（E1）：这个会话的请求、HTTP 钩子会走到别人的路由上，说一句
-    const how = await svc.ensureRunning();
-    if (how === 'foreign') return '[vibe-kit] 模型路由的端口 ' + svc.portOf() + ' 被这台电脑上另一个安装的路由占着（远程桌面多人共用时会碰上），这个会话的请求会走到它那里。打开 ' + svc.CONFIG + '，把 listen.port 换一个没人用的，再在配置页"断开""接上"一次。';
-  } catch (e) { /* 兜底失败不能影响会话启动 */ }
-  return '';
+    const Rt = require('../lib/router-retire.js');
+    if (!Rt.pending() || require('../lib/updater.js').lockHeld()) return '';
+    const r = await Rt.run();
+    return r.notes.join('；');
+  } catch (e) { return ''; }
 }
 
 async function handle(j) {
@@ -73,15 +60,13 @@ async function handle(j) {
     try {
       if (source !== 'compact' && readState('welcome').pending) {
         writeState('welcome', { pending: false, at: Date.now() });
-        let page = '';
-        try { page = '配置页 http://127.0.0.1:' + require(path.join(KIT, 'router', 'service.js')).portOf() + '/ui 管模型、开关、更新；'; } catch (e) { /* 没装路由 */ }
-        welcome = '这台电脑第一次用 vibe-kit。先用三四句话告诉用户，再做用户要的事：' + page + '新需求走 /opsx:propose，小改动用 /vk-fix，提交用 /vk-commit；被拦下了提示里写着怎么改，觉得拦错了可以让 Claude 记一条问题反馈；不确定装得对不对，跑 node "' + path.join(KIT, 'tools', 'doctor.js') + '" 体检。';
+        welcome = '这台电脑第一次用 vibe-kit。先用三四句话告诉用户，再做用户要的事：开关、更新在配置页改，敲 /vk-config 打开；新需求走 /opsx:explore，小改动用 /vk-fix，提交用 /vk-commit；被拦下了提示里写着怎么改，觉得拦错了可以让 Claude 记一条问题反馈；不确定装得对不对，跑 node "' + path.join(KIT, 'tools', 'doctor.js') + '" 体检。';
       }
     } catch (e) { welcome = ''; }
     j = atHome(j);
     const cwd = path.resolve(j.cwd || process.cwd());
-    // 压缩之后：之前"选了再做一会儿"、全自动"这一段已经提醒过写交接记录"、"快到网关上限说过了"的记录作废，重新到线再说
-    if (source === 'compact' && j.session_id) { const k = j.session_id + '-handover'; const h = readState(k); if (h.askedAtPct != null || h.autoAtPct != null || h.gwAsked || h.gwNoted || h.gwStop) writeState(k, Object.assign({}, h, { askedAtPct: null, autoAtPct: null, gwAsked: false, gwNoted: false, gwStop: false, at: Date.now() })); }
+    // 压缩之后：之前"选了再做一会儿"、全自动"这一段已经提醒过写交接记录"的记录作废，重新到线再说
+    if (source === 'compact' && j.session_id) { const k = j.session_id + '-handover'; const h = readState(k); if (h.askedAtPct != null || h.autoAtPct != null) writeState(k, Object.assign({}, h, { askedAtPct: null, autoAtPct: null, at: Date.now() })); }
     const out = [];
     if (welcome) out.push(welcome);
 
@@ -262,8 +247,8 @@ async function handle(j) {
       result = { hookSpecificOutput: o };
     }
   } catch (e) { /* 注入失败不能影响会话启动 */ }
-  const routerNote = await ensureRouter();
-  if (routerNote) { try { if (result && result.hookSpecificOutput) result.hookSpecificOutput.additionalContext = String(result.hookSpecificOutput.additionalContext || '') + '\n' + routerNote; else result = { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: routerNote } }; } catch (e) { /* 说不了就算了 */ } }
+  const retired = await retireRouter();
+  if (retired) result = Object.assign(result || {}, { systemMessage: '[vibe-kit] ' + retired });
   return result;
 }
 
