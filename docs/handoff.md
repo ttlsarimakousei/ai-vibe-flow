@@ -4,29 +4,34 @@
 
 ## 在做的
 
-下个版本（新流程、删路由、审查子代理、状态栏）。计划和定下的 7 条在 [feedback-20261103.md](feedback-20261103.md)，由 Opus 5.5 Max 规划，批 0～7 共 8 批。
+下个版本（新流程、删路由、审查子代理、状态栏）。计划和定下的 7 条在 [feedback-20261103.md](feedback-20261103.md)，**仓库主人 2026-11-04 说这一版做完直接打包发版**，不用再问。
 
-- 批 0～4 提交、推送了：大任务、三种进流程的门、/vk-resume、多 change 串行、全面自测和核验放最后、归档前预演、审查全用子代理（SubagentStop 入账，新钩子 review-stop.js）、取消次数和文件上限。
-- 批 5 在做：删路由和 idea-mcp、配置页用时才起。已写未接上（未提交）：`kit/lib/router-retire.js`、`kit/lib/config-page.js`、`kit/lib/guard-mcp.js`，测试 `dev/test-router-retire.js`、`test-config-page.js`、`test-guard-mcp.js`。
-- 批 6 状态栏步骤条、批 7 清残留、首页放图、文档、自审、复审没开始。
-- **仓库主人 2026-11-04 说：这一版做完直接打包发版**（docs/release.md：全量回归、打包、验收升级、release 提交和标签）。`publish.js` 发内网 GitLab 仍由仓库主人做。
+- 批 0～7 提交、推送了。修复结果和自审见 feedback-20261103.md。
+- 现在：全量回归（三个 Claude Code 版本）+ 别的模型复审（报告放 `reviews/claude/20261104-下个版本-复审.md`），之后打包、从 1436、2248 验收升级、`release` 提交和标签（docs/release.md）。
 
-## 待修的
+## 待仓库主人做的
 
-- `dev/e2e-auto-0929.js`、`dev/e2e-lessons.js` 要改提示（话里不再按句子进流程，要敲 `/opsx:apply`、`/vk-resume`）。e2e-subagent 三个版本都过。
+- 这一版打完包，内网 GitLab 发布（`publish.js`，只能仓库主人做）。发之前先用 cch 切走：升级时路由、`router-data/` 里的 key 一起删。
 
 ## 要注意的
 
-- 审查：`review.js prepare` 备材料、输出 agents；子代理交的结论由 review-stop.js 入账；交齐才算；连续 3 次没交不再催不算过（`flow-policy.halted`）。假结论的测试用 `H.fakeReview`，只要结果文件的用 `H.reviewedTurn`。
-- 收回路由的时机：手动安装装完当场；自动更新（env `VIBE_KIT_AUTO_UPDATE`）等新代码第一次跑 session-start，更新器的锁还在时不收，自检不过装回旧版路由还在。
-- `dev/lib/harness.js` 的 makeHome 默认 `reviewLenses: 1`、autoHandover 开，和产品默认不一样。测试里同一个点第二次审文件没变不开子代理，要整份再审加 `full: true`。
-- session.js、guard-commit.js、router.js 现在只是出口和调度，改逻辑去 lib/session-*.js、lib/guard-*.js。
-- 开关只在 `kit/lib/config-fields.js` 定义。手册的开关表 `node dev/config-doc.js --write` 生成。
-- 测试里拿旧版比：`dev/baseline/20261102.2248/vibe-kit`。几个会话同时跑测试会撞固定端口。回归跑着时别改被测文件。
-- 补丁脚本里带反斜杠的不要用 heredoc 写，用 Write 写成文件再跑。Bash 里不要 `cd`。
-- `hooks/` 下的文件不能删。这台电脑没装 vibe-kit。
+- 模型路由删了：`vibe-kit/router/` 没了，配置页在 `kit/ui/`，`kit/lib/config-page.js` 起（优先 15731 端口，敲 `/vk-config`）。测试里起配置页用 `H.configPage(h, 端口)`。
+- 收回旧东西只放在 `kit/lib/router-retire.js`。令牌保护里的 `router-data` 字样不删（硬规矩 6）。
+- 删了的名字由 `dev/test-no-leftovers.js` 扫（`dev/pack.js` 打包前也跑）：留着的进它的白名单，写理由和能删的条件。
+- 钩子出错放行会藏住"名字没定义"：这一版真 CLI 实测抓到 `task-anchor` 的 `blockOut` 没引入（`dev/probes/cc-vk-config.js`），老测试没覆盖。改了钩子入口要跑真 CLI。
+- winpty 在 Git Bash 下会把 `/vk-config` 改写成路径，探针里写 `//vk-config`。
+- 审查：脚本只备材料（`review.js prepare`），子代理审，`hooks/review-stop.js` 入账。没有上限，连续 3 次没交结论才断路。
+- 测试里同一个点第二次 `R.run` 文件没变不发请求，要整份再审加 `full: true`；`H.fakeReview`、`H.reviewedTurn` 代替真子代理。
+- session.js、guard-commit.js 只是出口和调度，改逻辑去 lib/session-*.js、lib/guard-*.js。
+- 开关只在 `kit/lib/config-fields.js` 定义（硬规矩 10）。手册的开关表 `node dev/config-doc.js --write` 生成。
+- 按会话的状态在 state/session/<会话号>/，全局的照旧在 state/。
+- 测试里拿旧版比：`dev/baseline/20261102.2248/vibe-kit`；基线删了的用 `H.baselineDir(版本)` 从 git 标签取。
+- 几个会话同时跑测试会撞固定端口，报端口被占的先单独重跑。回归跑着时别改被测文件。
+- 补丁脚本里带反斜杠的不要用 heredoc 或 `node -e`（`\n` 会变成真换行），用 Write 写成文件再跑。
+- `hooks/` 下的文件不能删（`guard-push.js`、`source-hint.js` 是空壳）。这台电脑没装 vibe-kit。
+- 系统临时目录里有测试崩了留下的 `vkt-*` 目录（通配删除被权限拦了），要清的话仓库主人自己删。
 
 ## 环境
 
-- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI。
+- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289（exe 在 `node_modules/@anthropic-ai/claude-code-win32-x64/claude.exe`）。2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI。
 - Python 3.12、JDK 17（%LOCALAPPDATA%\Programs\…）、H2 在 ~/.m2。8 GB 内存，端到端用 `--e2e-lanes 2`。
