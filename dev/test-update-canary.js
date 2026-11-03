@@ -1,12 +1,9 @@
 'use strict';
 /*
- * 发版保护（K2，仓库主人 2026-11-01 定的"尝鲜组 + 观察期"，docs/feedback-20261101.md 的 K2）：在假 GitLab 上走一遍。
+ * 发版保护（K2，仓库主人 2026-11-01 定的"尝鲜组"，docs/feedback-20261101.md 的 K2；观察期 2026-11-03 随路由取消）：在假 GitLab 上走一遍。
  *   尝鲜组   勾了"先装新版"的电脑一发现新版就装；没勾的等这一版发布满 24 小时（按仓库里那个提交的时间）、尝鲜组没报问题才装；
  *            报了的不装，维护的人关掉那条以后照常装；查不到（接口不通）按没问题；仓库退回旧版不等；配置页点"立即更新"不等
- *   观察期   装完新版，路由记的每天用量（router-data/usage-daily.json，测试里直接写）里失败明显变多：钩子甩的后台进程装回上一版、
- *            记反馈；尝鲜组的电脑在仓库里报"[有问题的版本]"（只有版本号和次数），别的电脑查到了不装，又一台报的补在同一条下面，
- *            导出后"关掉这一批"不关它；没勾的电脑装回不报；失败没变多、一直没怎么用的观察期照常过；不到 8 次、装之前就常失败的不判
- *   固定     点了"固定在这一版"什么都不自动装（新版、退回的旧版、观察期装回、装坏后再试），"立即更新"也不装，没装好的不能固定，取消以后照常
+ *   固定     点了"固定在这一版"什么都不自动装（新版、退回的旧版、装坏后再试），"立即更新"也不装，没装好的不能固定，取消以后照常
  *   跳过     点了"跳过这一版"仓库里是这一版时不自动装；取消跳过、"立即更新"照样能装；出了别的版本照常
  *   配置页   开关两份默认值一样、乱填的不收；页面上有这一项，顶部说清楚现在是什么状态
  * 发布用真的 publish.js（维护的人走令牌），"发布满 24 小时"用 GIT_COMMITTER_DATE 把发布的提交拨到 25 小时前。
@@ -23,7 +20,7 @@ const args = process.argv.slice(2);
 const FROM = args.find((a) => !/^\d+$/.test(a) && fs.existsSync(path.join(a, 'kit'))) ? path.resolve(args.find((a) => !/^\d+$/.test(a) && fs.existsSync(path.join(a, 'kit')))) : null;
 const SRCV = FROM || H.SRC;
 const PORT = Number(args.find((a) => /^\d+$/.test(a))) || 18755;
-const V = { A: '20261101.0900', B: '20261102.0900', C: '20261103.0900', D: '20261104.0900', E: '20261105.0900', F: '20261106.0900', R: '20261104.1200', G: '20261107.0900', H: '20261108.0900', I: '20261109.0900' };
+const V = { A: '20261101.0900', B: '20261102.0900', C: '20261103.0900', D: '20261104.0900', E: '20261105.0900', F: '20261106.0900', R: '20261104.1200', H: '20261108.0900', I: '20261109.0900' };
 
 const json = (t) => { try { return JSON.parse(String(t).trim().split(/\r?\n/).filter(Boolean).pop()); } catch (e) { return null; } };
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } };
@@ -34,10 +31,7 @@ const setState = (h, patch) => { const f = path.join(h.kit, 'state', 'update.jso
 const setCfg = (h, patch) => { const f = path.join(h.kit, 'config.json'); fs.writeFileSync(f, JSON.stringify(Object.assign(readJson(f), patch), null, 2)); };
 /** 发布时间拨到 hours 小时前（git 认 "<秒> +0000" 这种写法） */
 const publishedAgo = (hours) => { const t = Math.floor((Date.now() - hours * 3600000) / 1000) + ' +0000'; return { GIT_COMMITTER_DATE: t, GIT_AUTHOR_DATE: t }; };
-/** n 天前的本地日期，和路由记每天用量的写法一样 */
-const dayKey = (n) => { const d = new Date(Date.now() - (n || 0) * 86400000); const p = (x) => String(x).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
-/** 装成路由记的每天用量（router-data/usage-daily.json）：昨天 200 次失败 3 次，今天按给的数（一个模型） */
-const usage = (h, t) => H.write(path.join(h.kit, 'router-data', 'usage-daily.json'), JSON.stringify({ [dayKey(1)]: { requests: 200, byProvider: { gw: { requests: 200, fail: 3, input: 10, output: 1 } } }, [dayKey(0)]: { requests: t.requests, byProvider: { gw: Object.assign({ input: 10, output: 1 }, t) } } }));
+const UI_DIR = fs.existsSync(path.join(SRCV, 'kit', 'ui')) ? path.join(SRCV, 'kit', 'ui') : path.join(SRCV, 'router');
 
 /** 一份安装包：从 SRCV（这一版的源码，或者给的旧版目录）拷，版本号改成 version */
 function makePkg(name, version) {
@@ -193,116 +187,25 @@ function makePkg(name, version) {
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('观察期：尝鲜组的电脑装完新版，路由的请求失败率明显变高 → 钩子甩后台进程装回上一版、记反馈、在仓库里报这一版有问题');
-  const c1 = machine('ucn-c1', { updateEarly: true });
-  const ucn = (h) => JSON.stringify(path.join(h.kit, 'lib', 'issues.js'));
+  H.section('手工报的"[有问题的版本]"：维护的人导出后"关掉这一批"不关，关了别的电脑就会去装');
   {
-    // 装之前：昨天 200 次失败 3 次；今天 120 次（4 次按 Esc 取消）失败 2 次
-    usage(c1, { requests: 120, fail: 2, cancelled: 4 });
-    const p = publish(pkg.G);
-    H.ok('（发布了 G，刚刚）', p.code === 0, p.out + p.err);
-    const r = c1.run(['run', '--print']);
-    H.ok('尝鲜组马上装上了 G', r.json && r.json.apply && r.json.apply.ok && version(c1) === V.G, r.out + r.err);
-    const ob = state(c1).observe;
-    H.ok('装完开始观察：记下装的时候今天的数（不算取消的）、装之前几天的数', !!ob && ob.version === V.G && ob.from === V.A && ob.day === dayKey(0) && ob.snap && ob.snap.req === 116 && ob.snap.fail === 2 && ob.base && ob.base.req === 316 && ob.base.fail === 5, ob);
-    const s = c1.status();
-    H.ok('配置页的接口：观察到什么时候（装完 2 小时、最晚 24 小时）', s.observe && s.observe.version === V.G && Math.abs(s.observe.until - (ob.at + 2 * 3600000)) < 1000 && Math.abs(s.observe.last - (ob.at + 24 * 3600000)) < 1000, s.observe);
-    H.ok('状态栏：已更新到 G，观察中', /已更新到 20261107\.0900，观察中/.test(c1.line()), c1.line());
-    H.ok('刚装完：钩子还不甩后台进程去看', c1.js('console.log(require(' + c1.up() + ').kick("测试"))') === 'false');
-    // 装之后：14 次请求（1 次取消）、失败 11 次
-    usage(c1, { requests: 134, fail: 13, cancelled: 5 });
-    setState(c1, { observe: Object.assign({}, state(c1).observe, { lastAt: Date.now() - 11 * 60000 }), lastKickAt: 0 });
-    // 装回的 A 没带依赖清单：新版留下的那份要删掉（复审发现，不然体检拿新清单对旧包）
-    H.write(path.join(c1.kit, 'deps.json'), JSON.stringify({ format: 1, components: [] }));
-    const k = c1.js('console.log(require(' + c1.up() + ').kick("测试"))');
-    H.ok('过了 10 分钟：钩子甩后台进程去看', k === 'true', k);
-    let done = false;
-    for (let i = 0; i < 360 && k === 'true' && !done; i++) { await H.sleep(500); done = !!(state(c1).failed && state(c1).failed.version === V.G) && !fs.existsSync(path.join(c1.kit, 'update', 'lock.json')); }
-    const st = state(c1);
-    H.ok('后台装回了 A', done && version(c1) === V.A, [version(c1), st, H.read(path.join(c1.kit, 'update', 'update.log'))]);
-    H.ok('记下 G 是装回的：不再自动装，带着装之后的数', st.failed && st.failed.version === V.G && st.failed.from === V.A && st.failed.times >= 2 && st.failed.rolledBack === true && st.failed.observed && st.failed.observed.req === 13 && st.failed.observed.fail === 11 && /失败/.test(st.failed.why || '') && !st.observe, st.failed);
-    H.ok('更新记录里有这一笔', (st.history || []).some((x) => x.to === V.G && x.ok === false && x.observed && x.rolledBack), st.history);
-    H.ok('装回的那一版没带依赖清单：新版留下的删掉了', !fs.existsSync(path.join(c1.kit, 'deps.json')));
-    H.ok('从本机留的上一版装回（不用连仓库）', /已从本地恢复上一版/.test(H.read(path.join(c1.kit, 'update', 'update.log')) || ''));
-    const fbDir = path.join(c1.kit, 'feedback');
-    const recs = fs.existsSync(fbDir) ? fs.readdirSync(fbDir).filter((f) => /\.md$/.test(f)).map((f) => H.read(path.join(fbDir, f))) : [];
-    H.ok('记了一条问题反馈', recs.some((t) => /20261107\.0900/.test(t) && /观察期/.test(t)), recs.map((t) => t.slice(0, 200)));
-    const bad = gl.issues().filter((i) => i.title === '[有问题的版本] ' + V.G);
-    const desc = bad.length ? bad[0].description : '';
-    H.ok('在仓库里报了"[有问题的版本] G"，带标签', bad.length === 1 && bad[0].state === 'opened' && desc.includes('vibe-kit-bad-version:' + V.G) && (bad[0].labels || []).includes('vibe-kit有问题的版本'), gl.issues().map((i) => i.title));
-    H.ok('报的只有版本号和次数：装之前、装之后各几次', /装之前/.test(desc) && /请求 316 次，失败 5 次/.test(desc) && /请求 13 次，失败 11 次/.test(desc) && desc.includes(V.A), desc);
-    H.ok('不带电脑名、路径、模型名', !desc.includes(require('os').hostname()) && !desc.includes(c1.root) && !/vkt-|\\Users\\|gw/.test(desc), desc);
-    H.ok('记下报过了（哪一条）', st.flagSent && st.flagSent.version === V.G && st.flagSent.ok === true && st.flagSent.iid === (bad[0] && bad[0].iid), st.flagSent);
-    H.ok('状态栏：G 装完出错变多，已装回 A', /新版 20261107\.0900 装完出错变多，已装回 20261101\.0900，看配置页/.test(c1.line()), c1.line());
-    setState(c1, { lastCheckAt: 0 });
-    const again = c1.run(['run', '--print']);
-    H.ok('再检查：G 不再自动装', again.json && again.json.check && again.json.check.remote === V.G && !again.json.apply && version(c1) === V.A, again.out + again.err);
-  }
-
-  H.section('别的电脑：尝鲜组报了 G 有问题，过了 24 小时也不装；又一台尝鲜组装回时在同一条下面补一句');
-  {
-    setState(u, { lastCheckAt: 0 });
-    const r0 = u.run(['run', '--print']);
-    H.ok('（u 查到了 G，在等）', r0.json && r0.json.check && r0.json.check.remote === V.G && !r0.json.apply && version(u) === V.F, r0.out + r0.err);
-    setState(u, { remoteAt: Date.now() - 25 * 3600000 });
-    const r = u.run(['run', '--print']);
-    H.ok('过了 24 小时：查到尝鲜组报了 G 有问题，不装', r.json && !r.json.apply && version(u) === V.F && state(u).flag && state(u).flag.version === V.G && state(u).flag.bad === true, [r.out, state(u).flag]);
-    const more = c1.js('require(' + ucn(c1) + ').flagVersion(' + JSON.stringify(V.G) + ', { from: ' + JSON.stringify(V.A) + ', base: { req: 50, fail: 1 }, after: { req: 9, fail: 9 }, minutes: 25 }).then((x) => console.log(JSON.stringify(x)))');
-    const bad = gl.issues().filter((i) => i.title === '[有问题的版本] ' + V.G);
-    H.ok('又一台报的：没另建，在那一条下面补了一句', bad.length === 1 && bad[0].notes.filter((n) => !n.system).length === 1 && /又一台尝鲜组的电脑/.test(bad[0].notes[0].body) && /请求 9 次，失败 9 次/.test(bad[0].notes[0].body), [more, bad.map((i) => i.notes)]);
-    setState(u, { flag: Object.assign({}, state(u).flag, { at: Date.now() - 3 * 3600000 }) });
-    u.run(['run', '--print']);
-    H.ok('别的电脑再查：看得到报了两台', state(u).flag && state(u).flag.bad === true && state(u).flag.count === 2, state(u).flag);
-    const closed = c1.js('require(' + ucn(c1) + ').closeExported([' + (bad[0] ? bad[0].iid : 0) + '], "").then((x) => console.log(JSON.stringify(x)))');
-    H.ok('维护的人导出后"关掉这一批"：这一条不关（关了别的电脑就会去装）', bad[0] && gl.issues().find((i) => i.iid === bad[0].iid).state === 'opened', closed);
-  }
-
-  H.section('没勾"先装新版"的电脑观察期里装回：记反馈，不在仓库里报');
-  {
-    // u 装着 F（从 R 点"立即更新"装上的，本机留着 R）：装成正在观察 F，装之后 12 次失败 10 次
-    usage(u, { requests: 12, fail: 10 });
-    setState(u, { observe: { version: V.F, from: V.R, at: Date.now() - 30 * 60000, lastAt: 0, day: dayKey(0), snap: { req: 0, fail: 0 }, base: { req: 200, fail: 3 } } });
-    const r = u.run(['run', '--print']);
-    H.ok('装回了 R', version(u) === V.R && r.json && r.json.observe && r.json.observe.rolledBack === true, r.out + r.err);
-    H.ok('这一次别的事都不做了（进程里还是新版的代码）', r.json && !r.json.check && !r.json.apply && r.json.issues === undefined, r.json);
-    H.ok('没在仓库里报', !gl.issues().some((i) => i.title === '[有问题的版本] ' + V.F) && !state(u).flagSent, gl.issues().map((i) => i.title));
-    H.ok('记下 F 是装回的', state(u).failed && state(u).failed.version === V.F && state(u).failed.observed, state(u).failed);
-  }
-
-  H.section('观察期过了：失败没变多（过了 2 小时、看够 20 次）、一直没怎么用（24 小时）；不到 8 次不判；装之前就常失败的不算变高');
-  {
+    const made = await glApi('POST', '/issues', { title: '[有问题的版本] ' + V.E, description: 'vibe-kit-bad-version:' + V.E + '\n' });
+    const iss = JSON.stringify(path.join(u.kit, 'lib', 'issues.js'));
+    const closed = u.js('require(' + iss + ').closeExported([' + (made.json ? made.json.iid : 0) + '], "").then((x) => console.log(JSON.stringify(x)))');
+    H.ok('这一条不关', made.json && gl.issues().find((i) => i.iid === made.json.iid).state === 'opened', closed);
+    const up = u.js('console.log(typeof require(' + iss + ').flagVersion)');
+    H.ok('不再有自动报的入口（观察期取消）', up === 'undefined', up);
     const p = publish(pkg.H);
     H.ok('（发布了 H，刚刚）', p.code === 0, p.out + p.err);
-    setState(c1, { lastCheckAt: 0 });
-    const r = c1.run(['run', '--print']);
-    H.ok('（尝鲜组装上了 H，开始观察）', r.json && r.json.apply && r.json.apply.ok && version(c1) === V.H && state(c1).observe && state(c1).observe.version === V.H, r.out + r.err);
-    // 装的时候今天是 134 次（5 次取消）失败 13 次；之后 25 次请求失败 1 次
-    usage(c1, { requests: 159, fail: 14, cancelled: 5 });
-    setState(c1, { observe: Object.assign({}, state(c1).observe, { at: Date.now() - 3 * 3600000, lastAt: 0 }) });
-    const r2 = c1.run(['run', '--print']);
-    const st = state(c1);
-    H.ok('过了 2 小时、看了 25 次、失败 1 次：观察期过了，不装回', version(c1) === V.H && !st.observe && st.observed && st.observed.version === V.H && st.observed.req === 25 && st.observed.fail === 1 && r2.json && r2.json.observe && r2.json.observe.passed, [r2.out, st.observed]);
-    H.ok('日志里说了', /观察期过了/.test(H.read(path.join(c1.kit, 'update', 'update.log')) || ''));
-    const fake = (at, snap, base) => setState(c1, { observe: { version: V.H, from: V.A, at: Date.now() - at, lastAt: 0, day: dayKey(0), snap, base } });
-    fake(25 * 3600000, { req: 151, fail: 14 }, { req: 300, fail: 5 });
-    c1.run(['run', '--print']);
-    H.ok('装完 25 小时只有 3 次请求：不再看了，算过了', version(c1) === V.H && !state(c1).observe && state(c1).observed && state(c1).observed.req === 3, state(c1));
-    fake(3600000, { req: 149, fail: 9 }, { req: 300, fail: 5 });
-    c1.run(['run', '--print']);
-    H.ok('装完 1 小时 5 次全失败：不到 8 次不判，接着看', version(c1) === V.H && state(c1).observe && state(c1).observe.seen && state(c1).observe.seen.req === 5 && state(c1).observe.seen.fail === 5, state(c1).observe);
-    fake(3600000, { req: 144, fail: 7 }, { req: 100, fail: 50 });
-    c1.run(['run', '--print']);
-    H.ok('装之前就一半失败（网关本来就不稳）、装之后 10 次失败 7 次：不算变高，接着看', version(c1) === V.H && state(c1).observe && state(c1).observe.seen && state(c1).observe.seen.req === 10, state(c1).observe);
-    setState(c1, { observe: null });
   }
 
   let api0 = null; let ses = null;
-  try { api0 = require(path.join(SRCV, 'router', 'kit-api.js')); } catch (e) { api0 = null; }
+  try { api0 = require(path.join(UI_DIR, 'kit-api.js')); } catch (e) { api0 = null; }
   try { ses = require(path.join(SRCV, 'kit', 'lib', 'session.js')); } catch (e) { ses = null; }
   /** 配置页的接口：出错返回 { error } */
   const post = (h, url, body) => (api0 ? api0.handle('POST', '/api/kit/remote' + url, body, h.kit).catch((e) => ({ error: e.message })) : Promise.resolve({ error: '没有 kit-api' }));
 
-  H.section('固定在这一版：什么版本都不自动装（新版、退回的旧版、观察期装回、装坏后再试），"立即更新"也不装；取消以后照常');
+  H.section('固定在这一版：什么版本都不自动装（新版、退回的旧版、装坏后再试），"立即更新"也不装；取消以后照常');
   {
     // 勾了"先装新版"：不固定的话一发现就装，看得最清楚
     const p = machine('ucn-p', { updateEarly: true });
@@ -322,12 +225,6 @@ function makePkg(name, version) {
     const ap = await post(p, '/apply', {});
     H.ok('配置页的"立即更新"接口：不开始，说要先取消固定', ap.started === false && /取消固定/.test(ap.why || ''), ap.error || ap.why);
     H.ok('仓库退回旧版也不跟', p.js('console.log(require(' + p.up() + ').gate({ updatePin: ' + JSON.stringify(V.A) + ' }, { remoteVersion: "20261001.0900" }, ' + JSON.stringify(V.A) + ', Date.now()).hold)') === 'pin');
-    // 观察期：装之后 12 次失败 10 次，本来该装回
-    usage(p, { requests: 12, fail: 10 });
-    setState(p, { observe: { version: V.A, from: '20261001.0900', at: Date.now() - 30 * 60000, lastAt: 0, day: dayKey(0), snap: { req: 0, fail: 0 }, base: { req: 200, fail: 3 } } });
-    const ob = p.run(['run', '--print']);
-    H.ok('观察期不看了，失败变多也不装回', version(p) === V.A && !state(p).observe && ob.json && ob.json.observe && /固定/.test(ob.json.observe.dropped || ''), [ob.out, state(p).observe]);
-    H.ok('接口不说在观察', !p.status().observe);
     // 装坏了也没装回去的状态：不固定的话过 6 小时再试着装回
     // at 要比安装器记的 install-done 晚（不然算"之后装好过"）；retriedAt 是上次试的时间
     setState(p, { failed: { version: V.A, from: '20261001.0900', times: 1, at: Date.now(), retriedAt: Date.now() - 7 * 3600000, rolledBack: false, why: '测试' } });
@@ -389,12 +286,12 @@ function makePkg(name, version) {
     const c6 = api0 ? api0.cleanConfig({ autoUpdate: 'notify' }, { updatePin: V.A, updateSkip: V.B }) : {};
     H.ok('固定、跳过：收版本号和空串，乱填的保持原值，别的开关保存时不冲掉', c3.updatePin === V.A && c3.updateSkip === V.B && c4.updatePin === V.A && c4.updateSkip === V.B && c5.updatePin === '' && c6.updatePin === V.A && c6.updateSkip === V.B, [c3, c4, c5, c6].map((c) => [c.updatePin, c.updateSkip]));
     const view = api0 ? await api0.handle('GET', '/api/kit/remote/status', null, u.kit).catch((e) => ({ error: e.message })) : {};
-    H.ok('"更新和上报"的接口：带着开关和发版保护的状态', view && view.config && view.config.updateEarly === false && view.update && typeof view.update.hold === 'string' && 'waitUntil' in view.update && 'flag' in view.update && 'observe' in view.update, view && [view.config, view.update && view.update.hold]);
-    const page = H.read(path.join(SRCV, 'router', 'ui.html')) || '';
+    H.ok('"更新和上报"的接口：带着开关和发版保护的状态', view && view.config && view.config.updateEarly === false && view.update && typeof view.update.hold === 'string' && 'waitUntil' in view.update && 'flag' in view.update, view && [view.config, view.update && view.update.hold]);
+    const page = H.read(path.join(UI_DIR, 'ui.html')) || '';
     const remoteTab = page.slice(page.indexOf('id="tab-remote"'));
     H.ok('"更新和上报"那一页有"先装新版（尝鲜）"，说了 24 小时、尝鲜组、查不到按没问题', /id="k_updateEarly"/.test(remoteTab) && /先装新版（尝鲜）/.test(remoteTab) && /发布满 24 小时/.test(remoteTab) && /查不到有没有人报.*按没问题算/.test(remoteTab) && /fBool\('updateEarly'/.test(page));
-    H.ok('页面顶部有单独说更新状态的一块（不被路由的提示冲掉）', /<div id="updBanner"><\/div>/.test(page) && /function renderUpdBanner/.test(page) && /等尝鲜组先试/.test(page));
-    H.ok('观察期：卡片上说了装完观察、细节里写了门槛；状态表、顶部说观察中、装回了', /装完再观察至少 2 小时/.test(remoteTab) && /至少 8 次请求、一半以上失败、比装之前高 30 个百分点/.test(remoteTab) && /装回的那一版/.test(page) && /套件刚更新到 ' \+ esc\(u\.observe\.version\) \+ '，在观察/.test(page) && /装完以后出错明显变多，已经自动装回/.test(page));
+    H.ok('页面顶部有单独说更新状态的一块', /<div id="updBanner"><\/div>/.test(page) && /function renderUpdBanner/.test(page) && /等尝鲜组先试/.test(page));
+    H.ok('观察期没了：页面、接口都不说', !/观察/.test(page), (page.match(/.{20}观察.{20}/) || [''])[0]);
     H.ok('固定、跳过：卡片上有两个按钮和说明；状态表、顶部说清楚；固定着"立即更新"是灰的', /id="ruPin"/.test(remoteTab) && /id="ruSkip"/.test(remoteTab) && /什么版本都不自动装/.test(remoteTab) && /api\('POST', '\/api\/kit\/remote\/pin'/.test(page) && /api\('POST', '\/api\/kit\/remote\/skip'/.test(page) && /套件固定在 /.test(page) && /跳过了套件的新版 /.test(page) && /\$\('ruApply'\)\.disabled = [^;]*u\.pin/.test(page));
     // 页面的脚本没有语法错
     const scripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((x) => x[1]);
@@ -407,5 +304,5 @@ function makePkg(name, version) {
   await H.sleep(300);
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
-  H.done('发版保护（尝鲜组、观察期、固定和跳过）' + (FROM ? '，拿 ' + FROM + ' 跑' : ''));
+  H.done('发版保护（尝鲜组、固定和跳过）' + (FROM ? '，拿 ' + FROM + ' 跑' : ''));
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

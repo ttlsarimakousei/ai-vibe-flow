@@ -178,7 +178,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     H.ok('建了这台电脑的"[使用情况]"议题，传了过完的两天，今天的不传', r.code === 0 && r.json && r.json.sent === 2 && r.json.left === 0 && ui().length === 1 && ui()[0].notes.length === 2 && ui()[0].state === 'opened', r.out + r.err);
     const body = ui()[0].notes.map((n) => n.body).join('\n');
     H.ok('补充里是一张表和给导出用的数', new RegExp('### ' + D2 + ' 的使用情况').test(body) && new RegExp('### ' + D1 + ' 的使用情况').test(body) && /\| 开口 \| 9 次/.test(body) && /<!-- vibe-kit-usage \{/.test(body) && /\| 拦下 \| 共 3 次：guard-commit 2，guard-spec 1 \|/.test(body), body.slice(0, 1500));
-    H.ok('模型的名字里的内网地址遮掉了；不带路径、项目名', !/10\.1\.2\.3/.test(body) && /qwen3-内网IP/.test(body) && !body.includes(z.root) && !/vkt-iss/.test(body), body.slice(0, 1500));
+    H.ok('不带模型名、路径、项目名', !/10\.1\.2\.3/.test(body) && !/qwen3/.test(body) && !body.includes(z.root) && !/vkt-iss/.test(body), body.slice(0, 1500));
     H.ok('议题的正文说清楚是什么、怎么关', /不是问题/.test(ui()[0].description) && /使用情况上报/.test(ui()[0].description) && /vibe-kit-usage-host:/.test(ui()[0].description), ui()[0].description);
     const r2 = up(z, ['usage-sync']);
     H.ok('再传一次：没有新的', r2.json && r2.json.sent === 0 && ui()[0].notes.length === 2, r2.out);

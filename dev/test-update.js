@@ -282,35 +282,13 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     H.ok('仓库里出了修好的 Y：装上了', p2.code === 0 && r4.json && r4.json.apply && r4.json.apply.ok && version(u) === Y && !state(u).failed, p2.out + r4.out + r4.err);
   }
 
-  H.section('路由在忙就等');
+  H.section('不再等路由空闲（路由 2026-11-03 删了）');
   {
-    const busyFile = path.join(H.tempDir('upd-busy'), 'busy.json');
-    fs.writeFileSync(busyFile, JSON.stringify({ inflight: 1, idleMs: 0, upMs: 100000 }));
-    const bp = PORT + 1;
-    const busy = spawn(process.execPath, [path.join(__dirname, 'lib', 'fake-busy.js'), String(bp), busyFile], { windowsHide: true, stdio: 'ignore' });
-    let up = false;
-    for (let i = 0; i < 40 && !up; i++) { await H.sleep(150); up = (await H.httpGet('http://127.0.0.1:' + bp + '/__ping')).status === 200; }
-    H.ok('（装成路由的进程起来了）', up);
-    H.write(path.join(u.kit, 'router', 'service.js'), "'use strict';\nmodule.exports = { portOf: () => " + bp + " };\n");
     const p = publish(H.makePackage('pkg-z', Z), ['--no-router', '--no-open']);
     setState(u, { lastCheckAt: 0 });
-    const t0 = Date.now();
-    const r = run(['run', '--print', '--wait-ms', '4000', '--quiet-ms', '1000']);
-    H.ok('路由有请求在跑：等着，等不到就先不装', p.code === 0 && r.json && r.json.apply && !r.json.apply.ok && /忙/.test(r.json.apply.why) && version(u) === Y && Date.now() - t0 >= 3500, r.out + r.err);
-    H.ok('等不到不算装坏', !state(u).failed);
-    // 没装成（只是没等到空闲）：问题、使用情况照常上报。以前这种时候一并跳过，全自动挂着跑、请求不断的那段时间一直传不上去
-    H.ok('没等到空闲：这一次照常上报，不跳过', r.json && r.json.issues !== undefined && r.json.usage !== undefined, r.out);
-    const k = H.node(u, '-e', ['const up = require(' + JSON.stringify(updater) + '); console.log(up.needInstall())'], { env: Object.assign({}, live) });
-    H.ok('下载好了、还没装上的，下次接着装', k.out.trim() === 'true', k.out + k.err);
-    fs.writeFileSync(busyFile, JSON.stringify({ inflight: 0, idleMs: 60000, upMs: 100000 }));
-    const r2 = run(['run', '--print', '--wait-ms', '4000', '--quiet-ms', '1000']);
-    H.ok('路由闲下来了：装上 Z', r2.json && r2.json.apply && r2.json.apply.ok && version(u) === Z, r2.out + r2.err);
-    H.ok('真装了新版的那一次：上报留给下一次（这个进程里还是旧代码）', r2.json && r2.json.issues === undefined && r2.json.usage === undefined, r2.out);
-    try { busy.kill(); } catch (e) { /* 已经退了 */ }
-    // 装成路由的那个文件删掉，安装清单里"装了路由"也改回去：不然下一次自动更新会把真的路由装上、启动起来
-    fs.rmSync(path.join(u.kit, 'router'), { recursive: true, force: true });
-    const mf = path.join(u.kit, 'installed.json');
-    fs.writeFileSync(mf, JSON.stringify(Object.assign(readJson(mf), { router: false }), null, 2));
+    const r = run(['run', '--print']);
+    H.ok('查到新版直接装上 Z', p.code === 0 && r.json && r.json.apply && r.json.apply.ok && version(u) === Z, r.out + r.err);
+    H.ok('真装了新版的那一次：上报留给下一次（这个进程里还是旧代码）', r.json && r.json.issues === undefined && r.json.usage === undefined, r.out);
   }
 
   H.section('同时只跑一个；钩子甩后台进程');
@@ -333,7 +311,7 @@ const bareGit = (gl, args) => H.git(gl.bare, args);
     H.ok('后台进程自己查到 W、装上了（上一个进程留下的死锁不碍事）', done && state(u).lastApplied && state(u).lastApplied.to === W, [version(u), state(u), H.read(path.join(u.kit, 'update', 'update.log'))]);
     const k = H.node(u, '-e', ['console.log(require(' + JSON.stringify(updater) + ').kick("测试"))'], { env: Object.assign({}, live) });
     H.ok('刚查过：钩子不再甩', k.out.trim() === 'false', k.out + k.err);
-    H.ok('没装过路由的电脑，自动更新不会给它装上路由', !fs.existsSync(path.join(u.kit, 'router')) && readJson(path.join(u.kit, 'installed.json')).router === false, readJson(path.join(u.kit, 'installed.json')));
+    H.ok('自动更新不会装上路由', !fs.existsSync(path.join(u.kit, 'router')) && !fs.existsSync(path.join(u.kit, 'router-data')), fs.readdirSync(u.kit));
   }
 
   H.section('用户目录带中文和空格');

@@ -7,11 +7,11 @@
  *     1. 问仓库现在是哪个提交（git ls-remote，零点几秒）；和上次一样就不用拉
  *     2. 不一样：拉到暂存处 ~/.claude/vibe-kit/update/repo（只要最新的那一个提交，之后每次只下载变了的文件）
  *     3. 暂存处的版本和装着的不一样（"跟着仓库走"：仓库退回了旧版，这里也跟着退），而且开关是"自动装"：
- *        等路由空闲（没有正在转发的请求）→ 跑暂存处里的 install.js（和手动双击安装完全一样）→ 自检
+ *        跑暂存处里的 install.js（和手动双击安装完全一样）→ 自检
  *        自检不过：从仓库拉上一版的标签装回去，这个坏版本记下来不再装，等仓库里出了新的再说
  *     4. 顺带把还没上报的问题反馈建成议题（lib/issues.js）
  *
- * 发版保护（K2，仓库主人 2026-11-01 定的"尝鲜组 + 观察期"；以前一发新版所有电脑两小时内全装上，出了问题全员中招）：
+ * 发版保护（K2，仓库主人 2026-11-01 定的"尝鲜组"；以前一发新版所有电脑两小时内全装上，出了问题全员中招）：
  *   尝鲜组   配置页勾了"先装新版"（updateEarly）的电脑：一发现新版就装，和以前一样
  *   别的电脑 等这一版发布满 24 小时（按仓库里那个提交的时间；比现在晚一小时以上、读不出来的，按这台电脑第一次看到它的时间），
  *            而且尝鲜组没在仓库里报"这一版有问题"（开着的"[有问题的版本] <版本>"议题，lib/issues.js），才自动装。
@@ -19,16 +19,8 @@
  *            查不到有没有人报（没有令牌、接口不通）按"没问题"：24 小时已经给了尝鲜组和维护的人一天；很多电脑没有建 issue 的令牌，
  *            按"等等再装"它们就永远装不上。查过的结果记两小时，过了再查（维护的人关掉误报的那条，别的电脑最晚两小时后知道）。
  *            勾了"先装新版"的电脑不查，一发现就装：尝鲜组本来就是来试的，多一台装上、装回也是给维护的人的证据
- *   观察期   每台电脑装完比装着的新的版本（自动装的、点"立即更新"装的都算），至少观察 2 小时、看够 20 次请求，最长 24 小时（一直没怎么用就算过了）。
- *            看的是路由记的每天的次数（router-data/usage-daily.json，不算按 Esc 取消的，只取次数）：装之后至少 8 次请求、一半以上失败、
- *            比装之前（最近 7 个用过的日子）的失败率高 30 个百分点以上，就等路由空闲装回上一版（和装坏了一样走 rollback）、记一条问题反馈，
- *            这一版不再自动装（times 记成 2：装回去的旧版本也认这个，不会再装回来）；勾了"先装新版"的电脑还在仓库里报"这一版有问题"
- *            （只有版本号和次数）。没勾的装回时不报：等它们装上，尝鲜组已经试了一天，它们自己装回就够了，报的人多了误报也多。
- *            时长、门槛写成常量（OBSERVE）不做开关：没人知道该怎么调；按请求数判比只按时间可靠（装完两小时没人用，看了等于没看）。
- *            路由换模型时每次失败都记一次，但同一个模型失败后要冷却一阵（一般 5 分钟）不再试，所以单个模型出故障时失败率涨不到一半；
- *            整个网关断了会误判成新版的问题，误判的代价是装回上一版（照常能用）、报一条维护的人能关掉的 issue
  *   固定     配置页"固定在这一版"（config.json 的 updatePin，存的是固定时装着的版本）：不再自动装任何版本——新版、仓库退回的旧版、
- *            观察期里的装回、装坏后的修复都不做，直到点"取消固定"；"立即更新"也要先取消。照常检查，配置页上看得到仓库里有什么
+ *            装坏后的修复都不做，直到点"取消固定"；"立即更新"也要先取消。照常检查，配置页上看得到仓库里有什么
  *   跳过     配置页"跳过这一版"（updateSkip，存的是跳过的版本）：仓库里是这一版时不自动装，出了别的版本照常（不用再去取消）
  *
  * 连仓库走哪条路（手填的令牌、SSH 密钥、这台电脑上 git 登录的身份）由 lib/gitlab.js 挨个试，这里不管。
@@ -38,16 +30,14 @@
  * 更新源在 lib/gitlab.js（配置页里填，默认是团队的那个仓库）。
  *
  * 为什么放在 lib/ 里：模型只能跑 page/ 和 tools/ 里的脚本（guard-commit），这里的它跑不了——更新等于执行仓库里的代码，不能让模型来触发。
- * 状态在 state/update.json（全局，不按时间清；发版保护用的几项：remoteAt、remoteSeenAt 这一版什么时候发布的、flag 查到的"这一版有没有问题"、
- * observe 正在观察的、observed 上一次观察过了的、flagSent 上一次在仓库里报"这一版有问题"），
+ * 状态在 state/update.json（全局，不按时间清；发版保护用的几项：remoteAt、remoteSeenAt 这一版什么时候发布的、flag 查到的"这一版有没有问题"），
  * 日志在 update/update.log，安装器的输出在 update/last-install.log。
  *
  * 配置页的几个按钮（测试连接、立即检查、立即更新、申请令牌、导出议题）也是起一个进程跑这个文件：连 GitLab 可能要等十几秒，
- * 不能在路由的进程里等。这些命令往标准输出写一行 JSON，令牌从不写出来。
+ * 不能在配置页的进程里等。这些命令往标准输出写一行 JSON，令牌从不写出来。
  */
 const fs = require('fs');
 const path = require('path');
-const http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const { KIT, CFG_DIR, readConfig, readState, updateState } = require('./session');
 const gl = require('./gitlab');
@@ -63,9 +53,6 @@ const LOCK_MS = 40 * 60000;
 // 发版保护（见文件开头）：没勾"先装新版"的等多久；查过的"这一版有没有问题"记多久
 const CANARY_WAIT_MS = 24 * 3600000;
 const FLAG_TTL_MS = 2 * 3600000;
-// 观察期：至少 2 小时、看够 20 次请求才算过，最长 24 小时；判"失败率明显变高"要装之后至少 8 次请求、一半以上失败、比装之前高 30 个百分点；
-// 装之前看最近 7 个用过的日子；后台每 10 分钟看一次
-const OBSERVE = { minMs: 2 * 3600000, maxMs: 24 * 3600000, passReq: 20, failReq: 8, rate: 0.5, jump: 0.3, baseDays: 7, everyMs: 10 * 60000 };
 
 const modeOf = (cfg) => { const m = (cfg || readConfig()).autoUpdate; return ['auto', 'notify', 'off'].includes(m) ? m : 'auto'; };
 /** 配置里存的版本号（固定、跳过）：不像版本号的当没有 */
@@ -86,7 +73,6 @@ function whenText(t) {
 const hoursOf = (cfg) => { const n = Number((cfg || readConfig()).updateCheckHours); return n >= 1 && n <= 24 ? n : 2; };
 const readText = (f) => { try { return fs.readFileSync(f, 'utf8').replace(/^﻿/, '').trim(); } catch (e) { return ''; } };
 const installedVersion = () => readText(path.join(KIT, 'VERSION'));
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const stamp = () => new Date().toLocaleString('zh-CN', { hour12: false });
 
 function log(line) {
@@ -113,7 +99,7 @@ function lock() {
 function unlock() { if (updateLock) updateLock.release(); updateLock = null; }
 /** 锁还是自己的吗 */
 function ownLock() { try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && l.pid === process.pid && !!updateLock && l.token === updateLock.token; } catch (e) { return false; } }
-/** 核对锁还是自己的，顺带续租：拿锁时间拨到现在（一分钟最多一次）。等路由空闲、拉取、安装加起来可能超过租期，不续租会被别的进程当失效抢走（复审 U-R4） */
+/** 核对锁还是自己的，顺带续租：拿锁时间拨到现在（一分钟最多一次）。拉取、安装加起来可能超过租期，不续租会被别的进程当失效抢走（复审 U-R4） */
 function touchLock() {
   try {
     const l = JSON.parse(fs.readFileSync(LOCK, 'utf8'));
@@ -220,28 +206,6 @@ function check() {
 }
 
 // ---------- 空闲 ----------
-function routerPort() { try { const svc = path.join(KIT, 'router', 'service.js'); if (!fs.existsSync(svc)) return 0; return Number(require(svc).portOf()) || 0; } catch (e) { return 0; } }
-function getJson(url, timeout) {
-  return new Promise((resolve) => {
-    const r = http.get(url, { timeout: timeout || 3000 }, (res) => { let t = ''; res.on('data', (c) => { t += c; }); res.on('end', () => { let j = null; try { j = JSON.parse(t); } catch (e) { /* 不是 JSON */ } resolve({ status: res.statusCode, json: j }); }); });
-    r.on('timeout', () => r.destroy());
-    r.on('error', () => resolve({ status: 0, json: null }));
-  });
-}
-/** 路由现在闲不闲：没有正在转发的请求，而且最近 quiet 毫秒里没来过请求。路由没在跑、或者是不认得这个问法的老路由，都算闲 */
-async function idle(quiet) {
-  const port = routerPort();
-  if (!port) return true;
-  const r = await getJson('http://127.0.0.1:' + port + '/busy');
-  if (r.status !== 200 || !r.json) return true;
-  return !(Number(r.json.inflight) > 0) && Number(r.json.idleMs) >= (quiet === undefined ? 20000 : quiet);
-}
-async function waitIdle(maxMs, quiet) {
-  const end = Date.now() + (maxMs || 30 * 60000);
-  while (Date.now() < end) { touchLock(); if (await idle(quiet)) return true; await sleep(5000); }
-  return false;
-}
-
 // ---------- 安装、自检、装回上一版 ----------
 /**
  * 要装的比装着的旧（维护者把所有人退回旧版、或者装回上一版）：旧版的安装器只认它那时的技能名字，
@@ -295,10 +259,8 @@ function runInstaller(dir) {
 }
 function runInstallerOnly(dir) {
   touchLock();
-  let man = {};
-  try { man = JSON.parse(fs.readFileSync(path.join(KIT, 'installed.json'), 'utf8')) || {}; } catch (e) { man = {}; }
-  const hasRouter = man.router === true || (man.router === undefined && fs.existsSync(path.join(KIT, 'router', 'service.js')));
-  const args = [path.join(dir, 'install.js'), '--no-open'].concat(hasRouter ? [] : ['--no-router']);
+  // --no-router：只有装回旧版时旧的 install.js 才认，别让它把路由装回来；新版不认这个参数
+  const args = [path.join(dir, 'install.js'), '--no-open', '--no-router'];
   const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: CFG_DIR, VIBE_KIT_AUTO_UPDATE: '1' });
   const r = spawnSync(process.execPath, args, { cwd: dir, env, encoding: 'utf8', windowsHide: true, timeout: 10 * 60000, maxBuffer: 16 * 1024 * 1024 });
   touchLock();
@@ -322,14 +284,6 @@ function selfCheck() {
   if (a.status !== 0 || !/ok/.test(String(a.stdout))) return { ok: false, why: (String(a.stdout || '') + String(a.stderr || '')).trim().split(/\r?\n/).slice(0, 3).join('；') || '自检进程没跑完' };
   const b = spawnSync(process.execPath, [path.join(KIT, 'statusline.js')], { input: '{}', encoding: 'utf8', windowsHide: true, timeout: 30000 });
   if (b.status !== 0 || !String(b.stdout || '').trim()) return { ok: false, why: '状态栏跑不出来：' + String(b.stderr || '').trim().split(/\r?\n/)[0] };
-  // 路由冒烟（20261030 起）：另起一份新装的路由接假网关，真发一次请求和一次 HTTP 钩子。以前路由坏了照样判装好（审核 P02、Codex C07）。
-  // 装回的老版本没有 router-smoke.js 就不做；没装路由的它自己跳过
-  const smoke = path.join(KIT, 'lib', 'router-smoke.js');
-  if (fs.existsSync(smoke)) {
-    const c = spawnSync(process.execPath, [smoke], { encoding: 'utf8', windowsHide: true, timeout: 90000 });
-    const last = String(c.stdout || '').trim().split(/\r?\n/).pop() || '';
-    if (c.status !== 0 || last !== 'ok') return { ok: false, why: '路由冒烟没过：' + (last.replace(/^冒烟没过：/, '') || String(c.stderr || '').trim().split(/\r?\n/)[0] || '没跑完') };
-  }
   return { ok: true };
 }
 /** 装回的那一版没带依赖清单（K1-6 之前的版本）：把新版留下的清单删掉，不然体检拿新版的清单对旧版的包，报依赖不对 */
@@ -412,98 +366,6 @@ async function refreshFlag(cfg, evenWaiting) {
   } catch (e) { log('查"这一版有没有问题"时出错：' + ((e && e.message) || e)); return null; }
 }
 
-// ---------- 观察期：装完新版之后看路由的请求失败率 ----------
-/**
- * 路由记的每天的次数（router-data/usage-daily.json，路由每 20 秒写一次、停之前也写）：{ 'YYYY-MM-DD': { req, fail } }。
- * req 不算按 Esc 取消的。只把各个模型的次数加起来，不留模型名，不碰 router-data/config.json（模型的 key 在那里）。没装路由、没有这个文件返回 null
- */
-function routerCounts() {
-  let daily = null;
-  try { let t = fs.readFileSync(path.join(KIT, 'router-data', 'usage-daily.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); daily = JSON.parse(t); } catch (e) { return null; }
-  if (!daily || typeof daily !== 'object' || Array.isArray(daily)) return null;
-  const out = {};
-  for (const d of Object.keys(daily)) {
-    const v = daily[d];
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !v || typeof v !== 'object') continue;
-    let req = 0; let fail = 0;
-    for (const p of Object.values(v.byProvider || {})) { if (!p || typeof p !== 'object') continue; req += Math.max(0, (Number(p.requests) || 0) - (Number(p.cancelled) || 0)); fail += Number(p.fail) || 0; }
-    out[d] = { req, fail };
-  }
-  return out;
-}
-/** 装之前记一笔：今天到装的时候的次数（之后的减掉它就是装之后的）、最近 7 个用过的日子的次数（装之前的失败率）。没有路由的用量返回 null，不观察 */
-function observeSnapshot() {
-  const days = routerCounts();
-  if (!days) return null;
-  const day = dayKey();
-  const keys = Object.keys(days).filter((k) => k <= day).sort().slice(-OBSERVE.baseDays);
-  const base = keys.reduce((a, k) => ({ req: a.req + days[k].req, fail: a.fail + days[k].fail }), { req: 0, fail: 0 });
-  return { day, snap: days[day] || { req: 0, fail: 0 }, base };
-}
-/** 观察到现在怎么样：{ req, fail（装之后的）, rate, baseRate, bad（明显变高）, pass（观察期过了） }。用量文件被清过（数比装的时候还小）的从 0 算 */
-function observeVerdict(ob, days, now) {
-  let req = 0; let fail = 0;
-  for (const k of Object.keys(days || {})) if (k >= ob.day) { req += days[k].req; fail += days[k].fail; }
-  const snap = ob.snap || {};
-  req = Math.max(0, req - (Number(snap.req) || 0));
-  fail = Math.min(req, Math.max(0, fail - (Number(snap.fail) || 0)));
-  const b = ob.base || {};
-  const baseRate = Number(b.req) >= 10 ? (Number(b.fail) || 0) / Number(b.req) : 0;
-  const rate = req ? fail / req : 0;
-  const out = { req, fail, rate, baseRate };
-  if (req >= OBSERVE.failReq && rate >= OBSERVE.rate && rate - baseRate >= OBSERVE.jump) out.bad = true;
-  else { const age = now - (Number(ob.at) || 0); if ((age >= OBSERVE.minMs && req >= OBSERVE.passReq) || age >= OBSERVE.maxMs) out.pass = true; }
-  return out;
-}
-/**
- * 后台进程（run）每次先看一眼观察期：装着的已经不是观察的那一版（手动装了别的），不看了；过了就记一笔；
- * 失败率明显变高：等路由空闲装回上一版（和装坏了一样走 rollback）、记问题反馈；勾了"先装新版"的电脑在仓库里报这一版有问题。
- * 返回 null（没在观察）、{ watching }、{ passed }、{ dropped }、{ bad, waiting }（路由一直在忙，十分钟后再装回）、{ rolledBack: 真假, version, from, flag }
- */
-async function observeStep(cfg, o) {
-  const st = readState('update');
-  const ob = st.observe;
-  if (!ob || !ob.version) return null;
-  const now = Date.now();
-  const cur = installedVersion();
-  if (ob.version !== cur) { setState({ observe: null }); log('装着的已经不是 ' + ob.version + '（现在是 ' + (cur || '没有版本号') + '），它的观察期不看了'); return { dropped: '装着的不是 ' + ob.version }; }
-  // 固定在这一版：你要留着它，不再看、也不会自动装回
-  if (verOf(cfg.updatePin)) { setState({ observe: null }); log('固定在这一版：' + cur + ' 的观察期不看了，不会自动装回'); return { dropped: '固定在这一版' }; }
-  const v = observeVerdict(ob, routerCounts(), now);
-  const seen = { req: v.req, fail: v.fail };
-  if (v.pass) {
-    setState({ observe: null, observed: { version: ob.version, from: ob.from || '', at: now, since: Number(ob.at) || 0, req: v.req, fail: v.fail } });
-    log('观察期过了：' + ob.version + ' 装完以后路由请求 ' + v.req + ' 次、失败 ' + v.fail + ' 次，没有明显变多');
-    return Object.assign({ passed: true }, seen);
-  }
-  if (!v.bad) { setState({ observe: Object.assign({}, ob, { lastAt: now, seen }) }); return Object.assign({ watching: true }, seen); }
-  // 失败率明显变高。先把要用的代码载进来：装回上一版以后磁盘上就是旧代码了（旧版的 issues.js 可能还没有报"这一版有问题"的函数）
-  let is = null; let fb = null;
-  try { is = require('./issues.js'); } catch (e) { is = null; }
-  try { fb = require('./feedback.js'); } catch (e) { fb = null; }
-  const pctText = (x) => Math.round(x * 100) + '%';
-  const base = ob.base || {};
-  const why = '装完以后路由的请求失败得明显比以前多：装之后 ' + v.req + ' 次请求失败 ' + v.fail + ' 次（' + pctText(v.rate) + '），' + (Number(base.req) >= 10 ? '装之前 ' + pctText(v.baseRate) : '装之前这台电脑没怎么用过路由');
-  if (!(await waitIdle(o.waitMs, o.quietMs))) { setState({ observe: Object.assign({}, ob, { lastAt: now, seen }) }); log('观察期：' + why + '。路由一直在忙，先不装回，十分钟后再看'); return Object.assign({ bad: true, waiting: true }, seen); }
-  log('观察期：' + why + '，装回 ' + ob.from);
-  const back = rollback(ob.from, gl.settings());
-  log(back.ok ? '已装回上一版 ' + ob.from : '没能装回上一版：' + back.why);
-  const at = Date.now();
-  const hist = (readState('update').history || []).slice(-9);
-  // times 记成 2：这一版不再自动装（装回去的旧版本也认这个）；没装回去的（rolledBack: false）按装坏了算，之后照装坏的修
-  setState({ observe: null, failed: { version: ob.version, from: ob.from, times: 2, why, at, rolledBack: back.ok, observed: { req: v.req, fail: v.fail, baseReq: Number(base.req) || 0, baseFail: Number(base.fail) || 0 } }, history: hist.concat({ at, from: ob.from, to: ob.version, ok: false, why, rolledBack: back.ok, observed: true }) });
-  try { if (fb) fb.record({ kind: '出错', hook: '自动更新', source: '钩子自动记录', title: '新版 ' + ob.version + ' 装完观察期里路由失败变多，' + (back.ok ? '已装回 ' + ob.from : '没能装回上一版'), what: '从 ' + ob.from + ' 更新到 ' + ob.version + ' 之后，' + why + '。' + (back.ok ? '已经自动装回 ' + ob.from + '，这一版不再自动装；出了下一版照常装。' : '没能装回上一版：' + back.why), sig: fb.sigOf(['update-observe', ob.version]) }); } catch (e) { /* 记不了不影响装回 */ }
-  const out = Object.assign({ rolledBack: back.ok, version: ob.version, from: ob.from }, seen);
-  // 尝鲜组的电脑：在仓库里报这一版有问题，别的电脑装之前会查到（只有版本号和次数；问题上报关着的不报）
-  if (cfg.updateEarly === true) {
-    let r = null;
-    try { r = is && typeof is.flagVersion === 'function' ? await is.flagVersion(ob.version, { from: ob.from, base, after: seen, minutes: Math.round((now - (Number(ob.at) || now)) / 60000), rolledBack: back.ok }) : { ok: false, why: '载不进报问题的代码' }; } catch (e) { r = { ok: false, why: String((e && e.message) || e) }; }
-    setState({ flagSent: { version: ob.version, ok: !!r.ok, iid: Number(r.iid) || 0, url: String(r.url || ''), why: String(r.why || r.skipped || '').slice(0, 300), at: Date.now() } });
-    log(r.ok ? '已在仓库里报了 ' + ob.version + ' 有问题（#' + r.iid + '），别的电脑先不装' : '没能在仓库里报 ' + ob.version + ' 有问题：' + (r.why || r.skipped || ''));
-    out.flag = r;
-  }
-  return out;
-}
 function apply() {
   const s = gl.settings();
   const from = installedVersion();
@@ -516,8 +378,6 @@ function apply() {
   log('开始安装 ' + to + '（现在是 ' + (from || '没有版本号') + '）');
   const backup = require('./local-backup').save(KIT, path.join(DIR, 'previous-package'));
   setState({ localBackup: backup.ok ? { version: backup.version, manifestHash: backup.manifestHash, at: Date.now() } : null });
-  // 观察期：装之前记下路由今天到现在的次数、最近几天的失败率（只在升级时；没装路由、没有用量文件的不观察）
-  const snap = olderThan(from, to) ? observeSnapshot() : null;
   const r = runInstaller(STAGE);
   // 安装器"什么都没动"（退出码 4：settings.json 读不懂、全局约定不是 UTF-8、Node 太老）：装回上一版也会被同样拒绝，
   // 不回退、不算装坏，记下原因，等用户把电脑上的问题改好，下次检查照样再装（审核 P43）
@@ -531,14 +391,13 @@ function apply() {
     return { ok: false, refused: true, why, version: to, from };
   }
   let why = '';
-  if (!r.ok) why = (r.status === 3 ? '路由起不来（' : '安装器没跑完（') + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
+  if (!r.ok) why = '安装器没跑完（' + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
   else if (installedVersion() !== to) why = '装完版本号不对：是 ' + installedVersion();
   else { const c = selfCheck(); if (!c.ok) why = '装完自检没过：' + c.why; }
   const hist = (readState('update').history || []).slice(-9);
   if (!why) {
-    const observe = snap ? Object.assign({ version: to, from, at: Date.now(), lastAt: Date.now() }, snap) : null;
-    setState({ lastApplied: { at: Date.now(), from, to }, failed: null, refused: null, history: hist.concat({ at: Date.now(), from, to, ok: true }), observe, observed: null });
-    log('已更新到 ' + to + (observe ? '。观察至少 2 小时：路由的请求失败率明显变高就自动装回 ' + from : ''));
+    setState({ lastApplied: { at: Date.now(), from, to }, failed: null, refused: null, history: hist.concat({ at: Date.now(), from, to, ok: true }) });
+    log('已更新到 ' + to);
     return { ok: true, version: to, from };
   }
   log('没装成：' + why);
@@ -557,18 +416,14 @@ function apply() {
 /**
  * 发版保护现在处在哪一步（状态栏、配置页顶部、status() 共用，只看配置和状态文件，不连网）：
  * { hold: '' / 'pin' / 'skip' / 'wait' / 'flag', until: 等到什么时候, flag: 尝鲜组报的那一条,
- *   pin: 固定在哪一版（没固定是空的，仓库里没有新版也给）, skip: 跳过的那一版（仓库里现在就是它才给）,
- *   observe: 装着的这一版正在观察（version、from、at、until 至少看到、last 最晚看到、seen 装之后到现在的次数）或 null（固定了不给：不会自动装回） }
+ *   pin: 固定在哪一版（没固定是空的，仓库里没有新版也给）, skip: 跳过的那一版（仓库里现在就是它才给） }
  */
 function phase(cfg, st, installed, now) {
   const s = st || {};
   const c = cfg || {};
   const g = gate(c, s, installed, now || Date.now());
   const pin = verOf(c.updatePin);
-  const ob = !pin && s.observe && s.observe.version && s.observe.version === installed ? s.observe : null;
-  const at = ob ? Number(ob.at) || 0 : 0;
-  return { hold: g.hold || '', until: g.until || 0, flag: g.hold === 'flag' ? g.flag : null, pin, skip: g.hold === 'skip' ? s.remoteVersion : '',
-    observe: ob ? { version: ob.version, from: ob.from || '', at, until: at + OBSERVE.minMs, last: at + OBSERVE.maxMs, need: OBSERVE.passReq, seen: ob.seen || null, base: ob.base || null } : null };
+  return { hold: g.hold || '', until: g.until || 0, flag: g.hold === 'flag' ? g.flag : null, pin, skip: g.hold === 'skip' ? s.remoteVersion : '' };
 }
 function status() {
   const cfg = readConfig();
@@ -591,8 +446,6 @@ function status() {
     // 固定在哪一版（空 = 没固定）；跳过的版本（配置里存的，不管仓库里现在是不是它）
     pin: ph.pin, skip: verOf(cfg.updateSkip),
     flag: st.flag && st.flag.version === remote && remote !== installed ? st.flag : null,
-    // 观察期：装着的这一版正在观察；上一次观察过了的（还是装着的这一版才给）；上一次在仓库里报"这一版有问题"
-    observe: ph.observe, observed: st.observed && st.observed.version === installed ? st.observed : null, flagSent: st.flagSent || null,
   };
 }
 
@@ -623,39 +476,29 @@ function kick(why) {
     // 使用情况：有过完了的日子还没传（今天查过、传完了就不再看；传不上去一小时后再试）
     let dueUsage = false;
     if (cfg.usageReport !== 'off') { const u = readState('usage-sync'); const U = require('./usage.js'); const today = U.dayKey(); dueUsage = u.checkedDay !== today && now >= (u.blockedUntil || 0) && now - (u.lastTryAt || 0) >= 3600000 && U.days().some((d) => d < today); }
-    // 装完新版、正在观察：每 10 分钟让后台进程看一次路由的失败率（开关是"不检查"的也看：装上的是这台电脑的更新器装的，装回也归它管）
-    const ob = st.observe;
-    const dueObserve = !!(ob && ob.version) && now - (Number(ob.lastAt) || Number(ob.at) || 0) >= OBSERVE.everyMs;
-    if (!dueUpdate && !dueApply && !dueIssues && !dueUsage && !dueObserve) return false;
+    if (!dueUpdate && !dueApply && !dueIssues && !dueUsage) return false;
     if (now - (st.lastKickAt || 0) < 60000 || lockHeld()) return false;
     setState({ lastKickAt: now, lastKickWhy: String(why || '') });
     return spawnBackground(['run']);
   } catch (e) { return false; }
 }
 
-/** 后台进程干的事：检查 → （自动装的）等空闲、安装 → 上报问题、使用情况 */
+/** 后台进程干的事：检查 → （自动装的）安装 → 上报问题、使用情况 */
 async function run(opt) {
   const o = opt || {};
   if (!lock()) return { skipped: '已经有一个在跑了' };
   const out = {};
   try {
     const cfg = readConfig();
-    // 观察期（装完新版之后）：失败率明显变高就装回上一版。装回了的话，这个进程里还是新版的代码、磁盘上是旧版：
-    // 检查、安装、上报都留给下一次（旧版的代码来做）。点"立即更新"的不看（马上要装别的了）
-    if (!o.force) {
-      const ob = await observeStep(cfg, o);
-      if (ob) out.observe = ob;
-      if (ob && ob.rolledBack !== undefined) return out;
-    }
     const st = readState('update');
-    // 这一次真的跑过安装器没有（等路由空闲没等到的不算）
+    // 这一次真的跑过安装器没有
     let installed = false;
     // 上次装坏了、也没能装回上一版（审核 P04）：版本号已经是坏的那一版，以前之后就当"已是最新"不再管。这次再试着装回上一版
-    // 只在自动更新模式下、离上次试过 6 小时以上、路由空闲时试（复审 U-R2：以前每次检查都重装、重启路由，不等空闲，只提醒的模式也装）
+    // 只在自动更新模式下、离上次试过 6 小时以上才试（复审 U-R2：以前每次检查都重装，只提醒的模式也装）
     // 固定在这一版的不试（固定 = 什么都不自动装）
     const pin = verOf(cfg.updatePin);
     const bad = brokenOf(st);
-    if (bad && bad.from && !pin && modeOf(cfg) === 'auto' && Date.now() - (Number(bad.retriedAt) || Number(bad.at) || 0) >= 6 * 3600000 && await waitIdle(o.waitMs, o.quietMs)) {
+    if (bad && bad.from && !pin && modeOf(cfg) === 'auto' && Date.now() - (Number(bad.retriedAt) || Number(bad.at) || 0) >= 6 * 3600000) {
       const back = rollback(bad.from, gl.settings());
       log(back.ok ? '上次没装回去，这次装回了上一版 ' + bad.from : '还是没能装回上一版 ' + bad.from + '：' + back.why);
       if (back.ok) { setState({ failed: Object.assign({}, bad, { rolledBack: true, retriedAt: Date.now() }) }); installed = true; }
@@ -668,28 +511,24 @@ async function run(opt) {
       // 固定在这一版：配置页点"立即更新"也不装，要先取消固定（配置页上这个按钮是灰的，这里再挡一次）
       if (o.force && pin && needInstall(true)) { out.apply = { ok: false, pinned: true, why: '固定在 ' + pin + '，不更新。要更新先在配置页"更新和上报"点"取消固定"' }; log('固定在 ' + pin + '，没装 ' + stagedVersion()); }
       else if ((modeOf(cfg) === 'auto' || o.force) && needInstall(!!o.force)) {
-        if (o.force || await waitIdle(o.waitMs, o.quietMs)) { out.apply = apply(); installed = true; }
-        else { log('一直有请求在跑，这次先不装，十分钟后再看'); out.apply = { ok: false, why: '路由一直在忙' }; }
+        out.apply = apply(); installed = true;
       }
     }
     // 刚装过新版的话，这个进程里载入的还是旧代码：上报留给下一次（新代码来做）。
-    // 只是没等到路由空闲、没装成的，照常上报：不然全自动挂着跑、请求不断的那段时间里，问题和使用情况一直传不上去
     if (cfg.issueUpload !== 'off' && !o.noIssues && !installed) { try { out.issues = await require('./issues.js').sync(); } catch (e) { log('上报问题时出错：' + ((e && e.message) || e)); } }
     if (cfg.usageReport !== 'off' && !o.noIssues && !installed) { try { out.usage = await require('./issues.js').syncUsage(); } catch (e) { log('上报使用情况时出错：' + ((e && e.message) || e)); } }
   } catch (e) { log('后台更新出错：' + ((e && e.stack) || e)); out.error = String((e && e.message) || e); } finally { unlock(); }
   return out;
 }
 
-module.exports = { DIR, STAGE, LOG, INSTALL_LOG, CANARY_WAIT_MS, FLAG_TTL_MS, OBSERVE, modeOf, hoursOf, installedVersion, stagedVersion, remoteHead, check, needInstall, gate, phase, refreshFlag, whenText, routerCounts, observeVerdict, apply, selfCheck, idle, waitIdle, status, kick, run, spawnBackground, lockHeld };
+module.exports = { DIR, STAGE, LOG, INSTALL_LOG, CANARY_WAIT_MS, FLAG_TTL_MS, modeOf, hoursOf, installedVersion, stagedVersion, remoteHead, check, needInstall, gate, phase, refreshFlag, whenText, apply, selfCheck, status, kick, run, spawnBackground, lockHeld };
 
 if (require.main === module) {
   const cmd = process.argv[2] || 'status';
   const has = (f) => process.argv.includes(f);
   const print = (o) => process.stdout.write(JSON.stringify(o) + '\n');
   (async () => {
-    // --wait-ms、--quiet-ms：等路由空闲最多等多久、多久没请求才算空闲（默认 30 分钟、20 秒）；--print：把结果写出来
-    const num = (f) => { const i = process.argv.indexOf(f); const n = i > 0 ? Number(process.argv[i + 1]) : NaN; return n >= 0 ? n : undefined; };
-    if (cmd === 'run') { const r = await run({ force: has('--force'), waitMs: num('--wait-ms'), quietMs: num('--quiet-ms') }); if (has('--print')) print(r); }
+    if (cmd === 'run') { const r = await run({ force: has('--force') }); if (has('--print')) print(r); }
     // 配置页点"立即检查"：顺带查一下尝鲜组有没有报仓库里这一版有问题（没勾"先装新版"、仓库里的比装着的新才查）
     else if (cmd === 'check') { let ran = false; if (lock()) { try { const c = check(); if (c.lastCheckOk) await refreshFlag(readConfig(), true); ran = true; } finally { unlock(); } } print(Object.assign(status(), ran ? {} : { skipped: '已经有一个在跑了' })); }
     else if (cmd === 'apply') print(await run({ force: true, noIssues: true }));
