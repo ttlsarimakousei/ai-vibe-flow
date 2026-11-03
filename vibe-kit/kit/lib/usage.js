@@ -11,8 +11,7 @@
  *
  * 记的：会话怎么来的（新开、恢复、/clear、压缩后）、开口几次、进 OpenSpec 流程几次、接着交接记录做几次、全自动收工报告几次、
  *       各道检查拦了几次、放行几次（没问人的、问了人的）、上下文到 70% / 90% / 超过上限的会话几个、审查几轮、
- *       写代码前拉代码的结果、钩子出错几次、Claude Code 和套件的版本、开关里和默认不一样的几项、
- *       路由里各个模型当天的请求、失败、切换、token（路由自己记的 usage-daily.json）、钩子在路由里跑的平均耗时
+ *       写代码前拉代码的结果、钩子出错几次、Claude Code 和套件的版本、开关里和默认不一样的几项
  * 不记：路径、项目名、文件名、分支名、提交信息、提示词、代码、模型的回答、令牌、key
  */
 const fs = require('fs');
@@ -116,26 +115,6 @@ function collect(day) {
     if (v === undefined || JSON.stringify(v) === JSON.stringify(DEFAULT_CONFIG[k])) continue;
     changed[k] = typeof v === 'boolean' || typeof v === 'number' || (typeof v === 'string' && v.length <= 16 && /^[\w.\-]*$/.test(v)) ? v : '改过';
   }
-  // 路由记的各个模型当天的用量（路由自己的文件，没装路由就没有）
-  const daily = readJson(path.join(KIT, 'router-data', 'usage-daily.json')) || {};
-  const md = daily && typeof daily === 'object' ? daily[d] : null;
-  let models = null;
-  if (md && md.byProvider && typeof md.byProvider === 'object') {
-    models = { requests: Number(md.requests) || 0, by: {} };
-    for (const name of Object.keys(md.byProvider).slice(0, 20)) {
-      const x = md.byProvider[name] || {};
-      // 遮过以后重名的（两个模型的名字只差在地址上）加在一起，不是后一个盖掉前一个
-      const key = maskAddr(name).slice(0, 60);
-      const c = models.by[key] || { requests: 0, fail: 0, failover: 0, input: 0, output: 0 };
-      models.by[key] = { requests: c.requests + (Number(x.requests) || 0), fail: c.fail + (Number(x.fail) || 0), failover: c.failover + (Number(x.failover) || 0), input: c.input + (Number(x.input) || 0) + (Number(x.cacheRead) || 0) + (Number(x.cacheWrite) || 0), output: c.output + (Number(x.output) || 0) };
-    }
-  }
-  // 钩子在路由里跑的耗时（累计到现在的，路由记的；走命令方式的没有）
-  let hooks = [];
-  try {
-    const hs = readState('hook-stats').byHook || {};
-    hooks = Object.keys(hs).map((k) => { const h = hs[k] || {}; return { name: k.slice(0, 40), n: Number(h.n) || 0, avg: h.timed ? Math.round(h.total / h.timed) : 0, errors: Number(h.errors) || 0 }; }).filter((h) => h.n).sort((a, b) => b.avg - a.avg).slice(0, 8);
-  } catch (e) { hooks = []; }
   // 查库、查 redis 的工具（累计到现在的，lib/toolstats.js 记的：只有命令名、次数、耗时，没有 SQL 和数据），和从用量里看出来能优化的地方
   let tools = [];
   let hints = [];
@@ -147,9 +126,9 @@ function collect(day) {
   return {
     v: 1, day: d, host: deviceId(),
     kit: Array.isArray(u.kit) && u.kit.length ? u.kit : [kitVersion()].filter(Boolean), cc: Array.isArray(u.cc) ? u.cc : [],
-    os: process.platform + ' ' + os.release(), node: process.version, hook: String(cfg.hookTransport || 'auto'), autoMode: autoUsedOn(d),
-    changed, n: Object.fromEntries(Object.entries(u.n || {}).filter(([k]) => !/\.ms$|duration|latency|elapsed|average/i.test(k))), models,
-    hooks: hooks.map((h) => ({ name: h.name, n: h.n, errors: h.errors })), tools: tools.map((t) => ({ tool: t.tool, cmd: t.cmd, n: t.n, fail: t.fail })), hints: [],
+    os: process.platform + ' ' + os.release(), node: process.version, autoMode: autoUsedOn(d),
+    changed, n: Object.fromEntries(Object.entries(u.n || {}).filter(([k]) => !/\.ms$|duration|latency|elapsed|average/i.test(k))),
+    tools: tools.map((t) => ({ tool: t.tool, cmd: t.cmd, n: t.n, fail: t.fail })), hints: [],
   };
 }
 const num = (x) => Number(x) || 0;
@@ -186,17 +165,15 @@ function modelTable(by) {
 function render(x) {
   const env = [
     ['版本', '套件 ' + (x.kit.join('、') || '？') + '；Claude Code ' + (x.cc.join('、') || '（状态栏没报）')],
-    ['环境', x.os + '，Node ' + x.node + '，检查在' + ({ http: '路由里跑', command: '命令里跑' }[x.hook] || '自动选的地方跑') + '，全自动' + (x.autoMode ? '开着' : '关着')],
+    ['环境', x.os + '，Node ' + x.node + '，全自动' + (x.autoMode ? '开着' : '关着')],
     ['和默认不一样的开关', Object.keys(x.changed).map((k) => k + '=' + x.changed[k]).join('，') || '没有'],
   ];
   const rows = rowsOf(x.n).concat(env);
-  const hooks = x.hooks && x.hooks.length ? '\n钩子调用（累计到现在）：' + x.hooks.map((h) => h.name + ' ' + h.n + ' 次' + (h.errors ? '、出错 ' + h.errors + ' 次' : '')).join('；') + '\n' : '';
   const sec = (ms) => (ms >= 1000 ? (ms / 1000).toFixed(1) + ' 秒' : ms + ' 毫秒');
   const tools = x.tools && x.tools.length ? '\n查库、查 redis 的工具（累计到现在）：' + x.tools.map((t) => t.tool + ' ' + t.cmd + ' ' + t.n + ' 次' + (t.fail ? '（出错 ' + t.fail + '）' : '')).join('；') + '\n' : '';
   const hints = x.hints && x.hints.length ? '\n从用量里看出来能优化的：' + x.hints.join('；') + '\n' : '';
-  const models = x.models ? '\n路由里各个模型（这一天一共 ' + x.models.requests + ' 次请求）：\n\n' + (modelTable(x.models.by) || '没有。\n') : '';
   const data = JSON.stringify(x).replace(/--/g, '-\\u002d');
-  return '### ' + x.day + ' 的使用情况\n\n| 项 | 数 |\n|---|---|\n' + rows.map((r) => '| ' + r[0] + ' | ' + cell(r[1]) + ' |').join('\n') + '\n' + models + hooks + tools + hints
+  return '### ' + x.day + ' 的使用情况\n\n| 项 | 数 |\n|---|---|\n' + rows.map((r) => '| ' + r[0] + ' | ' + cell(r[1]) + ' |').join('\n') + '\n' + tools + hints
     + '\n<!-- ' + MARK + ' ' + data + ' -->\n';
 }
 function summary(day) { const x = collect(day); return { day: x.day, data: x, text: render(x) }; }
@@ -240,7 +217,7 @@ function aggregate(list, from, to) {
   return '## 使用情况（' + from + ' 到 ' + to + '，' + names.length + ' 台电脑，一共 ' + personDays + ' 个人天）\n\n'
     + '不是问题，是各台电脑每天用套件的次数（每台电脑一条"[使用情况]"议题，一天一条补充，导出时不会被关掉）。给改套件的人看哪里能优化：'
     + '拦得多、放行多的检查，提示可能写得不清楚或者判断错了；超过上限的会话多，自动压缩没起作用；审查轮数多、轮数用完的多，审查提示或者改法有问题；'
-    + '拉代码没拉成的多，看是分叉还是连不上；某个模型失败、切换多，看路由配置；钩子平均耗时长的，看那道检查。\n\n'
+    + '拉代码没拉成的多，看是分叉还是连不上；\n\n'
     + '| 项 | 合计 |\n|---|---|\n' + rowsOf(n).map((r) => '| ' + r[0] + ' | ' + cell(r[1]) + ' |').join('\n') + '\n'
     + (Object.keys(sw).length ? '| 改过的开关（几台电脑） | ' + cell(Object.keys(sw).sort((a, b) => sw[b] - sw[a]).map((k) => k + ' ' + sw[k]).join('，')) + ' |\n' : '')
     + (Object.keys(models).length ? '\n' + modelTable(models) : '')

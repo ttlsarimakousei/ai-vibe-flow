@@ -265,11 +265,6 @@ function hints() {
     }
     if (s.tool === 'ttls-db-crud' && s.cmd === 'query' && s.n >= 30) { const peek = all.find((x) => x.tool === s.tool && x.cmd === 'peek'); if (!peek || peek.n * 5 < s.n) out.push({ what: '查数据几乎都在写 SQL（query ' + s.n + ' 次，peek ' + (peek ? peek.n : 0) + ' 次）', detail: '看一张表、按值找数据用 peek 不用写 SQL。模型没用上，可能是技能说明里那张"先挑最省事的命令"的表没起作用。' }); }
   }
-  // 钩子：平均耗时长的（路由里记的，走命令方式的没有）
-  try {
-    const hs = readState('hook-stats').byHook || {};
-    for (const k of Object.keys(hs)) { const h = hs[k] || {}; if ((h.timed || 0) >= 20 && (h.total || 0) / h.timed >= 1500) out.push({ what: '检查 ' + k + ' 平均 ' + Math.round(h.total / h.timed) + ' 毫秒（' + h.timed + ' 次）', detail: '每次改文件、跑命令都要等它。多半是会话记录很长。' }); }
-  } catch (e) { /* 没有 */ }
   const seen = new Set();
   return out.filter((x) => (seen.has(x.what) ? false : seen.add(x.what))).slice(0, 12);
 }

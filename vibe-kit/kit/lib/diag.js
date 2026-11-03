@@ -1,14 +1,12 @@
 'use strict';
 /*
- * 本机诊断指标（K1-8，2026-11-01）：出了"钩子慢、路由卡"这类问题时，有数可看，不靠猜。
+ * 本机诊断指标（K1-8，2026-11-01）：出了"钩子慢"这类问题时，有数可看，不靠猜。
  *   钩子预算    12 秒用完时停在哪个阶段（lib/invocation.js）
  *   锁等待      拿状态文件的锁等了 200 毫秒以上的（lib/state-store.js）
- *   审查批次    每批拿到结论、重试后才拿到、没拿到（lib/review-runner.js）
- *   路由首字节  上游多久回头部，按模型（router/forward.js）；路由等待：被限流等了多久
  * 按天汇总进 state/diag.json，留 14 天：{ 日期: { 类别: { 键: { n, total, max } } } }。tools/doctor.js 显示。
  * 只记本机，不上报（硬规矩 15）：使用情况、问题反馈都不读这个文件。
- * 记不下来不影响正事，什么都不抛。路由一秒可能很多次，传 buffer 先攒在内存里，最多 30 秒写一次。
- * 只依赖 state-store：路由、钩子都用；state-store 反过来也调这里（迟一点才载），所以 diag.json 自己的锁不记。
+ * 记不下来不影响正事，什么都不抛。
+ * 只依赖 state-store：state-store 反过来也调这里（迟一点才载），所以 diag.json 自己的锁不记。
  */
 const path = require('path');
 
@@ -20,7 +18,7 @@ let lastFlush = 0;
 let timer = null;
 
 const dayKey = (t) => { const d = new Date(t); const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
-/** 最多等 100 毫秒拿锁：诊断不值得让钩子、路由等（路由这里同步等会堵住所有请求，复审发现）。拿不到这一批就丢了 */
+/** 最多等 100 毫秒拿锁：诊断不值得让钩子等。拿不到这一批就丢了 */
 function write(items) {
   const store = require('./state-store');
   const lock = store.acquire(FILE + '.lock', { waitMs: 100 });
