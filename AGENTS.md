@@ -7,7 +7,7 @@
 内网的同事用 Claude Code，后面接的是公司网关上的私有模型。这个仓库做的是给他们用的工作流 `vibe-kit`：
 
 - 一套装进 `~/.claude` 的东西：全局约定、规范、六个技能、一个审查代理、十几个钩子、状态栏。
-- 一个在后台运行的模型路由（本机 15730 端口），带一个本机配置页，开关都在配置页上改。
+- 一个用时才起的本机配置页（敲 `/vk-config`），开关都在配置页上改。模型路由 2026-11-03 删了，连模型由用户自己配。
 - 挂在 OpenSpec 上：需求和任务归 OpenSpec 管，套件只在提案、打勾、归档这些节点上做确定性的检查。安装包自带一份 OpenSpec（打包时的最新版），同事电脑 Node 版本不够时退回用他自己装的。
 
 核心思路：**能用本机脚本确定性判断的，不交给模型**（编号、状态、git、编译、起停服务、截图比对、该不该交接），模型只做要理解的事。所以钩子多、提示少。
@@ -29,15 +29,15 @@
 
 | 路径 | 是什么 |
 |---|---|
-| `vibe-kit/install.js` | 安装器：拷文件、登记钩子、写 settings.json、生成全局约定、装路由、卸载 |
+| `vibe-kit/install.js` | 安装器：拷文件、登记钩子、写 settings.json、生成全局约定、卸载 |
 | `vibe-kit/publish.js` | 把安装包发布到内网 GitLab（只有维护的人用） |
-| `vibe-kit/kit/hooks/` | 钩子。每个导出 `handle(j)`，命令方式和 HTTP 方式共用一份代码 |
+| `vibe-kit/kit/hooks/` | 钩子。每个导出 `handle(j)`，全走命令方式 |
 | `vibe-kit/kit/lib/` | 钩子、工具、配置页共用的库。`session.js` 是最底层，别的都依赖它 |
 | `vibe-kit/kit/tools/` | 给模型和用户在命令行用的工具（问题反馈、经验规则、起服务、溯源……） |
 | `vibe-kit/kit/page/` | 看页面的执行器（Playwright 脚本，用系统 Edge）。`node_modules/` 是有意带进仓库的：内网离线，装不了依赖 |
 | `vibe-kit/kit/openspec/` | 套件自带的 OpenSpec（2026-10-17 集成，打包时的最新版）。`node_modules/` 同样有意带进仓库；怎么用上、怎么降级见 `kit/lib/openspec.js`，升级见 docs/release.md |
 | `vibe-kit/kit/statusline.js` | 状态栏 |
-| `vibe-kit/router/` | 模型路由 `router.js`、后台管理 `service.js`、配置页 `ui.html` 和它的后端 `kit-api.js` |
+| `vibe-kit/kit/ui/` | 配置页 `ui.html` 和它的后端 `kit-api.js`、`kit-worker.js`；起它的是 `kit/lib/config-page.js` |
 | `vibe-kit/claude/` | 装进 `~/.claude` 的给模型看的东西：全局约定模板 `CLAUDE.md`、规范 `rules/`、技能 `skills/`、审查代理 `agents/` |
 | `vibe-kit/README.md`、`vibe-kit/手册/`、`vibe-kit/更新说明.md` | 用户手册（README 是短手册，`手册/` 下是一件事一份的附录）、版本说明。会打进安装包；`手册/` 新加的文件要加进 `dev/pack.js` 的必备清单 |
 | `dev/` | 测试（`test-*.js`、`ui-*.js`、`e2e-*.js`）、`run-all.js`、`pack.js`、`accept-packages.js`、`diff-hooks.js`、测试支架 `lib/`、旧版基线 `baseline/` |
@@ -97,15 +97,15 @@
 
 ### 改 vibe-kit 的硬规矩
 
-1. **只用 Node 自带的模块**。钩子、库、工具、路由都不引第三方包（看页面的执行器、自带的 OpenSpec 除外，它们带着自己的 `node_modules`，只当子进程跑，钩子不 require 它们）。
+1. **只用 Node 自带的模块**。钩子、库、工具都不引第三方包（看页面的执行器、自带的 OpenSpec 除外，它们带着自己的 `node_modules`，只当子进程跑，钩子不 require 它们）。
 2. **钩子出错一律放行**（fail-open），并记一条问题反馈。判断不了就放行，不能因为钩子出错把用户卡住。
 3. **拦截用 JSON 输出，不用退出码 2**：`lib/session.js` 的 `blockOut()` / `askOut()`。Windows 上退出码会被改写，拦不住。
 4. **用户目录按代码自己的位置推**（`__dirname`），不靠 `os.homedir()` 和环境变量。测试用的覆盖变量单独命名（`VIBE_KIT_DIR`、`VIBE_KIT_STARTUP_DIR` 这类）。
 5. **后台起进程一律 `windowsHide: true`**，输出走管道或 ignore，不在桌面弹窗口。
-6. **令牌和模型的 key 模型读不到**：`secrets.json`、`router-data/` 由权限规则、`guard-read`、`guard-commit` 三道挡着。不许打印、不许写进日志和问题反馈、不许打进安装包。状态栏不读 `router-data/config.json`。令牌保护只能收紧，不能再放宽。
+6. **令牌和模型的 key 模型读不到**：`secrets.json`、`router-data/` 由权限规则、`guard-read`、`guard-commit` 三道挡着。不许打印、不许写进日志和问题反馈、不许打进安装包。路由删了，`router-data/` 这几道照样留着。令牌保护只能收紧，不能再放宽。
 7. **查库、连 redis 由工具自己读连接配置，口令不上命令行、不写进提示**（2026-10-30 用户定的措辞：项目里的口令 10-25 起对模型放开，`.vibe/` 里的连接配置模型能读）。厂商的 JDBC 驱动不进安装包（`pack.js` 会查 jar）。
 8. **全局约定（`vibe-kit/claude/CLAUDE.md`）每个请求都带着**。加一个字都是每个请求的成本：能放进钩子在对应时机送的，就不往约定里加。
-9. **审查全部用子代理 `ttls-reviewer`，除审查外套件的流程里不新开子代理**（2026-11-03 用户定的，下个版本起；现在的代码还是单独请求）。
+9. **审查全部用子代理 `ttls-reviewer`，除审查外套件的流程里不新开子代理**（2026-11-03 用户定的）。
 10. **开关只在 `kit/lib/config-fields.js` 的字段表里定义一次**（名字、类型、默认、取值、在哪一页、手册里那一行；2026-11-01，K1-4）。默认值和保存时的清洗都从它来。新开关要改：字段表、配置页 `ui.html`（控件和 `fBool`、`fSel`、`fNum`）、跑 `node dev/config-doc.js --write` 重写手册的开关表、`更新说明.md`。`dev/test-config-fields.js` 核对字段表和配置页。
 11. **`kit/hooks/` 里的文件不能删**。自动更新装完新版后的自检跑的是旧版的代码，按旧版的名单挨个载钩子，少一个就装回旧版。不用了的钩子留空壳（`source-hint.js` 就是）。
 12. **`kit/lib/` 新加的文件要加进 `dev/pack.js` 的必备清单**（`need` 那一串），不然漏打进包也发现不了。
@@ -128,7 +128,7 @@
 | 改了什么 | 要改哪些 |
 |---|---|
 | 用户看得见的行为、开关、配置页 | `vibe-kit/README.md` 或 `vibe-kit/手册/` 里对应的附录、`vibe-kit/更新说明.md` 最上面那一节 |
-| 钩子、工具的实际行为 ↔ 配置页 `router/ui.html` 上对应开关的说明（双向，用户 2026-10-17 定的） | 改了行为，配置页上对应开关、"套件说明"页的说明要跟着改；改了配置页的说明，代码也要照着说明做。两边对不上算缺陷 |
+| 钩子、工具的实际行为 ↔ 配置页 `kit/ui/ui.html` 上对应开关的说明（双向，用户 2026-10-17 定的） | 改了行为，配置页上对应开关、"套件说明"页的说明要跟着改；改了配置页的说明，代码也要照着说明做。两边对不上算缺陷 |
 | 测试、打包的做法 | `dev/README.md` |
 | 架构、状态文件、新模块 | `docs/architecture.md` |
 | 用户定下的规矩、重要取舍 | `docs/decisions.md` |

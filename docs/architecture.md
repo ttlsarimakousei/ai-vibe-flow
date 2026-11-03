@@ -5,36 +5,33 @@
 ## 一张图看全
 
 ```
-Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）──▶ 公司网关后面的各个模型
-     │                    │
-     │                    ├─ 配置页 /ui（ui.html + kit-api.js）：模型、角色、开关、本机环境、驱动、更新和上报
-     │                    └─ HTTP 钩子 /vibe-kit/hook/<名字>（hook-host.js，工作线程里跑钩子）
+Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026-11-03 起）
      │
-     ├─ 钩子（命令方式：node kit/hooks/<名字>.js；高频的几个装了路由时走 HTTP）
+     ├─ 钩子（命令方式：node kit/hooks/<名字>.js）
      ├─ 状态栏 kit/statusline.js
+     ├─ 配置页（敲 /vk-config 才起：kit/lib/config-page.js 加 kit/ui/，只在本机）
      └─ ~/.claude 里的约定、规范、技能、审查代理（install.js 装进去）
 ```
 
-装好之后的位置：套件在 `~/.claude/vibe-kit/`，路由的程序在 `~/.claude/vibe-kit/router/`，路由的数据（模型、key、用量）在 `~/.claude/vibe-kit/router-data/`。
+装好之后的位置：套件在 `~/.claude/vibe-kit/`。
 
 ## 钩子：什么时机做什么
 
 | 时机 | 钩子 | 做什么 |
 |---|---|---|
-| 会话开始（新开、/clear、压缩后、恢复） | `session-start.js`（一直走命令） | 送项目说明、只读就绪摘要和壳子结构；压缩恢复时核对当前事实；不自动续接旧交接许可；记启动目录、核对套件指纹、清过期文件、数使用情况 |
-| 用户开口 | `task-anchor.js`（一直走命令） | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；HTTP 钩子自检 |
+| 会话开始（新开、/clear、压缩后、恢复） | `session-start.js` | 送项目说明、只读就绪摘要和壳子结构；压缩恢复时核对当前事实；不自动续接旧交接许可；记启动目录、核对套件指纹、清过期文件、数使用情况；新代码第一次跑时收回路由（`router-retire`） |
+| 用户开口 | `task-anchor.js` | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；`/vk-config` 起配置页，不发模型请求（decision:block） |
 | 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑五道检查：`guard-kit`（套件的文件不许改）→ `guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
 | 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add）、按提交方式（关 / 询问 / 自动）管提交、push 要用户当场说推送，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）；都过了再把 `openspec …` 改成调用自带的 OpenSpec（updatedInput） |
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
-| 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下；IDEA 读取复用相同范围判断 |
-| 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；IDEA 工具的返回原样给模型（2026-10-25 起不再遮口令） |
+| 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下 |
+| 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；MCP 工具的返回原样给模型 |
+| 审查子代理结束 | `review-stop.js` | 只管 `ttls-reviewer`：`last_assistant_message` 入账，没交结构化结论让它接着写 |
 | 模型说做完了 | `verify-gate.js` | 自动阶段按产物或整组任务催审修，人工阶段 Ask；提醒提交与自动提交分开；核对材料、修订链和实际验证结果，交付用例及结果，用户决定验收归档 |
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
 
-**HTTP 方式**：装了路由时，改文件、跑命令、提问框、搜文件、收工这五个高频钩子登记成 `type: "http"`，打到路由的 `/vibe-kit/hook/<名字>`，在路由的工作线程里跑（最多 3 个线程，一次几毫秒；命令方式一次 0.3 到 0.9 秒）。25 秒没结果当放行，记问题反馈，同线程排队的换线程重跑一次；例外：guard-commit 没跑成、命令里有 push / publish / 发布到 字样的回 ask（2026-10-30，push 只留钩子一道确认）。路由整个不在时 Claude Code 当放行，所以 HTTP 方式另登记命令钩子 `guard-push.js <端口>`，带 `if`（`Bash(*push*)` 等六条，实测见 claude-code-facts.md）：`/version` 不答话就自己跑一遍 guard-commit，出错回 ask。HTTP 钩子写 `timeout: 30`。用户开口时 `hook-health.js` 自检：上一轮改过文件、跑过命令，路由却没收到调用，就把路由拉起来，还不行就切回命令方式。开关 `hookTransport`。
-
-**兜底放行**：流程类的检查拦下时，提示末尾带〔拦截编号〕。模型确信是套件拦错了，用 `tools/feedback.js bypass <编号> --why "…"` 申请，再做一次那一步时弹确认框（全自动模式下直接放行并记进报告）。改套件、读令牌、关钩子、结束路由、非 UTF-8 文件、整仓 add、push 没有编号，什么模式都不能放行。见 `lib/feedback.js` 开头。
+**兜底放行**：流程类的检查拦下时，提示末尾带〔拦截编号〕。模型确信是套件拦错了，用 `tools/feedback.js bypass <编号> --why "…"` 申请，再做一次那一步时弹确认框（全自动模式下直接放行并记进报告）。改套件、读令牌、关钩子、非 UTF-8 文件、整仓 add、push 没有编号，什么模式都不能放行。见 `lib/feedback.js` 开头。
 
 ## 库（kit/lib）
 
@@ -55,19 +52,20 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 | `idea-config.js` | 读 IDEA 里配的 Maven、settings.xml、本地仓库、JDK（`.idea` 和 IDE 的配置目录）。探索写命令、配置页"自动探测"用，只读文件，不连 IDEA |
 | `session-*.js` | session.js 拆出来的 11 块（2026-11-01）：state 状态文件和流水账（最底层）、transcript 会话记录、config 配置和会话自动开关、flow 流程状态、voice 用户的话和许可、out 钩子输出和 cli、projects 壳子和变更目录、proposal 提案门槛、plan 大需求计划、review 审查记录、kitfiles 套件文件保护和约定变化提示。session.js 只剩出口，导出的名字和以前一样，别的文件照旧 `require('./session')` |
 | `shell-words.js` | 拆命令（2026-11-01 从 guard-commit 拆出）：按 Bash / PowerShell 的规则拆组、段、词，认命令名、解开包着的命令 |
-| `guard-git.js`、`guard-kit.js`、`guard-process.js`、`guard-archive.js` | guard-commit 的各类检查（2026-11-01 拆出）：git 提交推送和提交方式；改套件、读令牌、经验规则、路由接口；结束进程、起服务、过程文件、串 cd；归档门槛。guard-commit 只留调度 |
+| `guard-git.js`、`guard-kit.js`、`guard-process.js`、`guard-archive.js` | guard-commit 的各类检查（2026-11-01 拆出）：git 提交推送和提交方式；改套件、读令牌、经验规则、配置页接口；起服务、过程文件、串 cd；归档门槛。guard-commit 只留调度 |
 | `drivers.js`、`toolstats.js` | 多版本驱动登记、默认和单版删除；查库、查 redis 的匿名类别计数 |
 | `perf.js` | 耗时异常（2026-10-31，问题表第 20 条）：devserver 每次起服务按"项目 + 命令"记分段耗时，比本机基线（最近几次的中位数）慢一倍以上且多 60 秒以上、或它自己的检查超过 20 秒，记一条问题反馈并按开关 `perfReport` 上报（只带秒数、分段、原因类别）；基线和上报记录在 `perf-baseline.json`、`perf-report.json`（GLOBAL_STATE），每天最多报 3 条、同一个 24 小时一次 |
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |
 | `usage.js` | 使用情况：每天数次数，第二天传到 GitLab |
 | `pull.js` | 开工前拉代码 |
-| `idea-mcp.js` | 撤回套件以前登记的 IDEA MCP（2026-10-28 起不再登记）：装新版、卸载时删掉套件加的、没被改过的 `vibe-idea-端口`；老版本代码调的 `due`、`sync` 留着（due 恒为假，sync 只撤回） |
-| `idea-tools.js` | 用户自己登记的 IDEA MCP（名字 jetbrains、老的 vibe-idea-端口，或带 IDEA 特有工具名）的入口：终端按 Bash、改文件按 Edit、读令牌照拦；认不出是 IDEA 的 MCP 只查写明的路径读不读令牌 |
-| `hook-host.js`、`hook-worker.js`、`hook-health.js` | HTTP 钩子：路由里跑钩子、自检 |
+| `guard-mcp.js` | MCP 工具的令牌保护（硬规矩第 6 条）：套件不接 MCP，不认工具名，所有 `mcp__` 工具四层：路径字段范围有令牌的拦、参数原文点到令牌文件的拦、`command` 这类字段按 Bash 和 PowerShell 查读令牌、路径落在套件目录的拦。别的不查 |
+| `big-task.js`、`guard-explore.js` | 大任务状态从 plan.md 和探索记录算（`phaseOf`、状态栏的 `bar`）；探索完后范围只能在用户开口那一轮改 |
+| `router-retire.js` | 收回路由（只放迁移代码）：判据只看文件在不在；自动更新在新代码第一次跑 session-start 时收，手动安装装完当场收；中途失败下次再试 |
+| `config-page.js` | 配置页用时才起：只监听本机，端口优先 15731，状态在 `state/config-page.json`（DISPOSABLE_STATE）；心跳停了退出；更新装完用新代码重起一份 |
 | `deps.js` | 随包依赖的清单 `kit/deps.json`（2026-11-01，K1-6）：打包时扫看页面、自带 OpenSpec 两个组件的 node_modules（每个顶层包的名字、版本、`engines.node`、来源、内容哈希，组件要的 Node 按主包算）；安装时核对包在不在、版本对不对，列出这台电脑的 Node 用不了的组件。engines 的版本范围自己判断（`satisfies`、`minOf`），不靠 npm |
 | `stage-rules.js` | 进 OpenSpec 流程时送的规矩（2026-11-01，J4）：`hook-rules.md`、写需求和做任务两段的"照做就不会被拦"；每样一个会话一次，压缩后重送 |
 | `fail-summary.js`、`sql-check.js`、`fix-pass.js`、`checkpoint.js`、`edited-files.js` | K3（2026-11-01）：编译测试失败只给摘要；改 SQL、Mapper 时核对表结构缓存；命令失败改好再通过的记成经验候选；检查点和一键回退；认出这个会话改过哪些文件（`tools/commit.js`、`tools/checkpoint.js` 用） |
-| `diag.js` | 本机诊断指标（2026-11-01，K1-8）：钩子预算用完停在哪个阶段、等锁 200 毫秒以上、审查每批结果、路由首字节和限流等待。按天汇总进 `state/diag.json`，留 14 天，`tools/doctor.js` 显示，不上报 |
+| `diag.js` | 本机诊断指标（2026-11-01，K1-8）：钩子预算用完停在哪个阶段、等锁 200 毫秒以上。按天汇总进 `state/diag.json`，留 14 天，`tools/doctor.js` 显示，不上报 |
 
 ## 给模型看的东西（vibe-kit/claude）
 
@@ -75,34 +73,15 @@ Claude Code ──请求──▶ 模型路由 router.js（127.0.0.1:15730）─
 - `rules/`：规范。启用的并进全局约定（`20-git-commit.md`）；开头标着 `<!-- vibe-kit:钩子送 -->` 的（`10-openspec.md`，2026-11-01，J4）不进全局约定，安装器和 `--sync` 填好占位符写成 `~/.claude/vibe-kit/hook-rules.md`，由 `lib/stage-rules.js` 在进 OpenSpec 流程时送：开口（task-anchor）、模型自己跑 openspec 或改 openspec/ 下的文件（after-tool）；压缩后还在流程里的马上重送（session-start）。记录在 `<会话>-stage-rules.json`。文件名前加下划线就停用。
 - 用户自己的约定和规范不在这里：装好后的 `~/.claude/vibe-kit/user/*.md` 接在套件的规范后面生成进全局约定，`user/remove.txt` 一行一句从套件的约定、规范里去掉（模板里的原句、换完占位符的句子都认）；安装器不拷进、不覆盖这个目录，打包时它出现在源目录里就报错（F8，2026-11-01）。
 - `skills/`：六个技能，都带 `ttls-` 前缀：`ttls-onboard`、`ttls-see-page`、`ttls-cross-review`、`ttls-handover`、`ttls-db-crud`、`ttls-redis`。
-- `agents/ttls-reviewer.md`：审查代理。审查提示第一行写"模式：提案 / 代码 / 复审提案 / 复审代码"，第二行统一写裸变更名（兼容目录、完整路径）；审查者最后一行写"结论：问题 N 条"，钩子靠这两处记账。前台结果和带 result 的后台通知都认，不存在的变更不借用材料里另一个变更。
+- `agents/ttls-reviewer.md`：审查子代理，不写 model（跟主会话同模型）。提示由 `review.js prepare` 生成，第三行是"审查任务"，交 JSON 结论；需求和探索记录里没有的标 `scope: out`。结论由 `review-stop.js`（SubagentStop）入账。
 
-## 模型路由（vibe-kit/router）
+## 配置页（vibe-kit/kit/ui）
 
-- `router.js`：本机常驻，按"角色"把请求分给各个模型（opus 主会话、sonnet 审查、haiku 后台小任务），限流先等再换、额度用完停用到重置时间、大请求超时不换模型、粘住同一个会话的模型（不破坏提示缓存）。只用 Node 自带模块。2026-11-01 按块拆成几个文件（K1-1），`router.js` 只留入口（HTTP 服务按路径分派、pid 文件、退出），文件名、命令行参数（`-c`、`-p`）、启动方式都没变：自动更新之后可能是旧版的 `service.js` 来起新的 `router.js`。
+`ui.html` + `kit-api.js`（+ `kit-worker.js`），`kit/lib/config-page.js` 起。只认本机连接、本机 Host，不收别的网站的页面发来的请求（按 Sec-Fetch-Site 认），改东西还要带自定义请求头。开关只传改过的项，保存后跑一次 `install.js --sync` 让约定和钩子跟着变。
 
-  | 文件 | 管什么 |
-  |---|---|
-  | `base.js` | 命令行参数、数据文件的位置、版本、日志、诊断脱敏、原子写、回 JSON |
-  | `config-file.js` | 配置的读、校验、保存（带备份）、热加载，实际监听的地址。`config` 会被重新赋值，别的文件经它的同名属性取当前的 |
-  | `health.js` | 冷却、额度用完（跨重启保留，`router-data/quota.json`）、粘住同一个模型、上游错误怎么分类、要不要先等 |
-  | `usage.js` | 用量记录和落盘、网关对单次请求大小的上限（`state/gateway.json`） |
-  | `forward.js` | 选模型、转发、换模型、流式回复边收边转（没收到 message_stop 就结束的断开客户端的连接，收到了之后上游才断开的照常结束，E3）、配置页"测试"一个模型 |
-  | `access.js` | 谁能用哪些接口：转发和钩子入口只收本机程序，配置页接口只收本机、不收别的网站的页面 |
-  | `api.js` | 配置页的 `/api` 接口（`/api/kit` 交给 `kit-api.js`） |
-  | `hook-entry.js` | 套件的 HTTP 钩子入口（`/vibe-kit/hook/<名字>`） |
-  | `install-id.js` | 这一份安装的标识：按套件目录的真实路径算的哈希（不带用户名、路径原文），`/version` 带着，`service.js` 比对（E1） |
-
-  `install.js` 装新版时整个换 `router/` 目录；新加的文件要加进 `dev/pack.js` 的必备清单（`dev/test-router-k.js` 查）。安装器按 `router.js` 里有没有 `/vibe-kit/hook/` 判断路由认不认得钩子请求，所以钩子入口的分派留在入口里。
-- `service.js`：后台启动（没有窗口）、停止、登录后自启（"启动"文件夹里的 `.vbs`）。认"端口上的是不是这份安装的路由"看 `/version`：带安装标识的要和这份对得上，对不上的是别的安装的（远程桌面多人共用一台电脑时会碰上），不停、不当成自己的、说清端口被另一个安装的路由占着；老版本的路由不带标识，照以前的规矩答得出版本号就算（E1，2026-11-01）。
-- `ui.html` + `kit-api.js`（+ `kit-worker.js`）：本机配置页 `http://127.0.0.1:15730/ui`。只认本机连接、本机 Host，不收别的网站的页面发来的请求（按 Sec-Fetch-Site 认，`access.js` 的 `apiAllowed`），改东西还要带自定义请求头。开关只传改过的项，保存后跑一次 `install.js --sync` 让约定和钩子跟着变。
-- 路由每 20 秒写一次 `router-data/usage-daily.json`、`usage-today.json`（状态栏第三行读后者）。
+模型路由 2026-11-03 删了（问题表第 39 条），为什么和少了什么见 decisions.md、`vibe-kit/手册/配置页.md`。
 
 ## 状态放在哪
-
-IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`state/idea-mcp.json` 只剩以前登记时记下的归属（`owned`），装新版、卸载时 `idea-mcp.retract` 按它把套件加的、没被改过的 `vibe-idea-端口` 从 Claude Code 的用户配置（`.claude.json`，设了 `CLAUDE_CONFIG_DIR` 时是那个目录里的）删掉，删完状态记成 `off`；用户配置解析不了或正在变化就不改，归属留着下次再撤。`idea-mcp.lock` 防并发，异常遗留锁一分钟后可接手。不输出原始配置。
-
-`guard-commit` 的匹配器有 `mcp__.*`。`idea-tools` 认 IDEA：名字 `jetbrains`、老的 `vibe-idea-端口`，或者工具名是 IDEA 特有的（`execute_terminal_command`、`get_file_text_by_path`、`replace_text_in_file` 这类）。认出来的：工具路由先解析为实际操作，终端经过 Bash 和 PowerShell 两种检查，所有路径字段、文件列表和项目路径调用 `guard-read`（读令牌、`.claude.json`），编辑类调用 `pre-edit`；别的不拦（2026-10-25 定的）。认不出的 MCP 只查写明的路径参数读不读令牌（套件不再记登记名，令牌保护不能因此放松）。`after-tool` 不改写 MCP 工具的返回。
 
 | 东西 | 位置 |
 |---|---|
@@ -120,7 +99,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
   - 依赖（K1-6）：按安装包里的依赖清单 `kit/deps.json` 核对每个包在不在、版本对不对（不算哈希），这台电脑的 Node 用不了哪个组件照清单说；没有清单（直接从源码装、本地恢复包）照以前写死的检查。清单由 `dev/pack.js` 生成，查库执行器的 class 打包时按编译记录 `DbRunner.build.json` 核对是从现在的 `DbRunner.java` 编的。
   - 用户改过的（F8，用户 2026-10-30 定的）：升级时套件的 `CLAUDE.md`、`rules/<套件的>.md` 和上次装的原样（`pristine/`）对不上的，按行比，新加的（带所在那一节的标题）挪进 `user/migrated-<文件名>.md`，删掉改掉的原句并进 `user/remove.txt`，再备份、换成新版；重装时同样的内容不重复写。技能、审查代理、命令照旧换成新版、先备份。这些都记进 `state/install-done.json` 的 `notice`（没看过的跨次安装留着，最多 20 条），配置页（`kit-api.js` 的 `installNotice`）在顶上提示，点"知道了"写 `noticeSeen`。
   - `JAVA_TOOL_OPTIONS`（F8）：settings.json 的 env 会替掉 Claude Code 里跑的命令看到的系统值，所以写进去的是系统的值（注册表里用户级、机器级的环境变量，测试用 `VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS` 顶替）加上套件要的、系统里没写同名项的几项；还是套件写的那个值的，每次安装跟着系统重新算，用户改过的不动。
-- 自动更新：团队的内网 GitLab 仓库里放着解开的安装包。钩子看一眼"该检查了没有"，该了就甩一个后台进程（`updater.js run`）：拉仓库、等路由空闲、跑新版的 `install.js`、自检，不过就装回上一版。
+- 自动更新：团队的内网 GitLab 仓库里放着解开的安装包。钩子看一眼"该检查了没有"，该了就甩一个后台进程（`updater.js run`）：拉仓库、跑新版的 `install.js`、自检，不过就装回上一版。`updater` 给新 install.js 传 `--no-router`：新版不认，旧版回滚时不装回路由。
 - 问题上报：本机记下的问题反馈由后台进程建成 GitLab 的议题，不重复建；使用情况一台电脑一条议题、一天一条补充。维护的那台电脑在配置页导出开放中的议题（浏览器下载），导出后关掉这一批。
 - 发布：维护的人打包、解压，双击 `发布到 GitLab（双击我）.bat`（`publish.js`：先在本机装一遍、自检，再推一个提交加一个标签 `v<版本号>`）。
 
@@ -142,15 +121,15 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 
 `session.js` 逐步只保留公共入口，状态原子写与锁拆到 `state-store.js`，一次调用缓存拆到 `invocation.js`。`intent.js`、`apply-scope.js`、`permissions.js` 统一真人意图、范围和版本许可；`flowView` 供执行与展示共用。
 
-`after-tool.js` 登记 PostToolUse 和 Failure，消费成功操作许可并采集本机证据；IDEA 结果仅适配已识别工具。`evidence.js`、`workspace.js` 计算当前输入与环境指纹。`task-types.js` 区分审查、意见处理和用户验收，不制造审查循环。
+`after-tool.js` 登记 PostToolUse 和 Failure，消费成功操作许可并采集本机证据。`evidence.js`、`workspace.js` 计算当前输入与环境指纹。`task-types.js` 区分审查、意见处理和用户验收，不制造审查循环。
 
-`review-runner.js` 与 `tools/review.js` 管有限材料、独立请求、超出预期用时的上报、取消与意见处理；`readiness.js`、`workflow.js` 提供就绪、交付、提交计划、自测和恢复事实；`work-sessions.js` 提示同变更冲突。`connection-lifecycle.js` 留无凭据退役记录；`redact.js` 统一诊断出口；`local-backup.js` 和 `entry-check.js` 管本地恢复与入口行为自检。
+`review-runner.js` 与 `tools/review.js` 管备材料、算修改点、记账（2026-11-03 起不发请求，审查是子代理做的）、超出预期用时的上报、取消与意见处理；`readiness.js`、`workflow.js` 提供就绪、交付、提交计划、自测和恢复事实；`work-sessions.js` 提示同变更冲突。`connection-lifecycle.js` 留无凭据退役记录；`redact.js` 统一诊断出口；`local-backup.js` 和 `entry-check.js` 管本地恢复与入口行为自检。
 
 跨会话状态加入 GLOBAL_STATE：evidence、review-jobs、work-baselines、review-local-metrics、work-sessions、readiness、usage-device、devserver（2026-10-28，devserver 的全机服务登记：端口 → 项目里的记录文件、运行目录、命令；start 找不到同名记录时按运行目录和命令认出之前起的服务，status、stop、会话开始的提醒也看它）。许可仍按会话清理。使用情况按持久随机设备标识分组；旧议题复用编号并改名，历史补充保留。审查材料和诊断明细不上传，耗时仅留本机。用户可见行为以 vibe-kit/README.md 和 vibe-kit/手册/ 为准（开发流程.md、验收清单.md 2026-10-30 删了，用户定的）。
 
 `state-store.atomicWrite` 写结构化对象，`atomicText` 写 Markdown 等原文；调用方检查保存结果。`state-store.acquire` 的锁记进程号和拿锁时间，进程不在了或者超过租期（默认 10 分钟，`leaseMs` 可改）都按失效处理（2026-10-31：Windows 复用进程号时锁曾经永远拿不回来）；经验规则的读改写用 `state/lessons.lock`。`workspace` 的相同只读 Git 查询只在一次钩子调用内复用，下一次调用重新核对。审查读材料前检查真实路径、文件类型和编码，范围外链接与未覆盖材料不会算作完整审查。
 
-审查不限时（2026-10-28 用户定的）：每批都送完，配置页的 `reviewBudgetSeconds` 是预期用时，审完超了、有批次只回思考或没拿到结论，`reportReview` 记一条问题反馈（总用时、每批用时、重试、输出 token、停止原因、原因，不带材料原文）；`--new-budget` 不再需要。单批请求只有 30 分钟的保险（防本机路由整个没了）。不带变更名的审查（`.vibe/reviews/plain/code.json`）也能 `resolve` 登记决定，"接受"按项目目录核对用户许可（#234）。新的完整审查清除上一轮意见处理状态，修复意见须有当前版本的成功复验。零问题或仅驳回意见不能批准后来修改的代码。
+审查不限时（2026-10-28 用户定的）：每批都送完，配置页的 `reviewBudgetSeconds` 是预期用时，审完超了、有批次只回思考或没拿到结论，`reportReview` 记一条问题反馈（总用时、每批用时、重试、输出 token、停止原因、原因，不带材料原文）；`--new-budget` 不再需要。（2026-11-03 起审查改子代理，分批、重试这些没了，只留超时记反馈。）不带变更名的审查（`.vibe/reviews/plain/code.json`）也能 `resolve` 登记决定，"接受"按项目目录核对用户许可（#234）。新的完整审查清除上一轮意见处理状态，修复意见须有当前版本的成功复验。零问题或仅驳回意见不能批准后来修改的代码。
 
 本地恢复包只包含受管程序，清单记录文件哈希和目录集合；额外文件、敏感文件、目录链接、清单变化均使恢复包失效。新版失败优先使用可验证的本地上一版，保留原来的远端恢复政策。活进程锁不因续期丢失随机身份。
 
@@ -166,7 +145,7 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 
 ## 20261013 反馈修复
 
-`invocation` 为命令与 HTTP 钩子提供 12 秒检查预算和阶段标记；会话读取、Git、文件指纹及完成证据共用。HTTP 工作线程将阶段送给 host，25 秒兜底记录最后阶段并放行；反馈另有 3 秒记录预算，不能因检查预算已用完而漏掉错误。状态锁和不能静态判断的磁盘等待仍按原 fail-open。`tools/diagnose.js` 只读阶段、推送回执与钩子统计白名单。
+`invocation` 为钩子提供 12 秒检查预算和阶段标记；会话读取、Git、文件指纹及完成证据共用。反馈另有 3 秒记录预算，不能因检查预算已用完而漏掉错误。状态锁和不能静态判断的磁盘等待仍按原 fail-open。`tools/diagnose.js` 只读阶段、推送回执与钩子统计白名单。
 
 `apply-scope` 绑定选中答案中的目标，缺目标时只取问题里的唯一变更或唯一当前变更。失效范围的产物修订清除旧实施范围并进入 plan/waiting=scope，保留开工答案指纹，防止重用；业务代码和打勾仍受当前许可约束。暂不提交记在会话 `-commit-declined`，同一输入不重复催问。
 
@@ -208,5 +187,5 @@ IDEA MCP：2026-10-28 起套件不再登记、不再探测（用户定的）。`
 - **许可**：`<会话>-permissions.json` 的每个动作各自记 `voice`（以前整份一个，换一次开口就清掉别的动作）；提交、推送同一句可用在几个仓库上，每个仓库一次，点了子项目名的只用在点名的；"改完然后提交"开口时不登记版本。
 - **开工**：`apply-scope.grant` 多认技能参数、模型刚才那段话（`session.saidBefore`）、这一步要改的变更或文件；认不下来把原因记进流程状态的 `applyRefused`（绑定那次开口），`refusal()` 给拦截提示用。`confirmApply` 在旧开工范围失效时也能凭新答案重新开工，pre-edit 拦业务代码前先补读。
 - **收工检查**：只认 openspec 命令（status、instructions、new、archive……）里点名的变更算"在做"；人工提示按每一份文档最后写入时间和用户表态时间比，不审之后没再改的不再问。
-- **审查执行器**：输出上限 16000，只回思考、停在上限的同一批 32000、加"少想"再试，还不行拆成两半各审一次（2026-10-28，#226）；诊断记 `stopReason`、`outputTokens`、`model`，没结论时结果带 `hint`。`--base` 可写几次（`仓库=提交`），未跟踪文件只送基线之后改过的（结果的 `excluded` 记跳过了几个），不带变更名的审查按基线分开记。
-- **指纹**：没改过的已跟踪文件直接用 `ls-files -s` 的哈希，链接（120000）和子模块（160000）照旧逐个核对；阶段名带仓库名。工作线程载入钩子模块放到预算外。
+- **审查材料**：`--base` 可写几次（`仓库=提交`），未跟踪文件只送基线之后改过的（结果的 `excluded` 记跳过了几个），不带变更名的审查按基线分开记。
+- **指纹**：没改过的已跟踪文件直接用 `ls-files -s` 的哈希，链接（120000）和子模块（160000）照旧逐个核对；阶段名带仓库名。载入钩子模块放到预算外。

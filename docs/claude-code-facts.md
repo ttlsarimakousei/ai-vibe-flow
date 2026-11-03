@@ -197,3 +197,11 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 - `refreshInterval: 10` 实测相隔 10.0 秒（2.1.120、2.1.289）。
 - 2.1.120 设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` 无害，工具和默认一样是 `TaskCreate` 这一组。
 - ◆◇✓●○ 在 winpty 抓屏里没有错位；Windows Terminal、conhost 上占几列要人看一眼。
+
+## 用户开口的钩子拦下斜杠命令（2026-11-04 实测）
+
+`dev/probes/cc-vk-config.js`，交互界面，假用户目录加假网关，2.1.120、2.1.259、2.1.289 一样：
+
+- 敲 `/vk-config`（`disable-model-invocation` 的命令），UserPromptSubmit 回 `decision: "block"` 加 `reason`：不发主会话的模型请求，屏幕上显示 `UserPromptSubmit operation blocked by hook:` 和 reason 那一行。配置页靠这个打开，不花 token。
+- winpty 跑在 Git Bash 下，参数 `/vk-config` 会被改写成 `C:/Program Files/Git/vk-config`，`MSYS2_ARG_CONV_EXCL`、`MSYS_NO_PATHCONV` 都不管用，要写 `//vk-config`。
+
