@@ -14,9 +14,6 @@ const H = require('./lib/harness');
 const PORT = Number(process.argv[2]) || 18795;
 const SHOTS = process.argv[3] ? path.resolve(process.argv[3]) : '';
 const h = H.makeHome('uidata');
-H.copyDir(path.join(H.SRC, 'router'), path.join(h.kit, 'router'));
-fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });
-fs.writeFileSync(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [], routes: [], default: { provider: '' }, failover: [], options: {} }, null, 2));
 fs.writeFileSync(path.join(h.cfg, 'settings.json'), '{}\n');
 fs.writeFileSync(path.join(h.kit, 'VERSION'), '20260930.0000\n');
 const line = (o) => JSON.stringify(Object.assign({ at: Date.now() }, o)) + '\n';
@@ -34,7 +31,7 @@ const call = (method, url, body) => new Promise((resolve) => {
 
 (async () => {
   const watch = await H.watchWindows('uidata-win');
-  const router = spawn(process.execPath, [path.join(h.kit, 'router', 'router.js'), '-c', path.join(h.kit, 'router-data', 'config.json'), '-p', String(PORT)], { env: H.envFor(h), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const router = H.configPage(h, PORT);
   let log = '';
   router.stdout.on('data', (d) => { log += d; });
   router.stderr.on('data', (d) => { log += d; });
@@ -42,7 +39,7 @@ const call = (method, url, body) => new Promise((resolve) => {
   const stopAll = async () => { try { if (browser) await browser.close(); } catch (e) { /* 已经关了 */ } try { router.kill(); } catch (e) { /* 已经退了 */ } };
   let up = false;
   for (let i = 0; i < 40 && !up; i++) { await H.sleep(250); up = (await call('GET', '/ui')).status === 200; }
-  H.ok('临时路由起来了，配置页打得开', up, log);
+  H.ok('配置页打得开', up, log);
   if (!up) { await stopAll(); return H.done('配置页：查库'); }
 
   H.section('接口');
@@ -76,7 +73,7 @@ const call = (method, url, body) => new Promise((resolve) => {
   if (page) {
     const shot = async (name, view) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: !view }); } };
     await page.goto('http://127.0.0.1:' + PORT + '/ui');
-    await page.waitForSelector('#meta:has-text("今天")');
+    await page.waitForSelector('#kitVer:has-text("套件")');
     H.ok('导航里叫"查库"', (await page.locator('nav > button').allInnerTexts()).includes('查库'), await page.locator('nav > button').allInnerTexts());
     await page.click('nav button[data-tab="data"]');
     const secs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());

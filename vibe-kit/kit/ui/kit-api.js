@@ -1,11 +1,11 @@
 'use strict';
 /*
- * 配置页里"本机环境""套件开关"两页的后端。路由本身不依赖它，删掉这个文件路由照常工作。
+ * 配置页的后端（lib/config-page.js 载它）："本机环境""套件开关"几页。
  *   本机环境 → ~/.claude/vibe-kit/local.json   各版本 JDK、Maven、Tomcat 在这台机器上的位置。保存后重新生成全局约定，Claude 每个会话都能看到
  *   套件开关 → ~/.claude/vibe-kit/config.json  自动验证、自动看页面、自动交叉审查、交接阈值
  *   问题反馈 → ~/.claude/vibe-kit/feedback/    只读：列表，每条带着上报了没有（记录由套件的钩子和 tools/feedback.js 写）。在"更新和上报"那一页显示
  *   更新和上报 → ~/.claude/vibe-kit/gitlab.json（仓库地址）、secrets.json（令牌，从不原样回给页面）；
- *                连 GitLab 的事（测试连接、检查更新、上报、导出）都起一个进程跑套件的 lib/updater.js，不在路由的进程里等
+ *                连 GitLab 的事（测试连接、检查更新、上报、导出）都起一个进程跑套件的 lib/updater.js，不在配置页的进程里等
  * 这些文件只在本机，不进任何仓库。
  */
 const fs = require('fs');
@@ -122,107 +122,18 @@ function detect(kitDir) {
 }
 
 /**
- * 重新生成全局约定、重新登记钩子。用户目录按套件所在的位置定（kitDir 的上一层），不看路由进程自己的环境变量：
- * 路由可能是登录时拉起来的，那时候的环境变量和用户开 Claude Code 的终端不一样
+ * 重新生成全局约定、重新登记钩子。用户目录按套件所在的位置定（kitDir 的上一层），不看这个进程自己的环境变量
  */
 function sync(kitDir) {
   return new Promise((resolve) => {
     const script = path.join(kitDir, 'install.js');
     if (!fs.existsSync(script)) return resolve({ ok: false, output: '还没装 vibe-kit：已经保存了，但要装了套件才会生效' });
     const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: path.dirname(path.resolve(kitDir)) });
-    // 路由是 detached 起的、没有控制台：不写 windowsHide 的话，每保存一次配置桌面上就弹一个 node 窗口
+    // 配置页是 detached 起的、没有控制台：不写 windowsHide 的话，每保存一次配置桌面上就弹一个 node 窗口
     execFile(process.execPath, [script, '--sync'], { timeout: 30000, env, windowsHide: true }, (err, stdout, stderr) => resolve({ ok: !err, output: String(stdout || '') + String(stderr || '') }));
   });
 }
 
-/** 钩子现在怎么跑：settings.json 里登记的方式（http / command / 两种都有 / 没登记），加上路由最近收到钩子调用的记录 */
-function hookInfo(kitDir) {
-  let registered = 'none';
-  try { registered = require(path.join(kitDir, 'lib', 'hook-health.js')).registeredTransport(path.dirname(kitDir)); } catch (e) { /* 老版本没有 */ }
-  let stats = null;
-  try { stats = JSON.parse(fs.readFileSync(path.join(kitDir, 'state', 'hook-stats.json'), 'utf8')); } catch (e) { /* 还没收到过 */ }
-  const byHook = {};
-  if (stats && stats.byHook) for (const k of Object.keys(stats.byHook)) { const h = stats.byHook[k] || {}; byHook[k] = { n: h.n || 0, at: h.at || 0, ms: h.ms || 0, blocked: h.blocked || 0, errors: h.errors || 0, lastError: h.lastError || '' }; }
-  return { registered, lastAt: (stats && stats.lastAt) || 0, byHook };
-}
-
-// ---------- 让 Claude Code 走这个路由 ----------
-/*
- * 全新的机器上，Claude Code 并不知道有这个路由：要在它的 settings.json 里把 ANTHROPIC_BASE_URL 指过来。
- * 这一步由人在配置页上点，不自动做：万一这台机器上的 Claude Code 本来连的是别处（官方、别的网关），自动改会让它用不了。
- * 改之前备份 settings.json；原来的值记在数据目录的 claude-link.json 里，"断开"时原样恢复。
- * key 不在这里管：路由会把每个请求换成对应模型的 key。只在什么凭证都没配时放一个占位的，让 Claude Code 不去要登录。
- */
-const PLACEHOLDER_TOKEN = 'vibe-kit-router';
-/** 本机回环地址（127.x、localhost、[::1]）：Claude Code 指着它，多半是这个路由换端口之前的地址 */
-const isLoopbackUrl = (u) => { try { const h = new URL(u).hostname.toLowerCase(); return h === 'localhost' || h === '[::1]' || /^127\./.test(h); } catch (e) { return false; } };
-function linkState(claudeDir, ctx) {
-  const target = 'http://127.0.0.1:' + ctx.port;
-  const file = path.join(claudeDir, 'settings.json');
-  let s = {};
-  let error = '';
-  try { if (fs.existsSync(file)) { let t = fs.readFileSync(file, 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); s = t.trim() ? JSON.parse(t) : {}; } } catch (e) { error = 'settings.json 不是合法的 JSON，没法改：' + e.message; }
-  if (!error && (!s || typeof s !== 'object' || Array.isArray(s) || (s.env !== undefined && (typeof s.env !== 'object' || !s.env || Array.isArray(s.env))))) error = 'settings.json 的结构不对（顶层或 env 不是对象），没法改';
-  const env = (!error && s.env) || {};
-  const current = String(env.ANTHROPIC_BASE_URL || '');
-  const isRouter = (u) => { try { const a = new URL(u); return ['127.0.0.1', 'localhost', '[::1]'].includes(a.hostname) && String(a.port || 80) === String(ctx.port); } catch (e) { return false; } };
-  return { file, settings: s, error, target, current, state: current ? (isRouter(current) ? 'router' : 'other') : 'none' };
-}
-function setLink(claudeDir, ctx, on, force) {
-  const st = linkState(claudeDir, ctx);
-  if (st.error) throw new Error(st.error);
-  const memoFile = path.join(ctx.dataDir, 'claude-link.json');
-  const s = st.settings;
-  if (on) {
-    if (st.state === 'router') return { changed: false };
-    if (st.state === 'other' && !force) return { changed: false, needConfirm: true, current: st.current, currentIsLocal: isLoopbackUrl(st.current) };
-    // 现在指着本机回环地址、而且之前记过"原来的地址"：多半是这个路由换了端口，这次只是改到新端口。
-    // 原来记下的地址不能被旧端口盖掉，不然以后点"断开"会恢复成旧端口，真正原来的网关地址就永远丢了
-    // 认"是不是这个路由以前的地址"：记录里有当时接上的地址（linkedTo）就按它比；老记录没有，就看是不是本机回环地址
-    const hadMemo = fs.existsSync(memoFile);
-    const old = readJson(memoFile, { prevBaseUrl: null, addedToken: false });
-    const moved = hadMemo && (old.linkedTo ? String(old.linkedTo) === st.current : isLoopbackUrl(st.current));
-    const memo = moved
-      ? { prevBaseUrl: old.prevBaseUrl || null, addedToken: !!old.addedToken, at: new Date().toISOString(), movedFrom: st.current, linkedTo: st.target }
-      : { prevBaseUrl: st.current || null, addedToken: false, at: new Date().toISOString(), linkedTo: st.target };
-    s.env = s.env || {};
-    s.env.ANTHROPIC_BASE_URL = st.target;
-    if (!s.env.ANTHROPIC_AUTH_TOKEN && !s.env.ANTHROPIC_API_KEY) { s.env.ANTHROPIC_AUTH_TOKEN = PLACEHOLDER_TOKEN; memo.addedToken = true; }
-    writeJson(memoFile, memo);
-  } else {
-    if (st.state !== 'router') return { changed: false };
-    const memo = readJson(memoFile, { prevBaseUrl: null, addedToken: false });
-    if (memo.prevBaseUrl) s.env.ANTHROPIC_BASE_URL = memo.prevBaseUrl; else delete s.env.ANTHROPIC_BASE_URL;
-    if (s.env.ANTHROPIC_AUTH_TOKEN === PLACEHOLDER_TOKEN) delete s.env.ANTHROPIC_AUTH_TOKEN;
-    if (!Object.keys(s.env).length) delete s.env;
-  }
-  // 先备份再写
-  if (fs.existsSync(st.file)) {
-    const dir = path.join(ctx.dataDir, 'settings-backups');
-    fs.mkdirSync(dir, { recursive: true });
-    const d = new Date(); const p = (n) => String(n).padStart(2, '0');
-    // 文件名带毫秒，同名就加序号：一秒内连着点两次，后一份备份不能把前一份（最原始的那份）盖掉
-    const stamp = d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '-' + String(d.getMilliseconds()).padStart(3, '0');
-    let to = path.join(dir, 'settings-' + stamp + '.json');
-    for (let n = 2; fs.existsSync(to); n++) to = path.join(dir, 'settings-' + stamp + '-' + n + '.json');
-    fs.copyFileSync(st.file, to);
-    const old = fs.readdirSync(dir).filter((f) => /^settings-.*\.json$/.test(f)).sort();
-    while (old.length > 10) fs.unlinkSync(path.join(dir, old.shift()));
-  }
-  writeJson(st.file, s);
-  // 断开：恢复完了，这份记录就用掉了。留着的话，以后 settings.json 改成别的本机地址再接上，会被误认成"换了端口"
-  if (!on) { try { fs.unlinkSync(memoFile); } catch (e) { /* 没有 */ } }
-  return { changed: true };
-}
-const publicLink = (claudeDir, ctx) => {
-  const st = linkState(claudeDir, ctx);
-  const memoFile = path.join(ctx.dataDir, 'claude-link.json');
-  // 记下的"原来的地址"：换端口后再接上时页面要说清楚，"断开"恢复的是它，不是旧端口
-  const remembered = fs.existsSync(memoFile) ? readJson(memoFile, { prevBaseUrl: null }).prevBaseUrl || '' : null;
-  return { state: st.state, current: st.current, target: st.target, error: st.error, file: st.file, usable: ctx.usable || 0, currentIsLocal: isLoopbackUrl(st.current), remembered };
-};
-
-/** 最近两小时里状态栏刷新过的会话：用了多少 token、Claude Code 报的窗口多大。百分比由页面按当前填的上限现算，改了数马上能看到效果 */
 function liveSessions(kitDir) {
   const out = [];
   try {
@@ -240,7 +151,7 @@ function liveSessions(kitDir) {
 }
 
 /**
- * 给配置页的"选目录"弹窗列目录。网页自己拿不到硬盘上的完整路径（浏览器的限制），路由就跑在本机，由它来列。
+ * 给配置页的"选目录"弹窗列目录。网页自己拿不到硬盘上的完整路径（浏览器的限制），后端就跑在本机，由它来列。
  * 只列名字，不读文件内容；接口只接受本机连接。顺手标出当前目录是不是一个 JDK / Maven / Tomcat，免得选错层级。
  */
 function browse(dir, wantFile) {
@@ -274,7 +185,7 @@ function browse(dir, wantFile) {
 /** 工作线程里实际执行的那几件事（kit-worker.js 调它） */
 function runOp(op, a) {
   if (op === 'readiness') { const f = path.join(a.kitDir, 'lib', 'readiness.js'); return require(f).inspect(a.project); }
-  if (op === 'performance') { const S = require(path.join(a.kitDir, 'lib', 'session')); return { reviews: S.readState('review-local-metrics'), hooks: S.readState('hook-stats').byHook || {}, tools: toolUsage(a.kitDir) }; }
+  if (op === 'performance') { const S = require(path.join(a.kitDir, 'lib', 'session')); return { hooks: S.readState('hook-stats').byHook || {}, tools: toolUsage(a.kitDir) }; }
   if (op === 'browse') return browse(a.dir, a.file);
   if (op === 'detect') return detect(a.kitDir);
   if (op === 'lessons') return lessonsOp(a);
@@ -283,7 +194,7 @@ function runOp(op, a) {
 
 // ---------- 工作线程 ----------
 /*
- * 选目录、自动探测、读驱动的登记表都是同步的文件操作，碰到断开的网络盘、很慢的磁盘会卡住几十秒。路由的转发和它们在同一个线程里的话，
+ * 选目录、自动探测、读驱动的登记表都是同步的文件操作，碰到断开的网络盘、很慢的磁盘会卡住几十秒。和接口在同一个线程里的话，
  * 这段时间所有请求都跟着卡住。所以放到一个工作线程里做；主线程只等 8 秒，超时就结束这个线程（下次重新建一个），告诉页面"超时"。
  * 被卡住的那个线程要等系统调用自己返回才会真正退出，但已经不挡任何东西了。
  */
@@ -302,7 +213,7 @@ function dropWorker(reason) {
 function getWorker() {
   if (worker) return worker;
   const w = new Worker(WORKER_FILE);
-  w.unref(); // 不因为它让路由退不掉
+  w.unref(); // 不因为它让配置页退不掉
   w.on('message', (m) => { const p = pending.get(m && m.id); if (!p) return; pending.delete(m.id); clearTimeout(p.timer); if (m.ok) p.resolve(m.result); else p.reject(new Error(m.error)); });
   w.on('error', (e) => { if (worker === w) dropWorker('后台线程出错：' + ((e && e.message) || e)); });
   w.on('exit', () => { if (worker === w) dropWorker('后台线程意外退出了，请再试一次'); });
@@ -325,13 +236,10 @@ function inWorker(op, args, what) {
   });
 }
 
-async function handle(method, url, body, kitDir, ctx) {
+async function handle(method, url, body, kitDir) {
   if (method === 'POST' && url === '/api/kit/readiness') { const project = pathStr(body && body.project); if (!project || !path.isAbsolute(project)) throw new Error('填写项目完整路径'); return inWorker('readiness', { kitDir, project }, '核对环境'); }
   if (method === 'GET' && url === '/api/kit/performance') return inWorker('performance', { kitDir }, '读取本机耗时');
   if (method === 'POST' && url === '/api/kit/browse') return inWorker('browse', { dir: pathStr(body && body.dir), file: !!(body && body.file) }, '列目录');
-  const claudeDir = path.dirname(kitDir);
-  if (ctx && method === 'GET' && url === '/api/kit/link') return publicLink(claudeDir, ctx);
-  if (ctx && method === 'POST' && url === '/api/kit/link') { const r = setLink(claudeDir, ctx, !!(body && body.on), !!(body && body.force)); return Object.assign(r, publicLink(claudeDir, ctx)); }
   const localFile = path.join(kitDir, 'local.json');
   const configFile = path.join(kitDir, 'config.json');
   const installed = fs.existsSync(path.join(kitDir, 'install.js'));
@@ -343,7 +251,7 @@ async function handle(method, url, body, kitDir, ctx) {
     if (config.kitLock === false && seal.kitLock !== false) tampered.push('关掉"禁止 Claude 自己改套件"');
     if (config.kitBypass === 'auto' && seal.kitBypass !== 'auto') tampered.push('兜底放行"让它自己放行"');
     for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (config[k] === true && seal[k] === false) tampered.push('打开“' + label + '”');
-    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, hooks: hookInfo(kitDir), tampered, openspec: openspecInfo(kitDir), notice: installNotice(kitDir) };
+    return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, tampered, openspec: openspecInfo(kitDir), notice: installNotice(kitDir) };
   }
   // 安装时覆盖了你改过的东西、挪了你的补充（安装器写在 state/install-done.json 的 notice）：页面上点"知道了"之后不再提示
   if (method === 'POST' && url === '/api/kit/notice') {
@@ -352,7 +260,6 @@ async function handle(method, url, body, kitDir, ctx) {
     if (d.notice && d.notice.at) { d.noticeSeen = Number(d.notice.at) || Date.now(); writeJson(f, d); }
     return { ok: true };
   }
-  if (method === 'GET' && url === '/api/kit/hooks') return hookInfo(kitDir);
   if (method === 'GET' && url === '/api/kit/sessions') return { sessions: liveSessions(kitDir) };
   if (method === 'GET' && url === '/api/kit/detect') return inWorker('detect', { kitDir }, '自动探测');
   if (method === 'POST' && url === '/api/kit/local') { writeJson(localFile, cleanLocal(body)); const r = await sync(kitDir); return { ok: true, synced: r.ok, output: r.output }; }
@@ -400,14 +307,14 @@ async function handle(method, url, body, kitDir, ctx) {
   throw new Error('没有这个接口');
 }
 // ---------- 更新和上报 ----------
-/** 套件里管 GitLab、更新、上报的那几份代码（每次现读：装了新版不用重启路由）。老版本没有的返回 null */
+/** 套件里管 GitLab、更新、上报的那几份代码（每次现读：装了新版不用重启配置页）。老版本没有的返回 null */
 function loadRemote(kitDir) {
   const lib = path.join(kitDir, 'lib');
   if (!fs.existsSync(path.join(lib, 'updater.js')) || !fs.existsSync(path.join(lib, 'gitlab.js'))) return null;
   for (const m of ['updater.js', 'issues.js', 'gitlab.js', 'feedback.js', 'session.js']) { try { delete require.cache[require.resolve(path.join(lib, m))]; } catch (e) { /* 没载入过 */ } }
   return { gl: require(path.join(lib, 'gitlab.js')), up: require(path.join(lib, 'updater.js')), is: require(path.join(lib, 'issues.js')), session: require(path.join(lib, 'session.js')) };
 }
-/** 起一个进程跑套件的 lib/updater.js <命令>，把它写出来的那一行 JSON 拿回来。没有窗口；路由的转发不受影响 */
+/** 起一个进程跑套件的 lib/updater.js <命令>，把它写出来的那一行 JSON 拿回来。没有窗口 */
 function runKit(kitDir, args, timeoutMs) {
   return new Promise((resolve) => {
     const script = path.join(kitDir, 'lib', 'updater.js');
@@ -471,7 +378,7 @@ async function remote(method, url, body, kitDir) {
     // 固定着的不装：页面上按钮是灰的，这里再挡一次
     const pinned = r.up.status().pin;
     if (pinned) return Object.assign({ started: false, why: '固定在 ' + pinned + '，不更新。要更新先点"取消固定"' }, remoteView(r, true));
-    // 安装器会把路由停掉换新的：更新进程得独立于路由（不然跟着路由一起被结束），所以甩到后台，页面自己隔几秒来问进度
+    // 更新进程独立于配置页，甩到后台，页面自己隔几秒来问进度
     if (r.up.lockHeld()) return Object.assign({ started: false, why: '已经有一个在跑了' }, remoteView(r, true));
     r.up.spawnBackground(['apply']);
     return Object.assign({ started: true }, remoteView(r, true));
@@ -518,7 +425,7 @@ function lessonsOp(a) {
   if (!r.ok) throw new Error(r.msg || '没做成');
   return Object.assign({ ok: true, done: a.action, file: r.file || '' }, ls.overview());
 }
-/** 套件里管经验规则的那一份代码（每次现读：装了新版不用重启路由）。没装套件、老版本没有的返回 null */
+/** 套件里管经验规则的那一份代码（每次现读：装了新版不用重启配置页）。没装套件、老版本没有的返回 null */
 function loadLessons(kitDir) {
   const f = path.join(kitDir, 'lib', 'lessons.js');
   if (!fs.existsSync(f)) return null;
@@ -532,7 +439,7 @@ function loadLessons(kitDir) {
  */
 /**
  * 在文件里现有的配置上合并传进来的字段、整体清洗、写回。返回改之前和改之后的。
- * 和钩子自检切回命令方式（lib/hook-health.js）用同一把锁：两边同时写会互相盖掉。拿不到锁照样写（老版本的套件没有 state-store）
+ * 拿锁写，免得几个页面同时写互相盖掉。拿不到锁照样写（老版本的套件没有 state-store）
  */
 function mergeConfig(kitDir, inc) {
   const configFile = path.join(kitDir, 'config.json');
@@ -571,7 +478,7 @@ function toolUsage(kitDir) {
     return { stats: ts.stats(30), hints: ts.hints() };
   } catch (e) { return { stats: [], hints: [] }; }
 }
-/** 套件里记问题反馈的那一份代码（每次现读：装了新版不用重启路由）。没装套件、老版本没有的返回 null */
+/** 套件里记问题反馈的那一份代码（每次现读：装了新版不用重启配置页）。没装套件、老版本没有的返回 null */
 function loadFeedback(kitDir) {
   const f = path.join(kitDir, 'lib', 'feedback.js');
   if (!fs.existsSync(f)) return null;
@@ -586,4 +493,4 @@ function loadIssues(kitDir) {
   return require(f);
 }
 
-module.exports = { handle, detect, browse, runOp, sync, hookInfo, cleanLocal, cleanConfig, DEFAULT_CONFIG, EMPTY_LOCAL };
+module.exports = { handle, detect, browse, runOp, sync, cleanLocal, cleanConfig, DEFAULT_CONFIG, EMPTY_LOCAL };

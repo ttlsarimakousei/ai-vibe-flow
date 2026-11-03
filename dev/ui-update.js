@@ -1,16 +1,17 @@
 'use strict';
 /*
  * 配置页"更新和上报"那一页的接口，加上"保存开关"的新规矩（只存改过的项）。
- * 在假的用户目录里用真的安装器装一份（带路由，端口换掉），假 GitLab 当仓库。走一遍：
- *   填仓库地址和令牌 → 测试连接 → 立即检查 → 立即更新（安装器会把路由重启）→ 上报 → 导出（交给页面下载）→ 关掉这一批 → 使用情况
- * 维护套件的电脑 2026-10-01 起写死在代码里：测导出时用环境变量 VIBE_KIT_MAINTAINER_HOSTS 把路由装成那台电脑
+ * 在假的用户目录里用真的安装器装一份，配置页起在测试端口，假 GitLab 当仓库。走一遍：
+ *   填仓库地址和令牌 → 测试连接 → 立即检查 → 立即更新 → 上报 → 导出（交给页面下载）→ 关掉这一批 → 使用情况
+ * 维护套件的电脑 2026-10-01 起写死在代码里：测导出时用环境变量 VIBE_KIT_MAINTAINER_HOSTS 把配置页装成那台电脑
  * 第二个参数给秒数就留着让人（或浏览器工具）看页面。看完在临时目录里建一个叫 stop 的文件，或者等到时间。
- * 用法：node dev/ui-update.js [路由端口，默认 18745] [留多少秒，默认 0] [假 GitLab 的端口，默认 18746]
+ * 用法：node dev/ui-update.js [配置页端口，默认 18745] [留多少秒，默认 0] [假 GitLab 的端口，默认 18746]
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const { spawn } = require('child_process');
 const H = require('./lib/harness');
 
 const PORT = Number(process.argv[2]) || 18745;
@@ -50,21 +51,22 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
   const pubA = H.node(m, path.join(pkgA, 'publish.js'), ['--no-router', '--no-open'], { cwd: pkgA, timeout: 600000, env: { VIBE_KIT_NO_UPDATE: undefined } });
   H.ok('（维护的人发布了 A）', pubA.code === 0, pubA.out + pubA.err);
 
-  // 同事的电脑：装 A，带路由（端口换成测试用的）
+  // 同事的电脑：装 A
   const h = H.freshHome('uiu-u');
-  fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });
-  fs.writeFileSync(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [], routes: [], default: { provider: '' }, failover: [], options: {} }, null, 2));
   const inst = H.node(h, path.join(pkgA, 'install.js'), ['--no-open'], { cwd: h.root, timeout: 300000, env: Object.assign({}, live, { VIBE_KIT_NO_UPDATE: '1' }) });
-  H.ok('同事的电脑装上了 A，路由在测试端口上跑着', inst.code === 0 && /模型路由 v.*已在后台运行/.test(inst.out) && new RegExp(':' + PORT + '/ui').test(inst.out), inst.out + inst.err);
-  H.ok('登录后自动启动写进了假的"启动"文件夹', fs.existsSync(path.join(h.home, 'Startup', 'vibe-kit-router.vbs')), inst.out);
-  const svc = path.join(h.kit, 'router', 'service.js');
-  const stopRouter = () => H.node(h, svc, ['stop'], { cwd: h.root, timeout: 60000 });
-  // 路由是安装器甩出去的，环境变量里没有假 ssh：停掉，带着假 ssh 的环境重新起（真实的电脑上路由继承的就是用户的环境）
-  stopRouter();
-  const restart = H.node(h, svc, ['start'], { cwd: h.root, timeout: 60000, env: Object.assign({}, live) });
-  let up = false;
-  for (let i = 0; i < 40 && !up; i++) { await H.sleep(250); up = (await call('GET', '/ui')).status === 200; }
-  H.ok('配置页打得开', up, restart.out + restart.err);
+  H.ok('同事的电脑装上了 A', inst.code === 0, inst.out + inst.err);
+  H.ok('没有路由，没写开机自启', !fs.existsSync(path.join(h.kit, 'router')) && !fs.existsSync(path.join(h.home, 'Startup', 'vibe-kit-router.vbs')), inst.out);
+  // 配置页带着假 ssh 的环境起（真实的电脑上它继承钩子的环境）
+  let pageProc = null;
+  const pageUp = async (env) => {
+    pageProc = spawn(process.execPath, [path.join(h.kit, 'lib', 'config-page.js'), 'serve'], { env: H.envFor(h, Object.assign({}, live, { VIBE_KIT_CONFIG_PORT: String(PORT), VIBE_KIT_NO_BROWSER: '1', VIBE_KIT_CONFIG_IDLE_MS: '900000', VIBE_KIT_CONFIG_NOBODY_MS: '900000' }, env || {})), stdio: 'ignore', windowsHide: true });
+    for (let i = 0; i < 40; i++) { await H.sleep(250); if ((await call('GET', '/ui')).status === 200) return true; }
+    return false;
+  };
+  // 配置页可能自己换过进程（更新后用新代码重起），按状态文件里的进程号停
+  const stopPage = async () => { try { pageProc.kill(); } catch (e) { /* 已经退了 */ } try { process.kill(readJson(path.join(h.kit, 'state', 'config-page.json')).pid); } catch (e) { /* 已经退了 */ } await H.sleep(500); };
+  const up = await pageUp();
+  H.ok('配置页打得开', up);
   for (const t of ['第一条', '第二条']) H.node(h, '-e', ['require(' + JSON.stringify(path.join(h.kit, 'lib', 'feedback.js')) + ').record(' + JSON.stringify({ kind: '出错', hook: 'verify-gate', title: '同事电脑上记的' + t, what: 'x', sig: 'sig-ui-' + t }) + ')'], { cwd: h.root });
 
   if (up) {
@@ -76,24 +78,22 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
     H.ok('问题列表、使用情况在"更新和上报"这一页；经验规则单开一页', /id="fbList"/.test(remoteTab) && /id="sec-usage-report"/.test(remoteTab) && /data-tab="lessons"/.test(page.text) && /id="tab-lessons"[\s\S]*id="sec-lessons"/.test(page.text) && !/id="sec-feedback"/.test(page.text));
     const kitInfo = await call('GET', '/api/kit');
     const c0 = kitInfo.json && kitInfo.json.config;
-    H.ok('开关里有新的几项，没有"维护套件的电脑"', c0 && c0.autoUpdate === 'auto' && c0.updateCheckHours === 2 && c0.issueUpload === 'on' && c0.sshToken === 'auto' && c0.maintainerHosts === undefined && c0.autoCompactPercent === 70 && c0.statusUsage === true && c0.commitMode === 'off' && c0.pullBeforeWork === undefined && c0.autoCommit === undefined && c0.usageReport === 'on', c0);
-    const busy = await call('GET', '/busy');
-    H.ok('路由答得出"现在忙不忙"', busy.status === 200 && busy.json && busy.json.inflight === 0 && busy.json.idleMs >= 0, busy.text);
+    H.ok('开关里有新的几项，没有"维护套件的电脑"', c0 && c0.autoUpdate === 'auto' && c0.updateCheckHours === 2 && c0.issueUpload === 'on' && c0.sshToken === 'auto' && c0.maintainerHosts === undefined && c0.autoCompactPercent === 70 && c0.commitMode === 'off' && c0.pullBeforeWork === undefined && c0.autoCommit === undefined && c0.usageReport === 'on', c0);
 
     H.section('保存开关：只存改过的项');
-    // 页面甲把审查轮数改成 4；页面乙（打开得早，还显示 3）只改了提交方式（2026-10-17 起是 commitMode）——只传改过的那一项，轮数不会被带回 3
-    const s1 = await call('POST', '/api/kit/config', { reviewMaxRounds: 4 });
+    // 页面甲把过程文件保留天数改成 4；页面乙（打开得早，还显示 7）只改了提交方式（2026-10-17 起是 commitMode）——只传改过的那一项，轮数不会被带回 3
+    const s1 = await call('POST', '/api/kit/config', { tmpKeepDays: 4 });
     const s2 = await call('POST', '/api/kit/config', { commitMode: 'off' });
-    H.ok('别的页面只改了别的项：审查轮数不变', s1.json.config.reviewMaxRounds === 4 && s2.json.config.reviewMaxRounds === 4 && s2.json.config.commitMode === 'off' && readJson(path.join(h.kit, 'config.json')).reviewMaxRounds === 4, s2.text);
-    const s3 = await call('POST', '/api/kit/config', { reviewMaxRounds: 9, updateCheckHours: 99, autoUpdate: 'sometimes', issueUpload: 'maybe', maintainerHosts: ['10.9.8.7'], autoCompactPercent: 30, usageReport: 'maybe', commitMode: 'sometimes' });
-    H.ok('乱填的不收，保持原值；"维护套件的电脑"传了也不存', s3.json.config.reviewMaxRounds === 4 && s3.json.config.updateCheckHours === 2 && s3.json.config.autoUpdate === 'auto' && s3.json.config.issueUpload === 'on' && s3.json.config.maintainerHosts === undefined && s3.json.config.autoCompactPercent === 70 && s3.json.config.usageReport === 'on' && s3.json.config.commitMode === 'off' && !/maintainerHosts/.test(H.read(path.join(h.kit, 'config.json'))), s3.text);
-    const s4 = await call('POST', '/api/kit/config', { autoUpdate: 'notify', updateCheckHours: 6, sshToken: 'off', autoCompactPercent: 80, usageReport: 'off', commitMode: 'auto', statusUsage: false });
-    H.ok('新的几项存得进去', s4.json.config.autoUpdate === 'notify' && s4.json.config.updateCheckHours === 6 && s4.json.config.sshToken === 'off' && s4.json.config.autoCompactPercent === 80 && s4.json.config.usageReport === 'off' && s4.json.config.commitMode === 'auto' && s4.json.config.statusUsage === false, s4.text);
+    H.ok('别的页面只改了别的项：天数不变', s1.json.config.tmpKeepDays === 4 && s2.json.config.tmpKeepDays === 4 && s2.json.config.commitMode === 'off' && readJson(path.join(h.kit, 'config.json')).tmpKeepDays === 4, s2.text);
+    const s3 = await call('POST', '/api/kit/config', { tmpKeepDays: -5, updateCheckHours: 99, autoUpdate: 'sometimes', issueUpload: 'maybe', maintainerHosts: ['10.9.8.7'], autoCompactPercent: 30, usageReport: 'maybe', commitMode: 'sometimes' });
+    H.ok('乱填的不收，保持原值；"维护套件的电脑"传了也不存', s3.json.config.tmpKeepDays === 4 && s3.json.config.updateCheckHours === 2 && s3.json.config.autoUpdate === 'auto' && s3.json.config.issueUpload === 'on' && s3.json.config.maintainerHosts === undefined && s3.json.config.autoCompactPercent === 70 && s3.json.config.usageReport === 'on' && s3.json.config.commitMode === 'off' && !/maintainerHosts/.test(H.read(path.join(h.kit, 'config.json'))), s3.text);
+    const s4 = await call('POST', '/api/kit/config', { autoUpdate: 'notify', updateCheckHours: 6, sshToken: 'off', autoCompactPercent: 80, usageReport: 'off', commitMode: 'auto' });
+    H.ok('新的几项存得进去', s4.json.config.autoUpdate === 'notify' && s4.json.config.updateCheckHours === 6 && s4.json.config.sshToken === 'off' && s4.json.config.autoCompactPercent === 80 && s4.json.config.usageReport === 'off' && s4.json.config.commitMode === 'auto', s4.text);
     H.ok('自动压缩线改了：settings.json 的窗口跟着改', readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow === 833000 && s4.json.synced !== false, [readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow, s4.json.output]);
     const s5 = await call('POST', '/api/kit/config', { autoCompactPercent: 0 });
     H.ok('页面上的两项（J2）给页面，不存进文件', s5.json.config.contextAction === 'off' && !('contextAction' in readJson(path.join(h.kit, 'config.json'))) && !('contextPercent' in readJson(path.join(h.kit, 'config.json'))), readJson(path.join(h.kit, 'config.json')));
     H.ok('填 0：窗口去掉，照 Claude Code 自己的', s5.json.config.autoCompactPercent === 0 &&readJson(path.join(h.cfg, 'settings.json')).autoCompactWindow === undefined, s5.text);
-    await call('POST', '/api/kit/config', { sshToken: 'auto', commitMode: 'ask', reviewMaxRounds: 3, autoCompactPercent: 90, usageReport: 'on', statusUsage: true });
+    await call('POST', '/api/kit/config', { sshToken: 'auto', commitMode: 'ask', tmpKeepDays: 7, autoCompactPercent: 90, usageReport: 'on' });
 
     H.section('仓库地址和令牌');
     let d = (await call('GET', '/api/kit/remote')).json;
@@ -125,11 +125,11 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
     H.ok('问进度的接口不带问题反馈那一块', st1.json && st1.json.update && st1.json.issues === undefined, st1.text);
     const ap = await call('POST', '/api/kit/remote/apply', {});
     H.ok('立即更新：在后台开始了', ap.status === 200 && ap.json.started === true, ap.text);
-    // 安装器会把路由停掉换新的：页面这时连不上是正常的，隔一会儿再问
+    // 装完配置页用新代码重起一份，这时连不上是正常的，隔一会儿再问
     let done = false;
     let last = null;
     for (let i = 0; i < 240 && !done; i++) { await H.sleep(1000); last = await call('GET', '/api/kit/remote/status'); done = !!(last.json && last.json.version === B && !last.json.update.running); }
-    H.ok('装上了 B，路由换成了新的，页面又连得上', done && (H.read(path.join(h.kit, 'VERSION')) || '').trim() === B, last && last.text);
+    H.ok('装上了 B，配置页换成了新代码，页面又连得上', done && (H.read(path.join(h.kit, 'VERSION')) || '').trim() === B, last && last.text);
     H.ok('更新之后：仓库地址、令牌、开关都还在', readJson(path.join(h.kit, 'gitlab.json')).repo === gl.url && readJson(path.join(h.kit, 'secrets.json')).gitlabToken === UT && readJson(path.join(h.kit, 'config.json')).autoUpdate === 'notify');
     const ap2 = await call('POST', '/api/kit/remote/apply', {});
     await H.sleep(1500);
@@ -149,11 +149,9 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
     H.ok('不是维护套件的电脑：不给导出，也不给关', ex0.status >= 400 && /维护套件/.test(ex0.json.error) && cl0.status >= 400 && gl.issues().every((i) => i.state === 'opened'), ex0.text + cl0.text);
     d = (await call('GET', '/api/kit/remote')).json;
     H.ok('配置里写什么都不认', d.maintainer === false && d.config.maintainerHosts === undefined, d.config);
-    // 装成维护的那台电脑：带着测试用的环境变量重新起路由
-    stopRouter();
-    H.node(h, svc, ['start'], { cwd: h.root, timeout: 60000, env: Object.assign({}, live, { VIBE_KIT_MAINTAINER_HOSTS: os.hostname() }) });
-    let back = false;
-    for (let i = 0; i < 40 && !back; i++) { await H.sleep(250); back = (await call('GET', '/ui')).status === 200; }
+    // 装成维护的那台电脑：带着测试用的环境变量重新起配置页
+    await stopPage();
+    const back = await pageUp({ VIBE_KIT_MAINTAINER_HOSTS: os.hostname() });
     d = (await call('GET', '/api/kit/remote')).json;
     H.ok('维护的那台电脑：认了', back && d.maintainer === true, d && d.config);
     const ex1 = await call('POST', '/api/kit/remote/issues/export', {});
@@ -244,8 +242,7 @@ const call = (method, url, body, noHeader) => new Promise((resolve) => {
     const end = Date.now() + STAY * 1000;
     while (Date.now() < end && !fs.existsSync(path.join(h.root, 'stop'))) await H.sleep(500);
   }
-  const stopped = stopRouter();
-  H.ok('路由停掉了', stopped.code === 0, stopped.out + stopped.err);
+  await stopPage();
   gl.stop();
   await H.sleep(500);
   const wins = await watch.stop();

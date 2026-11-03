@@ -21,9 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const intent = require('../lib/intent');
-const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, sessionChanges, KIT, cli } = require('../lib/session');
-let hookHealth = () => '';
-try { hookHealth = require('../lib/hook-health.js').check; } catch (e) { /* 老版本没有 */ }
+const { blockOut, atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, sessionChanges, KIT, cli } = require('../lib/session');
 
 // "不要停""别等我，做完再说""不用问我"：开头是"不 / 别"，意思却是接着做
 const KEEP_GOING = /^(不要|不用|别|甭|不必|无需)再?(停|等|问|管我|确认|请示|汇报|担心)/;
@@ -338,17 +336,10 @@ function anchorLines(j, cfg, note) {
     if (used && cfg.contextStrategy === 'handover') {
       const pct = Math.round(contextPercent(used, fresh ? st.windowSize : 0, cfg).pct);
       const line = Number(cfg.handoverPercent) || 70;
-      const gw = nearGatewayLimit(used);
       const hk = sid + '-handover';
       const asked = readState(hk);
       const declined = asked.askedAtPct != null && pct < asked.askedAtPct + 10;
-      if (gw) {
-        if (!note || !asked.gwNoted) {
-          overLine = true;
-          lines.push('这个会话的请求快到内网网关能接受的大小了：上次大约 ' + Math.round(gw.limitTokens / 10000) + ' 万 token 时被网关直接拒绝，那是硬限制，撞上了这个会话就发不出去了。现在就执行 /ttls-handover 写交接记录，然后' + (cfg.autoMode ? '停下（全自动模式也得停：这个会话发不出去了）' : '提醒我开新会话') + '。');
-          if (note) writeState(hk, Object.assign({}, asked, { gwNoted: true, at: Date.now() }));
-        }
-      } else if (pct >= line && !note) {
+      if (pct >= line && !note) {
         overLine = !declined;
         if (cfg.autoMode) {
           // 全自动：每涨 10 个百分点说一次（收工检查也按这个记录，写过交接记录的不再催）
@@ -376,7 +367,16 @@ const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，�
   + '只做探索记录和用户材料里有的，不自己加需求（"这里加个按钮更好"这种不加）；做法上的取舍自己定，记进 revisions.md（起因：自动模式决定），不停下来问；'
   + '用户中途报的问题、改的需求照改，记进 revisions.md，接着自动做。只有用户的描述或材料让你完全走不下去时，先自己探索，还不行再问。归档、push 照旧要用户点头；改库、写 redis 照技能里全自动的规矩（留得下备份的工具会说不用等人，别的留给用户）。';
 const AUTO_OFF_TEXT = '这个会话的自动模式关了（用户刚说的）：照人工来，审查、自测、复验先问用户。';
+/** /vk-config：钩子拉起配置页、开浏览器，这句话不发给模型（用户 2026-11-03 定的，路由删了之后配置页用时才起） */
+const CONFIG_CMD = /^\s*\/vk-config\s*$|<command-name>\s*\/?vk-config\s*<\/command-name>/i;
+async function openConfigPage() {
+  const P = require('../lib/config-page.js');
+  const r = await P.ensure();
+  if (r.ok) P.openInBrowser(r.url);
+  return blockOut('UserPromptSubmit', r.ok ? '配置页：' + r.url : '配置页没起来：' + r.reason);
+}
 async function handle(j) {
+  if (CONFIG_CMD.test(String(j.prompt || ''))) { try { return await openConfigPage(); } catch (e) { return blockOut('UserPromptSubmit', '配置页没起来：' + ((e && e.message) || e)); } }
   // 用户开、关这个会话的自动模式（/vk-auto、"这个需求自动做"、"别自动了"）：先记下，下面按新的开关算。后台任务的通知不算用户的话
   let autoSaid = '';
   if (!isTaskNotePrompt(j.prompt)) {
@@ -469,8 +469,6 @@ async function handle(j) {
   if (!note) {
     try { const ob = require('../lib/onboard.js'); ob.kick(j.cwd || process.cwd(), '用户开口'); ob.waitFresh(j.cwd || process.cwd(), 1500); const on = ob.noticeFor(j); if (on) lines.unshift(on); } catch (e) { /* 探索的事不影响对话 */ }
   }
-  // 钩子走 HTTP 时的自检：上一轮改过文件、跑过命令，路由却没收到钩子调用 → 拉起路由，或者切回命令方式
-  try { const hh = await hookHealth(j, cfg); if (hh) lines.unshift(hh); } catch (e) { /* 自检失败不影响对话 */ }
   // 报的是做完的功能上的问题：先溯源再修（这时就不提"先探索再提案"，修 bug 不用提案）
   const th = note ? '' : traceHint(j, cfg);
   if (cfg.specGate !== false && !note) {

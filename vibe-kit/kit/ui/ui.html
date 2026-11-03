@@ -63,6 +63,18 @@
 
   /* ---------- 卡片 ---------- */
   /* 套件说明页的图：两栏流程、组成图（只用页面已有的颜色变量，深浅色都跟着走） */
+  .g-fig { margin:12px 0 0; }
+  .g-svg { overflow-x:auto; border:1px solid var(--hair); border-radius:9px; padding:10px; background:var(--card); }
+  .g-svg svg { display:block; width:100%; min-width:900px; height:auto; color:var(--text); }
+  .g-svg svg text { font-family:var(--sans); font-size:12px; fill:var(--text); }
+  .g-svg svg .h { font-size:13px; font-weight:700; }
+  .g-svg svg .s, .g-svg svg .l { font-size:11.5px; fill:var(--dim); }
+  .g-svg svg .m { font-family:var(--mono); font-size:11px; }
+  .g-svg svg .b { fill:var(--bg); stroke:var(--line); }
+  .g-svg svg .g { fill:none; stroke:var(--line); stroke-dasharray:4 4; }
+  .g-svg svg .a { fill:none; stroke:var(--dim); stroke-width:1.3; }
+  .g-svg svg .ah { fill:var(--dim); }
+  .g-fig figcaption { color:var(--dim); font-size:12.5px; margin-top:6px; }
   .g-arch { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
   .g-row3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
   .g-box { border:1px solid var(--line); border-radius:9px; padding:9px 11px; background:var(--card); display:flex; flex-direction:column; gap:3px; font-size:13px; }
@@ -184,15 +196,12 @@
 <div class="shell">
 <aside class="rail">
   <div class="brand">
-    <div class="name"><i id="lamp"></i>vibe-kit</div>
-    <h1>模型路由 · 套件开关</h1>
-    <span class="meta" id="meta"></span>
+    <div class="name">vibe-kit</div>
+    <h1>套件开关</h1>
     <span class="meta" id="kitVer"></span>
   </div>
   <nav>
-    <button data-tab="guide">套件说明</button>
-    <button data-tab="models" class="on">模型</button>
-    <button data-tab="usage">用量</button>
+    <button data-tab="guide" class="on">套件说明</button>
     <button data-tab="local">本机环境</button>
     <button data-tab="data">查库</button>
     <button data-tab="kit">套件开关</button>
@@ -207,45 +216,273 @@
   <div id="kitNotice"></div>
   <div id="updBanner"></div>
 
-  <section id="tab-guide" class="tab hide">
-    <div class="pagehead"><h2>套件说明</h2><p>vibe-kit 是什么、由哪几块组成、人工和自动两种模式各怎么走，以及哪些规矩是固定的、不做开关。</p></div>
+  <section id="tab-guide" class="tab">
+    <div class="pagehead"><h2>套件说明</h2><p>vibe-kit 是什么、由哪几块组成、流程怎么走、人工和自动有什么不同，以及哪些规矩是固定的、不做开关。</p></div>
     <div class="card" id="sec-guide-core" data-sec="核心思路">
       <h2>核心思路</h2>
       <p>能用本机脚本确定判断的事，不交给模型：编号、阶段、git 状态、编译、起停服务、截图比对、该不该问你。模型只做要理解的事：读需求、写文档和代码、核对审查意见。所以套件钩子多、给模型的提示少。</p>
-      <div class="g-arch">
-        <div class="g-box g-mute"><b>你在 Claude Code 里说话</b><span>提需求、开工、审查、提交……</span></div>
-        <div class="g-arrow">↓</div>
-        <div class="g-row3">
-          <div class="g-box g-acc"><b>钩子（十几个）</b><span>每次开口、改文件、跑命令、答完时做确定性检查：拦下、先问或放行</span></div>
-          <div class="g-box g-acc"><b>约定、规范、技能</b><span>告诉模型怎么做；6 个技能、1 个审查代理</span></div>
-          <div class="g-box g-acc"><b>状态栏</b><span>阶段、用量、该做什么的提醒</span></div>
-        </div>
-        <div class="g-row3">
-          <div class="g-box"><b>模型路由（本机 15730）</b><span>请求转到公司网关；挂了换下一个；这个配置页</span></div>
-          <div class="g-box"><b>自带的 OpenSpec</b><span>需求、规格、设计、任务归它管；项目不用自己初始化</span></div>
-          <div class="g-box"><b>本机记录</b><span>审查进度、自测证据、报告都记在本机，不写进团队的文档</span></div>
-        </div>
-      </div>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 556" role="img" aria-label="套件的组成：Claude Code 经 cc-switch 连公司网关，钩子、命令、规范在 Claude Code 里，进度存在项目文件里。">
+        <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
+
+        <rect class="b" x="20" y="40" width="130" height="44" rx="6"/><text class="h" x="85" y="67" text-anchor="middle">你</text>
+        <path class="a" d="M150 62H228" marker-end="url(#a1)"/><text class="l" x="189" y="54" text-anchor="middle">说话、敲命令</text>
+        <path class="a" d="M85 84V168" marker-end="url(#a1)"/><text class="l" x="93" y="130">改开关</text>
+        <rect class="b" x="20" y="170" width="150" height="62" rx="6"/><text class="h" x="95" y="196" text-anchor="middle">配置页</text><text class="s" x="95" y="215" text-anchor="middle">用时才起</text>
+
+        <rect class="g" x="230" y="16" width="560" height="336" rx="10"/>
+        <text class="h" x="246" y="38">Claude Code CLI（2.1.120 起）</text>
+
+        <rect class="b" x="246" y="50" width="170" height="46" rx="6"/><text class="h" x="331" y="70" text-anchor="middle">全局约定</text><text class="s" x="331" y="87" text-anchor="middle">每个请求都带</text>
+        <rect class="b" x="424" y="50" width="170" height="46" rx="6"/><text class="h" x="509" y="70" text-anchor="middle">进流程才送的规范</text><text class="s" x="509" y="87" text-anchor="middle">每组只审查，最后全面自测</text>
+        <rect class="b" x="602" y="50" width="172" height="46" rx="6"/><text class="h" x="688" y="70" text-anchor="middle">技能 6 个、审查代理</text><text class="s" x="688" y="87" text-anchor="middle">审查全部走这个代理</text>
+
+        <rect class="b" x="246" y="104" width="260" height="46" rx="6"/><text class="m" x="376" y="124" text-anchor="middle">/opsx:explore 探索</text><text class="m" x="376" y="141" text-anchor="middle">/vk-resume 接回</text>
+        <rect class="b" x="514" y="104" width="260" height="46" rx="6"/><text class="m" x="644" y="124" text-anchor="middle">/vk-auto go commit push</text><text class="m" x="644" y="141" text-anchor="middle">archive review test fix</text>
+
+        <text class="s" x="246" y="172">钩子：时机和文件。拦不拦由脚本判断</text>
+        <rect class="b" x="246" y="180" width="127" height="44" rx="6"/><text x="309" y="198" text-anchor="middle">会话开始</text><text class="m" x="309" y="215" text-anchor="middle">session-start</text>
+        <rect class="b" x="380" y="180" width="127" height="44" rx="6"/><text x="443" y="198" text-anchor="middle">开口</text><text class="m" x="443" y="215" text-anchor="middle">task-anchor</text>
+        <rect class="b" x="514" y="180" width="127" height="44" rx="6"/><text x="577" y="198" text-anchor="middle">改文件</text><text class="m" x="577" y="215" text-anchor="middle">pre-edit</text>
+        <rect class="b" x="648" y="180" width="127" height="44" rx="6"/><text x="711" y="198" text-anchor="middle">跑命令</text><text class="m" x="711" y="215" text-anchor="middle">guard-commit</text>
+        <rect class="b" x="246" y="232" width="127" height="44" rx="6"/><text x="309" y="250" text-anchor="middle">提问框</text><text class="m" x="309" y="267" text-anchor="middle">guard-ask</text>
+        <rect class="b" x="380" y="232" width="127" height="44" rx="6"/><text x="443" y="250" text-anchor="middle">搜内容</text><text class="m" x="443" y="267" text-anchor="middle">guard-read</text>
+        <rect class="b" x="514" y="232" width="127" height="44" rx="6"/><text x="577" y="250" text-anchor="middle">工具之后</text><text class="m" x="577" y="267" text-anchor="middle">after-tool</text>
+        <rect class="b" x="648" y="232" width="127" height="44" rx="6"/><text x="711" y="250" text-anchor="middle">收工</text><text class="m" x="711" y="267" text-anchor="middle">verify-gate</text>
+
+        <rect class="b" x="246" y="288" width="529" height="48" rx="6"/><text class="h" x="510" y="308" text-anchor="middle">状态栏：上下文、自动开关、步骤条</text><text class="s" x="510" y="325" text-anchor="middle">第二行是步骤条，第三行是下一项</text>
+
+        <path class="a" d="M790 62H848" marker-end="url(#a1)"/><text class="l" x="819" y="54" text-anchor="middle">模型请求</text>
+        <rect class="b" x="850" y="40" width="170" height="44" rx="6"/><text class="h" x="935" y="67" text-anchor="middle">cc-switch</text>
+        <path class="a" d="M935 84V134" marker-end="url(#a1)"/>
+        <rect class="b" x="850" y="136" width="170" height="44" rx="6"/><text class="h" x="935" y="163" text-anchor="middle">公司网关</text>
+        
+
+        <path class="a" d="M280 352V374H145V394" marker-end="url(#a1)"/><text class="l" x="212" y="368" text-anchor="middle">模型调用</text>
+        <path class="a" d="M435 352V394" marker-end="url(#a1)"/><text class="l" x="443" y="378">读进度、写产物</text>
+        <path class="a" d="M685 352V394" marker-end="url(#a1)"/><text class="l" x="693" y="378">读写状态</text>
+
+        <rect class="b" x="20" y="396" width="250" height="150" rx="6"/><text class="h" x="36" y="420">本机工具 kit/tools（16 个）</text>
+        <text class="s" x="36" y="444">devserver 起停服务</text><text class="s" x="36" y="464">commit、checkpoint、trace</text><text class="s" x="36" y="484">plan、doctor、workflow</text><text class="s" x="36" y="504">review 备材料、算修改点、记账</text><text class="s" x="36" y="524">feedback、lesson、drivers 等</text>
+
+        <rect class="b" x="290" y="396" width="290" height="150" rx="6"/><text class="h" x="306" y="420">项目里的文件：进度全在这</text>
+        <text class="m" x="306" y="444">openspec/plan.md</text><text class="s" x="440" y="444">索引</text>
+        <text class="m" x="306" y="464">openspec/explore/&lt;大任务&gt;.md</text><text class="s" x="306" y="482">探索结果</text>
+        <text class="m" x="306" y="504">openspec/changes/&lt;change&gt;/</text>
+        <text class="m" x="306" y="526">.vibe/</text><text class="s" x="350" y="526">本机过程文件，不进仓库</text>
+
+        <rect class="b" x="600" y="396" width="170" height="150" rx="6"/><text class="h" x="616" y="420">~/.claude/vibe-kit</text>
+        <text class="s" x="616" y="444">config.json 开关</text><text class="s" x="616" y="464">state/ 按会话的状态</text><text class="s" x="616" y="484">feedback/ 问题反馈</text><text class="s" x="616" y="504">secrets.json 令牌</text>
+
+        <path class="a" d="M770 470H848" marker-end="url(#a1)"/><text class="l" x="809" y="462" text-anchor="middle">更新、上报</text>
+        <rect class="b" x="850" y="396" width="170" height="150" rx="6"/><text class="h" x="866" y="420">内网 GitLab</text><text class="s" x="866" y="444">自动更新</text><text class="s" x="866" y="464">问题上报</text><text class="s" x="866" y="484">使用情况上报</text><text class="s" x="866" y="504">耗时异常上报</text>
+      </svg></div><figcaption>进度只存在项目文件和本机状态里，所以换会话、死机都能重算。</figcaption></figure>
+    </div>
+    <div class="card" id="sec-guide-steps" data-sec="流程">
+      <h2>流程</h2>
+      <p class="hint">探索 → [需求 → apply] × N → 全面自测 → 人工核验 → 按顺序归档。中途打断不影响。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 420" role="img" aria-label="三种入口进入探索，探索时写探索记录和 plan.md，每个 change 依次走需求和 apply，全部做完后全面自测、人工核验、按顺序归档。">
+        <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
+        <rect class="b" x="20" y="24" width="200" height="50" rx="6"/><text class="h" x="120" y="45" text-anchor="middle">你敲 /opsx:explore</text><text class="s" x="120" y="63" text-anchor="middle">直接进</text>
+        <rect class="b" x="20" y="88" width="200" height="50" rx="6"/><text class="h" x="120" y="109" text-anchor="middle">话里明确有 openspec</text><text class="s" x="120" y="127" text-anchor="middle">模型调，钩子核对这句话</text>
+        <rect class="b" x="20" y="152" width="200" height="50" rx="6"/><text class="h" x="120" y="173" text-anchor="middle">模型判断改动较大</text><text class="s" x="120" y="191" text-anchor="middle">提问框问你要不要探索</text>
+        <path class="a" d="M220 49H242V177H220M242 113H268" marker-end="url(#a2)"/>
+        <text class="l" x="248" y="178">选探索</text>
+        <path class="a" d="M120 202V248" marker-end="url(#a2)"/><text class="l" x="128" y="230">选直接改</text>
+        <rect class="b" x="20" y="250" width="200" height="50" rx="6" stroke-dasharray="4 4"/><text class="h" x="120" y="271" text-anchor="middle">普通任务</text><text class="s" x="120" y="289" text-anchor="middle">不进流程，这件事不再问</text>
+
+        <rect class="b" x="270" y="66" width="160" height="94" rx="6"/><text class="h" x="350" y="90" text-anchor="middle">探索</text><text class="s" x="350" y="110" text-anchor="middle">边谈边写</text><text class="m" x="350" y="128" text-anchor="middle">explore/&lt;大任务&gt;.md</text><text class="m" x="350" y="146" text-anchor="middle">plan.md</text>
+        <path class="a" d="M430 113H458" marker-end="url(#a2)"/>
+
+        <rect class="g" x="460" y="14" width="560" height="200" rx="10"/><text class="h" x="478" y="38">每个 change 走一遍（× N）</text>
+        <rect class="b" x="480" y="56" width="240" height="88" rx="6"/><text class="h" x="600" y="80" text-anchor="middle">需求</text><text class="s" x="600" y="100" text-anchor="middle">读探索记录这一节和前面的落地偏差</text><text class="s" x="600" y="120" text-anchor="middle">写四份文档，每份审查</text>
+        <path class="a" d="M720 100H758" marker-end="url(#a2)"/>
+        <rect class="b" x="760" y="56" width="240" height="88" rx="6"/><text class="h" x="880" y="80" text-anchor="middle">apply</text><text class="s" x="880" y="100" text-anchor="middle">按任务做，每组只审查</text><text class="s" x="880" y="120" text-anchor="middle">这里不跑自测</text>
+        <path class="a" d="M880 144V166H600V146" marker-end="url(#a2)"/>
+        <text class="l" x="740" y="190" text-anchor="middle">做完一个：记落地偏差，按 plan.md 接下一个</text>
+
+        <path class="a" d="M740 214V236H355V258" marker-end="url(#a2)"/><text class="l" x="750" y="231">全部做完</text>
+        <rect class="b" x="270" y="260" width="170" height="60" rx="6"/><text class="h" x="355" y="284" text-anchor="middle">全面自测（Claude）</text><text class="s" x="355" y="304" text-anchor="middle">全部用例 + 整体用例</text>
+        <path class="a" d="M440 290H488" marker-end="url(#a2)"/>
+        <rect class="b" x="490" y="260" width="170" height="60" rx="6"/><text class="h" x="575" y="284" text-anchor="middle">人工核验</text><text class="s" x="575" y="304" text-anchor="middle">整个大任务一起看</text>
+        <path class="a" d="M660 290H708" marker-end="url(#a2)"/>
+        <rect class="b" x="710" y="260" width="170" height="60" rx="6"/><text class="h" x="795" y="284" text-anchor="middle">按顺序归档</text><text class="s" x="795" y="304" text-anchor="middle">你说归档才归档</text>
+        <path class="a" d="M355 322V358" marker-start="url(#a2)" marker-end="url(#a2)"/><path class="a" d="M575 322V358" marker-start="url(#a2)" marker-end="url(#a2)"/>
+        <rect class="b" x="270" y="360" width="390" height="44" rx="6"/><text x="465" y="387" text-anchor="middle">发现问题：改完记进对应 change 的 revisions.md，再复验</text>
+      </svg></div><figcaption>单个 change 就是 N=1，走同一条路。</figcaption></figure>
+    </div>
+    <div class="card" id="sec-guide-explore" data-sec="探索记录">
+      <h2>探索记录</h2>
+      <p class="hint">接着写新 change 时靠它理解之前的讨论。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 376" role="img" aria-label="plan.md 是索引，指向探索记录；探索记录保存探索结果全文；写 change 的需求时读它对应的一节；每个 change 做完把落地偏差追加回探索记录。">
+        <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
+        <rect class="b" x="20" y="16" width="150" height="38" rx="6"/><text class="m" x="95" y="40" text-anchor="middle">/vk-resume</text>
+        <path class="a" d="M95 54V88" marker-end="url(#a3)"/><text class="l" x="103" y="76">先读索引</text>
+        <rect class="b" x="20" y="90" width="280" height="190" rx="6"/>
+        <text class="m" x="36" y="114">openspec/plan.md</text><text class="s" x="36" y="134">索引：只放状态和指针</text>
+        <text class="s" x="36" y="162">探索记录：explore/order-export.md</text>
+        <text class="m" x="36" y="192">c1-model  已归档</text><text class="m" x="36" y="214">c2-api    进行中 2/5</text><text class="m" x="36" y="236">c3-page   未开始</text>
+        <text class="s" x="36" y="264">状态按 changes/ 实际算，现成的</text>
+        <path class="a" d="M300 170H358" marker-end="url(#a3)"/><text class="l" x="329" y="162" text-anchor="middle">指向</text>
+
+        <rect class="b" x="360" y="16" width="330" height="344" rx="6"/>
+        <text class="m" x="376" y="40">openspec/explore/order-export.md</text><text class="s" x="376" y="58">探索结果全文：边谈边写，随仓库提交</text>
+        <rect class="b" x="374" y="68" width="302" height="30" rx="4"/><text x="386" y="88">原话和材料（PRD 路径）</text>
+        <rect class="b" x="374" y="102" width="302" height="30" rx="4"/><text x="386" y="122">定了的、否了的（带理由）、还没定的</text>
+        <rect class="b" x="374" y="136" width="302" height="30" rx="4"/><text x="386" y="156">现状：读过哪些路径，看到了什么</text>
+        <rect class="b" x="374" y="170" width="302" height="30" rx="4"/><text x="386" y="190">范围：做什么、不做什么（第 43 条的依据）</text>
+        <rect class="b" x="374" y="204" width="302" height="30" rx="4"/><text x="386" y="224">跨 change 约定：规则、接口、数据结构</text>
+        <rect class="b" x="374" y="238" width="302" height="30" rx="4"/><text x="386" y="258">c1、c2、c3 各一节：目标、边界、依赖、留的接口</text>
+        <rect class="b" x="374" y="272" width="302" height="30" rx="4"/><text x="386" y="292">整体验收用例</text>
+        <rect class="b" x="374" y="306" width="302" height="30" rx="4"/><text x="386" y="326">落地偏差：每做完一个就追加</text>
+
+        <rect class="g" x="750" y="16" width="270" height="96" rx="6"/><text class="h" x="766" y="40">探索时不写</text><text class="s" x="766" y="62">具体改哪些文件、任务清单</text><text class="s" x="766" y="82">这两样要看前面 change 落地的结果</text>
+        <path class="a" d="M676 253H748" marker-end="url(#a3)"/><text class="l" x="720" y="245" text-anchor="middle">写需求时读</text>
+        <rect class="b" x="750" y="128" width="270" height="156" rx="6"/>
+        <text class="m" x="766" y="152">changes/c2-api/</text><text class="s" x="766" y="172">开始这个 change 时才建</text>
+        <text class="s" x="766" y="198">proposal.md、specs/</text><text class="s" x="766" y="220">design.md，这时才写具体路径</text><text class="s" x="766" y="242">tasks.md</text><text class="s" x="766" y="264">revisions.md</text>
+        <path class="a" d="M750 321H678" marker-end="url(#a3)"/><text class="l" x="714" y="313" text-anchor="middle">做完追加</text>
+        <rect class="b" x="750" y="296" width="270" height="52" rx="6"/><text class="m" x="766" y="317">changes/c1-model/</text><text class="s" x="766" y="337">design.md、revisions.md</text>
+      </svg></div><figcaption>颗粒度的标准：换一个新会话，只读公共几节和这个 change 的那一节，不用再问你就能写 proposal。</figcaption></figure>
+    </div>
+    <div class="card" id="sec-guide-resume" data-sec="接回和插话">
+      <h2>接回和插话</h2>
+      <p class="hint">敲 /vk-resume 接回；死机前开着自动就接着开。任何时候插话都不退出流程。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 330" role="img" aria-label="死机后敲 /vk-resume，脚本读文件算进度并显示给用户，再回到需求、apply 或下一个 change。工作中插话时回答后回到原来那一步，流程不退出。">
+        <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
+        <rect class="b" x="20" y="24" width="160" height="56" rx="6"/><text class="h" x="100" y="48" text-anchor="middle">死机或关窗</text><text class="s" x="100" y="67" text-anchor="middle">进度都在文件里</text>
+        <path class="a" d="M180 52H228" marker-end="url(#a4)"/>
+        <rect class="b" x="230" y="24" width="180" height="56" rx="6"/><text class="h" x="320" y="48" text-anchor="middle">你敲 /vk-resume</text><text class="s" x="320" y="67" text-anchor="middle">多个大任务时让你选</text>
+        <path class="a" d="M410 52H458" marker-end="url(#a4)"/>
+        <rect class="b" x="460" y="24" width="220" height="56" rx="6"/><text class="h" x="570" y="48" text-anchor="middle">脚本算进度</text><text class="s" x="570" y="67" text-anchor="middle">plan.md、tasks.md、探索记录</text>
+        <path class="a" d="M680 52H728" marker-end="url(#a4)"/>
+        <rect class="b" x="730" y="24" width="290" height="56" rx="6"/><text class="h" x="875" y="48" text-anchor="middle">屏幕上显示给你</text><text class="s" x="875" y="67" text-anchor="middle">共 3 个，c1 归档，c2 做到 2/5，后面还有 c3</text>
+        <path class="a" d="M875 80V124" marker-end="url(#a4)"/><path class="a" d="M875 102H590V124" marker-end="url(#a4)"/><path class="a" d="M590 102H320V124" marker-end="url(#a4)"/>
+        <rect class="b" x="230" y="126" width="180" height="56" rx="6"/><text class="h" x="320" y="150" text-anchor="middle">回到需求</text><text class="s" x="320" y="169" text-anchor="middle">这个 change 还没有任务</text>
+        <rect class="b" x="500" y="126" width="180" height="56" rx="6"/><text class="h" x="590" y="150" text-anchor="middle">回到 apply</text><text class="s" x="590" y="169" text-anchor="middle">有没勾的任务</text>
+        <rect class="b" x="770" y="126" width="210" height="56" rx="6"/><text class="h" x="875" y="150" text-anchor="middle">下一个或全面自测</text><text class="s" x="875" y="169" text-anchor="middle">任务全勾完</text>
+
+        <path d="M20 212H1020" fill="none" stroke="var(--line)" stroke-dasharray="4 4"/>
+        <rect class="b" x="20" y="238" width="180" height="56" rx="6"/><text class="h" x="110" y="262" text-anchor="middle">插一句或按 Esc</text><text class="s" x="110" y="281" text-anchor="middle">任何阶段都行</text>
+        <path class="a" d="M200 266H248" marker-end="url(#a4)"/>
+        <rect class="b" x="250" y="238" width="180" height="56" rx="6"/><text class="h" x="340" y="262" text-anchor="middle">回答或改方向</text><text class="s" x="340" y="281" text-anchor="middle">流程不退出</text>
+        <path class="a" d="M430 266H478" marker-end="url(#a4)"/>
+        <rect class="b" x="480" y="238" width="180" height="56" rx="6"/><text class="h" x="570" y="262" text-anchor="middle">回到原来那一步</text><text class="s" x="570" y="281" text-anchor="middle">步骤清单还在</text>
+        <rect class="g" x="700" y="238" width="320" height="56" rx="6"/>
+      </svg></div></figure>
+    </div>
+    <div class="card" id="sec-guide-regress" data-sec="发现要改时">
+      <h2>发现要改时</h2>
+      <p class="hint">做到一半、全面自测、人工核验发现要改，都走这张图。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 432" role="img" aria-label="发现要改时分三类：行为和需求对不上直接改，要改需求走需求回归，范围外的新需求你说要加才加。三类改完都回到全面自测、人工核验，归档前预演一遍，再按顺序归档。">
+        <defs><marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
+        <rect class="b" x="330" y="14" width="400" height="44" rx="6"/><text class="h" x="530" y="41" text-anchor="middle">发现要改：做到一半、全面自测、人工核验都一样</text>
+        <path class="a" d="M530 58V104" marker-end="url(#a6)"/><path class="a" d="M530 80H150V104" marker-end="url(#a6)"/><path class="a" d="M530 80H900V104" marker-end="url(#a6)"/>
+
+        <rect class="b" x="20" y="106" width="260" height="214" rx="6"/>
+        <text class="h" x="36" y="130">行为和需求对不上</text><text class="s" x="36" y="150">需求不用改</text>
+        <text x="36" y="182">三个文件以内、不改接口和表结构：</text><text x="36" y="202">直接改</text>
+        <text x="36" y="234">提交写 fix: 问题</text><text x="36" y="254">（源自 变更名 任务号）</text>
+        <text x="36" y="286">别的先告诉你</text>
+
+        <rect class="b" x="300" y="106" width="460" height="214" rx="6"/>
+        <text class="h" x="316" y="130">要改需求：需求回归</text>
+        <rect class="b" x="314" y="140" width="432" height="30" rx="4"/><text x="326" y="160">同步 proposal、specs、design、tasks，加批注，记 revisions.md</text>
+        <rect class="b" x="314" y="174" width="432" height="30" rx="4"/><text x="326" y="194">同步探索记录：定了的、跨 change 约定</text>
+        <rect class="b" x="314" y="208" width="432" height="30" rx="4"/><text x="326" y="228">改的是前面的 change：直接改它的文档，不在后面写 MODIFIED</text>
+        <rect class="b" x="314" y="242" width="432" height="30" rx="4"/><text x="326" y="262">补没勾的任务，按表顺序先做完它，再回原来的 change</text>
+        <rect class="b" x="314" y="276" width="432" height="30" rx="4"/><text x="326" y="296">revisions.md 写影响哪些 change，列出来的审修改点</text>
+
+        <rect class="b" x="780" y="106" width="240" height="214" rx="6"/>
+        <text class="h" x="796" y="130">范围外的新需求</text><text class="s" x="796" y="150">探索记录里没有</text>
+        <text x="796" y="182">你说要加才加（第 38 条）</text>
+        <text x="796" y="214">plan.md 加一行</text><text x="796" y="234">探索记录加一节</text>
+        <text x="796" y="266">走同样的需求和 apply</text>
+
+        <path class="a" d="M900 320V344H170V364" marker-end="url(#a6)"/><path class="a" d="M530 320V344"/><path class="a" d="M150 320V344H170"/>
+        <rect class="b" x="20" y="366" width="300" height="56" rx="6"/><text class="h" x="170" y="388" text-anchor="middle">全面自测</text><text class="s" x="170" y="407" text-anchor="middle">受影响 change 的用例 + 整体用例</text>
+        <path class="a" d="M320 394H358" marker-end="url(#a6)"/>
+        <rect class="b" x="360" y="366" width="220" height="56" rx="6"/><text class="h" x="470" y="388" text-anchor="middle">人工核验</text><text class="s" x="470" y="407" text-anchor="middle">整个大任务一起看</text>
+        <path class="a" d="M580 394H618" marker-end="url(#a6)"/>
+        <rect class="b" x="620" y="366" width="220" height="56" rx="6"/><text class="h" x="730" y="388" text-anchor="middle">归档前预演</text><text class="s" x="730" y="407" text-anchor="middle">临时副本按表顺序跑一遍</text>
+        <path class="a" d="M840 394H878" marker-end="url(#a6)"/>
+        <rect class="b" x="880" y="366" width="140" height="56" rx="6"/><text class="h" x="950" y="388" text-anchor="middle">按顺序归档</text><text class="s" x="950" y="407" text-anchor="middle">你说才归档</text>
+      </svg></div><figcaption>前面的 change 还没归档，就直接改它的文档，不在后面的 change 里写 MODIFIED。</figcaption></figure>
+    </div>
+    <div class="card" id="sec-guide-noadd" data-sec="不自己加">
+      <h2>不自己加</h2>
+      <p class="hint">探索完之后，需求、apply、自测都对着探索记录核对。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 290" role="img" aria-label="需求、apply、自测都对着探索记录核对。写错了照修；没说的新东西不加，记成范围外建议，人工核验时列给用户，用户要的才走范围外新需求。探索记录探索完后只有用户开口那一轮能改。">
+        <defs><marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
+        <rect class="b" x="20" y="60" width="220" height="170" rx="6"/>
+        <text class="h" x="36" y="88">探索记录</text><text x="36" y="114">范围：做什么、不做什么</text><text x="36" y="136">定了的、否了的</text>
+        <text class="s" x="36" y="172">探索完后，只有你开口的</text><text class="s" x="36" y="192">那一轮能改。钩子查</text>
+
+        <path class="a" d="M240 145H270V56H298" marker-end="url(#a7)"/><path class="a" d="M270 145H298" marker-end="url(#a7)"/><path class="a" d="M270 145V234H298" marker-end="url(#a7)"/>
+        <text class="l" x="266" y="44" text-anchor="middle">对着它核对</text>
+
+        <rect class="b" x="300" y="28" width="250" height="56" rx="6"/><text class="h" x="316" y="50">需求</text><text class="s" x="316" y="70">写的每条要能对上</text>
+        <rect class="b" x="300" y="117" width="250" height="56" rx="6"/><text class="h" x="316" y="139">apply</text><text class="s" x="316" y="159">只做文档里有的，做法自己定</text>
+        <rect class="b" x="300" y="206" width="250" height="56" rx="6"/><text class="h" x="316" y="228">自测</text><text class="s" x="316" y="248">用例只来自验收用例和整体用例</text>
+
+        <path class="a" d="M550 56H590V90H618" marker-end="url(#a7)"/><path class="a" d="M550 145H590"/><path class="a" d="M550 234H590V200H618" marker-end="url(#a7)"/><path class="a" d="M590 90V200"/>
+
+        <rect class="b" x="620" y="50" width="210" height="80" rx="6"/><text class="h" x="636" y="76">写错了、做坏了</text><text class="s" x="636" y="96">含这次写出来的崩溃、漏洞</text><text class="s" x="636" y="116">照修</text>
+        <rect class="b" x="620" y="160" width="210" height="80" rx="6"/><text class="h" x="636" y="186">没说的新东西</text><text class="s" x="636" y="206">新场景、新校验、新按钮</text><text class="s" x="636" y="226">不加，记成范围外建议</text>
+        <path class="a" d="M830 200H868" marker-end="url(#a7)"/>
+        <rect class="b" x="870" y="160" width="150" height="80" rx="6"/><text class="h" x="886" y="186">人工核验时</text><text class="s" x="886" y="206">列给你，不打断</text><text class="s" x="886" y="226">要的才走需求回归</text>
+      </svg></div><figcaption>范围外建议不丢也不做，你看过再决定。做法上的取舍（怎么写、用哪种实现）照旧自己定，记进 revisions.md。</figcaption></figure>
+    </div>
+    <div class="card" id="sec-guide-review" data-sec="审查">
+      <h2>审查</h2>
+      <p class="hint">审查全部用子代理 ttls-reviewer，和主会话同一个模型。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 236" role="img" aria-label="审查从 /ttls-cross-review 进，脚本备材料，第一轮同时开 2 到 3 个子代理，走现有连接，结果交给脚本合并记账。每个审查点修完后只审修改点，没有 P1、P2 才结束，用户可以打断。">
+        <defs><marker id="a8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
+        <text class="h" x="20" y="24">一次审查怎么跑</text>
+        <rect class="b" x="20" y="36" width="160" height="56" rx="6"/><text class="m" x="100" y="60" text-anchor="middle">/ttls-cross-review</text><text class="s" x="100" y="79" text-anchor="middle">入口</text>
+        <path class="a" d="M180 64H218" marker-end="url(#a8)"/>
+        <rect class="b" x="220" y="36" width="190" height="56" rx="6"/><text class="h" x="315" y="58" text-anchor="middle">review.js</text><text class="s" x="315" y="77" text-anchor="middle">备材料，算修改点，不发请求</text>
+        <path class="a" d="M410 64H448" marker-end="url(#a8)"/>
+        <rect class="b" x="450" y="36" width="170" height="56" rx="6"/><text class="h" x="535" y="58" text-anchor="middle">ttls-reviewer × 3</text><text class="s" x="535" y="77" text-anchor="middle">每个一个角度，同时开</text>
+        <path class="a" d="M620 64H658" marker-end="url(#a8)"/>
+        <rect class="b" x="660" y="36" width="170" height="56" rx="6"/><text class="h" x="745" y="58" text-anchor="middle">现有连接</text><text class="s" x="745" y="77" text-anchor="middle">不用管地址、key、模型名</text>
+        <path class="a" d="M830 64H868" marker-end="url(#a8)"/>
+        <rect class="b" x="870" y="36" width="150" height="56" rx="6"/><text class="h" x="945" y="58" text-anchor="middle">脚本合并、记账</text><text class="s" x="945" y="77" text-anchor="middle">子代理把结果交给它</text>
+
+        <text class="h" x="20" y="130">每个审查点怎么跑</text>
+        <rect class="b" x="20" y="142" width="230" height="56" rx="6"/><text class="h" x="135" y="164" text-anchor="middle">第一轮：同时审</text><text class="s" x="135" y="183" text-anchor="middle">2~3 个子代理，每个一个角度</text>
+        <path class="a" d="M250 170H288" marker-end="url(#a8)"/>
+        <rect class="b" x="290" y="142" width="150" height="56" rx="6"/><text class="h" x="365" y="164" text-anchor="middle">修 P1、P2</text><text class="s" x="365" y="183" text-anchor="middle">P3 只记</text>
+        <path class="a" d="M440 170H478" marker-end="url(#a8)"/>
+        <rect class="b" x="480" y="142" width="180" height="56" rx="6"/><text class="h" x="570" y="164" text-anchor="middle">再审：只审修改点</text><text class="s" x="570" y="183" text-anchor="middle">1 个子代理</text>
+        <path class="a" d="M660 170H690V152H718" marker-end="url(#a8)"/><path class="a" d="M690 170V206H718" marker-end="url(#a8)"/>
+        <rect class="b" x="720" y="130" width="300" height="42" rx="6"/><text class="h" x="870" y="156" text-anchor="middle">没有 P1、P2：结束</text>
+        <rect class="b" x="720" y="184" width="300" height="42" rx="6"/><text class="h" x="870" y="210" text-anchor="middle">还有 P1、P2：接着修、接着审，可以打断</text>
+      </svg></div><figcaption>没有次数上限、文件上限。出口：没有 P1、P2；逐条处理完；你说提交。</figcaption></figure>
     </div>
     <div class="card" id="sec-guide-flow" data-sec="人工和自动">
       <h2>人工和自动怎么走</h2>
       <p class="hint">自动模式按会话开：在要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），只对那个会话有效，/vk-auto off 关；没开就是人工模式。中间横跨两栏的是两种模式一样的步骤。</p>
       <div class="g-lanes">
         <div class="g-head g-mute">人工模式</div><div class="g-head g-acc">自动模式</div>
-        <div class="g-phase">需求阶段</div>
-        <div class="g-both">你提需求 → 套件认出你要做什么；否定、提问、引用不算许可</div>
-        <div class="g-both">先探索代码、问清业务；没初始化 OpenSpec 的项目，第一次用时自动建 openspec/</div>
-        <div class="g-step">一份一份写：proposal → specs → design → tasks。每写完一份停下给你看，你选"审一下 / 直接写下一份 / 我要改"</div><div class="g-step g-a">范围和验收都明确、你没有未答的问题，才自动逐份写；每份自动审查、修改、复审，过了才写下一份；审到 10 轮或者不收敛就停下报告</div>
+        <div class="g-phase">探索</div>
+        <div class="g-both">进流程只有三种门：你敲 /opsx:explore；话里明确有 openspec；改动较大时模型用提问框问你，选"探索"才进。问句、说"停"都不退出流程</div>
+        <div class="g-both">边谈边写 openspec/explore/&lt;大任务&gt;.md，plan.md 只当索引；没初始化 OpenSpec 的项目，第一次用时自动建 openspec/</div>
+        <div class="g-phase">需求（每个 change 一遍）</div>
+        <div class="g-step">一份一份写：proposal → specs → design → tasks。每写完一份停下给你看，你选"审一下 / 直接写下一份 / 我要改"</div><div class="g-step g-a">自动逐份写；每份用子代理审查、修改、复审，没有 P1、P2 才写下一份</div>
         <div class="g-both">design.md 里写"验收用例"：对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。tasks.md 只写要做的实现</div>
-        <div class="g-step">四份定稿后按提交方式提交（询问就问你），再问你：开工 / 继续修改 / 暂不执行</div><div class="g-step g-a">按提交方式提交，自动开工；你只让它写需求的不开工</div>
-        <div class="g-phase">实施阶段</div>
-        <div class="g-both">按 1.1、1.2 做，做完打勾；没说开工不能打勾</div>
-        <div class="g-step">编译、类型检查直接跑；跑测试、起服务、看页面先问你</div><div class="g-step g-a">每组做完先跑这一组的验收用例（"自动自测"开着时），再自动审修，过了才进下一组；全部做完把能自动跑的用例全跑一遍</div>
-        <div class="g-step">每组做完，问你要不要审查、自测（同一个要求只问一次）</div><div class="g-step g-a">审到 10 轮或者不收敛就停下报告；业务上拿不准的仍然问你；快到网关上限停下交报告</div>
-        <div class="g-step">每轮收工：没快检、没审、没测、没提交的，在一个提问里问你，不强制</div><div class="g-step g-a">每轮收工：有下一项接着做；做完或卡住写全自动报告</div>
+        <div class="g-step">四份定稿后按提交方式提交（询问就问你），再问你：开工 / 继续修改 / 暂不执行</div><div class="g-step g-a">提交方式是"自动"才提交，"关""询问"都不提交也不问；接着自动开工</div>
+        <div class="g-phase">apply（每个 change 一遍）</div>
+        <div class="g-both">按 1.1、1.2 做，做完打勾；流程里没开工改源码要拦（带拦截编号，能放行）</div>
+        <div class="g-step">编译、类型检查直接跑；跑测试、起服务、看页面先问你</div><div class="g-step g-a">每组做完只审修，不跑自测，过了才进下一组</div>
+        <div class="g-step">每组做完，问你要不要审查（同一个要求只问一次）</div><div class="g-step g-a">审修不设次数上限，没有 P1、P2 才算过；子代理连续 3 次没交结论就不再催，写进报告，不算通过</div>
+        <div class="g-step">一个 change 做完，用提问框问你接不接下一个</div><div class="g-step g-a">一个 change 做完，记落地偏差，按 plan.md 直接接下一个</div>
+        <div class="g-phase">全面自测和人工核验</div>
+        <div class="g-step">全部 change 做完，问你要不要全面自测</div><div class="g-step g-a">全部 change 做完，自动全面自测：所有验收用例和整体用例；改过代码退回重跑</div>
+        <div class="g-both">全面自测过了停下等你核验，自动也停；审查和模型想到的范围外建议一起列给你</div>
+        <div class="g-both">你测出问题、改了需求：照改，记进对应 change 的 revisions.md，再复验；不加你没说的需求</div>
+        <div class="g-phase">归档</div>
+        <div class="g-both">你说"归档"才归档：先在临时副本里按 plan.md 的顺序预演一遍，过了才动真目录，再按顺序归档</div>
         <div class="g-both">提交按"提交方式"：询问 / 自动 / 关。推送、发内网都要你亲口说，自动模式不能代替</div>
-        <div class="g-both">任务全打勾、代码审过，就是等你照验收用例自测；你说"自测通过""归档"才归档</div>
-        <div class="g-step">你测出问题、改了需求：照改，审查、自测先问你</div><div class="g-step g-a">你测出问题、改了需求：照改、记修订，接着自动审、测、提交，不退回人工；不加你没说的需求</div>
       </div>
     </div>
     <div class="card" id="sec-guide-fixed" data-sec="固定的规矩">
@@ -257,7 +494,7 @@
         <li><b>起服务走 devserver</b>：直接敲 mvn spring-boot:run、npm run dev 会被拦下，要经过套件的 devserver.js。同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000，不和你在 IDE 里跑着的冲突。你在 IDEA、终端里起的服务不动。换了目录、换了名字也认得自己起过的，要重启在原来的端口先停再起；vite 这类会热更新的改了代码不重启。等它起来时每 2 秒看一次日志：日志说起好了再发一次请求确认，日志里报了起不来的错马上停掉、把日志给模型看，不干等。不用 IDEA 的运行配置起（2026-10-28 起）。</li>
         <li><b>推送、发内网要你亲口说</b>：git push、把安装包发到内网 GitLab，都要你当场明确说；同意推送不代表同意发内网。自动模式也不能代替。说"推送"直接推，不出推送计划，也不再弹 Claude Code 的确认框；套件的合并推送工具 2026-10-28 起去掉了，你说"合并推送"的照你说的自己合并再推，不拦。</li>
         <li><b>令牌和口令模型读不到</b>：GitLab 令牌、模型的 key、数据库和 redis 的口令，模型读不到、不进命令行、不进日志，也不许提交。项目里别的口令不再遮。</li>
-        <li><b>不接 IDEA 的 MCP</b>：2026-10-28 起套件不再登记 IDEA 的 MCP，以前登记的更新时撤掉。你自己登记的照用：IDEA 终端里的命令按 Bash 查，IDEA 改文件按 Edit 查，读套件令牌照拦，别的不拦。</li>
+        <li><b>不接任何 MCP</b>：套件不登记 MCP。你自己接的 MCP 工具只查两件事：读令牌、改套件目录照拦，别的不查（终端命令不按 Bash 的规矩查，运行配置不算自测）。</li>
         <li><b>需求文档一份一份写</b>：上一份审完（人工是你看过、说了写下一份）才写下一份。</li>
         <li><b>任务只写实现</b>：tasks.md 不写"验："，不写测试、审查、用户验收任务；测试和验收写在 design.md 的"验收用例"里。打勾不查验法。</li>
         <li><b>人工模式先问</b>：跑测试、起服务、看页面、审查、复验先问你，同一个要求只问一次；这一轮你说过要审、要测的，改完再审、再测不再问（"提交"也一样，分几笔提交不再问）。编译、类型检查、静态检查直接跑。你放弃就继续，不记待办。</li>
@@ -269,11 +506,10 @@
     <div class="card" id="sec-guide-docs" data-sec="大需求怎么写">
       <h2>大需求怎么写</h2>
       <ul class="g-list">
-        <li>文档写多长都行，套件不限行数；审查时长文件按 4 万字一片、8 万字一批送审，不截断。</li>
+        <li>文档写多长都行，套件不限行数；审查子代理自己读文件，不截断。</li>
         <li>按能力拆规格：一个能力一份 specs/&lt;能力&gt;/spec.md，不要全堆在一份里。</li>
         <li>关系复杂的地方画图：状态流转、调用链、数据流在 design.md 里用 mermaid 图。</li>
         <li>真的太大就拆成几个变更：每个能单独开工、单独验收的部分各建一个。</li>
-        <li>真正的上限是公司网关单次请求约 1MB：一个会话读太多大文件、对话太长会撞上，状态栏会提前警告。</li>
       </ul>
     </div>
     <div class="card" id="sec-guide-openspec" data-sec="自带的 OpenSpec">
@@ -285,74 +521,6 @@
         <li>装的命令：/opsx:explore、/opsx:propose、/opsx:new、/opsx:continue、/opsx:apply、/opsx:verify、/opsx:archive。一份一份写用 /opsx:new 加 /opsx:continue，用 /opsx:propose 也一样会一份一份停下。</li>
       </ul>
     </div>
-  </section>
-
-  <section id="tab-models" class="tab">
-    <div class="pagehead"><h2>模型</h2><p>Claude Code 的请求先到这里，再交给你配的模型。一个不行自动换下一个。</p></div>
-    <div class="card" id="linkCard" data-sec="接上 Claude Code">
-      <h2>让 Claude Code 走这个路由</h2>
-      <p class="hint" id="linkHint">…</p>
-      <div class="row"><span class="tag off" id="linkTag">…</span><button class="btn primary" id="linkOn">接上</button><button class="btn" id="linkOff">断开</button><span class="msg" id="linkMsg"></span></div>
-    </div>
-    <div class="card" id="sec-providers" data-sec="模型">
-      <div class="row between"><div><h2>模型</h2><p class="hint">限流、熔断、key 失效时自动换下一个。额度用完的停用到它说的重置时间，到点自动恢复。你找管理员加了额度，点"手动恢复"立刻启用。</p></div><button class="btn primary" id="addProvider">添加模型</button></div>
-      <div class="scroll"><table><thead><tr><th>名称</th><th>地址</th><th>key</th><th>状态</th><th class="num">今天请求</th><th class="num">今天 token（入 / 出）</th><th></th></tr></thead><tbody id="providers"></tbody></table></div>
-    </div>
-    <div class="card" id="sec-routes" data-sec="角色分配">
-      <h2>角色分配</h2>
-      <p class="hint">请求里的模型名包含哪个词，就交给哪个模型。主会话一般是 opus，审查代理固定用 sonnet，后台小任务用 haiku。</p>
-      <div id="routes"></div>
-      <div class="row"><button class="btn" id="addRoute">添加一条</button><button class="btn" id="quickRoutes">按常用的分三个角色</button></div>
-      <div class="grid" style="margin-top:12px">
-        <label class="f"><span>其余请求交给</span><select id="defaultProvider"></select></label>
-        <div class="f" style="margin-bottom:10px"><span style="display:block;font-size:12px;color:var(--dim);margin-bottom:3px">首选的模型不行时，按这个顺序换</span><div id="failoverList"></div></div>
-      </div>
-    </div>
-    <div class="card" id="sec-behavior" data-sec="换模型的规矩">
-      <h2>换模型的规矩</h2>
-      <p class="hint">时间的单位都是秒。</p>
-      <div class="opt">
-        <div><div class="t">限流、出错后多久再试它</div><div class="d">这段时间里请求交给下一个模型。</div></div>
-        <div class="ctl"><input type="number" id="o_cooldownSec" min="10"><span class="dim">秒</span></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">熔断、key 失效后多久再试它</div><div class="d">这类问题好得慢，时间设长一些。</div></div>
-        <div class="ctl"><input type="number" id="o_outageCooldownSec" min="10"><span class="dim">秒</span></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">等多久没回应就换模型</div><div class="d">最少 30。内网网关是整段返回的，别设太短。要小于 Claude Code 自己的超时 600 秒。</div></div>
-        <div class="ctl"><input type="number" id="o_firstByteTimeoutSec" min="10"><span class="dim">秒</span></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">限流时先等多久再换</div><div class="d">0 是立刻换。换模型要把整个上下文从头算一遍，缓存全丢。限流多半几秒就过。</div></div>
-        <div class="ctl"><input type="number" id="o_rateLimitWaitSec" min="0" max="300"><span class="dim">秒</span></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">多大算大请求</div><div class="d">单位字节，约 4 字节 1 token。0 是不区分。大请求超时不换模型，交回 Claude Code 重试，连续两次才换。</div></div>
-        <div class="ctl"><input type="number" id="o_bigRequestBytes" min="0" step="10000" style="width:130px"></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">每天请求数到多少提醒</div><div class="d">到了这个数，页面顶上挂一条提醒。</div></div>
-        <div class="ctl"><input type="number" id="o_dailyRequestWarn" min="0"><span class="dim">次</span></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">换过之后留在新模型上</div><div class="d">开着：同一个会话换过模型之后，10 分钟内不来回切。到点、或者你点了首选模型的"现在就试"，就回首选。</div></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="o_stickySession"><i></i></label></div>
-      </div>
-      <div class="row end"><span class="msg" id="saveMsg"></span><button class="btn primary" id="saveAll">保存角色和规矩</button></div>
-    </div>
-    <div class="card" id="sec-backups" data-sec="配置备份">
-      <h2>配置备份</h2>
-      <p class="hint">每次保存前自动备份上一份，留最近 20 份。配置文件：<span class="mono" id="cfgPath"></span></p>
-      <div id="backups" class="dim">…</div>
-    </div>
-  </section>
-
-  <section id="tab-usage" class="tab hide">
-    <div class="pagehead"><h2>用量</h2><p>模型每调用一次工具就是一次请求，这个数涨得比你发的消息快。</p></div>
-    <div class="card"><h2>今天</h2><p class="hint" id="todayHint"></p><div class="bar" id="todayBar"><i style="width:0"></i></div><div id="todayModels" class="dim" style="margin-top:10px"></div></div>
-    <div class="card"><div class="row between"><h2>每天</h2><div class="row" id="daysPager"></div></div><div class="scroll"><table><thead><tr><th>日期</th><th class="num">请求</th><th class="num">失败</th><th class="num">输入</th><th class="num">缓存命中</th><th class="num">输出</th></tr></thead><tbody id="days"></tbody></table></div></div>
-    <div class="card"><div class="row between"><h2>最近的请求</h2><div class="row"><label class="dim"><input type="checkbox" id="recentFail"> 只看失败的</label><span id="recentPager" class="row"></span></div></div><div class="scroll"><table><thead><tr><th>时间</th><th>落到</th><th>结果</th><th class="num">总耗时</th><th class="num">入 / 出</th><th>说明</th></tr></thead><tbody id="recent"></tbody></table></div></div>
   </section>
 
   <section id="tab-local" class="tab hide">
@@ -430,17 +598,12 @@
         <div class="ctl"><input type="number" id="k_contextPercent" min="30" max="95"><span class="dim">%</span></div>
       </div>
       <div class="row" style="margin-top:6px"><span id="ctxPreview" class="dim"></span><span class="msg" id="ctxMsg"></span></div>
-      <p class="hint" id="gwNote" style="margin:10px 0 0"></p>
       <div id="liveSessions" style="margin-top:10px"></div>
     </div>
 
     <div class="card" id="sec-status" data-sec="状态栏">
       <h2>状态栏</h2>
-      <p class="hint">Claude Code 底下的状态栏最多三行。第一行：警告、模型、目录和分支、上下文、进行中的变更。第二行：这个会话开没开自动、在哪一段生效、用到多少自动压缩、放松了的保护、经验待确认、更新。第三行是下面这一项。没有新消息时每 30 秒刷新一次。</p>
-      <div class="opt">
-        <div><div class="t">显示今天的用量</div><div class="d">开着：第三行显示今天经过路由的请求次数、token，和用得最多的三个模型各自的次数、token。次数到公司提醒线的 75% 变黄，到了变红。保存后下一次刷新就变。</div></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_statusUsage"><i></i></label></div>
-      </div>
+      <p class="hint">第一行：警告、目录和分支、上下文、自动开没开。进了流程多两行，第二行是步骤条：探索、当前 change 的每份文档和每组任务、自测、核验、归档；✓ 做完，● 正在做，○ 没开始；◆ 审过，◇ 在审，✗N 有 N 条 P1、P2 待修。第三行是下一项，或者在等你什么。放松了的保护、经验待确认、更新有才单独一行。没进流程不显示变更。没有新消息时每 10 秒刷新一次。</p>
     </div>
 
     <div class="card" id="sec-stop" data-sec="全局：过程文件">
@@ -460,15 +623,14 @@
         <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
       </div>
     </div>
-    </div>
 
     <div class="card" id="sec-auto" data-sec="自动模式">
       <h2>自动模式（每个会话自己开）</h2>
       <p class="hint">自动模式不在这里开：在要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），只对那个会话有效，/vk-auto off 关，状态栏第二行看得到。开了以后先探索、和你确认范围和疑问，之后自动写需求文档、审修、定稿、开工，每组做完审查、自测、修改，按提交方式提交，收工交报告。不加你没说的需求；你中途报的问题、改的需求照改，接着自动做。归档、push 照旧要你点头；改库照旧按自动模式的规矩（留得下备份的才做，别的留给你，见手册"查库和 redis"）。</p>
       <ul class="g-list">
-        <li><b>审查</b>：需求文档的每个审查点、任务的每一组，做完都自动审查、核验、修改和复验，再做下一步。第一轮 2～3 个角度同时审，后面只审改过的地方；没有 P1、P2 就算过，连续两轮 P1、P2 没减少就不再自动审。每件事（每个审查点）自动审到 10 轮就停，各算各的，通过了才重数。停了的点不挡提交，报告里写着没通过；你主动要求审查仍可继续。每轮的过程记在项目的 .vibe/reviews/&lt;变更&gt;/审查记录.md。</li>
-        <li><b>自测</b>：每组任务做完先跑 design.md "验收用例"里这一组的、Claude 能自动跑的用例，全部做完再全跑一遍；改了代码还要跑过快检（项目说明 .vibe/project.md 里记的那条编译级命令，比如 <span class="mono">mvn -q compile</span>；标了"快检：不适用"的项目不查）。验不了的，它说明"没验证"和原因就放行。</li>
-        <li><b>看页面</b>：改了 .vue、.html、.css 这类文件却没跑过页面场景，用 /ttls-see-page 看一遍：自己起服务，用无头浏览器照步骤操作，不开窗口。改动不影响显示的，它说明原因就放行。</li>
+        <li><b>审查</b>：需求文档的每个审查点、任务的每一组，做完都用子代理自动审查、核验、修改和复验，没有 P1、P2 才做下一步，不设次数上限。</li>
+        <li><b>自测</b>：每组任务做完只审查，不自测。全部 change 做完全面自测：所有验收用例和整体用例，改过代码退回重跑，验不了的写明没验证和原因；过了停下等你核验。</li>
+        <li><b>看页面</b>：改了 .vue、.html、.css 这类文件却没跑过页面场景，全面自测时用 /ttls-see-page 看一遍：自己起服务，用无头浏览器，不开窗口。</li>
       </ul>
       <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档写多长都行，复杂的关系画图。只要求写需求时不会自行开工。没开自动的会话，审查、自测和复验都先用提问框问你；放弃就继续，不记待办。</p>
     </div>
@@ -501,12 +663,6 @@
         <div><div class="t">被检查拦住时能不能放行</div><div class="d">只管带拦截编号的检查：OpenSpec 门槛、归档、产出位置、过程文件、起服务、提交信息格式、新文件没 add。</div>
           <details class="more"><summary>细节</summary><ul><li><b>要我点同意</b>：写清查过什么，再做那一步时弹确认框。通行证只用一次；每个会话最多 5 个不同问题，同类最多 3 个。</li><li><b>它自己放行</b>：不弹框，最多 60 个不同问题。</li><li>同一检查、目标和理由重试不重复扣额度，申请结果显示剩余数量。</li><li><b>不许放行</b>：被拦住就停下来告诉你。</li><li>自动模式下直接放行并记报告，选了“不许放行”的除外。</li><li>只适用于带拦截编号的流程检查；推送确认、读令牌和改套件不能用放行额度替代。</li><li>放行记录在“更新和上报”可见。</li></ul></details></div>
         <div class="ctl"><select id="k_kitBypass"><option value="ask">要我点同意</option><option value="auto">它自己放行</option><option value="off">不许放行</option></select></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">检查在哪里跑</div><div class="d">套件的检查（钩子）在哪里执行。路由里跑每次几十毫秒，路由停了就查不了；用命令跑每次零点几秒，不依赖路由。"自动"：路由在用路由，不在退回命令。</div>
-          <details class="more"><summary>细节</summary><ul><li>管的是五个检查：改文件、跑命令、提问框和调技能、搜文件内容、收工检查。会话开始、你发消息时的两个一直用命令。</li><li>在路由里跑时，路由没在跑这几个检查会被跳过。所以你每次发消息会自检一次：收不到就把路由拉起来；拉不起来、或者路由在跑却连着两轮收不到，自动切回命令方式。</li><li>推送另有一道命令方式的检查兜底：只在命令里有 push、发布字样时才起，路由停了 push 照样拦得住；路由里的检查出错时，带 push 的命令要你确认。</li></ul></details>
-          <div class="d" id="hookStatus" style="margin-top:4px"></div></div>
-        <div class="ctl"><select id="k_hookTransport"><option value="auto">自动：装了路由就在路由里跑</option><option value="http">在路由里跑</option><option value="command">用命令跑</option></select></div>
       </div>
       <div class="opt">
         <div><div class="t">Claude Code 自带的自动模式</div><div class="d">新版 Claude Code 没配权限模式时默认进它：有风险的命令先发给一个分类模型审。内网的模型当不了这个分类器，默认关掉。</div>
@@ -597,14 +753,14 @@
     </div>
     <div class="card" id="sec-update" data-sec="自动更新">
       <h2>自动更新</h2>
-      <p class="hint">用 Claude Code 的时候，隔一阵在后台问一次仓库，没有窗口。有新版就下载；勾了"先装新版"的马上装，没勾的等这一版发布满 24 小时、尝鲜组没报问题再装，都等路由空闲时装。装完自检，自检不过自动装回上一版；装完再观察至少 2 小时，路由的请求失败得明显比以前多，也自动装回上一版。装着的版本跟着仓库走：仓库退回旧版，这台电脑也马上跟着退，不等。</p>
+      <p class="hint">用 Claude Code 的时候，隔一阵在后台问一次仓库，没有窗口。有新版就下载；勾了"先装新版"的马上装，没勾的等这一版发布满 24 小时、尝鲜组没报问题再装。装完自检，自检不过自动装回上一版。装着的版本跟着仓库走：仓库退回旧版，这台电脑也马上跟着退，不等。</p>
       <div class="opt">
         <div><div class="t">发现新版之后</div><div class="d">"只提醒"：状态栏和这一页说有新版，你点了才装。</div></div>
         <div class="ctl"><select id="k_autoUpdate"><option value="auto">自动装上</option><option value="notify">只提醒</option><option value="off">不检查</option></select></div>
       </div>
       <div class="opt">
         <div><div class="t">先装新版（尝鲜）</div><div class="d">勾上：一发现新版就装，替大家先试。不勾：等这一版发布满 24 小时、尝鲜组没报问题再装。</div>
-          <details class="more"><summary>细节</summary><ul><li>24 小时按仓库里那次发布的时间算；那个时间比现在还晚（维护的电脑钟不准）的，按这台电脑第一次看到它的时间算。</li><li>尝鲜组报问题：勾了的电脑装完新版、观察期里路由的请求失败得明显比以前多，自动装回上一版的同时，在仓库里记一条"[有问题的版本] 版本号"（只有版本号和次数；问题上报关着的不记）。</li><li>这一条开着，没勾的电脑就不自动装那一版。维护的人确认是误报、关掉它以后，最晚两小时照常装。</li><li>观察期：每台电脑装完比原来新的版本都看，至少 2 小时、看够 20 次请求，最长 24 小时；装之后至少 8 次请求、一半以上失败、比装之前高 30 个百分点才算明显变多。</li><li>查不到有没有人报（没有建 issue 的令牌、接口不通）按没问题算，满 24 小时照装。</li><li>点"立即更新"不用等；仓库退回旧版也不等，马上跟着退。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li>24 小时按仓库里那次发布的时间算；那个时间比现在还晚（维护的电脑钟不准）的，按这台电脑第一次看到它的时间算。</li><li>尝鲜组报问题：在仓库里记一条"[有问题的版本] 版本号"。</li><li>这一条开着，没勾的电脑就不自动装那一版。维护的人确认是误报、关掉它以后，最晚两小时照常装。</li><li>查不到有没有人报（没有建 issue 的令牌、接口不通）按没问题算，满 24 小时照装。</li><li>点"立即更新"不用等；仓库退回旧版也不等，马上跟着退。</li></ul></details></div>
         <div class="ctl"><label class="switch"><input type="checkbox" id="k_updateEarly"><i></i></label></div>
       </div>
       <div class="opt">
@@ -613,7 +769,7 @@
       </div>
       <div class="opt">
         <div><div class="t">固定、跳过</div><div class="d">固定在这一版：什么版本都不自动装，直到取消。跳过这一版：仓库里是这一版时不自动装，出了别的版本照常。</div>
-          <details class="more"><summary>细节</summary><ul><li>固定着照常检查，这一页看得到仓库里有什么。</li><li>固定以后这些都不做：装新版、跟着仓库退回旧版、观察期里装回上一版、装坏后再试着装回。"立即更新"是灰的，要先取消固定。</li><li>没装好的版本不能固定。</li><li>跳过的版本点"立即更新"照样能装；出了别的版本，跳过自动不起作用，不用去取消。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li>固定着照常检查，这一页看得到仓库里有什么。</li><li>固定以后这些都不做：装新版、跟着仓库退回旧版、装坏后再试着装回。"立即更新"是灰的，要先取消固定。</li><li>没装好的版本不能固定。</li><li>跳过的版本点"立即更新"照样能装；出了别的版本，跳过自动不起作用，不用去取消。</li></ul></details></div>
         <div class="ctl"><button class="btn" id="ruPin">固定在这一版</button><button class="btn hide" id="ruSkip">跳过这一版</button></div>
       </div>
       <div id="ruStatus" style="margin-top:6px"></div>
@@ -687,19 +843,6 @@
   <div class="row end"><span class="msg" id="tdMsg" style="margin-right:auto"></span><button class="btn" id="tdCopy">复制</button><button class="btn primary" id="tdClose">关闭</button></div>
 </dialog>
 
-<dialog id="dlg">
-  <h2 id="dlgTitle" style="margin-top:0">添加模型</h2>
-  <div class="grid">
-    <label class="f"><span>名称（自己认得就行）</span><input type="text" id="p_name"></label>
-    <label class="f"><span>换成这个模型名再发出去（可不填）</span><input type="text" id="p_model_override" placeholder="不填就用 Claude Code 发来的模型名"></label>
-  </div>
-  <label class="f"><span>地址（不带 /v1）</span><input type="text" id="p_base_url"></label>
-  <label class="f"><span>key</span><input type="password" id="p_api_key" autocomplete="off"></label>
-  <label class="f"><span>备注</span><input type="text" id="p_note"></label>
-  <label class="check"><input type="checkbox" id="p_enabled"><span>启用</span></label>
-  <label class="check"><input type="checkbox" id="p_verify_cert"><span>校验证书（只对 https 地址有用）<br><span class="dim">默认不勾：不校验网关的证书，内网常见的自签证书也能连上，但万一有人冒充这个网关，key 会发给它。网关的证书是正规机构签发的就勾上；勾上后自签证书会连不上。</span></span></label>
-  <div class="row end"><span class="msg" id="dlgMsg" style="margin-right:auto"></span><button class="btn" id="dlgTest">测试</button><button class="btn" id="dlgCancel">取消</button><button class="btn primary" id="dlgSave">保存</button></div>
-</dialog>
 
 <script>
 (() => {
@@ -715,12 +858,6 @@
   const CONFLICT_MSG = '配置在别处改过，已刷新，请重做这次修改';
   const say = (el, text, ok) => { el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'bad'); if (ok) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 4000); };
 
-  let state = null;       // 路由返回的当前状态
-  let draft = null;       // 正在编辑的角色分配（避免定时刷新把用户没保存的改动冲掉）
-  let draftVersion = null; // draft 是按哪个版本的配置文件做的：保存时交给路由核对，文件在别处改过就不覆盖
-  let editing = null;     // 对话框里正在编辑的模型原名，null 表示新增
-  const tests = {};       // 模型名 -> { text, ok, busy }：表格每 5 秒重建一次，测试结果和"测试中"存在这里，重建时带上
-
   // ---------- 页签 ----------
   /** 当前页里的各节（带 data-sec 的卡片）列在导航里那一页的下面，点了跳过去 */
   function buildSubnav(tab) {
@@ -731,10 +868,9 @@
   }
   document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
     document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
-    for (const t of ['guide', 'models', 'usage', 'local', 'data', 'kit', 'lessons', 'remote']) $('tab-' + t).classList.toggle('hide', t !== b.dataset.tab);
+    for (const t of ['guide', 'local', 'data', 'kit', 'lessons', 'remote']) $('tab-' + t).classList.toggle('hide', t !== b.dataset.tab);
     buildSubnav(b.dataset.tab);
     window.scrollTo(0, 0);
-    if (b.dataset.tab === 'usage') loadUsage();
     // 每次切到这几页都重新读一遍开关：页面开着的时候别处改过的，这里跟着变（你在页面上改了还没保存的不动）
     if (['guide', 'local', 'data', 'kit', 'lessons', 'remote'].includes(b.dataset.tab)) loadKit(true).then(() => { if (b.dataset.tab === 'remote') loadRemote(true); renderBar(); });
     if (b.dataset.tab === 'data') loadToolUse();
@@ -754,228 +890,6 @@
   window.addEventListener('hashchange', openAnchor);
   window.addEventListener('load', openAnchor);
 
-  // ---------- 模型页 ----------
-  function renderProviders() {
-    $('providers').innerHTML = state.providers.map((p) => {
-      const st = !p.enabled ? '<span class="tag off">已停用</span>'
-        : p.problem ? '<span class="tag bad">配得不对，已跳过：' + esc(p.problem) + '</span>'
-        // 额度用完：停用到上游说的重置时间，到点自动恢复；额度提前恢复了（找管理员加了）就手动恢复
-        : p.quota ? '<span class="tag bad" title="' + esc(p.reason) + '">额度用完，' + esc(p.untilText) + ' 自动恢复</span> <button class="btn" data-clear="' + esc(p.name) + '" title="额度已经恢复了（比如找管理员加了额度），点这里立刻重新启用它。其实没恢复的话，下一次请求会被它拒绝，路由会自动再停用一次">手动恢复</button><div class="dim" style="font-size:12px;max-width:380px;margin-top:2px">' + esc(p.reason) + '</div>'
-        : p.cooldownLeftSec > 0 ? '<span class="tag bad" title="' + esc(p.reason) + '">' + esc(p.reason) + '，' + (p.cooldownLeftSec > 90 ? Math.round(p.cooldownLeftSec / 60) + ' 分钟' : p.cooldownLeftSec + ' 秒') + '后再试</span> <button class="btn" data-clear="' + esc(p.name) + '">现在就试</button>'
-        : p.lastOkAt ? '<span class="tag ok">正常</span>' : '<span class="tag off">还没用过</span>';
-      const t = p.today;
-      const tr = tests[p.name];
-      return '<tr><td><b>' + esc(p.name) + '</b>' + (p.model_override ? '<div class="dim mono">→ ' + esc(p.model_override) + '</div>' : '') + (p.note ? '<div class="dim">' + esc(p.note) + '</div>' : '') + (p.verify_cert ? '<div class="dim">校验证书</div>' : '') + '</td>'
-        + '<td class="mono">' + esc(p.base_url) + '</td><td class="mono">' + esc(p.key_masked) + '</td><td>' + st + '</td>'
-        + '<td class="num">' + t.requests + (t.fail ? ' <span class="dim">（失败 ' + t.fail + '）</span>' : '') + '</td><td class="num">' + fmt(t.input + t.cacheRead + t.cacheWrite) + ' / ' + fmt(t.output) + '</td>'
-        + '<td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end"><span class="msg clip' + (tr ? (tr.ok ? ' ok' : ' bad') : '') + '" data-msg="' + esc(p.name) + '"' + (tr && tr.text.length > 24 ? ' data-full="' + esc(p.name) + '" title="点开看完整内容"' : '') + '>' + (tr ? esc(tr.text) : '') + '</span><button class="btn" data-test="' + esc(p.name) + '"' + (tr && tr.busy ? ' disabled' : '') + '>测试</button><button class="btn" data-edit="' + esc(p.name) + '">编辑</button><button class="btn danger" data-del="' + esc(p.name) + '">删除</button></div></td></tr>';
-    }).join('') || '<tr><td colspan="7" class="dim">还没有模型，点右上角"添加模型"。</td></tr>';
-  }
-  const providerOptions = (sel) => state.providers.map((p) => '<option' + (p.name === sel ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('');
-  const ROLE_WORDS = { opus: 'opus（主会话）', sonnet: 'sonnet（审查代理）', haiku: 'haiku（后台小任务）' };
-  const isRole = (m) => m.length === 1 && ROLE_WORDS[String(m[0]).toLowerCase()];
-  let order = [];
-  function renderOrder() {
-    $('failoverList').innerHTML = order.map((n, i) => '<div class="ord"><span>' + (i + 1) + '. ' + esc(n) + '</span><button class="btn" data-up="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button><button class="btn" data-down="' + i + '"' + (i === order.length - 1 ? ' disabled' : '') + '>↓</button></div>').join('') || '<span class="dim">还没有模型</span>';
-  }
-  function renderRoutes() {
-    $('routes').innerHTML = draft.routes.map((r, i) => {
-      const role = isRole(r.match) ? String(r.match[0]).toLowerCase() : (r.match.length ? 'custom' : 'opus');
-      return '<div class="row" style="margin-bottom:6px"><span class="dim">模型名包含</span><select style="flex:0 0 200px" data-matchsel="' + i + '">' + Object.keys(ROLE_WORDS).map((k) => '<option value="' + k + '"' + (k === role ? ' selected' : '') + '>' + ROLE_WORDS[k] + '</option>').join('') + '<option value="custom"' + (role === 'custom' ? ' selected' : '') + '>自己写…</option></select><input type="text" style="flex:1;min-width:120px" class="' + (role === 'custom' ? '' : 'hide') + '" data-match="' + i + '" value="' + esc(r.match.join(', ')) + '" placeholder="模型名里的词，逗号分开"><span class="dim">→</span><select style="flex:0 0 180px" data-prov="' + i + '">' + providerOptions(r.provider) + '</select><button class="btn danger" data-rmroute="' + i + '">删除</button></div>';
-    }).join('');
-    $('defaultProvider').innerHTML = providerOptions(draft.default.provider);
-    const names = state.providers.map((p) => p.name);
-    order = draft.failover.filter((n) => names.includes(n)).concat(names.filter((n) => !draft.failover.includes(n)));
-    renderOrder();
-    for (const k of ['cooldownSec', 'outageCooldownSec', 'firstByteTimeoutSec', 'dailyRequestWarn', 'rateLimitWaitSec', 'bigRequestBytes']) $('o_' + k).value = draft.options[k];
-    $('o_stickySession').checked = !!draft.options.stickySession;
-  }
-  function readDraft() {
-    document.querySelectorAll('[data-matchsel]').forEach((el) => {
-      const i = +el.dataset.matchsel;
-      const input = document.querySelector('[data-match="' + i + '"]');
-      draft.routes[i].match = el.value === 'custom' ? input.value.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean) : [el.value];
-    });
-    document.querySelectorAll('[data-prov]').forEach((el) => { draft.routes[+el.dataset.prov].provider = el.value; });
-    draft.default = { provider: $('defaultProvider').value };
-    draft.failover = order.slice();
-    // 清空的输入框原样传空串：路由把空串当"用默认值"。不能变成 0，0 会被收到最小值（30 秒超时、限流立刻换模型）
-    for (const k of ['cooldownSec', 'outageCooldownSec', 'firstByteTimeoutSec', 'dailyRequestWarn', 'rateLimitWaitSec', 'bigRequestBytes']) { const v = String($('o_' + k).value).trim(); draft.options[k] = v === '' ? '' : Number(v); }
-    draft.options.stickySession = $('o_stickySession').checked;
-  }
-  $('failoverList').onclick = (ev) => {
-    const t = ev.target; let i = -1; let j = -1;
-    if (t.dataset.up !== undefined) { i = +t.dataset.up; j = i - 1; } else if (t.dataset.down !== undefined) { i = +t.dataset.down; j = i + 1; } else return;
-    if (j < 0 || j >= order.length) return;
-    const x = order[i]; order[i] = order[j]; order[j] = x;
-    renderOrder();
-  };
-  $('routes').addEventListener('change', (ev) => { const el = ev.target; if (el.dataset.matchsel === undefined) return; const input = document.querySelector('[data-match="' + el.dataset.matchsel + '"]'); input.classList.toggle('hide', el.value !== 'custom'); if (el.value === 'custom') { input.value = ''; input.focus(); } });
-  const payload = (providers) => ({ providers, routes: draft.routes, default: draft.default, failover: draft.failover, options: draft.options, baseVersion: draftVersion });
-  const currentProviders = () => state.providers.map((p) => ({ name: p.name, original_name: p.name, base_url: p.base_url, model_override: p.model_override, enabled: p.enabled, note: p.note, verify_cert: !!p.verify_cert }));
-  /** 保存时路由回 409：配置文件在别处改过。刷新成最新的，请用户重做这次修改 */
-  async function conflicted(e) { if (!e || e.status !== 409) return false; await refresh(true); loadBackups(); return true; }
-
-  function applyState(s, resetDraft) {
-    state = s;
-    $('meta').innerHTML = '路由 v' + esc(s.version) + '<br>' + esc(s.listen.host + ':' + s.listen.port) + '<br>今天 ' + esc(s.todayRequests) + ' 次请求';
-    $('lamp').className = 'on';
-    $('cfgPath').textContent = s.configPath;
-    const b = [];
-    if (s.configError) b.push('<div class="banner bad">' + esc(s.configError) + (s.usingLastGood ? '。现在用的是上一份好的配置，Claude 不受影响；在这里改好保存一次就恢复正常。' : '') + '</div>');
-    if (s.warnings && s.warnings.length) b.push('<div class="banner warn">配置里有几处不对，已经跳过，其余照常用：' + esc(s.warnings.join('；')) + '</div>');
-    if (s.options.dailyRequestWarn && s.todayRequests >= s.options.dailyRequestWarn) b.push('<div class="banner warn">今天已经 ' + s.todayRequests + ' 次请求，超过了 ' + s.options.dailyRequestWarn + ' 次。公司规定超过这个数要自查在做什么。</div>');
-    $('banner').innerHTML = b.join('');
-    renderProviders();
-    if (resetDraft || !draft) { draft = JSON.parse(JSON.stringify({ routes: s.routes, default: s.default, failover: s.failover, options: s.options })); draftVersion = s.configVersion; renderRoutes(); }
-  }
-  async function refresh(resetDraft) { try { applyState(await api('GET', '/api/state'), resetDraft); } catch (e) { $('lamp').className = 'off'; $('banner').innerHTML = '<div class="banner bad">连不上路由：' + esc(e.message) + '</div>'; } }
-
-  $('providers').onclick = async (ev) => {
-    const t = ev.target;
-    if (t.dataset.full && tests[t.dataset.full]) { showText('测试结果：' + t.dataset.full, tests[t.dataset.full].text); return; }
-    if (t.dataset.test) {
-      const name = t.dataset.test;
-      tests[name] = { text: '测试中…', ok: true, busy: true }; renderProviders();
-      try { const r = await api('POST', '/api/test', { name }); tests[name] = { text: (r.ok ? '通了 ' : '不通：') + (r.ok ? r.ms + ' ms' : r.reason), ok: r.ok }; } catch (e) { tests[name] = { text: e.message, ok: false }; }
-      renderProviders();
-    }
-    if (t.dataset.edit) openDialog(state.providers.find((p) => p.name === t.dataset.edit));
-    if (t.dataset.clear) { await api('POST', '/api/clear-cooldown', { name: t.dataset.clear }); refresh(false); }
-    if (t.dataset.del) {
-      const name = t.dataset.del;
-      const used = draft.routes.filter((r) => r.provider === name).map((r) => r.match.join('/'));
-      if (state.providers.length <= 1) return alert('至少要留一个模型。');
-      if (!confirm('删除模型 ' + name + '？' + (used.length ? '\n角色 ' + used.join('、') + ' 正在用它，会一并改到默认模型上。' : ''))) return;
-      readDraft();
-      const rest = currentProviders().filter((p) => p.name !== name);
-      if (draft.default.provider === name) draft.default.provider = rest[0].name;
-      draft.routes.forEach((r) => { if (r.provider === name) r.provider = draft.default.provider; });
-      draft.failover = draft.failover.filter((n) => n !== name);
-      try { applyState((await api('POST', '/api/config', payload(rest))).state, true); } catch (e) { if (await conflicted(e)) alert('没删成：' + CONFLICT_MSG); else alert('没删成：' + e.message); }
-    }
-  };
-  $('routes').onclick = (ev) => { if (ev.target.dataset.rmroute !== undefined) { readDraft(); draft.routes.splice(+ev.target.dataset.rmroute, 1); renderRoutes(); } };
-  $('quickRoutes').onclick = () => {
-    if (!state.providers.length) return alert('先添加模型。');
-    readDraft();
-    const def = draft.default.provider || state.providers[0].name;
-    for (const k of ['opus', 'sonnet', 'haiku']) if (!draft.routes.some((r) => r.match.map((m) => m.toLowerCase()).includes(k))) draft.routes.push({ match: [k], provider: def });
-    renderRoutes();
-    say($('saveMsg'), '填好了：主会话 opus、审查 sonnet、后台小任务 haiku。想让审查换个模型，把 sonnet 那一行改掉，然后保存', true);
-  };
-  $('addRoute').onclick = () => { readDraft(); const used = draft.routes.map((r) => String(r.match[0] || '').toLowerCase()); const next = ['opus', 'sonnet', 'haiku'].find((k) => !used.includes(k)) || 'opus'; draft.routes.push({ match: [next], provider: (state.providers[0] || {}).name || '' }); renderRoutes(); };
-  $('saveAll').onclick = async () => {
-    readDraft();
-    try { applyState((await api('POST', '/api/config', payload(currentProviders()))).state, true); say($('saveMsg'), '已保存，立即生效', true); loadBackups(); }
-    catch (e) { if (await conflicted(e)) say($('saveMsg'), '没保存：' + CONFLICT_MSG, false); else say($('saveMsg'), '没保存：' + e.message, false); }
-  };
-
-  // ---------- 添加 / 编辑模型 ----------
-  function openDialog(p) {
-    editing = p ? p.name : null;
-    $('dlgTitle').textContent = p ? '编辑模型 ' + p.name : '添加模型';
-    $('p_name').value = p ? p.name : '';
-    $('p_base_url').value = p ? p.base_url : ((state.providers[0] || {}).base_url || '');
-    $('p_api_key').value = '';
-    $('p_api_key').placeholder = p ? '不改就留空（现在是 ' + p.key_masked + '）' : '';
-    $('p_model_override').value = p ? p.model_override : '';
-    $('p_note').value = p ? p.note : '';
-    $('p_enabled').checked = p ? p.enabled : true;
-    $('p_verify_cert').checked = p ? !!p.verify_cert : false;
-    $('dlgMsg').textContent = '';
-    $('dlg').showModal();
-  }
-  const dialogValues = () => ({ name: $('p_name').value.trim(), original_name: editing || undefined, base_url: $('p_base_url').value.trim(), api_key: $('p_api_key').value.trim(), model_override: $('p_model_override').value.trim(), note: $('p_note').value.trim(), enabled: $('p_enabled').checked, verify_cert: $('p_verify_cert').checked });
-  async function testDialog() {
-    const v = dialogValues();
-    say($('dlgMsg'), '测试中…', true);
-    const r = await api('POST', '/api/test', { name: v.name, original_name: editing || undefined, base_url: v.base_url, api_key: v.api_key, model_override: v.model_override, verify_cert: v.verify_cert });
-    say($('dlgMsg'), r.ok ? '通了，' + r.ms + ' ms。' + r.reason : '不通：' + r.reason, r.ok);
-    return r;
-  }
-  $('addProvider').onclick = () => openDialog(null);
-  $('dlgCancel').onclick = () => $('dlg').close();
-  $('dlgTest').onclick = () => testDialog().catch((e) => say($('dlgMsg'), e.message, false));
-  $('dlgSave').onclick = async () => {
-    const v = dialogValues();
-    if (!v.name || !v.base_url) return say($('dlgMsg'), '名称和地址要填', false);
-    if (!editing && !v.api_key) return say($('dlgMsg'), 'key 要填', false);
-    $('dlgSave').disabled = true;
-    try {
-      // 保存前先测一次。不通也允许保存：路由碰到它失败会自动换别的，不会让 Claude 用不了
-      if (v.enabled) {
-        const r = await testDialog();
-        if (!r.ok && !confirm('测试没通过：' + r.reason + '\n\n仍然保存吗？\n保存后路由碰到它失败会自动换到别的模型，不会让 Claude 用不了；也可以取消勾选"启用"先存着。')) return;
-      }
-      readDraft();
-      const list = currentProviders();
-      const i = editing ? list.findIndex((p) => p.name === editing) : -1;
-      if (i >= 0) list[i] = v; else list.push(v);
-      if (editing && editing !== v.name) { draft.routes.forEach((r) => { if (r.provider === editing) r.provider = v.name; }); if (draft.default.provider === editing) draft.default.provider = v.name; draft.failover = draft.failover.map((n) => (n === editing ? v.name : n)); }
-      if (!draft.default.provider) draft.default.provider = v.name;
-      applyState((await api('POST', '/api/config', payload(list))).state, true);
-      $('dlg').close();
-      loadBackups();
-    } catch (e) { if (await conflicted(e)) say($('dlgMsg'), '没保存：' + CONFLICT_MSG + '（再点一次"保存"就按最新的配置存）', false); else say($('dlgMsg'), '没保存：' + e.message, false); }
-    finally { $('dlgSave').disabled = false; }
-  };
-
-  async function loadBackups() {
-    try {
-      const r = await api('GET', '/api/backups');
-      $('backups').innerHTML = r.files.length ? r.files.slice(0, 8).map((f) => '<div class="row" style="margin-bottom:4px"><span class="mono">' + esc(f) + '</span><button class="btn" data-restore="' + esc(f) + '">恢复到这一份</button></div>').join('') : '还没有备份。';
-    } catch (e) { $('backups').textContent = e.message; }
-  }
-  $('backups').onclick = async (ev) => {
-    const f = ev.target.dataset.restore; if (!f || !confirm('恢复到 ' + f + '？当前配置会先备份。')) return;
-    try { applyState((await api('POST', '/api/restore', { file: f })).state, true); loadBackups(); } catch (e) { alert('没恢复成：' + e.message); }
-  };
-
-  // ---------- 用量页 ----------
-  // 2026-10-28 精简（问题反馈表第 12 条）：去掉按模型的缓存统计表、每天那一行的按模型明细、首字节；每天 7 天一页，最近的请求 20 条一页，能只看失败的
-  const usage = { data: null, daysPage: 0, recentPage: 0 };
-  const DAYS_PER_PAGE = 7, RECENT_PER_PAGE = 20;
-  function pager(el, page, pages, go) {
-    el.innerHTML = pages > 1 ? '<button class="btn" data-p="-1"' + (page <= 0 ? ' disabled' : '') + '>上一页</button><span class="dim" style="margin:0 8px">第 ' + (page + 1) + ' / ' + pages + ' 页</span><button class="btn" data-p="1"' + (page >= pages - 1 ? ' disabled' : '') + '>下一页</button>' : '';
-    el.onclick = (ev) => { const b = ev.target.closest('[data-p]'); if (b && !b.disabled) go(page + Number(b.dataset.p)); };
-  }
-  function renderDays() {
-    const u = usage.data; const keys = Object.keys(u.daily).sort().reverse();
-    const pages = Math.max(1, Math.ceil(keys.length / DAYS_PER_PAGE)); usage.daysPage = Math.min(Math.max(0, usage.daysPage), pages - 1);
-    $('days').innerHTML = keys.slice(usage.daysPage * DAYS_PER_PAGE, (usage.daysPage + 1) * DAYS_PER_PAGE).map((k) => {
-      const day = u.daily[k]; const t = { fail: 0, input: 0, cacheRead: 0, output: 0 };
-      for (const x of Object.values(day.byProvider || {})) { t.fail += x.fail || 0; t.input += (x.input || 0) + (x.cacheWrite || 0); t.cacheRead += x.cacheRead || 0; t.output += x.output || 0; }
-      return '<tr><td>' + esc(k) + '</td><td class="num">' + (day.requests || 0) + '</td><td class="num">' + t.fail + '</td><td class="num">' + fmt(t.input) + '</td><td class="num">' + fmt(t.cacheRead) + (t.input + t.cacheRead ? ' <span class="dim">' + Math.round(t.cacheRead * 100 / (t.input + t.cacheRead)) + '%</span>' : '') + '</td><td class="num">' + fmt(t.output) + '</td></tr>';
-    }).join('') || '<tr><td colspan="6" class="dim">还没有记录。</td></tr>';
-    pager($('daysPager'), usage.daysPage, pages, (p) => { usage.daysPage = p; renderDays(); });
-  }
-  function renderRecent() {
-    // failed：状态码是 200 但其实没成（流里报错、没收全）；cancelled：客户端自己取消的（按了 Esc），不算模型的错
-    const okOf = (r) => !r.failed && !r.cancelled && r.status > 0 && r.status < 400;
-    const list = usage.data.recent.filter((r) => !$('recentFail').checked || (!okOf(r) && !r.cancelled));
-    const pages = Math.max(1, Math.ceil(list.length / RECENT_PER_PAGE)); usage.recentPage = Math.min(Math.max(0, usage.recentPage), pages - 1);
-    $('recent').innerHTML = list.slice(usage.recentPage * RECENT_PER_PAGE, (usage.recentPage + 1) * RECENT_PER_PAGE).map((r) => {
-      const tag = r.cancelled ? '<span class="tag off">取消</span>' : '<span class="tag ' + (okOf(r) ? 'ok' : 'bad') + '">' + (r.status || '断开') + '</span>';
-      return '<tr><td class="mono">' + esc(new Date(r.timestamp).toLocaleTimeString('zh-CN', { hour12: false })) + '</td><td>' + esc(r.provider) + (r.failover ? ' <span class="tag off">换过来的</span>' : '') + '</td><td>' + tag + '</td><td class="num">' + (((r.totalMs || 0) / 1000).toFixed(1)) + ' s</td><td class="num">' + fmt((r.input || 0) + (r.cacheRead || 0) + (r.cacheWrite || 0)) + ' / ' + fmt(r.output) + '</td><td class="dim">' + (r.error ? '<span class="clip"' + (r.error.length > 24 ? ' data-full="' + esc(r.error) + '" title="点开看完整内容"' : '') + '>' + esc(r.error) + '</span>' : '') + '</td></tr>';
-    }).join('') || '<tr><td colspan="6" class="dim">' + ($('recentFail').checked ? '最近没有失败的请求。' : '还没有请求。') + '</td></tr>';
-    pager($('recentPager'), usage.recentPage, pages, (p) => { usage.recentPage = p; renderRecent(); });
-  }
-  $('recentFail').onchange = () => { usage.recentPage = 0; if (usage.data) renderRecent(); };
-  async function loadUsage() {
-    const u = await api('GET', '/api/usage').catch(() => null); if (!u) return;
-    usage.data = u;
-    const d = new Date(); const today = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    const td = u.daily[today] || { requests: 0, byProvider: {} };
-    const n = td.requests || 0;
-    const warn = u.warnAt || 0;
-    $('todayHint').textContent = '今天 ' + n + ' 次请求' + (warn ? '，提醒线 ' + warn + ' 次。' : '。') + '一次对话里模型每调用一次工具就是一次请求，所以这个数涨得比你发的消息快得多。';
-    $('todayBar').className = 'bar' + (warn && n >= warn ? ' bad' : warn && n >= warn * 0.75 ? ' warn' : '');
-    $('todayBar').firstElementChild.style.width = Math.min(100, warn ? n * 100 / warn : 0) + '%';
-    $('todayModels').innerHTML = Object.entries(td.byProvider || {}).sort((x, y) => (y[1].requests || 0) - (x[1].requests || 0)).map(([p, x]) => esc(p) + ' ' + (x.requests || 0) + ' 次' + (x.fail ? '（失败 ' + x.fail + '）' : '')).join('，') || '今天还没有请求。';
-    renderDays(); renderRecent();
-  }
-  $('recent').addEventListener('click', (ev) => { const t = ev.target.closest('[data-full]'); if (t) showText('请求的说明', t.dataset.full); });
   /** 长文本弹窗：表格里只显示一行，点开看全文 */
   function showText(title, text) { $('tdTitle').textContent = title; $('tdBody').textContent = text; $('tdMsg').textContent = ''; $('textDlg').showModal(); }
   $('tdClose').onclick = () => $('textDlg').close();
@@ -1005,7 +919,7 @@
   }
   const readLocal = () => ({ jdks: readItems('jdks'), defaultJdk: $('defaultJdk').value, mavens: readItems('mavens'), defaultMaven: $('defaultMaven').value, tomcats: readItems('tomcats'), notes: $('notes').value });
 
-  // ---------- 选目录的弹窗：目录由路由在本机列出来（网页自己拿不到硬盘上的完整路径）----------
+  // ---------- 选目录的弹窗：目录由后端在本机列出来（网页自己拿不到硬盘上的完整路径）----------
   const EXPECT = { jdk: ['jdk', '这里是一个 JDK（有 bin/javac），选它', '要选到 JDK 的根目录：里面有 bin、lib 的那一层'], maven: ['maven', '这里是 Maven 的安装目录（有 bin/mvn），选它', '要选到 Maven 的根目录：里面有 bin、conf 的那一层'], tomcat: ['tomcat', '这里是 Tomcat 的目录（有 bin/catalina），选它', '要选到 Tomcat 的根目录：里面有 bin、webapps 的那一层'], repo: ['repo', '这里像是一个 Maven 本地仓库（有 com、org），选它', '本地仓库一般叫 repository，里面是 com、org 这些目录'] };
   let pk = null;
   async function pkGo(dir) {
@@ -1071,15 +985,15 @@
   fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
   fNum('tmpKeepDays', '临时目录留几天', 0, 90);
   fNum('contextPercent', '到百分之多少', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true);
-  fBool('statusUsage', '状态栏显示今天的用量'); fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
-  fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('hookTransport', '检查在哪里跑', ['auto', 'http', 'command']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
+  fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
+  fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
   fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);
   fSel('autoUpdate', '发现新版之后', ['auto', 'notify', 'off']); fNum('updateCheckHours', '多久检查一次', 1, 24); fBool('updateEarly', '先装新版（尝鲜）'); fSel('issueUpload', '问题上报', ['on', 'off']); fSel('sshToken', '没填令牌的时候', ['auto', 'off']);
   const sameVal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  let base = null; // 上一次从路由拿到的开关：和页面上现在的值一比，就知道哪几项是在这个页面上改过的
+  let base = null; // 上一次从后端拿到的开关：和页面上现在的值一比，就知道哪几项是在这个页面上改过的
   const baseOf = (k) => base[k];
   function fillFields(c, keys) { for (const k of keys || Object.keys(F)) { try { F[k].set(c[k]); } catch (e) { /* 页面上没有这一项 */ } } renderCtx(); }
   /** 在这个页面上改过、还没保存的项（填错了的也算） */
@@ -1122,7 +1036,6 @@
       const restart = [dirty.includes('autoMemory') ? '"自动记忆"' : '', dirty.includes('ccAutoMode') ? '"Claude Code 自带的自动模式"' : ''].filter(Boolean);
       const note = restart.length ? '。' + restart.join('、') + '那一项要重新打开 Claude Code 才生效' : '';
       say(msgEl, r.synced === false && r.output ? '已保存 ' + dirty.length + ' 项（' + names + '）' + tail + '。' + r.output : (okText || '已保存') + '：' + names + tail + note, r.synced !== false && !adjusted.length);
-      loadHooks();
       return { saved: dirty, adjusted, r };
     } catch (e) { say(msgEl, e.message, false); return null; }
   }
@@ -1140,7 +1053,6 @@
         if (kit.local) renderLocal(kit.local);
         base = c;
         fillFields(c);
-        renderHookStatus(kit.hooks);
         loadFeedback();
         loadLessons();
         // 安装、自动更新时覆盖了你改过的东西、挪了你的补充：提示到你点"知道了"为止
@@ -1156,7 +1068,6 @@
         kit.config = c; kit.hooks = fresh.hooks;
         base = c;
         fillFields(c, Object.keys(F).filter((k) => !dirty.includes(k)));
-        renderHookStatus(fresh.hooks);
       }
     } catch (e) { say($('localMsg'), e.message, false); }
   }
@@ -1173,7 +1084,7 @@
     } catch (e) { say($('localMsg'), e.message, false); }
   };
   $('readyCheck').onclick = async () => { try { const r = await api('POST', '/api/kit/readiness', { project: $('readyProject').value.trim() }); $('readyOutput').textContent = '识别工程：' + (r.identified.join('、') || '普通工程') + '\n缺工具：' + (r.missing.join('、') || '所需工具文件存在') + '\n项目说明：' + (r.projectNotes ? '已找到' : '尚未找到') + '\n驱动：' + (r.drivers.map(d => d.artifact + ' ' + d.version + ' ' + (d.registered ? '文件已登记' : '需补齐或核对')).join('；') || '项目未声明') + '\n' + r.verification; } catch (e) { $('readyOutput').textContent = e.message; } };
-  $('performanceCheck').onclick = async () => { try { const r = await api('GET', '/api/kit/performance'); const n = r.reviews.n || 0; $('readyOutput').textContent = '本机审查完成 ' + n + ' 次，平均 ' + (n ? Math.round(r.reviews.totalMs / n / 1000) : 0) + ' 秒。\n钩子：' + Object.entries(r.hooks).map(([name,h]) => name + ' ' + h.n + ' 次，出错 ' + (h.errors || 0) + ' 次').join('；') + '\n耗时与诊断明细只留本机，不上报。'; } catch (e) { $('readyOutput').textContent = e.message; } };
+  $('performanceCheck').onclick = async () => { try { const r = await api('GET', '/api/kit/performance'); $('readyOutput').textContent = '钩子：' + Object.entries(r.hooks).map(([name,h]) => name + ' ' + h.n + ' 次，出错 ' + (h.errors || 0) + ' 次').join('；') + '\n耗时与诊断明细只留本机，不上报。'; } catch (e) { $('readyOutput').textContent = e.message; } };
   $('saveLocal').onclick = async () => {
     try { const r = await api('POST', '/api/kit/local', readLocal()); say($('localMsg'), r.synced ? '已保存并写进全局约定，新开的会话生效' : '已保存。' + (r.output || ''), r.synced); } catch (e) { say($('localMsg'), e.message, false); }
   };
@@ -1186,18 +1097,13 @@
     const line = Number($('k_contextPercent').value) || 70;
     // 和套件的 lib/config-fields.js 算压缩线的办法一样
     const acp = action === 'off' ? 0 : action === 'compact' ? Math.max(50, line) : Math.min(95, Math.max(50, line + 15));
-    // 和套件里算 autoCompactWindow 的办法一样（kit/lib/session.js 的 autoCompactWindowOf）
+    // 和安装器算 autoCompactWindow 的办法一样（install.js）
     const acw = acp > 0 ? Math.max(100000, Math.min(960000, Math.round((limit > 0 ? limit : 1000000) * Math.min(acp, 95) / 100) + 33000)) : 0;
     const compact = acw ? '；用到 ' + tok(acw - 33000) + ' 时 Claude Code 自己压缩（开着的会话敲 /autocompact ' + acw + ' 马上生效）' : '；自动压缩照 Claude Code 自己的';
     const doing = action === 'ask' ? '问你要不要交接' : '提醒一句';
     const head = limit > 0 ? '按现在填的：上限 ' + tok(limit) : '按现在填的：上限跟着 Claude Code 报的窗口走';
     const remind = action === 'remind' || action === 'ask' ? (limit > 0 ? '，用到 ' + tok(Math.round(limit * line / 100)) + '（' + line + '%）时' : '，用到它的 ' + line + '% 时') + doing : '';
     $('ctxPreview').textContent = head + remind + compact;
-    const g = state && state.gateway;
-    $('gwNote').innerHTML = g && g.limitBytes
-      ? '<b style="color:var(--warn)">实测到的网关限制：</b>' + esc(new Date(g.limitAt).toLocaleString('zh-CN', { hour12: false })) + ' 有一次 ' + (g.limitBytes / 1048576).toFixed(2) + ' MB 的请求被网关直接拒绝（413），那时的上下文大约 ' + tok(g.limitTokens) + ' token。这是网关对单次请求大小的限制，和模型的上下文长度无关，到了就发不出去。之后快到这个大小的 85% 时，状态栏会提前警告，不管上面的上限填多少。想根治要请网关管理员把请求体上限调大。 <button class="btn" id="gwForget">忘掉这条记录</button>'
-      : '还没有遇到过网关拒绝过大的请求。（内网网关对单次请求的大小可能有上限，和模型的上下文长度无关。真遇到了这里会记下来，之后快到那个大小时状态栏会提前警告。）';
-    const fb = $('gwForget'); if (fb) fb.onclick = async () => { try { await api('POST', '/api/gateway-forget', {}); await refresh(false); renderCtx(); } catch (e) { say($('ctxMsg'), e.message, false); } };
     $('liveSessions').innerHTML = sessions.length ? '<div class="dim" style="font-size:12px;margin-bottom:4px">最近两小时用过的会话（按现在填的数算，每 5 秒刷新）：</div>' + sessions.map((s) => {
       const size = limit > 0 ? limit : (s.windowSize || 200000);
       const p = Math.min(100, Math.round(s.used * 100 / size));
@@ -1205,20 +1111,9 @@
     }).join('') : '';
   }
   async function loadSessions() { try { sessions = (await api('GET', '/api/kit/sessions')).sessions || []; renderCtx(); } catch (e) { /* 没装套件就没有 */ } }
-  /** 检查现在登记成哪种方式、路由最近一次收到检查调用是什么时候 */
-  function renderHookStatus(h) {
-    if (!h) { $('hookStatus').textContent = ''; return; }
-    const reg = { http: '现在登记的是 HTTP 方式', command: '现在登记的是命令方式', mixed: '现在两种方式都有登记（多半是手改过 settings.json），点一次"保存"就会理顺', none: '还没有登记检查（套件没装好？）' }[h.registered] || '';
-    const when = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false });
-    const last = h.lastAt ? '路由最近一次收到检查调用：' + when(h.lastAt) : (h.registered === 'http' ? '路由还没收到过检查调用' : '');
-    const bh = h.byHook || {};
-    const errs = Object.keys(bh).filter((k) => bh[k].errors).map((k) => k + ' 出过 ' + bh[k].errors + ' 次错（最近一次：' + (bh[k].lastError || '').split('\n')[0] + '），出错时当放行');
-    $('hookStatus').textContent = [reg, last].filter(Boolean).join('；') + (errs.length ? '。' + errs.join('；') : '');
-  }
-  async function loadHooks() { try { renderHookStatus(await api('GET', '/api/kit/hooks')); } catch (e) { /* 老版本没有这个接口 */ } }
   // 上下文这几项以前一改就自动保存：保存条冒出来又马上消失，看着像没存（2026-10-17 用户提的）。现在和别的开关一样，等点保存条
   for (const id of ['k_contextLimitTokens', 'k_contextPercent', 'k_contextAction']) { $(id).addEventListener('input', renderCtx); $(id).addEventListener('change', renderCtx); }
-  setInterval(() => { if (!$('tab-kit').classList.contains('hide')) { loadSessions(); loadHooks(); } }, 5000);
+  setInterval(() => { if (!$('tab-kit').classList.contains('hide')) { loadSessions(); } }, 5000);
 
   // ---------- 底部的保存条：页面上有开关改了还没保存，它就冒出来。存的是这个页面上所有改过的开关 ----------
   let barKeep = 0;
@@ -1368,8 +1263,8 @@
   };
   const tag = (cls, text) => '<span class="tag ' + cls + '">' + esc(text) + '</span>';
   /**
-   * 页面顶部说清楚更新现在是什么状态（发版保护 K2）。单独一块（#updBanner）：路由的提示每 5 秒重画 #banner，放在那里会被冲掉。
-   * 先说要你管的（装坏了、没装上、装完出错变多装回了），再说正在发生的（观察中、尝鲜组报了问题、等尝鲜组），最后是"只提醒"的有新版
+   * 页面顶部说清楚更新现在是什么状态（发版保护 K2）。单独一块（#updBanner）。
+   * 先说要你管的（装坏了、没装上），再说正在发生的（尝鲜组报了问题、等尝鲜组），最后是"只提醒"的有新版
    */
   function renderUpdBanner(u) {
     const box = $('updBanner');
@@ -1377,9 +1272,7 @@
     const b = (cls, text) => '<div class="banner ' + cls + '">' + text + '</div>';
     let h = '';
     if (u.broken) h = b('bad', '套件的新版 ' + esc(u.broken.version) + ' 没装好，也没能装回上一版 ' + esc(u.broken.from || '') + '。后台会再试；急用就在"更新和上报"点"立即更新"，或者重新运行安装包。原因：' + esc(String(u.broken.why || '').slice(0, 120)));
-    else if (u.failed && u.failed.observed && u.differs) h = b('bad', '套件的新版 ' + esc(u.failed.version) + ' 装完以后出错明显变多，已经自动装回 ' + esc(u.installed) + '，照常能用，这一版不再自动装。' + esc(u.failed.why || '') + '。详情在"更新和上报"那一页。');
     else if (u.failed && u.failed.times >= 1 && u.differs) h = b('bad', '套件的新版 ' + esc(u.failed.version) + ' 没装上：' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回 ' + esc(u.installed) + '，照常能用' : '') + '。详情在"更新和上报"那一页。');
-    else if (u.observe) h = b('info', '套件刚更新到 ' + esc(u.observe.version) + '，在观察：' + esc(soon(u.observe.until)) + ' 之前（而且看够 ' + esc(u.observe.need || 20) + ' 次请求），路由的请求失败得明显比更新前多，就自动装回 ' + esc(u.observe.from) + '。');
     else if (u.mode !== 'off' && u.differs && u.hold === 'pin') h = b('info', '套件固定在 ' + esc(u.pin) + '，不自动更新（仓库里是 ' + esc(u.remote) + '）。要更新，到"更新和上报"点"取消固定"。');
     else if (u.mode !== 'off' && u.differs && u.hold === 'skip') h = b('info', '跳过了套件的新版 ' + esc(u.remote) + '，这一版不自动装，出了别的版本照常。要装，到"更新和上报"点"立即更新"或"取消跳过"。');
     else if (u.mode !== 'off' && u.differs && u.hold === 'flag') h = b('warn', '套件的新版 ' + esc(u.remote) + ' 被尝鲜组报了有问题，这台电脑先不自动装。维护的人确认没问题、把那条 issue 关掉以后照常装；急用就在"更新和上报"点"立即更新"。');
@@ -1421,13 +1314,7 @@
     if (u.pin) rows.push('<tr><td class="dim">固定</td><td>' + tag('off', '固定着') + ' <span class="mono">' + esc(u.pin) + '</span>' + (u.pin !== u.installed ? '（现在装着 <span class="mono">' + esc(u.installed || '') + '</span>，是手动装的）' : '') + '，什么版本都不自动装，直到点"取消固定"</td></tr>');
     rows.push('<tr><td class="dim">上次检查</td><td>' + (u.lastCheckAt ? esc(at(u.lastCheckAt)) + '　' + (u.lastCheckOk ? tag('ok', '通') + (u.routeLabel ? ' <span class="dim">走的是' + esc(u.routeLabel) + '</span>' : '') : tag('bad', '没成功') + '<div style="color:var(--bad)">' + esc(u.lastError || '') + '</div>') : '<span class="dim">还没查过</span>') + '</td></tr>');
     if (u.refused) rows.push('<tr><td class="dim">没动手的那一版</td><td><span class="mono">' + esc(u.refused.version) + '</span>　' + esc(at(u.refused.at)) + '　' + esc(u.refused.why || '') + '。<b style="color:var(--bad)">电脑上有问题要改</b>，改好之后 6 小时内会再试，或者点"立即更新"</td></tr>');
-    // 观察期里失败变多、装回了的（发版保护 K2）叫"装回的那一版"，写上有没有在仓库里报这一版有问题
-    const sent = u.failed && u.flagSent && u.flagSent.version === u.failed.version ? u.flagSent : null;
-    if (u.failed) rows.push('<tr><td class="dim">' + (u.failed.observed ? '装回的那一版' : '装坏的那一版') + '</td><td><span class="mono">' + esc(u.failed.version) + '</span>　' + esc(at(u.failed.at)) + '　' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回上一版' + (u.failed.observed ? '，这一版不再自动装' : '') : '。<b style="color:var(--bad)">没能装回上一版，拿安装包手动装一次</b>')
-      + (sent ? (sent.ok ? '。已经在仓库里报了这一版有问题（' + (sent.url ? '<a href="' + esc(sent.url) + '" target="_blank" rel="noopener">#' + esc(sent.iid) + '</a>' : '#' + esc(sent.iid)) + '），别的电脑先不装' : '。<span class="dim">没在仓库里报：' + esc(sent.why || '') + '</span>') : '') + '</td></tr>');
-    // 观察期：正在看的、上一次看过了的
-    if (u.observe) { const s = u.observe.seen || { req: 0, fail: 0 }; rows.push('<tr><td class="dim">观察期</td><td>' + tag('off', '观察中') + ' <span class="mono">' + esc(u.observe.version) + '</span> ' + esc(at(u.observe.at)) + ' 装的，至少看到 ' + esc(soon(u.observe.until)) + '、看够 ' + esc(u.observe.need || 20) + ' 次请求（最晚 ' + esc(soon(u.observe.last)) + '）。到现在请求 ' + esc(s.req) + ' 次、失败 ' + esc(s.fail) + ' 次。路由的请求失败得明显比装之前多，就自动装回 ' + esc(u.observe.from) + (u.early ? '，并在仓库里报这一版有问题' : '') + '</td></tr>'); }
-    else if (u.observed) rows.push('<tr><td class="dim">观察期</td><td>' + tag('ok', '过了') + ' <span class="mono">' + esc(u.observed.version) + '</span> 装完看了 ' + esc(u.observed.req) + ' 次请求、失败 ' + esc(u.observed.fail) + ' 次，没有明显变多 <span class="dim">' + esc(at(u.observed.at)) + '</span></td></tr>');
+    if (u.failed) rows.push('<tr><td class="dim">' + '装坏的那一版' + '</td><td><span class="mono">' + esc(u.failed.version) + '</span>　' + esc(at(u.failed.at)) + '　' + esc(u.failed.why || '') + (u.failed.rolledBack ? '。已经装回上一版' : '。<b style="color:var(--bad)">没能装回上一版，拿安装包手动装一次</b>') + '</td></tr>');
     if (u.running) rows.push('<tr><td class="dim">后台</td><td>' + tag('off', '正在跑') + ' <span class="dim">检查、下载或者安装，跑完这里会变</span></td></tr>');
     $('ruStatus').innerHTML = '<div class="scroll"><table><tbody>' + rows.join('') + '</tbody></table></div>';
     renderUpdBanner(u);
@@ -1461,7 +1348,7 @@
     if (!pageVersion && d.version) pageVersion = d.version;
   }
   async function loadRemote(withSettings) { try { renderRemote(await api('GET', '/api/kit/remote'), withSettings); } catch (e) { say($('rMsg'), e.message, false); } }
-  async function pollRemote() { try { const d = await api('GET', '/api/kit/remote/status'); if (remote && remote.issues) d.issues = remote.issues; renderRemote(d, false); } catch (e) { /* 路由正在被换成新版，连不上是正常的，下次再问 */ } }
+  async function pollRemote() { try { const d = await api('GET', '/api/kit/remote/status'); if (remote && remote.issues) d.issues = remote.issues; renderRemote(d, false); } catch (e) { /* 配置页正在被换成新版，连不上是正常的，下次再问 */ } }
   function renderTest(t) {
     if (!t || t.failed) { $('rTestOut').innerHTML = '<p style="color:var(--bad);margin:10px 0 0">' + esc((t && t.why) || '没测出结果') + '</p>'; return; }
     const line = (name, ok, text) => '<tr><td style="width:150px" class="dim">' + name + '</td><td>' + (ok === null ? tag('off', '没试') : ok ? tag('ok', '通') : tag('bad', '不通')) + ' ' + text + '</td></tr>';
@@ -1525,7 +1412,7 @@
     const u = (remote && remote.update) || {};
     // 发版保护拦着的也能装（你点的），先说清楚拦着的是什么
     const held = u.hold === 'skip' ? '\n\n你跳过了这一版，这台电脑本来不自动装它。' : u.hold === 'flag' ? '\n\n注意：尝鲜组报了这一版有问题，这台电脑本来不自动装它。' : u.hold === 'wait' ? '\n\n这一版发布还不到 24 小时，尝鲜组还在试；不点的话 ' + soon(u.waitUntil) + ' 以后' + (u.mode === 'auto' ? '自动装' : '再提醒你') + '。' : '';
-    if (!confirm('现在把套件装成仓库里的 ' + (u.remote || '') + '？' + held + '\n\n安装的时候路由会重启一下，正在跑的 Claude Code 请求会断一次（它自己会重试）。装完这个页面会自动重新载入。')) return;
+    if (!confirm('现在把套件装成仓库里的 ' + (u.remote || '') + '？' + held + '\n\n装完这个页面会自动重新载入。')) return;
     const d = await api('POST', '/api/kit/remote/apply', {});
     if (remote && remote.issues) d.issues = remote.issues;
     renderRemote(d, false);
@@ -1534,7 +1421,7 @@
   $('ruPin').onclick = () => busy($('ruPin'), $('ruMsg'), '保存中…', async () => {
     const u = (remote && remote.update) || {};
     const on = !u.pin;
-    if (on && !confirm('固定在 ' + (u.installed || '') + '？\n\n固定以后什么版本都不自动装：新版、仓库退回的旧版都不装，观察期也不看了，直到点"取消固定"。')) return;
+    if (on && !confirm('固定在 ' + (u.installed || '') + '？\n\n固定以后什么版本都不自动装：新版、仓库退回的旧版都不装，直到点"取消固定"。')) return;
     const d = await api('POST', '/api/kit/remote/pin', { on });
     if (remote && remote.issues) d.issues = remote.issues;
     renderRemote(d, false);
@@ -1605,52 +1492,14 @@
     if (d.missing) return;
     if (first && d.version) { pageVersion = d.version; $('kitVer').textContent = '套件 ' + d.version; }
     renderUpdBanner(d.update || {});
-  }).catch(() => { /* 老版本的路由没有这个接口；路由正在换新版时连不上 */ });
+  }).catch(() => { /* 配置页正在换新版时连不上 */ });
   loadUpdBanner(true);
   setInterval(() => { if ($('tab-remote').classList.contains('hide')) loadUpdBanner(false); }, 60000);
 
-  // ---------- 接上 / 断开 Claude Code ----------
-  function renderLink(l) {
-    const tag = $('linkTag');
-    if (l.error) { tag.className = 'tag bad'; tag.textContent = '读不了设置'; $('linkHint').textContent = l.error; $('linkOn').disabled = true; $('linkOff').disabled = true; return; }
-    const on = l.state === 'router';
-    tag.className = 'tag ' + (on ? 'ok' : 'off');
-    tag.textContent = on ? '已接上' : l.state === 'other' ? '现在连的是别处' : '还没接上';
-    // 指着本机的另一个端口：多半是这个路由换端口之前的地址。"接上"只是改到新端口，记下的原地址不变
-    const moved = l.state === 'other' && l.currentIsLocal;
-    const back = l.remembered ? '（' + l.remembered + '）' : l.remembered === '' ? '（原来没有设置，断开后就去掉这一项）' : '';
-    $('linkHint').textContent = on
-      ? 'Claude Code 的请求现在都经过这个路由（' + l.target + '）。改的是 ' + l.file + ' 里的 ANTHROPIC_BASE_URL；"断开"会恢复成原来的样子' + back + '。'
-      : moved ? '这台机器上的 Claude Code 现在连的是本机的 ' + l.current + '，多半是这个路由换端口之前的地址。点"接上"会改到新端口 ' + l.target + '（改之前自动备份）；原来记下的地址' + back + '不变，以后点"断开"恢复成它，不会恢复成旧端口。'
-      : (l.state === 'other' ? '这台机器上的 Claude Code 现在连的是 ' + l.current + '。' : '这台机器上的 Claude Code 还不知道有这个路由。') + '先在下面添加模型，再点"接上"：会把 ' + l.file + ' 里的 ANTHROPIC_BASE_URL 指到 ' + l.target + '（改之前自动备份）。对所有用这个用户目录的 Claude Code（命令行、桌面版、IDE 插件）新开的会话生效。';
-    $('linkOn').textContent = moved ? '改到新端口' : '接上';
-    $('linkOn').classList.toggle('hide', on); $('linkOff').classList.toggle('hide', !on);
-    $('linkOn').disabled = false; $('linkOff').disabled = false;
-  }
-  async function loadLink() { try { renderLink(await api('GET', '/api/kit/link')); } catch (e) { $('linkCard').classList.add('hide'); } }
-  $('linkOn').onclick = async () => {
-    try {
-      const usable = state.providers.filter((p) => p.enabled && !p.problem).length;
-      if (!usable && !confirm('还没有可用的模型。现在接上，Claude Code 会用不了，直到你添加好模型。仍然接上吗？')) return;
-      let r = await api('POST', '/api/kit/link', { on: true });
-      if (r.needConfirm) {
-        const ask = r.currentIsLocal
-          ? 'Claude Code 现在连的是本机的 ' + r.current + '，多半是这个路由换端口之前的地址。\n\n改到新端口吗？之前记下的原地址不变，点"断开"时恢复成它（不会恢复成旧端口）。'
-          : 'Claude Code 现在连的是：' + r.current + '\n\n改成走这个路由吗？原来的地址会记下来，点"断开"时恢复。';
-        if (!confirm(ask)) return;
-        r = await api('POST', '/api/kit/link', { on: true, force: true });
-      }
-      renderLink(r); say($('linkMsg'), '已接上，新开的 Claude Code 会话生效', true);
-    } catch (e) { say($('linkMsg'), e.message, false); }
-  };
-  $('linkOff').onclick = async () => {
-    if (!confirm('断开之后，Claude Code 不再经过这个路由，恢复成接上之前的样子。继续吗？')) return;
-    try { renderLink(await api('POST', '/api/kit/link', { on: false })); say($('linkMsg'), '已断开，新开的会话生效', true); } catch (e) { say($('linkMsg'), e.message, false); }
-  };
-
-  buildSubnav('models');
-  refresh(true).then(loadBackups).then(loadLink);
-  setInterval(() => { if (!$('dlg').open) refresh(false); }, 5000);
+  // 心跳：配置页 3 分钟没心跳自己退出，页面开着就一直在；退出了说一句
+  setInterval(() => { api('GET', '/api/ping').then(() => { $('banner').innerHTML = ''; }).catch(() => { $('banner').innerHTML = '<div class="banner bad">配置页已经退出。在 Claude Code 里敲 /vk-config 再打开。</div>'; }); }, 30000);
+  buildSubnav('guide');
+  loadKit(false);
 })();
 </script>
 </body>

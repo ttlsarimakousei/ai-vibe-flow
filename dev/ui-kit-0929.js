@@ -5,7 +5,7 @@
  *   改了开关 → 底部冒出保存条 → 保存（只存改过的）→ 保存条收起；放弃 → 恢复原样
  *   问题反馈里只列套件的问题，另有放行记录、拦得最多的规矩；保护那一节有最近的开关改动
  *   2026-10-01：经验规则单开一页；问题列表挪到"更新和上报"（每条标上报了没有，没有导出、清空）；多了状态栏、自动压缩线、开工前拉代码
- * 在假的用户目录里起一个临时路由（换一个端口）。第二个参数给目录就把截图存进去。
+ * 在假的用户目录里起配置页（换一个端口）。第二个参数给目录就把截图存进去。
  * 用法：node dev/ui-kit-0929.js [端口，默认 18791] [截图目录]
  */
 const fs = require('fs');
@@ -17,9 +17,6 @@ const H = require('./lib/harness');
 const PORT = Number(process.argv[2]) || 18791;
 const SHOTS = process.argv[3] ? path.resolve(process.argv[3]) : '';
 const h = H.makeHome('uikit');
-H.copyDir(path.join(H.SRC, 'router'), path.join(h.kit, 'router'));
-fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });
-fs.writeFileSync(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [], routes: [], default: { provider: '' }, failover: [], options: {} }, null, 2));
 fs.writeFileSync(path.join(h.cfg, 'settings.json'), '{}\n');
 fs.writeFileSync(path.join(h.kit, 'VERSION'), '20260929.0000\n');
 const F = require(path.join(h.kit, 'lib', 'feedback.js'));
@@ -42,7 +39,7 @@ const call = (method, url, body) => new Promise((resolve) => {
 
 (async () => {
   const watch = await H.watchWindows('uikit-win');
-  const router = spawn(process.execPath, [path.join(h.kit, 'router', 'router.js'), '-c', path.join(h.kit, 'router-data', 'config.json'), '-p', String(PORT)], { env: H.envFor(h), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const router = H.configPage(h, PORT);
   let log = '';
   router.stdout.on('data', (d) => { log += d; });
   router.stderr.on('data', (d) => { log += d; });
@@ -50,7 +47,7 @@ const call = (method, url, body) => new Promise((resolve) => {
   const stopAll = async () => { try { if (browser) await browser.close(); } catch (e) { /* 已经关了 */ } try { router.kill(); } catch (e) { /* 已经退了 */ } };
   let up = false;
   for (let i = 0; i < 40 && !up; i++) { await H.sleep(250); up = (await call('GET', '/ui')).status === 200; }
-  H.ok('临时路由起来了，配置页打得开', up, log);
+  H.ok('配置页打得开', up, log);
   if (!up) { await stopAll(); return H.done('配置页 0929'); }
 
   H.section('接口');
@@ -87,57 +84,57 @@ const call = (method, url, body) => new Promise((resolve) => {
   if (page) {
     const shot = async (name, view) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: !view }); } };
     await page.goto('http://127.0.0.1:' + PORT + '/ui');
-    await page.waitForSelector('#meta:has-text("今天")');
-    H.ok('页头：路由的版本、地址，绿灯亮着', (await page.locator('#lamp').getAttribute('class')) === 'on' && /127\.0\.0\.1:/.test(await page.locator('#meta').innerText()));
+    await page.waitForSelector('#kitVer:has-text("套件")');
     H.ok('页头显示套件的版本', /套件 20260929\.0000/.test(await page.locator('#kitVer').innerText()));
-    H.ok('模型页：各节列在导航下面', (await page.locator('#subnav a').allInnerTexts()).join('|').replace(/\s+/g, '') === '01接上ClaudeCode|02模型|03角色分配|04换模型的规矩|05配置备份', await page.locator('#subnav a').allInnerTexts());
-    await shot('1-models');
+    H.ok('默认打开套件说明，只有六页', (await page.locator('nav > button').allInnerTexts()).join('|') === '套件说明|本机环境|查库|套件开关|经验规则|更新和上报' && await page.locator('#tab-guide').isVisible(), await page.locator('nav > button').allInnerTexts());
+    H.ok('首页有 7 张图', (await page.locator('#tab-guide svg').count()) === 7);
+    await shot('1-guide');
     await page.click('nav button[data-tab="kit"]');
     await page.waitForFunction(() => document.getElementById('k_contextPercent').value !== '');
     const secs = (await page.locator('#subnav a').allInnerTexts()).map((s) => s.replace(/^\d+\s*/, '').trim());
     H.ok('套件开关页：七节（自动探索不做开关、自动模式合成一节，2026-11-02 起）', secs.join('|') === '上下文和交接|状态栏|全局：过程文件|全局：审查与产物|自动模式|提交|保护', secs);
-    H.ok('新的几项：自动压缩线、状态栏的用量、提交方式（2026-10-17 晚上起默认 70%、关，没有开工前拉代码）', (await page.inputValue('#k_contextPercent')) === '70' && (await page.inputValue('#k_contextAction')) === 'compact' && (await page.locator('#k_statusUsage').isChecked()) && (await page.inputValue('#k_commitMode')) === 'off' && (await page.locator('#k_pullBeforeWork').count()) === 0 && /用到 700k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 733000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
+    H.ok('新的几项：自动压缩线、提交方式（2026-10-17 晚上起默认 70%、关，没有开工前拉代码）', (await page.inputValue('#k_contextPercent')) === '70' && (await page.inputValue('#k_contextAction')) === 'compact' && (await page.inputValue('#k_commitMode')) === 'off' && (await page.locator('#k_pullBeforeWork').count()) === 0 && /用到 700k 时 Claude Code 自己压缩（开着的会话敲 \/autocompact 733000 马上生效）/.test(await page.locator('#ctxPreview').innerText()), await page.locator('#ctxPreview').innerText());
     H.ok('页面上没有提示规则、清点技能的东西了', (await page.locator('#sec-hints, #sec-skills, #hints, #skillsReport, #addHint, #checkSkills').count()) === 0);
     H.ok('保存条一开始不出来', !(await page.locator('#savebar').getAttribute('class')).includes(' on'));
     // 每一项开关：一个名字、一句话
     const opts = await page.locator('#tab-kit .opt').evaluateAll((els) => els.map((e) => ({ t: (e.querySelector('.t') || {}).textContent || '', d: (e.querySelector(':scope > div > .d') || {}).textContent || '', ctl: !!e.querySelector('.ctl input, .ctl select') })));
-    H.ok('每一项都有名字、一句话说明和控件', opts.length >= 12 && opts.every((o) => o.t.trim() && o.d.trim() && o.ctl), opts.filter((o) => !(o.t.trim() && o.d.trim() && o.ctl)));
+    H.ok('每一项都有名字、一句话说明和控件', opts.length >= 8 && opts.every((o) => o.t.trim() && o.d.trim() && o.ctl), opts.filter((o) => !(o.t.trim() && o.d.trim() && o.ctl)));
     const longest = opts.reduce((a, o) => Math.max(a, o.d.trim().length), 0);
     H.ok('一句话说明都不超过 90 个字（以前最长的六百多字）', longest <= 90, opts.filter((o) => o.d.trim().length > 90).map((o) => o.t + ' ' + o.d.trim().length));
     H.ok('细节默认折着', (await page.locator('#tab-kit details.more[open]').count()) === 0 && (await page.locator('#tab-kit details.more').count()) >= 4);
     const autoMore = await page.locator('#sec-auto').innerText();
-    H.ok('自动模式一节：说明无法执行时如实报告，每个审查点审到 10 轮就停', /验不了/.test(autoMore) && /审到 10 轮就停/.test(autoMore), autoMore);
-    H.ok('自动模式没有开关了（2026-11-02 起）；自动开关不在配置页（2026-10-31 起每个会话 /vk-auto 开）', (await page.locator('#k_requirementsReviewMaxRounds, #k_applyReviewMaxRounds, #k_autoVerify, #k_autoSeePage, #k_autoHandover, #k_specGate, #k_autoOnboard, #k_autoRequirements, #k_autoApply').count()) === 0 && /\/vk-auto/.test(autoMore));
+    H.ok('自动模式一节：说明无法执行时如实报告，审修不设次数上限', /验不了/.test(autoMore) && /不设次数上限/.test(autoMore), autoMore);
+    H.ok('自动模式没有开关了（2026-11-02 起）；自动开关不在配置页（2026-10-31 起每个会话 /vk-auto 开）', (await page.locator('#k_autoVerify, #k_autoSeePage, #k_autoHandover, #k_specGate, #k_autoOnboard, #k_autoRequirements, #k_autoApply').count()) === 0 && /\/vk-auto/.test(autoMore));
     H.ok('固定的规矩里写了后台自动探索、提案打勾归档的门槛', /后台自动探索/.test(await page.locator('#sec-guide-fixed').textContent()) && /提案、打勾、归档有门槛/.test(await page.locator('#sec-guide-fixed').textContent()));
     await shot('2-kit');
     await page.evaluate(() => window.scrollTo(0, 0));
     await shot('2b-kit-view', true);
     // 改两个开关：保存条冒出来，写着改了哪两项
     const before = (await call('GET', '/api/kit')).json.config;
-    await page.locator('#k_statusUsage').setChecked(!before.statusUsage, { force: true });
-    await page.fill('#k_reviewMaxFiles', '4');
+    await page.locator('#k_commitCheck').setChecked(!before.commitCheck, { force: true });
+    await page.fill('#k_tmpKeepDays', '4');
     await page.waitForSelector('#savebar.on');
     const what = await page.locator('#barWhat').innerText();
-    H.ok('改了两项：保存条冒出来，写着是哪两项', /^2 项改动还没保存/.test(what) && /状态栏显示今天的用量/.test(what) && /审查文件上限/.test(what), what);
+    H.ok('改了两项：保存条冒出来，写着是哪两项', /^2 项改动还没保存/.test(what) && /提交检查/.test(what) && /临时目录留几天/.test(what), what);
     await shot('3-savebar');
     await page.locator('#sec-auto').scrollIntoViewIfNeeded();
     await shot('3b-savebar-view', true);
     await page.click('#barDrop');
     await page.waitForFunction(() => !document.getElementById('savebar').className.includes(' on'));
-    H.ok('放弃：两项都恢复原样', (await page.locator('#k_statusUsage').isChecked()) === !!before.statusUsage && (await page.inputValue('#k_reviewMaxFiles')) === String(before.reviewMaxFiles));
-    await page.locator('#k_statusUsage').setChecked(!before.statusUsage, { force: true });
+    H.ok('放弃：两项都恢复原样', (await page.locator('#k_commitCheck').isChecked()) === !!before.commitCheck && (await page.inputValue('#k_tmpKeepDays')) === String(before.tmpKeepDays));
+    await page.locator('#k_commitCheck').setChecked(!before.commitCheck, { force: true });
     await page.waitForSelector('#savebar.on');
     await page.click('#barSave');
     await page.waitForSelector('#barMsg.ok');
     const after = (await call('GET', '/api/kit')).json.config;
-    H.ok('保存：这一项存下了，别的开关没动', after.statusUsage === !before.statusUsage && Object.keys(before).filter((k) => !['statusUsage'].includes(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k])).length === 0, [before, after]);
-    H.ok('保存条说存了哪一项', /已保存，立即生效：状态栏显示今天的用量/.test(await page.locator('#barMsg').innerText()), await page.locator('#barMsg').innerText());
+    H.ok('保存：这一项存下了，别的开关没动', after.commitCheck === !before.commitCheck && Object.keys(before).filter((k) => !['commitCheck'].includes(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k])).length === 0, [before, after]);
+    H.ok('保存条说存了哪一项', /已保存，立即生效：提交检查/.test(await page.locator('#barMsg').innerText()), await page.locator('#barMsg').innerText());
     // 填错了不保存
-    await page.fill('#k_reviewMaxFiles', '61');
+    await page.fill('#k_tmpKeepDays', '91');
     await page.waitForSelector('#barSave:not(.hide)');
     await page.click('#barSave');
     await page.waitForSelector('#barMsg.bad');
-    H.ok('填错了：说清哪一项、什么都没存', /审查文件上限：要在 1 到 60 之间/.test(await page.locator('#barMsg').innerText()) && (await call('GET', '/api/kit')).json.config.reviewMaxFiles === before.reviewMaxFiles, await page.locator('#barMsg').innerText());
+    H.ok('填错了：说清哪一项、什么都没存', /临时目录留几天：要在 0 到 90 之间/.test(await page.locator('#barMsg').innerText()) && (await call('GET', '/api/kit')).json.config.tmpKeepDays === before.tmpKeepDays, await page.locator('#barMsg').innerText());
     await page.click('#barDrop');
     // 上下文那一节 2026-10-17 起不自动保存（用户定的）：改完出保存条，点了保存才存
     await page.fill('#k_contextPercent', '65');
@@ -191,8 +188,6 @@ const call = (method, url, body) => new Promise((resolve) => {
     await shot('5-remote');
     await page.click('nav button[data-tab="local"]');
     await shot('6-local');
-    await page.click('nav button[data-tab="usage"]');
-    await shot('7-usage');
     // 窄屏：导航挪到上面，页面不横向滚
     await page.setViewportSize({ width: 760, height: 900 });
     await page.click('nav button[data-tab="kit"]');

@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 配置页的"经验规则"卡片：在假的用户目录里起一个临时路由（换一个端口，不碰正在用的），先把接口测一遍，
+ * 配置页的"经验规则"卡片：在假的用户目录里起配置页（换一个端口，不碰正在用的），先把接口测一遍，
  * 再留着几分钟给人（或浏览器工具）看页面。看完在临时目录里建一个叫 stop 的文件，或者等到时间，它自己退出并清理。
  * 用法：node dev/ui-lessons.js [端口，默认 18733] [留多少秒，默认 0 = 测完接口就退]
  */
@@ -13,9 +13,6 @@ const H = require('./lib/harness');
 const PORT = Number(process.argv[2]) || 18733;
 const STAY = Number(process.argv[3]) || 0;
 const h = H.makeHome('ui', null, { lessonThreshold: 1 });
-H.copyDir(path.join(H.SRC, 'router'), path.join(h.kit, 'router'));
-fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });
-fs.writeFileSync(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [], routes: [], default: { provider: '' }, failover: [], options: {} }, null, 2));
 fs.writeFileSync(path.join(h.cfg, 'settings.json'), '{}\n');
 
 const TOOL = path.join(h.kit, 'tools', 'lesson.js');
@@ -47,7 +44,7 @@ const call = (method, url, body) => new Promise((resolve) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
-  const router = spawn(process.execPath, [path.join(h.kit, 'router', 'router.js'), '-c', path.join(h.kit, 'router-data', 'config.json'), '-p', String(PORT)], { env: H.envFor(h), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const router = H.configPage(h, PORT);
   let log = '';
   router.stdout.on('data', (d) => { log += d; });
   router.stderr.on('data', (d) => { log += d; });
@@ -55,7 +52,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   process.on('exit', stopAll);
   let up = false;
   for (let i = 0; i < 40 && !up; i++) { await sleep(250); up = (await call('GET', '/ui')).status === 200; }
-  H.ok('临时路由起来了，配置页打得开', up, log);
+  H.ok('配置页打得开', up, log);
   if (up) {
     H.section('接口');
     const page = await call('GET', '/ui');
@@ -83,7 +80,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     H.ok('删项目规则', pe.status === 200 && pe.json.projects.find((p) => p.name === 'sjytoa').files.find((f) => f.group === 'java').rules.length === java.rules.length - 1, pe.text);
     const evil = await call('POST', '/api/kit/lessons/remove', { scope: 'project', root: path.join(h.root, 'nowhere'), id: 'L000000' });
     H.ok('不认识的项目路径不收', evil.status >= 400 || (evil.json && evil.json.error), evil.text);
-    // 路由原来的规定：读（GET）本机就行，改（POST）必须带页面的请求头
+    // 读（GET）本机就行，改（POST）必须带页面的请求头
     const noHeader = await new Promise((resolve) => {
       const data = Buffer.from(JSON.stringify({ scope: 'user', id: uid }));
       const req = http.request({ host: '127.0.0.1', port: PORT, path: '/api/kit/lessons/remove', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': data.length } }, (res) => { res.resume(); resolve(res.statusCode); });
