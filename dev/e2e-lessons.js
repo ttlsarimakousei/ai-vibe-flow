@@ -72,7 +72,7 @@ function feedReview(body) {
     let j = null; try { j = JSON.parse(text.trim().split('\n').pop()); } catch (e) { continue; }
     if (!j || !Array.isArray(j.agents) || fed.has(j.id)) continue;
     fed.add(j.id);
-    for (const a of j.agents) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '调 selectByIds 之前没有判空', evidence: '传空列表，拼出 in ()，SQL 报错', fix: '先判空', kind: '边界', avoid: '按一批 id 查询之前：先判断列表是不是空的' }], summary: '看完了' }));
+    for (const a of j.agents) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '调 selectByIds 之前没有判空', evidence: '传空列表，拼出 in ()，SQL 报错', fix: '先判空', kind: '边界', avoid: RULE_TEXT }], summary: '看完了' }));
   }
 }
 function answer(body, res) {

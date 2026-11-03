@@ -1,37 +1,32 @@
 # 交接：现在的状态
 
-更新于 2026-11-03。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)。
-
-## 最近一次发版
-
-20261102.2248，已推到 GitHub（main 和标签 v20261102.2248），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。这一版做了什么、提交号、测试、自审：[feedback-20261102-1543.md](feedback-20261102-1543.md)。复审：[reviews/claude/20261102-1102批-复审.md](../reviews/claude/20261102-1102批-复审.md)。
-
-全量回归 108 套、三个 Claude Code 版本的端到端：6398 项过，2 项是用户的 Windows Terminal 弹的提示窗被算成多出的窗口，单独重跑过了。从 1436、0255、0540 三个包验收升级都过。0255、0540 没发内网，直接发这一版。20261028.1834 不能用，别发。
+更新于 2026-11-04。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)。
 
 ## 在做的
 
-下个版本在实施（2026-11-03 仓库主人说开工），计划和进度见 [feedback-20261103.md](feedback-20261103.md)。流程：探索→[需求→apply]×N→全面自测→人工核验→按顺序归档，中途打断不影响，针对 CLI 2.1.120 起。定的事见 decisions.md 2026-11-03，全局图和留删清单见全局页 https://claude.ai/artifact/UNhvaRSEFqGtBLj6hHfHew（用 Artifact 工具 read），实测见 claude-code-facts.md 最后两节。第 39 条（连路由进程一起删）、第 45 条（审查全部用子代理，取消 10 轮、不收敛就停和文件上限）这批做；第 41 条（开着 vk-auto 还卡在问是否开工）、第 42 条（全自动下 guard-commit 拦提案的自动提交）、第 43 条（需求没说的不许自己加）、第 44 条（vk-auto 开着还在询问，说是需求阶段却在动代码）只记了，没改，都见 [owner-issues.md](owner-issues.md)。
+下个版本（新流程、删路由、审查子代理、状态栏）。计划和定下的 7 条在 [feedback-20261103.md](feedback-20261103.md)，由 Opus 5.5 Max 规划，批 0～7 共 8 批。
 
-## 待仓库主人做的
+- 批 0～4 提交、推送了：大任务、三种进流程的门、/vk-resume、多 change 串行、全面自测和核验放最后、归档前预演、审查全用子代理（SubagentStop 入账，新钩子 review-stop.js）、取消次数和文件上限。
+- 批 5 在做：删路由和 idea-mcp、配置页用时才起。已写未接上（未提交）：`kit/lib/router-retire.js`、`kit/lib/config-page.js`、`kit/lib/guard-mcp.js`，测试 `dev/test-router-retire.js`、`test-config-page.js`、`test-guard-mcp.js`。
+- 批 6 状态栏步骤条、批 7 清残留、首页放图、文档、自审、复审没开始。
+- **仓库主人 2026-11-04 说：这一版做完直接打包发版**（docs/release.md：全量回归、打包、验收升级、release 提交和标签）。`publish.js` 发内网 GitLab 仍由仓库主人做。
 
-- 内网 GitLab 发布 20261102.2248。
+## 待修的
+
+- `dev/e2e-auto-0929.js`、`dev/e2e-lessons.js` 要改提示（话里不再按句子进流程，要敲 `/opsx:apply`、`/vk-resume`）。e2e-subagent 三个版本都过。
 
 ## 要注意的
 
-- 审查分轮在 `lib/review-scope.js`：第一轮几个角度、后面只审修改点。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json`，过程记在同目录的 `审查记录.md`。每个审查点自动审到 10 轮就停，不是设置（下个版本取消，连续没减少就停也取消，审查改用子代理）。
-- `dev/lib/harness.js` 的 makeHome 默认 `reviewLenses: 1`、审查上限 3 轮、autoHandover 开，和产品默认不一样，是为了老测试。测试里同一个点第二次 `R.run` 文件没变不发请求，要整份再审加 `full: true`。
-- session.js、guard-commit.js、router.js 现在只是出口和调度，改逻辑去 lib/session-*.js、lib/guard-*.js、router/*.js。
-- 开关只在 `kit/lib/config-fields.js` 定义（AGENTS.md 硬规矩 10）。手册的开关表 `node dev/config-doc.js --write` 生成。
-- OpenSpec 规范不在全局约定里了：`rules/10-openspec.md` 开头有标记，安装器写成 `hook-rules.md`，`lib/stage-rules.js` 送。测试里查规范文字要读 hook-rules.md。
-- 配置页"快满时怎么办"两项不存文件，文件里存的是四个旧字段（`contextStrategy` 等），钩子读旧字段。
-- 按会话的状态在 state/session/<会话号>/，全局的照旧在 state/。
-- 测试里拿旧版比：`dev/baseline/20261102.2248/vibe-kit`；基线删了的用 `H.baselineDir(版本)` 从 git 标签取。
-- 几个会话同时跑测试会撞固定端口，报端口被占的先单独重跑。回归跑着时别改被测文件。
-- 补丁脚本里带反斜杠的不要用 heredoc 写（`\n` 会变成真换行），用 Write 写成文件再跑。
-- 已合并、可以清掉的 worktree：`.claude/worktrees/agent-a7c23950c55ccf840`、`agent-a95aa8abeac21f606`。
-- `hooks/` 下的文件不能删。`lib/idea-mcp.js` 下一批删（第 48 条，旧版调用核对过）。这台电脑没装 vibe-kit。
+- 审查：`review.js prepare` 备材料、输出 agents；子代理交的结论由 review-stop.js 入账；交齐才算；连续 3 次没交不再催不算过（`flow-policy.halted`）。假结论的测试用 `H.fakeReview`，只要结果文件的用 `H.reviewedTurn`。
+- 收回路由的时机：手动安装装完当场；自动更新（env `VIBE_KIT_AUTO_UPDATE`）等新代码第一次跑 session-start，更新器的锁还在时不收，自检不过装回旧版路由还在。
+- `dev/lib/harness.js` 的 makeHome 默认 `reviewLenses: 1`、autoHandover 开，和产品默认不一样。测试里同一个点第二次审文件没变不开子代理，要整份再审加 `full: true`。
+- session.js、guard-commit.js、router.js 现在只是出口和调度，改逻辑去 lib/session-*.js、lib/guard-*.js。
+- 开关只在 `kit/lib/config-fields.js` 定义。手册的开关表 `node dev/config-doc.js --write` 生成。
+- 测试里拿旧版比：`dev/baseline/20261102.2248/vibe-kit`。几个会话同时跑测试会撞固定端口。回归跑着时别改被测文件。
+- 补丁脚本里带反斜杠的不要用 heredoc 写，用 Write 写成文件再跑。Bash 里不要 `cd`。
+- `hooks/` 下的文件不能删。这台电脑没装 vibe-kit。
 
 ## 环境
 
-- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289（exe 在 `node_modules/@anthropic-ai/claude-code-win32-x64/claude.exe`）。2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI。
+- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI。
 - Python 3.12、JDK 17（%LOCALAPPDATA%\Programs\…）、H2 在 ~/.m2。8 GB 内存，端到端用 `--e2e-lanes 2`。

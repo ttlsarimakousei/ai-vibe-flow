@@ -190,7 +190,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     for (const { role, c } of blocks.slice(-24)) console.log('      ' + role + ' ' + c.type + ' ' + String(c.name || '') + ' ' + String(c.id || c.tool_use_id || '') + ' ' + String(c.text || (c.input && JSON.stringify(c.input)) || (typeof c.content === 'string' ? c.content : JSON.stringify(c.content || '')) || '').replace(/\s+/g, ' ').slice(0, 220));
   };
 
-  const r = await runClaude(port, '把变更 a1 的 1.1 做完，审一下代码，有问题就改');
+  const r = await runClaude(port, '/opsx:apply a1 把 1.1 做完，审一下代码，有问题就改');
   show(r); dump(r);
   const cmds = cmdsOf(r);
   H.ok('第一个会话跑完了，没有挂住', r.code === 0 && !r.killed, r.err.slice(-600));
