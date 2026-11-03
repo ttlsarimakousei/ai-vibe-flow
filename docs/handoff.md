@@ -10,7 +10,7 @@
 
 ## 在做的
 
-下个版本的方案谈定了，代码没改，等仓库主人说开工。流程：探索→[需求→apply]×N→全面自测→人工核验→按顺序归档，中途打断不影响，针对 CLI 2.1.120 起。定的事见 decisions.md 2026-11-03，全局图和留删清单见全局页 https://claude.ai/artifact/UNhvaRSEFqGtBLj6hHfHew（用 Artifact 工具 read），实测见 claude-code-facts.md 最后两节。第 39 条（连路由进程一起删）这批做；第 41 条（开着 vk-auto 还卡在问是否开工）、第 42 条（全自动下 guard-commit 拦提案的自动提交）、第 43 条（需求没说的不许自己加）、第 44 条（vk-auto 开着还在询问，说是需求阶段却在动代码）只记了，没改，都见 [owner-issues.md](owner-issues.md)。
+下个版本的方案谈定了，代码没改，等仓库主人说开工。流程：探索→[需求→apply]×N→全面自测→人工核验→按顺序归档，中途打断不影响，针对 CLI 2.1.120 起。定的事见 decisions.md 2026-11-03，全局图和留删清单见全局页 https://claude.ai/artifact/UNhvaRSEFqGtBLj6hHfHew（用 Artifact 工具 read），实测见 claude-code-facts.md 最后两节。第 39 条（连路由进程一起删）、第 45 条（审查全部用子代理，取消 10 轮和文件上限）这批做；第 41 条（开着 vk-auto 还卡在问是否开工）、第 42 条（全自动下 guard-commit 拦提案的自动提交）、第 43 条（需求没说的不许自己加）、第 44 条（vk-auto 开着还在询问，说是需求阶段却在动代码）只记了，没改，都见 [owner-issues.md](owner-issues.md)。
 
 ## 待仓库主人做的
 
@@ -18,7 +18,7 @@
 
 ## 要注意的
 
-- 审查分轮在 `lib/review-scope.js`：第一轮几个角度、后面只审修改点。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json`，过程记在同目录的 `审查记录.md`。每个审查点自动审到 10 轮就停，不是设置。
+- 审查分轮在 `lib/review-scope.js`：第一轮几个角度、后面只审修改点。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json`，过程记在同目录的 `审查记录.md`。每个审查点自动审到 10 轮就停，不是设置（下个版本取消，审查改用子代理）。
 - `dev/lib/harness.js` 的 makeHome 默认 `reviewLenses: 1`、审查上限 3 轮、autoHandover 开，和产品默认不一样，是为了老测试。测试里同一个点第二次 `R.run` 文件没变不发请求，要整份再审加 `full: true`。
 - session.js、guard-commit.js、router.js 现在只是出口和调度，改逻辑去 lib/session-*.js、lib/guard-*.js、router/*.js。
 - 开关只在 `kit/lib/config-fields.js` 定义（AGENTS.md 硬规矩 10）。手册的开关表 `node dev/config-doc.js --write` 生成。
