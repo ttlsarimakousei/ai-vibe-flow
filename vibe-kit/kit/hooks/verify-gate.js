@@ -412,11 +412,18 @@ function nextStepTodo(j, cfg, turnId, policy) {
   // 代码审查还没收尾的不往下走：stop() 在催
   if (open.some((c) => c.total && !c.todo && policy.pending(c.dir, 'code'))) return [];
   if (ph.phase === 'plan' && st.stage === 'apply') {
-    setFlow(j, true, '接下一个 change ' + ph.change, 'plan');
-    const prev = fresh.changes[fresh.changes.findIndex((c) => c.name === ph.change) - 1];
+    // 开工了、第一项还没勾的（phaseOf 也算 plan）不是接下一个（复审 20261104 R1）：这个 change 还没写任务，或者前一个是这次开工之后才做完的，才接
+    const i = fresh.changes.findIndex((c) => c.name === ph.change);
+    const cur = fresh.changes[i]; const prev = fresh.changes[i - 1];
+    let prevDoneNow = false;
+    if (prev && prev.exists && !prev.archived && prev.total && !prev.todo) { try { prevDoneNow = fs.statSync(path.join(prev.dir, 'tasks.md')).mtimeMs >= (Number(st.lastApplyAt) || 0); } catch (e) { prevDoneNow = false; } }
+    if (cur && cur.total && !prevDoneNow) return [];
     const note = prev ? prev.name + ' 做完了，先在探索记录"落地偏差"写下和计划不一样的地方（' + fresh.explore + '）。' : '';
-    if (cfg.autoSession === true) return [policy.oncePrompt(j, 'next|' + ph.change, 'next', note + '接着做 ' + ph.change + '：读探索记录的公共几节、' + ph.change + ' 那一节和前面 change 的 design、revisions，用 /opsx:new 或 openspec new change 建变更，一份一份写需求。')].filter(Boolean);
-    return [policy.oncePrompt(j, 'next|' + ph.change, 'next', note + '用提问框问用户要不要接着做 ' + ph.change + '（选项写"接着做 ' + ph.change + '""先停"）。')].filter(Boolean);
+    const text = cfg.autoSession === true ? note + '接着做 ' + ph.change + '：读探索记录的公共几节、' + ph.change + ' 那一节和前面 change 的 design、revisions，用 /opsx:new 或 openspec new change 建变更，一份一份写需求。' : note + '用提问框问用户要不要接着做 ' + ph.change + '（选项写"接着做 ' + ph.change + '""先停"）。';
+    const prompt = policy.oncePrompt(j, 'next|' + ph.change, 'next', text);
+    if (!prompt) return [];
+    setFlow(j, true, '接下一个 change ' + ph.change, 'plan');
+    return [prompt];
   }
   if (ph.phase === 'selftest') {
     const sig = 'selftest:' + fresh.changes.map((c) => c.name + c.done).join();

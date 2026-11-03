@@ -112,6 +112,8 @@ H.section('按表顺序接下一个');
     S.flowTouch(j, d1);
     if (auto) S.setSessionAuto(j, true, '测试');
     A.grant(j, '开工 c1', '', {});
+    // c1 是这次开工之后才做完的
+    const later = new Date(Date.now() + 2000); fs.utimesSync(path.join(d1, 'tasks.md'), later, later);
     return { j, r: H.reasonOf(stop(j)) };
   };
   let c = run(true);
@@ -119,6 +121,35 @@ H.section('按表顺序接下一个');
   H.ok('回到写需求那一段', fl(c.j).stage === 'plan', fl(c.j));
   c = run(false);
   H.ok('人工：用提问框问', /用提问框问用户要不要接着做 c2/.test(c.r), c.r);
+}
+
+H.section('开工了、第一项还没勾：不算接下一个（复审 R1）');
+{
+  for (const auto of [false, true]) {
+    const proj = project(['c1']);
+    const d1 = docs(proj, 'c1', 0, 3);
+    H.reviewPoints(h, d1, 'proposal');
+    const j = session(proj);
+    S.setFlow(j, true, '测试', 'apply');
+    S.flowTouch(j, d1);
+    if (auto) S.setSessionAuto(j, true, '测试');
+    A.grant(j, '开工 c1', '', {});
+    const r = H.reasonOf(stop(j));
+    H.ok((auto ? '自动' : '人工') + '：还在做任务那一段', fl(j).stage === 'apply', fl(j));
+    H.ok((auto ? '自动' : '人工') + '：不问要不要接着做，不说建变更', !/要不要接着做|接着做 c1/.test(r), r);
+  }
+  // 前一个早就做完了，这次开工点名后一个
+  const proj = project(['c1', 'c2']);
+  const d1 = docs(proj, 'c1', 2, 0);
+  const d2 = docs(proj, 'c2', 0, 2);
+  H.reviewPoints(h, d1, 'proposal'); H.reviewPoints(h, d1, 'code'); H.reviewPoints(h, d2, 'proposal');
+  const old = new Date(Date.now() - 60000); fs.utimesSync(path.join(d1, 'tasks.md'), old, old);
+  const j = session(proj);
+  S.setFlow(j, true, '测试', 'apply');
+  S.flowTouch(j, d2);
+  A.grant(j, '开工 c2', '', {});
+  const r = H.reasonOf(stop(j));
+  H.ok('前一个早做完了、这次开工的是 c2：不退回写需求', fl(j).stage === 'apply' && !/要不要接着做/.test(r), [fl(j).stage, r]);
 }
 
 H.section('全面自测和人工核验放到最后');
