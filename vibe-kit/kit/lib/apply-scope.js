@@ -40,9 +40,13 @@ function grant(j, text, context, opts) {
   const under = (k, d) => k === d || k.startsWith(d + '/');
   const inChange = hk ? all.filter((c) => under(hk, S.normKey(c.dir))) : [];
   const hinted = !hk ? [] : inChange.length ? inChange : all.filter((c) => S.projectRootsOf(c.dir).some((r) => under(hk, S.normKey(r))));
-  const targets = named.length ? named : argued.length === 1 ? argued : asked.length === 1 ? asked : all.length === 1 ? all : touched.length === 1 ? touched : spoken.length === 1 ? spoken : hinted.length === 1 ? hinted : [];
+  let targets = named.length ? named : argued.length === 1 ? argued : asked.length === 1 ? asked : all.length === 1 ? all : touched.length === 1 ? touched : spoken.length === 1 ? spoken : hinted.length === 1 ? hinted : [];
+  // 大任务里几个 change 是一件事（用户 2026-11-03 定的）：开工范围是整个大任务，回改前面的 change、接下一个都不用再认一次
+  let task = null;
+  try { const B = require('./big-task'); task = (targets[0] && B.ofChange(j.cwd || process.cwd(), targets[0].name)) || B.forSession(j); } catch (e) { task = null; }
+  if (task) { const own = all.filter((c) => task.changes.some((x) => S.normKey(x.dir) === S.normKey(c.dir))); if (own.length) targets = own; }
   if (!targets.length) return refuse(j, all.length ? '有 ' + all.map((c) => c.name).slice(0, 5).join('、') + ' 几个变更，用户说开工时没点名：让用户说"开工 ' + all[0].name + '"这样带上变更名，或者在提问框的选项里写明' : '没有当前变更，按普通任务沟通', all);
-  const scope = { at: Date.now(), dirs: {}, roots: [] };
+  const scope = { at: Date.now(), dirs: {}, roots: [], task: task ? task.name : '' };
   for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir), req: requirementHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
   const voice = j.transcript_path && S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
   const saved = S.updateState(j.session_id + '-flow', (s) => { delete s.applyRefused; s.applyScope = scope; s.waiting = ''; s.lastApplyAt = scope.at; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: scope.at }; if (voice) { s.applyVoice = S.voiceKey(voice); s.applyVoiceSchema = 2; } });
@@ -88,13 +92,23 @@ function valid(j) {
   const p = changed[0][1];
   return { ok: false, reason: p.req ? '需求本身（proposal.md、specs 里的要求）改了，先和用户沟通新范围，再明确 apply' : '需求、设计或任务验法已变化，先沟通新范围，再明确 apply' };
 }
+/** 这个变更在开工范围里：登记过的；或者属于同一个大任务（开工之后才建的 change 自动并入） */
+function inScope(scope, a, j) {
+  const S = require('./session');
+  if (scope.dirs[S.normKey(a.dir)]) return true;
+  if (!scope.task) return false;
+  try { const t = require('./big-task').ofChange(j.cwd || a.root, a.name); if (!t || t.name !== scope.task) return false; } catch (e) { return false; }
+  S.updateState(j.session_id + '-flow', (s) => { if (s.applyScope) s.applyScope.dirs[S.normKey(a.dir)] = { hash: planHash(a.dir), req: requirementHash(a.dir) }; });
+  scope.dirs[S.normKey(a.dir)] = { hash: planHash(a.dir), req: requirementHash(a.dir) };
+  return true;
+}
 function check(j, target) {
   const S = require('./session'); const st = S.flowState(j);
   if (st.on && st.stage === 'plan' && st.waiting === 'scope' && !S.artifactOf(target)) return '提案已修订，业务代码要重新明确开工；可以继续修改提案和修订记录';
   if (!st.on || st.stage !== 'apply' || !st.applyScope) return '';
   const v = valid(j); if (!v.ok) return v.reason;
   const file = S.normKey(target); const a = S.artifactOf(target);
-  if (a && !st.applyScope.dirs[S.normKey(a.dir)]) return '这个变更不在当前 apply 许可里，先沟通范围并单独开工';
+  if (a && !inScope(st.applyScope, a, j)) return '这个变更不在当前 apply 许可里，先沟通范围并单独开工';
   if (!a && !(st.applyScope.roots || []).some((r) => file === r || file.startsWith(r + '/'))) return '目标项目不在当前 apply 许可里，不能借用另一个项目的全自动状态';
   return '';
 }
@@ -110,7 +124,7 @@ function prepareEdit(j, target) {
   }
   if (ticking) return;
   // 会话开着自动：改需求文档不退回提案阶段（valid 里按改后的内容重定范围）
-  if ((valid(j).ok || S.sessionAuto(j) === true) && st.applyScope.dirs[S.normKey(a.dir)]) {
+  if ((valid(j).ok || S.sessionAuto(j) === true) && inScope(st.applyScope, a, j)) {
     // 做任务时改 design、tasks、修订记录：不退出自动，收工报告里列出来（改 proposal、specs 的，改完 valid 就不过了，下一次改需求文档时退回提案阶段）
     if (a.kind !== 'proposal' && a.kind !== 'spec') { try { require('./report').note(j, { kind: 'docEdit', title: '做任务时改了 ' + a.name + '/' + a.rel + '（需求本身没变，没退出自动）', change: a.name }); } catch (e) { /* 记不了不影响改文件 */ } }
     return;

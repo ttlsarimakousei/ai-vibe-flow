@@ -443,6 +443,8 @@ for (const c of cases) {
   // 话里点变更的名字不是进流程的门（接回用 /vk-resume），只照旧提醒有进行中的变更
   if (c.name === '开口：说"开工"（点名变更）') { c.expect = /进行中的 OpenSpec 变更：add-export/; c.since = NEXT; }
   if (c.name === '开口：让它停') { c.expect = /写需求这一段的规矩|放行，没有输出/; c.since = NEXT; }
+  // 每组只审查，全面自测放到大任务最后
+  if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /一个 change 做完按 plan\.md 接下一个，全部做完全面自测[\s\S]*checkpoint\.js/; c.since = NEXT; }
 }
 
 let same = 0;

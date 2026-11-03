@@ -190,7 +190,9 @@ function flowView(j) {
   const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code'));
   // 会话里开了自动（问题表第 24 条，2026-10-31）：任务做完、等用户验收时照样算自动，用户报的问题自动改、审、测，归档照旧等用户说。
   // 用户改了需求（范围变化）在 apply-scope.valid 里按用户的话重定范围，不退回人工
-  const waiting = st.waiting || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
+  let verifying = false;
+  if (st.on && st.stage === 'apply') { try { const B = require('./big-task'); const t = B.forSession(j); verifying = !!t && !t.legacy && B.phaseOf(t).phase === 'verify'; } catch (e) { verifying = false; } }
+  const waiting = st.waiting || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : verifying ? '等你核验' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
   // 写需求那一段的自动：探索记录写完了才算（"还没定的"清空、范围写了）。老会话 planReady 还认
   const planOk = () => { if (st.planReady) return true; try { const B = require('./big-task'); const t = B.forSession(j); return !!t && !t.legacy && B.exploreIssues(t).length === 0; } catch (e) { return false; } };
   // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。配置开关开着时自动不再生效，但收工还要交这一轮的报告；会话开关开着时照样自动

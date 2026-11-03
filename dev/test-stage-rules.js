@@ -54,10 +54,10 @@ H.section('安装器：规范不进全局约定，写成 hook-rules.md');
   fs.unlinkSync(hookFile(h));
   const s = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 120000 });
   H.ok('--sync 也写', s.code === 0 && (H.read(hookFile(h)) || '').includes(SPEC), s.out + s.err);
-  const line = t.split('\n').find((l) => l.startsWith('- 多个变更的顺序'));
+  const line = t.split('\n').find((l) => l.startsWith('- 多个变更按 openspec/plan.md 表的顺序做'));
   H.write(path.join(h.kit, 'user', 'remove.txt'), line + '\n');
   H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 120000 });
-  H.ok('user/remove.txt 去掉的句子：hook-rules.md 里也没了', !!line && !(H.read(hookFile(h)) || '').includes('多个变更的顺序'), line);
+  H.ok('user/remove.txt 去掉的句子：hook-rules.md 里也没了', !!line && !(H.read(hookFile(h)) || '').includes('多个变更按 openspec/plan.md 表的顺序做'), line);
   const u = H.node(h, path.join(h.kit, 'install.js'), ['--uninstall'], { cwd: h.root, timeout: 120000 });
   H.ok('卸载：hook-rules.md 删了', u.code === 0 && !fs.existsSync(hookFile(h)), u.out + u.err);
 }

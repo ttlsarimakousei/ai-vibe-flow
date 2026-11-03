@@ -191,23 +191,12 @@ function instruction(dir, point, cfg) {
   if (rec.stalled) return '当前审查点 ' + point + ' 连续两轮 P1、P2 没减少（' + (rec.trend || []).join('→') + '），不再自动审：停止自动循环并报告问题；用户主动要求仍可继续审查。';
   if ((rec.rounds || 0) >= max && rec.status && !['completed', 'needs_review', 'resolved'].includes(rec.status)) return '当前审查点 ' + point + ' 已经 ' + max + ' 轮，最后一轮没审成（' + rec.status + '）：这一组的代码可能根本没审过。停止自动循环，收工报告里写明"' + point + ' 没审成"，请用户决定要不要再审；用户主动要求仍可继续审查。';
   if ((rec.rounds || 0) >= max) return '当前审查点 ' + point + ' 已达到 ' + max + ' 轮上限且尚未通过，停止自动循环并报告问题；用户主动要求仍可继续审查。';
-  return selfTestFirst(dir, point, cfg) + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过，最多 ' + max + ' 轮；当前已经 ' + (rec.rounds || 0) + ' 轮。需求变化先沟通并同步相关产物和用例。';
-}
-/**
- * 自动模式按验收用例自测（用户 2026-10-17 定的）：用例写在 design.md 的"验收用例"一节，任务清单里不写测试任务。
- * "自动自测"开着时：每组做完先跑任务组写着这一组的、Claude 能自动跑的用例；全部做完先把能自动跑的全跑一遍。
- * 页面上的用例在"自动验证页面"开着时用 /ttls-see-page 跑，关着的留给人工。只在代码审查点前说
- */
-function selfTestFirst(dir, point, cfg) {
-  if (!point.startsWith('group-') || point === REST || cfg.autoVerify === false) return '';
-  const page = cfg.autoSeePage === false ? '页面上的留给人工' : '页面上的用 /ttls-see-page 跑';
-  const all = groups(dir); const finished = all.length > 0 && all.every(g => g.done);
-  if (finished) return '任务全部做完：先把 design.md "验收用例"里 Claude 能自动跑的全部跑一遍（' + page + '），结果写进最后的交代；跑不了的写明原因。然后';
-  return '先按 design.md "验收用例"里任务组写 ' + point.slice(6) + ' 的、Claude 能自动跑的用例自测（' + page + '）。然后';
+  return '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过，最多 ' + max + ' 轮；当前已经 ' + (rec.rounds || 0) + ' 轮。需求变化先沟通并同步相关产物和用例。';
 }
 function entriesOf(j) { return j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : []; }
 function explicit(j, action) { return S.userSaid(entriesOf(j), action).ok; }
 // 提示只记发过哪条，不生成“未审查/未测试”任务，也不登记放弃状态。
+function oncePrompt(j, id, signature, text) { return once(j, id, signature, text); }
 function once(j, id, signature, text) {
   if (!j.session_id) return text;
   let fresh = false; S.updateState(j.session_id + '-workflow-prompts', o => { if (o[id] !== signature) { o[id] = signature; fresh = true; } });
@@ -234,6 +223,13 @@ function writtenAt(dir, point) {
 }
 // 用户说不要之后（v 是那一次开口），at 这个时间点的改动还在不在那之前：在之前就别再问（#220）
 const stillDeclined = (v, at) => !!v && !(Number(at) > (Number(v.at) || 0));
+/** 这个会话在做任务那一段，dir 又是当前该做的 change（不是大任务的按这一段算）：一项都还没勾也算在做 */
+function applyingNow(j, dir) {
+  if (S.flowStage(j) !== 'apply') return false;
+  const B = require('./big-task');
+  const task = B.forSession(j);
+  return !task || B.phaseOf(task).change === path.basename(dir);
+}
 /** lastEditAt：这一轮最后一次改代码、页面的时间（收工检查算），用户说不用审、不用测之后又改了才再问 */
 function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   const quick = () => typeof quickPending === 'function' && quickPending() ? QUICK_ASK : '';
@@ -245,7 +241,8 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   const noTest = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'test');
   const dirs = [...new Set([...touched, ...S.flowChanges(j)].filter(d => fs.existsSync(d)))];
   for (const dir of dirs) {
-    const mode = S.flowStage(j) === 'apply' ? 'code' : 'proposal';
+    // 自动下每个 change 按自己走到哪算（回改前面的 change、接下一个时，几个 change 不在同一段）
+    const mode = cfg.autoMode ? (S.changeStarted(dir) || applyingNow(j, dir) ? 'code' : 'proposal') : S.flowStage(j) === 'apply' ? 'code' : 'proposal';
     // 到上限没通过的点：说一次停止自动循环、写进报告，接着往下（第 26 条）
     if (cfg.autoMode) for (const p of points(dir, mode).filter((x) => exhausted(dir, x, cfg))) { const m = once(j, key(dir, p) + '|limit', fingerprint(dir, p) + ':' + (record(dir, p).rounds || 0), instruction(dir, p, cfg) + '没解决的问题写进收工报告，接着往下做。'); if (m) out.push(m); }
     const point = cfg.autoMode ? pending(dir, mode) : points(dir, mode).slice().reverse().find(p => !settled(dir, p));
@@ -450,4 +447,4 @@ function selfTestWords(words) {
   }
   return false;
 }
-module.exports = { groups, points, pointFiles, fingerprint, record, passed, settled, exhausted, fixPending, pending, allPassed, allDone, limit, begin, noteResult, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };
+module.exports = { oncePrompt, groups, points, pointFiles, fingerprint, record, passed, settled, exhausted, fixPending, pending, allPassed, allDone, limit, begin, noteResult, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };
