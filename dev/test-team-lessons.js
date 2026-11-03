@@ -12,7 +12,7 @@ const H = require('./lib/harness');
 
 const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit')) ? process.argv[2] : null;
 const SRCV = FROM || H.SRC;
-const KA = require(path.join(SRCV, 'router', 'kit-api.js'));
+const KA = require(fs.existsSync(path.join(SRCV, 'kit', 'ui')) ? path.join(SRCV, 'kit', 'ui', 'kit-api.js') : path.join(SRCV, 'router', 'kit-api.js'));
 
 const javaLines = ['package com.x;', '', 'public class OrderService {', '    private OrderMapper mapper;', '    public void load(java.util.List<Long> ids) {', '        mapper.selectByIds(ids);', '    }', '}', ''];
 function setup(name, config) {

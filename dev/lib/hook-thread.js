@@ -2,7 +2,7 @@
 /*
  * 测试支架在工作线程里调钩子（harness.js 的 hook() 用，不单独运行）。2026-10-18 起：起一个 node 进程调一次钩子，
  * 每次固定多 0.3—0.6 秒（起进程、载模块，实测见 docs/release-timing.md）；这里每份套件载一次，反复用。
- * 和路由的 HTTP 钩子（kit/lib/hook-worker.js）一样：载 kit/hooks/<名字>.js，经 kit/lib/invocation.js 调 handle()，出错记进问题反馈、当放行。
+ * 载 kit/hooks/<名字>.js，经 kit/lib/invocation.js 调 handle()，出错记进问题反馈、当放行。
  * 为了和命令方式（子进程）跑出来一样，补了三处子进程本来就有、工作线程没有的：
  *   - 环境变量不分大小写（Windows 上进程的是这样，工作线程里的是一份分大小写的副本）
  *   - os.homedir() 跟着 USERPROFILE / HOME 走（原生实现读的是测试进程自己的环境，会指到真的用户目录）

@@ -17,6 +17,6 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const feedback = require(path.join(h.kit, 'lib/feedback'));
   feedback.record({ kind: '出错', hook: 'test', source: '钩子自动记录', title: '详细问题标题不应进入收尾', what: '模拟', sid: 'summary', cwd: p });
   const out = H.hook(h, 'verify-gate', { cwd: p, session_id: 'summary', hook_event_name: 'Stop', transcript_path: H.transcript(path.join(h.root, 'done.jsonl'), [H.tr.user('处理结束')]), last_assistant_message: '已经完成。' });
-  H.ok('#115 套件问题摘要有数量和链接且无逐条要求', /套件问题.*1|1.*套件问题/.test(JSON.stringify(out)) && /127\.0\.0\.1.*ui/.test(JSON.stringify(out)) && !/逐条写|详细问题标题/.test(JSON.stringify(out)), out);
+  H.ok('#115 套件问题摘要有数量、说敲 /vk-config 看详情，无逐条要求', /套件问题.*1|1.*套件问题/.test(JSON.stringify(out)) && /\/vk-config/.test(JSON.stringify(out)) && !/逐条写|详细问题标题/.test(JSON.stringify(out)), out);
   H.done('1014 非数据库反馈');
 })().catch(e => { console.error(e); H.ok('测试正常执行', false); H.done('1014 非数据库反馈'); });

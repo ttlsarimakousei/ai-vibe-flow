@@ -107,12 +107,12 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
   // ---------------------------------------------------------------------------------------------
   H.section('开关：ccAutoMode');
   {
-    const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
+    const api = require(path.join(H.SRC, 'kit', 'ui', 'kit-api.js'));
     const ses = require(path.join(H.SRC, 'kit', 'lib', 'session.js'));
     H.ok('默认是关掉，两处默认值一样', api.DEFAULT_CONFIG.ccAutoMode === 'off' && ses.DEFAULT_CONFIG.ccAutoMode === 'off' && JSON.stringify(Object.keys(api.DEFAULT_CONFIG).sort()) === JSON.stringify(Object.keys(ses.DEFAULT_CONFIG).sort()));
     H.ok('存得进去', api.cleanConfig({ ccAutoMode: 'on' }).ccAutoMode === 'on' && api.cleanConfig({ ccAutoMode: 'off' }).ccAutoMode === 'off');
     H.ok('乱填的不收', api.cleanConfig({ ccAutoMode: 'auto' }).ccAutoMode === 'off' && api.cleanConfig({ ccAutoMode: true }).ccAutoMode === 'off');
-    const ui = H.read(path.join(H.SRC, 'router', 'ui.html')) || '';
+    const ui = H.read(path.join(H.SRC, 'kit', 'ui', 'ui.html')) || '';
     H.ok('配置页"保护"那一节有这个开关', /id="sec-guard"[\s\S]*id="k_ccAutoMode"[\s\S]*最近的开关改动/.test(ui) && /fSel\('ccAutoMode'/.test(ui));
   }
 
@@ -186,8 +186,6 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     H.setConfig(h, { autoCompactPercent: 90, contextLimitTokens: 2000000 });
     sync(h);
     H.ok('上限填 200 万：窗口也是 96 万（以前是 100 万）', settings(h).autoCompactWindow === 960000, settings(h).autoCompactWindow);
-    const s = H.node(h, '-e', ['const S = require(' + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + '); const c = { autoCompactPercent: 95, contextLimitTokens: 1000000 }; console.log(JSON.stringify([S.autoCompactWindowOf(c), S.autoCompactAt(c, 1000000)]))'], { cwd: h.root });
-    H.ok('钩子、状态栏算的和安装器写的一样', s.out.trim() === '[960000,927000]', s.out + s.err);
     const ups = ((settings(h).hooks || {}).UserPromptSubmit || [])[0];
     H.ok('用户开口那个钩子写明等 300 秒（Claude Code 默认只等 30 秒，合并做到一半不能被它结束）', !!ups && ups.hooks[0].timeout === 300 && /task-anchor\.js/.test(ups.hooks[0].command), ups);
   }
@@ -214,68 +212,8 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('使用情况：模型名字里的内网地址遮掉，遮完重名的加在一起');
-  {
-    const u = H.makeHome('t1005-us');
-    const p2 = (n) => String(n).padStart(2, '0');
-    const now = new Date();
-    const day = now.getFullYear() + '-' + p2(now.getMonth() + 1) + '-' + p2(now.getDate());
-    const by = { 'qwen3.5-coder': { requests: 5 }, 'gpt-4.1-mini': { requests: 1 }, 'kimi-k2.thinking': { requests: 1 }, 'glm-4.5.flash': { requests: 1 }, 'http://10.2.3.4:8000/v1': { requests: 2 }, 'llm.corp.intranet-qwen': { requests: 3 }, 'gw.local': { requests: 4 }, 'fe80::1ff:fe23:4567:890a': { requests: 6 }, '10.1.1.1-a': { requests: 7, input: 10 }, '10.1.1.2-a': { requests: 8, input: 5 } };
-    H.write(path.join(u.kit, 'router-data', 'usage-daily.json'), JSON.stringify({ [day]: { requests: 38, byProvider: by } }));
-    const r = H.node(u, '-e', ['const U = require(' + JSON.stringify(path.join(u.kit, 'lib', 'usage.js')) + '); const c = U.collect(); console.log(JSON.stringify({ by: c.models && c.models.by, text: U.summary().text }))'], { cwd: u.root });
-    let o = {};
-    try { o = JSON.parse(r.out.trim().split('\n').pop()); } catch (e) { o = { error: r.out + r.err }; }
-    const names = Object.keys(o.by || {});
-    H.ok('版本号那样的名字不动', ['qwen3.5-coder', 'gpt-4.1-mini', 'kimi-k2.thinking', 'glm-4.5.flash'].every((n) => names.includes(n)), o.error || names);
-    H.ok('网址、域名、IPv6 都换掉了，要传的那一段里也没有', names.includes('内网地址') && names.includes('内网域名') && names.includes('内网IP') && !/10\.2\.3\.4|corp|intranet|gw\.local|fe80/.test(JSON.stringify(o)), o.error || o);
-    H.ok('遮完重名的加在一起，不是后一个盖掉前一个', !!o.by && !!o.by['内网IP-a'] && o.by['内网IP-a'].requests === 15 && o.by['内网IP-a'].input === 15 && !!o.by['内网域名'] && o.by['内网域名'].requests === 7, o.error || o.by);
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  H.section('路由：配置页的接口不收别的网站的页面发来的请求');
-  {
-    const h = H.makeHome('t1005-rt');
-    H.copyDir(path.join(H.SRC, 'router'), path.join(h.kit, 'router'));
-    H.write(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ listen: { host: '127.0.0.1', port: PORT }, providers: [], routes: [], default: { provider: '' }, failover: [], options: {} }, null, 2));
-    H.write(path.join(h.cfg, 'settings.json'), '{}\n');
-    const router = spawn(process.execPath, [path.join(h.kit, 'router', 'router.js'), '-c', path.join(h.kit, 'router-data', 'config.json'), '-p', String(PORT)], { env: H.envFor(h), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    let log = '';
-    router.stdout.on('data', (d) => { log += d; });
-    router.stderr.on('data', (d) => { log += d; });
-    process.on('exit', () => { try { router.kill(); } catch (e) { /* 已经退了 */ } });
-    const call = (method, url, headers, body) => new Promise((resolve) => {
-      const data = body ? Buffer.from(JSON.stringify(body)) : null;
-      const req = http.request({ host: '127.0.0.1', port: PORT, path: url, method, agent: false, headers: Object.assign({}, headers || {}, data ? { 'content-type': 'application/json', 'content-length': data.length } : {}) }, (res) => { let t = ''; res.on('data', (c) => { t += c; }); res.on('end', () => resolve({ status: res.statusCode, text: t })); });
-      req.on('error', (e) => resolve({ status: 0, text: String(e) }));
-      if (data) req.write(data);
-      req.end();
-    });
-    let up = false;
-    for (let i = 0; i < 40 && !up; i++) { await H.sleep(250); up = (await call('GET', '/version')).status === 200; }
-    H.ok('临时路由起来了', up, log);
-    if (up) {
-      // 别的页面里的 <img src="http://127.0.0.1:端口/api/..."> ：浏览器不带 Origin，带 Sec-Fetch-Site
-      const img = (v) => ({ 'sec-fetch-site': v, 'sec-fetch-mode': 'no-cors', 'sec-fetch-dest': 'image' });
-      const prog = await call('GET', '/api/state');
-      const page = await call('GET', '/api/state', { 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'cors', 'sec-fetch-dest': 'empty', 'x-vibe-router': '1' });
-      const bar = await call('GET', '/api/state', { 'sec-fetch-site': 'none', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' });
-      H.ok('程序发的、配置页自己发的、地址栏里直接打开的：照常', prog.status === 200 && page.status === 200 && bar.status === 200, [prog.status, page.status, bar.status]);
-      const x1 = await call('GET', '/api/state', img('cross-site'));
-      const x2 = await call('GET', '/api/kit/remote/usage/preview', img('cross-site'));
-      H.ok('别的网站的页面里的 <img>（不带 Origin）：不收，不会被它拿来起进程', x1.status === 403 && x2.status === 403, [x1.status, x2.status, x2.text.slice(0, 200)]);
-      const x3 = await call('GET', '/api/kit', img('same-site'));
-      H.ok('本机别的端口上的页面（same-site）：也不收', x3.status === 403, x3.status);
-      const ro = [];
-      for (const u of ['/health', '/version', '/busy', '/stats']) ro.push([(await call('GET', u)).status, (await call('GET', u, img('cross-site'))).status]);
-      H.ok('/health、/version、/busy、/stats：程序照常问，别的网站的页面不给', ro.every((x) => x[0] === 200 && x[1] === 403), ro);
-      const save = await call('POST', '/api/kit/config', { 'x-vibe-router': '1', 'sec-fetch-site': 'same-origin', origin: 'http://127.0.0.1:' + PORT }, { tmpKeepDays: 9 });
-      const forged = await call('POST', '/api/kit/config', { 'x-vibe-router': '1', 'sec-fetch-site': 'cross-site' }, { tmpKeepDays: 8 });
-      H.ok('配置页自己保存开关照常；别的网站的页面发的不收', save.status === 200 && forged.status === 403 && readJson(path.join(h.kit, 'config.json')).tmpKeepDays === 9, [save.status, save.text.slice(0, 200), forged.status]);
-    }
-    try { router.kill(); } catch (e) { /* 已经退了 */ }
-    await H.sleep(600);
-  }
-
+  // 使用情况不再带模型名（路由 2026-11-03 删了，没有按模型的用量）：见 test-issues.js
+  // 配置页的接口不收别的网站的页面发来的请求：挪到 test-config-page.js（路由 2026-11-03 删了）
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
   H.done('2026-10-05 这一批');

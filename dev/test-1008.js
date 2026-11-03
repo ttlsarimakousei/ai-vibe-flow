@@ -127,8 +127,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const s3 = stop('c6', [H.tr.user('修一下 A 的空指针'), editA(), answered('改好了，提交吗？', '提交'), H.tr.say('好的')], '好的');
     // 1014 起人工模式改了代码还会先问一次审查、自测；提交那句在前面有别的待办时写作"接着提交"
     H.ok('我在提问框里选了提交、它却没提交就收工：照旧催它现在提交', blocked(s3) && /现在提交|接着提交，不用等我说/.test(H.reasonOf(s3)), H.reasonOf(s3));
-    const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
-    H.ok('提交方式存得进去、配置页上有，旧开关不再存', api.cleanConfig({ commitMode: 'ask' }).commitMode === 'ask' && api.cleanConfig({ commitMode: 'x' }).commitMode === 'off' && !('plainCommit' in api.cleanConfig({ plainCommit: 'auto' })) && /id="k_commitMode"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+    const api = require(path.join(H.SRC, 'kit', 'ui', 'kit-api.js'));
+    H.ok('提交方式存得进去、配置页上有，旧开关不再存', api.cleanConfig({ commitMode: 'ask' }).commitMode === 'ask' && api.cleanConfig({ commitMode: 'x' }).commitMode === 'off' && !('plainCommit' in api.cleanConfig({ plainCommit: 'auto' })) && /id="k_commitMode"/.test(H.read(path.join(H.SRC, 'kit', 'ui', 'ui.html')) || ''));
     const sorted = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
     H.ok('两份默认值一样，默认是关（2026-10-17 晚上起）', sorted(api.DEFAULT_CONFIG) === sorted(S.DEFAULT_CONFIG) && S.DEFAULT_CONFIG.commitMode === 'off' && !('plainCommit' in S.DEFAULT_CONFIG) && !('autoCommit' in S.DEFAULT_CONFIG));
   }
@@ -215,7 +215,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     // 状态栏
     const sl = (sid) => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
     H.ok('状态栏分开显示两开关，不猜历史阶段', /自动 开/.test(sl('p2')) && !/实施，当前生效/.test(sl('p9')));
-    H.ok('状态栏显示当前实施阶段实际生效', /自动 开/.test(sl('p1')) && /实施，当前生效/.test(sl('p1')));
+    H.ok('状态栏显示自动开着', /自动 开/.test(sl('p1')), sl('p1'));
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     // OpenSpec 规范 2026-11-01 起不进全局约定，进流程时由钩子送（J4），两处合起来看
@@ -285,10 +285,11 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.inFlow(h, sid, [chg], true, 'apply');
     const tf = path.join(h.root, 'd.jsonl');
     const sl = () => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
-    H.ok('变更还在：状态栏说在做任务', /实施，当前生效/.test(sl()), sl());
+    H.ok('变更还在：状态栏有这个变更', /done-y/.test(sl()), sl());
     fs.mkdirSync(path.join(proj, 'openspec', 'changes', 'archive'), { recursive: true });
     fs.renameSync(chg, path.join(proj, 'openspec', 'changes', 'archive', '2026-10-07-done-y'));
-    H.ok('变更归档了、收工检查还没跑：状态栏就说归档了，照常', /普通任务，照常，变更已归档/.test(sl()) && !/在做任务/.test(sl()), sl());
+    fs.rmSync(path.join(h.kit, 'state', 'changes-cache.json'), { force: true });
+    H.ok('变更归档了、收工检查还没跑：状态栏不再显示它', !/done-y/.test(sl()), sl());
     H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('归档'), H.tr.ran('Bash', { command: 'openspec archive done-y --yes' }, 'ok'), H.tr.say('归档好了')]), stop_hook_active: false, last_assistant_message: '归档好了' });
     const flow = () => readJson(path.join(h.kit, 'state', sid + '-flow.json'));
     H.ok('收工时记成不在流程里', flow().on === false && /归档/.test(flow().why), flow());
@@ -320,7 +321,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { handoverAsk: 'ask' });
     const r2 = say('再改一下');
     H.ok('选"问我"：照旧说收工时会用提问框问', /收工时会让你用提问框问我要不要交接/.test(r2), r2);
-    H.ok('配置页上"不问"那一项写明了只提醒、我说交接才交接', /提醒一句：状态栏变红，你说交接才写/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+    H.ok('配置页上"不问"那一项写明了只提醒、我说交接才交接', /提醒一句：状态栏变红，你说交接才写/.test(H.read(path.join(H.SRC, 'kit', 'ui', 'ui.html')) || ''));
   }
 
   const wins = await watch.stop();

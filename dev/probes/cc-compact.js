@@ -2,7 +2,7 @@
 /*
  * 探测：上下文到了多少，Claude Code 自己压缩？设了 autoCompactWindow / CLAUDE_CODE_AUTO_COMPACT_WINDOW 和没设的差别。
  * 假网关每次回复都报一个很大的 input_tokens，看 Claude Code 会不会在下一次请求之前先发一个"总结对话"的请求（那就是自动压缩）。
- * 套件写 settings.json 的 autoCompactWindow 靠的就是这里测出来的行为（kit/lib/session.js 的 autoCompactWindowOf）。
+ * 套件写 settings.json 的 autoCompactWindow 靠的就是这里测出来的行为（install.js 里算）。
  * 用法：node dev/probes/cc-compact.js <版本号 | claude.exe> [只跑哪几个用例，逗号分开]
  *       PROBE_DETAIL=1 把每个请求列出来
  */

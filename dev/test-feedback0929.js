@@ -404,7 +404,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
 {
   for (const n of fs.readdirSync(changes)) if (n !== 'archive') fs.rmSync(path.join(changes, n), { recursive: true, force: true });
   for (const n of ['reviewed', 'reviewed-proposal', 'review-rounds', 'review-nudged', 'task-ticks']) dropState(n);
-  H.setConfig(h, { autoMode: true, kitBypass: 'ask', autoCommit: 'off', commitMode: 'off', autoCrossReview: true, lessons: 'off', vibeTidy: false, reviewLoop: false, autoVerify: false, autoSeePage: false });
+  H.setConfig(h, { autoMode: true, kitBypass: 'ask', autoCommit: 'off', commitMode: 'off', autoCrossReview: true, lessons: 'off', vibeTidy: false, autoVerify: false, autoSeePage: false });
   const sid = 's-report';
   const chg = mk('miping', ['- [x] 3.1 移除审核按钮：src/main/java/A.java；验：`mvn -q -o compile`',
     '- [ ] 3.2 审核接口角色：src/main/java/B.java；验：javac 快检；对照场景 `checklist_role_compare.json`',

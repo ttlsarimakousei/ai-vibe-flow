@@ -161,9 +161,9 @@ bad('kitLock 关闭后的快速返回不能漏 ZIP', 'unzip app.zip');
 H.setConfig(h, { kitLock: true });
 
 const ide = (command, routed) => H.hook(h, 'guard-commit', { ...data(command), tool_name: 'mcp__jetbrains__' + (routed ? 'execute_tool' : 'execute_terminal_command'), tool_input: { projectPath: repo, command: routed ? 'execute_terminal_command --command ' + JSON.stringify(command) : command } });
-H.ok('IDEA 终端检查解包目标', denied(ide('jar xf app.jar')));
-H.ok('IDEA 工具路由也检查解包目标', denied(ide('unzip app.zip -d src', true)));
-H.ok('IDEA 安全解包放行', ide('unzip app.zip -d .vibe/tmp/1011-查包') === null);
+// 2026-11-03：MCP 工具只查读令牌和改套件，终端命令不按 Bash 的规矩查
+H.ok('MCP 终端不查解包目标', ide('jar xf app.jar') === null);
+H.ok('MCP 安全解包放行', ide('unzip app.zip -d .vibe/tmp/1011-查包') === null);
 
 H.setConfig(h, { autoMode: true });
 H.inFlow(h, 'archive-extract', [], 'apply');

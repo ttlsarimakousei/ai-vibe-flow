@@ -18,9 +18,9 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   H.ok('说"审一下"就是明确要求审查', !/用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('审一下变更 add-a 的代码，有问题就改')]) })))));
   H.ok('问"要不要审一下"不算要求', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('要不要审一下？')]) })))));
   H.ok('引号内构建文字不误当自测', runHook('guard-commit', { tool_input: { command: 'echo "npm test"' } }) === null);
-  // 2026-10-16：编译、文件检查是快检，人工模式直接跑；运行配置会起程序或跑测试，仍先 Ask
-  H.ok('IDEA 文件检查是快检，人工模式直接跑', runHook('guard-commit', { tool_name: 'mcp__ide__get_file_problems', tool_input: { filePath: 'a.js', projectPath: p } }) === null);
-  H.ok('IDEA 运行配置人工先 Ask', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', { tool_name: 'mcp__ide__execute_run_configuration', tool_input: { configurationName: 'app', projectPath: p } }))));
+  // 2026-11-03：套件不接 MCP，不认工具名：MCP 的运行配置不算自测，不问
+  H.ok('MCP 的文件检查直接跑', runHook('guard-commit', { tool_name: 'mcp__ide__get_file_problems', tool_input: { filePath: 'a.js', projectPath: p } }) === null);
+  H.ok('MCP 的运行配置不算自测，不问', runHook('guard-commit', { tool_name: 'mcp__ide__execute_run_configuration', tool_input: { configurationName: 'app', projectPath: p } }) === null);
   const kitTool = (t) => 'node "' + path.join(h.kit, 'tools', t).replace(/\\/g, '/') + '"';
   H.ok('起服务人工先 Ask', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', { tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } }))));
   H.ok('用户说把服务起起来就直接起', runHook('guard-commit', { transcript_path: tf([H.tr.user('把服务起起来')]), tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } }) === null);

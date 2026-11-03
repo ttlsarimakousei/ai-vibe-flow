@@ -232,7 +232,7 @@ const reason = (o) => H.reasonOf(o);
     // 配置页"自动探测"：IDEA 知道的排最前面
     H.write(path.join(options, 'recentProjects.xml'), '<application><component name="RecentProjectsManager"><option name="additionalInfo"><map><entry key="' + fwd(path.join(h.work, 'p1')) + '"><value /></entry></map></option></component></application>\n');
     const probe = path.join(h.root, 'detect.js');
-    H.write(probe, 'const api = require(' + JSON.stringify(path.join(H.SRC, 'router', 'kit-api.js')) + ');console.log(JSON.stringify(api.detect(' + JSON.stringify(h.kit) + ')));');
+    H.write(probe, 'const api = require(' + JSON.stringify(path.join(H.SRC, 'kit', 'ui', 'kit-api.js')) + ');console.log(JSON.stringify(api.detect(' + JSON.stringify(h.kit) + ')));');
     const det = H.node(h, probe, [], { env: { PATH: path.dirname(process.execPath), MAVEN_HOME: undefined, M2_HOME: undefined, JAVA_HOME: undefined } });
     let found = {}; try { found = JSON.parse(det.out); } catch (err) { found = {}; }
     H.ok('自动探测：IDEA 登记的 JDK 排最前面', !!found.jdks && fwd(found.jdks[0].path) === jdk, det.out + det.err);
@@ -403,8 +403,9 @@ const reason = (o) => H.reasonOf(o);
       const r12 = find(proj({ 'a.txt': 'x' }), { dialect: 'dm' });
       H.ok('哪都没有：报错里不再让人去配置页', r12.err && /找不到/.test(r12.err) && /driver_jar/.test(r12.err) && !/配置页/.test(r12.err), JSON.stringify(r12));
     }
-    const ui = fs.readFileSync(path.join(from, 'router', 'ui.html'), 'utf8');
-    const api = fs.readFileSync(path.join(from, 'router', 'kit-api.js'), 'utf8');
+    const uiDir = fs.existsSync(path.join(from, 'kit', 'ui')) ? path.join(from, 'kit', 'ui') : path.join(from, 'router');
+    const ui = fs.readFileSync(path.join(uiDir, 'ui.html'), 'utf8');
+    const api = fs.readFileSync(path.join(uiDir, 'kit-api.js'), 'utf8');
     H.ok('配置页：导航叫"查库"，没有"现在用的驱动"', /<button data-tab="data">查库<\/button>/.test(ui) && !/sec-drv|现在用的驱动|drvList/.test(ui));
     H.ok('配置页的后端：手动管驱动的接口去掉了', !/api\/kit\/drivers/.test(api) && !/driversOp|runTool/.test(api));
     H.ok('各处提示不再让人去配置页"数据库驱动"', !['claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/dbconf.py', 'claude/skills/ttls-db-crud/scripts/vibe.py', 'kit/lib/onboard.js'].some((f) => /配置页[^。\n]{0,6}数据库驱动/.test(fs.readFileSync(path.join(from, f), 'utf8'))));
@@ -483,9 +484,6 @@ const reason = (o) => H.reasonOf(o);
     let titles = []; try { titles = JSON.parse(out.out); } catch (e) { titles = []; }
     H.ok('同一道检查的预算用完、git 超时只算一条', titles.filter((t) => /after-tool.*本机检查超时/.test(t)).length === 1, out.out + out.err);
     H.ok('不同的检查各算各的，别的错照旧单独记', titles.filter((t) => /verify-gate.*本机检查超时/.test(t)).length === 1 && titles.some((t) => /verify-gate.*别的错/.test(t)), out.out + out.err);
-    const hw = fs.readFileSync(path.join(from, 'kit', 'lib', 'hook-worker.js'), 'utf8');
-    const hh = fs.readFileSync(path.join(from, 'kit', 'lib', 'hook-host.js'), 'utf8');
-    H.ok('工作线程记过的，路由那头不再记一条（#278）', /recorded: true/.test(hw) && /!m\.recorded\) noteFailure/.test(hh));
   }
 
   // ---------------------------------------------------------------------------------------------

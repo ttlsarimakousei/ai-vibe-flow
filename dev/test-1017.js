@@ -182,7 +182,7 @@ const DESIGN_OK = ['## Context', '', '- 读过 src/A.java：现在只有查询',
     H.ok('下次没在跑自动的时候：只补关两个自动，别的不再改', i4.code === 0 && c4.autoApply !== true && c4.autoRequirements !== true && c4.autoMode !== true && c4.commitMode === 'ask' && /需求自动和 Apply 自动关闭/.test(i4.out), [c4, i4.out.slice(-600)]);
     const i5 = install();
     H.ok('都改过了：再更新一个字都不说', i5.code === 0 && !/改回了新的默认值/.test(i5.out) && cfgOf().commitMode === 'ask');
-    H.ok('配置页上没有 autoResume 了，存也存不进去', !/k_autoResume/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || '') && !('autoResume' in require(path.join(H.SRC, 'router', 'kit-api.js')).cleanConfig({ autoResume: true })));
+    H.ok('配置页上没有 autoResume 了，存也存不进去', !/k_autoResume/.test(H.read(path.join(H.SRC, 'kit', 'ui', 'ui.html')) || '') && !('autoResume' in require(path.join(H.SRC, 'kit', 'ui', 'kit-api.js')).cleanConfig({ autoResume: true })));
   }
 
   const wins = await watch.stop();

@@ -4,7 +4,6 @@
  *   迁移标记        defaults-1017-migration 不在长期保留的名单里，3 天后被会话清理删掉，之后每次更新都把两个自动模式关掉（审核 P01、Codex C08）
  *   标记已经丢了的  装之前已经是 20261018.0051 或更新的版本：补写标记，不动用户的开关；真从更老的版本升上来照旧迁移一次
  *   状态文件的寿命  代码里每个固定名字的状态文件，要么在 GLOBAL_STATE（长期保留），要么在 DISPOSABLE_STATE（可以清）
- *   钩子自检        config.json 读不懂时不写回空配置（P11）；路由拉不起来要认出来、切回命令方式（P36）；路由在跑却收不到，连着两轮才切
  *   中途改需求文档  做任务时只有 proposal.md、specs 变了才退回人工；改 design、tasks 不退，收工报告里列出来
  * 用法：node dev/test-auto-mode-kept.js [旧版的 vibe-kit 目录]（给了就拿旧版跑，看哪些项不过）
  */
@@ -70,64 +69,6 @@ H.section('状态文件的寿命：固定名字的要么长期保留，要么写
   H.ok('扫到的固定名字不少于 30 个（扫描本身没坏）', names.size >= 30, [...names]);
   H.ok('每个都在 GLOBAL_STATE 或 DISPOSABLE_STATE 里', D.length > 0 && loose.length === 0, loose);
   H.ok('迁移标记在长期保留的名单里', !!(S.GLOBAL_STATE && S.GLOBAL_STATE.test('defaults-1017-migration.json')));
-}
-
-// ---------------------------------------------------------------------------------------------
-H.section('钩子自检：读不懂配置不写回；路由拉不起来要认出来；收不到钩子连着两轮才切命令方式');
-{
-  const h = H.makeHome('tamk-hh', FROM, { hookTransport: 'http', autoApply: true, autoRequirements: true, commitMode: 'auto' });
-  const cfgFile = path.join(h.kit, 'config.json');
-  const settings = path.join(h.cfg, 'settings.json');
-  const child = path.join(h.root, 'hh.js');
-  // 假的路由管理：端口由测试给，ensureRunning 照真的那样不抛错、起不来返回 error
-  H.write(path.join(h.kit, 'router', 'service.js'), "module.exports = { portOf: () => Number(process.env.TAMK_PORT), ensureRunning: async () => process.env.TAMK_ENSURE || 'error' };\n");
-  H.write(child, [
-    "'use strict';",
-    'const net = require("net");',
-    'const HH = require(' + JSON.stringify(path.join(h.kit, 'lib', 'hook-health.js')) + ');',
-    '(async () => {',
-    '  let srv = null;',
-    '  if (process.env.TAMK_LISTEN) await new Promise((r) => { srv = net.createServer((s) => s.destroy()).listen(Number(process.env.TAMK_PORT), "127.0.0.1", r); });',
-    '  const out = await HH.check({ session_id: "s-hh", transcript_path: process.env.TAMK_TR, prompt: "再改一下" });',
-    '  if (srv) srv.close();',
-    '  console.log(JSON.stringify({ out }));',
-    '})().catch((e) => { console.log(JSON.stringify({ err: String(e && e.stack || e) })); });',
-  ].join('\n'));
-  const freePort = () => { const r = require('child_process').spawnSync(process.execPath, ['-e', 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close();})'], { encoding: 'utf8', windowsHide: true }); return Number(String(r.stdout).trim()); };
-  const port = freePort();
-  const register = () => { H.write(settings, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'http', url: 'http://127.0.0.1:' + port + '/vibe-kit/hook/guard-commit' }] }] } }, null, 2)); ago(settings, 2 * 3600000); };
-  const tr = (name) => H.transcript(path.join(h.root, name + '.jsonl'), [H.tr.user('改一下'), H.tr.ran('Bash', { command: 'echo hi' }, 'hi'), H.tr.say('改好了'), H.tr.user('再改一下')]);
-  const check = (env) => { const r = H.node(h, child, [], { env: Object.assign({ TAMK_PORT: String(port) }, env), timeout: 120000 }); try { return JSON.parse(r.out.trim().split(/\r?\n/).pop()); } catch (e) { return { err: r.out + r.err }; } };
-
-  // 1. 路由没在跑、拉不起来（ensureRunning 返回 error，不抛错）
-  register();
-  const c1 = check({ TAMK_TR: tr('t1') });
-  const cfg1 = json(cfgFile) || {};
-  H.ok('路由拉不起来：说拉不起来，不说"已经拉起来了"', /拉不起来/.test(c1.out || '') && !/已经在后台把路由拉起来了/.test(c1.out || ''), c1);
-  H.ok('拉不起来就切回命令方式，别的开关都在', cfg1.hookTransport === 'command' && cfg1.autoApply === true && cfg1.commitMode === 'auto', cfg1);
-
-  // 2. config.json 读不懂：不写回（以前写回一份只有 hookTransport 的，用户的开关全没了）
-  H.write(cfgFile, '{ "autoApply": true, "commitMode": "auto",');
-  register();
-  const c2 = check({ TAMK_TR: tr('t2') });
-  H.ok('config.json 读不懂：原样留着，不写回空配置', H.read(cfgFile) === '{ "autoApply": true, "commitMode": "auto",', [H.read(cfgFile), c2]);
-  H.ok('读不懂时说清楚没切成、用户怎么手动切', /没成功/.test(c2.out || '') && /读不懂/.test(c2.out || ''), c2);
-
-  // 3. 路由在跑、钩子却没到：第一轮只重新登记，第二轮才切
-  H.write(cfgFile, JSON.stringify({ hookTransport: 'http', autoApply: true, autoRequirements: true, commitMode: 'auto', autoUpdate: 'off', issueUpload: 'off' }, null, 2));
-  register();
-  const c3 = check({ TAMK_TR: tr('t3'), TAMK_LISTEN: '1' });
-  H.ok('收不到钩子的第一轮：重新登记，不切方式', /下一轮还收不到就切回命令方式/.test(c3.out || '') && (json(cfgFile) || {}).hookTransport === 'http', [c3, json(cfgFile)]);
-  register(); // 下一轮：重新登记是在上一轮做的，这一轮的调用在它之后
-  const c4 = check({ TAMK_TR: tr('t4'), TAMK_LISTEN: '1' });
-  const cfg4 = json(cfgFile) || {};
-  H.ok('连着第二轮还收不到：切回命令方式，开关都在', /连着两轮/.test(c4.out || '') && cfg4.hookTransport === 'command' && cfg4.autoApply === true && cfg4.commitMode === 'auto', [c4, cfg4]);
-
-  // 4. 路由在跑、收不到钩子、config.json 又正好读不懂（审核 P11 的原样场景）：切换时不能把它写成只有 hookTransport 的空配置
-  const bad = '{ "autoApply": true, "commitMode": "auto", ';
-  H.write(cfgFile, bad);
-  for (const name of ['t5', 't6']) { register(); check({ TAMK_TR: tr(name), TAMK_LISTEN: '1' }); }
-  H.ok('读不懂的 config.json 连着两轮都没被写回空配置', H.read(cfgFile) === bad, H.read(cfgFile));
 }
 
 // ---------------------------------------------------------------------------------------------

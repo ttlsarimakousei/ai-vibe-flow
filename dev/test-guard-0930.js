@@ -13,10 +13,6 @@ const proj = H.makeRepo(path.join(h.work, 'proj'), { 'pom.xml': '<project/>\n', 
 fs.writeFileSync(path.join(h.kit, 'secrets.json'), JSON.stringify({ gitlabToken: 'glpat-SECRET-MARKER-000001' }));
 fs.mkdirSync(path.join(h.kit, 'router-data'), { recursive: true });
 fs.writeFileSync(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ providers: [{ name: 'x', api_key: 'sk-SECRET-MARKER' }] }));
-fs.writeFileSync(path.join(h.kit, 'router-data', 'router.pid'), JSON.stringify({ pid: 424242 }));
-fs.mkdirSync(path.join(h.kit, 'router'), { recursive: true });
-// 结束进程的检查只在装了路由时管：测试的假用户目录里没装路由，放一个空的 router.js 让它认为装了
-if (!fs.existsSync(path.join(h.kit, 'router', 'router.js'))) fs.writeFileSync(path.join(h.kit, 'router', 'router.js'), '// 假的路由\n');
 const K = h.kit.replace(/\\/g, '/');
 const KW = h.kit;
 const CFG = h.cfg.replace(/\\/g, '/');
@@ -77,19 +73,12 @@ for (const [tool, cmd] of [
   ['Bash', 'cat ~/.claude/skills/ttls-redis/SKILL.md'],
 ]) { const o = run(tool, cmd); H.ok('放行：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 70), o === null, why(o)); }
 
-H.section('先按名字挑出进程再结束：路由会被一起杀掉');
+H.section('结束进程不再拦（路由 2026-11-03 删了）');
 for (const [tool, cmd] of [
   ['PowerShell', "Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process -Force"],
-  ['PowerShell', 'Get-Process node | ForEach-Object { Stop-Process -Id $_.Id -Force }'],
-  ['PowerShell', "Get-Process | ? { $_.ProcessName -like 'node*' } | % { $_.Kill() }"],
-  ['PowerShell', "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Invoke-CimMethod -MethodName Terminate"],
-  ['Bash', 'ps -ef | grep node | grep -v grep | awk \'{print $2}\' | xargs kill -9'],
-  ['PowerShell', 'Get-Process | Where-Object { $_.Id -eq 424242 } | Stop-Process'],
-]) { const o = run(tool, cmd); H.ok('拦：' + cmd.slice(0, 80), blocked(o) && /路由/.test(why(o)), why(o)); }
-for (const [tool, cmd] of [
-  ['PowerShell', 'Get-Process | Where-Object { $_.Id -eq 5555 } | Stop-Process'],
+  ['PowerShell', 'taskkill /F /IM node.exe'],
+  ['Bash', 'pkill node'],
   ['PowerShell', 'Stop-Process -Id 5555'],
-  ['Bash', 'ps -ef | grep java'],
 ]) { const o = run(tool, cmd); H.ok('放行：' + cmd.slice(0, 80), o === null, why(o)); }
 
 H.section('heredoc、eval 里的命令也是命令');
@@ -138,14 +127,14 @@ for (const [tool, cmd, cwd] of [
   ['PowerShell', 'Select-String -Pattern "copy" -Path ~\\.claude\\skills\\ttls-see-page\\SKILL.md'],
   ['Bash', 'grep -n mkdir ' + K + '/README.md'],
   ['Bash', 'grep -n disableAllHooks ~/.claude/settings.json'],
-  ['Bash', 'node "$HOME/.claude/vibe-kit/tools/feedback.js" add --kind 出错 --title "配置页 http://127.0.0.1:15730/ui 打不开" --what "点了没反应"'],
+  ['Bash', 'node "$HOME/.claude/vibe-kit/tools/feedback.js" add --kind 出错 --title "配置页 http://127.0.0.1:15731/ui 打不开" --what "点了没反应"'],
 ]) { const o = run(tool, cmd, cwd); H.ok('放行：' + cmd.replace(K, '<套件>').replace(CFG, '<.claude>').slice(0, 80), o === null, why(o)); }
 for (const [tool, cmd, cwd] of [
   ['Bash', 'cd ~/.claude/skills/ttls-db-crud && cp scripts/db.py scripts/db.py.bak'],
   ['Bash', 'cd ~/.claude/vibe-kit && echo x > hooks/new.js'],
   ['Bash', 'python scripts/db.py --config ../../vibe-kit/config.json doctor', path.join(h.cfg, 'skills', 'ttls-db-crud')],
   ['Bash', 'echo disableAllHooks > ~/.claude/settings.json'],
-  ['Bash', 'curl -X POST http://127.0.0.1:15730/api/config -d "{}"'],
+  ['Bash', 'curl -X POST http://127.0.0.1:15731/api/kit/config -d "{}"'],
   ['Bash', 'grep -rl x ~/.claude/vibe-kit/hooks | xargs rm'],
 ]) { const o = run(tool, cmd, cwd); H.ok('照拦：' + cmd.slice(0, 80), blocked(o), why(o)); }
 

@@ -38,7 +38,7 @@ const fs = require('fs'); const path = require('path'); const H = require('./lib
   const results = await Promise.all([C.run(async () => { C.memo('sid', () => 'one'); await H.sleep(30); return C.memo('sid', () => 'wrong'); }), C.run(async () => { C.memo('sid', () => 'two'); await H.sleep(5); return C.memo('sid', () => 'wrong'); })]);
   H.ok('并发会话缓存隔离', results.join(',') === 'one,two');
   S.writeState('usage', { days: { [require(mod('usage')).dayKey()]: { n: { prompt: 3, 'review.ms': 999999 } } } });
-  const usage = require(mod('usage')).collect(); H.ok('上报不含本机耗时', !Object.keys(usage.n).some((k) => k.endsWith('.ms')) && usage.hooks.every((r) => r.avg === undefined) && usage.tools.every((r) => r.avg === undefined) && !usage.hints.length);
+  const usage = require(mod('usage')).collect(); H.ok('上报不含本机耗时', !Object.keys(usage.n).some((k) => k.endsWith('.ms')) && usage.tools.every((r) => r.avg === undefined) && !usage.hints.length);
   const tool = H.hook(h, 'after-tool', { cwd: p, session_id: 'ide', tool_name: 'mcp__jetbrains__execute_terminal_command', hook_event_name: 'PostToolUse', tool_use_id: 'ide-output', tool_input: { projectPath: p, command: 'git status' }, tool_response: { content: [{ type: 'text', text: 'password=FAKE_IDEA_PASSWORD; test failed' }] } });
   // 1025 起 IDEA 输出不再遮口令（用户 2026-10-25 定的：只留和普通工具一样的检查，项目口令放开），原样交给模型
   H.ok('IDEA 输出原样保留不改写', !/updated(?:MCP)?ToolOutput/.test(JSON.stringify(tool || {})), tool);

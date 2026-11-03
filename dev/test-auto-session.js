@@ -50,7 +50,7 @@ H.section('第 28 条：自动模式按会话开，/vk-auto 开、/vk-auto off �
   say('s-off', '改一下 A');
   H.ok('别的会话不受影响', S.readConfigFor({ session_id: 's-off', cwd: p }).autoApply === false);
   const sl = (sid) => H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: p, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: p }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: p }).out.replace(/\x1b\[[0-9;]*m/g, '');
-  H.ok('状态栏：开着的会话写"自动 开（本会话"，别的会话写"自动 关（/vk-auto 开）"', /自动 开（本会话/.test(sl('s-on')) && /自动 关（\/vk-auto 开）/.test(sl('s-off')), sl('s-on') + '\n' + sl('s-off'));
+  H.ok('状态栏：开着的会话写"自动 开"，别的会话写"自动 关"', /自动 开/.test(sl('s-on')) && /自动 关/.test(sl('s-off')), sl('s-on') + '\n' + sl('s-off'));
   const r2 = say('s-on', '/vk-auto off');
   H.ok('/vk-auto off：关了', sa('s-on') === false && /自动模式关了/.test(textOf(r2)));
   say('s-words', '这个需求自动做');

@@ -225,7 +225,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   show(r2); dump(r2);
   H.ok('第二个会话跑完了', r2.code === 0 && !r2.killed, r2.err.slice(-600));
   const p2 = point();
-  H.ok('复审计成了第 2 轮（两次调用 id 相同），0 条，审完了', p2.rounds === 2 && p2.issues === 0 && p2.status === 'completed' && P.passed(a1, 'group-1') && cmdsOf(r2).some((c) => /review\.js" run/.test(c)), p2);
+  H.ok('复审计成了第 2 轮（两次调用 id 相同），0 条，审完了', p2.rounds === 2 && p2.issues === 0 && p2.status === 'completed' && P.passed(a1, 'group-1') && cmdsOf(r2).some((c) => /review\.js" prepare/.test(c)), p2);
   const archA = path.join(proj, 'openspec', 'changes', 'archive', '2026-09-29-a1');
   H.ok('复审通过但未自测确认不能归档', !fs.existsSync(archA) && fs.existsSync(a1) && seen(r2, /归档.{0,40}(确认|自测|许可)|用户.{0,30}归档/), cmdsOf(r2));
   const session2 = JSON.parse(r2.out.trim()).session_id;

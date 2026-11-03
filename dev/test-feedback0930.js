@@ -511,7 +511,7 @@ H.section('工具的调用记录里的错：每天汇总一次，记成问题反
 H.section('提示规则去掉了');
 {
   H.ok('开关里没有这一项了', !('hints' in S.DEFAULT_CONFIG) && typeof S.matchHints === 'undefined');
-  const api = require(path.join(H.SRC, 'router', 'kit-api.js'));
+  const api = require(path.join(H.SRC, 'kit', 'ui', 'kit-api.js'));
   const c = api.cleanConfig({ hints: [{ name: 'x', prompt: '表结构', say: '用查库的技能' }], autoVerify: false }, { hints: [{ name: 'old', files: '.sql', say: 'y' }] });
   H.ok('配置页保存时不再收这一项，文件里以前存的也不写回去', !('hints' in c) && c.autoVerify === false && !('hints' in api.DEFAULT_CONFIG), c);
   H.ok('配置页的默认开关和套件的一样', JSON.stringify(Object.keys(api.DEFAULT_CONFIG).sort()) === JSON.stringify(Object.keys(S.DEFAULT_CONFIG).sort()) && Object.keys(S.DEFAULT_CONFIG).every((k) => JSON.stringify(S.DEFAULT_CONFIG[k]) === JSON.stringify(api.DEFAULT_CONFIG[k])));

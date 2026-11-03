@@ -14,15 +14,15 @@ const H = require('./lib/harness');
 
 const CF = require(path.join(H.SRC, 'kit', 'lib', 'config-fields.js'));
 const S = require(path.join(H.SRC, 'kit', 'lib', 'session.js'));
-const A = require(path.join(H.SRC, 'router', 'kit-api.js'));
-const page = H.read(path.join(H.SRC, 'router', 'ui.html')) || '';
+const A = require(path.join(H.SRC, 'kit', 'ui', 'kit-api.js'));
+const page = H.read(path.join(H.SRC, 'kit', 'ui', 'ui.html')) || '';
 const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
 
 (async () => {
   H.section('默认值只有一份');
   {
     H.ok('钩子、配置页后端拿到的是同一份', S.DEFAULT_CONFIG === CF.DEFAULT_CONFIG && A.DEFAULT_CONFIG === CF.DEFAULT_CONFIG);
-    H.ok('session、kit-api 里不再写默认值', !/const DEFAULT_CONFIG = \{/.test(H.read(path.join(H.SRC, 'kit', 'lib', 'session-config.js')) || '') && !/const DEFAULT_CONFIG = \{/.test(H.read(path.join(H.SRC, 'router', 'kit-api.js')) || ''));
+    H.ok('session、kit-api 里不再写默认值', !/const DEFAULT_CONFIG = \{/.test(H.read(path.join(H.SRC, 'kit', 'lib', 'session-config.js')) || '') && !/const DEFAULT_CONFIG = \{/.test(H.read(path.join(H.SRC, 'kit', 'ui', 'kit-api.js')) || ''));
     const names = all.map((f) => f.name);
     H.ok('名字不重复', new Set(names).size === names.length, names);
     const bad = all.filter((f) => CF.accept(f, f.def) !== f.def);
@@ -49,7 +49,7 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
     const known = new Set(all.map((f) => f.name));
     // 页面上收进保存条的开关：fBool、fSel、fNum 登记的
     const reg = [...page.matchAll(/\bf(Bool|Sel|Num)\('(\w+)'(?:,\s*'[^']*')?(?:,\s*(\[[^\]]*\]|\d+))?(?:,\s*(\d+))?(?:,\s*(true))?\)/g)];
-    H.ok('（认出了页面上的开关）', reg.length >= 28, reg.length);
+    H.ok('（认出了页面上的开关）', reg.length >= 25, reg.length);
     const extra = reg.filter((m) => !known.has(m[2])).map((m) => m[2]);
     H.ok('页面上每个开关都在字段表里', extra.length === 0, extra);
     const internal = reg.filter((m) => { const f = all.find((x) => x.name === m[2]); return f && (f.internal || f.noControl); }).map((m) => m[2]);

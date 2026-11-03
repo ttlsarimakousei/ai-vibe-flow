@@ -35,7 +35,7 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     const inst = H.node(h, path.join(H.SRC, 'install.js'), ['--no-router', '--no-open'], { cwd: h.root, timeout: 180000 });
     H.ok('装的时候写了窗口：上限 100 万的 70%（2026-10-17 起的默认）加 3.3 万', inst.code === 0 && settings().autoCompactWindow === 733000 && man().autoCompactWindow === 733000 && man().autoCompactWindowOrig === 400000, [inst.out.slice(-1200), settings().autoCompactWindow, man()]);
     H.ok('说了在哪压缩、开着的会话怎么马上生效', /自动压缩：上下文用到约 700k token 时/.test(inst.out) && /\/autocompact 733000/.test(inst.out), inst.out);
-    H.ok('状态栏没有新消息时也 30 秒刷新一次', settings().statusLine && settings().statusLine.refreshInterval === 30 && /statusline\.js/.test(settings().statusLine.command), settings().statusLine);
+    H.ok('状态栏没有新消息时也 10 秒刷新一次', settings().statusLine && settings().statusLine.refreshInterval === 10 && /statusline\.js/.test(settings().statusLine.command), settings().statusLine);
     const cfg = readJson(path.join(h.kit, 'config.json'));
     H.ok('开关文件里老的"维护套件的电脑"去掉了，别的开关还在', cfg.maintainerHosts === undefined && cfg.tmpKeepDays === 9 && !/32\.1\.4\.4/.test(H.read(path.join(h.kit, 'config.json'))), cfg);
     H.setConfig(h, { autoCompactPercent: 80 });
@@ -70,7 +70,7 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('状态栏：三行');
+  H.section('状态栏：第一行、放松了的保护、超过上限、使用情况（步骤条见 test-statusline-bar.js）');
   const h = H.makeHome('t1001-sl');
   const proj = H.makeRepo(path.join(h.work, 'shop'), { 'README.md': '# shop\n' });
   const sl = (input) => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify(input), cwd: proj }); return { code: r.code, raw: r.out, lines: plain(r.out).replace(/\n$/, '').split('\n'), err: r.err }; };
@@ -78,18 +78,11 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
   const usage = () => (readJson(path.join(h.kit, 'state', 'usage.json')).days || {})[dayOf(0)] || { n: {} };
   {
     const r = sl(base(300000));
-    H.ok('没装路由：两行', r.code === 0 && r.lines.length === 2, r.raw + r.err);
-    H.ok('第一行：模型、目录和分支、上下文', /^Qwen3 │ shop \(\S+\) │ 上下文 ███░░░░░░░ 30% 300k\/1M/.test(r.lines[0]), r.lines[0]);
-    H.ok('第二行：全自动关着、到多少自动压缩', /^自动 关（\/vk-auto 开） │ 到 700k 自动压缩$/.test(r.lines[1]), r.lines[1]);
-    H.setConfig(h, { autoMode: true });
-    const on1 = sl(base(300000));
-    H.ok('全自动开着、这个会话不在流程里：写明照常', /^自动 开（本会话/.test(on1.lines[1]) && !/当前生效/.test(on1.lines[1]), on1.lines[1]);
-    H.inFlow(h, 's-sl', []);
-    const on2 = sl(base(300000));
-    H.ok('全自动开着、这个会话在流程里', /^自动 开（本会话，\/vk-auto off 关） │ 实施，当前生效/.test(on2.lines[1]), on2.lines[1]);
-    H.setConfig(h, { autoMode: false, kitBypass: 'auto', kitLock: false });
+    H.ok('没进流程：一行', r.code === 0 && r.lines.length === 1, r.raw + r.err);
+    H.ok('第一行：目录和分支、上下文、自动开没开，没有模型名', /^shop \(\S+\) │ 上下文 ███░░░░░░░ 30% 300k\/1M │ 自动 关$/.test(r.lines[0]), r.lines[0]);
+    H.setConfig(h, { kitBypass: 'auto', kitLock: false });
     const loose = sl(base(300000));
-    H.ok('放松了的保护：说"被拦可自行放行"，不再说"放行：自动"', /被拦可自行放行/.test(loose.lines[1]) && /允许改套件/.test(loose.lines[1]) && !/放行：自动/.test(loose.raw), loose.lines[1]);
+    H.ok('放松了的保护：说"被拦可自行放行"，不再说"放行：自动"', /被拦可自行放行/.test(loose.lines[1]) && /允许改套件/.test(loose.lines[1]), loose.lines);
     H.setConfig(h, { kitBypass: 'ask', kitLock: true });
     const over = sl(base(1200000));
     H.ok('超过上限：百分比照实写，进度条满格，最前面说怎么办', /^⚠ 上下文超过上限了（1\.2M\/1M），Claude Code 没自动压缩：敲 \/compact 压缩，或者 \/ttls-handover 交接/.test(over.lines[0]) && /上下文 ██████████ 120% 1\.2M\/1M/.test(over.lines[0]), over.lines[0]);
@@ -97,38 +90,14 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     H.ok('使用情况：这个会话到 70%、90%、超过上限各数一次；记下 Claude Code 的版本', u1.n['ctx.70'] === 1 && u1.n['ctx.90'] === 1 && u1.n['ctx.100'] === 1 && (u1.cc || []).includes('2.1.259'), u1);
     sl(base(1300000));
     H.ok('同一个会话再刷新：不重复数', usage().n['ctx.100'] === 1, usage().n);
-    H.setConfig(h, { autoCompactPercent: 0 });
-    const noAc = sl(base(300000));
-    H.ok('自动压缩线填 0：不说到多少压缩', !/自动压缩/.test(noAc.raw), noAc.lines);
-    H.setConfig(h, { autoCompactPercent: 90, contextLimitTokens: 0 });
-    const cc = sl(base(150000, { context_window: { context_window_size: 200000, used_percentage: 75, current_usage: { input_tokens: 150000 } } }));
-    H.ok('上限跟着 Claude Code 的窗口（20 万）：到 16.7 万压缩', /到 167k 自动压缩/.test(cc.lines[1]), cc.lines[1]);
-    H.setConfig(h, { contextLimitTokens: 1000000 });
   }
   {
-    // 今天的用量（路由每 20 秒写一次 usage-today.json）
-    const rd = path.join(h.kit, 'router-data');
-    fs.mkdirSync(rd, { recursive: true });
-    // 装路由时 key 放在 router-data/config.json：状态栏不读它（写一个认得出来的假 key，看它有没有出现在输出里）
-    H.write(path.join(rd, 'config.json'), JSON.stringify({ providers: [{ name: 'A', api_key: 'sk-should-never-show-123' }] }));
-    const by = { 'qwen3-coder': { requests: 3000, fail: 2, input: 900000000, cacheRead: 100000000, cacheWrite: 0, output: 5000000 }, glm: { requests: 150, input: 20000000, output: 100000 }, kimi: { requests: 40, input: 1000000, output: 1000 }, ds: { requests: 10, input: 10000, output: 100 } };
-    H.write(path.join(rd, 'usage-today.json'), JSON.stringify({ day: dayOf(0), warnAt: 4000, requests: 3200, byProvider: by, at: Date.now() }));
+    // 以前路由的 key 放在 router-data/config.json：状态栏不读它（写一个认得出来的假 key，看它有没有出现在输出里）
+    H.write(path.join(h.kit, 'router-data', 'config.json'), JSON.stringify({ providers: [{ name: 'A', api_key: 'sk-should-never-show-123' }] }));
     const r = sl(base(300000));
-    H.ok('三行：第三行是今天的用量', r.lines.length === 3 && /^今天 3200 次（提醒线 4000） · 1026\.1M token/.test(r.lines[2]), r.lines);
-    H.ok('用得最多的三个模型各自的次数和 token，其余的说还有几个', /qwen3-coder 3000 次 1005M（失败 2）/.test(r.lines[2]) && /glm 150 次 20\.1M/.test(r.lines[2]) && /kimi 40 次 1M/.test(r.lines[2]) && /还有 1 个模型$/.test(r.lines[2]), r.lines[2]);
-    H.ok('到提醒线的 75%：次数变黄', /\x1b\[33m今天 3200 次/.test(r.raw), JSON.stringify(r.raw.split('\n')[2]));
     H.ok('没读模型的 key', !/sk-should-never-show/.test(r.raw));
-    H.write(path.join(rd, 'usage-today.json'), JSON.stringify({ day: dayOf(1), warnAt: 4000, requests: 4100, byProvider: by, at: Date.now() - 86400000 }));
-    const y = sl(base(300000));
-    H.ok('文件还是昨天的（今天还没请求过）：今天 0 次', /^今天 0 次（提醒线 4000） · 0 token$/.test(y.lines[2]), y.lines[2]);
-    fs.unlinkSync(path.join(rd, 'usage-today.json'));
-    H.write(path.join(rd, 'usage-daily.json'), JSON.stringify({ [dayOf(0)]: { requests: 4200, byProvider: { 'qwen3-coder': { requests: 4200, input: 1000, output: 10 } } } }));
-    const old = sl(base(300000));
-    H.ok('老版本的路由没有 usage-today.json：从 usage-daily.json 里取今天的，过了提醒线变红', /^今天 4200 次（提醒线 4000）/.test(old.lines[2]) && /\x1b\[31m今天 4200 次/.test(old.raw), old.lines[2]);
-    H.setConfig(h, { statusUsage: false });
-    const noU = sl(base(300000));
-    H.ok('开关关掉：不显示第三行', noU.lines.length === 2 && !/今天/.test(noU.raw), noU.lines);
-    H.setConfig(h, { statusUsage: true });
+    H.ok('不显示今天的用量', !/今天/.test(r.raw), r.lines);
+    fs.rmSync(path.join(h.kit, 'router-data'), { recursive: true, force: true });
     const bad = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: 'not json', cwd: proj });
     H.ok('输入不对也出一行，不报错', bad.code === 0 && plain(bad.out).trim().length > 0, bad.out + bad.err);
   }

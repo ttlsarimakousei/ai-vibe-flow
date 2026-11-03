@@ -105,14 +105,14 @@ H.section('以前直接改过套件的约定、规范：升级时挪进 user/，
   H.ok('重装一遍：上次没看过的提示留着', done2.notice && done2.notice.items.some((x) => /CLAUDE\.md/.test(x)), done2);
 
   // 配置页：给提示，点了"知道了"就不再给
-  const api = path.join(H.SRC, 'router', 'kit-api.js');
+  const api = path.join(H.SRC, 'kit', 'ui', 'kit-api.js');
   const call = (m, url) => H.node(u, '-e', ['require(' + JSON.stringify(api) + ').handle(' + JSON.stringify(m) + ', ' + JSON.stringify(url) + ', {}, ' + JSON.stringify(u.kit) + ').then((r) => console.log(JSON.stringify(r.notice === undefined ? r : r.notice)), (e) => console.log("ERR " + e.message))'], { cwd: u.root });
   const g1 = call('GET', '/api/kit');
   H.ok('配置页接口给出提示', /CLAUDE\.md/.test(g1.out) && /20261101\.1100/.test(g1.out), g1.out + g1.err);
   const p1 = call('POST', '/api/kit/notice');
   const g2 = call('GET', '/api/kit');
   H.ok('点了"知道了"之后不再给', /"ok":true/.test(p1.out) && g2.out.trim() === 'null', p1.out + g2.out + g2.err);
-  H.ok('配置页上有提示的位置和"知道了"按钮', /id="kitNotice"/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || '') && /\/api\/kit\/notice/.test(H.read(path.join(H.SRC, 'router', 'ui.html')) || ''));
+  H.ok('配置页上有提示的位置和"知道了"按钮', /id="kitNotice"/.test(H.read(path.join(H.SRC, 'kit', 'ui', 'ui.html')) || '') && /\/api\/kit\/notice/.test(H.read(path.join(H.SRC, 'kit', 'ui', 'ui.html')) || ''));
 }
 
 // ---------------------------------------------------------------------------------------------

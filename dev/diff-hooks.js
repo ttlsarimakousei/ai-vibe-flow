@@ -194,7 +194,7 @@ add('命令：用户说了提交再提交', 'guard-commit', (kit) => { const pro
 for (const c of ['ls -la', 'git status', 'mvn -q -o compile', 'git commit -m "改了点东西"', 'git commit -am "feat: x"',
   'git push', 'git -C "<项目>" push origin main', 'rm -rf ~/.claude/vibe-kit/hooks', 'cat ~/.claude/vibe-kit/config.json', 'echo x > ~/.claude/settings.json', 'node ~/.claude/vibe-kit/install.js --uninstall',
   'node "$HOME/.claude/vibe-kit/tools/feedback.js" list', 'taskkill //F //IM node.exe', 'pkill node', 'node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name a --port 8080 -- mvn spring-boot:run',
-  'curl -s http://127.0.0.1:15730/api/kit -H "x-vibe-router: 1"', 'curl -s http://127.0.0.1:8080/api/orders',
+  'curl -s http://127.0.0.1:15731/api/kit -H "x-vibe-router: 1"', 'curl -s http://127.0.0.1:8080/api/orders',
   'git add src/main/java/com/x/A.java.bak', 'grep -rn disableAllHooks .', 'echo \'{"disableAllHooks":true}\' > .claude/settings.local.json']) add('命令：' + c, 'guard-commit', cmd(c), /\bgit\b.*\bpush\b/.test(c) ? /推送预览[\s\S]*另一条真人确认/ : undefined, /\bgit\b.*\bpush\b/.test(c) ? V1011 : undefined);
 add('PowerShell：git commit -m "feat: 新增导出"; if ($?) { git push }', 'guard-commit', cmd('git commit -m "feat: 新增导出"; if ($?) { git push }', 'PowerShell'), /不走 OpenSpec 的改动，提交之前要我点头/, V1008);
 for (const c of ['Remove-Item -Recurse $env:USERPROFILE\\.claude\\vibe-kit', 'Get-Content $env:USERPROFILE\\.claude\\vibe-kit\\config.json', 'Stop-Process -Name node -Force'])
@@ -441,6 +441,9 @@ for (const c of cases) {
 // 2026-11-03：进流程只有三种门（敲 /opsx:…、话里明确有 openspec、提问框选探索）；问句、"停"不退出流程；新建提案要有探索记录
 for (const c of cases) {
   if (c.name === '没探索就写提案') { c.expect = /用户没说要走 OpenSpec/; c.since = NEXT; }
+  // 套件不接 MCP，不认工具名（第 48 条）；路由删了，改说配置页的接口（第 39 条）
+  if (['IDEA MCP 直接读令牌', 'IDEA MCP 路由读模型配置', 'IDEA MCP 冲突路径不盖过令牌路径'].includes(c.name)) { c.expect = /\[vibe-kit MCP\]/; c.since = NEXT; }
+  if (c.name === '命令：curl -s http://127.0.0.1:15731/api/kit -H "x-vibe-router: 1"') { c.expect = /配置页的接口/; c.since = NEXT; }
   if (['开口：提需求', '开口：开头是"不用"的需求', '开口：开头是"好"字的需求'].includes(c.name)) { c.expect = /放行，没有输出/; c.since = NEXT; }
   // 话里点变更的名字不是进流程的门（接回用 /vk-resume），只照旧提醒有进行中的变更
   if (c.name === '开口：说"开工"（点名变更）') { c.expect = /进行中的 OpenSpec 变更：add-export/; c.since = NEXT; }

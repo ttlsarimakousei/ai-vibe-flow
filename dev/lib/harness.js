@@ -89,7 +89,7 @@ function makeHome(name, from, config, opts) {
   const age = (p) => { let st; try { st = fs.statSync(p); } catch (e) { return; } if (st.isDirectory()) { for (const n of fs.readdirSync(p)) age(path.join(p, n)); } else { try { fs.utimesSync(p, old, old); } catch (e) { /* 拨不了就算了 */ } } };
   for (const p of [path.join(cfg, 'skills'), path.join(cfg, 'agents'), path.join(kit, 'CLAUDE.md'), path.join(kit, 'rules')]) age(p);
   fs.mkdirSync(path.join(kit, 'state'), { recursive: true });
-  fs.writeFileSync(path.join(kit, 'config.json'), JSON.stringify(Object.assign({ hookTransport: 'command', autoUpdate: 'off', issueUpload: 'off', autoHandover: true, reviewLenses: 1 }, config || {}), null, 2));
+  fs.writeFileSync(path.join(kit, 'config.json'), JSON.stringify(Object.assign({ autoUpdate: 'off', issueUpload: 'off', autoHandover: true, reviewLenses: 1 }, config || {}), null, 2));
   // 封条：测试里要关禁改、开自动放行时才认
   fs.writeFileSync(path.join(kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: !(config && config.kitLock === false), kitBypass: (config && config.kitBypass) || 'ask', autoMode: !!(config && (config.autoApply === true || config.autoMode === true)), autoApply: !!(config && (config.autoApply === true || config.autoMode === true)), autoRequirements: !!(config && config.autoRequirements === true), at: Date.now() }));
   return { root, home, cfg, kit, work: path.join(root, 'work') };
@@ -103,6 +103,10 @@ function setConfig(h, patch) {
   c.autoMode = c.autoApply === true;
   fs.writeFileSync(f, JSON.stringify(c, null, 2));
   fs.writeFileSync(path.join(h.kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass || 'ask', autoMode: c.autoApply === true || c.autoMode === true, autoApply: c.autoApply === true || c.autoMode === true, autoRequirements: c.autoRequirements === true, at: Date.now() }));
+}
+/** 起配置页（kit/lib/config-page.js serve）：固定端口，不开浏览器，不自己退出。测试用完 kill */
+function configPage(h, port, env) {
+  return require('child_process').spawn(process.execPath, [path.join(h.kit, 'lib', 'config-page.js'), 'serve'], { env: envFor(h, Object.assign({ VIBE_KIT_CONFIG_PORT: String(port), VIBE_KIT_NO_BROWSER: '1', VIBE_KIT_CONFIG_IDLE_MS: '900000', VIBE_KIT_CONFIG_NOBODY_MS: '900000' }, env || {})), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 function envFor(h, extra) {
   const env = {};
@@ -287,10 +291,10 @@ function run(h, exe, args, opts) {
   const r = spawnSync(exe, args || [], { cwd: o.cwd || h.root, env: envFor(h, o.env), encoding: 'utf8', input: o.input, windowsHide: true, timeout: o.timeout || 120000 });
   return { code: r.status, out: String(r.stdout || ''), err: String(r.stderr || ''), ms: Date.now() - t0 };
 }
-// ---------- 调钩子：路由在工作线程里跑的那几个，测试也在工作线程里调（2026-10-18 起） ----------
+// ---------- 调钩子：高频的几个测试也在工作线程里调（2026-10-18 起） ----------
 // 起进程调一次，每次固定多 0.3—0.6 秒；调钩子多的套，一半上下的时间花在这上面（实测见 docs/release-timing.md）。
-// 只用于套件自己在 HTTP 方式下也放进工作线程跑的钩子（kit/lib/hook-host.js 的 NAMES）：会话开始、用户开口这些照旧起进程。
-// 每份套件一个线程；套件的钩子、库改了（修改时间、大小，和 hook-host.js 认的一样），或者给钩子的环境变量变了，换新线程。
+// 只用于 THREAD_HOOKS 那几个：会话开始、用户开口这些照旧起进程。
+// 每份套件一个线程；套件的钩子、库改了（修改时间、大小），或者给钩子的环境变量变了，换新线程。
 // 怀疑是工作线程引起的：环境变量 VIBE_TEST_HOOK_SPAWN=1 全部退回起进程；单个调用传 { spawn: true }（比命令方式和 HTTP 方式的测试要用）
 const { Worker, MessageChannel, receiveMessageOnPort } = require('worker_threads');
 const threads = new Map();
@@ -306,10 +310,12 @@ function kitStamp(kit) {
   for (const d of ['pristine/skills', 'pristine/agents']) { try { parts.push(d + ':' + fs.readdirSync(path.join(kit, d)).sort().join(',')); } catch (e) { /* 没有 */ } }
   return parts.join('|');
 }
+// 高频的钩子放线程里调：路由时代是 hook-host.js 的 NAMES（旧版基线照旧读它），路由删了之后写在这里
+const THREAD_HOOKS = ['pre-edit', 'guard-commit', 'guard-ask', 'guard-read', 'source-hint', 'verify-gate', 'after-tool'];
 function inThreadNames(kit) {
   if (!threadNames.has(kit)) {
     let names = new Set();
-    try { if (fs.existsSync(path.join(kit, 'lib', 'invocation.js'))) names = new Set(require(path.join(kit, 'lib', 'hook-host.js')).NAMES || []); } catch (e) { names = new Set(); }
+    try { if (fs.existsSync(path.join(kit, 'lib', 'invocation.js'))) names = new Set(fs.existsSync(path.join(kit, 'lib', 'hook-host.js')) ? require(path.join(kit, 'lib', 'hook-host.js')).NAMES || [] : THREAD_HOOKS); } catch (e) { names = new Set(); }
     threadNames.set(kit, names);
   }
   return threadNames.get(kit);
@@ -490,4 +496,4 @@ function reviewPoints(h, dir, mode) {
   for (const point of p.points(dir, mode || 'code')) p.noteResult(dir, point, { id: 'fixture-' + point, status: 'completed', issues: [] }, p.fingerprint(dir, point));
 }
 
-module.exports = { REPO, SRC, ok, section, makeHome, freshHome, tempDir, baselineDir, makePackage, runtime, inFlow, reviewPoints, fakeReview, reviewedTurn, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done, stubDeps };
+module.exports = { configPage, REPO, SRC, ok, section, makeHome, freshHome, tempDir, baselineDir, makePackage, runtime, inFlow, reviewPoints, fakeReview, reviewedTurn, fakeGitlab, watchWindows, sleep, httpGet, setConfig, envFor, node, run, hook, reasonOf, git, makeRepo, write, read, copyDir, tr, transcript, cleanup, done, stubDeps };
