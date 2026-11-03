@@ -88,7 +88,7 @@ node dev/pack.js
 | `test-feedback1012-workflow.js` | 1012 流程反馈：只读计划、产出位置、待提交文件、探针证据和兼容审查诊断；可给旧版目录 |
 | `test-feedback1012-page.js` | 1012 页面探针：系统浏览器读值、断言、同步与异步超时、目录链接边界；可给旧版目录 |
 | `test-feedback1012-db.js` | 1012 数据库诊断：只模拟错误，不连接真实业务库；参数 [auto或none] [旧套件目录] |
-| `probes/` | 探测，不是回归测试：真的 Claude Code 加假网关，看某个版本在一件事上是怎么做的，输出给人看。`os-cross-change.js`（几个 change 都不归档时的校验和归档）、`cc-interrupt.js`（中途打断、步骤工具）、`cc-compact.js`（到多少自动压缩）、`cc-automode.js`（没配权限模式进不进自带的自动模式、分类请求长什么样）、`cc-statusline.js`（交互界面里状态栏照不照常，用 winpty 抓屏）、`cc-http-hooks.js`（钩子走 HTTP 照不照常）、`cc-system-message.js`（用户开口的钩子用 JSON 输出时 systemMessage 显不显示、给模型的提醒送不送到）、`cc-stream-cut.js`（流式回复断在半截时重不重发、半截留不留，经套件的路由；第二个参数给路由目录就拿那一份比）。见下面"换 Claude Code 版本之前" |
+| `probes/` | 探测，不是回归测试：真的 Claude Code 加假网关，看某个版本在一件事上是怎么做的，输出给人看。`cc-subagent.js`（子代理：前后台、并发、SubagentStop、Esc）、`os-cross-change.js`（几个 change 都不归档时的校验和归档）、`cc-interrupt.js`（中途打断、步骤工具）、`cc-compact.js`（到多少自动压缩）、`cc-automode.js`（没配权限模式进不进自带的自动模式、分类请求长什么样）、`cc-statusline.js`（交互界面里状态栏照不照常，用 winpty 抓屏）、`cc-http-hooks.js`（钩子走 HTTP 照不照常）、`cc-system-message.js`（用户开口的钩子用 JSON 输出时 systemMessage 显不显示、给模型的提醒送不送到）、`cc-stream-cut.js`（流式回复断在半截时重不重发、半截留不留，经套件的路由；第二个参数给路由目录就拿那一份比）。见下面"换 Claude Code 版本之前" |
 | `test-page-0929.js` | 看页面的场景：同一步里写断言、上传、应答文件选择框、点被盖住的控件。用本机的 Edge 无头跑 |
 | `test-devserver-0929.js [端口] [旧套件目录]` | 起服务的工具：最后一行是结果，停的时候进程清干净；先占端口、过 10 秒才答 HTTP 的（Tomcat 那种，用 `lib/fake-idea.js` 的 `__service`）等它答了才说起来了，等超时再 start 接着等；一直不答 HTTP 的端口通了 60 秒也算（这一项要等一分钟）；只听 ::1 的也认得 |
 | `ui-kit-0929.js` | 配置页重排之后：接口、页面上每个开关都在、保存条、三张表。第二个参数给目录就存截图 |

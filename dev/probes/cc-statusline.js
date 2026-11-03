@@ -5,6 +5,8 @@
  * 套件用真的 install.js 装进假用户目录（--no-router）。状态栏的命令外面包一层，把每次收到的输入存下来。
  * 用法：node dev/probes/cc-statusline.js <版本号 | claude.exe> [跑多少秒，默认 80]
  *       PROBE_USED=300000  假网关报的上下文用量
+ *       PROBE_LINE=<文字，\\n 换行>  不用套件的状态栏，输出这些行（看长行是截断还是折行）
+ *       PROBE_REFRESH=10  refreshInterval 设成多少秒
  *       PROBE_MODE=kit（默认：套件装成什么样就什么样）| default（只写 defaultMode: default，看会不会弹"要不要把自动模式设成默认"）
  */
 const fs = require('fs');
@@ -37,7 +39,7 @@ const WINPTY = ['C:/Program Files/Git/usr/bin/winpty.exe', 'C:/Program Files (x8
     "  fs.writeFileSync(path.join(dir, 'in-' + n + '.json'), raw);",
     '  const r = spawnSync(process.execPath, [' + JSON.stringify(path.join(h.kit, 'statusline.js')) + "], { input: raw, encoding: 'utf8', windowsHide: true });",
     "  fs.writeFileSync(path.join(dir, 'out-' + n + '.txt'), String(r.stdout || ''));",
-    "  process.stdout.write(String(r.stdout || ''));",
+    "  process.stdout.write(" + (process.env.PROBE_LINE ? JSON.stringify(process.env.PROBE_LINE.replace(/\\n/g, '\n') + '\n') : "String(r.stdout || '')") + ");",
     '});',
   ].join('\n'));
   const sf = path.join(h.cfg, 'settings.json');
@@ -45,6 +47,7 @@ const WINPTY = ['C:/Program Files/Git/usr/bin/winpty.exe', 'C:/Program Files (x8
   console.log('===== ' + EXE + ' =====');
   console.log('安装：退出码 ' + inst.code + '；安装器写的 statusLine：' + JSON.stringify(s.statusLine) + '；autoCompactWindow ' + s.autoCompactWindow + '；disableAutoMode ' + (s.permissions || {}).disableAutoMode);
   s.statusLine = Object.assign({}, s.statusLine, { command: 'node "' + wrap.split(path.sep).join('/') + '"' });
+  if (process.env.PROBE_REFRESH) s.statusLine.refreshInterval = Number(process.env.PROBE_REFRESH);
   if (process.env.PROBE_MODE === 'default') { delete s.permissions.disableAutoMode; s.permissions.defaultMode = 'default'; }
   fs.writeFileSync(sf, JSON.stringify(s, null, 2));
   // 跳过第一次启动的引导、信任这个目录
@@ -68,6 +71,7 @@ const WINPTY = ['C:/Program Files/Git/usr/bin/winpty.exe', 'C:/Program Files (x8
   const want = [['第一行（上下文百分比）', /上下文 .*\d+%/], ['第二行（全自动开没开）', /全自动 (开|关)/], ['模型的回复', /PROBE-REPLY-OK/], ['"要不要把自动模式设成默认"的弹框', /Make auto mode your default/], ['权限模式那一行', /(manual|auto|bypass)[^\n]{0,30} mode on|permissions on/i]];
   console.log('屏幕上抓到的：' + want.map(([n, re]) => n + '=' + (lines.some((l) => re.test(l)) ? '有' : '没有')).join('；'));
   const tail = []; for (const l of lines.slice(-60)) if (!/^[─\s>]*$/.test(l) && tail[tail.length - 1] !== l) tail.push(l);
+  if (process.env.PROBE_LINE) { const hit = lines.filter((l) => /LONG-|探索✓/.test(l)); console.log('屏幕上和这几行有关的（去重）：\n' + [...new Set(hit)].slice(0, 10).map((l) => '    | ' + l).join('\n')); console.log('屏幕宽度（最长一行字符数）：' + Math.max(...lines.map((l) => l.length))); }
   console.log('屏幕最后几行：\n' + tail.slice(-14).map((l) => '    | ' + brief(l, 160)).join('\n'));
   gw.close();
   const wins = await watch.stop();
