@@ -10,73 +10,6 @@ try { tidy = require('./tidy.js'); } catch (e) { /* 老版本没有 */ }
 const { flowChanges, sessionHome, allChanges, archivedNames, normKey, KIT, hookLog, cli } = require('./session');
 const { preprocess, OPEN, CLOSE, splitCommand, scanRedirects, words, dynamic, dynamicPath, local, baseName, headOf, joinWords, POPD, cdTarget } = require('./shell-words');
 
-// ---------- 不许顺手把模型路由一起杀掉 ----------
-/*
- * 开发服务卡住时，模型常顺手 taskkill /IM node.exe、Stop-Process -Name node、pkill node。模型路由也是 node 进程：
- * 它一停，接上了路由的 Claude Code 连不上模型，走 HTTP 的检查（改文件、跑命令、收工）也全部失效。要停哪个服务就按 PID 停。
- * 只在装了路由时管；按 PID 结束路由自己的进程也拦。
- */
-function routerPid() { try { return Number(JSON.parse(fs.readFileSync(path.join(KIT, 'router-data', 'router.pid'), 'utf8')).pid) || 0; } catch (e) { return 0; } }
-
-const NODE_PROC = /^node(\.exe)?\*?$/i;
-
-const KILL_ALL_MSG = '[vibe-kit] 这条命令会把所有 node 进程一起结束，模型路由也在里面（Claude Code 连模型、套件的检查都靠它）。要停某个开发服务，按端口找到它的 PID 再结束：netstat -ano | findstr :<端口>，然后 taskkill /PID <PID> /F（PowerShell：Stop-Process -Id <PID>）。';
-
-function killIssue(segs) {
-  if (!fs.existsSync(path.join(KIT, 'router', 'router.js'))) return '';
-  const pid = routerPid();
-  const pidMsg = '[vibe-kit] 进程 ' + pid + ' 是模型路由（Claude Code 连模型、套件的检查都靠它），不要结束它。要停的是别的服务，先用 netstat -ano | findstr :<端口> 找对 PID。';
-  // Git Bash 里为了不被当成路径，Windows 命令的开关常写成 //F //IM：归成 /F /IM 再认
-  const segsInfo = segs.map((x) => { const h = headOf(x.ws); return { name: h.name, args: x.ws.slice(h.i + 1).map((w) => String(w.text).replace(/^\/\/(?=[A-Za-z])/, '/')) }; });
-  const isPid = (t) => pid > 0 && String(t).replace(/,$/, '') === String(pid);
-  for (let k = 0; k < segsInfo.length; k++) {
-    const { name, args } = segsInfo[k];
-    const low = args.map((a) => a.toLowerCase());
-    if (name === 'taskkill') {
-      for (let i = 0; i < low.length; i++) {
-        if (/^[/-]im$/.test(low[i]) && NODE_PROC.test(low[i + 1] || '')) return KILL_ALL_MSG;
-        if (/^[/-]pid$/.test(low[i]) && isPid(low[i + 1])) return pidMsg;
-        if (/^[/-]fi$/.test(low[i]) && /imagename\s+eq\s+node/i.test(low[i + 1] || '')) return KILL_ALL_MSG;
-      }
-    }
-    if (/^(stop-process|spps)$/.test(name) || (name === 'kill' && low.some((a) => /^-(name|processname|id)$/.test(a)))) {
-      for (let i = 0; i < low.length; i++) {
-        if (/^-(name|processname|n)$/.test(low[i]) && (low[i + 1] || '').split(',').some((n) => NODE_PROC.test(n.trim()))) return KILL_ALL_MSG;
-        if (/^-id$/.test(low[i]) && (low[i + 1] || '').split(',').some(isPid)) return pidMsg;
-      }
-      if (low.some(isPid)) return pidMsg;
-    }
-    if (/^(pkill|killall)$/.test(name) && low.some((a) => !a.startsWith('-') && (NODE_PROC.test(a) || /(^|[\\/])node(\.exe)?$/.test(a)))) return KILL_ALL_MSG;
-    if (name === 'kill' && low.some(isPid)) return pidMsg;
-    if (name === 'wmic' && /name\s*=\s*['"]?node(\.exe)?['"]?/i.test(args.join(' ')) && /\b(delete|terminate)\b/i.test(args.join(' '))) return KILL_ALL_MSG;
-    if (/^(get-ciminstance|gcim|get-wmiobject|gwmi)$/.test(name) && /node/i.test(args.join(' ')) && segsInfo.slice(k + 1).some((x) => /^(invoke-cimmethod|icim|remove-ciminstance|rcim|invoke-wmimethod|iwmi|stop-process|spps)$/.test(x.name) || x.args.some((a) => /terminate|\.kill\(\)/i.test(a)))) return KILL_ALL_MSG;
-    // Get-Process node | Stop-Process、gps -Name node* | spps、Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process、pgrep node | xargs kill
-    const killer = (x) => /^(stop-process|spps|kill|taskkill)$/.test(x.name) || (x.name === 'xargs' && x.args.some((a) => /^(kill|taskkill|stop-process)$/i.test(a)));
-    if (/^(get-process|gps|ps|pgrep)$/.test(name) && segsInfo.slice(k + 1).some(killer)) {
-      const text = [args.join(' ')].concat(segsInfo.slice(k + 1).map((x) => x.args.join(' '))).join(' ');
-      if (/(^|[\s'"=,])node(\.exe)?\*?($|[\s'",}])/i.test(text)) return KILL_ALL_MSG;
-      if (pid > 0 && new RegExp('(^|\\D)' + pid + '(\\D|$)').test(text)) return pidMsg;
-    }
-  }
-  return '';
-}
-
-/**
- * 整条命令看一遍（不按组拆）：列进程的命令和结束进程的命令都在，中间提到了 node（或者路由的进程号），就拦。
- * Where-Object { … }、ForEach-Object { … } 这种花括号块会把管道拆成几组，按组看认不出来
- */
-function killAnywhere(cmd, ps) {
-  if (!fs.existsSync(path.join(KIT, 'router', 'router.js'))) return '';
-  const { s } = preprocess(cmd, ps);
-  const lister = /(^|[\s;|&({])(get-process|gps|ps|pgrep|tasklist|get-ciminstance|gcim|get-wmiobject|gwmi)(\.exe)?(?=$|[\s;|&)}])/i;
-  const killer = /(^|[\s;|&({])(stop-process|spps|kill|taskkill|invoke-cimmethod|icim|remove-ciminstance|rcim|invoke-wmimethod|iwmi)(\.exe)?(?=$|[\s;|&)}])|\.kill\(\)|\bTerminate\b/i;
-  if (!lister.test(s) || !killer.test(s)) return '';
-  if (/(^|[\s'"=,(])node(\.exe)?\*?($|[\s'",)}])/i.test(s)) return KILL_ALL_MSG;
-  const pid = routerPid();
-  if (pid > 0 && new RegExp('(^|\\D)' + pid + '(\\D|$)').test(s)) return '[vibe-kit] 进程 ' + pid + ' 是模型路由（Claude Code 连模型、套件的检查都靠它），不要结束它。要停的是别的服务，先用 netstat -ano | findstr :<端口> 找对 PID。';
-  return '';
-}
-
 // ---------- 起服务要经过 devserver.js ----------
 /*
  * 模型起服务自测，常常忘了之前起过、或者上次没关，再起时端口被占，就换个端口又起一个——前端代理、配置里写的还是原来的端口，
@@ -361,4 +294,4 @@ function cdCompoundText(hit, cwd) {
       : '这个命令要在那个目录里才能跑的话，cd "' + d + '" 单独跑一条、后面不串别的，下一条再跑它，跑完再单独一条 cd 回 "' + slash(base) + '"。');
 }
 
-module.exports = { killIssue, killAnywhere, serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText };
+module.exports = { serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText };

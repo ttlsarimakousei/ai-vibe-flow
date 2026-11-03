@@ -126,12 +126,12 @@ const startArgs = ['start', '--name', 'app', '--port', String(PORT), '--hot', '-
   await waitOpen(false);
 
   H.section('先占端口、过几秒才答 HTTP 的（Tomcat 那种，1017）');
-  // 服务用 lib/fake-idea.js 的 __service：一起来就占端口，过 SLOW_MS 才答（之前来的请求挂着）。答的是 v.txt 的内容。
+  // 服务用 lib/fake-slow-service.js：一起来就占端口，过 SLOW_MS 才答（之前来的请求挂着）。答的是 v.txt 的内容。
   // 模型紧接着调接口的超时给 2 秒：只看端口就说起来了的话，这一下拿不到内容
   const SLOW_MS = 10000;
   const get = (timeout) => new Promise((resolve) => { const g = http.get({ host: '127.0.0.1', port: PORT, path: '/', timeout, agent: false }, (res) => { let t = ''; res.on('data', (c) => t += c); res.on('end', () => resolve(t.trim())); }); g.on('timeout', () => { g.destroy(); resolve('ERR timeout'); }); g.on('error', (e) => resolve('ERR ' + e.code)); });
   H.write(path.join(proj, 'v.txt'), 'slow-v1\n');
-  const slowArgs = (extra) => ['start', '--name', 'slow', '--port', String(PORT)].concat(extra || [], ['--', 'node', path.join(__dirname, 'lib', 'fake-idea.js'), '__service', String(PORT), proj, String(SLOW_MS)]);
+  const slowArgs = (extra) => ['start', '--name', 'slow', '--port', String(PORT)].concat(extra || [], ['--', 'node', path.join(__dirname, 'lib', 'fake-slow-service.js'), String(PORT), proj, String(SLOW_MS)]);
   const slowRec = () => { try { return JSON.parse(fs.readFileSync(path.join(proj, '.vibe', 'run', 'slow.json'), 'utf8')); } catch (e) { return null; } };
   const w1 = tool(slowArgs());
   const got1 = await get(2000);

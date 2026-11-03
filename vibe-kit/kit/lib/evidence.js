@@ -60,20 +60,12 @@ function runsVerify(command, ps, depth) {
   } catch (e) { return true; }
 }
 function actual(j) {
-  let input = j.tool_input || {}; let name = j.tool_name || ''; let root = j.cwd;
-  if (/^mcp__.*__(execute_tool|execute_terminal_command|get_file_problems|execute_run_configuration)$/.test(name)) {
-    if (!require('./idea-tools').isIdea(name)) return null;
-    if (name.endsWith('__execute_tool')) { const r = require('./idea-tools').route(input.command); if (!r) return null; name = r.name; input = Object.assign({}, r.input, input.projectPath ? { projectPath: input.projectPath } : {}); }
-    root = input.projectPath; if (!root || !path.isAbsolute(root)) return null;
-    if (/execute_run_configuration$/.test(name)) { const r = j.tool_response || {}; if (r.isRunning || !/BUILD SUCCESS|Tests run:|测试.*通过/i.test(JSON.stringify(r))) return null; return { root, command: 'IDEA 运行配置验证 ' + String(input.configurationName || ''), kind: 'test' }; }
-    if (/get_file_problems$/.test(name)) return { root, command: 'IDEA 文件检查 ' + String(input.filePath || ''), kind: 'inspection' };
-    name = 'Bash';
-  }
+  const input = j.tool_input || {}; const name = j.tool_name || ''; let root = j.cwd;
   if (!/^(Bash|PowerShell)$/.test(name) || !root) return null;
   const command = String(input.command || '');
   // 查库、缓存工具属于查询和运维，不是项目测试；不为这些命令额外遍历整个仓库。
   if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis|urai-db-crud|redis)[\\/]/i.test(command)) return null;
-  // 切目录、git -C 指到别处的命令不猜覆盖范围；IDEA 的明确 projectPath 已在上面处理。mvn -f、gradle -p、npm --prefix 指到哪个仓库就算哪个，指了几个不同的不记
+  // 切目录、git -C 指到别处的命令不猜覆盖范围。mvn -f、gradle -p、npm --prefix 指到哪个仓库就算哪个，指了几个不同的不记
   if (/\b(?:cd|pushd|Set-Location)\b|\bgit\s+-C\b/i.test(command)) return null;
   // 每个工具只认自己指目录的那几个选项，大小写要对（复审 D-R5：以前不分大小写，mvn -P dev 的 profile 名、mvn -C 后面的 test 被当成目录，算指纹时报错）
   const DIR_OPTS = { mvn: ['-f', '--file'], gradle: ['-p', '--project-dir'], npm: ['--prefix'], pnpm: ['-C', '--dir', '--prefix'], yarn: ['--cwd'] };

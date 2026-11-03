@@ -30,9 +30,8 @@ function handle(j) {
   try {
     require('../lib/invocation').phase('登记操作许可');
     require('../lib/permissions').consume(j, successful(j));
-    // 验证证据与 IDEA 完成结果共用此入口；模块升级不同步时保持原工具结果。
+    // 验证证据；模块升级不同步时保持原工具结果。
     try { require('../lib/invocation').phase('登记验证证据'); require('../lib/evidence').recordTool(j, successful(j)); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 验证证据', j, e); }
-    // IDEA 工具的返回不再遮口令（用户 2026-10-25 定的，问题反馈表第 3 条）：项目里的口令模型要看得到；套件令牌照旧读不到（读的时候就拦）
     const cmd = String(j.tool_input && j.tool_input.command || '');
     // 失败的命令走 PostToolUseFailure，顶层是 error、没有 tool_response（docs/claude-code-facts.md 三版实测；2026-10-17 审核问题 11）
     const output = String(j.tool_response && (j.tool_response.stderr || j.tool_response.stdout || j.tool_response.error) || j.error || '');

@@ -4,7 +4,7 @@
  *   1. git push 要用户确认：任何写法（git -C x push、cd x && git push、cmd /c、bash -c、powershell -Command 里的）都检查。
  *      用户说了"推送""push"就直接推（用户 2026-10-25 定的）；合并推送 2026-10-28 取消了（用户定的），"合并推送"也按普通推送走。取消、问句、后台通知不算。
  *      20261030 起 push 只留这一道确认（用户定的）：settings 里的 Bash(git push:*) 确认规则去掉了（它按前缀匹配，git -C sub push 本来就绕得过）。
- *      这一道不看任何开关；钩子走路由时，路由不在由命令钩子 guard-push 兜底，路由里没跑成时带 push 的要确认（lib/hook-host.js）。
+ * *      这一道不看任何开关；检查没跑成时带 push 字样的按要确认算（session-out 的 pushFailOut）。
  *   2. 提交信息要符合公司规范："类型: 内容"（例：feat: 新增修改页面）。heredoc、here-string、-m"x"、-mx 这些写法都认。
  *   3. 不许把原来就有的改动带进提交：git add -A / --all / . / :/ / -u、git commit -a 一律拦；
  *      仓库下面套着别的 git 仓库（壳子）时，add 子项目目录也拦（会被提交成 gitlink，公司红线）。登记成子模块的不算。
@@ -16,8 +16,8 @@
  *      自动模式下用户不在就先不提交、记进报告；自动——做完一件完整的事（新勾完任务、审查修复收尾、需求文档定稿）才提交。不能放行。
  *  13. 跑 tools/commit.js（只提交本会话改过的文件，2026-11-01 K3）：按它要提交的文件和提交信息合成 git add、git commit，上面 2、3、8、9、12 条照查；
  *      没拦下的记一张票，commit.js 凭票提交，钩子没跑就不提交（lib/guard-git.js 的 commitToolRun、lib/edited-files.js）。
- *   5. 禁止改套件（开关 kitLock）：命令动到套件的文件、直接调路由的 /api、命令里出现 disableAllHooks，都拦。
- *   6. 装了路由时，不许一把结束所有 node 进程（taskkill /IM node.exe 之类），也不许结束路由自己的进程：路由一停，模型连不上、走 HTTP 的检查全部失效。
+ *   5. 禁止改套件（开关 kitLock）：命令动到套件的文件、直接调配置页的 /api、命令里出现 disableAllHooks，都拦。
+ *   6. （结束 node 进程保护路由的那一条，随路由 2026-11-03 删了）
  *   7. 起服务自测（mvn spring-boot:run、npm run dev、Tomcat 这类）要经过 tools/devserver.js（固定，不做开关）：同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000。
  *   8. 过程文件别落在项目里（固定，不做开关）：cp 出来的备份、备份目录、重定向出来的日志这类，放 .vibe/tmp/<事由>/；git add 过程文件也拦。同一个路径只拦一次。
  *      临时查看 JAR、ZIP、TAR、7z 等归档的直接解包命令检查实际目标目录，目录联接也查；不能靠重复执行落到项目根。只读列表和流式读取放行。
@@ -54,8 +54,8 @@ try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ 
 const { stripComments, preprocess, OPEN, CLOSE, splitCommand, scanRedirects, words, dynamic, dynamicPath, local, headOf, repoRoot, CD, PUSHD, POPD, cdTarget, docOf, innerCommand, expandLoopVars } = require('../lib/shell-words');
 const { pushAnywhere, publishAnywhere, parseGit, messageOf, commitAll, gitIssue, tempIndexOf, newFilesIssue, consentIssue, plainPush, commitToolRun, noteCommitTools } = require('../lib/guard-git');
 const { archiveTarget, archiveIssue } = require('../lib/guard-archive');
-const { easyListing, mayTouchSecret, keyFileIssue, kitIssue, lessonIssue, routerApiIssue, readOnlyCommand, hasReaderIn } = require('../lib/guard-kit');
-const { killIssue, killAnywhere, serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText } = require('../lib/guard-process');
+const { easyListing, mayTouchSecret, keyFileIssue, kitIssue, lessonIssue, configApiIssue, readOnlyCommand, hasReaderIn } = require('../lib/guard-kit');
+const { serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText } = require('../lib/guard-process');
 
 /** 某一道检查自己出错了：照常放行（硬规矩 2），但记一条问题反馈（审核 P13：以前这几处静默跳过，读令牌、改套件、提交许可这几道检查没跑也没人知道） */
 function checkFailed(what, j, e) { try { if (feedback && feedback.recordHookError) feedback.recordHookError('guard-commit（' + what + '）', j || {}, e); } catch (err) { /* 记不了就算了 */ } }
@@ -101,7 +101,6 @@ function analyze(cmd, ps, st, cfg, depth) {
         if (vals.length && !vals.some((w) => dynamic(w) || /[*?]/.test(w.raw))) st.loops[w0[1].text] = vals.map((w) => w.text); else delete st.loops[w0[1].text];
       }
     }
-    if (!st.block) { const k = killIssue(segs); if (k) setBlock(st, 'kill', k); }
     if (cfg.kitLock !== false && !st.block) { const k = kitIssue(segs, st.dir, docs); if (k) setBlock(st, 'kit', k); }
     if (cfg.kitLock !== false && !st.block) { let k = ''; try { k = lessonIssue(segs, st.dir, docs); } catch (e) { k = ''; checkFailed('改经验规则', st.j, e); } if (k) setBlock(st, 'kit', k); }
     // 令牌和模型的 key：不看"禁止改套件"那个开关，什么时候都不给读
@@ -236,7 +235,6 @@ function securityFirst(j, cmd) {
     const cfg0 = readConfig(j);
     const cwd0 = path.resolve(j.cwd || process.cwd());
     const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, securityOnly: true };
-    { const k = killAnywhere(cmd, ps); if (k) setBlock(st, 'kill', k); }
     if (!st.block) analyze(cmd, ps, st, cfg0, 0);
     if (!st.block) return null;
     let tail = '';
@@ -253,12 +251,8 @@ function securityFirst(j, cmd) {
   } catch (e) { checkFailed('安全检查前置', j, e); return null; }
 }
 function check(j) {
-  // IDEA 的终端、工具路由也走现有检查；认不出是 IDEA 的 MCP 只查路径参数读不读套件令牌（lib/idea-tools.js）。
-  if (/^mcp__/.test(String(j.tool_name || ''))) {
-    const out = require('../lib/idea-tools').handle(j); if (out) return out;
-    const issue = require('../lib/flow-policy').actionIssue(j);
-    return issue ? blockOut('PreToolUse', '[vibe-kit] ' + issue) : null;
-  }
+  // MCP 工具不认名字，只查令牌和套件目录（lib/guard-mcp.js，用户 2026-11-03 定的）
+  if (/^mcp__/.test(String(j.tool_name || ''))) return require('../lib/guard-mcp').handle(j);
   const cmd = String((j.tool_input && j.tool_input.command) || '');
   if (!cmd.trim()) return null;
   // 安全检查先跑（审核 P13，2026-11-01 H2）：读令牌、改套件、改经验规则、结束进程这几道不依赖流程状态，放在读开关（可能要算整个仓库的指纹）、
@@ -279,7 +273,7 @@ function check(j) {
   I.phase('命令：串着 cd');
   let cdHit = null;
   try { cdHit = ps ? null : cdCompoundIssue(cmd, j.cwd); } catch (e) { cdHit = null; }
-  // 不走拦截编号的几处（串着 cd、关钩子、调路由的接口、全自动下的 push）也数一笔：哪条规矩拦得多，使用情况里要看得到
+  // 不走拦截编号的几处（串着 cd、关钩子、调配置页接口、全自动下的 push）也数一笔：哪条规矩拦得多，使用情况里要看得到
   const counted = (kind, text) => { try { if (feedback && feedback.countBlock) feedback.countBlock(kind, text, String(j.session_id || '')); } catch (e) { /* 数不了不影响 */ } return blockOut('PreToolUse', text); };
   I.phase('命令：审查决定');
   const decisionIssue = require('../lib/review-runner').decisionIssue(j);
@@ -289,11 +283,11 @@ function check(j) {
     hookLog('guard-commit 拦下串着 cd 的命令：' + cmd.replace(/\s+/g, ' ').slice(0, 100));
     return counted('cd', cdCompoundText(cdHit, j.cwd));
   };
-  I.phase('命令：改套件和路由接口');
+  I.phase('命令：改套件和配置页接口');
   if (cfg.kitLock !== false) {
     // disableAllHooks 会把套件的检查一起关掉：只在命令要写东西的时候拦。只读的命令（grep 排查、cat）、提交信息、文档里提到这个词不拦
     if (/disableAllHooks/i.test(cmd) && !readOnlyCommand(cmd, ps, j.cwd) && (/settings[\w.-]*\.json/i.test(cmd) || /(>|\b(set-content|sc|out-file|add-content|ac|tee|tee-object)\b|sed\s+-i|writefile|write_text|\.write\s*\(|\bnode(\.exe)?\s+-e\b|\bpython3?(\.exe)?\s+-c\b)/i.test(cmd))) return counted('kit', '[vibe-kit] 不许写 disableAllHooks：它会把套件的所有检查一起关掉。钩子拦错了就把原因告诉用户，由用户来定；不要绕过。');
-    const api = routerApiIssue(cmd, ps, j.cwd);
+    const api = configApiIssue(cmd, ps, j.cwd);
     if (api) return counted('kit', api);
   }
   // push 不看任何开关，没有当场授权就确认；拆命令没认出来的写法由 pushAnywhere 兜底
@@ -307,9 +301,6 @@ function check(j) {
   if (cfg.kitLock === false && !pushAsk && !mayTouchSecret(cmd, j.cwd) && !/>/.test(cmd) && !/\.(sh|ps1|bat|cmd)\b/i.test(cmd) && !/commit\.js/i.test(cmd) &&!/\b(git|openspec|mv|move|move-item|mi|rename-item|rni|ren|robocopy|cmd|bash|sh|powershell|pwsh|taskkill|stop-process|spps|kill|pkill|killall|wmic|mvnw?|gradlew?|npm|cnpm|pnpm|yarn|npx|vite|vue-cli-service|webpack|webpack-dev-server|http-server|live-server|nodemon|catalina|startup|java|python3?|py|flask|uvicorn|gunicorn|cp|copy|xcopy|copy-item|cpi|tee|tee-object|out-file|set-content|sc|add-content|ac|xargs|start|start-process|saps|invoke-expression|iex|call|nohup|env|cross-env|rm|rmdir|rd|del|erase|remove-item|ri|unlink|find|jar|tar|gtar|bsdtar|unzip|7z|7za|7zr|7zz|expand-archive)\b/i.test(cmd)) return cdBlock();
   const cwd0 = path.resolve(j.cwd || process.cwd());
   const st = { dir: cwd0, cwd0, pushed: [], pushes: [], block: '', kind: '', target: '', ask: '', push: '', publishing: false, j, added: new Set(), passes: [], used: [], blocked: {}, sig: '', loops: {}, tempIndex: tempIndexOf(cmd) };
-  // 先按名字挑出进程再结束的写法（Get-Process | Where-Object { $_.Name -eq 'node' } | Stop-Process）：拆成组之后认不出来，整条看一遍
-  I.phase('命令：结束进程');
-  if (!st.block) { const k = killAnywhere(cmd, ps); if (k) setBlock(st, 'kill', k); }
   // 兜底放行：这个会话里申请过、还能用的通行证
   I.phase('命令：放行记录');
   const action = (j.tool_name || 'Bash') + '：' + cmd;
@@ -320,7 +311,7 @@ function check(j) {
   if (st.block) {
     let tail = '';
     try { if (feedback && st.sig) tail = feedback.registerBlock(j, st.kind, st.sig, st.block, action, st.target); } catch (e) { /* 记不了编号也照样拦 */ }
-    // 不能放行的（改套件、读令牌、结束路由、整仓 add）：全自动模式下不让它停下等人。
+    // 不能放行的（改套件、读令牌、整仓 add）：全自动模式下不让它停下等人。
     // 过程文件先留着那一道不算：它本来就不用做什么，也没有要留给用户的事
     if (!tail && cfg.autoMode && st.kind !== 'keep') {
       tail = '\n全自动模式：我不在，不要停下等我。这条命令不要跑：照上面说的换一个做法；换不了，就把这一步留给我，写进最后的交代，接着做别的。';
@@ -391,6 +382,6 @@ function handle(j) {
   } catch (e) { try { feedback.recordHookError('guard-commit OpenSpec 改写', j, e); } catch (x) { /* 记不了也放行 */ } return out; }
 }
 
-module.exports = { handle, preprocess, stripComments, splitCommand, words, scanRedirects, parseGit, messageOf };
+module.exports = { handle, securityFirst, preprocess, stripComments, splitCommand, words, scanRedirects, parseGit, messageOf };
 // 命令方式下出错、超出 12 秒预算：别的检查照旧放行，像推送的不放行（push 只留钩子这一道确认，复审 S3）
 if (require.main === module) cli(handle, { onError: (j, e) => require('../lib/session').pushFailOut(j, (e && e.message) || e) });
