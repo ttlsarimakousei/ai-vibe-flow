@@ -134,8 +134,8 @@ function noteResult(dir, point, result, inputHash) {
     o[k] = { rounds, status: result.status, issues: result.issues.length, blocking: block, failStreak, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, born: S.changeBorn(dir), at: Date.now() };
   });
 }
-/** 一个角度的子代理没交结论：记一次 */
-function noteFail(dir, point) { S.updateState('review-points', o => { const k = key(dir, point); if (o[k]) o[k].failStreak = (o[k].failStreak || 0) + 1; }); }
+/** 子代理没交结论：一轮记一次（roundId 同一个的不重复记）。一轮 3 个角度都被打断也只算一次（复审 20261104 R2） */
+function noteFail(dir, point, roundId) { S.updateState('review-points', o => { const k = key(dir, point); if (!o[k]) return; if (roundId && o[k].failRound === roundId) return; o[k].failRound = roundId || ''; o[k].failStreak = (o[k].failStreak || 0) + 1; }); }
 /**
  * 开着自动、需求文档审修完：直接开工（第 41 条：以前有一个条件不满足就落到"问能不能开工"）。
  * 探索记录要写完（老会话 planReady 还认）；当前 change 按大任务的表算，几个 change 也能开工。

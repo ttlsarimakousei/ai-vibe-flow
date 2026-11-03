@@ -301,7 +301,7 @@ function prepare(opts) {
   const before = W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all');
   const input = pointHash || before.hash;
   const old = S.readState('review-jobs')[key];
-  if (old && old.status === 'running' && old.lenses && !opts.full && old.input === input && Date.now() < old.deadline && fs.existsSync(old.dir)) return leftOf(old).length ? agentsOf(old) : finish(old.id);
+  if (old && old.status === 'running' && old.lenses && !opts.full && old.input === input && Date.now() < old.deadline && fs.existsSync(old.dir)) if (leftOf(old).length) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === old.id) o[key].tries = (o[key].tries || 0) + 1; }); old.tries = (old.tries || 0) + 1; return agentsOf(old); } else return finish(old.id);
   if (old && old.dir) fs.rmSync(old.dir, { recursive: true, force: true });
   const id = crypto.randomBytes(12).toString('hex'); const started = Date.now();
   // 配置页的"审查预期用时"：不到点截断（用户 2026-10-28 定的），审完超了就记问题反馈。--budget 给了就按它算这一次的预期
@@ -380,7 +380,7 @@ function failLens(id, lens, why) {
   const job = findJob(id); if (!job || job.status !== 'running' || !job.state[lens] || job.state[lens].status === 'submitted') return;
   S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id) cur.state[lens] = { status: 'failed', why: R.clip(why, 300), at: Date.now() }; });
   const change = job.change ? changeOf(job.root, job.change) : null;
-  if (change && job.point) require('./flow-policy').noteFail(change.dir, job.point);
+  if (change && job.point) require('./flow-policy').noteFail(change.dir, job.point, job.id + ':' + (job.tries || 0));
   try { require('./usage').bump('review.lost'); } catch (e) { /* 数不了就算了 */ }
   reportReview({ spentMs: Date.now() - job.started, status: 'running' }, Object.assign({}, job, { state: Object.assign({}, job.state, { [lens]: { status: 'failed' } }) }));
 }

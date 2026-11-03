@@ -169,6 +169,10 @@ H.section('放行：裸开子代理拦下，带任务的放行并记发出去了
     H.ok('连续 3 次没交：不再催，不算通过', P.halted(q.dir, 'group-1') && !P.settled(q.dir, 'group-1') && P.pending(q.dir, 'code') === '', P.record(q.dir, 'group-1'));
     H.ok('不挡往下走', P.allDone(q.dir, 'code') && !P.fixPending(q.dir, 'group-1', {}));
     H.ok('说法：不再催', /不再催/.test(P.instruction(q.dir, 'group-1')), P.instruction(q.dir, 'group-1'));
+    const w = project();
+    const r0 = R.prepare(opts(w));
+    for (const a of r0.agents) R.failLens(r0.id, a.lens, '子代理结束了，没交结论');
+    H.ok('一轮 3 个角度都被打断：只算一次，不断路（复审 R2）', r0.agents.length >= 2 && P.record(w.dir, 'group-1').failStreak === 1 && !P.halted(w.dir, 'group-1'), P.record(w.dir, 'group-1'));
     const r = await H.fakeReview(R, opts(q), () => ({ issues: [] }));
     H.ok('用户说审，审成了清零、过了', r.status === 'completed' && !P.record(q.dir, 'group-1').failStreak && P.settled(q.dir, 'group-1'), P.record(q.dir, 'group-1'));
   }
