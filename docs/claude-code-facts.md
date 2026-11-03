@@ -177,3 +177,23 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 | `openspec/plan.md`、`openspec/explore/` | `list`、`validate`、`archive` 都不受影响，归档后还在 |
 
 所以一个大任务最后一起归档时要按拆分表的顺序。顺序错了不会改坏文件。
+
+## 子代理和状态栏长行（2026-11-03 实测）
+
+交互界面，假用户目录加假网关，`dev/probes/cc-subagent.js`、`dev/probes/cc-statusline.js`（`PROBE_LINE`、`PROBE_REFRESH`）。
+
+| 行为 | 2.1.120 | 2.1.259、2.1.289 |
+|---|---|---|
+| 子代理工具 | `Agent`，有 `run_in_background` | `Agent`，没有这个参数 |
+| 默认怎么跑 | 前台：主会话等，工具结果和 PostToolUse 的 `content` 都是子代理全文 | 后台：工具结果只说已启动，主会话这一轮接着走到 Stop；每个子代理做完来一条通知，触发 UserPromptSubmit（`prompt` 以 `<task-notification>` 开头）和新一轮 |
+| 一条回复 3 个调用 | 同时跑 | 同时跑 |
+| 代理文件不写 model | 请求的 model 和主会话一样 | 同左 |
+| 子代理里 Bash 跑 node，stdin 带中文 JSON | 字节一致 | 同左 |
+| 子代理里的钩子 | `session_id`、`transcript_path` 和主会话一样，多 `agent_id`、`agent_type`；PreToolUse 拦得到 | 同左 |
+| SubagentStop | `last_assistant_message` 是全文（60000 字没截断）；回 `decision: "block"` 加 `reason`，子代理看到 reason 接着写 | 同左 |
+| 按 Esc | 子代理的请求断开，工具结果 `[Request interrupted by user for tool use]`；再说一句 UserPromptSubmit 触发 | 子代理的请求不断，后台接着跑；再说一句 UserPromptSubmit 触发 |
+
+- 状态栏超过宽度的行被截断，行尾加 `…`，不折行（80 列，三个版本）。2.1.120 上超宽的第二行没显示出来，原因没查；不超宽的三行都显示。
+- `refreshInterval: 10` 实测相隔 10.0 秒（2.1.120、2.1.289）。
+- 2.1.120 设 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` 无害，工具和默认一样是 `TaskCreate` 这一组。
+- ◆◇✓●○ 在 winpty 抓屏里没有错位；Windows Terminal、conhost 上占几列要人看一眼。
