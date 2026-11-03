@@ -5,7 +5,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { readConfigFor, flowState, flowTouch, userSaid, mentionsChange, allChanges, changeRoots, normKey, codeReviewIssue, touchChange, isDeferredTask, syncReviews, syncReviewRounds, reviewLoopIssue, tailEntries } = require('./session');
+const { readConfigFor, flowState, flowTouch, userSaid, mentionsChange, allChanges, changeRoots, normKey, codeReviewIssue, touchChange, isDeferredTask, tailEntries } = require('./session');
 const { local, baseName } = require('./shell-words');
 const { parseGit } = require('./guard-git');
 
@@ -44,10 +44,8 @@ function archiveTarget(ws, head, dir) {
 
 /** 归档门槛。过了返回 null；没过返回 { name: 查的是哪个变更, msg } */
 function archiveIssue(t, dir, j) {
-  // 刚审完（前台审查、或者后台审查的通知刚到）就归档：收工检查还没来得及记，先把会话记录里做完的审查记上
   let es = [];
-  let found = [];
-  if (j && j.transcript_path) { try { es = tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain); found = syncReviews(es, j.cwd || dir); } catch (e) { /* 记不了就按已有的记录判断 */ } }
+  if (j && j.transcript_path) { try { es = tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain); } catch (e) { /* 读不了就按没说过算 */ } }
   let chDir = '';
   let guessed = false;
   if (t.changesDir) chDir = path.join(t.changesDir, t.name);
@@ -84,12 +82,6 @@ function archiveIssue(t, dir, j) {
   } catch (e) { /* 没有 tasks.md 就不管任务 */ }
   const cr = cfg.autoMode ? codeReviewIssue(chDir) : '';
   if (cr) issues.push(cr);
-  else if (cfg.autoMode && cfg.reviewLoop) {
-    // 审查之后只在 revisions.md 记了理由（意见都不成立）的算处理完；轮数用完的这次按"问用户 / 全自动自己定"说
-    try { syncReviewRounds(es, found); } catch (e) { /* 计不了就按已有的记录判断 */ }
-    const lo = reviewLoopIssue('code', chDir, cfg);
-    if (lo) issues.push(lo);
-  }
   const who = guessed ? '这条命令没写变更名，没归档的变更只有 ' + name + ' 一个，查的是它（要归档的是别的，把名字写上）。' : '';
   if (!issues.length) {
     // 任务都打了勾、代码也审过了：还要用户自测过、说了归档（用户 2026-10-07 定的）。认会话记录里他最后一句话；点了别的变更的名不算

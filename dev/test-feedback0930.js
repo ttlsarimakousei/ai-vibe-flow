@@ -36,52 +36,6 @@ const mkChange = (root, name, tasks, extra) => {
 const markReviewed = (dir) => fs.writeFileSync(path.join(h.kit, 'state', 'reviewed-proposal.json'), JSON.stringify(Object.assign(state('reviewed-proposal'), { [S.normKey(dir)]: { done: true, at: Date.now() - 3600000, born: S.changeBorn(dir), issues: 0 } })));
 
 // =============================================================================================
-H.section('#1 / #6 审查是审提案还是审代码：认不出的不记到代码那边');
-{
-  const proj = H.makeRepo(path.join(h.work, 'rev'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n' });
-  const fresh = mkChange(proj, 'add-query-sql-cleanup', '- [ ] 1.1 改 src/A.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/A.java；验：`mvn -q -o compile`\n');
-  const done = mkChange(proj, 'all-done', '- [x] 1.1 改 src/A.java；验：`mvn -q -o compile`\n');
-  const half = mkChange(proj, 'half-done', '- [x] 1.1 改 src/A.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/A.java；验：`mvn -q -o compile`\n');
-  const c = (dir) => ({ name: path.basename(dir), dir });
-  H.ok('约定的第一行照旧认', S.reviewModeOf('模式：提案\n变更：x') === 'proposal' && S.reviewModeOf('模式：复审代码\n变更：x') === 'code' && S.reviewModeOf('模式：复审提案') === 'proposal');
-  H.ok('议题原样："独立审一遍 OpenSpec 提案（不是审代码）"是审提案', S.reviewModeOf('你以 vibe-reviewer 身份独立审一遍 OpenSpec 提案（不是审代码）。\n变更目录：openspec/changes/add-query-sql-cleanup/') === 'proposal');
-  H.ok('议题原样："复审模式：你上一轮报的 5 条已经改过"，变更一项都没打勾：是审提案', S.reviewModeOf('复审模式：你上一轮报的 5 条已经改过，确认改对了没有。', c(fresh)) === 'proposal');
-  H.ok('"模式：代码"写在第二行也认', S.reviewModeOf('请帮我审一下。\n模式：代码\n变更：all-done') === 'code');
-  H.ok('前几行里说了"审代码""审改动"：是审代码', S.reviewModeOf('审一下这次的代码改动，专挑想当然的。', c(half)) === 'code');
-  H.ok('话里认不出、任务全打了勾：是审代码', S.reviewModeOf('帮忙过一遍。', c(done)) === 'code');
-  H.ok('话里认不出、任务做了一半：不猜', S.reviewModeOf('帮忙过一遍。', c(half)) === '');
-  H.ok('话里认不出、又不知道是哪个变更：不猜', S.reviewModeOf('帮忙过一遍。') === '');
-  // 认不出的不记账：以前一律记成代码审查
-  const sid = 's-rev';
-  H.transcript(tfile, [H.tr.user('审一下'), reviewCall('toolu_r1', '帮忙过一遍。\n变更：openspec/changes/half-done/', 3)]);
-  S.syncReviews(S.tailEntries(tfile, 8000000).filter((e) => e && !e.isSidechain), proj);
-  H.ok('认不出审的是哪一样：两边都不记', !state('reviewed')[S.normKey(half)] && !state('reviewed-proposal')[S.normKey(half)], [state('reviewed'), state('reviewed-proposal')]);
-  H.ok('流水账里留了一句，说了第一行该怎么写', /审查记账 认不出审的是提案还是代码，没记：变更 half-done，报了 3 条/.test(hookLog()) && /模式：提案 \/ 代码 \/ 复审提案 \/ 复审代码/.test(hookLog()), hookLog().slice(-400));
-  const n0 = (hookLog().match(/审查记账 认不出/g) || []).length;
-  S.syncReviews(S.tailEntries(tfile, 8000000).filter((e) => e && !e.isSidechain), proj);
-  H.ok('同一次审查只留一次', (hookLog().match(/审查记账 认不出/g) || []).length === n0);
-  // 议题 #1 原样：提案审了好几轮，提示都没照约定写；打勾时不能说"提案还没审过"，收工时不能催"代码复审"
-  H.setConfig(h, { reviewLoop: true, reviewMaxRounds: 5 });
-  for (const n of ['reviewed', 'reviewed-proposal', 'review-rounds', 'review-nudged']) dropState(n);
-  const fix = H.tr.ran('Edit', { file_path: path.join(fresh, 'design.md'), old_string: 'a', new_string: 'b' }, 'ok');
-  H.write(path.join(fresh, 'design.md'), '## Context\n\n- 读过 src/A.java\n');
-  H.write(path.join(fresh, 'revisions.md'), '# 修订记录\n');
-  const talk = [H.tr.user('/opsx:propose 清理查询的 SQL'),
-    reviewCall('toolu_p1', '你以 vibe-reviewer 身份独立审一遍 OpenSpec 提案（不是审代码）。\n变更目录：openspec/changes/add-query-sql-cleanup/', 5), fix,
-    reviewCall('toolu_p2', '复审模式：你上一轮报的 5 条已经改过，确认改对了没有。\n变更：openspec/changes/add-query-sql-cleanup/', 3), fix];
-  const stop = (entries, said) => H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tfile, entries), stop_hook_active: false, last_assistant_message: said || '改好了，没验证：只改了文档' });
-  const r1 = stop(talk.concat([H.tr.say('改好了')]));
-  H.ok('人工模式先 Ask，旧提案审查结果仍正确识别', /Ask.*审查/.test(H.reasonOf(r1)) && S.reviewRecord('proposal', fresh).issues === 3);
-  H.ok('议题 #6 原样：报的条数是最近这一轮审查者说的（3 条）', S.reviewRecord('proposal', fresh).issues === 3);
-  H.ok('代码那边没有记录', !state('reviewed')[S.normKey(fresh)] && !Object.keys(state('review-rounds')).some((k) => k.startsWith('code|')), [state('reviewed'), Object.keys(state('review-rounds'))]);
-  // 审到 0 条：提案算审过了，可以开工打勾
-  const talk2 = talk.concat([reviewCall('toolu_p3', '复审：上一轮的 3 条都改了，再确认一遍。\n变更：openspec/changes/add-query-sql-cleanup/', 0)]);
-  H.transcript(tfile, talk2.concat([H.tr.ran('Edit', { file_path: path.join(proj, 'src/A.java'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'BUILD SUCCESS')]));
-  const tick = H.hook(h, 'pre-edit', { session_id: sid, transcript_path: tfile, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(fresh, 'tasks.md'), old_string: '- [ ] 1.1', new_string: '- [x] 1.1' } });
-  H.ok('议题 #1 原样：提案审完了，第一次打勾不再说"提案还没审过"', tick === null, H.reasonOf(tick));
-  H.setConfig(h, { reviewLoop: false });
-}
-
 // =============================================================================================
 H.section('#2 git -C 的目录写在变量里；新建的仓库第一次入仓');
 {

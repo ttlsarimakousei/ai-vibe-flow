@@ -234,7 +234,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   // ---------------------------------------------------------------------------------------------
   H.section('审查过程不进提交：提案审完询问提交，审查未收尾不催提交');
   {
-    const h = H.makeHome('t1008-rev', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', specGate: false, reviewLoop: true, reviewMaxRounds: 3, commitMode: 'ask' });
+    const h = H.makeHome('t1008-rev', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', specGate: false, commitMode: 'ask' });
     const proj = H.makeRepo(path.join(h.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', 'openspec/changes/add-x/tasks.md': '- [ ] 1.1 改 src/A.java；验：mvn -q compile\n' });
     const chg = path.join(proj, 'openspec', 'changes', 'add-x');
     const tf = path.join(h.root, 'r.jsonl');
@@ -247,7 +247,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     fs.writeFileSync(path.join(chg, 'tasks.md'), '- [x] 1.1 改 src/A.java；验：mvn -q compile\n');
     H.write(path.join(proj, 'src', 'A.java'), 'class A { int x; }\n');
     const editA = H.tr.ran('Edit', { file_path: path.join(proj, 'src', 'A.java'), old_string: 'class A {}', new_string: 'class A { int x; }' }, 'ok');
-    const rounds = (done) => fs.writeFileSync(path.join(h.kit, 'state', 'review-rounds.json'), JSON.stringify({ ['code|' + S.normKey(chg)]: { rounds: 1, seen: ['toolu_r1'], done, issues: 1, pendingFix: !done, at: Date.now() - 60000, born: S.changeBorn(chg) } }));
+    const P0 = require(path.join(h.kit, 'lib', 'flow-policy.js'));
+    const rounds = (done) => P0.noteResult(chg, 'group-1', { id: 'r-' + done, status: 'completed', issues: done ? [] : [{ severity: 'P2' }] }, P0.fingerprint(chg, 'group-1'));
     rounds(false);
     const r2 = stop('v2', [H.tr.user('把 add-x 审出来的问题改了'), editA, H.tr.say('改好了')], '改好了');
     H.ok('审查没审完（报了问题、还没复审到 0 条）：改了代码不催提交', !/还没提交/.test(H.reasonOf(r2)), H.reasonOf(r2));
@@ -275,7 +276,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('归档之后出流程；审查者只读不跑编译，使用情况里记审查耗时');
+  H.section('归档之后出流程；审查者只读不跑编译');
   {
     const h = H.makeHome('t1008-done', null, Object.assign({ autoMode: true }, QUIET));
     const proj = H.makeRepo(path.join(h.work, 'crm'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', 'openspec/changes/done-y/tasks.md': '- [x] 1.1 改 src/A.java；验：mvn -q compile\n' });
@@ -297,25 +298,9 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('敲 /opsx:propose 照样进流程（写提案那一段）', flow().on === true && flow().stage === 'plan', flow());
     // 审查者的说法
     const agent = H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || '';
-    H.ok('审查者：不编译、不跑测试，最多读 20 个文件', /不编译、不跑测试、不起服务/.test(agent) && /最多读 20 个文件/.test(agent) && !/能跑的就跑/.test(agent), agent.slice(0, 200));
+    H.ok('审查者：不编译、不跑测试，不限文件数', /不编译、不跑测试、不起服务/.test(agent) && !/最多读 20 个文件/.test(agent) && !/能跑的就跑/.test(agent), agent.slice(0, 200));
     const skill = H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || '';
-    H.ok('技能使用有限独立请求并保留兼容预算', /有限请求/.test(skill) && /兼容/.test(skill) && /取消/.test(skill), skill.slice(0, 200));
-    // 审查耗时：一次审查从调用到结论 3 分钟
-    const chg2 = path.join(proj, 'openspec', 'changes', 'add-z');
-    H.write(path.join(chg2, 'tasks.md'), '- [x] 1.1 改 src/A.java；验：mvn -q compile\n');
-    const t0 = Date.now() - 600000;
-    const call = Object.assign(H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：openspec/changes/add-z/\n材料…' }, 'toolu_rev1'), { timestamp: new Date(t0).toISOString() });
-    const res = Object.assign(H.tr.result('toolu_rev1', '审完了。\n结论：问题 0 条'), { timestamp: new Date(t0 + 180000).toISOString() });
-    H.hook(h, 'verify-gate', { session_id: 'd2', cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('审一下 add-z 的代码'), call, res, H.tr.say('审完了，0 条')]), stop_hook_active: false, last_assistant_message: '审完了，0 条' });
-    const days = readJson(path.join(h.kit, 'state', 'usage.json')).days || {};
-    const sum = (k) => Object.values(days).reduce((a, d) => a + Number((d.n || {})[k] || 0), 0);
-    const timing = readJson(path.join(h.kit, 'state', 'review-local-metrics.json'));
-    H.ok('审查耗时只记在本机', sum('review.code') === 1 && timing.n === 1 && timing.totalMs >= 179000 && timing.totalMs <= 181000, timing);
-    const U = require(path.join(h.kit, 'lib', 'usage.js'));
-    const rows = U.render ? '' : '';
-    void rows;
-    const text = JSON.stringify(Object.values(days));
-    H.ok('匿名次数里没有耗时', !/review\.ms/.test(text), text.slice(0, 200));
+    H.ok('技能走 prepare 和子代理，没有兼容方式', /review\.js" prepare/.test(skill) && /ttls-reviewer/.test(skill) && !/兼容/.test(skill), skill.slice(0, 200));
   }
 
   // ---------------------------------------------------------------------------------------------

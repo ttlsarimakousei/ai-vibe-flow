@@ -294,7 +294,7 @@ H.section('收工检查：审查报了问题、处理过了，却没记经验（
   H.setConfig(h, { lessonAuto: false });
   const tfile = path.join(h.root, 'tl.jsonl');
   const stop = (sid, entries, said) => H.hook(h, 'verify-gate', { session_id: sid, cwd: A, hook_event_name: 'Stop', transcript_path: H.transcript(tfile, entries), stop_hook_active: false, last_assistant_message: said || '审查的问题都改完了' });
-  const review = (issues, mode) => H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：' + (mode || '代码') + '\n变更：openspec/changes/add-export/\n改了 src/main/java/com/x/OrderService.java', run_in_background: false }, '- 位置：OrderService.java:12\n- 问题：没判空\n\n结论：问题 ' + issues + ' 条（会出错 ' + issues + '，有隐患 0，建议 0）');
+  const review = (issues, mode) => H.reviewedTurn(h, A, 'add-export', Array.from({ length: issues }, (_, i) => ({ severity: 'P2', file: JAVA, line: i + 1, problem: '问题 ' + i, evidence: '依据', kind: '边界', avoid: '以后这样' })), { recheck: /复审/.test(mode || '') });
   const fix = H.tr.ran('Edit', { file_path: path.join(A, JAVA), old_string: 'a', new_string: 'b' }, 'ok');
   const asked = (r) => !!r && /各记一条经验/.test(H.reasonOf(r));
   const e1 = [H.tr.user('审一下'), review(2), fix, H.tr.say('审查的问题都改完了')];

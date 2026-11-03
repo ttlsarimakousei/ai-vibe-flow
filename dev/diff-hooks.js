@@ -264,10 +264,12 @@ add('收工：最后一项打了勾、没审', 'verify-gate', (kit) => {
   return r;
 }, /实现和必要测试已完成[\s\S]*review\.js run[\s\S]*用户验收不自动勾/, V1011);
 add('收工：改了产物没记修订', 'verify-gate', stop((p) => [H.tr.user('改设计'), H.tr.ran('Edit', { file_path: path.join(p, 'openspec/changes/add-export/design.md'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.say('做完了')]));
+// 一次审查留下的：结果文件，和会话记录里那条 prepare（2026-11-03 起不再认结论行）
+const reviewIn = (p, issues) => { H.write(path.join(p, '.vibe', 'reviews', 'add-export', 'code.json'), JSON.stringify({ id: 'fake-' + issues, at: Date.now(), status: 'completed', scope: 'full', issues: Array.from({ length: issues }, (_, i) => ({ id: 'r' + (i + 1), severity: 'P1', file: 'src/main/java/com/x/A.java', line: 1, problem: '问题 ' + i, evidence: '依据', kind: '边界', avoid: '以后这样' })) })); return H.tr.ran('Bash', { command: 'node "$HOME/.claude/vibe-kit/tools/review.js" prepare --change add-export --mode code' }, '{"status":"prepared"}'); };
 const review = (issues, mode) => H.tr.ran('Agent', { subagent_type: 'vibe-reviewer', prompt: '模式：' + (mode || '代码') + '\n变更：openspec/changes/add-export/', run_in_background: false }, '审过了。\n\n结论：问题 ' + issues + ' 条（会出错 ' + issues + '，有隐患 0，建议 0）');
 add('收工：审查报 0 条', 'verify-gate', stop(() => [H.tr.user('审一下'), review(0), H.tr.say('审查没问题')]));
 add('收工：审查报了问题、还没处理', 'verify-gate', stop(() => [H.tr.user('审一下'), review(2), H.tr.say('报了 2 条，我看看')]));
-add('收工：审查报了问题、改了、验了', 'verify-gate', stop((p) => [H.tr.user('审一下'), review(2), H.tr.ran('Edit', { file_path: A(p), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'BUILD SUCCESS'), H.tr.say('都改完了')]), /各记一条经验/, V0928, { lessonAuto: false });
+add('收工：审查报了问题、改了、验了', 'verify-gate', stop((p) => [H.tr.user('审一下'), reviewIn(p, 2), H.tr.ran('Edit', { file_path: A(p), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'BUILD SUCCESS'), H.tr.say('都改完了')]), /各记一条经验/, V0928, { lessonAuto: false });
 // 这一版起审查报的问题由脚本自动收（开关 lessonAuto，默认开）：开着的时候不再催它自己记
 add('收工：审查报了问题、改了、验了（自动收开着）', 'verify-gate', stop((p) => [H.tr.user('审一下'), review(2), H.tr.ran('Edit', { file_path: A(p), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'BUILD SUCCESS'), H.tr.say('都改完了')]), /^(?![\s\S]*各记一条经验)/, V0930);
 
@@ -443,6 +445,10 @@ for (const c of cases) {
   // 话里点变更的名字不是进流程的门（接回用 /vk-resume），只照旧提醒有进行中的变更
   if (c.name === '开口：说"开工"（点名变更）') { c.expect = /进行中的 OpenSpec 变更：add-export/; c.since = NEXT; }
   if (c.name === '开口：让它停') { c.expect = /写需求这一段的规矩|放行，没有输出/; c.since = NEXT; }
+  // 审查全部用子代理：规范里写 prepare；只认结果文件；waive 没了
+  if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') c.since = NEXT;
+  if (c.name === '收工：审查报了问题、改了、验了') c.since = NEXT;
+  if (c.name === '1013：跳过审查需要真人决定') { c.expect = /放行，没有输出/; c.since = NEXT; }
   // 每组只审查，全面自测放到大任务最后
   if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /一个 change 做完按 plan\.md 接下一个，全部做完全面自测[\s\S]*checkpoint\.js/; c.since = NEXT; }
 }

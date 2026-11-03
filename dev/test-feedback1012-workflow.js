@@ -62,14 +62,4 @@ H.ok('失败和未完成的探针不能新增成功证据', (S.readState('eviden
 const front = path.join(p, 'ui'); H.write(path.join(front, 'package.json'), JSON.stringify({ dependencies: { vue: '2.7', webpack: '3' }, scripts: { dev: 'webpack-dev-server' } })); H.write(path.join(front, 'config/index.js'), "module.exports={proxyTable:{'/api':{target:'http://127.0.0.1:8096/oa'}}};\n");
 const facts = require(path.join(h.kit, 'lib/onboard')).frontendFacts(front, new Set());
 H.ok('旧 Vue webpack 配置被识别并提醒固定代理及认证', facts.proxies.some((x) => /8096/.test(x)) && facts.notes.some((x) => /CORS/.test(x)), facts);
-const reviews = [H.tr.user('审提案'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '你以审查身份独立审 OpenSpec 提案（不是审代码）。\n变更：' + change }, '结论：问题 0 条')];
-H.ok('旧模式提示不会归错代码', S.reviewModeOf('你以审查身份独立审 OpenSpec 提案（不是审代码）。') === 'proposal');
-if (S.reviewDiagnostics) {
-  const diag = S.reviewDiagnostics(reviews.flat(), p);
-  H.ok('完整结果诊断识别变更和模式', diag.length === 1 && diag[0].recognized && diag[0].mode === 'proposal', diag);
-  const missing = S.reviewDiagnostics([H.tr.user('审查'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：add-a' }, '已经读完了')].flat(), p);
-  H.ok('不合格式的结果说明缺证据而不记通过', missing.length === 1 && !missing[0].recognized && /结论/.test(missing[0].reason), missing);
-  const resumed = S.reviewDiagnostics([H.tr.user('审查后复审'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：add-a' }, '结论：问题 1 条\nagentId: review-one'), H.tr.ran('SendMessage', { recipient: 'review-one', content: '模式：复审代码\n变更：add-a\n请复审' }, '结论：问题 0 条')].flat(), p);
-  H.ok('诊断包含续接代理的复审记录', resumed.length === 2 && resumed.every(r => r.recognized && r.mode === 'code'), resumed);
-} else H.ok('兼容审查提供只读诊断', false);
 H.done('1012 流程反馈');

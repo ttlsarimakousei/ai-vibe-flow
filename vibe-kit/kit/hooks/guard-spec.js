@@ -17,7 +17,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { readConfig, readConfigFor, flowState, flowTouch, lastUserVoice, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, blockOut, artifactOf, findHedges, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, nestedRepos, looksLikeProject, hookLog, tailEntries, turnStart, toolCalls, toolResults, projectReads, tickedLines, verifyPartOf, resolveVerify, verifyPlan, pathTokens, pathExists, NEW_FILE, declaredNew, missingPathIssue, readState, normKey, proposalReviewed, syncReviews, syncReviewRounds, reviewLoopIssue, handoverReadIn, normTicks, pendingReviewsIn, taskNotes, allChanges, syncTicks, cli } = require('../lib/session');
+const { readConfig, readConfigFor, flowState, flowTouch, lastUserVoice, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, blockOut, artifactOf, findHedges, addedLines, checkTasks, checkSpec, checkDesign, leftoverPlaceholders, nestedRepos, looksLikeProject, hookLog, tailEntries, turnStart, toolCalls, projectReads, tickedLines, verifyPartOf, resolveVerify, verifyPlan, pathTokens, pathExists, NEW_FILE, declaredNew, missingPathIssue, readState, normKey, proposalReviewed, handoverReadIn, normTicks, allChanges, syncTicks, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 
@@ -121,22 +121,15 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const load = () => entries || (entries = j.transcript_path ? tailEntries(j.transcript_path, 6000000).filter((e) => e && !e.isSidechain) : []);
   const done = (issues) => ({ issues, ticked, skipped });
   if (cfg.autoMode && !/^\s*[-*]\s*\[[xX]\]/m.test(oldText)) {
-    let ok = require('../lib/session').reviewAllowed('proposal', art.dir);
-    let waiting = false;
-    if (!ok && j.transcript_path) {
-      // 状态里还没记上：去会话记录里找。后台跑的审查（2.1.259 起 Agent 默认在后台）结论在后来的通知里，收工检查还没来得及记
-      const es = load();
-      syncReviews(es, j.cwd || art.root);
-      ok = require('../lib/session').reviewAllowed('proposal', art.dir);
-      if (!ok) waiting = pendingReviewsIn(toolCalls(es, 0), toolResults(es), allChanges(j.cwd || art.root), taskNotes(es)).some((p) => p.mode === 'proposal' && p.change && normKey(p.change.dir) === normKey(art.dir));
-    }
-    if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没送回来。等审查结果的通知到了（到了会自动接着一轮），按结论改完、在 revisions.md 记录，再开工打勾；不要再开一个审查。']);
+    const ok = require('../lib/session').reviewAllowed('proposal', art.dir);
+    const waiting = !ok && require('../lib/review-runner').inFlight(art.dir, 'proposal');
+    if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没送回来。等子代理做完的通知到了（到了会自动接着一轮），跑 review.js status 看结论，改完再开工打勾；不要再开一个审查。']);
     if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先按 /ttls-cross-review 的提案模式审一遍：审查提示第一行写"模式：提案"，第二行写"变更：' + art.name + '"。成立的问题改掉并在 revisions.md 记录，再开工。']);
   }
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);
   // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一整组并审修过。
-  // 到轮数、不收敛停了的组不挡（flow-policy.js 的 exhausted）：那一组不会再自动审了，这里再拦就卡死，没过的写在报告里
+  // 子代理连续没交结论停了的组不挡（flow-policy.js 的 halted）：那一组不会再自动审了，这里再拦就卡死，没过的写在报告里
   // 按表的顺序（用户 2026-11-03 定的）：回改前面的 change 补了任务，先做它，再回来
   try {
     const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.name);
@@ -146,7 +139,7 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const policy = require('../lib/flow-policy');
   for (const t of ticked) {
     const m = t.match(/^(\d+)\./); if (!m) continue;
-    const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done || (!policy.settled(art.dir, g.id) && !policy.exhausted(art.dir, g.id, cfg)));
+    const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done || (!policy.settled(art.dir, g.id) && !policy.halted(art.dir, g.id)));
     if (prior) return done(['先完成上一整组任务及审修：' + prior.id + '。' + (prior.done ? policy.instruction(art.dir, prior.id, cfg) : '当前组尚未完成。')]);
   }
   return done([]);
@@ -210,7 +203,7 @@ function handle(j, opts) {
     if (cfg.autoMode) {
       // 自动：上一份审修过再写下一份
       // 到上限、不收敛停了的点不再挡：报告里写着没过，接着往下（第 26 条、第 37 条）
-      const prior = earlier.find(p => !policy.settled(art.dir, p) && !policy.exhausted(art.dir, p, cfg));
+      const prior = earlier.find(p => !policy.settled(art.dir, p) && !policy.halted(art.dir, p));
       if (prior) flow.push(policy.instruction(art.dir, prior, cfg) + '，完成后再生成下一产物。');
     } else if (earlier.length) {
       // 人工：上一份写完要停下给用户看。上一份最后一次写入之后用户说过话（"写下一份""审一下"之后的回复）才写下一份

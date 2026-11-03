@@ -9,8 +9,15 @@ const R = require('./redact');
 function read(f) { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return ''; } }
 function alive(pid) { try { process.kill(Number(pid), 0); return true; } catch (e) { return false; } }
 function services(root) { const out = []; for (const r of [root].concat(S.isShell(root) ? S.nestedRepos(root) : [])) { const dir = path.join(r, '.vibe', 'run'); let names = []; try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.json')); } catch (e) { continue; } for (const f of names) try { const rec = JSON.parse(read(path.join(dir, f))); out.push({ name: rec.name, root: r, port: rec.port, url: 'http://127.0.0.1:' + rec.port, backend: rec.backendUrl || '', owner: 'devserver', processAlive: alive(rec.pid) }); } catch (e) { /* 损坏记录不冒充服务 */ } } return out; }
+/** 代码审查到哪了：none 没审过，running 有角度在跑，completed 每个点都审过了，open 还有没收尾的 */
+function reviewStatus(dir) {
+  const P = require('./flow-policy'); const points = P.points(dir, 'code');
+  if (require('./review-runner').inFlight(dir, 'code')) return 'running';
+  if (!points.some((p) => P.record(dir, p).status)) return 'none';
+  return points.every((p) => P.settled(dir, p)) ? 'completed' : 'open';
+}
 function facts(root, j) {
-  root = path.resolve(root); const changes = S.allChanges(root).map((c) => { const tasks = T.tasks(c.dir); return { name: c.name, done: tasks.filter((t) => t.done).length, total: tasks.length, next: T.automatedLeft(c.dir).slice(0, 1).map((t) => t.text), review: require('./review-runner').stateFor(c.dir, 'code').status, userPending: tasks.some((t) => t.kind === 'user' && !t.done) }; });
+  root = path.resolve(root); const changes = S.allChanges(root).map((c) => { const tasks = T.tasks(c.dir); return { name: c.name, done: tasks.filter((t) => t.done).length, total: tasks.length, next: T.automatedLeft(c.dir).slice(0, 1).map((t) => t.text), review: reviewStatus(c.dir), userPending: tasks.some((t) => t.kind === 'user' && !t.done) }; });
   return { root, branch: W.git(root, ['branch', '--show-current']).trim(), dirty: W.git(root, ['status', '--porcelain']).split('\n').filter(Boolean).length, changes, services: services(root), evidence: require('./evidence').current(root).map((e) => ({ kind: e.kind, command: e.command, at: e.at })), flow: j ? S.flowView(j) : null };
 }
 function brief(root, j) { const f = facts(root, j); return '[本机事实] 分支 ' + (f.branch || '无 Git') + '，未提交文件 ' + f.dirty + '；' + (f.changes.length ? f.changes.map((c) => c.name + ' ' + c.done + '/' + c.total + '，审查 ' + c.review + (c.userPending ? '，等用户验收' : '')).join('；') : '没有活动变更') + '。当前有效验证 ' + f.evidence.length + ' 项。历史交接不授予 apply、提交、归档或 push 许可。'; }

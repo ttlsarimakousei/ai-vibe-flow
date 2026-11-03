@@ -23,8 +23,8 @@ const proj = H.makeRepo(path.join(h.work, 'proj'), {
 });
 for (const c of ['c1', 'c2', 'c3', 'c4']) H.write(path.join(proj, 'openspec', 'changes', c, 'tasks.md'), '- [x] 1.1 改 src/main/java/com/x/A.java；验：`mvn -q -o compile`\n');
 const J = (n) => path.join(proj, 'src/main/java/com/x', n);
-const finding = (where, problem, sev, kind, when) => ['- 位置：`' + where + '`', '- 问题：' + problem, '- **什么情况下会出错**：' + (when || '传空的时候'), '- 严重程度：' + sev, '- 类别：' + kind].join('\n');
-const reviewText = (list) => list.join('\n\n') + '\n\n结论：问题 ' + list.length + ' 条（会出错 ' + list.length + '，有隐患 0，建议 0）';
+const SEV = { 会出错: 'P1', 有隐患: 'P2', 建议: 'P3' };
+const finding = (where, problem, sev, kind, when) => ({ severity: SEV[sev], file: where.replace(/:\d+$/, ''), line: Number((/:(\d+)$/.exec(where) || [])[1]) || 1, problem, evidence: when || '传空的时候', kind });
 let seq = 0;
 /** 一个会话：审查报了这些问题，之后改了这些文件，然后说做完了。跑收工检查 */
 function session(change, findings, editFiles, opts) {
@@ -32,7 +32,7 @@ function session(change, findings, editFiles, opts) {
   const id = 'toolu_auto_' + (++seq);
   const entries = [H.tr.user('做 ' + change)]
     .concat((o.before || []).map((f) => H.tr.ran('Edit', { file_path: f, old_string: 'a', new_string: 'b' }, 'ok')))
-    .concat([H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：' + (o.mode || '代码') + '\n变更：openspec/changes/' + change + '/\n材料…', run_in_background: false }, id), H.tr.result(id, reviewText(findings))])
+    .concat(H.reviewedTurn(h, proj, change, findings, { mode: o.mode === '提案' ? 'proposal' : 'code' }))
     .concat(editFiles.map((f) => H.tr.ran('Edit', { file_path: f, old_string: 'a', new_string: 'b' }, 'ok')))
     .concat([H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'ok'), H.tr.say('改完了。没有需要沉淀的经验。')]);
   const tf = H.transcript(path.join(h.work, 't-' + seq + '.jsonl'), entries);
@@ -42,17 +42,6 @@ const ruleFile = path.join(proj, '.claude', 'rules', 'ttls-lessons-java.md');
 const rules = () => L.readRuleFile(ruleFile).rules;
 const cands = () => L.readCandidates(proj);
 const found = () => L.readFindings(proj).items;
-
-// ---------------------------------------------------------------------------------------------
-H.section('从审查者的回复里取出问题');
-{
-  const t = ['这次改动有两个问题。', '', '1. 位置：`src/A.java:12`', '   问题：导出接口没有判断列表为空', '   什么情况下会出错：列表为空时抛异常', '   严重程度：会出错', '   类别：边界', '',
-    '- **位置**：src/B.java:30-35、src/C.java:8', '- **问题**：分页参数为空时直接拼进 SQL。', '- **什么情况下会出错**：不传分页参数', '- **严重程度**：有隐患', '- **类别（选一个）**：数据库', '',
-    '- 位置：src/D.java', '- 严重程度：建议', '', '结论：问题 2 条（会出错 1，有隐患 1，建议 0）'].join('\n');
-  const f = L.parseFindings(t);
-  H.ok('两种写法都认；没写"问题"的那条不要', f.length === 2 && f[0].file === 'src/A.java' && f[0].problem === '导出接口没有判断列表为空' && f[0].severity === '会出错' && f[0].kind === '边界' && f[1].file === 'src/B.java' && f[1].kind === '数据库' && f[1].severity === '有隐患' && /拼进 SQL/.test(f[1].problem), f);
-  H.ok('没有问题的回复：取不出东西', L.parseFindings('没发现问题。\n\n结论：问题 0 条').length === 0);
-}
 
 // ---------------------------------------------------------------------------------------------
 H.section('第一个变更：收下来，还不是规则');
@@ -119,7 +108,7 @@ H.section('审查者写的是相对子项目的路径、前端的文件、提案
   const shell = H.makeRepo(path.join(h.work, 'shell'), { 'CLAUDE.md': '# 壳子\n', 'openspec/changes/s1/tasks.md': '- [x] 1.1 x；验：`mvn -q compile`\n' });
   const sub = H.makeRepo(path.join(shell, 'backend'), { 'pom.xml': '<project/>\n', 'src/main/java/A.java': 'class A {}\n' });
   const id = 'toolu_shell_1';
-  const tf = H.transcript(path.join(h.work, 't-shell.jsonl'), [H.tr.user('做 s1'), H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：openspec/changes/s1/\n仓库在 backend', run_in_background: false }, id), H.tr.result(id, reviewText([finding('src/main/java/A.java:1', '空指针没处理', '会出错', '边界')]))].concat(H.tr.ran('Edit', { file_path: path.join(sub, 'src/main/java/A.java'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'mvn -q compile' }, 'ok'), [H.tr.say('改完了。没有需要沉淀的经验。')]));
+  const tf = H.transcript(path.join(h.work, 't-shell.jsonl'), [H.tr.user('做 s1'), H.reviewedTurn(h, shell, 's1', [finding('src/main/java/A.java:1', '空指针没处理', '会出错', '边界')])].concat(H.tr.ran('Edit', { file_path: path.join(sub, 'src/main/java/A.java'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'mvn -q compile' }, 'ok'), [H.tr.say('改完了。没有需要沉淀的经验。')]));
   H.hook(h, 'verify-gate', { session_id: 's-auto-shell', cwd: shell, hook_event_name: 'Stop', transcript_path: tf, stop_hook_active: false, last_assistant_message: '改完了。没有需要沉淀的经验。' });
   H.ok('路径相对子项目的：认到子项目里，收在子项目的 .vibe 下', L.readFindings(sub).items.length === 1 && L.readFindings(sub).items[0].file === 'src/main/java/A.java' && !fs.existsSync(path.join(shell, '.vibe', 'lessons', 'findings.json')), L.readFindings(sub));
 }
@@ -155,7 +144,7 @@ H.section('按类别出的规则：人改过字的不再被脚本改回去；人
   const run2 = (change, where, problem) => {
     H.write(path.join(p2, 'openspec', 'changes', change, 'tasks.md'), '- [x] 1.1 x；验：`mvn -q compile`\n');
     const id = 'toolu_p2_' + (++seq);
-    const tf = H.transcript(path.join(h.work, 't-p2-' + seq + '.jsonl'), [H.tr.user('做 ' + change), H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：openspec/changes/' + change + '/\n材料…', run_in_background: false }, id), H.tr.result(id, reviewText([finding(where, problem, '会出错', '权限')]))]
+    const tf = H.transcript(path.join(h.work, 't-p2-' + seq + '.jsonl'), [H.tr.user('做 ' + change), H.reviewedTurn(h, p2, change, [finding(where, problem, '会出错', '权限')])]
       .concat(H.tr.ran('Edit', { file_path: path.join(p2, where.replace(/:\d+$/, '')), old_string: 'a', new_string: 'b' }, 'ok'), [H.tr.say('改完了。')]));
     return H.hook(h, 'verify-gate', { session_id: 's-p2-' + seq, cwd: p2, hook_event_name: 'Stop', transcript_path: tf, stop_hook_active: false, last_assistant_message: '改完了。' });
   };
@@ -182,14 +171,14 @@ H.section('不该收的不收：写了"无"的几种写法、驳回了的、带�
   const run3 = (change, list, files, extra) => {
     if (!(extra && extra.noDir)) H.write(path.join(p3, 'openspec', 'changes', change, 'tasks.md'), '- [x] 1.1 x；验：`mvn -q compile`\n');
     const id = 'toolu_p3_' + (++seq);
-    const tf = H.transcript(path.join(h.work, 't-p3-' + seq + '.jsonl'), [H.tr.user('做 ' + change), H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：' + ((extra && extra.line) || 'openspec/changes/' + change + '/') + '\n材料…', run_in_background: false }, id), H.tr.result(id, (extra && extra.head ? extra.head + '\n\n' : '') + reviewText(list))]
+    const tf = H.transcript(path.join(h.work, 't-p3-' + seq + '.jsonl'), [H.tr.user('做 ' + change), H.reviewedTurn(h, p3, extra && extra.line === '无' ? '' : change, list)]
       .concat(files.map((f) => H.tr.ran('Edit', { file_path: path.join(p3, f), old_string: 'a', new_string: 'b' }, 'ok')), [H.tr.say('改完了。')]));
     return H.hook(h, 'verify-gate', { session_id: 's-p3-' + seq, cwd: p3, hook_event_name: 'Stop', transcript_path: tf, stop_hook_active: false, last_assistant_message: '改完了。' });
   };
   const items = () => L.readFindings(p3).items;
-  const withAvoid = (where, problem, avoid, kind) => finding(where, problem, '会出错', kind || '边界') + '\n- 以后怎么避免：' + avoid;
-  for (const a of ['无（一次性疏忽）', '暂无', '不适用，笔误', '无，只是漏看了', 'N/A']) H.ok('"以后怎么避免：' + a + '"算"无"', L.parseFindings(withAvoid('src/A.java:1', '变量名拼错', a))[0].avoid === '无');
-  H.ok('"无线网络断开时：先提示再重试"不算"无"', L.parseFindings(withAvoid('src/A.java:1', 'x 没处理', '无线网络断开时：先提示再重试'))[0].avoid !== '无');
+  const withAvoid = (where, problem, avoid, kind) => Object.assign(finding(where, problem, '会出错', kind || '边界'), { avoid });
+  for (const a of ['无（一次性疏忽）', '暂无', '不适用，笔误', '无，只是漏看了', 'N/A']) H.ok('"以后怎么避免：' + a + '"算"无"', L.findingOfIssue(withAvoid('src/A.java:1', '变量名拼错', a)).avoid === '无');
+  H.ok('"无线网络断开时：先提示再重试"不算"无"', L.findingOfIssue(withAvoid('src/A.java:1', 'x 没处理', '无线网络断开时：先提示再重试')).avoid !== '无');
   run3('n1', [withAvoid('src/A.java:1', '变量名拼错了', '无（一次性疏忽）')], ['src/A.java']);
   run3('n2', [withAvoid('src/B.java:1', '变量名拼错了一个字母', '无（一次性疏忽）')], ['src/B.java']);
   H.ok('两个变更里都写"无（一次性疏忽）"：一条都不收，规则文件里没有多出"无（一次性疏忽）"这一条', items().length === 0 && !fs.existsSync(path.join(p3, '.claude', 'rules', 'ttls-lessons-java.md')), [items(), L.readCandidates(p3)]);
@@ -217,13 +206,6 @@ H.section('不该收的不收：写了"无"的几种写法、驳回了的、带�
   run3('x', [finding('src/B.java:1', '循环里反复查库', '有隐患', '数据库')], ['src/B.java'], { noDir: true, line: '无' });
   H.ok('"变更：无"的小改动：出处是"日期 小改动"', items().some((x) => /^\d{4}-\d\d-\d\d 小改动$/.test(x.change) && /反复查库/.test(x.problem)), items().slice(-2));
 
-  H.section('审查者的写法不标准');
-  const odd = L.parseFindings(['- 问题：先写的问题', '- 位置：`src/A.java:45`（updateUser 方法）', '- 严重程度：会出错', '', '- 问题：第二条的问题', '- 位置：src/B.java 第 12 行', '- 严重程度：有隐患', '', '- 问题：以上都属于边界处理不足', '',
-    '| 位置 | 问题 | 严重程度 | 类别 |', '|---|---|---|---|', '| src/C.java#L3 | 表格里的问题 | 会出错 | 边界 |', '| src/D.java:3-9 | 表格里的第二条 | 有隐患 | 权限 |'].join('\n'));
-  H.ok('先写问题后写位置：不张冠李戴；末尾的总结行不算一条', odd.length === 4 && odd[0].file === 'src/A.java' && odd[0].problem === '先写的问题' && odd[1].file === 'src/B.java' && odd[1].problem === '第二条的问题', odd);
-  H.ok('位置后面带括号、写"第 N 行"、#L3、3-9：都取得出文件', odd.map((x) => x.file).join() === 'src/A.java,src/B.java,src/C.java,src/D.java', odd.map((x) => x.file));
-  H.ok('表格也认', odd[2].problem === '表格里的问题' && odd[2].kind === '边界' && odd[3].severity === '有隐患', odd.slice(2));
-  H.ok('复审的时候引了上一轮的结论：以最后一个为准', require(path.join(h.kit, 'lib', 'session.js')).reviewIssues('上一轮结论：问题 3 条\n都改对了。\n结论：问题 0 条') === 0);
 
   H.section('记录文件坏了：留一份，不当成空的直接盖掉');
   const cf = L.candidatesFile(p3);
@@ -256,10 +238,8 @@ H.section('规则的文字用审查者写的"以后怎么避免"');
 {
   // "问题"那一句说的是哪里错了，规则要的是该怎么做：审查者每条多写一行"以后怎么避免"
   for (const c of ['d1', 'd2', 'd3', 'e1', 'e2']) H.write(path.join(proj, 'openspec', 'changes', c, 'tasks.md'), '- [x] 1.1 x；验：`mvn -q compile`\n');
-  const withAvoid = (where, problem, avoid, kind) => finding(where, problem, '会出错', kind || '连带影响') + '\n- 以后怎么避免：' + avoid;
+  const withAvoid = (where, problem, avoid, kind) => Object.assign(finding(where, problem, '会出错', kind || '连带影响'), { avoid });
   const AVOID = '删字段、改方法名之前：全局搜一遍引用，包括字符串拼出来的';
-  const pf = L.parseFindings(reviewText([withAvoid('src/A.java:1', '删了字段没搜引用', AVOID), withAvoid('src/B.java:2', '变量名拼错', '无。'), finding('src/C.java:3', '没判空', '会出错', '边界')]));
-  H.ok('取得出这一句；写"无"的认得；没写的是空的', pf.length === 3 && pf[0].avoid === AVOID && pf[1].avoid === '无' && pf[2].avoid === '', pf);
   const n = found().length;
   session('d1', [withAvoid('src/main/java/com/x/PayService.java:3', '删了 status 字段，报表里还在用', AVOID), withAvoid('src/main/java/com/x/PayService.java:9', '变量名拼错', '无')], [J('PayService.java')]);
   H.ok('写"无"的不收（一次性的疏忽，换个任务不会再犯）', found().length === n + 1 && !found().some((x) => x.problem === '变量名拼错'), found().slice(-2));

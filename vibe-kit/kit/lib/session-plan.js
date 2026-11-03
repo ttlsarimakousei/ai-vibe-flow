@@ -10,7 +10,7 @@ const { readConfig } = require('./session-config');
 const { changeRoots, listChanges, changeNames, archivedChanges } = require('./session-projects');
 const { readState, writeState, normKey } = require('./session-state');
 const { normTicks, artifactFiles } = require('./session-proposal');
-const { codeReviewIssue, reviewLoopIssue } = require('./session-review');
+const { codeReviewIssue } = require('./session-review');
 
 // ===================== 大需求的计划：openspec/plan.md =====================
 // 一个大需求拆成几个变更做，模型下次怎么知道哪些做完了？靠 plan.md：每个大任务一节（## 名字、探索记录：路径、模块 | 变更名 | 状态 | 说明 的表）。
@@ -52,10 +52,9 @@ function planStatusOf(name, changesDir) {
     const todo = (t.match(/^\s*[-*]\s*\[ \]/gm) || []).length;
     if (done + todo === 0) return '提案中';
     if (todo === 0) {
-      const cfg = readConfig();
       // 自动改成按会话开以后，这里不知道是哪个会话（复审 V14）：审过一轮、还没收尾的写"待审查"，从没审过的照旧写"待用户验收"
       let started = false; try { const P = require('./flow-policy'); started = P.points(dir, 'code').some((p) => !!P.record(dir, p).status); } catch (e) { started = false; }
-      const pending = started && codeReviewIssue(dir) || (cfg.reviewLoop && reviewLoopIssue('code', dir, cfg));
+      const pending = started && codeReviewIssue(dir);
       return '已完成 ' + done + '/' + done + (pending ? '，待审查或处理意见' : '，待用户验收并确认归档');
     }
     return (done ? '进行中 ' : '已提案 ') + done + '/' + (done + todo);

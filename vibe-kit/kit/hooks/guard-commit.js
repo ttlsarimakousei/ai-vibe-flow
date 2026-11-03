@@ -41,7 +41,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const archiveExtract = require('../lib/archive-extract');
-const { readConfig, readConfigFor, flowState, setFlow, flowTouch, flowChanges, sessionChanges, userSaid, mentionsChange, sessionHome, allChanges, archivedNames, nestedRepos, blockOut, askOut, changeRoots, readState, writeState, updateState, normKey, KIT, CFG_DIR, realish, isKitPath, isKitSkillScript, expandHome, codeReviewIssue, touchChange, isDeferredTask, syncReviews, syncReviewRounds, reviewLoopIssue, tailEntries, toolCalls, toolResults, hookLog, cli } = require('../lib/session');
+const { readConfig, readConfigFor, flowState, setFlow, flowTouch, flowChanges, sessionChanges, userSaid, mentionsChange, sessionHome, allChanges, archivedNames, nestedRepos, blockOut, askOut, changeRoots, readState, writeState, updateState, normKey, KIT, CFG_DIR, realish, isKitPath, isKitSkillScript, expandHome, codeReviewIssue, touchChange, isDeferredTask, tailEntries, toolCalls, toolResults, hookLog, cli } = require('../lib/session');
 let tidy = null;
 try { tidy = require('../lib/tidy.js'); } catch (e) { /* 老版本没有 */ }
 let feedback = null;
@@ -281,9 +281,7 @@ function check(j) {
   try { cdHit = ps ? null : cdCompoundIssue(cmd, j.cwd); } catch (e) { cdHit = null; }
   // 不走拦截编号的几处（串着 cd、关钩子、调路由的接口、全自动下的 push）也数一笔：哪条规矩拦得多，使用情况里要看得到
   const counted = (kind, text) => { try { if (feedback && feedback.countBlock) feedback.countBlock(kind, text, String(j.session_id || '')); } catch (e) { /* 数不了不影响 */ } return blockOut('PreToolUse', text); };
-  I.phase('命令：审查预算和决定');
-  const budgetIssue = require('../lib/review-runner').budgetIssue(j);
-  if (budgetIssue) return counted('review-budget', '[vibe-kit 审查预算] ' + budgetIssue);
+  I.phase('命令：审查决定');
   const decisionIssue = require('../lib/review-runner').decisionIssue(j);
   if (decisionIssue) return counted('review-decision', '[vibe-kit 审查决定] ' + decisionIssue);
   const cdBlock = () => {

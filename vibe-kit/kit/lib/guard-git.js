@@ -10,7 +10,7 @@ let tidy = null;
 try { tidy = require('./tidy.js'); } catch (e) { /* 老版本没有 */ }
 let lessons = null;
 try { lessons = require('./lessons.js'); } catch (e) { /* 老版本没有 */ }
-const { flowState, flowChanges, userSaid, allChanges, nestedRepos, readState, writeState, normKey, expandHome, syncReviews, syncReviewRounds, tailEntries, toolCalls, toolResults, hookLog } = require('./session');
+const { flowState, flowChanges, userSaid, allChanges, nestedRepos, readState, writeState, normKey, expandHome, tailEntries, toolCalls, toolResults, hookLog } = require('./session');
 const { preprocess, dynamic, dynamicPath, local, headOf, repoRoot, substitutions } = require('./shell-words');
 
 const TYPES =['feat', 'fix', 'docs', 'style', 'refactor', 'chore', 'release'];
@@ -336,13 +336,12 @@ function consentIssue(g, st, cfg, docs) {
   const root = repoRoot(g.dir) || g.dir; const baselines = readState('work-baselines');
   const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
   if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
-  const rounds = syncReviewRounds(es, syncReviews(es, st.cwd0));
-  // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、到了自动审查上限的不算，以前它们一直挡着，自动提交就永远提交不了
-  const open = current.some(c => P.points(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg))) || current.some(c => { const r = readState('review-rounds')['code|' + normKey(c.dir)]; return r && r.pendingFix && !r.done; });
+  // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、子代理连续没交结论停了的不算，以前它们一直挡着，自动提交就永远提交不了
+  const open = current.some(c => P.points(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg)));
   if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
-  if (S.pendingReviewsIn(toolCalls(es, 0), toolResults(es), current, S.taskNotes(es)).length) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
+  if (current.some((c) => require('./review-runner').inFlight(c.dir))) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
   const since = require('../hooks/verify-gate').lastCommitAt(root);
-  const reviewReady = rounds.some((x) => x.key.startsWith('code|') && current.some((c) => normKey(c.dir) === normKey(x.change.dir)) && (x.rec.done || (!cfg.reviewLoop && x.fixed)) && x.rec.at > since);
+  const reviewReady = current.every((c) => { try { return require('../lib/task-types').tasks(c.dir).length > 0; } catch (e) { return false; } }) && current.some((c) => P.points(c.dir, 'code').some((p) => P.settled(c.dir, p) && (P.record(c.dir, p).at || 0) > since));
   // 任务都勾完了（等用户验收、用户报了问题在改）：改完一处就算做完一件事（问题表第 25 条，2026-10-31）。
   // 以前只认"上次提交之后有新勾的任务或刚收尾的审查"，任务全勾完以后改 bug 永远凑不出来，提交方式选了自动也一直攒着
   // 每个当前变更都有任务、而且都勾完了才算（复审 V9：以前还没写 tasks 的变更也算勾完，几个变更里一个勾完就放行别的半成品）

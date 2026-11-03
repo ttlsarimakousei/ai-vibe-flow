@@ -61,17 +61,13 @@ function jar(file, version) {
   H.ok('全自动按任务允许新完成的一项', hook('guard-commit', 'git commit -m "feat: 完成第一项"', [H.tr.user('继续')], 'auto-off') === null);
   H.write(tasks, openTasks.replace(/\[ \]/g, '[x]')); H.run(h, process.execPath, ['-e', scode]);
   H.ok('自动提交：做完一组也能提交', hook('guard-commit', 'git commit -m "feat: 完成第一阶段"', [H.tr.user('继续')], 'auto-off') === null);
-  H.setConfig(h, { reviewLoop: true });
-  const reviewing = [H.tr.user('继续'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：add-a' }, '结论：问题 1 条')];
-  H.ok('任务都完成了也不能在审查中逐轮提交', denied(hook('guard-commit', 'git commit -m "fix: 审查修复"', reviewing, 'auto-off')));
-  H.ok('显式说提交仍可以决定未收尾的提交', hook('guard-commit', 'git commit -m "fix: 审查修复"', reviewing.concat(H.tr.user('提交')), 'auto-off') === null);
-  H.setConfig(h, { reviewLoop: false });
-  H.ok('单轮审查的成立问题没处理也不提交', denied(hook('guard-commit', 'git commit -m "fix: 审查修复"', reviewing, 'auto-off')));
-  const fixed = reviewing.concat(H.tr.ran('Edit', { file_path: path.join(proj, 'src/A.js'), old_string: '1', new_string: '2' }), H.tr.ran('Bash', { command: 'node --check src/A.js' }));
-  // 2026-10-14 起 Apply 自动固定审修复验，reviewLoop 不能再关成单轮：修完先复审，复审到 0 条就收尾提交，不再被催着继续审。
-  H.ok('自动模式修完没复审仍不提交', denied(hook('guard-commit', 'git commit -m "fix: 审查修复"', fixed, 'auto-off')));
-  const rechecked = fixed.concat(H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：复审代码\n变更：add-a' }, '结论：问题 0 条'));
-  H.ok('单轮审查修完验证后不用被强迫继续复审', hook('guard-commit', 'git commit -m "fix: 审查修复"', rechecked, 'auto-off') === null);
+  // 审查没收尾不逐轮提交；用户说提交照样提交；复审到 0 条就收尾提交
+  const Pol = require(path.join(h.kit, 'lib/flow-policy.js')); const pt = Pol.points(dir, 'code')[0];
+  Pol.noteResult(dir, pt, { id: 'r1', status: 'completed', issues: [{ severity: 'P2' }] }, Pol.fingerprint(dir, pt));
+  H.ok('任务都完成了也不能在审查中逐轮提交', denied(hook('guard-commit', 'git commit -m "fix: 审查修复"', [H.tr.user('继续')], 'auto-off')));
+  H.ok('显式说提交仍可以决定未收尾的提交', hook('guard-commit', 'git commit -m "fix: 审查修复"', [H.tr.user('继续'), H.tr.user('提交')], 'auto-off') === null);
+  Pol.noteResult(dir, pt, { id: 'r2', status: 'completed', issues: [] }, Pol.fingerprint(dir, pt));
+  H.ok('复审到 0 条：收尾提交', hook('guard-commit', 'git commit -m "fix: 审查修复"', [H.tr.user('继续')], 'auto-off') === null);
   H.write(tasks, openTasks);
   H.setConfig(h, { autoMode: false, autoCommit: 'task', commitMode: 'ask' });
   H.inFlow(h, 'old-flow', [dir], false, 'apply');
@@ -86,24 +82,6 @@ function jar(file, version) {
   H.run(h, process.execPath, ['-e', 'require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ').recordReview("proposal",' + JSON.stringify(pd) + ',0,"test-plan",Date.now());']);
   const planStop = H.hook(h, 'verify-gate', { session_id: 'ask-plan', cwd: proj, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '提案写好了', transcript_path: tf([H.tr.user('写提案'), H.tr.ran('Write', { file_path: path.join(pd, 'proposal.md'), content: '## Why\n\n解决问题。\n' }), H.tr.say('提案写好了')]) });
   H.ok('需求文档四份写完收工就询问提交，不拖到 apply', /需求文档四份都写完了[^\n]*用 Ask 问是否提交/.test(H.reasonOf(planStop)) && /提交不等于开工/.test(H.reasonOf(planStop)), H.reasonOf(planStop));
-  H.section('后台审查的 task-id 和续同一个代理');
-  const entries = [H.tr.user('审一下'), H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：提案\n变更：add-a' }, 'review-a'), H.tr.result('review-a', 'Async agent launched successfully. agentId: abc123'), H.tr.user('<task-notification><task-id>abc123</task-id><status>completed</status><result>第一轮：结论：问题 2 条</result></task-notification>'), H.tr.user('<task-notification><task-id>abc123</task-id><status>completed</status><result>复审：结论：问题 0 条</result></task-notification>')];
-  const code = 'const S=require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ');const e=S.tailEntries(' + JSON.stringify(tf(entries)) + ');const r=S.syncReviews(e,' + JSON.stringify(proj) + ');S.syncReviewRounds(e,r);console.log(JSON.stringify({r:r.map(x=>x.issues),state:S.readState("review-rounds"),review:S.proposalReviewed(' + JSON.stringify(dir) + ')}));';
-  const rr = H.run(h, process.execPath, ['-e', code]);
-  let data = {}; try { data = JSON.parse(rr.out); } catch (e) { /* 断言显示输出 */ }
-  H.ok('只有 task-id 的通知正确关联审查', data.review === true, rr.out + rr.err);
-  H.ok('续审的最新零问题结论记账', JSON.stringify(data.r) === '[2,0]' && Object.values(data.state || {}).some((v) => v && v.done && v.issues === 0), data);
-  const sent = entries.slice(0, 4).concat(H.tr.ran('SendMessage', { recipient: 'abc123', content: '模式：复审提案\n上一轮问题已修，请复审' }, '结论：问题 0 条'));
-  const sr = H.run(h, process.execPath, ['-e', 'const S=require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ');console.log(JSON.stringify(S.syncReviews(S.tailEntries(' + JSON.stringify(tf(sent)) + '),' + JSON.stringify(proj) + ').map(r=>({issues:r.issues,mode:r.mode}))));']);
-  H.ok('续同一个审查代理的 SendMessage 结论归入提案', sr.out.includes('"issues":0,"mode":"proposal"'), sr.out + sr.err);
-  const output = path.join(h.root, 'tasks', 'review-file.output'); H.write(output, '结论：问题 0 条');
-  const fileEntries = [H.tr.user('审一下'), H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：add-a' }, 'review-file'), H.tr.result('review-file', 'Async agent launched successfully. agentId: file123\noutput_file: ' + output), H.tr.user('<task-notification><task-id>file123</task-id><status>completed</status><output-file>ignored</output-file></task-notification>')];
-  const fileReview = H.run(h, process.execPath, ['-e', 'const S=require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ');console.log(JSON.stringify(S.syncReviews(S.tailEntries(' + JSON.stringify(tf(fileEntries)) + '),' + JSON.stringify(proj) + ').map(r=>({issues:r.issues,mode:r.mode}))));']);
-  H.ok('没有内嵌结论时只读启动审查登记的输出文件', fileReview.out.includes('"issues":0,"mode":"code"'), fileReview.out + fileReview.err);
-  const continuedFile = entries.slice(0, 4).concat(H.tr.ran('SendMessage', { recipient: 'abc123', content: '请复审提案，上一轮问题已经修复' }, 'Message sent'), H.tr.user('<task-notification><task-id>abc123</task-id><status>completed</status></task-notification>'));
-  continuedFile[2] = H.tr.result('review-a', 'Async agent launched. agentId: abc123\noutput_file: ' + output);
-  const cf = H.run(h, process.execPath, ['-e', 'const S=require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ');console.log(JSON.stringify(S.syncReviews(S.tailEntries(' + JSON.stringify(tf(continuedFile)) + '),' + JSON.stringify(proj) + ').map(r=>r.issues)));']);
-  H.ok('续审通知没有 result 时沿真实启动记录找到输出文件', cf.out.trim() === '[2,0]', cf.out + cf.err);
   H.section('中文项目的进程归属不要求目录后还有斜杠');
   const dcode = 'process.argv.push("--dir",' + JSON.stringify(proj) + ');const D=require(' + JSON.stringify(path.join(h.kit, 'tools/devserver.js')) + ');console.log(JSON.stringify([D.belongs({pid:1234,cmd:' + JSON.stringify('java.exe "-Dmaven.multiModuleProjectDirectory=' + proj + '"') + '},null,false),D.belongs({pid:1234,cmd:' + JSON.stringify('java.exe "-Dmaven.multiModuleProjectDirectory=' + proj + '-other"') + '},null,false)]));';
   const dr = H.run(h, process.execPath, ['-e', dcode], { cwd: proj });

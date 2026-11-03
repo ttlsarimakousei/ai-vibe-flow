@@ -105,11 +105,11 @@ const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit'))
     S.writeState(c + '-flow', { on: false });
     const old = new Date(Date.now() - 10 * 86400000);
     for (const f of fs.readdirSync(path.join(sd, 'session', c))) fs.utimesSync(path.join(sd, 'session', c, f), old, old);
-    S.writeState('review-rounds', { x: { at: Date.now() } }); fs.utimesSync(path.join(sd, 'review-rounds.json'), old, old);
+    S.writeState('review-points', { x: { at: Date.now() } }); fs.utimesSync(path.join(sd, 'review-points.json'), old, old);
     S.cleanState(3);
     H.ok('清理：10 天没动的会话目录整个删，新的留着', !fs.existsSync(path.join(sd, 'session', c)) && fs.existsSync(path.join(sd, 'session', a, 'flow.json')));
-    H.ok('清理：全局记录不按文件时间删', fs.existsSync(path.join(sd, 'review-rounds.json')));
-    H.ok('寿命类别：会话、跨会话、迁移标记、缓存', S.stateKindOf && S.stateKindOf(a + '-flow') === '会话' && S.stateKindOf('review-rounds') === '跨会话' && S.stateKindOf('defaults-1017-migration') === '迁移标记' && S.stateKindOf('bypass') === '缓存');
+    H.ok('清理：全局记录不按文件时间删', fs.existsSync(path.join(sd, 'review-points.json')));
+    H.ok('寿命类别：会话、跨会话、迁移标记、缓存', S.stateKindOf && S.stateKindOf(a + '-flow') === '会话' && S.stateKindOf('review-points') === '跨会话' && S.stateKindOf('defaults-1017-migration') === '迁移标记' && S.stateKindOf('bypass') === '缓存');
   }
 
   H.done('11-01 这一批（主会话）');

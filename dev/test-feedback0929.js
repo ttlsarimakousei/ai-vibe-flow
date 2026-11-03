@@ -67,63 +67,16 @@ H.section('工具调用的 id 重复：调用和结果按先后配对');
 }
 
 // ---------------------------------------------------------------------------------------------
-H.section('审查轮次：id 重复也不会记到别的变更头上（F20260929-006 / -016）');
-{
-  const sec = mk('secflow-gate', '- [x] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n');
-  const login = mk('login-gate-and-pwd-ui-fix', '- [x] 1.1 改 src/main/java/B.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/main/java/B.java；验：`mvn -q -o compile`\n');
-  H.setConfig(h, { reviewLoop: true, reviewMaxRounds: 3 });
-  const fix = (f) => H.tr.ran('Edit', { file_path: path.join(proj, f), old_string: 'a', new_string: 'b' }, 'ok');
-  // 反馈里的样子：两个 id 在两个变更的审查里来回用
-  H.transcript(tfile, [H.tr.user('做完归档'),
-    review('chatcmpl-tool-b9a8989979ffa5ac', '代码', 'secflow-gate', 4), fix('src/main/java/A.java'),
-    review('chatcmpl-tool-b9a8989979ffa5ac', '代码', 'login-gate-and-pwd-ui-fix', 3), fix('src/main/java/B.java'),
-    review('chatcmpl-tool-b823d0d9ed6676b2', '复审代码', 'secflow-gate', 2), fix('src/main/java/A.java'),
-    review('chatcmpl-tool-b823d0d9ed6676b2', '复审代码', 'login-gate-and-pwd-ui-fix', 1), fix('src/main/java/B.java'),
-    review('chatcmpl-tool-b9a8989979ffa5ac', '复审代码', 'secflow-gate', 0)]);
-  const es = entriesOf();
-  const found = S.syncReviews(es, proj);
-  H.ok('五次审查都认出来了', found.length === 5, found.map((r) => [r.change && r.change.name, r.issues]));
-  H.ok('每次审查的结论是它自己的', found.map((r) => r.issues).join() === '4,3,2,1,0', found.map((r) => r.issues));
-  S.syncReviewRounds(es, found);
-  const rounds = state('review-rounds');
-  const a = rounds['code|' + S.normKey(sec)];
-  const b = rounds['code|' + S.normKey(login)];
-  H.ok('secflow-gate：3 轮，最后 0 条，审完了', a && a.rounds === 3 && a.issues === 0 && a.done === true && !a.pendingFix, a);
-  H.ok('login-gate：2 轮，最后 1 条，没审完', b && b.rounds === 2 && b.issues === 1 && !b.done, b);
-  // 再读一遍（下一次收工）：不重复计
-  S.syncReviewRounds(entriesOf(), S.syncReviews(entriesOf(), proj));
-  const again = state('review-rounds');
-  H.ok('再读一遍不重复计', again['code|' + S.normKey(sec)].rounds === 3 && again['code|' + S.normKey(login)].rounds === 2, again);
-  // 归档只使用本次真人确认，不借审查结论授予许可。
-  fs.appendFileSync(tfile, JSON.stringify(H.tr.user('自测通过，归档 secflow-gate')) + '\n');
-  const r = H.hook(h, 'guard-commit', Object.assign(base('s-rounds'), { tool_name: 'Bash', tool_input: { command: 'git mv openspec/changes/secflow-gate openspec/changes/archive/2026-09-29-secflow-gate' } }));
-  H.ok('secflow-gate 可以归档', r === null, H.reasonOf(r));
-  const r2 = H.hook(h, 'guard-commit', Object.assign(base('s-rounds'), { tool_name: 'Bash', tool_input: { command: 'git mv openspec/changes/login-gate-and-pwd-ui-fix openspec/changes/archive/2026-09-29-login-gate-and-pwd-ui-fix' } }));
-  H.ok('login-gate 没做完：拦，说的是它自己', r2 && r2.decision === 'block' && /变更 login-gate-and-pwd-ui-fix 还不能归档/.test(H.reasonOf(r2)) && /还有 1 项任务没打勾/.test(H.reasonOf(r2)), H.reasonOf(r2));
-
-  // 老版本留下的状态（seen 里记的是调用的 id）：升级之后不重复计，之前漏掉的那一轮能补上
-  dropState('review-rounds'); dropState('reviewed');
-  const t = Date.parse(found[2].at ? new Date(found[2].at).toISOString() : '') || found[2].at;
-  fs.writeFileSync(path.join(h.kit, 'state', 'review-rounds.json'), JSON.stringify({
-    ['code|' + S.normKey(sec)]: { rounds: 2, seen: ['chatcmpl-tool-b9a8989979ffa5ac', 'chatcmpl-tool-b823d0d9ed6676b2'], done: false, issues: 2, pendingFix: true, at: t, born: S.changeBorn(sec), name: 'secflow-gate' },
-  }));
-  S.syncReviewRounds(entriesOf(), S.syncReviews(entriesOf(), proj));
-  const up = state('review-rounds')['code|' + S.normKey(sec)];
-  H.ok('老状态：计过的两轮不重复计，漏掉的第 3 轮补上了', up && up.rounds === 3 && up.issues === 0 && up.done === true, up);
-  H.setConfig(h, { reviewLoop: false });
-}
-
 // ---------------------------------------------------------------------------------------------
 H.section('审过代码之后打勾、改验法，审查照样算数（F20260928-014 / F20260929-003）');
 {
-  for (const n of ['review-rounds', 'reviewed', 'task-ticks']) dropState(n);
+  for (const n of ['reviewed', 'task-ticks']) dropState(n);
   const chg = mk('gate2', ['- [x] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`',
     '- [ ] 6.1 开发库 admin 密级迁移：执行 .vibe/pending/gate2_dml.sql；验：查 SYS_USER 返回 admin', ''].join('\n'));
   H.write(path.join(proj, '.vibe', 'pending', 'gate2_dml.sql'), '-- dml\n');
   const tasks = path.join(chg, 'tasks.md');
   S.syncTicks(chg);
-  H.transcript(tfile, [H.tr.user('审代码'), review('toolu_r1', '代码', 'gate2', 0)]);
-  S.syncReviews(entriesOf(), proj);
+  S.recordReview('code', chg, 0, 'k-gate2', Date.now());
   const rec = S.reviewRecord('code', chg);
   H.ok('审查记上了', rec && rec.done && rec.at > 0, rec);
   // 代码是审查之前写的
@@ -353,6 +306,7 @@ H.section('命令：注释不是命令；没写变更名时说清查的是谁（
   H.ok('只读地看套件的文件不拦', run('cat "$HOME/.claude/vibe-kit/VERSION" | head -1') === null);
   // 没归档的变更只剩一个时，不带名字的 openspec archive 查的是它：提示里要说
   for (const n of ['secflow-gate', 'gate2', 'miping-acceptance-fix', 'other-change']) fs.rmSync(path.join(changes, n), { recursive: true, force: true });
+  mk('login-gate-and-pwd-ui-fix', '- [x] 1.1 改 src/main/java/B.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/main/java/B.java；验：`mvn -q -o compile`\n');
   const r = run('openspec archive --yes 2>&1 | tail -5');
   H.ok('反馈原样：没写变更名，提示里说清查的是哪个、为什么是它', r && r.decision === 'block' && /这条命令没写变更名，没归档的变更只有 login-gate-and-pwd-ui-fix 一个，查的是它/.test(H.reasonOf(r)), H.reasonOf(r));
   mk('another', '- [x] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n');
@@ -480,7 +434,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
   R.note({ session_id: sid, cwd: proj }, { kind: 'ask', title: '导出的文件名用哪种格式？', detail: '带日期 / 不带日期' });
   R.note({ session_id: sid, cwd: proj }, { kind: 'bypass', title: 'OpenSpec 产物的门槛：Edit：' + tasks, detail: '对照场景要先改库，留给用户' });
   const r2 = stop(talk.concat([H.tr.say('3.2 做完了')]), '3.2 做完了');
-  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /审查点 group-3/.test(H.reasonOf(r2)) && /review.js run/.test(H.reasonOf(r2)) && !/下一项 3\.3/.test(H.reasonOf(r2)));
+  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /审查点 group-3/.test(H.reasonOf(r2)) && /review.js prepare/.test(H.reasonOf(r2)) && !/下一项 3\.3/.test(H.reasonOf(r2)));
   // 审完了
   H.reviewPoints(h, chg);
   const rv = review('toolu_rep1', '代码', 'miping', 0);

@@ -30,9 +30,6 @@ function handle(j) {
   try {
     require('../lib/invocation').phase('登记操作许可');
     require('../lib/permissions').consume(j, successful(j));
-    if (successful(j)) {
-      if (/^(Agent|Task|SendMessage|TaskOutput|TaskResult)$/.test(j.tool_name)) require('../lib/review-runner').syncAgent(j);
-    }
     // 验证证据与 IDEA 完成结果共用此入口；模块升级不同步时保持原工具结果。
     try { require('../lib/invocation').phase('登记验证证据'); require('../lib/evidence').recordTool(j, successful(j)); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 验证证据', j, e); }
     // IDEA 工具的返回不再遮口令（用户 2026-10-25 定的，问题反馈表第 3 条）：项目里的口令模型要看得到；套件令牌照旧读不到（读的时候就拦）

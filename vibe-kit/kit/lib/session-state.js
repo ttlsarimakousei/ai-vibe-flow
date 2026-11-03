@@ -71,14 +71,14 @@ function hookLog(line) {
 }
 
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(big-task|auto-session-migration|fixed-switch-migration|install-done|welcome|diag|perf-baseline|perf-report|reviewed|reviewed-proposal|review-rounds|review-nudged|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-points|workflow-v2-migration|review-waivers|work-baselines|review-local-metrics|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(big-task|auto-session-migration|fixed-switch-migration|install-done|welcome|diag|perf-baseline|perf-report|reviewed|reviewed-proposal|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|handover-consumed|artifact-cache|hook-stats|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|idea-mcp|evidence|review-jobs|review-points|workflow-v2-migration|review-waivers|work-baselines|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
 
 /**
  * 可以按文件时间清掉的固定名字（去重缓存、限时的放行、近期的拦截、节流、日志）：清了只是少一次去重或从头再记。
  * 新加一个固定名字的状态文件，要么进上面的 GLOBAL_STATE，要么进这里（dev/test-auto-mode-kept.js 会扫代码查）。
  * 20261030 以前迁移标记 defaults-1017-migration 两边都不在，3 天后被当成会话文件删掉，之后每次更新都把用户的开关改回默认（审核 P01）
  */
-const DISPOSABLE_STATE = ['review-unknown', 'bypass', 'blocks', 'active-sessions', 'tool-flow', 'onboard-kick', 'onboard.log', 'tool-usage.jsonl', 'idea-mcp.lock', 'hook-miss', 'lessons.lock', 'voice-pos'];
+const DISPOSABLE_STATE = ['bypass', 'blocks', 'active-sessions', 'tool-flow', 'onboard-kick', 'onboard.log', 'tool-usage.jsonl', 'idea-mcp.lock', 'hook-miss', 'lessons.lock', 'voice-pos'];
 
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);
@@ -122,7 +122,7 @@ function cleanState(days) {
     }
     // 全局记录里 60 天前的条目清掉（审查记录、催过、计划提醒）
     const old = Date.now() - 60 * 86400000;
-    for (const name of ['big-task', 'reviewed', 'reviewed-proposal', 'review-rounds', 'review-points', 'review-nudged', 'task-ticks', 'plan-hint', 'plan-unlisted']) {
+    for (const name of ['big-task', 'reviewed', 'reviewed-proposal', 'review-points', 'task-ticks', 'plan-hint', 'plan-unlisted']) {
       if (!fs.existsSync(stateFile(name))) continue;
       updateState(name, (o) => { for (const k of Object.keys(o)) { const t = entryAt(o[k]); if (t && t < old) delete o[k]; } });
     }
@@ -130,10 +130,7 @@ function cleanState(days) {
 }
 
 const normKey = (f) => path.resolve(f).split(path.sep).join('/').toLowerCase();
-
-// ===================== 多轮审查（开关 reviewLoop） =====================
-// 一轮审查报了问题：改了东西就复审改动点，报"问题 0 条"才算审完；审查意见都不成立、之后只在这个变更的 revisions.md 里记了理由的，算处理完；
-// 轮数用完还有问题：问用户一次（全自动按原则自己定），也算完。状态在 state/review-rounds.json，按"模式|变更目录"计。
 const underDir = (file, dir) => { const f = normKey(file); const d = normKey(dir); return f === d || f.startsWith(d + '/'); };
+
 
 module.exports = { KIT, sleepMs, stateFile, readState, writeState, updateState, hookLog, GLOBAL_STATE, DISPOSABLE_STATE, cleanState, normKey, underDir, STATE_KINDS, stateKindOf, sessionFileOf };

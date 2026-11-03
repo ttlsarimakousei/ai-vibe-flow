@@ -689,46 +689,6 @@ function fileOfWhere(where) {
   s = s.replace(/[:：]\s*\d+(?:\s*[-~～:：,]\s*\d+)*\s*行?\s*$/, '').replace(/\s+\d+(?:\s*[-~～]\s*\d+)?\s*行?\s*$/, '');
   return s.trim().replace(/^["']+|["']+$/g, '');
 }
-/**
- * 从审查者的回复里取出一条条问题：[{ where, file, problem, when, severity, kind, avoid }]。
- * 认的是审查代理约定的写法：每条有"位置""问题""什么情况下会出错""严重程度""类别""以后怎么避免"几行；写成表格的也认。
- * 几个字段谁先谁后都行：一条里同一个字段出现第二次，就是下一条开始了。缺"位置"或者缺"问题"的那一条不收。
- * avoid 是"以后怎么避免"那一句：没写是 ''，写了"无"是 '无'
- */
-function parseFindings(text) {
-  const out = [];
-  let cur = null;
-  const fresh = () => ({ where: '', file: '', problem: '', when: '', severity: '', kind: '', avoid: '', has: new Set() });
-  const close = () => { if (cur && cur.where && cur.file && cur.problem) { delete cur.has; out.push(cur); } cur = null; };
-  const put = (name, raw) => {
-    const v = String(raw || '').replace(/^[\x60*\s]+|[\x60*\s]+$/g, '');
-    if (!cur || cur.has.has(name) || (name === '位置' && cur.has.size && cur.where)) { close(); cur = fresh(); }
-    cur.has.add(name);
-    if (name === '位置') { cur.where = v; cur.file = fileOfWhere(v); }
-    else if (name === '问题') cur.problem = oneLine(v);
-    else if (name === '什么情况下会出错') cur.when = oneLine(v);
-    else if (name === '严重程度') cur.severity = (/会出错|有隐患|建议/.exec(v) || [''])[0];
-    else if (name === '类别') cur.kind = KINDS.find((k) => v.includes(k)) || oneLine(v).slice(0, 12);
-    else if (name === '以后怎么避免') cur.avoid = NO_AVOID.test(oneLine(v)) ? '无' : oneLine(v);
-  };
-  let cols = null;        // 表格：每一列是哪个字段
-  for (const l of String(text || '').split(/\r?\n/)) {
-    const t = l.trim();
-    if (/^\|.*\|$/.test(t)) {
-      const cells = t.slice(1, -1).split('|').map((c) => c.trim().replace(/^\*+|\*+$/g, ''));
-      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue;
-      const names = cells.map((c) => FIELD_NAMES.find((n) => c.replace(/（[^）]*）|\([^)]*\)/g, '').trim() === n) || '');
-      if (names.includes('位置') && names.includes('问题')) { close(); cols = names; continue; }
-      if (cols) { close(); cur = fresh(); cells.forEach((c, i) => { if (cols[i] && c) put(cols[i], c); }); close(); }
-      continue;
-    }
-    cols = null;
-    const m = FIELD.exec(l);
-    if (m) put(m[1], m[2]);
-  }
-  close();
-  return out;
-}
 function readFindings(root) {
   const j = readStore(findingsFile(root));
   return j ? { items: Array.isArray(j.items) ? j.items : [], cats: j.cats && typeof j.cats === 'object' ? j.cats : {} } : { items: [], cats: {} };
@@ -883,14 +843,14 @@ function rejectedLines(cwd, source) {
   }
   return out;
 }
-/** review.js 报的一条问题（JSON）换成 parseFindings 的样子：P1 会出错、P2 有隐患、P3 建议；fixed 是用户或模型登记过"修了"，不用再看文件改没改 */
+/** 审查报的一条问题（JSON）换成收集用的样子：P1 会出错、P2 有隐患、P3 建议；fixed 是用户或模型登记过"修了"，不用再看文件改没改 */
 function findingOfIssue(x) {
   const sev = { P1: '会出错', P2: '有隐患', P3: '建议' }[String(x.severity || '').toUpperCase()] || '';
   const av = oneLine(x.avoid);
   return { where: String(x.file || ''), file: String(x.file || ''), problem: oneLine(x.problem), when: oneLine(x.when), severity: sev, kind: KINDS.find((k) => String(x.kind || '').includes(k)) || '', avoid: NO_AVOID.test(av) ? '无' : av, fixed: !!x.fixed };
 }
 /**
- * 自动收审查报的问题。o: { reviews（审查代理的：lib/session.js 的 reviewsIn 给的，带审查者的原话 text；review.js 的：runsForLessons 给的，带 findings）, edits: [{ file, pos }]（会话里改成功了的文件和位置）, cwd }
+ * 自动收审查报的问题。o: { reviews（review-runner.js 的 runsForLessons 给的，带 findings）, edits: [{ file, pos }]（会话里改成功了的文件和位置）, cwd }
  * 只收：点名了变更的审查；严重程度是"会出错""有隐患"的；报了之后那个文件确实改过的。
  * 返回 { stored: 新收了几条, promoted: [升成规则的], category: [按类别出的规则], hit: [已经是规则、又被审出来的] }
  */
@@ -921,9 +881,9 @@ function autoCollectLocked(o, cfg) {
   const rejected = new Map();
   for (const r of o.reviews || []) {
     const source = r && (r.change ? r.change.name : r.source);
-    if (!r || !source || !(r.issues > 0) || (!r.text && !r.findings)) continue;
+    if (!r || !source || !(r.issues > 0) || !r.findings) continue;
     if (!rejected.has(source)) rejected.set(source, rejectedLines(cwd, source));
-    for (const f of r.findings ? r.findings.map(findingOfIssue) : parseFindings(r.text)) {
+    for (const f of r.findings.map(findingOfIssue)) {
       if (f.severity === '建议') continue;
       if (f.avoid === '无') continue;                // 审查者说了：一次性的疏忽，换个任务不会再犯
       const abs = locate(f.file);
@@ -1158,5 +1118,5 @@ function editRule(scope, root, id, newText, st0) {
   return { ok: false, msg: '没有这一条：' + id };
 }
 
-module.exports = { settings, GROUPS, KINDS, groupOf, groupInfo, isLessonFile, migrateNames, parseFindings, autoCollect, readFindings, findingsSummary, findingsFile, repoRootOf, projectNames, namesAlive, tokensOf, similarity, idOf, readRuleFile, renderRuleFile, writeRuleFile, listRuleFiles, squeeze,
+module.exports = { settings, GROUPS, KINDS, groupOf, groupInfo, isLessonFile, migrateNames, findingOfIssue, autoCollect, readFindings, findingsSummary, findingsFile, repoRootOf, projectNames, namesAlive, tokensOf, similarity, idOf, readRuleFile, renderRuleFile, writeRuleFile, listRuleFiles, squeeze,
   readCandidates, candidatesFile, readIndex, pendingUser, promoteUser, dismissUser, noteWritten, uncommitted, add, addByHand, promoteCandidate, autoFix, projectChoices, retire, tidy, overview, projectView, editRule, USER_RULES_DIR, STORE, SAME, NEAR, projectRulesDir, ruleFileOf };

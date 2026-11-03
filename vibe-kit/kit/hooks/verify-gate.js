@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, flowDone, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, refreshPlan, turnStart, toolCalls, toolResults, syncReviews, pendingReviewsIn, taskNotes, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, reviewMax, syncReviewRounds, reviewExhaustedText, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
+const { atHome, FLOW_SKILL, setFlow, flowTouch, flowChanges, flowState, flowDone, userSaid, changeStarted, tailEntries, textOf, listChanges, readConfig, readConfigFor, readState, writeState, updateState, blockOut, lastUsageTokens, contextPercent, nearGatewayLimit, artifactOf, STAGE, artifactHash, artifactFiles, normKey, proposalCapabilities, hookLog, VERIFY_CMD, sectionOf, pathTokens, pathExists, projectReads, nestedRepos, planSummary, planUnlisted, refreshPlan, turnStart, toolCalls, toolResults, allChanges, mentionsChange, archivedNames, archivedSince, proposalReviewed, codeReviewed, codeReviewIssue, changeBorn, sessionStartMs, sessionChanges, handoverWrittenIn, syncTicks, TASK_LINE, taskKey, cli } = require('../lib/session');
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 let tidy = null;
@@ -91,13 +91,12 @@ const notApplicable = (notes, key) => new RegExp('^\\s*[-*]?\\s*(?:' + key + ')\
 const commitMode = (cfg) => require('../lib/session').commitModeOf(cfg);
 /** 收工待办里催提交、问提交的那几条（排到最后） */
 const isCommitTodo = (t) => /^(这一轮改过的文件还没提交|做完一件完整的事、快检过了就接着提交|需求文档四份都写完了|经验规则文件更新了)/.test(String(t));
-/** 这个会话碰过的变更里，有没有审查还没审完的（多轮审查报了问题、还没复审到"问题 0 条"）：有就先不催提交，审查过程不进提交 */
+/** 这个会话碰过的变更里，有没有审查还没审完的（报了 P1、P2 还没处理完）：有就先不催提交，审查过程不进提交 */
 function reviewOpenFor(sid, entries, changes) {
   try {
-    const rr = readState('review-rounds'); const policy = require('../lib/flow-policy');
+    const policy = require('../lib/flow-policy');
     // 和 guard-commit 的提交检查同一口径：逐点审查审过、之后输入又变了还没复审完，也算没收尾
-    return sessionChanges(sid, entries, changes()).some((c) => ['code', 'proposal'].some((k) => { const x = rr[k + '|' + normKey(c.dir)]; return !!(x && !x.done); })
-      || policy.points(c.dir, 'code').some((p) => policy.fixPending(c.dir, p)));
+    return sessionChanges(sid, entries, changes()).some((c) => policy.points(c.dir, 'code').some((p) => policy.fixPending(c.dir, p)));
   } catch (e) { return false; }
 }
 // 它最后那句已经在问要不要提交
@@ -504,7 +503,7 @@ function revisionTodo(j, calls, isEdit, fileOf, turnId) {
   }
   if (!recorded) for (const r of revised.values()) { const f = path.join(r.art.dir, 'revisions.md'); const h = artifactHash(f); if (h && h !== files[normKey(f)]) { recorded = true; break; } }
   // 还没开工、这个会话在审这个变更：按审查意见改文档，过程脚本记在 审查记录.md 里，不用再写 revisions（问题表第 37 条：以前每轮都要补记、在文档里写批注，文档越来越乱）
-  for (const [k, r] of revised) { if (!changeStarted(r.art.dir) && calls.some((c) => /^(Bash|PowerShell)$/.test(c.name) && /review\.js["']?\s+(?:run|resolve)\b/.test(String(c.input.command || '')) && String(c.input.command || '').includes(r.art.name))) revised.delete(k); }
+  for (const [k, r] of revised) { if (!changeStarted(r.art.dir) && calls.some((c) => /^(Bash|PowerShell)$/.test(c.name) && /review\.js["']?\s+(?:prepare|run|resolve)\b/.test(String(c.input.command || '')) && String(c.input.command || '').includes(r.art.name))) revised.delete(k); }
   if (!revised.size || recorded) {
     if (dirs.size) {
       for (const d of dirs.values()) for (const f of artifactFiles(d)) files[normKey(f)] = artifactHash(f);
@@ -582,36 +581,6 @@ function handoverQuestion(j, cfg, entries, wroteHo) {
 }
 const under = (file, dir) => { const f = normKey(file); const d = normKey(dir); return f === d || f.startsWith(d + '/'); };
 
-/**
- * 多轮审查（开关 reviewLoop，最多 reviewMaxRounds 轮）：一轮审查报了问题、之后改了东西，就催它再审改动点；报"问题 0 条"才算审完。
- * 每次审查调用只计一次（记下调用 id）；同一轮里最多催一次。只看这份会话记录里出现过的审查（别的项目、别的会话没审完的不管）。
- * 审查意见都不成立、之后只在这个变更的 revisions.md 里记了理由的，算处理完（lib/session.js 的 syncReviewRounds）。
- * 轮数用完还有问题：不管改没改，问用户一次（全自动按原则自己定），记成审完；之后出现新的审查才开始新一轮计数。
- */
-function reviewLoopTodo(j, cfg, entries, reviews, turnId) {
-  if (!cfg.reviewLoop) return [];
-  const max = reviewMax(cfg);
-  const out = [];
-  const mark = [];
-  for (const { key, rec, change, fixed } of syncReviewRounds(entries, reviews)) {
-    if (rec.done || !rec.pendingFix) continue;
-    if (Date.now() - (rec.at || 0) > 7 * 86400000) continue;
-    const kind = key.startsWith('proposal|') ? 'proposal' : 'code';
-    const name = kind === 'proposal' ? '提案' : '代码';
-    if (rec.rounds >= max) {
-      out.push(reviewExhaustedText(rec, kind, cfg, change.name));
-      mark.push([key, { done: false, exhausted: true }]);
-      try { require('../lib/usage.js').bump('review.exhausted'); } catch (e) { /* 数不了就算了 */ }
-      continue;
-    }
-    if (!fixed) continue;
-    if (turnId ? rec.nudgedTurn === turnId : j.stop_hook_active) continue;
-    out.push('变更 ' + change.name + ' 的第 ' + rec.rounds + ' 轮' + name + '审查报了 ' + rec.issues + ' 条问题、你也改了。多轮审查开着：再让 ttls-reviewer 审一遍改动点（第 ' + (rec.rounds + 1) + ' 轮，最多 ' + max + ' 轮）：提示第一行写"模式：复审' + name + '"，第二行写"变更：' + change.name + '"，只给它上一轮的问题清单和这次改过的文件，让它确认改对了没有、有没有改出新问题。它报"结论：问题 0 条"才算审完；上一轮的问题有不成立的，在 revisions.md 记下理由。');
-    mark.push([key, { nudgedTurn: turnId || 'x' }]);
-  }
-  if (mark.length) updateState('review-rounds', (st) => { for (const [k, v] of mark) if (st[k]) Object.assign(st[k], v); });
-  return out;
-}
 /**
  * 全自动模式（开关 autoMode）：用户不在，流程也要往下走。收工时看这个会话动过的变更（壳子里 git pull 下来的同事的变更不算）到了哪一步，该干什么就催一句：
  *   提案审过了还没开工 → 直接 apply；做了一半停下 → 接着做下一项；全做完没审代码 → 审；审出的问题还没处理 → 处理；
@@ -834,26 +803,23 @@ async function handle(j) {
   const changes = () => changesMemo || (changesMemo = listChanges(cwd));
   const todo = [];
 
-  // 做完了的审查先记下来，后面的判断都看记录。前台跑的结论在 tool_result 里；后台跑的（2.1.259 起 Agent 默认在后台）结论在后来的通知里，
-  // 通知常常到下一轮才来，所以看整段会话记录，同一次审查只记一次
-  const reviews = syncReviews(entries, cwd);
   // 审查报的问题自动收（开关 lessonAuto）：报了之后那个文件确实改过的才收。同样的问题在几个变更里反复出现就变成规则，不靠模型自觉去记
+  let reviews = [];
   try {
     const all = toolCalls(entries, 0);
     const res = toolResults(entries);
-    // 默认的 review.js 审查：结论不在审查代理的回复里，单独取（问题表第 34 条）
-    const direct = lessons && lessons.autoCollect && cfg.lessonAuto !== false ? require('../lib/review-runner').runsForLessons(all, res, cwd) : [];
-    if (lessons && lessons.autoCollect && cfg.lessonAuto !== false && (direct.length || reviews.some((r) => r.issues > 0 && (r.change || r.source)))) {
+    if (lessons && lessons.autoCollect) reviews = require('../lib/review-runner').runsForLessons(all, res, cwd);
+    if (lessons && lessons.autoCollect && cfg.lessonAuto !== false && reviews.length) {
       const edits = all.filter((c) => /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(c.name) && (c.input.file_path || c.input.notebook_path) && res.get(c.id) && !res.get(c.id).error).map((c) => ({ file: String(c.input.file_path || c.input.notebook_path), pos: c.i }));
-      const got = lessons.autoCollect({ reviews: reviews.concat(direct), edits, cwd }, cfg);
+      const got = lessons.autoCollect({ reviews, edits, cwd }, cfg);
       if (got.stored) hookLog('verify-gate 自动收了 ' + got.stored + ' 条审查报的问题' + (got.promoted.length ? '，升成规则 ' + got.promoted.map((x) => x.id).join('、') : '') + (got.category.length ? '，按类别出的规则 ' + got.category.map((x) => x.id).join('、') : ''));
     }
   } catch (e) { hookLog('verify-gate 自动收审查问题出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（自动收审查问题）', j, e); }
-  // 发出去了、还在后台跑的审查：这时候别再催它审一遍（催了它会再开一个）
-  const pending = pendingReviewsIn(toolCalls(entries, 0), toolResults(entries), allChanges(cwd), taskNotes(entries));
-  const busy = (dir, mode) => pending.some((p) => p.mode === mode && p.change && normKey(p.change.dir) === normKey(dir)) || require('../lib/review-runner').stateFor(dir, mode).status === 'running';
-  const expired = pending.filter((p) => p.expired);
-  if (expired.length && !j.stop_hook_active) todo.push('兼容审查代理发出去 30 分钟还没回结论（多半是 Claude Code 退出过，子代理没了）：只取消已登记的任务 ' + expired.map((p) => p.id).join('、') + '，交代已覆盖与未覆盖范围。没有完整结论的审查任务保持未勾，不再继续等待或启动替代代理。');
+  // 子代理结束了没交结论的角度记下来（Esc 打断、Claude Code 退出过）；还在跑的别催（催了它会再开一个）
+  const Rr = require('../lib/review-runner');
+  try { Rr.sweep(entries, cwd); } catch (e) { hookLog('verify-gate 查审查子代理出错（不拦）：' + ((e && e.message) || e)); }
+  const busy = (dir, mode) => Rr.inFlight(dir, mode);
+  const proposalBusy = () => allChanges(cwd).some((c) => Rr.inFlight(c.dir, 'proposal'));
 
   // 这一轮的小状态：每件事每轮最多拦一次；续跑里只看"拦下之后又改了代码"
   const gkey = sid + '-gate';
@@ -882,7 +848,7 @@ async function handle(j) {
     });
     if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !probePassed && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /ttls-see-page 跑受影响的页面；场景做不了的，用 page/probe-run.js 执行 .vibe/tmp/<事由>/ 下的探针，断言通过并返回实际读到的值。失败、超时或只启动不算通过。这次改动确实不影响页面显示，就说明原因。');
     // 它说要攒着打勾：不行，做完一项勾一项（提交按提交方式来）
-    if (saidTickLater(lastSaid) && !pending.some((p) => p.mode === 'proposal') && !reviewOpenFor(sid, entries, changes)) todo.push('打勾不攒：每项任务做完就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完的任务都勾上，再收工。');
+    if (saidTickLater(lastSaid) && !proposalBusy() && !reviewOpenFor(sid, entries, changes)) todo.push('打勾不攒：每项任务做完就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完的任务都勾上，再收工。');
   } else if (sameTurn && codeNeedingCheck.length > (gate.codeEditsAtBlock || 0)) {
     // 续跑：拦下之后又改了代码（常见于审查之后的修复），没验证就再说一次
     const v = verifyIssue();
@@ -910,7 +876,7 @@ async function handle(j) {
     // 自动开工：大改之前先存检查点（K3 M07，只送一次）
     let ckpt = '';
     try { ckpt = require('../lib/checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; }
-    todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；完成整组任务后先审查、自测、修复复验，再进入下一组。' + (ckpt ? '\n' + ckpt : ''));
+    todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；完成整组任务后先审修，再进入下一组。' + (ckpt ? '\n' + ckpt : ''));
   }
   if (cfg.autoMode && flowState(j).stage === 'plan') {
     for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {
@@ -925,7 +891,7 @@ async function handle(j) {
     const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && require('../lib/flow-policy').points(a.dir, 'proposal').length === 4 && (!cfg.autoMode || require('../lib/session').reviewAllowed('proposal', a.dir)); });
     const pkey = sid + '-plancommit';
     const planOnce = turnId ? readState(pkey).turnId !== turnId : !j.stop_hook_active;
-    if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !pending.some((p) => p.mode === 'proposal') && !userSaid(entries, 'commit').ok && !require('../lib/session').commitDeclined(j, entries) && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
+    if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !proposalBusy() && !userSaid(entries, 'commit').ok && !require('../lib/session').commitDeclined(j, entries) && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
       const dirtyPlan = await uncommitted(plans, true);
       if (dirtyPlan.length) {
         writeState(pkey, { turnId, at: Date.now() });

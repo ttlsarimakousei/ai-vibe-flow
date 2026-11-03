@@ -21,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const intent = require('../lib/intent');
-const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, syncReviews, sessionChanges, KIT, cli } = require('../lib/session');
+const { atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, nearGatewayLimit, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, sessionChanges, KIT, cli } = require('../lib/session');
 let hookHealth = () => '';
 try { hookHealth = require('../lib/hook-health.js').check; } catch (e) { /* 老版本没有 */ }
 
@@ -436,7 +436,6 @@ async function handle(j) {
     } catch (e) { /* 数不了不影响对话 */ }
   }
   // 开工前不再自动拉代码（用户 2026-10-17 定的：交给用户自己拉）
-  if (note && j.transcript_path) { try { syncReviews(tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 记不了不影响对话 */ } }
   // 用户自己在发新指令（斜杠命令）：不提打断和进度
   const slash = /^\s*\//.test(String(j.prompt || ''));
   const anchored = slash ? [] : anchorLines(j, cfg, note);

@@ -46,7 +46,7 @@ const clean = (o) => JSON.stringify(o === null || (o && typeof o === 'object' &&
   H.ok('临时路由起来了，认得钩子请求', up, log);
   if (up) {
     const tfile = path.join(h.root, 't.jsonl');
-    const review = H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：openspec/changes/add-export/', run_in_background: false }, '有问题。\n\n结论：问题 1 条（会出错 1，有隐患 0，建议 0）');
+    const review = H.reviewedTurn(h, proj, 'add-export', [{ severity: 'P1', file: 'src/main/java/A.java', line: 1, problem: '分页参数没判空', evidence: '不传分页参数时报错', kind: '边界', avoid: '分页查询之前：先判断参数' }]);
     const turn = [H.tr.user('审一下'), review, H.tr.ran('Edit', { file_path: path.join(proj, 'src/main/java/A.java'), old_string: 'a', new_string: 'b' }, 'ok'), H.tr.ran('Bash', { command: 'mvn -q -o compile' }, 'ok'), H.tr.say('都改完了')];
     H.transcript(tfile, turn);
     const base = { cwd: proj, transcript_path: tfile };

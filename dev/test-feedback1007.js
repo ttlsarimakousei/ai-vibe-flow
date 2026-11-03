@@ -43,23 +43,6 @@ const denied = (o) => !!(o && (o.decision === 'block' || o.hookSpecificOutput &&
     H.ok('明确确认了套件问题才要求记反馈', /你说了是套件/.test(H.reasonOf(r)), H.reasonOf(r));
   }
 
-  H.section('#15：审查按路径和裸名都记到正确变更，不猜别的变更');
-  for (const target of ['add-a', 'openspec/changes/add-a/', slash(path.join(proj, 'openspec/changes/add-a')) + '/', '`openspec/changes/add-a/`']) {
-    H.write(path.join(h.kit, 'state/reviewed.json'), '{}');
-    const tf = transcript([H.tr.user('审一下'), H.tr.ran('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：' + target }, '结论：问题 0 条')]);
-    const code = 'const S=require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + '); const e=S.tailEntries(' + JSON.stringify(tf) + '); S.syncReviews(e,' + JSON.stringify(proj) + '); console.log(JSON.stringify(S.reviewRecord("code",' + JSON.stringify(path.join(proj, 'openspec/changes/add-a')) + ')));';
-    const r = H.run(h, process.execPath, ['-e', code]);
-    H.ok('前台审查结论认得出：' + target, /"done":true/.test(r.out), r.out + r.err);
-  }
-  for (const target of ['openspec/changes/add-a/', 'openspec/changes/missing/\n材料里顺带提到 add-a']) {
-    H.write(path.join(h.kit, 'state/reviewed.json'), '{}');
-    const id = 'async-review';
-    const tf = transcript([H.tr.user('审一下'), H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：代码\n变更：' + target }, id), H.tr.result(id, 'Async agent launched'), H.tr.user('<task-notification><tool-use-id>' + id + '</tool-use-id><status>completed</status><result>结论：问题 0 条</result></task-notification>')]);
-    const code = 'const S=require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + '); S.syncReviews(S.tailEntries(' + JSON.stringify(tf) + '),' + JSON.stringify(proj) + '); console.log(JSON.stringify(S.reviewRecord("code",' + JSON.stringify(path.join(proj, 'openspec/changes/add-a')) + ')));';
-    const r = H.run(h, process.execPath, ['-e', code]);
-    H.ok(target.includes('missing') ? '不存在的变更不借用材料里另一个名字' : '后台审查通知照样按目录记账', target.includes('missing') ? r.out.trim() === 'null' : /"done":true/.test(r.out), r.out + r.err);
-  }
-
   H.section('#17：push 由用户当场授权，开着全自动也能做');
   H.setConfig(h, { autoMode: true });
   const sid = 'push-auto';
