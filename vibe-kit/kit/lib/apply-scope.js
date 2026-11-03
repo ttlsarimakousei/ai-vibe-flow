@@ -118,4 +118,13 @@ function prepareEdit(j, target) {
   S.updateState(j.session_id + '-flow', (s) => { s.stage = 'plan'; s.waiting = 'scope'; s.why = '修订提案，旧开工范围失效'; delete s.applyScope; });
   S.hookLog('范围回到提案阶段：' + a.name);
 }
-module.exports = { grant, refusal, valid, check, planHash, requirementHash, prepareEdit };
+const SOURCE = /\.(java|kt|groovy|js|mjs|cjs|ts|py|go|cs|xml|sql|vue|jsx|tsx|html?|css|scss|sass|less|styl)$/i;
+const NOT_SOURCE = /(^|[\\/])(\.vibe|openspec|\.claude|node_modules)[\\/]/;
+/** 流程里、写需求那一段、用户没说开工：不改源码（第 44 条：说是需求阶段却在动代码）。有拦截编号，确信拦错了能放行。不在流程里不管 */
+function notStarted(j, target) {
+  const S = require('./session'); const st = S.flowState(j);
+  if (!st.on || st.stage !== 'plan' || st.waiting === 'scope') return '';
+  if (S.artifactOf(target) || !SOURCE.test(String(target)) || NOT_SOURCE.test(String(target))) return '';
+  return '现在在写需求这一段，用户还没说开工，不改代码。这个改动该走需求就写进文档；用户说开工（或敲 /vk-go）再改。用户说不走流程了，告诉他说"退出流程"。';
+}
+module.exports = { grant, refusal, valid, check, notStarted, planHash, requirementHash, prepareEdit };

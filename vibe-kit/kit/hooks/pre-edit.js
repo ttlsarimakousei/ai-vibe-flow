@@ -15,9 +15,19 @@
 const path = require('path');
 const crypto = require('crypto');
 const { ensureVibeIgnored, readConfig, readConfigFor, normKey, cli } = require('../lib/session');
-const checks = [require('./guard-kit.js'), require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js')];
+// 流程里没开工不改源码（第 44 条）：流程类的检查，有拦截编号
+const startedCheck = { handle(j) {
+  let f = String((j.tool_input || {}).file_path || '');
+  if (f && !path.isAbsolute(f) && j.cwd) f = path.resolve(j.cwd, f);
+  if (!f) return null;
+  const S = require('../lib/session'); const A = require('../lib/apply-scope');
+  const no = A.notStarted(j, f);
+  if (!no || S.confirmApply(j, { hint: f }) || require('../lib/flow-policy').automaticApply(j)) return null;
+  return S.blockOut('PreToolUse', '[vibe-kit 范围] ' + no);
+} };
+const checks = [require('./guard-kit.js'), require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js'), startedCheck];
 // 和上面一一对应：拦下时记的是哪道检查（兜底放行按这个名字认）
-const NAMES = ['guard-kit', 'guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec'];
+const NAMES = ['guard-kit', 'guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec', 'guard-started'];
 let outputs = null;
 try { outputs = require('../lib/outputs.js'); } catch (e) { /* 老版本没有 */ }
 let feedback = null;

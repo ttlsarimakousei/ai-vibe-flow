@@ -40,6 +40,7 @@ const DIR = path.join(KIT, 'feedback');
 // 能申请放行的检查：流程类的门槛。risk 只在导出的表里标一下轻重；全自动模式下哪一类都不等用户
 const BYPASSABLE = {
   'guard-spec': { risk: 'mid', label: 'OpenSpec 产物的门槛（打勾、含糊词、任务写法、先探索再提案等）' },
+  'guard-started': { risk: 'mid', label: '流程里没开工不改源码' },
   'archive': { risk: 'mid', label: '归档门槛（任务没全打勾、代码没审过）' },
   'guard-output': { risk: 'low', label: '代码之外的产出放哪' },
   'guard-vibe': { risk: 'low', label: '.vibe 整理、过程文件' },
