@@ -144,7 +144,7 @@ function readNew(j) {
   const lines = buf.slice(0, nl).toString('utf8').split('\n');
   const recs = [];
   const since = cut ? Number(pos.lastAt) || 0 : 0;
-  for (const l of lines) { if (!l.trim()) continue; try { const r = JSON.parse(l); if (r && typeof r === 'object' && r.tool && !(since && Number(r.at) <= since)) recs.push(r); } catch (e) { /* 半行、坏行：跳过 */ } }
+  for (const l of lines) { if (!l.trim()) continue; try { const r = JSON.parse(l); if (r && typeof r === 'object' && r.tool && !(since && Number(r.at) <= since)) { r.tool = String(r.tool).replace(/^ttls-/, 'vk-'); recs.push(r); } } catch (e) { /* 半行、坏行：跳过 */ } }
   const lastAt = recs.reduce((m, r) => Math.max(m, Number(r.at) || 0), Number(pos.lastAt) || 0);
   let next = { offset: done, head, lastAt, at: Date.now() };
   // 太大了：丢掉前一半。这一刻正好有工具在追加的话可能丢一行，用量是个大概数，不要紧
@@ -163,6 +163,18 @@ function readNew(j) {
   if (usage.length) {
     updateState(STATS, (st) => {
       const by = st.by && typeof st.by === 'object' ? st.by : {};
+      // 改名之前记的（ttls- 开头，2026-11-04 改成 vk-）：并进新名字那一条，不分成两条（复审第 9 条）
+      for (const k of Object.keys(by)) {
+        if (!/^ttls-/.test(k)) continue;
+        const nk = k.replace(/^ttls-/, 'vk-'); const o = by[k]; const s = by[nk];
+        if (!s) { o.tool = String(o.tool).replace(/^ttls-/, 'vk-'); by[nk] = o; }
+        else {
+          for (const f of ['n', 'fail', 'ms', 'java', 'daemon', 'cached']) s[f] = (Number(s[f]) || 0) + (Number(o[f]) || 0);
+          s.max = Math.max(s.max || 0, o.max || 0); s.last = Math.max(s.last || 0, o.last || 0); s.first = Math.min(s.first || Date.now(), o.first || Date.now());
+          for (const e of Object.keys(o.errors || {})) s.errors[e] = (s.errors[e] || 0) + o.errors[e];
+        }
+        delete by[k];
+      }
       for (const u of usage) {
         const k = String(u.tool) + '|' + String(u.cmd);
         const s = by[k] || (by[k] = { tool: String(u.tool), cmd: String(u.cmd), n: 0, fail: 0, ms: 0, max: 0, java: 0, daemon: 0, cached: 0, errors: {}, first: u.at || Date.now(), last: 0 });

@@ -169,7 +169,7 @@ function skillNotice(changed, gone) {
   if (lines.length) t = '技能有变化，这个会话开头给你的技能列表还没反映出来：\n' + lines.join('\n') + '\n新装的技能不在这个会话的技能列表里，调不出来：要用就直接读它的文件照着做。改过的技能，用它的时候以文件的最新内容为准。';
   if (gone.length) t += (t ? '\n' : '') + '这些技能已经删掉，别再用：' + gone.join('、') + '。';
   // 审查代理是会话开始时载入的：会话中途装的新代理（vk-reviewer，和 vk-cross-review 一起装的）这个会话里可能调不到
-  if (changed.some((s) => s.isNew && String(s.name).endsWith('cross-review'))) t += (t ? '\n' : '') + '审查代理也换了名字（vk-reviewer）。这个会话里调它报"找不到这个代理"的话，改用旧名字 vibe-reviewer；还不行就告诉用户重开一个会话再审。';
+  if (changed.some((s) => s.isNew && String(s.name).endsWith('cross-review'))) t += (t ? '\n' : '') + '审查代理也换了名字（vk-reviewer）。这个会话里调它报"找不到这个代理"的话，改用旧名字 ttls-reviewer；还不行就告诉用户重开一个会话再审。';
   return t;
 }
 

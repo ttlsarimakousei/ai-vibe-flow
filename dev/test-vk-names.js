@@ -99,6 +99,26 @@ H.section('会话记录里、升级那一刻开着的会话里的旧名字照样
   for (const n of ['vk-go', 'vk-commit', 'vk-push']) H.ok('模型调命令 /' + n + '：照拦', /给用户敲的/.test(skill(n)), skill(n));
 }
 
+H.section('项目里还写着旧名字（复审第 8、9 条）');
+{
+  const tf = H.transcript(path.join(h.work, 't-old.jsonl'), [H.tr.user('查一下库')]);
+  const skill = (n) => H.reasonOf(H.hook(h, 'guard-ask', { session_id: 's-old', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: n }, transcript_path: tf }));
+  H.ok('模型用旧名字调技能（ttls-db-crud）：说新名字是 vk-db-crud', /技能改名了：ttls-db-crud 现在叫 vk-db-crud/.test(skill('ttls-db-crud')), skill('ttls-db-crud'));
+  H.write(path.join(proj, '.vibe', 'project.md'), '# 项目说明\n\n- 数据库：用 /ttls-db-crud 查，脚本 ~/.claude/skills/ttls-db-crud/scripts/db.py\n- 页面：/ttls-see-page\n');
+  H.write(path.join(proj, 'CLAUDE.md'), '# 团队\n\n查库用 /ttls-db-crud\n');
+  const ss = H.hook(h, 'session-start', { session_id: 's-old2', cwd: proj, hook_event_name: 'SessionStart', source: 'startup', transcript_path: tf });
+  const pm = H.read(path.join(proj, '.vibe', 'project.md'));
+  H.ok('本机的项目说明（.vibe/project.md）：旧名字换成 vk-', /\/vk-db-crud/.test(pm) && /skills\/vk-db-crud\/scripts/.test(pm) && /\/vk-see-page/.test(pm) && !/ttls-/.test(pm), pm);
+  H.ok('项目的 CLAUDE.md 跟着仓库走：不改，提一句', /ttls-db-crud/.test(H.read(path.join(proj, 'CLAUDE.md'))) && /CLAUDE\.md 里还写着旧的技能名/.test(JSON.stringify(ss)), JSON.stringify(ss).slice(0, 300));
+  // 工具统计：旧名字记的并进新名字那一条
+  const T = require(path.join(h.kit, 'lib', 'toolstats.js'));
+  H.write(path.join(h.kit, 'state', 'tool-stats.json'), JSON.stringify({ by: { 'ttls-db-crud|query': { tool: 'ttls-db-crud', cmd: 'query', n: 3, fail: 0, ms: 300, max: 200, java: 3, daemon: 0, cached: 0, errors: {}, first: 1, last: 2 } } }));
+  fs.appendFileSync(path.join(h.kit, 'state', 'tool-usage.jsonl'), JSON.stringify({ tool: 'ttls-db-crud', cmd: 'query', at: Date.now(), ms: 100, exit: 0, java: 1 }) + '\n');
+  try { T.ingest({ session_id: 's-old3', cwd: proj }); } catch (e) { /* 看结果 */ }
+  const by = (JSON.parse(H.read(path.join(h.kit, 'state', 'tool-stats.json')) || '{}').by) || {};
+  H.ok('工具统计：ttls-db-crud 记的并进 vk-db-crud，不分成两条', !by['ttls-db-crud|query'] && by['vk-db-crud|query'] && by['vk-db-crud|query'].n === 4, by);
+}
+
 H.section('卸载');
 {
   const u = H.node(h, path.join(h.kit, 'install.js'), ['--uninstall'], { cwd: h.root, timeout: 120000 });

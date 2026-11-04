@@ -176,6 +176,18 @@ async function handle(j) {
     for (const d of [cwd].concat(repos)) if (fs.existsSync(path.join(d, '.vibe'))) ensureVibeIgnored(path.join(d, '.vibe'));
     // 经验规则的文件改过名（vibe-lessons-*.md → vk-lessons-*.md）：项目里还是旧名字的挪一下，收工检查会催提交
     try { const ls = require('../lib/lessons.js'); let n = ls.migrateNames(ls.USER_RULES_DIR, 'user'); for (const d of [cwd].concat(repos)) n += ls.migrateNames(ls.projectRulesDir(d), 'project', d); if (n) hookLog('session-start 经验规则的文件改名 ' + n + ' 个'); } catch (e) { /* 挪不了不影响会话开始 */ }
+    // 技能 2026-11-04 改名 vk-（复审第 8 条）：本机的项目说明（.vibe/project.md，不进仓库）里旧名字换成新的；项目的 CLAUDE.md 跟着仓库走，不改，提一句
+    try {
+      const OLD = /\bttls-(onboard|see-page|cross-review|handover|db-crud|redis)\b/g;
+      const stale = [];
+      for (const d of [cwd].concat(repos)) {
+        const pf = path.join(d, '.vibe', 'project.md');
+        if (fs.existsSync(pf)) { const t0 = fs.readFileSync(pf, 'utf8'); const t1 = t0.replace(OLD, 'vk-$1'); if (t1 !== t0) { fs.writeFileSync(pf, t1); hookLog('session-start 项目说明里的旧技能名换成 vk-：' + pf); } }
+        const cf = path.join(d, 'CLAUDE.md');
+        if (fs.existsSync(cf) && new RegExp(OLD.source).test(fs.readFileSync(cf, 'utf8'))) stale.push(cf);
+      }
+      if (stale.length) out.push('项目的 CLAUDE.md 里还写着旧的技能名（ttls- 开头）：' + stale.join('、') + '。现在都叫 vk- 开头（vk-db-crud、vk-redis、vk-see-page……），照新名字用；要改那份文件先问用户（它跟着仓库走）。');
+    } catch (e) { /* 改不了不影响会话开始 */ }
     // .vibe/tmp、.vibe/out 下做完了的过程文件目录清掉：已归档变更的（归档之后又动过的不算），或者 tmp 里 tmpKeepDays 天没动过的（还没归档的变更的不清）。
     // .vibe 里堆着的零散旧文件提醒一次（七天一次）
     try {

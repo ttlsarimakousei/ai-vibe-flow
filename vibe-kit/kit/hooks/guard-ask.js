@@ -33,6 +33,9 @@ function handle(j) {
       const name = String(inp.skill || inp.command || inp.name || '');
       const first = name.trim().split(/\s+/)[0].replace(/^\//, '');
       // 套件的 /vk-* 命令敲了就算用户点头（开工、提交、推送、归档）：只能用户自己敲，模型调了不算（复审 V12；命令文件也写了 disable-model-invocation）
+      // 旧名字（ttls- 开头，2026-11-04 改成 vk-）：项目说明、CLAUDE.md、记忆里可能还写着，调了找不到。直接说新名字
+      const old = /^ttls-(onboard|see-page|cross-review|handover|db-crud|redis)$/i.exec(first);
+      if (old) return blockOut('PreToolUse', '[vibe-kit] 技能改名了：' + first + ' 现在叫 vk-' + old[1].toLowerCase() + '，照新名字调。脚本的路径也跟着改（~/.claude/skills/vk-' + old[1].toLowerCase() + '/…）。');
       // 技能 2026-11-04 起也是 vk- 开头（vk-see-page、vk-db-crud……）：它们是给模型用的，不算命令
       if (/^vk-[\w-]+$/i.test(first) && !VK_SKILLS.test(first)) return blockOut('PreToolUse', '[vibe-kit] /' + first + ' 是给用户敲的：敲了就算用户点头，你自己调不算。要开工、提交、推送、归档，先问用户，用户说了再做。');
       if (FLOW_SKILL.test(name)) {
