@@ -39,7 +39,8 @@ function readPlan(openspecDir) {
     if (!name) continue;
     rows.push({ line: i, name, status: cells[cols.status] || '', cells, cols, task: section ? section.name : '' });
   }
-  const title = (/^#\s+(?:计划[：:]?)?\s*(.*)$/m.exec(text) || [])[1] || '';
+  // 只认这一行：\s 会跨行，"# 计划"后面紧跟表时会把表头当标题（问题表第 50 条）
+  const title = (/^#[ \t]+(?:计划[：:]?)?[ \t]*(.*)$/m.exec(text) || [])[1] || '';
   return { file, eol, lines, rows, sections, title: title.trim() };
 }
 
