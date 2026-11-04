@@ -724,7 +724,11 @@ async function waitUp(rec, waitSec) {
     // 日志说起好了就发 HTTP 确认；日志里认不出标志的（别的框架），端口通了 3 秒发第一次，之后每 10 秒一次
     if (open && (sign || (lastHttp ? Date.now() - lastHttp >= HTTP_EVERY : Date.now() - openAt >= FIRST_HTTP_MS))) {
       lastHttp = Date.now();
-      if (await httpAnswers(rec.port)) return done('http', sign ? '日志里看到 "' + sign + '"' : '');
+      if (await httpAnswers(rec.port)) {
+        // 等 HTTP 的这几秒里日志可能刚写了起好了：再看一眼，结果行才说得清（慢的机器上 HTTP 先回来）
+        if (!sign) { const late = logSince(rec.log, offset); for (const l of (carry + late.text).split(/\r?\n/)) if (!sign && LOG_UP.test(l)) sign = l.trim().slice(0, 160); }
+        return done('http', sign ? '日志里看到 "' + sign + '"' : '');
+      }
       if (Date.now() - openAt > NO_HTTP_MS) return done('port', sign ? '日志里看到 "' + sign + '"' : '');
     }
     // 日志说起好了，端口却一直不通：监听的多半不是这个端口，不干等到超时
