@@ -43,13 +43,16 @@ function grant(j, text, context, opts) {
   let targets = named.length ? named : argued.length === 1 ? argued : asked.length === 1 ? asked : all.length === 1 ? all : touched.length === 1 ? touched : spoken.length === 1 ? spoken : hinted.length === 1 ? hinted : [];
   // 大任务里几个 change 是一件事（用户 2026-11-03 定的）：开工范围是整个大任务，回改前面的 change、接下一个都不用再认一次
   let task = null;
-  try { const B = require('./big-task'); task = (targets[0] && B.ofChange(j.cwd || process.cwd(), targets[0].name)) || B.forSession(j); } catch (e) { task = null; }
+  try { const B = require('./big-task'); task = targets[0] ? B.ofChange(j.cwd || process.cwd(), targets[0].name) : B.forSession(j); } catch (e) { task = null; }
   if (task) { const own = all.filter((c) => task.changes.some((x) => S.normKey(x.dir) === S.normKey(c.dir))); if (own.length) targets = own; }
   if (!targets.length) return refuse(j, all.length ? '有 ' + all.map((c) => c.name).slice(0, 5).join('、') + ' 几个变更，用户说开工时没点名：让用户说"开工 ' + all[0].name + '"这样带上变更名，或者在提问框的选项里写明' : '没有当前变更，按普通任务沟通', all);
   const scope = { at: Date.now(), dirs: {}, roots: [], task: task ? task.name : '' };
   for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir), req: requirementHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
   const voice = j.transcript_path && S.lastUserVoice(S.tailEntries(j.transcript_path, 3000000));
-  const saved = S.updateState(j.session_id + '-flow', (s) => { delete s.applyRefused; s.applyScope = scope; s.waiting = ''; s.lastApplyAt = scope.at; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: scope.at }; if (voice) { s.applyVoice = S.voiceKey(voice); s.applyVoiceSchema = 2; } });
+  const saved = S.updateState(j.session_id + '-flow', (s) => { delete s.applyRefused; s.applyScope = scope;
+    // 表外的 change 开工：状态栏跟着它（第 50 条）。点名了别的 change：之前切的不算了
+    if (!task && targets.length === 1) s.current = targets[0].name; else if (named.length === 1 && s.current && s.current !== named[0].name) delete s.current;
+    s.waiting = ''; s.lastApplyAt = scope.at; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: scope.at }; if (voice) { s.applyVoice = S.voiceKey(voice); s.applyVoiceSchema = 2; } });
   if (!saved) return { ok: false, reason: '开工范围暂时不能保存，请重试' };
   try { require('./review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 审查缺基线时明确降级 */ }
   return { ok: true, targets: targets.map((c) => c.name) };
