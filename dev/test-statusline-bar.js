@@ -59,7 +59,7 @@ H.section('流程里：步骤条和下一项');
   void d1;
   const ls = run({}, p.proj, 's-flow');
   H.ok('三行', ls.length === 3, ls);
-  H.ok('第二行一字不差', ls[1] === '探索✓ │ c2-api(2/3) 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○', ls[1]);
+  H.ok('第二行一字不差（change 名后面不带第几个/共几个，2026-11-04）', ls[1] === '探索✓ │ c2-api 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○', ls[1]);
   H.ok('第三行是下一项', /^下一项 2\.2/.test(ls[2]), ls[2]);
   H.ok('第一行不写"当前生效"', !/当前生效/.test(ls.join('\n')), ls);
   P.noteResult(d2, 'group-1', { id: 'z', status: 'completed', issues: [{ severity: 'P1' }, { severity: 'P2' }, { severity: 'P3' }] }, P.fingerprint(d2, 'group-1'));
@@ -78,7 +78,7 @@ H.section('折叠、截断');
   S.flowTouch(j, d);
   const ls = run({}, p.proj, 's-many');
   H.ok('组太多折叠成一个', /组 3\/8●/.test(ls[1]) && !/4组/.test(ls[1]), ls[1]);
-  H.ok('变更名过长截断', /a-very-long-cha…\(1\/1\)/.test(ls[1]), ls[1]);
+  H.ok('变更名过长截断，后面不带序号', /a-very-long-cha… /.test(ls[1]) && !/\(\d+\/\d+\)/.test(ls[1]), ls[1]);
 }
 
 H.section('等用户');

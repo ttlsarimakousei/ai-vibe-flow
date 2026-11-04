@@ -54,7 +54,7 @@ H.section('目录不在的行（改名、删了，没归档）');
   const j = session(p, '开工 real-c');
   S.setFlow(j, true, '测试', 'apply');
   S.flowTouch(j, path.join(p, 'openspec', 'changes', 'real-c'));
-  H.ok('状态栏指着 real-c', /real-c\(2\/2\)/.test(bar(p, j.session_id)) && !/gone-c/.test(bar(p, j.session_id)), bar(p, j.session_id));
+  H.ok('状态栏指着 real-c', /real-c /.test(bar(p, j.session_id)) && !/gone-c/.test(bar(p, j.session_id)), bar(p, j.session_id));
   const r = resume(session(p, '/vk-resume'));
   H.ok('/vk-resume 不让去写它的需求', /real-c/.test(said(r)) && !/写 gone-c/.test(said(r)), said(r));
 
@@ -188,7 +188,7 @@ H.section('切 change 的指针：不能挡后面的大任务（复审 R1、R2�
   S.flowTouch(j, d1);
   H.ok('表外的归档了、后来开了大任务：归到大任务，不是 null', (B.forSession(j) || {}).name === '导出', B.forSession(j));
   clearBar();
-  H.ok('状态栏走大任务（有探索）', /探索✓/.test(bar(t1, j.session_id)) && /c1\(1\/2\)/.test(bar(t1, j.session_id)), bar(t1, j.session_id));
+  H.ok('状态栏走大任务（有探索）', /探索✓/.test(bar(t1, j.session_id)) && /│ c1 /.test(bar(t1, j.session_id)), bar(t1, j.session_id));
 
   const t2 = project(null);
   const old = change(t2, 'old-y', 1, 0);

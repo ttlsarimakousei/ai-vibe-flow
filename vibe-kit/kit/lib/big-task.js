@@ -243,7 +243,8 @@ function changeSteps(dir) {
 const shortName = (s) => { const n = String(s); return n.length > 16 ? n.slice(0, 15) + '…' : n; };
 /**
  * 这个会话在流程里：{ steps: 步骤条, next: 下一项或等什么 }；不在流程里 null（目录里有没勾完的 change 也不显示，第 46 条）。
- * 探索✓ │ c2-api(2/3) 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○
+ * change 名后面不带它在 plan.md 里排第几、一共几个（仓库主人 2026-11-04 定的）。
+ * 探索✓ │ c2-api 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○
  */
 function bar(j) {
   const S = require('./session');
@@ -266,10 +267,9 @@ function bar(j) {
     ph = { phase: !tasks.length || !done ? 'plan' : done < tasks.length ? 'apply' : 'verify', change: pick.name };
   }
   const name = ph.change || (list.length ? list[list.length - 1].name : '');
-  const idx = list.findIndex((x) => x.name === name) + 1;
   const after = { explore: 0, plan: 1, apply: 1, selftest: 2, verify: 3, archive: 4, done: 5 }[ph.phase];
   const mark = (n) => (after > n ? '✓' : after === n ? '●' : '○');
-  const mid = name ? shortName(name) + (list.length ? '(' + (idx || list.length) + '/' + list.length + ')' : '') + (dir ? ' ' + changeSteps(dir) : '') : '';
+  const mid = name ? shortName(name) + (dir ? ' ' + changeSteps(dir) : '') : '';
   const steps = [task ? '探索' + mark(0) : '', mid, '自测' + mark(2) + ' 核验' + mark(3) + ' 归档' + mark(4)].filter(Boolean).join(' │ ');
   let next = '';
   if (ph.phase === 'explore') next = '探索中';

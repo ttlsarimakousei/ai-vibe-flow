@@ -42,7 +42,7 @@ const walk = (d, out) => { for (const n of fs.readdirSync(d)) { const f = path.j
   const flat = text.replace(/\n\s*/g, '');
   console.log('流程状态：on=' + fl.on + ' stage=' + fl.stage + ' current=' + fl.current);
   console.log('屏幕上说切到了：' + (/切到 second-c/.test(flat) ? '有' : '没有'));
-  console.log('状态栏跟着它：' + (/second-c\(2\/2\)/.test(flat) ? '有' : '没有'));
+  console.log('状态栏跟着它：' + (/second-c /.test(flat) ? '有' : '没有'));
   console.log('模型收到了提醒：' + (seen.some(Boolean) ? '有' : '没有') + '（主会话请求 ' + seen.length + ' 个）');
   await gw.close();
   const wins = await watch.stop();
