@@ -770,7 +770,7 @@ const reason = (o) => H.reasonOf(o);
       return H.hook(h, 'verify-gate', { session_id: sid, hook_event_name: 'Stop', cwd: p, transcript_path: tf });
     };
     const textOf = (o) => JSON.stringify(o || {});
-    const p1 = mk('a', { 'openspec/plan.md': planOf([row('还没开始的变更', '未开始')]) });
+    const p1 = mk('a', { 'openspec/plan.md': planOf([row('later-one', '未开始')]) });
     const o0 = stop(p1, 's-plan-1');
     H.ok('变更不在计划表里：不让模型去改 plan.md', !/在表里加一行|plan\.md/.test(textOf(o0)), textOf(o0));
     // 前面还有别的事要拦（写完 proposal 要问用户）：这一次提醒不出，等真正收工

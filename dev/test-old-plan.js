@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 历史上写得不完善的 plan.md、/vk-resume 切当前 change（问题表第 49、50 条，2026-11-04）：
- *   切 change 的指针只在还没做完时算数，不能挡后面的大任务（复审 20261104）；目录不在的行不占"当前 change"；老任务不按表的顺序拦打勾，新任务照拦；表外的 change 能开工；/vk-resume <变更名> 切得过去，做完了回到表的顺序；标题不把表头当名字。
+ *   变更名那一列的占位文字（未开始、待定、—）不算 change（第 51 条）；切 change 的指针只在还没做完时算数，不能挡后面的大任务（复审 20261104）；目录不在的行不占"当前 change"；老任务不按表的顺序拦打勾，新任务照拦；表外的 change 能开工；/vk-resume <变更名> 切得过去，做完了回到表的顺序；标题不把表头当名字。
  * 用法：node dev/test-old-plan.js [旧版的 vibe-kit 目录]（拿 20261104.0435 跑要不过）
  */
 const fs = require('fs');
@@ -264,6 +264,35 @@ H.section('自动模式：催的时候先看切到的那个（复审 R3）');
   for (const d of [d1, d2]) { H.reviewPoints(h, d, 'proposal'); H.reviewPoints(h, d, 'code'); }
   const r = H.reasonOf(H.hook(h, 'verify-gate', Object.assign({}, j, { hook_event_name: 'Stop' })));
   H.ok('催的是切到的 c2，不把模型拉回刚做过的 c1', /c2-没做/.test(r) && !/c1-没做/.test(r), r.slice(0, 300));
+}
+
+H.section('变更名那一列的占位文字不算 change（第 51 条）');
+{
+  const rows = (fn) => Array.from({ length: 12 }, (_, i) => fn(i)).join('');
+  const p = project('# 计划\n\n| 序号 | 需求 | 变更名 | 状态 |\n|---|---|---|---|\n' + rows((i) => '| ' + (i + 1) + ' | 需求' + i + ' | ' + (i < 2 ? 'done-' + i : '未开始') + ' | ' + (i < 2 ? '已归档' : '未开始') + ' |\n'));
+  archived(p, 'done-0'); archived(p, 'done-1');
+  const j = session(p, '接着做');
+  S.setFlow(j, true, '测试', 'plan');
+  H.ok('只算真的 change', B.tasks(p)[0].changes.map((c) => c.name).join() === 'done-0,done-1', B.tasks(p)[0].changes.map((c) => c.name));
+  H.ok('都归档了：做完了', phase(p).phase === 'done', phase(p));
+  clearBar();
+  H.ok('状态栏不显示"未开始(3/12)"', !/未开始/.test(bar(p, j.session_id)), bar(p, j.session_id));
+  for (const w of ['待定', '—', '-', '...', 'TBD', 'todo', '订单导出']) {
+    const q = project('# 计划\n\n' + TABLE([w, 'real-c']));
+    change(q, 'real-c', 1, 1);
+    H.ok('占位 ' + w + ' 不算', B.tasks(q)[0].changes.map((c) => c.name).join() === 'real-c', B.tasks(q)[0].changes.map((c) => c.name));
+  }
+  const z = project('# 计划\n\n' + TABLE(['中文变更', 'real-c', 'add-export.v2']));
+  change(z, '中文变更', 1, 1); change(z, 'real-c', 0, 1);
+  H.ok('中文名目录真在：算', phase(z).change === '中文变更' && B.tasks(z)[0].changes.length === 3, B.tasks(z)[0].changes.map((c) => c.name));
+  const y = project('# 计划\n\n' + TABLE(['已归档的中文', 'real-c']));
+  archived(y, '已归档的中文'); change(y, 'real-c', 0, 1);
+  H.ok('中文名归档了：也算', B.tasks(y)[0].changes[0].archived === true, B.tasks(y)[0].changes);
+  const c1 = project('# 计划\n\n| 序号 | 需求 | 变更状态 |\n|---|---|---|\n| 1 | 甲 | 已归档 |\n| 2 | 乙 | 未开始 |\n');
+  H.ok('表头只有"变更状态"：这张表没有变更名那一列', B.tasks(c1).length === 0, B.tasks(c1));
+  const c2 = project('# 计划\n\n| 变更状态 | 变更名 |\n|---|---|\n| 进行中 | real-c |\n');
+  change(c2, 'real-c', 0, 1);
+  H.ok('"变更状态"在前面：不当成变更名那一列', B.tasks(c2)[0].changes.map((c) => c.name).join() === 'real-c', B.tasks(c2)[0].changes.map((c) => c.name));
 }
 
 H.section('大任务名');

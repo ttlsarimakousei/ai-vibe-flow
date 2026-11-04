@@ -16,6 +16,17 @@ const { codeReviewIssue } = require('./session-review');
 // 一个大需求拆成几个变更做，模型下次怎么知道哪些做完了？靠 plan.md：每个大任务一节（## 名字、探索记录：路径、模块 | 变更名 | 状态 | 说明 的表）。
 // 状态不靠人记：会话开头的汇总按 changes/ 和 changes/archive/ 的实际情况算。钩子只算不写（不动跟踪文件），文件里的状态列跑 tools/plan.js 才更新。
 // 老的 plan.md 没有分节，整张表算一个大任务（lib/big-task.js 按老任务算）。
+/**
+ * 这一格是不是 change 名（问题表第 51 条）：OpenSpec 的变更名只能是英文、数字加连字符。
+ * 别的（未开始、待定、—、订单导出）是还没建变更的占位，目录真在才算；tbd、todo 这些英文占位不算。
+ */
+const ENGLISH_PLACEHOLDER = /^(tbd|todo|none|na|pending|wip|done)$/i;
+function isChangeName(name, openspecDir) {
+  if (/^[\w.-]*[a-z0-9][\w.-]*$/i.test(name)) return !ENGLISH_PLACEHOLDER.test(name);
+  const changes = path.join(openspecDir, 'changes');
+  try { if (fs.existsSync(path.join(changes, name))) return true; } catch (e) { /* 当不是 */ }
+  try { return fs.readdirSync(path.join(changes, 'archive')).some((n) => n.replace(/^\d{4}-\d{2}-\d{2}-/, '') === name); } catch (e) { return false; }
+}
 function readPlan(openspecDir) {
   const file = path.join(openspecDir, 'plan.md');
   let text; try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return null; }
@@ -33,10 +44,10 @@ function readPlan(openspecDir) {
     if (ex) { if (section) section.explore = ex[1]; cols = null; continue; }
     if (!/^\s*\|/.test(l)) { cols = null; continue; }
     const cells = l.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((s) => s.trim());
-    if (!cols) { const c = cells.findIndex((x) => /变更|change/i.test(x)); const s = cells.findIndex((x) => /状态|status/i.test(x)); if (c >= 0 && s >= 0) cols = { change: c, status: s }; continue; }
+    if (!cols) { const c = cells.findIndex((x) => /变更|change/i.test(x) && !/状态|status/i.test(x)); const s = cells.findIndex((x) => /状态|status/i.test(x)); if (c >= 0 && s >= 0) cols = { change: c, status: s }; continue; }
     if (cells.every((x) => /^:?-*:?$/.test(x))) continue;
     const name = (cells[cols.change] || '').replace(/`/g, '').trim();
-    if (!name) continue;
+    if (!name || !isChangeName(name, openspecDir)) continue;
     rows.push({ line: i, name, status: cells[cols.status] || '', cells, cols, task: section ? section.name : '' });
   }
   // 只认这一行：\s 会跨行，"# 计划"后面紧跟表时会把表头当标题（问题表第 50 条）
