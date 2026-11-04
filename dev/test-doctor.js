@@ -65,7 +65,7 @@ const snapshot = (dir) => { const out = {}; const walk = (d) => { for (const n o
     H.ok('不再有模型路由这一项', !names.includes('模型路由'), names);
     const after = snapshot(h.kit);
     // 跑状态栏时它自己记的缓存不算
-    const changed = Object.keys(after).filter((f) => after[f] !== before[f] && !/hooks\.log|update\.log|changes-cache/.test(f));
+    const changed = Object.keys(after).filter((f) => after[f] !== before[f] && !/hooks\.log|update\.log|changes-cache|diag\.json/.test(f)); // diag.json：机器忙、等锁久了诊断模块记一笔
     H.ok('体检不改套件目录里的文件', changed.length === 0, changed);
   }
 
