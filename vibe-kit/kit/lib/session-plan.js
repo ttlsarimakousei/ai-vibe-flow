@@ -58,7 +58,7 @@ function readPlan(openspecDir) {
     if (cells.every((x) => /^:?-*:?$/.test(x))) continue;
     let name = (cells[cols.change] || '').replace(/`/g, '').trim();
     if (!name) continue;
-    if (!isChangeName(name, openspecDir)) { name = realNameIn(name, openspecDir); if (!name) continue; }
+    if (!isChangeName(name, openspecDir)) { name = realNameIn(name, openspecDir); if (!name || rows.some((r) => r.name === name)) continue; }
     rows.push({ line: i, name, status: cells[cols.status] || '', cells, cols, task: section ? section.name : '' });
   }
   // 只认这一行：\s 会跨行，"# 计划"后面紧跟表时会把表头当标题（问题表第 50 条）
@@ -198,26 +198,32 @@ function planAddUnlisted(openspecDir, opts) {
   try {
     const p = readPlan(openspecDir);
     if (!p) return none;
-    const want = (planUnlisted(openspecDir) || []).filter((n) => !o.names || o.names.includes(n));
+    const want = (planUnlisted(openspecDir) || []).filter((n) => (!o.names || o.names.includes(n)) && isChangeName(n, openspecDir));
     if (!want.length) return none;
     const tasks = [...new Set(p.rows.map((r) => r.task).concat(p.sections.map((s) => s.name)))];
     if (o.single && tasks.length > 1) return none;
     const pick = tasks.length <= 1 ? (tasks[0] || '') : (o.prefer && tasks.includes(o.prefer) ? o.prefer : p.sections[p.sections.length - 1].name);
     const changesDir = path.join(openspecDir, 'changes');
     const own = p.rows.filter((r) => r.task === pick);
-    const lines = p.lines.slice();
+    const text = fs.readFileSync(p.file, 'utf8');
+    // 读和写之间别的会话、plan.js 改过它：这次不写，下次再补（不盖掉别人刚写的）
+    if (text.split(/\r?\n/).join('\n') !== p.lines.join('\n')) return none;
+    // 第 i 行行尾（换行符之前）在文件里的位置：只在那一处插入，别的行原样不动（混着 CRLF、LF 的文件不整份重写）
+    const endOf = (i) => { let at = 0; for (let k = 0; k < i; k++) { const n = text.indexOf('\n', at); if (n < 0) return text.length; at = n + 1; } const n = text.indexOf('\n', at); return n < 0 ? text.length : (text[n - 1] === '\r' ? n - 1 : n); };
+    let at; let add;
     if (own.length) {
       const last = own[own.length - 1];
       const row = (n) => { const cells = last.cells.map(() => ''); cells[last.cols.change] = n; cells[last.cols.status] = planStatusOf(n, changesDir); return '| ' + cells.join(' | ') + ' |'; };
-      lines.splice(last.line + 1, 0, ...want.map(row));
+      at = endOf(last.line); add = want.map((n) => p.eol + row(n)).join('');
     } else {
-      // 这个大任务还没有表：在它那一节（或者文件末尾）建一张
+      // 这个大任务还没有表：在它那一节的末尾（或者文件末尾）建一张
       const sec = p.sections.find((s) => s.name === pick);
-      let at = lines.length;
-      if (sec) { at = sec.line + 1; while (at < lines.length && !/^##\s/.test(lines[at])) at++; while (at > sec.line + 1 && !lines[at - 1].trim()) at--; }
-      lines.splice(at, 0, '', '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|', ...want.map((n) => '| | ' + n + ' | ' + planStatusOf(n, changesDir) + ' | |'));
+      let li = p.lines.length - 1;
+      if (sec) { li = sec.line; while (li + 1 < p.lines.length && !/^##\s/.test(p.lines[li + 1])) li++; while (li > sec.line && !p.lines[li].trim()) li--; }
+      at = endOf(li); add = [p.eol, '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(want.map((n) => '| | ' + n + ' | ' + planStatusOf(n, changesDir) + ' | |')).join(p.eol);
     }
-    fs.writeFileSync(p.file, lines.join(p.eol));
+    if (fs.readFileSync(p.file, 'utf8') !== text) return none;
+    fs.writeFileSync(p.file, text.slice(0, at) + add + text.slice(at));
     return { added: want, task: pick };
   } catch (e) { return none; }
 }

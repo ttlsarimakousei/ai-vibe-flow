@@ -158,6 +158,18 @@ H.section('表外的 change：只有一个大任务，会话开始就补进表�
   ticks(odd, 'c1', 1, 1); ticks(odd, 'extra-z', 0, 1);
   fs.appendFileSync(path.join(odd, 'openspec', 'plan.md'), '| | 补充 extra-z（中途加） | | |\n');
   const B = require(path.join(h.kit, 'lib', 'big-task.js'));
+  // 复审第 5 条：CRLF 的文件只插那几行；占位词当名字的目录不补；带说明的格子不和别处重复算
+  const crlf = project({ 丁: ['d1'] });
+  ticks(crlf, 'd1', 1, 1); ticks(crlf, 'more-d', 0, 1); ticks(crlf, 'todo', 0, 1);
+  const pf = path.join(crlf, 'openspec', 'plan.md');
+  fs.writeFileSync(pf, fs.readFileSync(pf, 'utf8').replace(/\n/g, '\r\n').replace('## 丁\r\n', '## 丁\n'));
+  const before = fs.readFileSync(pf, 'utf8');
+  H.hook(h, 'session-start', Object.assign({}, session(crlf), { hook_event_name: 'SessionStart', source: 'startup' }));
+  const after = fs.readFileSync(pf, 'utf8');
+  H.ok('CRLF 的 plan.md：只插了新的一行，别的行原样（混着的 LF 也没动）', after.length > before.length && after.replace(/\r?\n\|\s*\|\s*more-d\s*\|[^\r\n]*/, '') === before && /## 丁\n/.test(after), JSON.stringify(after));
+  H.ok('目录名是占位词（todo）的 change：不补（补了也认不出，会越补越多）', !/\|\s*todo\s*\|/.test(after), after);
+  H.hook(h, 'session-start', Object.assign({}, session(crlf), { hook_event_name: 'SessionStart', source: 'startup' }));
+  H.ok('再开一个会话：不重复补', fs.readFileSync(pf, 'utf8') === after);
   H.ok('变更名那一格写成"补充 extra-z（中途加）"：认得出是 extra-z', B.tasks(odd).some((x) => x.changes.some((c) => c.name === 'extra-z')), B.tasks(odd).map((x) => x.changes.map((c) => c.name)));
 }
 
