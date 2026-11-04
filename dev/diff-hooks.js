@@ -88,6 +88,7 @@ const V1102 = '20261102.0255'; // K 批和问题表第 29—31 条：OpenSpec �
 const V11022248 = '20261102.2248'; // 11-02 这批：第 32 条，起服务单独说，问要不要起、不问范围，提示里不再写"人工模式"
 const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）改的。1001、1005 两批改的开工前拉代码（只在仓库有远端时才出字，1005 起"本来就是最新"不出字）这里比不出来：这里的项目没有远端，在 test-1001.js、test-1005.js 里测
 const V1104 = '20261104.0435'; // 新流程、删路由、审查子代理、状态栏这一版
+const V2337 = '20261104.2337'; // 套件可以改、拦了直接放行；第 52—56 条；ttls- 改成 vk-
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
 // 旧版在 from 之前（还没有这个毛病）、在 to 或者之后（已经改过）的应该一样，在两者之间的应该不一样
@@ -445,14 +446,14 @@ const KIT_FREE = ['改套件的配置', '改全局约定', '项目设置里写 d
   'PowerShell：Remove-Item -Recurse $env:USERPROFILE\\.claude\\vibe-kit', '命令：删经验规则文件'];
 const KIT_READ = ['命令：列套件目录再交给 xargs 读', '命令：在套件目录里找到就读'];
 const after1104 = (c) => {
-  if (KIT_FREE.includes(c.name)) { c.expect = /放行，没有输出/; c.since = NEXT; }
-  if (KIT_READ.includes(c.name)) { c.expect = /会读到令牌或者模型的 key/; c.since = NEXT; }
+  if (KIT_FREE.includes(c.name)) { c.expect = /放行，没有输出/; c.since = V2337; }
+  if (KIT_READ.includes(c.name)) { c.expect = /会读到令牌或者模型的 key/; c.since = V2337; }
 };
 // 2026-11-03：进流程只有三种门（敲 /opsx:…、话里明确有 openspec、提问框选探索）；问句、"停"不退出流程；新建提案要有探索记录
 for (const c of cases) {
   if (c.name === '没探索就写提案') { c.expect = /用户没说要走 OpenSpec/; c.since = V1104; }
   // 2026-11-04 ttls- 改成 vk-：模型用旧名字调技能，直接说新名字（复审第 8 条）
-  if (c.name === '交接：没有用户要求不能调技能') { c.expect = /技能改名了：ttls-handover 现在叫 vk-handover/; c.since = NEXT; }
+  if (c.name === '交接：没有用户要求不能调技能') { c.expect = /技能改名了：ttls-handover 现在叫 vk-handover/; c.since = V2337; }
   // 套件不接 MCP，不认工具名（第 48 条）；路由删了，改说配置页的接口（第 39 条）
   if (['IDEA MCP 直接读令牌', 'IDEA MCP 路由读模型配置', 'IDEA MCP 冲突路径不盖过令牌路径'].includes(c.name)) { c.expect = /\[vibe-kit MCP\]/; c.since = V1104; }
   if (c.name === '命令：curl -s http://127.0.0.1:15731/api/kit -H "x-vibe-router: 1"') { c.expect = /配置页的接口/; c.since = V1104; }
