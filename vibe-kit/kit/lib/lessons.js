@@ -92,7 +92,7 @@ function groupInfo(key) {
 const ruleFileOf = (dir, group) => path.join(dir, 'vk-lessons-' + group + '.md');
 const projectRulesDir = (root) => path.join(root, '.claude', 'rules');
 
-/** 这个路径是不是经验规则的文件（项目级、用户级的规则文件，或者 .vibe/lessons 里的候选）：模型不能直接改，只能通过 lesson.js */
+/** 这个路径是不是经验规则的文件（项目级、用户级的规则文件，或者 .vibe/lessons 里的候选）。以前拿它拦模型直接改，2026-11-04 起套件可以改，现在用来认文件（改名搬迁、要不要提交） */
 function isLessonFile(p) {
   const s = String(p || '').replace(/\\/g, '/');
   if (/(^|\/)\.vibe\/lessons(\/|$)/i.test(s)) return true;
