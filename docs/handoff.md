@@ -1,38 +1,35 @@
 # 交接：现在的状态
 
-更新于 2026-11-04。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)。
+更新于 2026-11-04 傍晚。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)。
 
 ## 最近一次发版
 
-20261104.1301，已推到 GitHub（main 和标签 v20261104.1301），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。和 0435 比：`/vk-auto` 改回纯开关；历史 plan.md 不完善的问题（第 49、50、51 条）；`/vk-resume <变更名>` 能切当前 change。提交号、测试、自审：[feedback-20261104.md](feedback-20261104.md)。复审：[reviews/claude/20261104-第49和50条-复审.md](../reviews/claude/20261104-第49和50条-复审.md)。0435 也已推到 GitHub，没有必要发内网，直接发 1301。
+20261104.1301，已推到 GitHub（main 和标签 v20261104.1301），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。提交号、测试、自审：[feedback-20261104.md](feedback-20261104.md)。
 
-全量回归 114 套 6214 项过，1 项是 `test-doctor` 机器忙时多写诊断记录，单独跑过。从 1436、2248、0435 验收升级都过。
+## 在做的（提交了，没打包）
 
-## 在做的
+1. 安装包瘦身到约 4.8 MB（[feedback-20261104-1345.md](feedback-20261104-1345.md)）。
+2. 套件可以改、拦了直接放行（两个开关去掉）；状态栏不带序号；第 52—55 条；`ttls-` 改成 `vk-`（[feedback-20261104-1730.md](feedback-20261104-1730.md)）。复审见那份文档"自审"一节。
 
-安装包清了多余的东西（[feedback-20261104-1345.md](feedback-20261104-1345.md)），约 4.8 MB，提交了，没打包。发版前要跑全量回归和别的模型复审。问题表第 52 条（审查一次开了 6 个子代理）只记了，没查。
+发版前要做：全量回归（带 `--claude` 三个版本、`--old`）、从 1301 和更早的包验收升级（改名搬迁、`vk-lessons-*`）。
 
 ## 待仓库主人做的
 
-- 内网 GitLab 发布 20261104.1301（`publish.js`，只能仓库主人做）。发之前先用 cch 切走：升级时路由、`router-data/` 里的 key 一起删。
+- 内网 GitLab 发布（`publish.js`，只能仓库主人做）。从 1301 之前的版本升上来，发之前先用 cch 切走：升级时路由、`router-data/` 里的 key 一起删。
 
 ## 要注意的
 
-- 模型路由删了：`vibe-kit/router/` 没了，配置页在 `kit/ui/`，`kit/lib/config-page.js` 起（优先 15731 端口，敲 `/vk-config`）。测试里起配置页用 `H.configPage(h, 端口)`。
-- 收回旧东西只放在 `kit/lib/router-retire.js`。令牌保护里的 `router-data` 字样不删（硬规矩 6）。
-- 删了的名字由 `dev/test-no-leftovers.js` 扫（`dev/pack.js` 打包前也跑）：留着的进它的白名单，写理由和能删的条件。
-- 钩子出错放行会藏住"名字没定义"：这一版真 CLI 实测抓到 `task-anchor` 的 `blockOut` 没引入（`dev/probes/cc-vk-config.js`），老测试没覆盖。改了钩子入口要跑真 CLI。
-- winpty 在 Git Bash 下会把 `/vk-config` 改写成路径，探针里写 `//vk-config`。
-- 审查：脚本只备材料（`review.js prepare`），子代理审，`hooks/review-stop.js` 入账。没有上限，连续 3 次没交结论才断路。
-- 测试里同一个点第二次 `R.run` 文件没变不发请求，要整份再审加 `full: true`；`H.fakeReview`、`H.reviewedTurn` 代替真子代理。
-- session.js、guard-commit.js 只是出口和调度，改逻辑去 lib/session-*.js、lib/guard-*.js。
-- 开关只在 `kit/lib/config-fields.js` 定义（硬规矩 10）。手册的开关表 `node dev/config-doc.js --write` 生成。
-- 按会话的状态在 state/session/<会话号>/，全局的照旧在 state/。
-- 测试里拿旧版比：`dev/baseline/20261102.2248/vibe-kit`；基线删了的用 `H.baselineDir(版本)` 从 git 标签取。
-- 几个会话同时跑测试会撞固定端口，报端口被占的先单独重跑。回归跑着时别改被测文件。
-- 补丁脚本里带反斜杠的不要用 heredoc 或 `node -e`（`\n` 会变成真换行），用 Write 写成文件再跑。
-- `hooks/` 下的文件不能删（`guard-push.js`、`source-hint.js` 是空壳）。这台电脑没装 vibe-kit。
-- 系统临时目录里有测试崩了留下的 `vkt-*` 目录（通配删除被权限拦了），要清的话仓库主人自己删。
+- 套件可以改了（硬规矩 6 改了措辞）：读 secrets.json、router-data 照拦，别的保护模型改得掉。`hooks/guard-kit.js` 是空壳。
+- 技能、审查代理、经验规则文件都是 `vk-` 开头；`guard-ask` 只把六个技能名以外的 `vk-*` 当"给用户敲的命令"。认旧名字 `ttls-` 的地方在 `test-no-leftovers.js` 白名单里，写了能删的条件。
+- 钩子会写 `openspec/plan.md`（表外的 change 补成一行，第 55 条），以前是只读。
+- `/vk-resume` 不写名字只出提问框；答案由收工钩子 `verify-gate` 调 `task-anchor.resumePicked` 认。
+- 审查子代理同一个项目里最多 3 个在跑（`review-runner.claim`）。
+- 删了的名字由 `dev/test-no-leftovers.js` 扫（`dev/pack.js` 打包前也跑）。
+- 钩子出错放行会藏住"名字没定义"：改了钩子入口要跑真 CLI（`dev/probes/cc-vk-config.js`、`cc-vk-resume.js`，Git Bash 下参数写 `//vk-…`）。
+- 测试里拿旧版比：`dev/baseline/20261104.1301/vibe-kit`；对比用例的输入要写那一版的名字（`ttls-handover` 这类）。
+- 补丁脚本里带反斜杠的不要用 heredoc 或 `node -e`，用 Write 写成文件再跑。`.bat` 按字节改。
+- `hooks/` 下的文件不能删。这台电脑没装 vibe-kit。系统临时目录里有测试崩了留下的 `vkt-*` 目录，要清的话仓库主人自己删。
+- 推 GitHub 偶尔 TLS 握手失败，重试就好。
 
 ## 环境
 
