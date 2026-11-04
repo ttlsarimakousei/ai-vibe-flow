@@ -87,7 +87,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 |---|---|
 | 开关 | `~/.claude/vibe-kit/config.json`（放松保护的三个开关另有封条 `state/config-seal.json`） |
 | 本机环境（JDK、Maven、Tomcat） | `~/.claude/vibe-kit/local.json`，sync 后生成到全局约定的"本机环境"一节 |
-| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`（在不在流程里、写提案还是做任务）、`<会话>-auto-switch.json`（这个会话的自动模式开没开，用户敲 /vk-auto 时开口钩子写，2026-10-31 起替代配置里的两个自动开关）、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里，可以按时间清的固定名字在 `DISPOSABLE_STATE` 里。代码里每个固定名字都要落在这两份之一（`dev/test-auto-mode-kept.js` 扫代码查）：2026-10-30 以前迁移标记 `defaults-1017-migration` 两边都不在，3 天后被删，之后每次更新都把用户的开关改回默认 |
+| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`（在不在流程里、写提案还是做任务；`current` 是用户用 /vk-resume <变更名> 切到的 change，`big-task.phaseFor` 优先用它）、`<会话>-auto-switch.json`（这个会话的自动模式开没开，用户敲 /vk-auto 时开口钩子写，2026-10-31 起替代配置里的两个自动开关）、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里，可以按时间清的固定名字在 `DISPOSABLE_STATE` 里。代码里每个固定名字都要落在这两份之一（`dev/test-auto-mode-kept.js` 扫代码查）：2026-10-30 以前迁移标记 `defaults-1017-migration` 两边都不在，3 天后被删，之后每次更新都把用户的开关改回默认 |
 | 钩子流水账 | `state/hooks.log`（出问题先看它） |
 | 问题反馈 | `~/.claude/vibe-kit/feedback/`（装新版、卸载都不删），对应的议题记在 `feedback/issues.json` |
 | 安装清单 | `~/.claude/vibe-kit/installed.json`：套件往 settings.json 里加了什么，卸载时只收回这些 |
