@@ -11,7 +11,7 @@ const { readConfigFor } = require('./session-flow');
 
 /**
  * 套件自己的代码的指纹：安装器装完记下 hooks、lib、tools、page 下的 .js 和 statusline.js 每个文件的 sha1（state/kit-hash.json，
- * install.js 里有一份同样算法的）；会话开始时再算一遍比。禁改拦的是写入的那一下，路径藏在变量里的拦不住——改了能发现才是兜底
+ * install.js 里有一份同样算法的）；会话开始时再算一遍比。2026-11-04 起套件可以改（不再拦写入），改了能发现，记一条问题反馈
  */
 const KIT_CODE_DIRS = ['hooks', 'lib', 'tools', 'page', 'ui'];
 
