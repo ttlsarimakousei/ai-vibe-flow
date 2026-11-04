@@ -4,6 +4,7 @@
 
 | 编号 | 问题 | 状态 | 在哪分析 | 下一步 |
 |---|---|---|---|---|
+| 问题表第 50 条 | 历史 plan.md 不完善：目录不在的行、放弃的行让状态栏和 /vk-resume 指错，后面的 change 打勾被拦，表外 change 开工落到表里的；/vk-resume 切不了当前 change | 待修 | [owner-issues.md](owner-issues.md) 第 50 条 | 仓库主人说修时再改；同事的历史 plan.md 也会碰上，发内网前要定 |
 | 问题表第 49 条 | 面板上显示的当前 change 不对，有没有办法主动切换 | 待修 | [owner-issues.md](owner-issues.md) 第 49 条 | 仓库主人说修时再核对 |
 | 复审 20261102 K-R8 | 跑 commit.js 的票只绑会话和仓库，"询问"模式用户拒绝后票还在，guard 认不出的写法能凭旧票提交，不再过提交方式这道检查 | 后做 | [reviews/claude/20261102-K批-复审.md](../reviews/claude/20261102-K批-复审.md) | 要特意构造，只影响提交方式 |
 | 复审 20261031 D-R6 | 壳子里 `mvn -f 子项目` 记的证据按子仓库记，review-runner 登记"修了"时按壳子查，对不上 | 后做 | [reviews/claude/20261031-C至J批-复审.md](../reviews/claude/20261031-C至J批-复审.md) | `evidence.commands` 认壳子下各子仓库的证据 |
