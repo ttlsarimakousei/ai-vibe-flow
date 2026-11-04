@@ -61,6 +61,24 @@ for (const [tool, cmd] of [
 ]) { const o = run(tool, cmd); H.ok('拦：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').replace(CFG, '<.claude>').slice(0, 80), secret(o), why(o)); }
 // 列套件目录再交给后面的命令读（xargs、ForEach-Object）：读令牌那一道拦
 for (const [tool, cmd] of [['PowerShell', 'gci "' + KW + '" | % { gc $_.FullName }'], ['Bash', 'ls ' + K + '/router-data | xargs cat']]) { const o = run(tool, cmd); H.ok('拦：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 70), blocked(o), why(o)); }
+H.section('复制、打包、挪走整个套件目录（或它的上级）：拦（复审 2026-11-04 第 1 条，以前靠"不许改套件"兜着）');
+for (const [tool, cmd] of [
+  ['Bash', 'cp -r ' + K + ' ' + K + '-copy1'],
+  ['Bash', 'cp -r ~/.claude/vibe-kit .vibe/tmp/k'],
+  ['Bash', 'tar czf /tmp/k.tgz -C ~/.claude vibe-kit'],
+  ['Bash', 'tar cf - ' + K + ' | tar xf - -C /tmp'],
+  ['Bash', 'mv ~/.claude/vibe-kit ~/kit-bak'],
+  ['Bash', 'cp -r ~/.claude /tmp/cfg'],
+  ['Bash', 'rsync -a ~/.claude/vibe-kit/ /tmp/k/'],
+  ['PowerShell', 'Copy-Item -Recurse "' + KW + '" "$env:TEMP\\kcopy"'],
+  ['PowerShell', 'Compress-Archive -Path "' + KW + '" -DestinationPath k.zip'],
+]) { const o = run(tool, cmd); H.ok('拦：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 80), secret(o), why(o)); }
+for (const [tool, cmd] of [
+  ['Bash', 'cp -r ~/.claude/vibe-kit/hooks .vibe/tmp/hooks-bak'],
+  ['Bash', 'cp ' + K + '/config.json .vibe/tmp/config.json'],
+  ['PowerShell', 'Copy-Item "' + KW + '\\tools\\lesson.js" .vibe\\tmp\\'],
+]) { const o = run(tool, cmd); H.ok('放行（套件里别的东西照常能复制）：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 80), o === null, why(o)); }
+
 H.section('只是列一列、算路径：放行');
 for (const [tool, cmd] of [
   ['Bash', 'ls ~/.claude/vibe-kit/router-data'],

@@ -93,6 +93,9 @@ function globHits(absPattern, target) {
   return true;
 }
 
+// 复制、打包、挪动的命令（复审 2026-11-04 第 1 条）：参数是套件目录或它的上级（~/.claude、用户目录），令牌就跟着出去了，
+// 之后读副本拦不住。以前靠"不许改套件"兜着，那道去掉之后补上。套件里别的子目录（hooks/、tools/）照常能复制
+const COPIERS = new Set(['cp', 'mv', 'scp', 'rsync', 'ditto', 'tar', 'gtar', 'bsdtar', 'zip', '7z', '7za', '7zr', '7zz', 'xcopy', 'robocopy', 'copy', 'copy-item', 'cpi', 'move', 'move-item', 'mi', 'compress-archive']);
 // 列目录的命令里，会把列出来的文件、算出来的路径往后传的那几个（ls 套件目录 | xargs cat、Get-Content (Resolve-Path …)）
 const PASSING = new Set(['ls', 'dir', 'get-childitem', 'gci', 'tree', 'get-item', 'gi', 'resolve-path', 'join-path', 'realpath', 'echo', 'write-output', 'split-path', 'dirname']);
 
@@ -112,6 +115,7 @@ function secretTouch(word, dir, head, recursive) {
   const keys = wild ? [normKey(abs0)] : [...new Set([normKey(abs0), normKey(realish(abs0))])];
   const search = SEARCHES.has(head);
   const listing = PASSING.has(head);
+  const copying = COPIERS.has(head);
   const deep = recursive || ['rg', 'ag', 'find'].includes(head);
   for (const r of secretRoots()) {
     for (const abs of keys) {
@@ -120,6 +124,7 @@ function secretTouch(word, dir, head, recursive) {
         // 通配符前面那一截是确定的目录：递归搜整个用户目录、整个盘（findstr /s "$env:USERPROFILE\*.json"）也算
         const fixed = abs.split('/').filter(Boolean).reduce((acc, seg) => (acc.stop || /[*?[\]]/.test(seg) ? Object.assign(acc, { stop: true }) : Object.assign(acc, { parts: acc.parts.concat(seg) })), { parts: [], stop: false }).parts.join('/');
         if ((search || listing) && deep && fixed && (r.kit === fixed || r.kit.startsWith(fixed + '/'))) return '递归搜 ' + word + ' 会搜到套件放令牌、放模型 key 的文件';
+        if (copying && fixed && (r.kit === fixed || r.kit.startsWith(fixed + '/'))) return '复制、打包 ' + word + ' 会把套件放令牌、放模型 key 的文件带出去';
         if (r.files.some((f) => globHits(abs, f))) return word + ' 会落到放令牌、放模型 key 的文件上';
         continue;
       }
@@ -128,6 +133,7 @@ function secretTouch(word, dir, head, recursive) {
       if (search && (abs === r.kit || abs === r.cfg || (deep && r.kit.startsWith(abs + '/')))) return '搜 ' + word + ' 会搜到套件放令牌、放模型 key 的文件';
       // 列目录再交给后面的命令读：列的是套件目录（令牌就在里面），或者递归列它的上级
       if (listing && (abs === r.kit || (deep && r.kit.startsWith(abs + '/')))) return '列 ' + word + ' 再读，会读到套件放令牌、放模型 key 的文件';
+      if (copying && (abs === r.kit || r.kit.startsWith(abs + '/'))) return '复制、打包、挪走 ' + word + ' 会把套件放令牌、放模型 key 的文件带出去';
     }
   }
   return '';
