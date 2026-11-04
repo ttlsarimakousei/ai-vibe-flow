@@ -67,7 +67,7 @@ npm view @fission-ai/openspec version
 npm install --prefix vibe-kit/kit/openspec @fission-ai/openspec@<版本号> --omit=dev --ignore-scripts --no-audit --no-fund
 ```
 
-然后跑 `node dev/prune-deps.js`（删依赖里运行时用不到的类型声明、source map、README，不跑 `pack.js` 不打包），把 `vibe-kit/kit/openspec/package.json` 里的版本钉成确切的版本号（不留 `^`），重新生成依赖清单（`node dev/pack.js --check-only`，和升级一起提交 `vibe-kit/kit/deps.json`），核对三件事：
+然后跑 `node dev/prune-deps.js`（删依赖里运行时用不到的类型声明、source map、README 和 `playwright-core/lib/vite`，不跑 `pack.js` 不打包），把 `vibe-kit/kit/openspec/package.json` 里的版本钉成确切的版本号（不留 `^`），重新生成依赖清单（`node dev/pack.js --check-only`，和升级一起提交 `vibe-kit/kit/deps.json`），核对三件事：
 - 新版要求的 Node 版本（`node_modules/@fission-ai/openspec/package.json` 的 `engines`，清单里组件的 `node`）。比以前高的，在《更新说明》里写明：Node 不够的电脑会退回用自己装的，安装器照清单说。依赖里有包要求比它高的，`pack.js` 不打包，先确认那个版本上能不能用，再在 `kit/lib/deps.js` 的 `COMPONENTS` 里写明 `node`。
 - 在临时目录里用新版建一个变更、写好四份产物，拿 1.2.0 跑 `list`、`status`、`validate`、`archive`，确认同事的旧版还认（做法见 2026-10-17 的记录：`.vibe/tmp/openspec-probe` 里的探测脚本思路）。
 - 新版生成的命令里调用命令行的写法没变（`openspec <子命令>` 开头），`lib/openspec.js` 的改写还能认出来。

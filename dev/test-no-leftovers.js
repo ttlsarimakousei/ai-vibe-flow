@@ -120,6 +120,7 @@ if (!FROM) {
   H.ok('套件的代码只 require playwright-core', !/require\('playwright'\)/.test(fs.readFileSync(path.join(KIT_ROOT, 'kit', 'page', 'browser.js'), 'utf8') + fs.readFileSync(path.join(KIT_ROOT, 'kit', 'page', 'scenario-run.js'), 'utf8')));
   const r = require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'prune-deps.js'), '--check'], { encoding: 'utf8', windowsHide: true });
   H.ok('依赖里没有类型声明、source map 这些', r.status === 0, r.stdout);
+  H.ok('playwright-core 不带录制器、trace 查看器这些网页界面（lib/vite）', !fs.existsSync(path.join(page, 'playwright-core', 'lib', 'vite')));
   H.ok('LICENSE 留着', fs.existsSync(path.join(page, 'playwright-core', 'LICENSE')));
   H.ok('OpenSpec 的模板留着', fs.readdirSync(path.join(KIT_ROOT, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'schemas', 'spec-driven', 'templates')).some((n) => /\.md$/.test(n)));
 }

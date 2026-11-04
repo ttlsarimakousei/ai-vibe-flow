@@ -7,9 +7,9 @@
       "label": "看页面（/ttls-see-page）",
       "main": "playwright-core",
       "node": ">=20",
-      "hash": "sha256-2a2931b8420f393a364877389676cd29b9ec312bffec8b3bfc697e8324ce7f29",
-      "files": 135,
-      "bytes": 12157360,
+      "hash": "sha256-8bc066975f4348df80d9517b089fb7ba58f7bd4fddf6abab14a9e3826787213e",
+      "files": 97,
+      "bytes": 8583597,
       "packages": [
         {
           "name": "pixelmatch",
@@ -29,9 +29,9 @@
           "license": "Apache-2.0",
           "source": "npm:playwright-core@1.62.1",
           "integrity": "",
-          "hash": "sha256-21b8fc022dec9cb005027e34ab9473db0b64d9858fae6e0af386582ef1de6def",
-          "files": 106,
-          "bytes": 11504735
+          "hash": "sha256-810b517d16c10e4920c38825b04ffb7c9b0be24fe4de4203ce8af631c4310373",
+          "files": 68,
+          "bytes": 7930972
         },
         {
           "name": "pngjs",
