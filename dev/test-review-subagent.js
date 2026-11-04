@@ -147,6 +147,11 @@ H.section('同时在跑的审查子代理最多 3 个（第 52 条，2026-11-04�
   R.submit(a.id, a.agents[0].lens, tell(a, a.agents[0].lens));
   H.ok('交了一个：第 4 个能开了', !H.reasonOf(call(b.agents[0].prompt)));
   H.ok('又满了：第 5 个照拦', /同时最多 3 个/.test(H.reasonOf(call(b.agents[1].prompt))));
+  // 前台子代理的结果已经回来、没交结论（崩了、被打断）：满了的时候先清掉它们，让出位子（复审第 6 条）
+  const done = [H.tr.user('开工')];
+  for (let i = 1; i <= n; i++) done.push({ type: 'assistant', uuid: 'c' + i, timestamp: new Date().toISOString(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'cap' + i, name: 'Agent', input: {} }] } }, { type: 'user', uuid: 'r' + i, timestamp: new Date().toISOString(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'cap' + i, content: '子代理出错退出了' }] } });
+  H.transcript(j.transcript_path, done);
+  H.ok('前面的都已经结束（没交）：第 5 个能开了', !H.reasonOf(call(b.agents[1].prompt)), H.reasonOf(call(b.agents[1].prompt)));
   H.setConfig(h, { autoRequirements: false, autoApply: false });
 }
 

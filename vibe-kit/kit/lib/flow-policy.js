@@ -334,7 +334,14 @@ function actionIssue(j) {
   // 裸开审查子代理拦下：结论对不上任务，入不了账（手工模式也一样）
   if (reviewer && !reviewTask) return '审查子代理要用 review.js prepare 输出的提示（第三行"审查任务：…"）：先跑 review.js prepare，再照它的 agents 开。任务已经交齐或作废的不用再开。';
   // 开审查子代理：同时在跑的最多 3 个（第 52 条），满了拦下、说等前面的交了再开
-  const sent = () => (reviewTask ? require('./review-runner').claim(reviewTask.id, reviewTask.lens, j.tool_use_id) : '');
+  // 满了的时候先看一眼会话记录：前台子代理的结果已经回来、没交结论的（崩了、被打断），算没交、让出位子（复审第 6 条），再判一次
+  const sent = () => {
+    if (!reviewTask) return '';
+    const RR = require('./review-runner');
+    let why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id);
+    if (why) { try { RR.sweep(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 看不了：照原来的判 */ } why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id); }
+    return why;
+  };
   if (cfg.autoMode) {
     if (runsReview) {
       const m = cmd.match(/--change\s+["']?([^\s"']+)/); const p = cmd.match(/--point\s+([\w-]+)/);
