@@ -21,7 +21,7 @@ const GONE = [
   'hook-host', 'hook-worker', 'hook-health', 'router-smoke', 'idea-mcp', 'idea-tools', 'fake-busy', 'fake-idea', 'cc-http-hooks', 'cc-stream-cut',
   'statusUsage', 'hookTransport', 'reviewExecutor', 'reviewMaxFiles', 'requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewMaxRounds', 'reviewLoop',
   'nearGatewayLimit', 'gatewayLimit', 'autoCompactAt', 'autoCompactWindowOf', 'flagVersion', 'ensureRouter', 'router/service.js', 'router/ui.html', 'router/kit-api', 'router/router.js',
-  'kitLock', 'kitBypass', 'autoCrossReview', 'releaseThread', 'planIntent', 'handoverStage', 'review-waivers', 'handover-consumed', 'hook-stats', 'textDlg', '127.0.0.1:15730', 'model-router', 'vibe-kit-router', '模型路由和配置', '观察期',
+  'kitLock', 'kitBypass', 'plan-unlisted', 'autoCrossReview', 'releaseThread', 'planIntent', 'handoverStage', 'review-waivers', 'handover-consumed', 'hook-stats', 'textDlg', '127.0.0.1:15730', 'model-router', 'vibe-kit-router', '模型路由和配置', '观察期',
 ];
 // [相对仓库的文件, 名字, 理由, 什么时候能删]
 const KEEP = [

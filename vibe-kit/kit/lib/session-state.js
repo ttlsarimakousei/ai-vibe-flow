@@ -71,7 +71,7 @@ function hookLog(line) {
 }
 
 /** 全局记录：跨会话要用的，不按文件时间删（条目自己 60 天后清） */
-const GLOBAL_STATE = /^(big-task|auto-session-migration|fixed-switch-migration|install-done|welcome|diag|perf-baseline|perf-report|reviewed|reviewed-proposal|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|plan-unlisted|gateway|artifact-cache|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|evidence|review-jobs|review-points|workflow-v2-migration|work-baselines|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
+const GLOBAL_STATE = /^(big-task|auto-session-migration|fixed-switch-migration|install-done|welcome|diag|perf-baseline|perf-report|reviewed|reviewed-proposal|task-ticks|block-stats|config-audit|tool-stats|tool-usage-pos|old-skills|onboard-fail|plan-hint|gateway|artifact-cache|changes-cache|anchor-scan|tidy-hint|config-seal|kit-hash|kit-drift|lesson-commit|update|issues|issues-dirty|issues-exported|archived-seen|usage|usage-sync|usage-device|pull|evidence|review-jobs|review-points|workflow-v2-migration|work-baselines|work-sessions|readiness|devserver|defaults-1017-migration)\.json$|^hooks\.log/;
 
 /**
  * 可以按文件时间清掉的固定名字（去重缓存、限时的放行、近期的拦截、节流、日志）：清了只是少一次去重或从头再记。
@@ -122,7 +122,7 @@ function cleanState(days) {
     }
     // 全局记录里 60 天前的条目清掉（审查记录、催过、计划提醒）
     const old = Date.now() - 60 * 86400000;
-    for (const name of ['big-task', 'reviewed', 'reviewed-proposal', 'review-points', 'task-ticks', 'plan-hint', 'plan-unlisted']) {
+    for (const name of ['big-task', 'reviewed', 'reviewed-proposal', 'review-points', 'task-ticks', 'plan-hint']) {
       if (!fs.existsSync(stateFile(name))) continue;
       updateState(name, (o) => { for (const k of Object.keys(o)) { const t = entryAt(o[k]); if (t && t < old) delete o[k]; } });
     }
