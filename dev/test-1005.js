@@ -204,11 +204,11 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     H.hook(h, 'guard-ask', Object.assign({}, base, { transcript_path: handover, tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } }));
     const n = ((readJson(path.join(h.kit, 'state', 'usage.json')).days || {})[today] || { n: {} }).n;
     const sum = Object.keys(n).filter((k) => /^block\./.test(k)).reduce((a, k) => a + n[k], 0);
-    H.ok('串着 cd 的命令、改套件、读令牌：三次都拦下了', blocked(cd) && blocked(kit) && blocked(tok), [cd, kit, tok]);
-    H.ok('都数进了"拦下"（以前这三样都是 0）', n['block.cd'] === 1 && n['block.guard-kit'] === 1 && sum === 3, n);
+    H.ok('串着 cd 的命令、读令牌：拦下了；改套件放行（2026-11-04 起套件可以改）', blocked(cd) && kit === null && blocked(tok), [cd, kit, tok]);
+    H.ok('都数进了"拦下"（以前这几样都是 0）', n['block.cd'] === 1 && n['block.kit'] === 1 && sum === 2, n);
     H.ok('用户要求后调用交接技能：数进"写交接记录"', n['handover.write'] === 1, n);
     const stats = readJson(path.join(h.kit, 'state', 'block-stats.json'));
-    H.ok('"拦得最多的规矩"里也有', Object.values(stats).some((x) => x && x.hook === 'cd') && Object.values(stats).some((x) => x && x.hook === 'guard-kit'), Object.values(stats).map((x) => x && x.hook));
+    H.ok('"拦得最多的规矩"里也有', Object.values(stats).some((x) => x && x.hook === 'cd') && Object.values(stats).some((x) => x && x.hook === 'kit'), Object.values(stats).map((x) => x && x.hook));
   }
 
   // ---------------------------------------------------------------------------------------------

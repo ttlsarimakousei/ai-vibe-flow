@@ -482,7 +482,7 @@
         <li><b>起服务走 devserver</b>：直接敲 mvn spring-boot:run、npm run dev 会被拦下，要经过套件的 devserver.js。同一个服务在跑就不重复起；端口在 30000 到 39999 里挑，离项目配置的端口至少 1000，不和你在 IDE 里跑着的冲突。你在 IDEA、终端里起的服务不动。换了目录、换了名字也认得自己起过的，要重启在原来的端口先停再起；vite 这类会热更新的改了代码不重启。等它起来时每 2 秒看一次日志：日志说起好了再发一次请求确认，日志里报了起不来的错马上停掉、把日志给模型看，不干等。不用 IDEA 的运行配置起（2026-10-28 起）。</li>
         <li><b>推送、发内网要你亲口说</b>：git push、把安装包发到内网 GitLab，都要你当场明确说；同意推送不代表同意发内网。自动模式也不能代替。说"推送"直接推，不出推送计划，也不再弹 Claude Code 的确认框；套件的合并推送工具 2026-10-28 起去掉了，你说"合并推送"的照你说的自己合并再推，不拦。</li>
         <li><b>令牌和口令模型读不到</b>：GitLab 令牌、模型的 key、数据库和 redis 的口令，模型读不到、不进命令行、不进日志，也不许提交。项目里别的口令不再遮。</li>
-        <li><b>不接任何 MCP</b>：套件不登记 MCP。你自己接的 MCP 工具只查两件事：读令牌、改套件目录照拦，别的不查（终端命令不按 Bash 的规矩查，运行配置不算自测）。</li>
+        <li><b>不接任何 MCP</b>：套件不登记 MCP。你自己接的 MCP 工具只查读令牌，别的不查（终端命令不按 Bash 的规矩查，运行配置不算自测）。</li>
         <li><b>需求文档一份一份写</b>：上一份审完（人工是你看过、说了写下一份）才写下一份。</li>
         <li><b>任务只写实现</b>：tasks.md 不写"验："，不写测试、审查、用户验收任务；测试和验收写在 design.md 的"验收用例"里。打勾不查验法。</li>
         <li><b>人工模式先问</b>：跑测试、起服务、看页面、审查、复验先问你，同一个要求只问一次；这一轮你说过要审、要测的，改完再审、再测不再问（"提交"也一样，分几笔提交不再问）。编译、类型检查、静态检查直接跑。你放弃就继续，不记待办。</li>
@@ -641,17 +641,6 @@
 
     <div class="card" id="sec-guard" data-sec="保护">
       <h2>保护</h2>
-      <p class="hint">前两项只认在这个页面上改的。有程序直接改开关文件，不会生效。</p>
-      <div class="opt">
-        <div><div class="t">不许 Claude 改套件</div><div class="d">开着：<span class="mono">~/.claude/vibe-kit</span>、settings.json、全局 CLAUDE.md、装进去的技能和代理，它只能用不能改。</div>
-          <details class="more"><summary>细节</summary><ul><li>用 Edit、Write 改会被拦。用 rm、重定向、sed 这些命令改也拦。直接调这个页面的接口也拦。</li><li>只读的命令和套件自带的工具不受影响。</li><li>令牌和模型的 key 不归这个开关管，什么时候都不给它读。</li></ul></details></div>
-        <div class="ctl"><label class="switch"><input type="checkbox" id="k_kitLock"><i></i></label></div>
-      </div>
-      <div class="opt">
-        <div><div class="t">被检查拦住时能不能放行</div><div class="d">只管带拦截编号的检查：OpenSpec 门槛、归档、产出位置、过程文件、起服务、提交信息格式、新文件没 add。</div>
-          <details class="more"><summary>细节</summary><ul><li><b>要我点同意</b>：写清查过什么，再做那一步时弹确认框。通行证只用一次；每个会话最多 5 个不同问题，同类最多 3 个。</li><li><b>它自己放行</b>：不弹框，最多 60 个不同问题。</li><li>同一检查、目标和理由重试不重复扣额度，申请结果显示剩余数量。</li><li><b>不许放行</b>：被拦住就停下来告诉你。</li><li>自动模式下直接放行并记报告，选了“不许放行”的除外。</li><li>只适用于带拦截编号的流程检查；推送确认、读令牌和改套件不能用放行额度替代。</li><li>放行记录在“更新和上报”可见。</li></ul></details></div>
-        <div class="ctl"><select id="k_kitBypass"><option value="ask">要我点同意</option><option value="auto">它自己放行</option><option value="off">不许放行</option></select></div>
-      </div>
       <div class="opt">
         <div><div class="t">Claude Code 自带的自动模式</div><div class="d">新版 Claude Code 没配权限模式时默认进它：有风险的命令先发给一个分类模型审。内网的模型当不了这个分类器，默认关掉。</div>
           <details class="more"><summary>细节</summary><ul>
@@ -960,11 +949,11 @@
     return n;
   }, set: (v) => { $('k_' + key).value = v === undefined || v === null ? '' : v; } }; };
   
-  fBool('kitLock', '不许 Claude 改套件'); fBool('commitCheck', '提交检查');
+  fBool('commitCheck', '提交检查');
   fNum('tmpKeepDays', '临时目录留几天', 0, 90);
   fNum('contextPercent', '到百分之多少', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true);
   fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
-  fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']); fSel('kitBypass', '被检查拦住时能不能放行', ['ask', 'auto', 'off']);
+  fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']);
   fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);

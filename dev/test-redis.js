@@ -177,8 +177,8 @@ const SECRET = 'r3dis-秘密-口令';
   H.ok('记了命令、耗时、错误的类别', usage().some((u) => u.tool === 'ttls-redis' && u.cmd === 'get' && u.ms >= 0 && u.exit === 0) && usage().some((u) => (u.errors || []).includes('AUTH_FAILED')), usage().slice(0, 3));
   H.ok('没有 key、值、地址、口令', !all.includes(SECRET) && !/你好|张三|str:1|127\.0\.0\.1/.test(all), all.slice(0, 500));
 
-  H.section('钩子：跑技能自带的脚本放行，改套件的东西照拦');
-  // 技能装在 ~/.claude/skills 里，属于"不许改的套件的东西"；跑它自带的脚本是正常用法（2026-09-30 之前会被一起拦掉）
+  H.section('钩子：跑技能自带的脚本放行；改套件的东西也放行（2026-11-04 起套件可以改），读令牌照拦');
+  // 技能装在 ~/.claude/skills 里，是套件的东西；跑它自带的脚本是正常用法（2026-09-30 之前会被一起拦掉）
   const tf = H.transcript(path.join(h.root, 'guard.jsonl'), [H.tr.user('查一下缓存')]);
   const guard = (tool, command) => H.reasonOf(H.hook(h, 'guard-commit', { session_id: 'g1', transcript_path: tf, cwd: proj, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: { command } }));
   const abs = (rel) => path.join(h.cfg, rel).replace(/\\/g, '/');
@@ -219,7 +219,8 @@ const SECRET = 'r3dis-秘密-口令';
     ['Bash', 'node -e "require(\'fs\').writeFileSync(process.env.HOME + \'/.claude/vibe-kit/config.json\', \'{}\')"'],
     ['PowerShell', 'python -c "import shutil; shutil.rmtree(\'' + abs('skills/ttls-redis') + '\')"'],
   ];
-  for (const [tool, cmd] of stop) { const r = guard(tool, cmd); H.ok('照拦：' + cmd.replace(h.root.replace(/\\/g, '/'), '…').slice(0, 70), /\[vibe-kit\]/.test(r), r); }
+  for (const [tool, cmd] of stop) { const r = guard(tool, cmd); H.ok('放行（套件可以改）：' + cmd.replace(h.root.replace(/\\/g, '/'), '…').slice(0, 70), !r, r); }
+  H.ok('技能脚本的参数里读令牌：照拦', /令牌/.test(guard('Bash', 'python ' + DB + ' --config "$HOME/.claude/vibe-kit/secrets.json" doctor')));
   H.ok('代码里不提套件的照常放行（node -e、python -c）', !guard('Bash', 'node -e "console.log(require(\'./package.json\').version)"') && !guard('Bash', 'python -c "print(open(\'src/a.txt\').read())"'));
 
   for (const c of servers) { try { c.kill(); } catch (e) { /* 已经退了 */ } }

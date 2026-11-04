@@ -27,8 +27,12 @@ const denied = (o) => !!(o && (o.decision === 'block' || o.hookSpecificOutput &&
     H.ok('套件 page 脚本放行：' + prefix.split(' ')[1], r === null, H.reasonOf(r));
   }
   const dir = slash(h.kit);
-  for (const cmd of ['env -C "' + dir + '" rm hooks/guard-commit.js', 'env -C "' + dir + '" cat secrets.json', 'env -C "' + dir + '" node -e "require(\'fs\').readFileSync(\'router-data/config.json\')"', 'env -C "' + slash(proj) + '" node "' + page + '" check.json > "' + dir + '/config.json"']) {
-    H.ok('换目录后写套件、读令牌、重定向到套件照旧拦', denied(command(cmd)), cmd);
+  for (const cmd of ['env -C "' + dir + '" cat secrets.json', 'env -C "' + dir + '" node -e "require(\'fs\').readFileSync(\'router-data/config.json\')"', 'env -C "' + slash(proj) + '" node "' + page + '" check.json > "' + dir + '/secrets.json"']) {
+    H.ok('换目录后读令牌、重定向到令牌文件照旧拦', denied(command(cmd)), cmd);
+  }
+  // 2026-11-04 起套件可以改（仓库主人定的）：换目录后改套件、重定向到套件的配置放行
+  for (const cmd of ['env -C "' + dir + '" rm hooks/guard-commit.js', 'env -C "' + slash(proj) + '" node "' + page + '" check.json > "' + dir + '/config.json"']) {
+    H.ok('换目录后改套件：放行', command(cmd) === null, cmd);
   }
   H.ok('env 的工作目录不传给后面的命令', command('env -C "' + dir + '" ls hooks; cat src/A.js') === null);
   H.ok('提交信息规范照旧拦外部技能的 scope 和多行模板', denied(command('git commit -m "chore(workspace): init 过程资产 workspace 仓"')), '#14 属于外部技能模板，不改公司规范');

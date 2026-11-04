@@ -188,7 +188,7 @@ const blockId = (r) => (H.reasonOf(r).match(/拦截编号 ([A-Z0-9]{4})/) || [])
 const bypass = (id, why, extra, cwd) => H.node(h, path.join(h.kit, 'tools', 'feedback.js'), ['bypass', id, '--why', why].concat(extra || []), { cwd: cwd || proj });
 const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/vibe-kit/tools/feedback.js" bypass ' + id + ' --why "…"' }, out);
 {
-  H.setConfig(h, { autoMode: true, kitBypass: 'ask' });
+  H.setConfig(h, { autoMode: true });
   const sid = 's-auto';
   // 全自动模式只在走 OpenSpec 流程的会话里算数：这个会话在流程里
   H.inFlow(h, sid);
@@ -241,13 +241,9 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   H.ok('命令写法变了（多了个参数），还是同一个变更：放行', ra2 === null, H.reasonOf(ra2));
   const ra3 = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'openspec archive other-change --yes' } }));
   H.ok('别的变更用不了这张通行证', ra3 && ra3.decision === 'block' && /other-change/.test(H.reasonOf(ra3)), H.reasonOf(ra3));
-  // 配置里关了放行：全自动也不许
-  H.setConfig(h, { kitBypass: 'off' });
-  const bo = bypass(blockId(ra3), '配置里关掉了申请放行，全自动模式下试一次看看会怎么说，写够二十个字');
-  H.ok('配置里关了放行：全自动模式下也不放，让它接着做别的', bo.code !== 0 && /接着做别的/.test(bo.out), bo.out);
 
-  // 有人在的时候：还是弹框、只用一次
-  H.setConfig(h, { autoMode: false, kitBypass: 'ask' });
+  // 有人在的时候：不弹框直接放行（2026-11-04 起，以前的开关"被检查拦住时能不能放行"去掉了），只用一次
+  H.setConfig(h, { autoMode: false });
   const sid2 = 's-ask';
   H.transcript(tfile, [H.tr.user('继续，测试'), editA, H.tr.ran('Bash', { command: 'git status' }, 'clean')]);
   fs.writeFileSync(path.join(other, 'tasks.md'), '- [ ] 1.1 改 src/main/java/A.java；验：`mvn -q -o compile`\n- [ ] 1.2 改 src/main/java/A.java；验：`mvn -q -o compile`\n');
@@ -256,10 +252,10 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   const q1 = vague('- [ ] 1.3 完善');
   H.ok('有人在：提示还是原来那句', q1 && /确信是套件拦错了、任务因此走不下去，才按约定申请放行/.test(H.reasonOf(q1)), H.reasonOf(q1));
   const bq = bypass(blockId(q1), '这一条是占位，下一轮细化成具体文件，先写进清单免得漏掉，钩子拦得太早');
-  H.ok('有人在：申请放行会弹确认框', bq.code === 0 && /会弹确认框/.test(bq.out), bq.out);
+  H.ok('有人在：申请放行不用人点，再做那一步直接放行', bq.code === 0 && /会直接放行/.test(bq.out) && !/弹确认框/.test(bq.out), bq.out);
   H.transcript(tfile, [H.tr.user('继续，测试'), editA, ranBypass(blockId(q1), bq.out)]);
   const q2 = vague('- [ ] 1.3 完善');
-  H.ok('有人在：再做时弹确认框', q2 && q2.hookSpecificOutput && q2.hookSpecificOutput.permissionDecision === 'ask', q2);
+  H.ok('有人在：再做时直接放行，不弹框', q2 === null, q2);
   const q3 = vague('- [ ] 1.4 优化');
   H.ok('有人在：通行证只用一次', q3 && q3.decision === 'block', H.reasonOf(q3));
 }
@@ -299,9 +295,9 @@ H.section('命令：注释不是命令；没写变更名时说清查的是谁（
   H.ok('注释里写的 git push 不弹确认', run('git status # 之后再 git push') === null);
   // 2026-10-25 起：用户说了推送就直接推；没说就拦下
   H.ok('真的 push、用户没说推送：拦下', (run('git status && git push origin main') || {}).decision === 'block' && /用户没说推送/.test(H.reasonOf(run('git status && git push origin main'))));
-  H.ok('引号里的 # 不是注释', (() => { const r = run('echo "#x" > "$HOME/.claude/vibe-kit/config.json"'); return r && r.decision === 'block'; })());
-  H.ok('真去改套件的照样拦', (() => { const r = run('rm -rf "$HOME/.claude/vibe-kit/hooks"'); return r && r.decision === 'block' && /不许改/.test(H.reasonOf(r)); })());
-  H.ok('列出套件的文件再交给 xargs 删：拦', (() => { const r = run('ls "$HOME/.claude/vibe-kit/hooks" | xargs rm -f'); return r && r.decision === 'block'; })());
+  H.ok('引号里的 # 不是注释（后面重定向到令牌文件照拦）', (() => { const r = run('echo "#x" > "$HOME/.claude/vibe-kit/secrets.json"'); return r && r.decision === 'block' && /令牌/.test(H.reasonOf(r)); })());
+  H.ok('改套件：放行（2026-11-04 起套件可以改）', run('rm -rf "$HOME/.claude/vibe-kit/hooks"') === null);
+  H.ok('列出套件目录再交给 xargs 读：拦（会读到令牌）', (() => { const r = run('ls "$HOME/.claude/vibe-kit" | xargs cat'); return r && r.decision === 'block' && /令牌/.test(H.reasonOf(r)); })());
   H.ok('管道前面的段没提到套件、后面只读地看套件：不拦', run('git log --oneline -3 | cat - "$HOME/.claude/vibe-kit/VERSION"') === null);
   H.ok('只读地看套件的文件不拦', run('cat "$HOME/.claude/vibe-kit/VERSION" | head -1') === null);
   // 没归档的变更只剩一个时，不带名字的 openspec archive 查的是它：提示里要说
@@ -316,7 +312,7 @@ H.section('命令：注释不是命令；没写变更名时说清查的是谁（
 // ---------------------------------------------------------------------------------------------
 H.section('全自动模式：push、提问框不挂着；不能放行的拦截也不让它等人');
 {
-  H.setConfig(h, { autoMode: true, kitBypass: 'ask' });
+  H.setConfig(h, { autoMode: true });
   const sid = 's-auto2';
   H.inFlow(h, sid);
   R.begin({ session_id: sid, cwd: proj });
@@ -327,11 +323,11 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
   const ask = H.hook(h, 'guard-ask', Object.assign(base(sid), { tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出的文件名用哪种格式？', header: '文件名', options: [{ label: '带日期', description: 'x' }, { label: '不带日期', description: 'y' }] }] } }));
   H.ok('自动阶段允许澄清业务问题', ask === null);
   const kit = H.hook(h, 'pre-edit', Object.assign(base(sid), { tool_name: 'Edit', tool_input: { file_path: path.join(h.kit, 'state', 'review-rounds.json'), old_string: 'a', new_string: 'b' } }));
-  H.ok('改套件的文件：照样拦，但不让它停下等人', kit && kit.decision === 'block' && /不许改/.test(H.reasonOf(kit)) && /不要停下等我/.test(H.reasonOf(kit)) && !/拦截编号/.test(H.reasonOf(kit)), H.reasonOf(kit));
+  H.ok('改套件的文件：放行（2026-11-04 起套件可以改）', kit === null, H.reasonOf(kit));
   const all = H.hook(h, 'guard-commit', Object.assign(base(sid), { tool_name: 'Bash', tool_input: { command: 'git add -A && git commit -m "feat: x"' } }));
   H.ok('整仓 add：照样拦，不给编号，不让它等人', all && all.decision === 'block' && /不要停下等我/.test(H.reasonOf(all)) && !/拦截编号/.test(H.reasonOf(all)), H.reasonOf(all));
   const items = R.stateOf({ session_id: sid }).items;
-  H.ok('报告里记了：想 push、想问的问题和选项、没让改的文件、没让跑的命令', items.some((x) => x.kind === 'hand' && /git push/.test(x.title)) && !items.some(x => x.kind === 'ask') && items.some((x) => x.kind === 'hand' && /review-rounds\.json/.test(x.title)) && items.some((x) => x.kind === 'hand' && /git add -A/.test(x.title)), items);
+  H.ok('报告里记了：想 push、没让跑的命令；问题和选项、改套件的文件不记', items.some((x) => x.kind === 'hand' && /git push/.test(x.title)) && !items.some(x => x.kind === 'ask') && !items.some((x) => /review-rounds\.json/.test(x.title)) && items.some((x) => x.kind === 'hand' && /git add -A/.test(x.title)), items);
   // 2026-10-17 起提交不再查像密码的内容（用户定的）：放行，不记报告
   H.write(path.join(proj, 'src/main/resources/app.properties'), 'db.password=Abc12345xyz\n');
   H.transcript(tfile, [H.tr.user('改好了，提交')]);
@@ -352,7 +348,7 @@ H.section('全自动模式：push、提问框不挂着；不能放行的拦截�
 H.section('开关只认配置页改的：全自动模式也算');
 {
   const cfgFile = path.join(h.kit, 'config.json');
-  H.setConfig(h, { autoMode: false, kitBypass: 'ask' });
+  H.setConfig(h, { autoMode: false });
   fs.writeFileSync(cfgFile, JSON.stringify(Object.assign(readJson(cfgFile), { autoApply: true })));
   const c = H.node(h, '-e', ['const c = require(' + JSON.stringify(path.join(h.kit, 'lib', 'session.js')) + ').readConfig(); console.log(JSON.stringify({ a: c.autoMode, t: c._tampered || [] }))']);
   H.ok('绕开配置页把全自动模式打开：不认', /"a":false/.test(c.out) && /autoApply/.test(c.out), c.out + c.err);
@@ -404,7 +400,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
 {
   for (const n of fs.readdirSync(changes)) if (n !== 'archive') fs.rmSync(path.join(changes, n), { recursive: true, force: true });
   for (const n of ['reviewed', 'reviewed-proposal', 'review-rounds', 'review-nudged', 'task-ticks']) dropState(n);
-  H.setConfig(h, { autoMode: true, kitBypass: 'ask', autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, autoVerify: false, autoSeePage: false });
+  H.setConfig(h, { autoMode: true, autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, autoVerify: false, autoSeePage: false });
   const sid = 's-report';
   const chg = mk('miping', ['- [x] 3.1 移除审核按钮：src/main/java/A.java；验：`mvn -q -o compile`',
     '- [ ] 3.2 审核接口角色：src/main/java/B.java；验：javac 快检；对照场景 `checklist_role_compare.json`',

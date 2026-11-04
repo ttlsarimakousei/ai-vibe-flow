@@ -33,11 +33,11 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
   H.ok('旧的人工项不阻塞代码审查前置', T.readyForReview(d));
   H.ok('下一项显示编号而不带复选框', /^2\.1/.test(T.automatedLeft(d)[0].text));
   const redactor = require(mod('redact'));
-  const publicConfig = redactor.tree({ kitBypass: 'ask', sshToken: 'auto', tokenSource: 'manual', tokenExpires: '2026-11-01', tokenMasked: 'glpat-…1234', password: 'FAKE_PRIVATE_VALUE' });
-  H.ok('非秘密开关保留合法选项', publicConfig.kitBypass === 'ask' && publicConfig.sshToken === 'auto');
+  const publicConfig = redactor.tree({ sshToken: 'auto', tokenSource: 'manual', tokenExpires: '2026-11-01', tokenMasked: 'glpat-…1234', password: 'FAKE_PRIVATE_VALUE' });
+  H.ok('非秘密开关保留合法选项', publicConfig.sshToken === 'auto');
   H.ok('令牌来源和有效期保持可用', publicConfig.tokenSource === 'manual' && publicConfig.tokenExpires === '2026-11-01' && publicConfig.tokenMasked === 'glpat-…1234');
   H.ok('假秘密仍被遮盖', !JSON.stringify(publicConfig).includes('FAKE_PRIVATE_VALUE'));
-  H.ok('同名字段的非法值不能借白名单', !JSON.stringify(redactor.tree({ kitBypass: 'FAKE_BYPASS_SECRET', tokenSource: 'FAKE_SOURCE_SECRET', tokenMasked: 'FAKE_FULL_TOKEN' })).includes('FAKE_'));
+  H.ok('同名字段的非法值不能借白名单', !JSON.stringify(redactor.tree({ sshToken: 'FAKE_SSH_SECRET', tokenSource: 'FAKE_SOURCE_SECRET', tokenMasked: 'FAKE_FULL_TOKEN' })).includes('FAKE_'));
   const typedSecret = redactor.tree({ password: 998812, apiKey: { raw: 'FAKE_NESTED_OPAQUE_VALUE' }, refreshToken: ['FAKE_ARRAY_TOKEN'], input_tokens: 42, output_tokens: 12 });
   H.ok('数值和复合形态凭据也遮盖', !JSON.stringify(typedSecret).includes('998812') && !JSON.stringify(typedSecret).includes('FAKE_'));
   H.ok('合法 token 计数保持数值', typedSecret.input_tokens === 42 && typedSecret.output_tokens === 12);
@@ -87,7 +87,6 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
     // 2026-10-28 起没有累计预算（用户定的，问题反馈表第 6 条）：照普通审查的规矩走
     const transcript = path.join(h.root, 'budget.jsonl'); const command = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --project "' + p.replace(/\\/g, '/') + '" --change add-x --mode code --base HEAD';
     const j = { cwd: p, session_id: 'budget', transcript_path: transcript, tool_name: 'Bash', hook_event_name: 'PreToolUse', tool_input: { command }, tool_use_id: 'budget-run' };
-    H.setConfig(h, { kitLock: false });
     H.transcript(transcript, [H.tr.user('继续')]);
     const r1 = H.hook(h, 'guard-commit', j);
     H.ok('不报"审查预算"（没说审查照人工模式先问）', !/审查预算/.test(H.reasonOf(r1)) && /用户这一轮没说要审查/.test(H.reasonOf(r1)), r1);

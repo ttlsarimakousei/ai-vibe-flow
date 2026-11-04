@@ -78,7 +78,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   // ---------------------------------------------------------------------------------------------
   H.section('审查、提交：同一句许可这一轮里能用好几次（第 16 条）');
   {
-    const h = H.makeHome('t1028-perm', from, { autoVerify: false, autoSeePage: false, commitMode: 'off', specGate: false, kitLock: false });
+    const h = H.makeHome('t1028-perm', from, { autoVerify: false, autoSeePage: false, commitMode: 'off', specGate: false });
     const p = H.makeRepo(path.join(h.work, 'perm'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'b.js': 'const b=1;\n' });
     let seq = 0;
     const run = (command, entries) => H.hook(h, 'guard-commit', { session_id: 'perm', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'perm-' + (++seq), tool_input: { command }, transcript_path: H.transcript(path.join(h.root, 'p' + seq + '.jsonl'), entries) });

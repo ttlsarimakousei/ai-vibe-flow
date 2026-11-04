@@ -21,11 +21,19 @@ const GONE = [
   'hook-host', 'hook-worker', 'hook-health', 'router-smoke', 'idea-mcp', 'idea-tools', 'fake-busy', 'fake-idea', 'cc-http-hooks', 'cc-stream-cut',
   'statusUsage', 'hookTransport', 'reviewExecutor', 'reviewMaxFiles', 'requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewMaxRounds', 'reviewLoop',
   'nearGatewayLimit', 'gatewayLimit', 'autoCompactAt', 'autoCompactWindowOf', 'flagVersion', 'ensureRouter', 'router/service.js', 'router/ui.html', 'router/kit-api', 'router/router.js',
-  'autoCrossReview', 'releaseThread', 'planIntent', 'handoverStage', 'review-waivers', 'handover-consumed', 'hook-stats', 'textDlg', '127.0.0.1:15730', 'model-router', 'vibe-kit-router', '模型路由和配置', '观察期',
+  'kitLock', 'kitBypass', 'autoCrossReview', 'releaseThread', 'planIntent', 'handoverStage', 'review-waivers', 'handover-consumed', 'hook-stats', 'textDlg', '127.0.0.1:15730', 'model-router', 'vibe-kit-router', '模型路由和配置', '观察期',
 ];
 // [相对仓库的文件, 名字, 理由, 什么时候能删]
 const KEEP = [
   ['vibe-kit/kit/lib/config-fields.js', 'autoCrossReview', 'REMOVED 名单：升级时清旧开关', OLD_UPDATERS],
+  ['vibe-kit/kit/lib/config-fields.js', 'kitLock', 'REMOVED 名单：升级时清旧开关', OLD_UPDATERS],
+  ['vibe-kit/kit/lib/config-fields.js', 'kitBypass', 'REMOVED 名单：升级时清旧开关', OLD_UPDATERS],
+  ['dev/lib/harness.js', 'kitLock', '给旧版套件写封条（比旧版、从旧版升级时它们还认）', '基线里没有 20261104.1301 及更早之后'],
+  ['dev/lib/harness.js', 'kitBypass', '给旧版套件写封条（比旧版、从旧版升级时它们还认）', '基线里没有 20261104.1301 及更早之后'],
+  ['dev/test-config-fields.js', 'kitLock', '测配置页上没有这两个控件了', OLD_UPDATERS],
+  ['dev/test-config-fields.js', 'kitBypass', '测配置页上没有这两个控件了', OLD_UPDATERS],
+  ['dev/ui-kit-0929.js', 'kitLock', '测封条里没有这两项了', OLD_UPDATERS],
+  ['dev/ui-kit-0929.js', 'kitBypass', '测封条、保存结果里没有这两项了', OLD_UPDATERS],
   ['vibe-kit/kit/lib/router-retire.js', 'hook-stats', '收回旧状态文件', OLD_UPDATERS],
   ['vibe-kit/kit/lib/router-retire.js', 'vibe-kit-router', '升级时收回路由和旧开关、旧状态', OLD_UPDATERS],
   ['vibe-kit/kit/lib/router-retire.js', 'model-router', '升级时收回路由和旧开关、旧状态', OLD_UPDATERS],

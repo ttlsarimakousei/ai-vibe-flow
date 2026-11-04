@@ -80,9 +80,7 @@ process.stdin.on('end', () => {
   else if (cfg.contextStrategy === 'handover' && pct !== null && pct >= line) line1.unshift(C.red + '⚠ 上下文 ' + Math.round(pct) + '%，到手动交接线：/ttls-handover' + C.reset);
   // 放松保护的开关被绕开配置页改了（没生效）
   if (cfg._tampered) line1.unshift(C.red + '⚠ 套件开关文件被直接改过，没生效，去配置页核对' + C.reset);
-  // 会话开始时比对过套件代码的指纹，对不上（被改过）：一直挂着，直到重新安装
-  const drift = readState('kit-drift');
-  if (Array.isArray(drift.list) && drift.list.length) line1.unshift(C.red + '⚠ 套件代码被改过（' + drift.list.length + ' 个文件），重新安装能恢复' + C.reset);
+  // 套件代码和安装时的指纹对不上，以前挂红字。2026-11-04 起套件可以改（仓库主人定的），状态栏不再显示；doctor.js 照样查得到
 
   // 自动模式按会话开（问题表第 28 条）
   const flowJ = { session_id: j.session_id, cwd };
@@ -104,9 +102,6 @@ process.stdin.on('end', () => {
   } catch (e) { steps = ''; next = ''; }
   // 在等你：写明你下一步说什么
   if (fl.waiting && !/^等你核验/.test(next)) next = '等你：' + fl.waiting + (/范围变化/.test(fl.waiting) ? '，说开工或 /vk-go' : '');
-  // 放松了的保护：一直挂着提醒
-  if (cfg.kitLock === false) extra.push(C.yellow + '允许改套件' + C.reset);
-  if (cfg.kitBypass === 'auto') extra.push(C.yellow + '被拦可自行放行' + C.reset);
   // 有经验在几个项目里都成了规则、等你确认要不要升成用户级（去配置页"经验规则"里点）
   try { if (cfg.lessons !== 'off') { const n = require('./lib/lessons').pendingUser().length; if (n) extra.push(C.yellow + '经验待确认 ' + n + ' 条' + C.reset); } } catch (e) { /* 老版本没有，或者读不了 */ }
   // 自动更新：刚更新过（一小时内）说一声；开关是"只提醒"的挂着"有新版"；新版装不上的也挂着；

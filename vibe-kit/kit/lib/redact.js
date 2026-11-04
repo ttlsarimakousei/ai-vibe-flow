@@ -21,7 +21,6 @@ function material(value) {
 function clip(value, n, secrets) { const s = text(value, secrets); return s.length > n ? s.slice(0, n) + '…' : s; }
 // 仅保留经过模式核验的非秘密元数据；同名字段塞入任意字符串仍遮盖。
 function publicOption(key, value) {
-  if (key === 'kitBypass') return ['ask', 'auto', 'off'].includes(value);
   if (key === 'sshToken') return ['auto', 'off'].includes(value);
   if (key === 'tokenSource') return ['', 'manual', 'ssh'].includes(value);
   if (key === 'tokenExpires') return value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value);

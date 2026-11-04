@@ -22,7 +22,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (o.hookSpecificOutput &
 const asked = (o) => !!o && !!o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'ask';
 const why = (o) => H.reasonOf(o) || JSON.stringify(o);
 const secret = (o) => blocked(o) && /令牌|key/.test(H.reasonOf(o));
-const kit = (o) => blocked(o) && /vibe-kit 套件/.test(H.reasonOf(o));
+// 2026-11-04 起套件可以改（仓库主人定的）：不按"改套件"拦；串着 cd 的照样只拦 cd
+const kitFree = (o) => !(blocked(o) && /vibe-kit 套件|不许改|disableAllHooks|配置页的接口/.test(H.reasonOf(o))) && (o === null || cdOnly(o));
 // cd 和别的命令串在一条里被拦下（只是这一条，不是"要动套件""读令牌"那几道）
 const cdHit = (o) => blocked(o) && /cd 和别的命令串在一/.test(H.reasonOf(o));
 const cdOnly = (o) => blocked(o) && /^\[vibe-kit\] 这条命令(先 cd 到|里 cd 和别的命令串在一起| cd 到的就是)/.test(H.reasonOf(o));
@@ -30,11 +31,11 @@ const cdOnly = (o) => blocked(o) && /^\[vibe-kit\] 这条命令(先 cd 到|里 c
 H.section('cd 进套件目录之后，后面的相对路径照样查（$HOME 写法以前跟丢）');
 for (const [tool, cmd, test, label] of [
   ['Bash', 'cd "$HOME/.claude/vibe-kit/router-data" && cat config.json', secret, '读 key'],
-  ['Bash', 'cd $HOME/.claude/vibe-kit/hooks && sed -i "s/a/b/" guard-commit.js', kit, '改钩子'],
+  ['Bash', 'cd $HOME/.claude/vibe-kit/hooks && sed -i "s/a/b/" guard-commit.js', kitFree, '改钩子：不按改套件拦，只拦 cd'],
   ['Bash', 'cd ~/.claude/vibe-kit && cat secrets.json', secret, '读令牌'],
   ['PowerShell', 'Set-Location $HOME\\.claude\\vibe-kit\\router-data; Get-Content config.json', secret, '读 key'],
-  ['PowerShell', 'Set-Location $env:USERPROFILE\\.claude\\vibe-kit; Set-Content -Path config.json -Value "{}"', kit, '改配置'],
-  ['Bash', 'cd "$CLAUDE_CONFIG_DIR/vibe-kit/hooks" && rm pre-edit.js', kit, '删钩子'],
+  ['PowerShell', 'Set-Location $env:USERPROFILE\\.claude\\vibe-kit; Set-Content -Path config.json -Value "{}"', (o) => o === null, '改配置：放行'],
+  ['Bash', 'cd "$CLAUDE_CONFIG_DIR/vibe-kit/hooks" && rm pre-edit.js', kitFree, '删钩子：不按改套件拦，只拦 cd'],
 ]) { const o = run(tool, cmd); H.ok(label + '：' + cmd.slice(0, 70), test(o), why(o)); }
 {
   const o = run('Bash', 'cd "$CFGROOT/.claude/vibe-kit/hooks" && rm pre-edit.js');
@@ -58,7 +59,7 @@ for (const [tool, cmd] of [
   ['Bash', 'rg glpat ' + CFG],
   ['Bash', 'powershell -Command "Get-Content (Join-Path $HOME \'.claude\\vibe-kit\\secrets.json\')"'],
 ]) { const o = run(tool, cmd); H.ok('拦：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').replace(CFG, '<.claude>').slice(0, 80), secret(o), why(o)); }
-// 这两条先被"不许改套件"拦下（xargs、ForEach-Object 在管道里接着套件的路径），也算拦住了
+// 列套件目录再交给后面的命令读（xargs、ForEach-Object）：读令牌那一道拦
 for (const [tool, cmd] of [['PowerShell', 'gci "' + KW + '" | % { gc $_.FullName }'], ['Bash', 'ls ' + K + '/router-data | xargs cat']]) { const o = run(tool, cmd); H.ok('拦：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 70), blocked(o), why(o)); }
 H.section('只是列一列、算路径：放行');
 for (const [tool, cmd] of [
@@ -91,7 +92,7 @@ H.section('heredoc、eval 里的命令也是命令');
   const o3 = run('Bash', "python - <<'EOF'\nimport os\nprint(open(os.path.expanduser('~/.claude/vibe-kit/secrets.json')).read())\nEOF");
   H.ok('python - <<EOF 里读令牌：拦', blocked(o3), why(o3));
   const o4 = run('Bash', "node - <<'EOF'\nrequire('fs').writeFileSync(process.env.HOME + '/.claude/vibe-kit/hooks/pre-edit.js', '')\nEOF");
-  H.ok('node - <<EOF 里改钩子：拦', kit(o4), why(o4));
+  H.ok('node - <<EOF 里改钩子：放行（套件可以改）', o4 === null, why(o4));
   const o5 = run('PowerShell', "powershell -Command @'\nGet-Content \"$HOME\\.claude\\vibe-kit\\secrets.json\"\n'@");
   H.ok('powershell -Command 后面跟 here-string：拦', blocked(o5), why(o5));
   const o6 = run('Bash', "cat <<'EOF' > notes.txt\n记一下：git push 要用户确认\nEOF");
@@ -108,8 +109,9 @@ for (const [tool, cmd] of [
   ['Bash', 'node --eval="require(\'fs\').rmSync(\'' + K + '/hooks\',{recursive:true})"'],
   ['Bash', 'node --eval="require(\'fs\').writeFileSync(\'' + K + '/hooks/pre-edit.js\',\'\')" "$HOME/.claude/skills/ttls-redis/scripts/redis.js"'],
   ['Bash', 'python -c"open(\'' + K + '/config.json\',\'w\')" "$HOME/.claude/skills/ttls-db-crud/scripts/db.py"'],
-]) { const o = run(tool, cmd); H.ok('拦：' + cmd.replace(K, '<套件>').slice(0, 80), kit(o), why(o)); }
+]) { const o = run(tool, cmd); H.ok('放行（套件可以改）：' + cmd.replace(K, '<套件>').slice(0, 80), o === null, why(o)); }
 H.ok('-pe 里不提套件的照常', run('Bash', 'node -pe "1+1"') === null);
+H.ok('-pe 里读令牌照拦', secret(run('Bash', 'node -pe "require(\'fs\').readFileSync(\'' + K + '/secrets.json\',\'utf8\')"')));
 
 H.section('跑技能脚本、套件工具的正常写法：放行');
 // cd 进技能、套件的目录再跑脚本：不当成"要改套件"（审查 3-11），但 cd 串在一条里这件事照样拦，给出写全路径的办法
@@ -136,7 +138,7 @@ for (const [tool, cmd, cwd] of [
   ['Bash', 'echo disableAllHooks > ~/.claude/settings.json'],
   ['Bash', 'curl -X POST http://127.0.0.1:15731/api/kit/config -d "{}"'],
   ['Bash', 'grep -rl x ~/.claude/vibe-kit/hooks | xargs rm'],
-]) { const o = run(tool, cmd, cwd); H.ok('照拦：' + cmd.slice(0, 80), blocked(o), why(o)); }
+]) { const o = run(tool, cmd, cwd); H.ok('不按改套件拦（串着 cd 的只拦 cd）：' + cmd.slice(0, 80), kitFree(o), why(o)); }
 
 H.section('子 shell 里的 cd、popd、cd - 不带出括号');
 {
@@ -213,15 +215,6 @@ H.section('cd 和别的命令串在一条里：拦下，给出不用 cd 的写�
   H.ok('整仓 add 串着 cd：先说 add，末尾带一句 cd', blocked(both) && /git add -A/.test(why(both)) && /另外，这条命令里 cd 和别的命令串在一起/.test(why(both)), why(both));
   const srv = run('Bash', 'cd frontend && npm run dev');
   H.ok('直接起服务串着 cd：说用 devserver.js，并且说了 --cwd', blocked(srv) && /devserver\.js/.test(why(srv)) && /start 后面加 --cwd <子目录>/.test(why(srv)), why(srv));
-  // 关了"禁止改套件"也照样拦：这一条和套件的开关无关
-  const S = require(path.join(h.kit, 'lib', 'session.js'));
-  const before = fs.readFileSync(path.join(h.kit, 'config.json'), 'utf8');
-  H.setConfig(h, { kitLock: false });
-  S.sealConfig(h.kit, JSON.parse(fs.readFileSync(path.join(h.kit, 'config.json'), 'utf8')));
-  const o = run('Bash', 'cd frontend && cat package.json');
-  H.ok('关了禁止改套件：照样拦', cdOnly(o), why(o));
-  fs.writeFileSync(path.join(h.kit, 'config.json'), before);
-  S.sealConfig(h.kit, JSON.parse(before));
 }
 
 

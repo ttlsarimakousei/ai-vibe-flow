@@ -80,10 +80,9 @@ const plain = (s) => String(s || '').replace(/\x1b\[[0-9;]*m/g, '');
     const r = sl(base(300000));
     H.ok('没进流程：一行', r.code === 0 && r.lines.length === 1, r.raw + r.err);
     H.ok('第一行：目录和分支、上下文、自动开没开，没有模型名', /^shop \(\S+\) │ 上下文 ███░░░░░░░ 30% 300k\/1M │ 自动 关$/.test(r.lines[0]), r.lines[0]);
-    H.setConfig(h, { kitBypass: 'auto', kitLock: false });
+    // 2026-11-04 起套件可以改、拦了可以自己放行（仓库主人定的）：状态栏不再显示"允许改套件""被拦可自行放行"
     const loose = sl(base(300000));
-    H.ok('放松了的保护：说"被拦可自行放行"，不再说"放行：自动"', /被拦可自行放行/.test(loose.lines[1]) && /允许改套件/.test(loose.lines[1]), loose.lines);
-    H.setConfig(h, { kitBypass: 'ask', kitLock: true });
+    H.ok('状态栏不显示"允许改套件""被拦可自行放行"', !/允许改套件|被拦可自行放行/.test(loose.raw), loose.lines);
     const over = sl(base(1200000));
     H.ok('超过上限：百分比照实写，进度条满格，最前面说怎么办', /^⚠ 上下文超过上限了（1\.2M\/1M），Claude Code 没自动压缩：敲 \/compact 压缩，或者 \/ttls-handover 交接/.test(over.lines[0]) && /上下文 ██████████ 120% 1\.2M\/1M/.test(over.lines[0]), over.lines[0]);
     const u1 = usage();

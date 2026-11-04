@@ -1,15 +1,16 @@
 'use strict';
 /*
- * PreToolUse 钩子（Edit / Write / MultiEdit）的统一入口：一次调用里依次跑五个检查，谁先拦就用谁的话。
- *   1. guard-kit：套件自己的文件不许改；不许往 .claude/settings*.json 里写 disableAllHooks
- *   2. guard-vibe：.vibe 里只放套件的东西，临时脚本放 .vibe/tmp/<事由>/
- *   3. guard-output：代码之外的产出（DDL、说明文档、分析报告）放哪要先跟用户定好
- *   4. guard-encoding：会把中文写坏的编辑
- *   5. guard-spec：OpenSpec 产物的门槛
+ * PreToolUse 钩子（Edit / Write / MultiEdit）的统一入口：一次调用里依次跑下面几个检查，谁先拦就用谁的话。
+ *   1. guard-vibe：.vibe 里只放套件的东西，临时脚本放 .vibe/tmp/<事由>/
+ *   2. guard-output：代码之外的产出（DDL、说明文档、分析报告）放哪要先跟用户定好
+ *   3. guard-encoding：会把中文写坏的编辑
+ *   4. guard-spec：OpenSpec 产物的门槛
+ *   5. 流程里没开工不改源码、探索记录和计划表只在用户开口那一轮改
+ * 以前第一道是 guard-kit（不许改套件），2026-11-04 去掉了（仓库主人定的：套件可以改）。
  * 都放行之后，要往 .vibe/ 里写东西的，确保 .vibe/ 已经在那个仓库的 .gitignore 里（写入被拦时不改 .gitignore）。
  * 合成一个入口：一次编辑只起一个进程。
  * 兜底放行（lib/feedback.js）：流程类的检查（guard-vibe、guard-output、guard-spec）拦下时带〔拦截编号〕；申请过放行的，
- * 只跳过申请了的那道检查，别的检查（尤其改套件、编码）照样跑。通行证按"同一个文件"认：申请之后对这个文件的编辑
+ * 只跳过申请了的那道检查，别的检查（尤其编码）照样跑。通行证按"同一个文件"认：申请之后对这个文件的编辑
  * 内容变了（比如中间改过一次验法）照样用得上。某道检查抛了异常：照旧当放行，但记进问题反馈。
  */
 const path = require('path');
@@ -33,16 +34,16 @@ const exploreCheck = { handle(j) {
   const no = require('../lib/guard-explore').issue(j, f);
   return no ? require('../lib/session').blockOut('PreToolUse', '[vibe-kit 探索记录] ' + no) : null;
 } };
-const checks = [require('./guard-kit.js'), require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js'), startedCheck, exploreCheck];
+const checks = [require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js'), startedCheck, exploreCheck];
 // 和上面一一对应：拦下时记的是哪道检查（兜底放行按这个名字认）
-const NAMES = ['guard-kit', 'guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec', 'guard-started', 'guard-explore'];
+const NAMES = ['guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec', 'guard-started', 'guard-explore'];
 let outputs = null;
 try { outputs = require('../lib/outputs.js'); } catch (e) { /* 老版本没有 */ }
 let feedback = null;
 try { feedback = require('../lib/feedback.js'); } catch (e) { /* 老版本没有 */ }
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
-// 全自动模式下，不能放行的拦截（改套件、非 UTF-8 文件）：提示里原来写的是"停下来告诉用户"，用户不在，停下就是一直挂着
+// 全自动模式下，不能放行的拦截（非 UTF-8 文件）：提示里原来写的是"停下来告诉用户"，用户不在，停下就是一直挂着
 const AUTO_HARD = '\n全自动模式：我不在，不要停下等我。这个文件先不动：换一个不碰它的做法；换不了，就把这项任务留给我（任务后面加上"（留给用户：原因）"，不打勾），接着做别的。已经记进全自动报告。';
 
 /** 这一步是哪个操作：工具、文件、写的内容。原样再做一次时算出来一样 */

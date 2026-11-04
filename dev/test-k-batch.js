@@ -47,8 +47,9 @@ const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit'))
     const tight = (command) => { try { return I.run(() => { const t = Date.now(); while (Date.now() - t < 20) { /* 空转 */ } return G.handle({ session_id: 'h2', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'h2-' + command.length, tool_input: { command }, transcript_path: tf }); }, { budgetMs: 1 }); } catch (e) { return { threw: e.message }; } };
     const r1 = tight('cat "' + kit + '/secrets.json"');
     H.ok('预算用完：cat secrets.json 照样拦', !!r1 && r1.decision === 'block' || !!(r1 && r1.hookSpecificOutput && r1.hookSpecificOutput.permissionDecision === 'deny'), r1);
-    const r2 = tight('sed -i "s/a/b/" "' + kit + '/hooks/guard-commit.js"');
-    H.ok('预算用完：改套件的钩子照样拦', !!r2 && (r2.decision === 'block' || !!(r2.hookSpecificOutput && r2.hookSpecificOutput.permissionDecision === 'deny')), r2);
+    // 2026-11-04 起改套件不拦了（仓库主人定的），换成另一种读令牌的写法：递归搜套件目录
+    const r2 = tight('grep -rn token "' + kit + '"');
+    H.ok('预算用完：递归搜套件目录（会搜到令牌）照样拦', !!r2 && (r2.decision === 'block' || !!(r2.hookSpecificOutput && r2.hookSpecificOutput.permissionDecision === 'deny')), r2);
     const r3 = tight('echo hello');
     H.ok('预算用完、普通命令：照旧放行（出错放行）', !r3 || !!r3.threw, r3);
   }

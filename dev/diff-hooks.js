@@ -108,7 +108,6 @@ const prompt = (text, files, entries) => (kit) => { const proj = project(kit, fi
 // 临时解包与检查结果不落到项目普通目录。
 add('解包：JAR 不能写入项目根', 'guard-commit', cmd('jar xf dependency.jar'), /归档解包[\s\S]*\.vibe\/tmp\//, V1011B);
 add('解包：ZIP 不能写入源码', 'guard-commit', cmd('unzip dependency.jar -d src'), /归档解包/, V1011B);
-add('解包：关闭 kitLock 后仍检查', 'guard-commit', cmd('tar xf app.tar'), /归档解包/, V1011B, { kitLock: false });
 add('解包：条目落盘也用事由目录', 'guard-commit', cmd('unzip -p dependency.jar entry.txt > inspect.txt'), /归档解包/, V1011B);
 add('解包：Start-Process 完整程序路径', 'guard-commit', (kit, proj) => ({ ...cmd("Start-Process -FilePath 'C:\\jdk\\bin\\jar.exe' -ArgumentList 'xf dependency.jar' -WindowStyle Hidden")(kit, proj), tool_name: 'PowerShell' }), /归档解包/, V1011B);
 add('解包：cmd start 带空格的程序路径', 'guard-commit', (kit, proj) => ({ ...cmd('cmd /c start "" "C:\\Program Files\\jdk\\bin\\jar.exe" xf dependency.jar')(kit, proj), tool_name: 'PowerShell' }), /归档解包/, V1011B);
@@ -245,7 +244,7 @@ const grepIn = (input) => (kit) => { const proj = project(kit); return { proj, j
 add('Grep：对着套件目录搜内容', 'guard-read', grepIn({ pattern: 'token', path: '<套件>', output_mode: 'content' }), /里有放令牌、放模型 key 的文件/, V0928B);
 add('Grep：对着套件目录只看文件名', 'guard-read', grepIn({ pattern: 'token', path: '<套件>', output_mode: 'files_with_matches' }));
 add('Grep：搜项目的内容', 'guard-read', grepIn({ pattern: 'class', path: '<项目>', output_mode: 'content' }));
-add('命令：在套件的钩子里搜', 'guard-commit', cmd('grep -rn kitLock ~/.claude/vibe-kit/hooks'));
+add('命令：在套件的钩子里搜', 'guard-commit', cmd('grep -rn readConfig ~/.claude/vibe-kit/hooks'));
 
 // ---------- 收工 ----------
 const A = (proj) => path.join(proj, 'src/main/java/com/x/A.java');
@@ -439,6 +438,16 @@ for (const c of cases) {
   if (c.name === '反馈1007：env -C 跑套件场景脚本') { c.expect = /用户这一轮没说要自测：先用 Ask 询问是否自测或复验及范围[\s\S]*我要看看系统[\s\S]*devserver\.js status，起着的直接给地址/; c.since = V11022248; }
 }
 
+// 2026-11-04：套件可以改（仓库主人定的，"禁止改套件"开关去掉）：改套件、写 disableAllHooks、改经验规则文件、调配置页接口不再拦；
+// 列套件目录、在套件目录里找到再读，照样拦，说的是读令牌
+const KIT_FREE = ['改套件的配置', '改全局约定', '项目设置里写 disableAllHooks', '直接改经验规则文件', '改经验规则文件（新名字）', '命令：rm -rf ~/.claude/vibe-kit/hooks', '命令：echo x > ~/.claude/settings.json',
+  '命令：node ~/.claude/vibe-kit/install.js --uninstall', '命令：curl -s http://127.0.0.1:15731/api/kit -H "x-vibe-router: 1"', '命令：echo \'{"disableAllHooks":true}\' > .claude/settings.local.json',
+  'PowerShell：Remove-Item -Recurse $env:USERPROFILE\\.claude\\vibe-kit', '命令：删经验规则文件'];
+const KIT_READ = ['命令：列套件目录再交给 xargs 读', '命令：在套件目录里找到就读'];
+const after1104 = (c) => {
+  if (KIT_FREE.includes(c.name)) { c.expect = /放行，没有输出/; c.since = NEXT; }
+  if (KIT_READ.includes(c.name)) { c.expect = /会读到令牌或者模型的 key/; c.since = NEXT; }
+};
 // 2026-11-03：进流程只有三种门（敲 /opsx:…、话里明确有 openspec、提问框选探索）；问句、"停"不退出流程；新建提案要有探索记录
 for (const c of cases) {
   if (c.name === '没探索就写提案') { c.expect = /用户没说要走 OpenSpec/; c.since = V1104; }
@@ -456,6 +465,7 @@ for (const c of cases) {
   // 每组只审查，全面自测放到大任务最后
   if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /一个 change 做完按 plan\.md 接下一个，全部做完全面自测[\s\S]*checkpoint\.js/; c.since = V1104; }
 }
+for (const c of cases) after1104(c);
 
 let same = 0;
 let changed = 0;

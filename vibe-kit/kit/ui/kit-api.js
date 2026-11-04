@@ -246,8 +246,6 @@ async function handle(method, url, body, kitDir) {
     // 文件里放松了保护、封条里没有（不是经配置页、安装器改的）：钩子按安全的值算，这里提醒用户核对后保存一次
     const seal = readJson(path.join(kitDir, 'state', 'config-seal.json'), {});
     const tampered = [];
-    if (config.kitLock === false && seal.kitLock !== false) tampered.push('关掉"禁止 Claude 自己改套件"');
-    if (config.kitBypass === 'auto' && seal.kitBypass !== 'auto') tampered.push('兜底放行"让它自己放行"');
     for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (config[k] === true && seal[k] === false) tampered.push('打开“' + label + '”');
     return { installed, kitDir, local: cleanLocal(readJson(localFile, EMPTY_LOCAL)), config, tampered, openspec: openspecInfo(kitDir), notice: installNotice(kitDir) };
   }
@@ -266,8 +264,8 @@ async function handle(method, url, body, kitDir) {
   if (method === 'POST' && url === '/api/kit/config') {
     const inc = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
     const { cur, c } = mergeConfig(kitDir, inc);
-    // 封条：三个放松保护的开关（关掉禁改、自动放行、全自动模式）只认这里和安装器改的，钩子拿它对照（见套件 lib/session.js 的 readConfig）
-    try { fs.mkdirSync(path.join(kitDir, 'state'), { recursive: true }); fs.writeFileSync(path.join(kitDir, 'state', 'config-seal.json'), JSON.stringify({ kitLock: c.kitLock !== false, kitBypass: c.kitBypass, autoMode: c.autoApply === true, autoApply: c.autoApply === true, autoRequirements: c.autoRequirements === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
+    // 封条：全自动这几个开关只认这里和安装器改的，钩子拿它对照（见套件 lib/session-config.js 的 readConfigRaw）
+    try { fs.mkdirSync(path.join(kitDir, 'state'), { recursive: true }); fs.writeFileSync(path.join(kitDir, 'state', 'config-seal.json'), JSON.stringify({ autoMode: c.autoApply === true, autoApply: c.autoApply === true, autoRequirements: c.autoRequirements === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
     auditLog(kitDir, cur, c);
     const r = await sync(kitDir);
     return { ok: true, synced: r.ok, output: r.output, config: c };
@@ -455,9 +453,6 @@ function mergeConfig(kitDir, inc) {
 }
 function auditLog(kitDir, before, after) {
   const changed = [];
-  if (before.kitLock !== false && after.kitLock === false) changed.push('关掉了"禁止 Claude 自己改套件"');
-  if (before.kitLock === false && after.kitLock !== false) changed.push('打开了"禁止 Claude 自己改套件"');
-  if (before.kitBypass !== after.kitBypass) changed.push('被拦住时的放行改成了"' + ({ ask: '问我', auto: '让它自己放行', off: '不许放行' }[after.kitBypass] || after.kitBypass) + '"');
   for (const [k, label] of [['autoRequirements', '需求自动模式'], ['autoApply', 'Apply 自动模式']]) if (before[k] !== after[k]) changed.push((after[k] ? '打开了' : '关掉了') + label);
   if (!changed.length) return;
   try {

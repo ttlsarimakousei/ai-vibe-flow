@@ -20,7 +20,7 @@
 // 不做开关、升级时从 config.json 里清掉的（问题表第 29—31 条）
 const FIXED = ['autoVerify', 'autoSeePage', 'specGate', 'autoOnboard', 'autoHandover'];
 // 不再有的开关（审查次数、文件数、方式，用户 2026-11-03 定的）：字段表里没有了，升级时也从 config.json 里清掉
-const REMOVED = ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewLoop', 'reviewMaxRounds', 'reviewExecutor', 'reviewMaxFiles', 'statusUsage', 'hookTransport', 'autoCrossReview'];
+const REMOVED = ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewLoop', 'reviewMaxRounds', 'reviewExecutor', 'reviewMaxFiles', 'statusUsage', 'hookTransport', 'autoCrossReview', 'kitLock', 'kitBypass'];
 const FIELDS = [
   { name: 'autoVerify', type: 'bool', def: true, internal: true },
   { name: 'autoSeePage', type: 'bool', def: true, internal: true },
@@ -32,8 +32,6 @@ const FIELDS = [
   { name: 'autoApply', type: 'bool', def: false, internal: true },
   { name: 'reviewLenses', type: 'int', def: 3, min: 1, max: 3, internal: true },
   { name: 'autoHandover', type: 'bool', def: false, internal: true },
-  { name: 'kitLock', type: 'bool', def: true, page: 'kit', doc: '禁止 Claude 自己改套件', since: '0923', defText: '开' },
-  { name: 'kitBypass', type: 'enum', def: 'ask', values: ['ask', 'auto', 'off'], page: 'kit', doc: '被检查拦住、它又确信是套件拦错了（自动模式下不用点，选"不许放行"的除外）', since: '0924.1848', defText: '要我点同意' },
   { name: 'contextLimitTokens', type: 'int', def: 1000000, min: 50000, max: 10000000, zero: true, page: 'kit', doc: '上下文上限 contextLimitTokens', since: '0921', defText: '100 万 token' },
   { name: 'handoverPercent', type: 'int', def: 70, min: 30, max: 95, internal: true },
   { name: 'handoverAsk', type: 'enum', def: 'off', values: ['ask', 'off'], internal: true },

@@ -1,7 +1,7 @@
 'use strict';
 /* #70、#78、#88、#89 与反馈元数据：只读入口、总预算、额度去重和完整重现说明。全部使用假用户目录。 */
 const path = require('path'); const fs = require('fs'); const H = require('./lib/harness');
-const h = H.makeHome('feedback1013-diagnostics', process.argv[2], { kitBypass: 'auto' });
+const h = H.makeHome('feedback1013-diagnostics', process.argv[2]);
 const p = H.makeRepo(path.join(h.work, 'p'), { 'a.js': 'let a=1;\n' });
 const S = require(path.join(h.kit, 'lib/session')); const F = require(path.join(h.kit, 'lib/feedback')); const I = require(path.join(h.kit, 'lib/invocation'));
 S.setFlow({ session_id: 'inspect' }, true, '提案修订', 'plan');

@@ -105,8 +105,6 @@ function config() {
   try { readJson(path.join(KIT, 'config.json')); } catch (e) { if (e.code !== 'ENOENT') return bad('config.json 读不懂，开关都按默认算', '到配置页"套件开关"保存一次，或者把文件改对'); }
   const c = readConfig();
   const loose = [];
-  if (c.kitLock === false) loose.push('允许 Claude 改套件');
-  if (c.kitBypass === 'auto') loose.push('被拦住时让它自己放行');
   if (c.specGate === false) loose.push('提案检查关着');
   if (c.commitCheck === false) loose.push('提交检查关着');
   return loose.length ? warn('放松了保护：' + loose.join('、'), '是你自己开的可以不管；改回去在配置页"套件开关"') : good('保护的开关都是默认的');

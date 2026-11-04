@@ -108,35 +108,32 @@ H.section('规则文件');
   H.ok('记下了要提交的文件', L.uncommitted(A).length === 1 && L.uncommitted(A)[0].rel === '.claude/rules/ttls-lessons-java.md', L.uncommitted(A));
 }
 
-H.section('规则文件不许模型直接改');
+H.section('规则文件模型能直接改（2026-11-04 起套件可以改，仓库主人定的）');
 {
   const f = ruleFile(A, 'java');
   const base = { session_id: 's-guard', cwd: A, hook_event_name: 'PreToolUse', transcript_path: H.transcript(path.join(h.root, 'tg.jsonl'), [H.tr.user('x')]) };
   const edit = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: f, old_string: '- 调', new_string: '- 改' } }));
-  H.ok('Edit 拦', edit && edit.decision === 'block' && /lesson\.js/.test(H.reasonOf(edit)), edit);
+  H.ok('Edit 放行', edit === null, edit);
   const wr = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(A, '.claude', 'rules', 'ttls-lessons-web.md'), content: '- x\n' } }));
-  H.ok('Write 新的规则文件也拦', wr && wr.decision === 'block', wr);
+  H.ok('Write 新的规则文件放行', wr === null, wr);
   const cand = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: L.candidatesFile(A), old_string: 'a', new_string: 'b' } }));
-  H.ok('候选文件拦', cand && cand.decision === 'block', cand);
+  H.ok('候选文件放行', cand === null, cand);
   const userRule = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(h.cfg, 'rules', 'ttls-lessons-java.md'), content: '- x\n' } }));
-  H.ok('用户级的拦', userRule && userRule.decision === 'block', userRule);
+  H.ok('用户级的放行', userRule === null, userRule);
   const other = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(A, '.claude', 'rules', 'team-style.md'), content: '- 团队自己的规则\n' } }));
   H.ok('别的规则文件不管', other === null, other);
   const cmd = (c, tool) => H.hook(h, 'guard-commit', Object.assign({}, base, { tool_name: tool || 'Bash', tool_input: { command: c } }));
   for (const c of ['echo "- x" >> .claude/rules/ttls-lessons-java.md', 'rm .claude/rules/ttls-lessons-java.md', "sed -i 's/a/b/' .claude/rules/ttls-lessons-java.md", 'cd .claude/rules && rm ttls-lessons-java.md', 'git checkout -- .claude/rules/ttls-lessons-java.md', 'rm -rf .vibe/lessons']) {
     const r = cmd(c);
-    H.ok('命令拦：' + c, r && r.decision === 'block' && /经验规则/.test(H.reasonOf(r)), r);
+    const cdOnly = /^cd /.test(c) && r && r.decision === 'block' && /cd 和别的命令串在一/.test(H.reasonOf(r));
+    H.ok('命令不按经验规则拦：' + c, !(r && /经验规则/.test(H.reasonOf(r))) && (r === null || cdOnly), r);
   }
   const ps = cmd('Remove-Item .claude\\rules\\ttls-lessons-java.md', 'PowerShell');
-  H.ok('PowerShell 删也拦', ps && ps.decision === 'block', ps);
+  H.ok('PowerShell 删也放行', ps === null, ps);
   for (const c of ['cat .claude/rules/ttls-lessons-java.md', 'git add .claude/rules/ttls-lessons-java.md', 'git -C "' + A.replace(/\\/g, '/') + '" add ".claude/rules/ttls-lessons-java.md"', 'git diff -- .claude/rules/ttls-lessons-java.md', 'node "' + TOOL.replace(/\\/g, '/') + '" list']) {
     const r = cmd(c);
     H.ok('命令放行：' + c.slice(0, 50), r === null, r);
   }
-  H.setConfig(h, { kitLock: false });
-  const off = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: f, old_string: '- 调', new_string: '- 改' } }));
-  H.ok('用户在配置页关了禁改：放行', off === null, off);
-  H.setConfig(h, { kitLock: true });
 }
 
 H.section('规则文件改了没提交：收工时催一次');

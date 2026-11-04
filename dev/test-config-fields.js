@@ -49,7 +49,7 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
     const known = new Set(all.map((f) => f.name));
     // 页面上收进保存条的开关：fBool、fSel、fNum 登记的
     const reg = [...page.matchAll(/\bf(Bool|Sel|Num)\('(\w+)'(?:,\s*'[^']*')?(?:,\s*(\[[^\]]*\]|\d+))?(?:,\s*(\d+))?(?:,\s*(true))?\)/g)];
-    H.ok('（认出了页面上的开关）', reg.length >= 25, reg.length);
+    H.ok('（认出了页面上的开关）', reg.length >= 23, reg.length);
     const extra = reg.filter((m) => !known.has(m[2])).map((m) => m[2]);
     H.ok('页面上每个开关都在字段表里', extra.length === 0, extra);
     const internal = reg.filter((m) => { const f = all.find((x) => x.name === m[2]); return f && (f.internal || f.noControl); }).map((m) => m[2]);
@@ -177,7 +177,7 @@ const all = CF.FIELDS.concat(CF.VIEW_FIELDS);
     H.ok('新的两个控件在，旧的五个不在', /id="k_contextAction"/.test(page) && /id="k_contextPercent"/.test(page) && !/id="k_(contextStrategy|handoverPercent|autoCompactPercent|handoverAsk|autoHandover)"/.test(page));
     H.ok('说明写了四种选择和压缩线怎么算', /快满时怎么办/.test(page) && /问我要不要交接/.test(page) && /再过 15 个百分点/.test(page));
     H.ok('配置页不再提"全自动模式"这个没有了的开关（20261102.0255 的"保护"一节还写着）', !/全自动模式|全自动阶段/.test(page), (page.match(/.{20}全自动(模式|阶段).{10}/) || [])[0]);
-    H.ok('"保护"一节只说前两项认配置页', /前两项只认在这个页面上改的/.test(page));
+    H.ok('"保护"一节不再有"不许 Claude 改套件""被检查拦住时能不能放行"（2026-11-04 去掉）', !/k_kitLock|k_kitBypass|不许 Claude 改套件|被检查拦住时能不能放行|前两项只认/.test(page));
     H.ok('预览和套件算压缩线的办法一样', /Math\.min\(95, Math\.max\(50, line \+ 15\)\)/.test(page) && /Math\.min\(95, Math\.max\(50, p \+ 15\)\)/.test(H.read(path.join(H.SRC, 'kit', 'lib', 'config-fields.js')) || ''));
   }
 

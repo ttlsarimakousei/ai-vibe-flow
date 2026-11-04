@@ -53,17 +53,18 @@ const call = (method, url, body) => new Promise((resolve) => {
   H.section('接口');
   // 配置页上改放松保护的开关：记在开关改动里，不记成问题
   const n0 = fs.readdirSync(path.join(h.kit, 'feedback')).filter((n) => /^F\d{8}/.test(n)).length;
-  const sv = await call('POST', '/api/kit/config', { kitBypass: 'auto' });
-  H.ok('保存开关', sv.status === 200 && sv.json.config.kitBypass === 'auto', sv.text);
+  // 2026-11-04 起"被检查拦住时能不能放行"去掉了，放松保护的只剩全自动这几个
+  const sv = await call('POST', '/api/kit/config', { autoRequirements: true });
+  H.ok('保存开关', sv.status === 200 && sv.json.config.autoRequirements === true && sv.json.config.kitBypass === undefined, sv.text);
   H.ok('改开关不再记成问题', fs.readdirSync(path.join(h.kit, 'feedback')).filter((n) => /^F\d{8}/.test(n)).length === n0);
   await call('POST', '/api/kit/config', { autoApply: true });
   const seal = JSON.parse(fs.readFileSync(path.join(h.kit, 'state', 'config-seal.json'), 'utf8'));
-  H.ok('封条里记了Apply 自动模式', seal.autoApply === true && seal.kitBypass === 'auto', seal);
+  H.ok('封条里记了全自动的开关，不再有禁止改套件、放行方式这两项', seal.autoApply === true && seal.autoRequirements === true && seal.kitBypass === undefined && seal.kitLock === undefined, seal);
   const fb = (await call('GET', '/api/kit/feedback')).json;
   H.ok('问题列表里只有套件的问题', fb && fb.records.length === 1 && /验法跑过了/.test(fb.records[0].title), fb && fb.records);
   H.ok('每条标着上报了没有（上报关着）；不再给清空用的全部记录', fb.records[0].upload === 'off' && fb.all === undefined, fb.records);
   H.ok('带上了放行记录、拦得最多的规矩、开关改动', fb.passes.length === 1 && fb.passes[0].uses === 2 && fb.stats.length === 1 && fb.stats[0].count === 7 && fb.stats[0].sessions === 2 && fb.audit.length === 2 && /Apply 自动模式/.test(fb.audit[0].title), fb);
-  await call('POST', '/api/kit/config', { autoApply: false, kitBypass: 'ask' });
+  await call('POST', '/api/kit/config', { autoApply: false, autoRequirements: false });
 
   H.section('页面');
   let launch = null;
@@ -155,7 +156,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('自动压缩线保存了，说了开着的会话怎么马上生效', (await call('GET', '/api/kit')).json.config.autoCompactPercent === 80 && /\/autocompact/.test(await page.locator('#barMsg').innerText()), await page.locator('#barMsg').innerText());
     // 保护那一节：最近的开关改动
     const audit = await page.locator('#auditList').innerText();
-    H.ok('保护那一节列着最近的开关改动', /打开了Apply 自动模式/.test(audit) && /让它自己放行/.test(audit), audit);
+    H.ok('保护那一节列着最近的开关改动', /打开了Apply 自动模式/.test(audit) && /打开了需求自动模式/.test(audit), audit);
     await shot('4-kit-bottom');
     // 经验规则单开一页
     await page.click('nav button[data-tab="lessons"]');

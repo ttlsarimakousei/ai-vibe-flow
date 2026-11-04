@@ -83,16 +83,17 @@ async function handle(j) {
       out.push('Bash 里不要把 cd 和别的命令串在一条里（Claude Code 会停下来要人确认，开着跳过权限模式也问）：命令、脚本、文件写完整路径或者相对当前目录的路径；git 用 git -C <目录>，Maven 用 mvn -f <目录>/pom.xml，npm 用 npm --prefix <目录>。');
     }
 
-    // 套件自己的代码和安装时记下的指纹对不上（被改过、删了、多出来的）：告诉它和用户（状态栏也挂红字），记一条问题反馈。重新装一遍就恢复
+    // 套件自己的代码和安装时记下的指纹对不上（被改过、删了、多出来的）：告诉它，记一条问题反馈。重新装一遍就恢复。
+    // 2026-11-04 起套件可以改（用户让改才改），状态栏不再挂红字
     try {
       const drift = kitCodeDrift();
       if (drift) {
         writeState('kit-drift', { list: drift.map((x) => x.rel + '（' + x.how + '）'), at: Date.now() });
         if (drift.length) {
           const list = drift.map((x) => x.rel + '（' + x.how + '）');
-          out.push('套件自己的代码和安装时不一样：' + list.slice(0, 8).join('、') + (list.length > 8 ? ' 等 ' + list.length + ' 个' : '') + '。这些检查可能已经不可靠了：先告诉我；不是你改的也不要去"修"它。重新运行安装包就能恢复。');
+          out.push('套件自己的代码和安装时不一样：' + list.slice(0, 8).join('、') + (list.length > 8 ? ' 等 ' + list.length + ' 个' : '') + '。不是我让你改的，先告诉我，不要去"修"它。重新运行安装包就能恢复。');
           const fb = require('../lib/feedback.js');
-          fb.record({ kind: '篡改', hook: '套件代码', source: '钩子自动记录', title: '套件自己的代码和安装时不一样：' + list.slice(0, 3).join('、') + (list.length > 3 ? ' 等' : ''), what: '会话开始时比对安装时记下的指纹（state/kit-hash.json），这些文件对不上：' + list.join('、') + '。不是安装器装的样子，可能是被程序绕开禁改改过，也可能是手工改的。', sig: fb.sigOf(['kit-drift', list.join(',')]), sid: j.session_id, cwd, transcript: j.transcript_path });
+          fb.record({ kind: '篡改', hook: '套件代码', source: '钩子自动记录', title: '套件自己的代码和安装时不一样：' + list.slice(0, 3).join('、') + (list.length > 3 ? ' 等' : ''), what: '会话开始时比对安装时记下的指纹（state/kit-hash.json），这些文件对不上：' + list.join('、') + '。不是安装器装的样子，可能是用户让 Claude 改的，也可能是手工改的。', sig: fb.sigOf(['kit-drift', list.join(',')]), sid: j.session_id, cwd, transcript: j.transcript_path });
         }
       }
     } catch (e) { /* 比不了不影响会话开始 */ }

@@ -106,12 +106,12 @@ const snapshot = (dir) => { const out = {}; const walk = (d) => { for (const n o
   {
     const h = machine('doc-note');
     // 放松保护的开关只认配置页、安装器写的：封条要一起写
-    setCfg(h, { kitBypass: 'auto', specGate: false });
-    setState(h, 'config-seal', { kitLock: true, kitBypass: 'auto', at: Date.now() });
+    setCfg(h, { specGate: false });
+    setState(h, 'config-seal', { at: Date.now() });
     const c = h.item('开关');
-    H.ok('放松了保护的开关：说是哪几个', c.level === '注意' && /让它自己放行/.test(c.text) && /提案检查关着/.test(c.text), c);
-    setCfg(h, { kitBypass: 'ask', specGate: true, updatePin: V });
-    setState(h, 'config-seal', { kitLock: true, kitBypass: 'ask', at: Date.now() });
+    H.ok('放松了保护的开关：说是哪几个；不再有"允许改套件""让它自己放行"（2026-11-04 去掉）', c.level === '注意' && /提案检查关着/.test(c.text) && !/改套件|自己放行/.test(c.text), c);
+    setCfg(h, { specGate: true, updatePin: V });
+    setState(h, 'config-seal', { at: Date.now() });
     setState(h, 'update', { remoteVersion: V2 });
     const u = h.item('自动更新');
     H.ok('固定在这一版：说了，还说怎么取消', u.level === '注意' && u.text.includes('固定在 ' + V) && /取消固定/.test(u.fix), u);

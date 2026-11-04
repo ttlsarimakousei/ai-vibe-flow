@@ -38,8 +38,9 @@ H.ok('相对路径按 projectPath 算，别的目录放行', call({ projectPath:
 H.ok('字段里只是一段话，没路径：放行', call({ query: 'find all orders' }) === null);
 H.ok('字段里是网址：放行', call({ link: 'http://example.com/a/b' }) === null);
 
-H.section('写套件目录也拦');
-H.ok('改套件的钩子', blocked(call({ file_path: path.join(h.kit, 'hooks', 'verify-gate.js'), new_string: 'x' }, 'mcp__ide__edit')));
+H.section('写套件目录：放行（2026-11-04 起套件可以改），令牌照拦');
+H.ok('改套件的钩子：放行', call({ file_path: path.join(h.kit, 'hooks', 'verify-gate.js'), new_string: 'x' }, 'mcp__ide__edit') === null);
+H.ok('读套件的令牌：拦', blocked(call({ file_path: path.join(h.kit, 'secrets.json') }, 'mcp__ide__read')));
 
 H.section('别的放行');
 H.ok('普通参数', call({ q: 'hello' }) === null);

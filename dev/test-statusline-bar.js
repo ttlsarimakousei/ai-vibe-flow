@@ -98,10 +98,9 @@ H.section('等用户');
 H.section('有才出现的一行');
 {
   const p = project(['c1']);
-  H.setConfig(h, { kitLock: false });
+  // 2026-11-04 起套件可以改：不再有"允许改套件"这一行
   const ls = run({}, p.proj, 's-extra');
-  H.ok('放松的保护：单独一行', ls.length === 2 && /允许改套件/.test(ls[1]), ls);
-  H.setConfig(h, { kitLock: true });
+  H.ok('没进流程、没有经验待确认、没有更新：只有一行，不显示"允许改套件"', ls.length === 1 && !/允许改套件|被拦可自行放行/.test(ls.join('\n')), ls);
 }
 
 H.section('流程状态读不了：照样出一行（复审 R14）');

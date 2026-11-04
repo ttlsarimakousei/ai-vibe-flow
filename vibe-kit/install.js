@@ -964,7 +964,7 @@ if (mode === 'install') {
     const sealFile = path.join(KIT, 'state', 'config-seal.json');
     let oldSeal = {}; try { oldSeal = JSON.parse(fs.readFileSync(sealFile, 'utf8')); } catch (e) { /* 没有旧封条时保护项采用安全默认值 */ }
     fs.mkdirSync(path.dirname(sealFile), { recursive: true });
-    fs.writeFileSync(sealFile, JSON.stringify(Object.assign({ kitLock: true, kitBypass: 'ask' }, oldSeal, { autoMode: false, autoApply: false, autoRequirements: false, at: Date.now() })));
+    fs.writeFileSync(sealFile, JSON.stringify(Object.assign({}, oldSeal, { autoMode: false, autoApply: false, autoRequirements: false, at: Date.now() })));
     fs.writeFileSync(migrationFile, JSON.stringify({ at: Date.now() }));
     console.log('  [OK] 两阶段自动模式已关闭，任务进度保留；需要时在配置页重新开启');
   }
@@ -1001,7 +1001,7 @@ if (mode === 'install') {
         const sealFile = path.join(KIT, 'state', 'config-seal.json');
         let oldSeal = {}; try { oldSeal = JSON.parse(fs.readFileSync(sealFile, 'utf8')); } catch (e) { /* 没有旧封条时保护项采用安全默认值 */ }
         fs.mkdirSync(path.dirname(sealFile), { recursive: true });
-        fs.writeFileSync(sealFile, JSON.stringify(Object.assign({ kitLock: true, kitBypass: 'ask' }, oldSeal, { autoMode: false, autoApply: false, autoRequirements: false, at: Date.now() })));
+        fs.writeFileSync(sealFile, JSON.stringify(Object.assign({}, oldSeal, { autoMode: false, autoApply: false, autoRequirements: false, at: Date.now() })));
         forced.autoOff = Date.now();
         said.push('需求自动和 Apply 自动关闭');
       }
@@ -1066,11 +1066,10 @@ if (mode === 'install') {
   // 不在这里记的话要等第一次上报时才记，装好之后、第一次上报之前记的问题会被当成"以前攒下的"，永远传不上去
   const issueStore = path.join(KIT, 'feedback', 'issues.json');
   if (!fs.existsSync(issueStore)) { try { fs.mkdirSync(path.dirname(issueStore), { recursive: true }); fs.writeFileSync(issueStore, JSON.stringify({ since: Math.floor(Date.now() / 1000) * 1000, map: {} })); } catch (e) { /* 记不了：第一次上报时再记 */ } }
-  // 封条（三个放松保护的开关只认配置页、安装器改的，见 kit/lib/session.js 的 readConfig）：还没有的，按现在文件里的记一份——
-  // 以前在配置页关掉过禁改的，升级后照旧；已经有封条的不动
+  // 封条（全自动的开关只认配置页、安装器改的，见 kit/lib/session-config.js 的 readConfigRaw）：还没有的，按现在文件里的记一份；已经有封条的不动
   const sealFile = path.join(KIT, 'state', 'config-seal.json');
   if (!fs.existsSync(sealFile)) {
-    try { const cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^﻿/, '')); fs.mkdirSync(path.dirname(sealFile), { recursive: true }); fs.writeFileSync(sealFile, JSON.stringify({ kitLock: cur.kitLock !== false, kitBypass: ['ask', 'auto', 'off'].includes(cur.kitBypass) ? cur.kitBypass : 'ask', autoMode: cur.autoMode === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
+    try { const cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8').replace(/^﻿/, '')); fs.mkdirSync(path.dirname(sealFile), { recursive: true }); fs.writeFileSync(sealFile, JSON.stringify({ autoMode: cur.autoMode === true, at: Date.now() })); } catch (e) { /* 记不了就按安全的值算 */ }
   } else {
     // 老版本的封条里没有全自动模式这一项：按现在文件里的补上（以前在配置页打开过的，升级后照旧）
     try {

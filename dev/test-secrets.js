@@ -79,7 +79,7 @@ H.section('用 Grep 工具搜：范围里有令牌、要看内容的，拦');
     ['只看文件名（没写 output_mode）', { pattern: 'token', path: h.kit }],
     ['只看文件名', { pattern: 'token', path: h.cfg, output_mode: 'files_with_matches' }],
     ['只数个数', { pattern: 'token', path: h.kit, output_mode: 'count' }],
-    ['搜套件的钩子目录', { pattern: 'kitLock', path: path.join(h.kit, 'hooks'), output_mode: 'content' }],
+    ['搜套件的钩子目录', { pattern: 'readConfig', path: path.join(h.kit, 'hooks'), output_mode: 'content' }],
     ['搜套件的开关文件', { pattern: 'autoUpdate', path: path.join(h.kit, 'config.json'), output_mode: 'content' }],
     ['搜项目', { pattern: 'class', path: proj, output_mode: 'content' }],
     ['没给路径，人站在项目里', { pattern: 'class', output_mode: 'content' }],
@@ -90,9 +90,7 @@ H.section('用 Grep 工具搜：范围里有令牌、要看内容的，拦');
   }
   const read = H.hook(h, 'guard-read', { session_id: 's-sec', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: path.join(h.kit, 'secrets.json') } });
   H.ok('别的工具不归它管（Read 由权限规则挡）', read === null, read);
-  H.setConfig(h, { kitLock: false });
   H.ok('关掉了禁改：照样拦', blocked(grep({ pattern: 'token', path: h.kit, output_mode: 'content' })));
-  H.setConfig(h, { kitLock: true });
   H.ok('套件目录里有 .ignore，让搜索工具跳过这两处', /^secrets\.json$/m.test(H.read(path.join(h.kit, '.ignore')) || '') && /^router-data\/$/m.test(H.read(path.join(h.kit, '.ignore')) || ''), H.read(path.join(h.kit, '.ignore')));
 }
 
@@ -120,7 +118,6 @@ for (const [tool, cmd, cwd] of [
 
 H.section('关掉了"禁止 Claude 自己改套件"：令牌照样不给读');
 {
-  H.setConfig(h, { kitLock: false });
   H.ok('cat secrets.json：拦', secretBlock(run('Bash', 'cat ' + K + '/secrets.json')));
   H.ok('cat *.json：拦', secretBlock(run('Bash', 'cat ' + K + '/*.json')));
   H.ok('PowerShell 读 router-data：拦', secretBlock(run('PowerShell', 'Get-Content "' + KW + '\\router-data\\config.json"')));
@@ -130,7 +127,6 @@ H.section('关掉了"禁止 Claude 自己改套件"：令牌照样不给读');
   H.ok('node -e 读：拦', secretBlock(run('Bash', 'node -e "console.log(require(\'fs\').readFileSync(\'' + K + '/secrets.json\', \'utf8\'))"')));
   H.ok('读开关、列目录：放行', !blocked(run('Bash', 'cat ' + K + '/config.json')) && !blocked(run('Bash', 'ls ' + K)));
   H.ok('不相干的命令不触发令牌或发布保护', !/令牌|发布要你确认/.test(H.reasonOf(run('Bash', 'mvn -q test'))));
-  H.setConfig(h, { kitLock: true });
 }
 
 H.section('跑发布脚本：和 push 一样要用户确认');
@@ -154,9 +150,7 @@ H.section('跑发布脚本：和 push 一样要用户确认');
     const o = run('Bash', 'cd "' + P + '" && node publish.js --rollback', proj);
     H.ok('cd 到安装包目录再发布：拦下，没有悄悄放过去', blocked(o) && !asked(o) && /cd 和别的命令串在一/.test(H.reasonOf(o)) && /publish\.js"/.test(H.reasonOf(o)), H.reasonOf(o) || o);
   }
-  H.setConfig(h, { kitLock: false });
   H.ok('关掉了禁改：照样要确认', asked(run('Bash', 'node publish.js', pkg)));
-  H.setConfig(h, { kitLock: true });
   H.ok('项目自己的 publish.js（旁边没有安装包）：不问', !asked(run('Bash', 'node scripts/publish.js', proj)) && !blocked(run('Bash', 'node scripts/publish.js', proj)));
   H.ok('提交信息里提到 publish.js：不问', !asked(run('Bash', 'git log --oneline --grep "publish.js"', proj)));
   H.ok('用户没说推送：git push 拦下', blocked(run('Bash', 'git push origin main', proj)) && /推送/.test(H.reasonOf(run('Bash', 'git push origin main', proj))));

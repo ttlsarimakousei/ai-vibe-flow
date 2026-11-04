@@ -21,8 +21,8 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 |---|---|---|
 | 会话开始（新开、/clear、压缩后、恢复） | `session-start.js` | 送项目说明、只读就绪摘要和壳子结构；压缩恢复时核对当前事实；不自动续接旧交接许可；记启动目录、核对套件指纹、清过期文件、数使用情况；新代码第一次跑时收回路由（`router-retire`） |
 | 用户开口 | `task-anchor.js` | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；`/vk-config` 起配置页，不发模型请求（decision:block） |
-| 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑五道检查：`guard-kit`（套件的文件不许改）→ `guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
-| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add）、按提交方式（关 / 询问 / 自动）管提交、push 要用户当场说推送，内网发布单独确认、读令牌和 key 的拦下、改套件的命令拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）；都过了再把 `openspec …` 改成调用自带的 OpenSpec（updatedInput） |
+| 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑这几道检查（`guard-kit` 2026-11-04 起是空壳，套件可以改）：`guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
+| 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add）、按提交方式（关 / 询问 / 自动）管提交、push 要用户当场说推送，内网发布单独确认、读令牌和 key 的拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）；都过了再把 `openspec …` 改成调用自带的 OpenSpec（updatedInput） |
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；MCP 工具的返回原样给模型 |
@@ -31,7 +31,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
 
-**兜底放行**：流程类的检查拦下时，提示末尾带〔拦截编号〕。模型确信是套件拦错了，用 `tools/feedback.js bypass <编号> --why "…"` 申请，再做一次那一步时弹确认框（全自动模式下直接放行并记进报告）。改套件、读令牌、关钩子、非 UTF-8 文件、整仓 add、push 没有编号，什么模式都不能放行。见 `lib/feedback.js` 开头。
+**兜底放行**：流程类的检查拦下时，提示末尾带〔拦截编号〕。模型确信是套件拦错了，用 `tools/feedback.js bypass <编号> --why "…"` 申请，再做一次那一步时直接放行（全自动模式下记进报告；2026-11-04 起不再弹确认框）。读令牌、非 UTF-8 文件、整仓 add、push 没有编号，什么模式都不能放行。见 `lib/feedback.js` 开头。
 
 ## 库（kit/lib）
 
@@ -52,7 +52,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | `idea-config.js` | 读 IDEA 里配的 Maven、settings.xml、本地仓库、JDK（`.idea` 和 IDE 的配置目录）。探索写命令、配置页"自动探测"用，只读文件，不连 IDEA |
 | `session-*.js` | session.js 拆出来的 11 块（2026-11-01）：state 状态文件和流水账（最底层）、transcript 会话记录、config 配置和会话自动开关、flow 流程状态、voice 用户的话和许可、out 钩子输出和 cli、projects 壳子和变更目录、proposal 提案门槛、plan 大需求计划、review 审查记录、kitfiles 套件文件保护和约定变化提示。session.js 只剩出口，导出的名字和以前一样，别的文件照旧 `require('./session')` |
 | `shell-words.js` | 拆命令（2026-11-01 从 guard-commit 拆出）：按 Bash / PowerShell 的规则拆组、段、词，认命令名、解开包着的命令 |
-| `guard-git.js`、`guard-kit.js`、`guard-process.js`、`guard-archive.js` | guard-commit 的各类检查（2026-11-01 拆出）：git 提交推送和提交方式；改套件、读令牌、经验规则、配置页接口；起服务、过程文件、串 cd；归档门槛。guard-commit 只留调度 |
+| `guard-git.js`、`guard-kit.js`、`guard-process.js`、`guard-archive.js` | guard-commit 的各类检查（2026-11-01 拆出）：git 提交推送和提交方式；读令牌；起服务、过程文件、串 cd；归档门槛。guard-commit 只留调度 |
 | `drivers.js`、`toolstats.js` | 多版本驱动登记、默认和单版删除；查库、查 redis 的匿名类别计数 |
 | `perf.js` | 耗时异常（2026-10-31，问题表第 20 条）：devserver 每次起服务按"项目 + 命令"记分段耗时，比本机基线（最近几次的中位数）慢一倍以上且多 60 秒以上、或它自己的检查超过 20 秒，记一条问题反馈并按开关 `perfReport` 上报（只带秒数、分段、原因类别）；基线和上报记录在 `perf-baseline.json`、`perf-report.json`（GLOBAL_STATE），每天最多报 3 条、同一个 24 小时一次 |
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |

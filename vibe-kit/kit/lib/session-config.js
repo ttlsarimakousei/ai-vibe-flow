@@ -13,15 +13,16 @@ const { DEFAULT_CONFIG } = require('./config-fields');
 
 /**
  * 套件开关（~/.claude/vibe-kit/config.json），可以在配置页里改，也可以手改。
- * 三个"放松保护"的（kitLock 关掉、kitBypass 改成 auto、autoMode 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
+ * 放松保护的全自动（autoMode、autoApply、autoRequirements 打开）只认配置页、安装器改的：它们写配置时顺手记一份封条（state/config-seal.json）。
+ * 以前还管"禁止改套件""被检查拦住时能不能放行"两个开关，2026-11-04 去掉了（仓库主人定的：套件可以改，拦了可以自己放行）。
  * 文件里是放松的、封条里不是（多半是被程序绕开配置页直接改的），按安全的值算，并在 _tampered 里写明是哪几个
- * （状态栏、用户开口时提醒，记进问题反馈）。收紧（打开禁改、不许放行、关掉全自动）怎么改都认。
+ * （状态栏、用户开口时提醒，记进问题反馈）。收紧（关掉全自动）怎么改都认。
  * 全自动模式从 20260929 这一版起算放松保护的（它开着时放行不等用户）：老版本的封条里没有这一项，没有就认文件里的
  */
 /*
  * 自动模式按会话开（问题表第 28 条，用户 2026-10-31 定的，替代 10-14、10-17 的"需求自动、Apply 自动两个配置开关"）：
  * 用户自己敲 /vk-auto（或者说"这个需求自动做""开自动"）打开，/vk-auto off（"别自动了""关掉自动"）关，只对这个会话有效，
- * 记在 state/<会话>-auto-switch.json，由开口钩子（task-anchor）按用户的原话写，模型写不了（~/.claude 禁改）。
+ * 记在 state/<会话>-auto-switch.json，由开口钩子（task-anchor）按用户的原话写。
  * 打开时需求、实施两段都算开（cfg.autoRequirements、cfg.autoApply 都为真），照旧要先探索、范围确认（qualify）才自动写需求。
  * 配置文件里旧的 autoApply、autoRequirements 不再出现在配置页，升级时清掉；还在的（测试、没升级的老配置）当作所有会话的默认值，会话里开过、关过的以会话为准
  */
@@ -93,15 +94,11 @@ function readConfigRaw(j) {
   c.autoApply = Object.prototype.hasOwnProperty.call(raw, 'autoApply') ? raw.autoApply === true : raw.autoMode === true;
   c.autoMode = c.autoApply;
   const loose = [];
-  if (c.kitLock === false) loose.push('kitLock');
-  if (c.kitBypass === 'auto') loose.push('kitBypass');
   if (c.autoMode === true) loose.push('autoMode');
   for (const k of ['autoRequirements', 'autoApply']) if (c[k]) loose.push(k);
   if (loose.length) {
     const seal = readState('config-seal');
     const bad = loose.filter((k) => (['autoMode', 'autoRequirements', 'autoApply'].includes(k) ? seal[k] === false : seal[k] !== c[k]));
-    if (bad.includes('kitLock')) c.kitLock = true;
-    if (bad.includes('kitBypass')) c.kitBypass = 'ask';
     if (bad.includes('autoMode') || bad.includes('autoApply')) { c.autoMode = false; c.autoApply = false; }
     if (bad.includes('autoRequirements')) c.autoRequirements = false;
     if (bad.length) c._tampered = bad;
@@ -112,12 +109,12 @@ function readConfigRaw(j) {
   return c;
 }
 
-/** 配置页、安装器写完配置后调：记下三个放松保护的开关现在的值（封条） */
+/** 配置页、安装器写完配置后调：记下全自动这几个开关现在的值（封条） */
 function sealConfig(kitDir, cfg) {
   try {
     const d = path.join(kitDir || KIT, 'state');
     fs.mkdirSync(d, { recursive: true });
-    fs.writeFileSync(path.join(d, 'config-seal.json'), JSON.stringify({ kitLock: cfg.kitLock !== false, kitBypass: ['ask', 'auto', 'off'].includes(cfg.kitBypass) ? cfg.kitBypass : 'ask', autoMode: cfg.autoApply === true, autoApply: cfg.autoApply === true, autoRequirements: cfg.autoRequirements === true, at: Date.now() }));
+    fs.writeFileSync(path.join(d, 'config-seal.json'), JSON.stringify({ autoMode: cfg.autoApply === true, autoApply: cfg.autoApply === true, autoRequirements: cfg.autoRequirements === true, at: Date.now() }));
   } catch (e) { /* 记不了就按安全的值算 */ }
 }
 

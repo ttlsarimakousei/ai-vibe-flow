@@ -155,10 +155,9 @@ bad('未知目录恢复到根目录后继续检查', 'Set-Location $dest; Set-Lo
 H.write(path.join(repo, '.vibe/tmp/1011-查包/inspect.sh'), 'jar xf app.jar\n');
 bad('读取已存在脚本里的直接解包', 'bash .vibe/tmp/1011-查包/inspect.sh');
 bad('关闭套件文件保护不跳过整理检查', 'jar xf app.jar');
-H.setConfig(h, { kitLock: false });
-bad('kitLock 关闭后的快速返回不能漏 JAR', 'jar xf app.jar');
-bad('kitLock 关闭后的快速返回不能漏 ZIP', 'unzip app.zip');
-H.setConfig(h, { kitLock: true });
+// 以前"禁止改套件"关着时简单命令走快路、不全拆；2026-11-04 那个开关和快路都去掉了，照默认的全拆
+bad('简单命令也全拆：不能漏 JAR', 'jar xf app.jar');
+bad('简单命令也全拆：不能漏 ZIP', 'unzip app.zip');
 
 const ide = (command, routed) => H.hook(h, 'guard-commit', { ...data(command), tool_name: 'mcp__jetbrains__' + (routed ? 'execute_tool' : 'execute_terminal_command'), tool_input: { projectPath: repo, command: routed ? 'execute_terminal_command --command ' + JSON.stringify(command) : command } });
 // 2026-11-03：MCP 工具只查读令牌和改套件，终端命令不按 Bash 的规矩查

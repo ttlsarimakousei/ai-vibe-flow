@@ -1,7 +1,7 @@
 'use strict';
 /* #89 与重复反馈：不同问题额度、重复申请、最新版本和完整补充。只在假用户目录记反馈。 */
 const path = require('path'); const H = require('./lib/harness');
-const h = H.makeHome('feedback1013-feedback', process.argv[2], { kitBypass: 'auto' });
+const h = H.makeHome('feedback1013-feedback', process.argv[2]);
 const p = H.makeRepo(path.join(h.work, 'p'), { 'a.js': 'let a=1;\n' });
 const S = require(path.join(h.kit, 'lib/session')); const F = require(path.join(h.kit, 'lib/feedback'));
 let ok = 0; let last;
@@ -11,7 +11,6 @@ for (let i = 0; i < 8; i++) {
 }
 H.ok('配置自行放行不会在第五次卡住', ok === 8, last);
 H.ok('申请结果显示剩余额度', /还可申请/.test(last.msg), last);
-H.setConfig(h, { kitBypass: 'ask' });
 for (let i = 0; i < 8; i++) {
   F.registerBlock({ session_id: 'repeat', cwd: p }, 'guard-spec', 'repeat' + i, '相同任务缺审查依据', 'Edit', 'file:' + path.join(p, 'same-task'));
   const b = S.readState('blocks').list.slice(-1)[0]; last = F.requestBypass(b.id, '查过任务与验证记录，同一目标同一检查反复误拦，申请这次放行。', { bug: true });

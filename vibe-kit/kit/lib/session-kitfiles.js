@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const { KIT, readState, writeState, hookLog, normKey } = require('./session-state');
 
 // ===================== 套件自己的文件（用户级）不许模型改 =====================
-// 实际发生过：模型嫌钩子碍事，自己去改 ~/.claude/vibe-kit 里的钩子。套件是用户的，模型只能用不能改（开关 kitLock，默认开）。
+// 以前拿它拦模型改套件（开关"禁止改套件"），2026-11-04 去掉了（仓库主人定的：套件可以改）。现在拿它认"这是套件的东西"：读令牌、改动清单跳过套件的文件。
 const CFG_DIR = path.dirname(KIT);
 
 /** 路径解析成真实路径（跟着目录联接、符号链接走）；路径还不存在时解析它最近一级存在的上级，再把剩下的拼回去 */
@@ -89,9 +89,6 @@ function isKitSkillScript(p, baseDir) {
     return protectedKitPaths().some((x) => /\/skills\/[^/]+$/.test(x) && keys.some((k) => k.startsWith(x + '/scripts/') && /^[^/]+\.(py|js)$/.test(k.slice(x.length + 9))));
   } catch (e) { return false; }
 }
-
-/** .claude 目录下的 settings.json / settings.local.json（项目级、用户级都算）：往里写 disableAllHooks 会让所有钩子失效 */
-const isClaudeSettingsFile = (p) => /(^|[\\/])\.claude[\\/]settings(\.local)?\.json$/i.test(String(p || '')) || /(^|[\\/])settings(\.local)?\.json$/i.test(String(p || '')) && isKitPath(p);
 
 // ===================== 会话中途约定、技能变了：不用 /clear 也能让模型知道 =====================
 // 实测（2.1.259）：会话进行中，钩子脚本和钩子登记改了立刻生效；全局 CLAUDE.md 改了、新装了技能，模型看不到，/clear 之后才重新读。
@@ -239,4 +236,4 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { CFG_DIR, realish, protectedKitPaths, expandHome, isKitPath, isKitSkillScript, isClaudeSettingsFile, mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice };
+module.exports = { CFG_DIR, realish, protectedKitPaths, expandHome, isKitPath, isKitSkillScript, mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice };
