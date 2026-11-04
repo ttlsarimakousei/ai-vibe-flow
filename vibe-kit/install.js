@@ -908,7 +908,7 @@ if (mode === 'install') {
     if (gaps.length) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：' + gaps.map((g) => g.label + '要 Node ' + g.node + '，' + g.without).join('；') + (top ? '。要用就把 Node 升到 ' + top + ' 以上' : ''));
   } else {
     if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/ttls-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
-    for (const dep of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) {
+    for (const dep of ['pixelmatch', 'pngjs', 'playwright-core']) {
       if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
     }
     if (!fs.existsSync(path.join(SRC, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'bin', 'openspec.js'))) { console.log('  [X] 安装包不完整：缺自带的 OpenSpec（kit/openspec/node_modules）。重新拷一份完整的包'); process.exit(1); }
@@ -919,8 +919,9 @@ if (mode === 'install') {
   fs.mkdirSync(KIT, { recursive: true });
   // 版本号（VERSION）最后写：装到一半被结束（关机、注销）的话，版本号还是旧的，自动更新下次会接着重装；
   // 先写的话，技能、约定、钩子登记都还是旧的，却已经显示"已是最新"，一直到下一版
-  // 自带的 OpenSpec 整个换新：换版本时不留上一版的旧文件
+  // 自带的 OpenSpec、看页面的依赖整个换新：换版本时不留上一版的旧文件（拷贝只覆盖，新旧文件混在一起会坏）
   removeDirQuiet(path.join(KIT, 'openspec'));
+  removeDirQuiet(path.join(KIT, 'page', 'node_modules'));
   // user/ 是你自己的约定和规范：安装包里就算带了也不拷（打包时也查）
   copyDir(path.join(SRC, 'kit'), KIT, ['VERSION', 'user']);
   // 新版删掉了的文件：拷贝不会删，旧版留下的要清掉（自检会挨个载 lib 下的每个文件）。hooks 下的文件不删（AGENTS.md 硬规矩第 11 条）

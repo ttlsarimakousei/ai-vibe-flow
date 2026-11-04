@@ -71,7 +71,7 @@ if (packOk) {
   H.ok('--check-only 过了，没压缩、没留基线、没改版本号', r.code === 0 && noZip() && H.read(path.join(kitPkg, 'kit', 'VERSION')) === versionBefore, r.out.slice(-1200) + r.err.slice(-400));
   H.ok('生成了 kit/deps.json', !!man && Array.isArray(man.components), r.out.slice(-600));
   const tops = (nm) => { const out = []; for (const n of fs.readdirSync(nm)) { if (n.startsWith('.')) continue; if (n.startsWith('@')) { for (const s of fs.readdirSync(path.join(nm, n))) out.push(n + '/' + s); } else out.push(n); } return out.sort(); };
-  for (const [id, mainPkg] of [['page', 'playwright'], ['openspec', '@fission-ai/openspec']]) {
+  for (const [id, mainPkg] of [['page', 'playwright-core'], ['openspec', '@fission-ai/openspec']]) {
     const nm = path.join(kitPkg, 'kit', id, 'node_modules');
     const c = man && man.components.find((x) => x.id === id);
     const listed = c ? c.packages.map((p) => p.name).sort() : [];

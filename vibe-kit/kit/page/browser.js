@@ -6,7 +6,7 @@
  */
 // 随包的 Playwright 要 Node 20（Codex C16）：低于 20 的先说清楚，不让它报一句看不懂的版本错误
 if (parseInt(process.versions.node.split('.')[0], 10) < 20) throw new Error('看页面要 Node 20 以上，这台电脑的 Node 是 ' + process.versions.node + '。把 Node 升到 20 以上再看页面；别的功能不受影响');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 
 function trim(s, n) {
   n = n || 200;

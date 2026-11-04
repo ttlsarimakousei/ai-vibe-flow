@@ -4,7 +4,7 @@
  * 带着自己的 node_modules 进安装包；以前包里只有文件，说不清是哪个包的哪一版、从哪来、要多高的 Node、和打包时是不是同一份。
  *
  *   打包（dev/pack.js）  scan() 扫两个组件的 node_modules：每个顶层包的名字、版本、要求的 Node、来源（lock 文件里的下载地址和校验值，
- *                        没有 lock 的写 npm:<名字>@<版本>）、内容哈希；组件要求的 Node 按主包（看页面是 playwright，OpenSpec 是
+ *                        没有 lock 的写 npm:<名字>@<版本>）、内容哈希；组件要求的 Node 按主包（看页面是 playwright-core，OpenSpec 是
  *                        @fission-ai/openspec）的 engines 算。consistency() 核对主包写的最低版本满足组件里每个包的要求，不满足不打包。
  *   安装（install.js）   read() 读清单；check() 只核对每个包在不在、版本对不对（不算哈希，几十个 package.json，很快）；
  *                        nodeGaps() 列出这台电脑的 Node 用不了的组件，安装器照它说清哪个组件用不了、要多少。
@@ -21,7 +21,7 @@ const FORMAT = 1;
  * without 是 Node 不够时这个组件怎么样（安装器原样说）。node 写了就用它，不按主包算（主包写得比依赖松、又确认过时用）
  */
 const COMPONENTS = [
-  { id: 'page', dir: 'page', main: 'playwright', label: '看页面（/ttls-see-page）', without: '套件照样装，看页面用不了' },
+  { id: 'page', dir: 'page', main: 'playwright-core', label: '看页面（/ttls-see-page）', without: '套件照样装，看页面用不了' },
   { id: 'openspec', dir: 'openspec', main: '@fission-ai/openspec', label: '自带的 OpenSpec（/opsx:* 命令）', without: '套件照样装，照旧用你自己装的 OpenSpec' },
 ];
 
@@ -121,7 +121,6 @@ function combine(digests, prefix) {
   }
   return { hash: 'sha256-' + h.digest('hex'), files, bytes };
 }
-const dirHash = (dir) => combine(fileDigests(dir));
 /** node_modules 下的顶层包名（带作用域的写成 @x/y）；. 开头的（.bin、.package-lock.json）不算包 */
 function topNames(nm) {
   const out = [];
@@ -222,4 +221,4 @@ function nodeGaps(man, have) {
   });
 }
 
-module.exports = { FILE, FORMAT, COMPONENTS, parts, satisfies, minOf, dirHash, scan, consistency, read, check, nodeGaps };
+module.exports = { FILE, FORMAT, COMPONENTS, parts, satisfies, minOf, scan, consistency, read, check, nodeGaps };

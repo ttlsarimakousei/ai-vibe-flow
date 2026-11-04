@@ -467,7 +467,7 @@ async function runStep(ctx, st) {
     finish();
   }, MAX_SEC * 1000);
   if (apiOnly) {
-    try { ctx.api = await require('playwright').request.newContext({ ignoreHTTPSErrors: true }); result.via = '只调接口，没开浏览器'; } catch (e) { result.ok = false; result.fatal = trim(e && e.message || e, 400); return finish(); }
+    try { ctx.api = await require('playwright-core').request.newContext({ ignoreHTTPSErrors: true }); result.via = '只调接口，没开浏览器'; } catch (e) { result.ok = false; result.fatal = trim(e && e.message || e, 400); return finish(); }
   } else {
     try {
       const r = await launchBrowser({ headed: !!args.headed });
