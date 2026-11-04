@@ -344,6 +344,29 @@ function prepare(opts) {
 function dispatch(id, lens, toolId) {
   S.updateState('review-jobs', (o) => { for (const k of Object.keys(o)) { const job = o[k]; if (job && job.id === id && job.status === 'running' && job.state[lens] && job.state[lens].status !== 'submitted') job.state[lens] = Object.assign(job.state[lens], { status: 'sent', sentAt: Date.now(), tool: toolId || '' }); } });
 }
+/**
+ * 开一个审查子代理之前占个位子（第 52 条，仓库主人 2026-11-04："同时启动的子代理应该最多3个"）：
+ * 同一个项目里正在跑的（发出去、半小时内、还没交）已经有 3 个，不让开，返回原因；没满就记成发出去了，返回 ''。
+ * 以前只按任务记"发出去了"，两个审查点、两个 change 各 prepare 一次，一条回复里就开了 6 个。
+ * 数和记在同一把锁里：一条回复里开几个子代理时，几个钩子可能同时跑
+ */
+const MAX_RUNNING = 3;
+function claim(id, lens, toolId) {
+  let why = '';
+  S.updateState('review-jobs', (o) => {
+    const mine = Object.values(o).find((job) => job && job.id === id && job.status === 'running' && job.state && job.state[lens]);
+    if (!mine || mine.state[lens].status === 'submitted') return;
+    const near = (a, b) => S.underDir(a, b) || S.underDir(b, a);
+    const busy = [];
+    for (const job of Object.values(o)) {
+      if (!job || job.status !== 'running' || !job.state || !near(job.root, mine.root)) continue;
+      for (const [l, s] of Object.entries(job.state)) if (s && s.status === 'sent' && Date.now() - (s.sentAt || 0) < QUIET_MS && !(job.id === id && l === lens)) busy.push((job.change ? job.change + ' ' : '') + (job.point || job.mode) + ' ' + l);
+    }
+    if (busy.length >= MAX_RUNNING) { why = '已经有 ' + busy.length + ' 个审查子代理在跑（' + busy.join('、') + '），同时最多 ' + MAX_RUNNING + ' 个。先不开这一个：等前面的交了结论，再跑一次 review.js prepare，照它给的还没开的角度开。'; return; }
+    mine.state[lens] = Object.assign(mine.state[lens], { status: 'sent', sentAt: Date.now(), tool: toolId || '' });
+  });
+  return why;
+}
 /** 这条提示是不是一个有效的审查任务。返回 { id, lens } 或 null */
 function taskOf(text) {
   const m = /审查任务\s*[:：]\s*([0-9a-f]{24})\/([^\s`"，。]+)/.exec(String(text || ''));
@@ -605,4 +628,4 @@ function runsForLessons(calls, results, cwd) {
 }
 // 老会话还可能敲 run
 const run = prepare;
-module.exports = { runsForLessons, prepare, run, submit, noteReject, failLens, dispatch, taskOf, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };
+module.exports = { claim, MAX_RUNNING, runsForLessons, prepare, run, submit, noteReject, failLens, dispatch, taskOf, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };

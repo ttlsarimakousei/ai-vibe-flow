@@ -123,6 +123,33 @@ H.section('放行：裸开子代理拦下，带任务的放行并记发出去了
   H.ok('后台在跑：不算没交', R.status(opts(p)).state[lens2].status === 'sent', R.status(opts(p)).state);
 }
 
+H.section('同时在跑的审查子代理最多 3 个（第 52 条，2026-11-04）');
+{
+  // 同一个项目里两个 change 各 prepare 一次：以前一条回复里能开 6 个
+  const p = project();
+  const c2 = path.join(p.proj, 'openspec', 'changes', 'c2');
+  for (const f of ['proposal.md', 'design.md', 'tasks.md', path.join('specs', 'order', 'spec.md')]) H.write(path.join(c2, f), H.read(path.join(p.dir, f)));
+  const j = { session_id: 's-cap', cwd: p.proj, transcript_path: H.transcript(path.join(H.tempDir('rs-cap'), 't.jsonl'), [H.tr.user('开工')]), hook_event_name: 'PreToolUse', tool_name: 'Agent' };
+  S.setFlow(j, true, '测试', 'apply');
+  S.setSessionAuto(j, true, '测试');
+  H.setConfig(h, { autoRequirements: true, autoApply: true });
+  let n = 0;
+  const call = (prompt) => H.hook(h, 'guard-ask', Object.assign({}, j, { tool_use_id: 'cap' + (++n), tool_input: { subagent_type: 'ttls-reviewer', prompt } }));
+  const a = R.prepare(opts(p));
+  const b = R.prepare(opts(p, { change: 'c2' }));
+  H.ok('（两个任务各 3 个角度）', a.agents.length === 3 && b.agents.length === 3, [a.agents.length, b.agents.length]);
+  const first = a.agents.map((x) => call(x.prompt));
+  H.ok('前 3 个放行', first.every((o) => !H.reasonOf(o)), first.map(H.reasonOf));
+  const fourth = call(b.agents[0].prompt);
+  H.ok('第 4 个拦下：说已经有 3 个在跑、等前面的交了再开', /已经有 3 个审查子代理在跑/.test(H.reasonOf(fourth)) && /同时最多 3 个/.test(H.reasonOf(fourth)), H.reasonOf(fourth));
+  H.ok('拦下的没记成发出去了', R.status(opts(p, { change: 'c2' })).state[b.agents[0].lens].status !== 'sent', R.status(opts(p, { change: 'c2' })).state);
+  H.ok('已经发出去的那个再开一次（重试）：不算多一个', !H.reasonOf(call(a.agents[0].prompt)));
+  R.submit(a.id, a.agents[0].lens, tell(a, a.agents[0].lens));
+  H.ok('交了一个：第 4 个能开了', !H.reasonOf(call(b.agents[0].prompt)));
+  H.ok('又满了：第 5 个照拦', /同时最多 3 个/.test(H.reasonOf(call(b.agents[1].prompt))));
+  H.setConfig(h, { autoRequirements: false, autoApply: false });
+}
+
 (async () => {
   H.section('复审只送修改点');
   {

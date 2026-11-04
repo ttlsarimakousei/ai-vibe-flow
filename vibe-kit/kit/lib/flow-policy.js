@@ -333,7 +333,8 @@ function actionIssue(j) {
   if (!review && !test) return '';
   // 裸开审查子代理拦下：结论对不上任务，入不了账（手工模式也一样）
   if (reviewer && !reviewTask) return '审查子代理要用 review.js prepare 输出的提示（第三行"审查任务：…"）：先跑 review.js prepare，再照它的 agents 开。任务已经交齐或作废的不用再开。';
-  const sent = () => { if (reviewTask) require('./review-runner').dispatch(reviewTask.id, reviewTask.lens, j.tool_use_id); return ''; };
+  // 开审查子代理：同时在跑的最多 3 个（第 52 条），满了拦下、说等前面的交了再开
+  const sent = () => (reviewTask ? require('./review-runner').claim(reviewTask.id, reviewTask.lens, j.tool_use_id) : '');
   if (cfg.autoMode) {
     if (runsReview) {
       const m = cmd.match(/--change\s+["']?([^\s"']+)/); const p = cmd.match(/--point\s+([\w-]+)/);
