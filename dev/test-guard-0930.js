@@ -77,7 +77,21 @@ for (const [tool, cmd] of [
   ['Bash', 'cp -r ~/.claude/vibe-kit/hooks .vibe/tmp/hooks-bak'],
   ['Bash', 'cp ' + K + '/config.json .vibe/tmp/config.json'],
   ['PowerShell', 'Copy-Item "' + KW + '\\tools\\lesson.js" .vibe\\tmp\\'],
-]) { const o = run(tool, cmd); H.ok('放行（套件里别的东西照常能复制）：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 80), o === null, why(o)); }
+  // 只看源，不看目标：往用户目录、上级目录放东西照常（全量回归抓到 tar xf … -C ../../.. 被误拦）
+  ['Bash', 'cp a.txt ~/'],
+  ['Bash', 'cp -r dist ~/backup/dist'],
+  ['Bash', 'tar xf app.tar -C ~/'],
+  ['Bash', 'tar czf ~/out.tgz src'],
+  ['Bash', 'zip -r ~/out.zip src'],
+  ['PowerShell', 'Copy-Item a.txt -Destination $HOME'],
+  ['Bash', 'mv build.log ~/'],
+]) { const o = run(tool, cmd); H.ok('放行（套件里别的东西、往外放东西照常）：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 80), o === null, why(o)); }
+for (const [tool, cmd] of [
+  ['Bash', 'cp -t /tmp -r ~/.claude/vibe-kit'],
+  ['Bash', 'zip -r out.zip ~/.claude/vibe-kit'],
+  ['Bash', 'cp -r ~/.claude/* /tmp/cfg/'],
+  ['PowerShell', 'Copy-Item -Path "' + KW + '" -Destination x -Recurse'],
+]) { const o = run(tool, cmd); H.ok('拦（源是套件目录）：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 80), secret(o), why(o)); }
 
 H.section('只是列一列、算路径：放行');
 for (const [tool, cmd] of [

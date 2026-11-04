@@ -115,7 +115,6 @@ function secretTouch(word, dir, head, recursive) {
   const keys = wild ? [normKey(abs0)] : [...new Set([normKey(abs0), normKey(realish(abs0))])];
   const search = SEARCHES.has(head);
   const listing = PASSING.has(head);
-  const copying = COPIERS.has(head);
   const deep = recursive || ['rg', 'ag', 'find'].includes(head);
   for (const r of secretRoots()) {
     for (const abs of keys) {
@@ -124,7 +123,6 @@ function secretTouch(word, dir, head, recursive) {
         // 通配符前面那一截是确定的目录：递归搜整个用户目录、整个盘（findstr /s "$env:USERPROFILE\*.json"）也算
         const fixed = abs.split('/').filter(Boolean).reduce((acc, seg) => (acc.stop || /[*?[\]]/.test(seg) ? Object.assign(acc, { stop: true }) : Object.assign(acc, { parts: acc.parts.concat(seg) })), { parts: [], stop: false }).parts.join('/');
         if ((search || listing) && deep && fixed && (r.kit === fixed || r.kit.startsWith(fixed + '/'))) return '递归搜 ' + word + ' 会搜到套件放令牌、放模型 key 的文件';
-        if (copying && fixed && (r.kit === fixed || r.kit.startsWith(fixed + '/'))) return '复制、打包 ' + word + ' 会把套件放令牌、放模型 key 的文件带出去';
         if (r.files.some((f) => globHits(abs, f))) return word + ' 会落到放令牌、放模型 key 的文件上';
         continue;
       }
@@ -133,7 +131,6 @@ function secretTouch(word, dir, head, recursive) {
       if (search && (abs === r.kit || abs === r.cfg || (deep && r.kit.startsWith(abs + '/')))) return '搜 ' + word + ' 会搜到套件放令牌、放模型 key 的文件';
       // 列目录再交给后面的命令读：列的是套件目录（令牌就在里面），或者递归列它的上级
       if (listing && (abs === r.kit || (deep && r.kit.startsWith(abs + '/')))) return '列 ' + word + ' 再读，会读到套件放令牌、放模型 key 的文件';
-      if (copying && (abs === r.kit || r.kit.startsWith(abs + '/'))) return '复制、打包、挪走 ' + word + ' 会把套件放令牌、放模型 key 的文件带出去';
     }
   }
   return '';
@@ -154,6 +151,70 @@ function kitToolRun(x, h, dir) {
 }
 
 /**
+ * 复制、打包、挪动命令的源（复审第 1 条）：只看源，不看目标——cp x ~/、tar xf a.tar -C ../..、zip ~/out.zip src 是往外放东西，不是把套件带出去。
+ * 返回 [{ word, base }]：base 是这个源按哪个目录算（tar 的 -C 会换目录），null 就是命令所在的目录
+ */
+function copySources(x, h) {
+  const name = h.name; const rest = x.ws.slice(h.i + 1).map((w) => w.text); const out = [];
+  const positional = (from) => rest.slice(from || 0).filter((s) => !/^-/.test(s));
+  if (/^(tar|gtar|bsdtar)$/.test(name)) {
+    let create = false; let base = null; const src = [];
+    for (let i = 0; i < rest.length; i++) {
+      const s = rest[i];
+      if (s === '--create') { create = true; continue; }
+      let m = /^--(directory|file)=(.*)$/.exec(s);
+      if (m) { if (m[1] === 'directory') base = m[2]; continue; }
+      if (s === '--directory' || s === '--file') { if (s === '--directory') base = rest[i + 1]; i++; continue; }
+      if (/^--/.test(s)) continue;
+      // 一串短选项：-czf、czf（旧语法只认第一个词）、-C dir
+      if (/^-[A-Za-z]+$/.test(s) || (i === 0 && /^[A-Za-z]+$/.test(s))) {
+        const letters = s.replace(/^-/, '');
+        if (letters.includes('c')) create = true;
+        for (const ch of letters) { if (ch === 'f') i++; else if (ch === 'C') { base = rest[i + 1]; i++; } }
+        continue;
+      }
+      src.push({ word: s, base });
+    }
+    return create ? src : [];
+  }
+  if (/^(cp|mv|scp|rsync|ditto)$/.test(name)) {
+    let target = false;
+    for (let i = 0; i < rest.length; i++) { if (rest[i] === '-t' || rest[i] === '--target-directory') { target = true; i++; } else if (/^--target-directory=/.test(rest[i])) target = true; }
+    const p = []; for (let i = 0; i < rest.length; i++) { const s = rest[i]; if (s === '-t' || s === '--target-directory') { i++; continue; } if (!/^-/.test(s)) p.push(s); }
+    return (target ? p : p.slice(0, -1)).map((word) => ({ word, base: null }));
+  }
+  if (/^(robocopy|xcopy|copy|move)$/.test(name)) { const p = positional(); return p.length ? [{ word: p[0], base: null }] : []; }
+  if (/^(copy-item|cpi|move-item|mi|compress-archive)$/.test(name)) {
+    const src = []; const p = [];
+    for (let i = 0; i < rest.length; i++) {
+      const s = rest[i]; const m = /^-(path|literalpath)(?::(.+))?$/i.exec(s);
+      if (m) { if (m[2]) src.push(m[2]); else { src.push(rest[i + 1]); i++; } continue; }
+      if (/^-(destination|destinationpath|compressionlevel|filter|include|exclude)$/i.test(s)) { i++; continue; }
+      if (/^-/.test(s)) continue;
+      p.push(s);
+    }
+    return (src.length ? src : p.slice(0, 1)).filter(Boolean).map((word) => ({ word, base: null }));
+  }
+  if (name === 'zip') return positional().slice(1).map((word) => ({ word, base: null }));
+  if (/^7z[arz]?$/.test(name)) { const p = positional(); return /^[au]$/.test(p[0] || '') ? p.slice(2).map((word) => ({ word, base: null })) : []; }
+  return out;
+}
+/** 这个源是不是套件目录本身、它的上级（~/.claude、用户目录），或者通配符落在这一级：会把令牌带出去 */
+function copyTouch(word, dir) {
+  const s = local(String(word || '').replace(/^["']|["']$/g, ''));
+  if (!s) return '';
+  const abs0 = path.isAbsolute(s) ? s : path.resolve(dir, s);
+  const wild = /[*?[\]]/.test(abs0);
+  for (const r of secretRoots()) {
+    for (const abs of wild ? [normKey(abs0)] : [...new Set([normKey(abs0), normKey(realish(abs0))])]) {
+      const fixed = wild ? abs.split('/').reduce((acc, seg) => (acc.stop || /[*?[\]]/.test(seg) ? Object.assign(acc, { stop: true }) : Object.assign(acc, { parts: acc.parts.concat(seg) })), { parts: [], stop: false }).parts.join('/') : abs;
+      if (fixed && (r.kit === fixed || r.kit.startsWith(fixed + '/'))) return '复制、打包、挪走 ' + word + ' 会把套件放令牌、放模型 key 的文件带出去';
+    }
+  }
+  return '';
+}
+
+/**
  * segs 是用管道连着的一串命令；hasReader 是这整条命令里有没有会把文件内容读出来的命令
  * （只是 ls 一下放令牌的目录可以；ls 完交给 Get-Content、Select-String，或者 cat $(ls …)，就不行）；
  * easy 是这整条命令是不是只在列名字、过滤名单（这时 hasReader 是 false：后面的 head、grep 读的是名单）
@@ -165,6 +226,7 @@ function keyFileIssue(segs, dir, hasReader, easy) {
     if (!h.name) continue;
     if (kitToolRun(x, h, dir)) continue;
     const rec = recursiveSeg(x, h);
+    if (COPIERS.has(h.name)) for (const src of copySources(x, h)) { const why = copyTouch(src.word, src.base ? path.resolve(dir, local(src.base)) : dir); if (why) return '[vibe-kit] 这条命令会读到令牌或者模型的 key（' + why + '）' + NO; }
     // 重定向到令牌文件（echo x > secrets.json）：放在下面"只是列一下"的跳过之前。以前 echo 走到那里就跳过了，靠"不许改套件"兜着；
     // 2026-11-04 那道去掉之后漏出来（自审发现）
     for (const r of x.redirs) { const why = secretTouch(r.target, dir, h.name, false); if (why) return '[vibe-kit] 这条命令会碰到令牌或者模型的 key（' + r.target + '），不许动。'; }
