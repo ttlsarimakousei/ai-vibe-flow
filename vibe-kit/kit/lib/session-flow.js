@@ -121,23 +121,10 @@ function applyIntent(p) {
 }
 
 /** 这句话是不是在说提案那一段的事 */
-const planIntent = (p) => PLAN_EDIT.test(String(p || ''));
 
 /** 这个变更开工了没有：tasks.md 里有打过勾的任务 */
 function changeStarted(dir) { try { return /^\s*[-*]\s*\[[xX]\]/m.test(fs.readFileSync(path.join(dir, 'tasks.md'), 'utf8')); } catch (e) { return false; } }
 
-/** 接着交接记录做：记录里提到的变更开过工就是 apply；没提变更的，看记录里有没有在说任务 */
-function handoverStage(cwd) {
-  try {
-    let d = path.resolve(cwd || process.cwd());
-    let text = '';
-    for (let i = 0; i < 2; i++) { const f = path.join(d, '.vibe', 'handover.md'); if (fs.existsSync(f)) { text = fs.readFileSync(f, 'utf8'); break; } const up = path.dirname(d); if (up === d) break; d = up; }
-    if (!text) return 'apply';
-    const named = allChanges(cwd || process.cwd()).filter((c) => mentionsChange(text, c.name));
-    if (named.length) return named.some((c) => changeStarted(c.dir)) ? 'apply' : 'plan';
-    return /apply|打勾|任务\s*\d|(^|[^\d.])\d+\.\d+(?![\d.])/i.test(text) ? 'apply' : 'plan';
-  } catch (e) { return 'apply'; }
-}
 
 // ===================== 做完的功能上发现的问题：先查清原因，改动小直接改 =====================
 /*
@@ -236,4 +223,4 @@ function touchChange(sid, dir) {
   } catch (e) { /* 记不了不影响归档 */ }
 }
 
-module.exports = { FLOW_SLASH, FLOW_TAG, FLOW_SKILL, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, APPLY_SLASH, APPLY_TAG, applyIntent, planIntent, changeStarted, handoverStage, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowAdopt, readConfigFor, flowView, sessionChanges, touchChange };
+module.exports = { FLOW_SLASH, FLOW_TAG, FLOW_SKILL, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, APPLY_SLASH, APPLY_TAG, applyIntent, changeStarted, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowAdopt, readConfigFor, flowView, sessionChanges, touchChange };

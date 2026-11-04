@@ -681,14 +681,6 @@ const NO_AVOID = /^(无|没有|暂无|不适用|不用|不需要|一次性|n\/?a
 // 短的中文句子里"之前""先按"这类套话占比高，0.45 会把"先按主键去重"和"先按主键排序"并成一条
 const AUTO_NEAR = 0.62;
 const MAX_FINDINGS = 400;
-/** 位置那一栏里的文件：取第一个；括号里的说明、行号（:45、:45-60、#L45、第 45 行、45~60 行）去掉 */
-function fileOfWhere(where) {
-  let s = String(where || '').split(/[、，；;]|,\s/)[0].replace(/\x60/g, '').trim();
-  s = s.replace(/[（(][^（）()]*[）)]?/g, ' ').trim();
-  s = s.replace(/\s*第\s*\d+(?:\s*[-~～到至]\s*\d+)?\s*行.*$/, '').replace(/#L\d+(?:-L?\d+)?$/i, '');
-  s = s.replace(/[:：]\s*\d+(?:\s*[-~～:：,]\s*\d+)*\s*行?\s*$/, '').replace(/\s+\d+(?:\s*[-~～]\s*\d+)?\s*行?\s*$/, '');
-  return s.trim().replace(/^["']+|["']+$/g, '');
-}
 function readFindings(root) {
   const j = readStore(findingsFile(root));
   return j ? { items: Array.isArray(j.items) ? j.items : [], cats: j.cats && typeof j.cats === 'object' ? j.cats : {} } : { items: [], cats: {} };

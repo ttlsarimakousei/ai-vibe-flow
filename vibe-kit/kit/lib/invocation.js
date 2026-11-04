@@ -10,13 +10,6 @@ function budgetError() { const s = scope.getStore(); return s && s.deadline ? ov
 function phase(name) { const s = scope.getStore(); if (!s) return; remaining(12000); if (s.phase === name) return; s.phase = name; if (s.onPhase) s.onPhase(name, Date.now() - s.started); }
 function memo(key, fn) { const s = scope.getStore(); if (!s) return fn(); if (!s.values.has(key)) s.values.set(key, fn()); return s.values.get(key); }
 function object(input, key, fn) { const s = scope.getStore(); if (!s || !input || typeof input !== 'object') return fn(); let m = s.objects.get(input); if (!m) { m = new Map(); s.objects.set(input, m); } if (!m.has(key)) m.set(key, fn()); return m.get(key); }
-// 前置网络操作自带超时；它等待的时间不占后续本机检查预算。
-async function external(fn) {
-  const s = scope.getStore(); if (!s) return fn();
-  const started = Date.now();
-  try { return await scope.run(Object.assign({}, s, { deadline: 0 }), fn); }
-  finally { if (s.deadline) s.deadline += Date.now() - started; }
-}
 /** 作废这次调用里以 prefix 开头的缓存（写了状态文件、改了开关之后） */
 function forget(prefix) { const s = scope.getStore(); if (!s) return; for (const k of [...s.values.keys()]) if (String(k).startsWith(prefix)) s.values.delete(k); }
-module.exports = { run, memo, object, remaining, budgetError, phase, external, forget };
+module.exports = { run, memo, object, remaining, budgetError, phase, forget };

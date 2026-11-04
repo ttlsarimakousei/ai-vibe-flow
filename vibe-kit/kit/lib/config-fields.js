@@ -20,11 +20,10 @@
 // 不做开关、升级时从 config.json 里清掉的（问题表第 29—31 条）
 const FIXED = ['autoVerify', 'autoSeePage', 'specGate', 'autoOnboard', 'autoHandover'];
 // 不再有的开关（审查次数、文件数、方式，用户 2026-11-03 定的）：字段表里没有了，升级时也从 config.json 里清掉
-const REMOVED = ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewLoop', 'reviewMaxRounds', 'reviewExecutor', 'reviewMaxFiles', 'statusUsage', 'hookTransport'];
+const REMOVED = ['requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewLoop', 'reviewMaxRounds', 'reviewExecutor', 'reviewMaxFiles', 'statusUsage', 'hookTransport', 'autoCrossReview'];
 const FIELDS = [
   { name: 'autoVerify', type: 'bool', def: true, internal: true },
   { name: 'autoSeePage', type: 'bool', def: true, internal: true },
-  { name: 'autoCrossReview', type: 'bool', def: true, internal: true },
   { name: 'commitCheck', type: 'bool', def: true, page: 'kit', doc: '提交不合规范 → 拦下（本版起不再查像密码的内容）', since: '最早就有', defText: '开' },
   { name: 'specGate', type: 'bool', def: true, internal: true },
   { name: 'tmpKeepDays', type: 'int', def: 7, min: 0, max: 90, page: 'kit', doc: '过程文件多少天没动就清', since: '0924 中午', defText: '7 天' },

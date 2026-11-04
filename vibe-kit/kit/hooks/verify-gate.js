@@ -130,29 +130,6 @@ function lastCommitAt(root) {
     return time + 999;
   } catch (e) { return 0; }
 }
-/**
- * 按阶段提交：这个变更有没有"刚做完的阶段"——tasks.md 里同一个大编号（1.x、2.x）的任务全部打勾，而且最后那一个勾打在仓库最近一次提交之后。
- * 没有编号的任务各算一组（和每项任务提交一样）。since 是仓库最近一次提交的时间，0 = 没提交过。
- * 用户 2026-10-07 定的：每项任务提交太碎，整个变更提交太大，按阶段是中间那一档
- */
-function phaseDone(c, since) {
-  let text;
-  try { text = fs.readFileSync(path.join(c.dir, 'tasks.md'), 'utf8'); } catch (e) { return false; }
-  let ticks = {};
-  try { ticks = syncTicks(c.dir) || {}; } catch (e) { ticks = {}; }
-  const groups = new Map();
-  for (const l of text.split(/\r?\n/)) {
-    const m = l.match(TASK_LINE);
-    if (!m) continue;
-    const body = m[3].trim();
-    const num = /^(\d+)(?:[.．]\d+)*/.exec(body);
-    const g = num ? num[1] : body.slice(0, 20);
-    if (!groups.has(g)) groups.set(g, { open: 0, last: 0 });
-    const x = groups.get(g);
-    if (m[2] === ' ') x.open++; else x.last = Math.max(x.last, Number(ticks[taskKey(body)]) || 0);
-  }
-  return [...groups.values()].some((x) => !x.open && x.last > since);
-}
 /** 这些文件里，哪些在 git 看来还没提交。按仓库分组各问一次 git（不抢 IDE 的 index 锁）；被忽略的文件 git 不会列出来 */
 function gitStatus(root, rel) {
   return new Promise((resolve) => {
@@ -1001,5 +978,5 @@ async function handle(j) {
   return notices.length ? { systemMessage: '[vibe-kit 提醒] ' + notices.join('\n') } : null;
 }
 
-module.exports = { handle, phaseDone, lastCommitAt };
+module.exports = { handle, lastCommitAt };
 if (require.main === module) cli(handle);

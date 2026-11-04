@@ -233,7 +233,6 @@ function scanNewest(dir) {
   walk(dir, 0);
   return { newest, complete };
 }
-function newestMtime(dir) { return scanNewest(dir).newest; }
 /**
  * 这个过程文件目录是哪个变更的：名字就是变更名，或者以"变更名-""变更名_""变更名."开头（add-x-sm2 是 add-x 的）。
  * names 是变更名（小写）。几个都对得上取最长的那个：add-x 和 add-x-excel 两个变更，add-x-excel-测试 是后一个的
@@ -304,4 +303,4 @@ function clutter(root) {
   return out;
 }
 
-module.exports = { vibePart, misplaced, vibeCheck, cleanTmp, changeOwner, clutter, newestMtime, scanNewest, PROCESS_NAME, isProcessName, isProcessFile, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };
+module.exports = { vibePart, misplaced, vibeCheck, cleanTmp, changeOwner, clutter, scanNewest, PROCESS_NAME, isProcessName, isProcessFile, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };

@@ -268,15 +268,6 @@ function scanWholeFile(file) {
  * 或者自己写过这份 handover.md 的都跳过。只接一次。
  */
 const RESUME_WORDS = /继续|接着|接上|交接|上次|恢复|continue|resume/i;
-function wroteHandover(entries, file) {
-  const key = normKey(file);
-  return entries.some((e) => {
-    if (/<command-name>\s*\/?(ttls-)?handover\s*<\/command-name>/.test(textOf(e))) return true;
-    const c = e && e.type === 'assistant' && e.message && e.message.content;
-    if (!Array.isArray(c)) return false;
-    return c.some((b) => b && b.type === 'tool_use' && ((b.name === 'Skill' && /^(ttls-)?handover$/i.test(String((b.input || {}).skill || (b.input || {}).command || '').replace(/^\//, ''))) || (/^(Write|Edit|MultiEdit)$/.test(b.name) && (b.input || {}).file_path && normKey(b.input.file_path) === key)));
-  });
-}
 function handoverContinuation(j, cfg) {
   // 历史交接只在用户点名选择时读取；一句"继续"不借用旧记录。
   if (!/(?:读取|接着|恢复|使用|按)[^。！？\n]{0,36}(?:\.vibe[\\/]handover\.md|交接记录)|(?:交接记录|handover\.md)[^。！？\n]{0,20}(?:继续|接着|恢复)/i.test(intent.plain(j.prompt))) return '';

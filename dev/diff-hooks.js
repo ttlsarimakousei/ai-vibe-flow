@@ -135,7 +135,7 @@ add('IDEA MCP 普通符号查询', 'guard-commit', idea('search_symbol', () => (
 
 // ---------- 改文件 ----------
 add('反馈1007：env -C 跑套件场景脚本', 'guard-commit', cmd('env -C "<项目>" node "$HOME/.claude/vibe-kit/page/scenario-run.js" .vibe/scenarios/check.json --base http://127.0.0.1:34907'), /放行，没有输出/, V1010);
-add('反馈1007：否定套件问题不报反馈', 'verify-gate', stop(() => [H.tr.user('查一下'), H.tr.say('不是 vibe-kit 套件的问题。')], { last_assistant_message: '不是 vibe-kit 套件的问题。' }), /放行，没有输出/, V1010, { autoVerify: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', vibeTidy: false, lessons: 'off' });
+add('反馈1007：否定套件问题不报反馈', 'verify-gate', stop(() => [H.tr.user('查一下'), H.tr.say('不是 vibe-kit 套件的问题。')], { last_assistant_message: '不是 vibe-kit 套件的问题。' }), /放行，没有输出/, V1010, { autoVerify: false, autoCommit: 'off', commitMode: 'off', vibeTidy: false, lessons: 'off' });
 add('反馈1007：全自动时用户当场要求 push', 'guard-commit', (kit) => {
   const r = cmd('git push origin main')(kit);
   r.j.session_id = 'feedback1007-push';
@@ -312,7 +312,7 @@ add('提问框', 'guard-ask', (kit) => { const proj = project(kit); return { pro
 
 // 1012：行为与提示的有意变更，从 V1012 起生效。
 add('1012：根目录产出选项', 'guard-output', (kit) => { const proj=project(kit); const j=base(proj,kit,{tool_name:'Write',tool_input:{file_path:path.join(proj,'工时.csv'),content:'工时'}}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'root-answer.jsonl'),[H.tr.user('生成表格'),H.tr.ran('AskUserQuestion',{},'Your questions have been answered: "产出放哪？"="仓库根目录 工时.csv"')]); return {proj,j}; }, /放行，没有输出/, V1012);
-add('1012：交付新文件可以等用户提交', 'verify-gate', (kit) => { const proj=project(kit); const file=path.join(proj,'交付.xls'); H.write(file,'交付'); const j=base(proj,kit,{hook_event_name:'Stop',last_assistant_message:'交付完成，保留文件等待用户提交。'}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'deliver.jsonl'),[H.tr.user('生成交付表格'),H.tr.ran('Write',{file_path:file,content:'交付'})]);return {proj,j};}, /新文件尚未提交/, V1012, {autoCommit:'off', commitMode: 'off',autoVerify:false,autoSeePage:false,autoCrossReview:false,specGate:false,lessons:'off',vibeTidy:true});
+add('1012：交付新文件可以等用户提交', 'verify-gate', (kit) => { const proj=project(kit); const file=path.join(proj,'交付.xls'); H.write(file,'交付'); const j=base(proj,kit,{hook_event_name:'Stop',last_assistant_message:'交付完成，保留文件等待用户提交。'}); j.transcript_path=H.transcript(path.join(path.dirname(proj),'deliver.jsonl'),[H.tr.user('生成交付表格'),H.tr.ran('Write',{file_path:file,content:'交付'})]);return {proj,j};}, /新文件尚未提交/, V1012, {autoCommit:'off', commitMode: 'off',autoVerify:false,autoSeePage:false,specGate:false,lessons:'off',vibeTidy:true});
 add('1012：截断推送预览当场提示', 'after-tool', (kit) => {const proj=project(kit);return {proj,j:base(proj,kit,{hook_event_name:'PostToolUse',tool_name:'Bash',tool_input:{command:'node "'+path.join(kit.kit,'tools/merge-push.js').replace(/\\/g,'/')+'" plan --dir "'+proj.replace(/\\/g,'/')+'" | tail -5'},tool_response:{stdout:'截断内容',exit_code:0}})};}, /预览未登记/, V1012);
 
 // 1013：普通推送策略和文案、确认目标、修订入口、反馈正文与用户审查决定。

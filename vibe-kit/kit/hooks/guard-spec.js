@@ -31,17 +31,6 @@ const HEDGE_GUIDE = '不许写"以后再说"。拿不准的写成决策项：未
 // 验法中的材料由 proposal-files 检查可交付性，不能依赖本机临时脚本。
 const beforeVerify = (line) => String(line || '').split(/(?:验|验证|验收|检验|核对)\s*[:：]/)[0];
 
-/** 这个会话是不是接着一份交接记录干的：一天内写的 .vibe/handover.md（当前目录或上一级） */
-function recentHandover(cwd) {
-  let d = path.resolve(cwd || process.cwd());
-  for (let i = 0; i < 2; i++) {
-    try { if (Date.now() - fs.statSync(path.join(d, '.vibe', 'handover.md')).mtimeMs < 86400000) return true; } catch (e) { /* 没有 */ }
-    const up = path.dirname(d);
-    if (up === d) break;
-    d = up;
-  }
-  return false;
-}
 
 /**
  * 先探索再提案。探索和提案要分两轮：只认"用户提需求（开口钩子记下的时刻）之后、这一轮之前"的探索——会话里更早读过的不相干的文件不算。
@@ -95,14 +84,6 @@ function crossChangeIssues(art, text, isAdded) {
   return out;
 }
 
-/** 项目里有没有叫这个名字的场景文件（.vibe/scenarios/<名字>.json，各个根目录、当前目录都看） */
-function scenarioFinder(roots) {
-  return (name) => {
-    const n = String(name || '').replace(/\.json$/i, '');
-    if (!n || /[\\/]/.test(n)) return false;
-    return roots.some((r) => ['.vibe/scenarios', 'scenarios', '.vibe'].some((d) => fs.existsSync(path.join(r, d, n + '.json'))));
-  };
-}
 /**
  * 打勾前的检查：这次编辑把哪些任务打了勾。不查验法（用户 2026-10-17 定的：任务里不写"验："，两种模式打勾都不查）。
  * 自动模式下：这个变更的第一次打勾（apply 开工）要提案审过，状态里没有记录就去会话记录里找一次成功的审提案调用兜底；

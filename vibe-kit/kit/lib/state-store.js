@@ -106,11 +106,4 @@ function update(file, fn, log) {
     return atomicWrite(file, next) ? next : null;
   } finally { lock.release(); }
 }
-/** HTTP 工作线程异常退出后，宿主只释放该线程确实持有的锁。 */
-function releaseThread(dir, id) {
-  const scan = (d) => { for (const f of fs.readdirSync(d)) if (/\.lock$/.test(f)) { const p = path.join(d, f); const o = owner(p); if (o && o.pid === process.pid && o.thread === id) release(p, o.token); } };
-  try { scan(dir); } catch (e) { /* 清理失败仍显示检查降级 */ }
-  // 按会话的状态在 state/session/<会话号>/ 下（K1-3），那里的锁也要放
-  try { const sd = path.join(dir, 'session'); if (fs.existsSync(sd)) for (const n of fs.readdirSync(sd)) { try { scan(path.join(sd, n)); } catch (e) { /* 下一个 */ } } } catch (e) { /* 同上 */ }
-}
-module.exports = { acquire, release, read, write, update, atomicWrite, atomicText, releaseThread };
+module.exports = { acquire, release, read, write, update, atomicWrite, atomicText };
