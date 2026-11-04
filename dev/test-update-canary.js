@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const FROM = args.find((a) => !/^\d+$/.test(a) && fs.existsSync(path.join(a, 'kit'))) ? path.resolve(args.find((a) => !/^\d+$/.test(a) && fs.existsSync(path.join(a, 'kit')))) : null;
 const SRCV = FROM || H.SRC;
 const PORT = Number(args.find((a) => /^\d+$/.test(a))) || 18755;
-const V = { A: '20261101.0900', B: '20261102.0900', C: '20261103.0900', D: '20261104.0900', E: '20261105.0900', F: '20261106.0900', R: '20261104.1200', H: '20261108.0900', I: '20261109.0900' };
+const V = { A: '20261101.0900', B: '20261102.0900', C: '20261103.0900', D: '20261104.0900', E: '20261105.0900', F: '20261106.0900', G: '20261107.0900', R: '20261104.1200', H: '20261108.0900', I: '20261109.0900' };
 
 const json = (t) => { try { return JSON.parse(String(t).trim().split(/\r?\n/).filter(Boolean).pop()); } catch (e) { return null; } };
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } };
@@ -184,6 +184,17 @@ function makePkg(name, version) {
     H.ok('自动的：在等，不装', r.json && !r.json.apply && version(u) === V.R && u.status().hold === 'wait', r.out + r.err);
     const a = u.run(['apply']);
     H.ok('点了"立即更新"：装上 F', a.json && a.json.apply && a.json.apply.ok && version(u) === V.F, a.out + a.err);
+  }
+
+  H.section('发布时加 --now：这一版不等尝鲜组，没勾"先装新版"的电脑一检查到就装（问题表第 56 条）');
+  {
+    const p = publish(pkg.G, ['--now']);
+    H.ok('（发布了 G，加了 --now）', p.code === 0 && /--now：这一版不等尝鲜组/.test(p.out), p.out + p.err);
+    H.ok('提交信息写明"马上装"', /马上装/.test(H.git(gl.bare, ['log', '-1', '--format=%s', 'main']).out), H.git(gl.bare, ['log', '-1', '--format=%s', 'main']).out);
+    setState(u, { lastCheckAt: 0 });
+    const r = u.run(['run', '--print']);
+    H.ok('没勾"先装新版"的电脑：一检查到就装上 G', r.json && r.json.apply && r.json.apply.ok && version(u) === V.G, r.out + r.err);
+    H.ok('发布时间按提交的算（25 小时前）', Math.abs(Number(state(u).remoteAt) - (Date.now() - 25 * 3600000)) < 15 * 60000, state(u).remoteAt);
   }
 
   // ---------------------------------------------------------------------------------------------

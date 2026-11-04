@@ -21,6 +21,9 @@
  *   node publish.js --dry-run       只看不推：说出会做什么
  *   node publish.js --rollback      仓库里的比这个新也发（全员退回这一版），不再问
  *   node publish.js --force         仓库里不是套件的安装包也发
+ *   node publish.js --now           这一版不等尝鲜组（问题表第 56 条，仓库主人 2026-11-04 定的）：发布提交的时间拨到 25 小时前，
+ *                                   没勾"先装新版"的电脑一检查到就装。它们按仓库里那个提交的时间算"发布满 24 小时"（kit/lib/updater.js 的 check），
+ *                                   装着的旧版也是这样算，所以这一版就生效。提交信息里写明"马上装"。不加照旧等 24 小时
  *   --no-open                       原样传给安装器
  *
  * 要推送权限：令牌要勾 write_repository；走 SSH 的话账号在项目里至少是 Developer，分支受保护的要 Maintainer。
@@ -35,6 +38,13 @@ const SRC = __dirname;
 const args = process.argv.slice(2);
 const has = (f) => args.includes(f);
 const DRY = has('--dry-run');
+const NOW = has('--now');
+/** --now：发布提交的时间拨到 25 小时前（作者时间、提交时间都拨）。已经设了的（测试）不动 */
+function backdate() {
+  if (process.env.GIT_COMMITTER_DATE) return;
+  const t = Math.floor((Date.now() - 25 * 3600000) / 1000) + ' +0000';
+  process.env.GIT_COMMITTER_DATE = t; process.env.GIT_AUTHOR_DATE = t;
+}
 const VERSION_RE = /^\d{8}\.\d{4}$/;
 const CLAUDE = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 const KIT = path.join(CLAUDE, 'vibe-kit');
@@ -186,7 +196,7 @@ function fixedIssues(version) {
   if (DRY) {
     console.log('');
     say('只看不推。真发的话会：');
-    say('  推一个提交到 ' + branch + '（' + count + ' 个文件），标签 v' + version);
+    say('  推一个提交到 ' + branch + '（' + count + ' 个文件），标签 v' + version + (NOW ? '；--now：提交时间拨到 25 小时前，没勾"先装新版"的电脑一检查到就装' : ''));
     if (fixed.length) say('  在这几个议题下面留话说这一版修了：' + fixed.map((n) => '#' + n).join('、'));
     cleanup();
     return;
@@ -194,7 +204,8 @@ function fixedIssues(version) {
   const ident = [];
   if (!gl.git(null, ['config', '--get', 'user.name']).out.trim()) ident.push('-c', 'user.name=' + (os.userInfo().username || 'vibe-kit'));
   if (!gl.git(null, ['config', '--get', 'user.email']).out.trim()) ident.push('-c', 'user.email=' + (os.userInfo().username || 'vibe-kit') + '@' + os.hostname());
-  const commit = G(ident.concat(['commit', '-q', '-m', 'chore: 发布 vibe-kit ' + version]), { timeout: 120000 });
+  if (NOW) { backdate(); say('--now：这一版不等尝鲜组，提交时间拨到 25 小时前，没勾"先装新版"的电脑一检查到就装'); }
+  const commit = G(ident.concat(['commit', '-q', '-m', 'chore: 发布 vibe-kit ' + version + (NOW ? '（马上装：提交时间拨到 25 小时前，不等尝鲜组）' : '')]), { timeout: 120000 });
   if (commit.code !== 0) stop(gl.explainGit(commit, '建提交'));
   G(['tag', '-f', 'v' + version]);
   // 分支和标签一起推，要么都成、要么都不动（Codex C03）：以前分支推成了、标签被拒，仓库里是新内容却没有版本标签
