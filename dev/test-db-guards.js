@@ -16,7 +16,7 @@ H.section('D1 确认串只能用一次：第二个进程读到的是取走之前
 if (!RT.python) console.log('  （没找到 Python，跳过）');
 else {
   const h = H.makeHome('tdg-d1', FROM);
-  const dir = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+  const dir = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts');
   const script = path.join(h.root, 'd1.py');
   H.write(script, [
     'import sys, json',
@@ -41,7 +41,7 @@ H.section('D2 提交那一步出错（库那边已经提交、回话丢了）：
 if (!RT.java || !RT.h2) console.log('  （没找到 Java 或 H2 的驱动，跳过）');
 else {
   const h = H.makeHome('tdg-d2', FROM);
-  const runner = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts', 'runner');
+  const runner = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts', 'runner');
   const work = path.join(h.root, 'd2');
   // 用 H2 当真库，连接外面包一层代理：commit() 先真提交，再抛"连接断开"——就是"已经提交、回话丢了"
   H.write(path.join(work, 'VkCommitLost.java'), [
@@ -89,7 +89,7 @@ H.section('C9（P33）公共目录里几个版本的驱动：按版本号挑最�
 if (!RT.python) console.log('  （没找到 Python，跳过）');
 else {
   const h = H.makeHome('tdg-p33', FROM);
-  const dir = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+  const dir = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts');
   const jars = path.join(h.root, 'drivers');
   for (const v of ['8.1.2.9', '8.1.3.62', '8.1.3.140']) H.write(path.join(jars, 'DmJdbcDriver18-' + v + '.jar'), 'x');
   const r = H.run(h, RT.python, ['-B', '-c', 'import sys, re, pathlib; sys.path.insert(0, sys.argv[1]); import dbconf; print(dbconf._scan_for_jar(pathlib.Path(sys.argv[2]), [re.compile(r"DmJdbcDriver", re.I)]))', dir, jars], { cwd: h.root });
@@ -99,7 +99,7 @@ else {
 H.section('D4 redis 改值保留过期时间：一条 SET 带上 KEEPTTL；老版本 redis 不认就退回 PX；PTTL 为 0 也不能变成永久');
 {
   const h = H.makeHome('tdg-d4', FROM);
-  const client = path.join(h.cfg, 'skills', 'ttls-redis', 'scripts', 'redis.js');
+  const client = path.join(h.cfg, 'skills', 'vk-redis', 'scripts', 'redis.js');
   const script = path.join(h.root, 'redis-set.js');
   // 假 redis：PTTL 回测试给的值；mode=old 时 SET … KEEPTTL 回语法错误（Redis 6 以前的行为）；记下收到的每一条命令
   H.write(script, [
@@ -166,7 +166,7 @@ H.section('D7 改库的确认写明连接从哪来：没分环境的 application
 if (!RT.python) console.log('  （没找到 Python，跳过）');
 else {
   const h = H.makeHome('tdg-d7', FROM);
-  const dir = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+  const dir = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts');
   const script = path.join(h.root, 'd7.py');
   H.write(script, [
     'import sys',
@@ -194,7 +194,7 @@ H.section('D5 驱动连不上自己换：按登记的顺序换下一个，换成
 if (!RT.python || !RT.java || !RT.h2) console.log('  （没找到 Python、Java 或 H2 的驱动，跳过）');
 else {
   const h = H.makeHome('tdg-d5', FROM);
-  const scripts = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+  const scripts = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts');
   const DB = path.join(scripts, 'db.py');
   // 登记表：默认的是一个坏的（里面没有驱动，DriverManager 认不出这个地址），第二个版本是能用的（H2，拿它当库）
   const store = path.join(h.root, 'drivers');

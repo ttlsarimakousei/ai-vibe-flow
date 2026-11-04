@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 改了 *.sql、MyBatis 的 Mapper XML：拿查库技能存下的表结构缓存（<项目>/.vibe/db-crud.cache.json，ttls-db-crud 的 metacache.py 写的）
+ * 改了 *.sql、MyBatis 的 Mapper XML：拿查库技能存下的表结构缓存（<项目>/.vibe/db-crud.cache.json，vk-db-crud 的 metacache.py 写的）
  * 核对里面用到的表名、列名，对不上的提醒一句（K3 M10，2026-11-01）。只提醒，不拦。
  * 只用缓存：不连库、不读连接配置（口令不经过这里，硬规矩 7）。没有缓存、缓存里没有这张表的不提——缓存里只有看过的表，没看过的不等于没有。
  * 认得的写法（保守，拿不准的不提）：
@@ -360,7 +360,7 @@ function hintFor(j) {
   }
   const list = r.issues.slice(0, 8).map((x) => '- 第 ' + x.line + ' 行：' + x.text);
   return '[vibe-kit 表结构] ' + path.basename(abs) + ' 里有 ' + r.issues.length + ' 处和查库技能存的表结构对不上（缓存是 ' + ageText(r.age) + '前存的，只有看过的表）：\n' + list.join('\n')
-    + (r.issues.length > 8 ? '\n- 还有 ' + (r.issues.length - 8) + ' 处' : '') + '\n只是提醒，不拦。核对一下；库里刚改过结构的，用 /ttls-db-crud 的 columns --table <表> --fresh 重新看一遍。';
+    + (r.issues.length > 8 ? '\n- 还有 ' + (r.issues.length - 8) + ' 处' : '') + '\n只是提醒，不拦。核对一下；库里刚改过结构的，用 /vk-db-crud 的 columns --table <表> --fresh 重新看一遍。';
 }
 
 module.exports = { check, hintFor, analyze, tokenize, mapperStatements, scriptStatements, blankXml, loadCache };

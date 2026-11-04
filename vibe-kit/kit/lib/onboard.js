@@ -2,8 +2,8 @@
 /*
  * 后台自动探索。进到一个没探索过的项目，不用模型、不花额度，脚本自己查清这几件事，写进项目的 .vibe/：
  *   project.md     项目说明：是什么工程、模块、怎么构建、启动命令和端口、编码、数据库和 redis 的连接名
- *   db-crud.ini    开发环境的数据库连接（ttls-db-crud 用）
- *   redis.json     开发环境的 redis 连接（ttls-redis 用）
+ *   db-crud.ini    开发环境的数据库连接（vk-db-crud 用）
+ *   redis.json     开发环境的 redis 连接（vk-redis 用）
  *   onboard.json   探索的记录：依据了哪些文件（指纹）、各部分上次生成的是什么
  *
  * 什么时候跑：会话开始、用户每次开口时看一眼（只读一个小文件、对十几个文件取一下修改时间），该跑了就甩一个后台进程，钩子自己马上返回。
@@ -17,7 +17,7 @@
  *
  * 项目说明是一行一条（- 键：值）。重新探索时只换"这里生成的、而且这次生成的和上次不一样"的行：
  * 模型和用户改过的行（去掉了"没跑过"、补了别的话）、自己加的行，都不动。
- * 项目说明不是这里生成的（/ttls-onboard 或者人写的）：不动它，只管数据库和 redis 的连接。
+ * 项目说明不是这里生成的（/vk-onboard 或者人写的）：不动它，只管数据库和 redis 的连接。
  *
  * 只要开发环境的连接。测试、生产环境的不写进去：宁可少找一个，不能把生产库配给 AI。
  */
@@ -35,7 +35,7 @@ const KICK_GAP_MS = 3000;
 const MARK = '<!-- vibe-kit 后台自动探索 -->';
 const NOT_RUN = '（没跑过）';
 // 前端整包构建（npm run build 这类）在内网电脑上可能要十几分钟（#228：vite 构建 13 分 19 秒，压缩、单个大包、杀毒和加密软件拖慢）
-const SLOW_BUILD = '。整包构建可能要十几分钟：日常验证先用开发服务器、/ttls-see-page 看页面；要跑就放后台跑（Bash 的 run_in_background），不要前台干等';
+const SLOW_BUILD = '。整包构建可能要十几分钟：日常验证先用开发服务器、/vk-see-page 看页面；要跑就放后台跑（Bash 的 run_in_background），不要前台干等';
 const SKIP = new Set(['.git', 'node_modules', 'target', 'build', 'dist', 'out', '.idea', '.vscode', '__pycache__', '.vibe', '.claude', 'logs', 'log', '.gradle', '.mvn', 'openspec']);
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -121,9 +121,9 @@ function noteFail(root, ok) {
 // 并进套件之前单独装的技能。装在用户目录里的，安装器会删；装在项目里的安装器不动，由这里在会话开始时提醒
 const db0 = (d) => exists(path.join(d, 'scripts', 'db.py')) && exists(path.join(d, 'scripts', 'sqlguard.py'));
 const OLD_SKILLS = [
-  { name: 'urai-db-crud', now: 'ttls-db-crud', is: db0, drivers: true },
-  { name: 'db-crud', now: 'ttls-db-crud', is: db0, drivers: true },
-  { name: 'redis', now: 'ttls-redis', is: (d) => exists(path.join(d, 'assets', 'redis-client.js')) },
+  { name: 'urai-db-crud', now: 'vk-db-crud', is: db0, drivers: true },
+  { name: 'db-crud', now: 'vk-db-crud', is: db0, drivers: true },
+  { name: 'redis', now: 'vk-redis', is: (d) => exists(path.join(d, 'assets', 'redis-client.js')) },
 ];
 /** cwd 和它下面各个子项目的 .claude/skills 里，认得出的旧技能：[{ name, now, dir, drivers: 带不带驱动 }]。用户目录的不算 */
 function oldSkills(cwd) {
@@ -165,11 +165,11 @@ function oldSkillNotice(cwd) {
     const told = S.readState('old-skills');
     const fresh = list.filter((s) => !told[S.normKey(s.dir)]);
     const names = list.map((s) => s.name + '（' + s.dir + '，现在叫 /' + s.now + '）').join('；');
-    if (!fresh.length) return '这个项目里还留着并进套件之前的技能：' + names + '。用 ttls- 开头的那个，旧的不要用。';
+    if (!fresh.length) return '这个项目里还留着并进套件之前的技能：' + names + '。用 vk- 开头的那个，旧的不要用。';
     const got = rescueDrivers(fresh);
     for (const s of fresh) told[S.normKey(s.dir)] = Date.now();
     S.writeState('old-skills', told);
-    return '这个项目里还留着并进套件之前的技能：' + names + '。用 ttls- 开头的那个，旧的不要用。'
+    return '这个项目里还留着并进套件之前的技能：' + names + '。用 vk- 开头的那个，旧的不要用。'
       + '这一次回答的最后提醒我一句：旧的可以删掉了，删哪几个目录照上面写' + (fresh.some((s) => s.drivers) ? '；它自带的数据库驱动' + (got.length ? '已经收进套件登记好了（' + got.join('、') + '）' : '套件里已经有登记的，不用管') : '') + '。不要自己去删。';
   } catch (e) { return ''; }
 }
@@ -435,7 +435,7 @@ function facts(root) {
     if (front && !same(frontDir, root)) type += '；前端在 ' + rel(root, frontDir) + '（' + [front.fw, front.bundler].filter(Boolean).join(' + ') + '）';
     add('类型', type);
     add('环境', [mv.note, mv.jdk || jdkNote(java)].filter(Boolean).join('；'));
-    add('快检', mv.cmd + ' -q -o compile' + NOT_RUN + '。离线编不过：报缺某个依赖的，只拉那一个（' + mv.cmd + ' dependency:get -Dartifact=<group>:<artifact>:<version>）再离线编；缺父 pom、插件的才去掉 -o。嫌慢：照 /ttls-onboard 的 recipes 导出依赖清单，用 javac 只编改过的文件');
+    add('快检', mv.cmd + ' -q -o compile' + NOT_RUN + '。离线编不过：报缺某个依赖的，只拉那一个（' + mv.cmd + ' dependency:get -Dartifact=<group>:<artifact>:<version>）再离线编；缺父 pom、插件的才去掉 -o。嫌慢：照 /vk-onboard 的 recipes 导出依赖清单，用 javac 只编改过的文件');
     add('全量', mv.cmd + ' -q -o -DskipTests compile' + NOT_RUN + '。离线编不过同上');
     const sf = springFacts(runMod ? runMod.dir : root, tracked);
     if (usesBoot) {
@@ -482,7 +482,7 @@ function facts(root) {
       if (classpath) tracked.add(path.join(root, '.classpath'));
       add('类型', '代码工程。没有 pom 的老式 Java Web（在 IDE 里配 Tomcat 启动）' + (webInf ? '，页面和 jar 在 ' + rel(root, path.dirname(webInf)) : ''));
       add('环境', mv.jdk);
-      add('快检', '还没备好：照 /ttls-onboard 的 recipes（"没有 pom 的老式 Java Web"一节）拼 javac 命令，跑通了记在这里');
+      add('快检', '还没备好：照 /vk-onboard 的 recipes（"没有 pom 的老式 Java Web"一节）拼 javac 命令，跑通了记在这里');
       add('全量', '同上');
       add('启动', '在 IDE 里启动');
     } else if (skills >= 2 || exists(path.join(root, '.claude-plugin'))) {
@@ -495,7 +495,7 @@ function facts(root) {
     } else if (scripts > md && scripts >= 3 && !code) {
       kind = 'scripts';
       add('类型', '脚本、工具。' + Object.keys(scriptExt).sort((a, b) => scriptExt[b] - scriptExt[a]).map((e) => '.' + e + ' ' + scriptExt[e] + ' 个').join('，'));
-      add('快检', '语法检查：' + [scriptExt.js && 'node --check <文件>', scriptExt.py && 'python -m py_compile <文件>', scriptExt.ps1 && 'PowerShell 的语法检查（见 /ttls-onboard 的 recipes）'].filter(Boolean).join('；'));
+      add('快检', '语法检查：' + [scriptExt.js && 'node --check <文件>', scriptExt.py && 'python -m py_compile <文件>', scriptExt.ps1 && 'PowerShell 的语法检查（见 /vk-onboard 的 recipes）'].filter(Boolean).join('；'));
       add('全量', '不适用');
       add('启动', '不适用');
       add('看页面', '不适用');
@@ -508,7 +508,7 @@ function facts(root) {
       add('看页面', '不适用');
     } else {
       kind = 'unknown';
-      add('类型', '没认出来（没有构建文件）。改东西之前先问我这个仓库是干什么的、改完怎么算改对了，或者跑 /ttls-onboard');
+      add('类型', '没认出来（没有构建文件）。改东西之前先问我这个仓库是干什么的、改完怎么算改对了，或者跑 /vk-onboard');
     }
   }
   if (front) {
@@ -518,7 +518,7 @@ function facts(root) {
     const npmRun = (script) => 'npm ' + (sub ? '--prefix ' + (/\s/.test(sub) ? '"' + sub + '"' : sub) + ' ' : '') + 'run ' + script;
     const pre = kind === 'frontend' ? '' : '前端';
     if (kind === 'frontend') {
-      add('快检', front.eslint ? 'npx --no-install eslint <改动的文件>' + NOT_RUN : '没有单个文件的检查：靠开发服务器热更新，用 /ttls-see-page 看页面');
+      add('快检', front.eslint ? 'npx --no-install eslint <改动的文件>' + NOT_RUN : '没有单个文件的检查：靠开发服务器热更新，用 /vk-see-page 看页面');
       add('全量', front.build ? 'npm run ' + front.build + NOT_RUN + SLOW_BUILD : '');
     } else if (front.build) add('前端全量', npmRun(front.build) + NOT_RUN + SLOW_BUILD);
     if (front.typeCheck) add(pre + '类型检查', npmRun(front.typeCheck) + NOT_RUN + '。现在就有的错先存成基线，只看新增的');
@@ -577,7 +577,7 @@ function mergeDb(owner, found, memo) {
   const file = dbConfigFile(owner);
   const had = exists(file);
   const out = { file, names: [], added: [], updated: [], gone: [] };
-  const before = had ? readStrict(file) : '; ttls-db-crud 的连接配置。带 source 的连接是 vibe-kit 后台自动探索从项目的配置文件里找到的（只找开发环境的），\n; 来源文件改了会跟着更新；你手改过、不想被更新的，把那一段的 source 那一行删掉。\n; ★ 这里面有账号口令，确认项目的 .gitignore 排除了 .vibe/。\n';
+  const before = had ? readStrict(file) : '; vk-db-crud 的连接配置。带 source 的连接是 vibe-kit 后台自动探索从项目的配置文件里找到的（只找开发环境的），\n; 来源文件改了会跟着更新；你手改过、不想被更新的，把那一段的 source 那一行删掉。\n; ★ 这里面有账号口令，确认项目的 .gitignore 排除了 .vibe/。\n';
   if (before === null) { log('连接配置读不出来，这次不动它：' + file); return Object.assign(out, { changed: false, skipped: true }); }
   const seen = memo || {};
   const ini = iniSections(before);
@@ -724,7 +724,7 @@ function mergeRedis(owner, found, memo) {
     else { conns[k].enabled = false; conns[k].gone = '来源已失效，失效记录暂未写成，重新探索后处理'; }
   }
   out.changed = JSON.stringify(conns) !== before;
-  if (out.changed) writeAtomic(file, JSON.stringify({ note: 'ttls-redis 的连接配置。auto 为 true 的是 vibe-kit 后台自动探索从项目的配置文件里找到的（只找开发环境的），来源文件改了会跟着更新；不想被更新的把 auto 改成 false。这里面有口令，.vibe/ 不要提交。', connections: conns }, null, 2) + '\n');
+  if (out.changed) writeAtomic(file, JSON.stringify({ note: 'vk-redis 的连接配置。auto 为 true 的是 vibe-kit 后台自动探索从项目的配置文件里找到的（只找开发环境的），来源文件改了会跟着更新；不想被更新的把 auto 改成 false。这里面有口令，.vibe/ 不要提交。', connections: conns }, null, 2) + '\n');
   return out;
 }
 
@@ -744,7 +744,7 @@ const ALT = '（自动探索）';
  *   文件里这一行和上次生成的一样（没人改过）：换成这次的，算一处变化
  *   这一行被改过（模型跑通了命令、去掉了"没跑过"；人补了话）：不动它。这次查到的和上次不一样（事实变了）时，
  *     在 notes 里说一句"查到的变成了什么"，由模型去核对那一行
- *   这一行不是这里生成的（文件是人写的、/ttls-onboard 写的，里面本来就有"数据库"一行）：不动它，这里查到的另起一行，键后面带"（自动探索）"
+ *   这一行不是这里生成的（文件是人写的、/vk-onboard 写的，里面本来就有"数据库"一行）：不动它，这里查到的另起一行，键后面带"（自动探索）"
  *   文件里没有这个键：上次生成过（被人删了）就不再加；没生成过就加在文件最后（不往中间插：中间可能是一条带着下一级的记录）
  * 返回 { text, changes: [改了哪几行], notes: [没改、要模型核对的], gen: 这次生成的 { 键: 值 }（下次的 prev） }
  */
@@ -780,7 +780,7 @@ function mergeProject(text, lines, prev) {
   while (out.length && !out[out.length - 1].trim()) out.pop();
   return { text: out.concat(extra).join('\n') + '\n', changes, notes, gen };
 }
-/** 项目的 CLAUDE.md 里有没有"项目说明（团队共享）"一节（/ttls-onboard 写的，跟着仓库走，Claude Code 自己会带上） */
+/** 项目的 CLAUDE.md 里有没有"项目说明（团队共享）"一节（/vk-onboard 写的，跟着仓库走，Claude Code 自己会带上） */
 function teamNotes(root) {
   for (const f of [path.join(root, 'CLAUDE.md'), path.join(root, '.claude', 'CLAUDE.md')]) { try { if (/^#{1,3}\s*项目说明（团队共享）/m.test(fs.readFileSync(f, 'utf8'))) return f; } catch (e) { /* 没有 */ } }
   return '';
@@ -842,8 +842,8 @@ function explore(root, why) {
   }
   // 测试、生产环境的连接没有配进来，模型也不要自己去配：用户说"查一下线上库"的时候，它得知道这件事要交回给用户
   const NOT_DEV = '。测试、生产环境的连接没有配进来，也不要自己往连接配置里加；要查那些库，告诉我，由我来';
-  if (dbNames.length) lines.push(['数据库', dbNames.map((d) => '连接 ' + d.name + '（' + (DIALECT_NAME[d.x.dialect] || d.x.dialect) + '，' + shortUrl(d.x.url) + '，来自 ' + rel(root, d.x.file) + '）').join('；') + '。查库、核对表和字段用 /ttls-db-crud，连接名照这里写' + (skipped ? NOT_DEV : '')]);
-  if (rdNames.length) lines.push(['redis', rdNames.map((d) => '连接 ' + d.name + '（' + d.x.host + ':' + d.x.port + '，库 ' + d.x.db + (d.x.mode ? '，' + (d.x.mode === 'cluster' ? '集群' : '哨兵') + '模式，内置的客户端连不了' : '') + '，来自 ' + rel(root, d.x.file) + '）').join('；') + '。查缓存用 /ttls-redis，连接名照这里写' + (skipped && !dbNames.length ? NOT_DEV : '')]);
+  if (dbNames.length) lines.push(['数据库', dbNames.map((d) => '连接 ' + d.name + '（' + (DIALECT_NAME[d.x.dialect] || d.x.dialect) + '，' + shortUrl(d.x.url) + '，来自 ' + rel(root, d.x.file) + '）').join('；') + '。查库、核对表和字段用 /vk-db-crud，连接名照这里写' + (skipped ? NOT_DEV : '')]);
+  if (rdNames.length) lines.push(['redis', rdNames.map((d) => '连接 ' + d.name + '（' + d.x.host + ':' + d.x.port + '，库 ' + d.x.db + (d.x.mode ? '，' + (d.x.mode === 'cluster' ? '集群' : '哨兵') + '模式，内置的客户端连不了' : '') + '，来自 ' + rel(root, d.x.file) + '）').join('；') + '。查缓存用 /vk-redis，连接名照这里写' + (skipped && !dbNames.length ? NOT_DEV : '')]);
 
   // 用到的数据库还没有驱动的：要到 Maven 本地仓库里找。上次找过、没找到的，6 小时内不再找（手动跑的除外），那句提醒照旧留着。
   // 用户在配置页里去掉的那一种不再自动登记回来
@@ -867,7 +867,7 @@ function explore(root, why) {
   const missNote = (list) => list.map((k) => DIALECT_NAME[k] || k).join('、') + '的数据库驱动还没有：项目里没带，Maven 本地仓库里也没找到。查库时报错会说只拉哪一个；项目没声明版本的，问用户 jar 在哪，写进连接的 driver_jar';
   const driver = { at: Number(rec.driverSearchAt) || 0, miss: search ? [] : need.slice() };
 
-  // 项目说明：没有就生成；有、是这里生成的就并进去；是别人写的（/ttls-onboard、人）只补数据库和 redis 两行。
+  // 项目说明：没有就生成；有、是这里生成的就并进去；是别人写的（/vk-onboard、人）只补数据库和 redis 两行。
   // 项目的 CLAUDE.md 里有"项目说明（团队共享）"一节的：命令以那一节为准（同事跑通过的），这里只管数据库和 redis，
   // 不另写一套没跑过的命令——模型手上有两条快检命令时，弱一点的会照没跑过的那条去跑
   const pm = path.join(root, '.vibe', 'project.md');
@@ -1012,17 +1012,17 @@ function waitFresh(cwd, ms) {
 
 /**
  * 会话开始、当前目录往上没有项目说明的时候，告诉模型现在是哪种情况（都有项目说明了返回 ''）：
- *   正在探索：等着，不用自己查；探索过了没认出是什么工程、探索没跑成、自动探索关着：要改东西先跑 /ttls-onboard。
+ *   正在探索：等着，不用自己查；探索过了没认出是什么工程、探索没跑成、自动探索关着：要改东西先跑 /vk-onboard。
  * 全局约定里不再写这件事：那句话每个请求都带，又说不清是哪种情况
  */
 function startNote(cwd, kicked) {
   const roots = targetsOf(cwd).filter((r) => !exists(path.join(r, '.vibe', 'project.md')));
   if (!roots.length) return '';
   const names = roots.length > 1 ? '（' + roots.slice(0, 6).map((r) => path.basename(r)).join('、') + '）' : '';
-  const TAIL = '要改东西先跑 /ttls-onboard；只是回答问题不用管。';
+  const TAIL = '要改东西先跑 /vk-onboard；只是回答问题不用管。';
   if (!config().on) return '这个项目还没有项目说明' + names + '。后台自动探索关着：' + TAIL;
   if (kicked || roots.some((r) => locked(r) || (due(r) && !failedLately(r) && process.env.VIBE_KIT_NO_ONBOARD !== '1'))) {
-    return '这个项目还没有项目说明' + names + '，套件正在后台自动探索（查工程类型、构建和启动命令、编码、开发环境的数据库和 redis 连接），几秒钟就好，探索好了会在我下一条消息里带给你。不用自己跑 /ttls-onboard。';
+    return '这个项目还没有项目说明' + names + '，套件正在后台自动探索（查工程类型、构建和启动命令、编码、开发环境的数据库和 redis 连接），几秒钟就好，探索好了会在我下一条消息里带给你。不用自己跑 /vk-onboard。';
   }
   if (roots.some(failedLately)) return '这个项目还没有项目说明' + names + '。后台自动探索没跑成（多半是项目目录写不了）：' + TAIL;
   if (roots.every((r) => exists(recordFile(r)))) return '这个项目还没有项目说明' + names + '。后台探索过了，没认出这是什么工程：' + TAIL;

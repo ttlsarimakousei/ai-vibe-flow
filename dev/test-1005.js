@@ -201,7 +201,7 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     const kit = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: path.join(h.kit, 'hooks', 'pre-edit.js'), old_string: 'a', new_string: 'b' } }));
     const tok = H.hook(h, 'guard-commit', Object.assign({}, base, { tool_name: 'Bash', tool_input: { command: 'cat ~/.claude/vibe-kit/secrets.json' } }));
     const handover = H.transcript(path.join(h.root, 'handover.jsonl'), [H.tr.user('写一份交接文档')]);
-    H.hook(h, 'guard-ask', Object.assign({}, base, { transcript_path: handover, tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } }));
+    H.hook(h, 'guard-ask', Object.assign({}, base, { transcript_path: handover, tool_name: 'Skill', tool_input: { skill: 'vk-handover' } }));
     const n = ((readJson(path.join(h.kit, 'state', 'usage.json')).days || {})[today] || { n: {} }).n;
     const sum = Object.keys(n).filter((k) => /^block\./.test(k)).reduce((a, k) => a + n[k], 0);
     H.ok('串着 cd 的命令、读令牌：拦下了；改套件放行（2026-11-04 起套件可以改）', blocked(cd) && kit === null && blocked(tok), [cd, kit, tok]);

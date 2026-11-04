@@ -207,7 +207,7 @@ function planNext(j, c) {
 function instruction(dir, point) {
   const mode = modeOfPoint(point); const rec = record(dir, point);
   if (halted(dir, point)) return '审查点 ' + point + ' 的子代理连续 ' + rec.failStreak + ' 次没交结论，不再催：这个点算没审过，收工报告里写明"' + point + ' 没审成"；用户说审再审。';
-  return '审查点 ' + point + '：执行 review.js prepare --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，照输出开 ttls-reviewer 子代理。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。需求变化先沟通并同步相关产物和用例。';
+  return '审查点 ' + point + '：执行 review.js prepare --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，照输出开 vk-reviewer 子代理。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。需求变化先沟通并同步相关产物和用例。';
 }
 function entriesOf(j) { return j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : []; }
 function explicit(j, action) { return S.userSaid(entriesOf(j), action).ok; }
@@ -325,7 +325,7 @@ function actionIssue(j) {
   const cfg = S.readConfigFor(j); let inp = j.tool_input || {}; let name = String(j.tool_name || '');
   const cmd = String(inp.command || '');
   const runsReview = /^(Bash|PowerShell)$/.test(name) && reviewRun(j, cmd, name === 'PowerShell');
-  const reviewer = /^(Agent|Task)$/.test(name) && /(?:ttls|vibe)-reviewer/.test(inp.subagent_type || '');
+  const reviewer = /^(Agent|Task)$/.test(name) && /(?:vk|ttls|vibe)-reviewer/.test(inp.subagent_type || '');
   const reviewTask = reviewer ? require('./review-runner').taskOf(inp.prompt) : null;
   const review = reviewer || runsReview || name === 'Skill' && /cross-review/.test(inp.skill || '');
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
@@ -442,7 +442,7 @@ function selfTestWords(words) {
       if (/^(?:-e|--eval|-p|--print|-c|--check)$/.test(a)) return false;
       if (/^(?:-r|--require|--import|--loader|--experimental-loader)$/.test(a)) { i++; continue; }
       if (/^-/.test(a)) continue;
-      if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis)[\\/]/i.test(a)) return false;
+      if (/[\\/]skills[\\/](?:vk-db-crud|vk-redis)[\\/]/i.test(a)) return false;
       if (base(a) === 'devserver.js') return String(args[i + 1] || '').toLowerCase() === 'start';
       return testScript(a);
     }
@@ -454,7 +454,7 @@ function selfTestWords(words) {
       if (a === '-m') return /^(?:pytest|unittest|nose2?|tox)$/i.test(args[i + 1] || '');
       if (a === '-c') return false;
       if (/^-/.test(a)) continue;
-      if (/[\\/]skills[\\/](?:ttls-db-crud|ttls-redis)[\\/]/i.test(a)) return false;
+      if (/[\\/]skills[\\/](?:vk-db-crud|vk-redis)[\\/]/i.test(a)) return false;
       return testScript(a) || base(a) === 'manage.py' && String(args[i + 1] || '').toLowerCase() === 'test';
     }
     return false;

@@ -97,11 +97,11 @@ const NO_BEFORE = '(先别|别|不要|不用|不能|不准|不必|无需|先不|
 const SAID = {
   reviewSkip: { yes: /审查|复审/, command: /^$/ },
   reviewAccept: { yes: /审查|风险|意见/, command: /^$/ },
-  review: { yes: /审查|审核|复审|审一下|审审|再审/, command: /^(?:(?:ttls-)?cross-review|vk-review)$/i },
+  review: { yes: /审查|审核|复审|审一下|审审|再审/, command: /^(?:(?:vk-|ttls-)?cross-review|vk-review)$/i },
   // 编译、构建、快检不算要求自测（用户 2026-10-16 定的；10-17 审核问题 8：说"编译一下"曾被当成许可跑测试、起服务）
-  test: { yes: /自测|测试|验证|复验|看页面|起服务|启动(?:服务|项目|应用)|跑起来/, command: /^(?:(?:ttls-)?see-page|vk-test)$/i },
+  test: { yes: /自测|测试|验证|复验|看页面|起服务|启动(?:服务|项目|应用)|跑起来/, command: /^(?:(?:vk-|ttls-)?see-page|vk-test)$/i },
   reviewBudget: { yes: /审查预算|重新审查/, command: /^$/ },
-  handover: { yes: /交接|handover/i, command: /^(ttls-)?handover$/i },
+  handover: { yes: /交接|handover/i, command: /^(?:vk-|ttls-)?handover$/i },
   accept: { yes: /自测|验收/, command: /^$/ },
   push: { yes: /(?:^|[，,。；;\n])\s*(?:\d+[.、]\s*)?(?:(?:请|帮我|现在|直接|立即|及时|继续|顺便|可以|同意|确认|执行)\s*)*(?:提交(?:并|和|后)?\s*)?(?:git\s+(?:-C\s+\S+\s+)?push\b|push\b|推送|推到远端)(?!\s*(?:策略|规则|规范|检查|权限|功能|提示|失败|报错|问题|日志|脚本|命令|配置|结果|状态|记录|成功|完成|被|测试|的|的时候|时|过|了))/i, no: new RegExp(NO_BEFORE + '(推送|push|推到远端)|(推送|push)(之前|前|以后再说|稍后|晚点|等等|先等)|(推送|push)[^。！!\n]{0,40}([吗么？?]|怎么|怎样|如何|什么|为什么|是否|会不会)|(能不能|可不可以|要不要|是否)(推送|push)|推不推|(?:push|推送)[^。！!\n]{0,8}(我自己|我来|留给我)|(?:解释|讲解|示例|举例)[^。！!\n]{0,16}(push|推送)', 'i'), command: /^vk-push$/i },
   archive: { yes: /归档|archive|验收(通过|过了|没问题|ok)/i, no: new RegExp(NO_BEFORE + '(归档|archive)|(归档|archive)(之前|前|以后再说|稍后|晚点|等等|先等)|(归档|archive)[^。！!\n]{0,12}[吗么？?]|(能不能|可不可以|要不要|是否)归档', 'i'), command: /^(?:(opsx:|openspec[-:])(archive|bulk-archive)|vk-archive)$/i },

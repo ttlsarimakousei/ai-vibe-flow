@@ -71,7 +71,7 @@ for (const [tool, cmd] of [
   ['Bash', 'cat ' + K + '/config.json'],
   ['Bash', 'grep -rn "todo" src/'],
   ['PowerShell', 'Get-ChildItem -Recurse src -Filter *.java | Select-String TODO'],
-  ['Bash', 'cat ~/.claude/skills/ttls-redis/SKILL.md'],
+  ['Bash', 'cat ~/.claude/skills/vk-redis/SKILL.md'],
 ]) { const o = run(tool, cmd); H.ok('放行：' + cmd.replace(K, '<套件>').replace(KW, '<套件>').slice(0, 70), o === null, why(o)); }
 
 H.section('结束进程不再拦（路由 2026-11-03 删了）');
@@ -107,8 +107,8 @@ for (const [tool, cmd] of [
   ['Bash', 'python -Bc "open(\'' + K + '/config.json\',\'w\').write(\'x\')"'],
   ['Bash', 'python -c"open(\'' + K + '/config.json\',\'w\').write(\'x\')"'],
   ['Bash', 'node --eval="require(\'fs\').rmSync(\'' + K + '/hooks\',{recursive:true})"'],
-  ['Bash', 'node --eval="require(\'fs\').writeFileSync(\'' + K + '/hooks/pre-edit.js\',\'\')" "$HOME/.claude/skills/ttls-redis/scripts/redis.js"'],
-  ['Bash', 'python -c"open(\'' + K + '/config.json\',\'w\')" "$HOME/.claude/skills/ttls-db-crud/scripts/db.py"'],
+  ['Bash', 'node --eval="require(\'fs\').writeFileSync(\'' + K + '/hooks/pre-edit.js\',\'\')" "$HOME/.claude/skills/vk-redis/scripts/redis.js"'],
+  ['Bash', 'python -c"open(\'' + K + '/config.json\',\'w\')" "$HOME/.claude/skills/vk-db-crud/scripts/db.py"'],
 ]) { const o = run(tool, cmd); H.ok('放行（套件可以改）：' + cmd.replace(K, '<套件>').slice(0, 80), o === null, why(o)); }
 H.ok('-pe 里不提套件的照常', run('Bash', 'node -pe "1+1"') === null);
 H.ok('-pe 里读令牌照拦', secret(run('Bash', 'node -pe "require(\'fs\').readFileSync(\'' + K + '/secrets.json\',\'utf8\')"')));
@@ -116,25 +116,25 @@ H.ok('-pe 里读令牌照拦', secret(run('Bash', 'node -pe "require(\'fs\').rea
 H.section('跑技能脚本、套件工具的正常写法：放行');
 // cd 进技能、套件的目录再跑脚本：不当成"要改套件"（审查 3-11），但 cd 串在一条里这件事照样拦，给出写全路径的办法
 for (const [cmd, want] of [
-  ['cd ~/.claude/skills/ttls-db-crud && python scripts/db.py find 订单', /skills\/ttls-db-crud\/scripts\/db\.py"/],
+  ['cd ~/.claude/skills/vk-db-crud && python scripts/db.py find 订单', /skills\/vk-db-crud\/scripts\/db\.py"/],
   ['cd ~/.claude/vibe-kit && node tools/lesson.js list', /vibe-kit\/tools\/lesson\.js"/],
 ]) { const o = run('Bash', cmd); H.ok('只拦 cd，建议里是脚本的完整路径：' + cmd.slice(0, 60), cdOnly(o) && want.test(why(o)), why(o)); }
 for (const [tool, cmd, cwd] of [
-  ['Bash', 'timeout 120 python "$HOME/.claude/skills/ttls-db-crud/scripts/db.py" query --sql "select 1"'],
+  ['Bash', 'timeout 120 python "$HOME/.claude/skills/vk-db-crud/scripts/db.py" query --sql "select 1"'],
   ['Bash', 'timeout -s KILL 30 node "$HOME/.claude/vibe-kit/tools/drivers.js" list'],
-  ['Bash', 'cmd //c python "' + CFG + '/skills/ttls-db-crud/scripts/db.py" doctor'],
-  ['Bash', 'winpty python "$HOME/.claude/skills/ttls-db-crud/scripts/db.py" doctor'],
-  ['Bash', 'python scripts/db.py --conn dev peek --table t_user', path.join(h.cfg, 'skills', 'ttls-db-crud')],
-  ['Bash', 'grep -n "install" ~/.claude/skills/ttls-onboard/SKILL.md'],
-  ['PowerShell', 'Select-String -Pattern "copy" -Path ~\\.claude\\skills\\ttls-see-page\\SKILL.md'],
+  ['Bash', 'cmd //c python "' + CFG + '/skills/vk-db-crud/scripts/db.py" doctor'],
+  ['Bash', 'winpty python "$HOME/.claude/skills/vk-db-crud/scripts/db.py" doctor'],
+  ['Bash', 'python scripts/db.py --conn dev peek --table t_user', path.join(h.cfg, 'skills', 'vk-db-crud')],
+  ['Bash', 'grep -n "install" ~/.claude/skills/vk-onboard/SKILL.md'],
+  ['PowerShell', 'Select-String -Pattern "copy" -Path ~\\.claude\\skills\\vk-see-page\\SKILL.md'],
   ['Bash', 'grep -n mkdir ' + K + '/README.md'],
   ['Bash', 'grep -n disableAllHooks ~/.claude/settings.json'],
   ['Bash', 'node "$HOME/.claude/vibe-kit/tools/feedback.js" add --kind 出错 --title "配置页 http://127.0.0.1:15731/ui 打不开" --what "点了没反应"'],
 ]) { const o = run(tool, cmd, cwd); H.ok('放行：' + cmd.replace(K, '<套件>').replace(CFG, '<.claude>').slice(0, 80), o === null, why(o)); }
 for (const [tool, cmd, cwd] of [
-  ['Bash', 'cd ~/.claude/skills/ttls-db-crud && cp scripts/db.py scripts/db.py.bak'],
+  ['Bash', 'cd ~/.claude/skills/vk-db-crud && cp scripts/db.py scripts/db.py.bak'],
   ['Bash', 'cd ~/.claude/vibe-kit && echo x > hooks/new.js'],
-  ['Bash', 'python scripts/db.py --config ../../vibe-kit/config.json doctor', path.join(h.cfg, 'skills', 'ttls-db-crud')],
+  ['Bash', 'python scripts/db.py --config ../../vibe-kit/config.json doctor', path.join(h.cfg, 'skills', 'vk-db-crud')],
   ['Bash', 'echo disableAllHooks > ~/.claude/settings.json'],
   ['Bash', 'curl -X POST http://127.0.0.1:15731/api/kit/config -d "{}"'],
   ['Bash', 'grep -rl x ~/.claude/vibe-kit/hooks | xargs rm'],

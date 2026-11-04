@@ -15,16 +15,38 @@ const FROM = process.argv[2];
 const REPO = path.join(__dirname, '..');
 const KIT_ROOT = FROM ? path.resolve(FROM) : path.join(REPO, 'vibe-kit');
 const OLD_UPDATERS = '上报里没有 20261102.2248 及更早的机器之后';
+const OLD_RENAME = '上报里没有 20261104.1301 及更早的机器之后（ttls- 改成 vk- 那一版之前）';
 
 // 已删的名字：能认出来是残留的才放进来，太短的（router、路由）误伤多，单独按文件看
 const GONE = [
   'hook-host', 'hook-worker', 'hook-health', 'router-smoke', 'idea-mcp', 'idea-tools', 'fake-busy', 'fake-idea', 'cc-http-hooks', 'cc-stream-cut',
   'statusUsage', 'hookTransport', 'reviewExecutor', 'reviewMaxFiles', 'requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewMaxRounds', 'reviewLoop',
   'nearGatewayLimit', 'gatewayLimit', 'autoCompactAt', 'autoCompactWindowOf', 'flagVersion', 'ensureRouter', 'router/service.js', 'router/ui.html', 'router/kit-api', 'router/router.js',
+  'ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis', 'ttls-reviewer', 'ttls-lessons-',
   'kitLock', 'kitBypass', 'plan-unlisted', 'autoCrossReview', 'releaseThread', 'planIntent', 'handoverStage', 'review-waivers', 'handover-consumed', 'hook-stats', 'textDlg', '127.0.0.1:15730', 'model-router', 'vibe-kit-router', '模型路由和配置', '观察期',
 ];
 // [相对仓库的文件, 名字, 理由, 什么时候能删]
 const KEEP = [
+  ['dev/README.md', 'ttls-lessons-', '说明 test-vk-names.js 测什么', OLD_RENAME],
+  ['dev/diff-hooks.js', 'ttls-handover', '对比用例：那一版的技能名', OLD_RENAME],
+  ['dev/diff-hooks.js', 'ttls-lessons-', '对比用例：那一版的规则文件名', OLD_RENAME],
+  ['vibe-kit/install.js', 'ttls-onboard', 'OLD_SKILLS、OLD_AGENTS：升级时删 ttls- 开头的旧技能和代理', OLD_RENAME],
+  ['vibe-kit/install.js', 'ttls-see-page', 'OLD_SKILLS、OLD_AGENTS：升级时删 ttls- 开头的旧技能和代理', OLD_RENAME],
+  ['vibe-kit/install.js', 'ttls-cross-review', 'OLD_SKILLS、OLD_AGENTS：升级时删 ttls- 开头的旧技能和代理', OLD_RENAME],
+  ['vibe-kit/install.js', 'ttls-handover', 'OLD_SKILLS、OLD_AGENTS：升级时删 ttls- 开头的旧技能和代理', OLD_RENAME],
+  ['vibe-kit/install.js', 'ttls-db-crud', 'OLD_SKILLS、OLD_AGENTS：升级时删 ttls- 开头的旧技能和代理', OLD_RENAME],
+  ['vibe-kit/install.js', 'ttls-redis', 'OLD_SKILLS、OLD_AGENTS：升级时删 ttls- 开头的旧技能和代理', OLD_RENAME],
+  ['vibe-kit/install.js', 'ttls-reviewer', 'OLD_SKILLS、OLD_AGENTS：升级时删 ttls- 开头的旧技能和代理', OLD_RENAME],
+  ['vibe-kit/kit/hooks/review-stop.js', 'ttls-reviewer', '升级那一刻开着的会话里审查代理还叫 ttls-reviewer', OLD_RENAME],
+  ['vibe-kit/kit/lib/lessons.js', 'ttls-lessons-', 'OLD_FILE_RE：旧名字的规则文件并进新名字的', OLD_RENAME],
+  ['vibe-kit/kit/lib/toolstats.js', 'ttls-db-crud', '统计文件里旧的工具名', OLD_RENAME],
+  ['vibe-kit/claude/skills/vk-db-crud/CHANGELOG.md', 'ttls-db-crud', '技能自己的变更记录，照当时的名字写', '不删：历史'],
+  ['dev/test-vk-names.js', 'ttls-see-page', '测从 ttls- 升上来', OLD_RENAME],
+  ['dev/test-vk-names.js', 'ttls-handover', '测从 ttls- 升上来', OLD_RENAME],
+  ['dev/test-vk-names.js', 'ttls-db-crud', '测从 ttls- 升上来', OLD_RENAME],
+  ['dev/test-vk-names.js', 'ttls-redis', '测从 ttls- 升上来', OLD_RENAME],
+  ['dev/test-vk-names.js', 'ttls-reviewer', '测从 ttls- 升上来', OLD_RENAME],
+  ['dev/test-vk-names.js', 'ttls-lessons-', '测从 ttls- 升上来', OLD_RENAME],
   ['vibe-kit/kit/lib/config-fields.js', 'autoCrossReview', 'REMOVED 名单：升级时清旧开关', OLD_UPDATERS],
   ['vibe-kit/kit/lib/config-fields.js', 'kitLock', 'REMOVED 名单：升级时清旧开关', OLD_UPDATERS],
   ['vibe-kit/kit/lib/config-fields.js', 'kitBypass', 'REMOVED 名单：升级时清旧开关', OLD_UPDATERS],

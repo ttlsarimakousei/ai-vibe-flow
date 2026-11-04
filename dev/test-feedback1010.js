@@ -97,7 +97,7 @@ function jar(file, version) {
   if (process.argv[2] !== 'none') {
     const rt = H.runtime(process.argv[2] || 'auto');
     H.write(path.join(proj, 'pom.xml'), '<project><dependencies><dependency><artifactId>mysql-connector-j</artifactId><version>8.0.33</version></dependency></dependencies></project>');
-    const py = 'import sys,json\nsys.dont_write_bytecode=True\nsys.path.insert(0,' + JSON.stringify(path.join(h.cfg, 'skills/ttls-db-crud/scripts')) + ')\nimport dbconf\nprint(dbconf.registry_driver("mysql",' + JSON.stringify(proj) + '))\n';
+    const py = 'import sys,json\nsys.dont_write_bytecode=True\nsys.path.insert(0,' + JSON.stringify(path.join(h.cfg, 'skills/vk-db-crud/scripts')) + ')\nimport dbconf\nprint(dbconf.registry_driver("mysql",' + JSON.stringify(proj) + '))\n';
     const pr = H.run(h, rt.python, ['-c', py]);
     H.ok('当前项目指定旧版就用旧版，不用全局默认新版', /8\.0\.33/.test(pr.out), pr.out + pr.err);
     H.write(path.join(proj, 'pom.xml'), '<project><dependencies><dependency><artifactId>mysql-connector-j</artifactId><version>5.1.49</version></dependency></dependencies></project>');
@@ -109,14 +109,14 @@ function jar(file, version) {
     H.ok('子项目覆盖父 pom 的版本，不误报两个版本', /8\.0\.33/.test(child.out), child.out + child.err);
     H.write(path.join(proj, 'lib/mysql-connector-j-8.0.33.jar'), fs.readFileSync(j1));
     H.write(path.join(proj, 'lib/mysql-connector-j-8.4.0.jar'), fs.readFileSync(j2));
-    const localPy = 'import sys;sys.dont_write_bytecode=True;sys.path.insert(0,' + JSON.stringify(path.join(h.cfg, 'skills/ttls-db-crud/scripts')) + ');import dbconf;print(dbconf.find_driver_jar({"dialect":"mysql"},' + JSON.stringify(proj) + '))';
+    const localPy = 'import sys;sys.dont_write_bytecode=True;sys.path.insert(0,' + JSON.stringify(path.join(h.cfg, 'skills/vk-db-crud/scripts')) + ');import dbconf;print(dbconf.find_driver_jar({"dialect":"mysql"},' + JSON.stringify(proj) + '))';
     const localJar = H.run(h, rt.python, ['-c', localPy]);
     H.ok('项目 lib 同时有两版也按声明选，不挑文件名最大的', /8\.0\.33/.test(localJar.out), localJar.out + localJar.err);
     H.write(path.join(proj, 'pom.xml'), '<project><dependencies><dependency><artifactId>mysql-connector-j</artifactId><version>${external.version}</version></dependency></dependencies></project>');
     const unknown = H.run(h, rt.python, ['-c', localPy]);
     H.ok('声明了驱动但版本无法解析时不猜默认或最新版本', unknown.code !== 0 && /未解析的属性/.test(unknown.err), unknown.out + unknown.err);
     H.write(path.join(proj, 'src/main/resources/application-dev.yml'), '测试来源，不含连接口令\n');
-    const owner = H.run(h, rt.python, ['-c', 'import sys;sys.dont_write_bytecode=True;sys.path.insert(0,' + JSON.stringify(path.join(h.cfg, 'skills/ttls-db-crud/scripts')) + ');import dbconf;print(dbconf.driver_project_root({"_config_root":' + JSON.stringify(h.work) + ',"source":"中文项目/src/main/resources/application-dev.yml"},' + JSON.stringify(h.work) + '))']);
+    const owner = H.run(h, rt.python, ['-c', 'import sys;sys.dont_write_bytecode=True;sys.path.insert(0,' + JSON.stringify(path.join(h.cfg, 'skills/vk-db-crud/scripts')) + ');import dbconf;print(dbconf.driver_project_root({"_config_root":' + JSON.stringify(h.work) + ',"source":"中文项目/src/main/resources/application-dev.yml"},' + JSON.stringify(h.work) + '))']);
     H.ok('壳子选连接时按来源找到子项目 pom', owner.out.trim().toLowerCase() === proj.toLowerCase(), owner.out + owner.err);
   }
   H.node(h, path.join(h.kit, 'tools/drivers.js'), ['remove', 'mysql', '--jar', pool[0] ? pool[0].jar : j1, '--json']);

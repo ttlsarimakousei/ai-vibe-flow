@@ -1,6 +1,6 @@
 'use strict';
 /*
- * ttls-redis：客户端对着假 redis（dev/lib/fake-redis.js）走一遍。
+ * vk-redis：客户端对着假 redis（dev/lib/fake-redis.js）走一遍。
  *   连接信息按连接名从配置里取，口令不上命令行；七个子命令；找配置（往上、往下、以前的位置）；
  *   全自动模式下不改数据；集群、加密连接说"不支持"；用量只记工具的事
  * 用法：node dev/test-redis.js [端口，默认 18761]
@@ -16,7 +16,7 @@ const SECRET = 'r3dis-秘密-口令';
 (async () => {
   const watch = await H.watchWindows('redis-win');
   const h = H.makeHome('redis');
-  const TOOL = path.join(h.cfg, 'skills', 'ttls-redis', 'scripts', 'redis.js');
+  const TOOL = path.join(h.cfg, 'skills', 'vk-redis', 'scripts', 'redis.js');
   const proj = H.makeRepo(path.join(h.work, 'shell', 'backend'), { 'pom.xml': '<project/>\n', '.gitignore': '.vibe/\n' });
   const servers = [];
   const start = async (port, pw, extra) => {
@@ -174,7 +174,7 @@ const SECRET = 'r3dis-秘密-口令';
 
   H.section('用量：只记工具的事');
   const all = H.read(path.join(h.kit, 'state', 'tool-usage.jsonl')) || '';
-  H.ok('记了命令、耗时、错误的类别', usage().some((u) => u.tool === 'ttls-redis' && u.cmd === 'get' && u.ms >= 0 && u.exit === 0) && usage().some((u) => (u.errors || []).includes('AUTH_FAILED')), usage().slice(0, 3));
+  H.ok('记了命令、耗时、错误的类别', usage().some((u) => u.tool === 'vk-redis' && u.cmd === 'get' && u.ms >= 0 && u.exit === 0) && usage().some((u) => (u.errors || []).includes('AUTH_FAILED')), usage().slice(0, 3));
   H.ok('没有 key、值、地址、口令', !all.includes(SECRET) && !/你好|张三|str:1|127\.0\.0\.1/.test(all), all.slice(0, 500));
 
   H.section('钩子：跑技能自带的脚本放行；改套件的东西也放行（2026-11-04 起套件可以改），读令牌照拦');
@@ -182,42 +182,42 @@ const SECRET = 'r3dis-秘密-口令';
   const tf = H.transcript(path.join(h.root, 'guard.jsonl'), [H.tr.user('查一下缓存')]);
   const guard = (tool, command) => H.reasonOf(H.hook(h, 'guard-commit', { session_id: 'g1', transcript_path: tf, cwd: proj, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: { command } }));
   const abs = (rel) => path.join(h.cfg, rel).replace(/\\/g, '/');
-  const DB = '"$HOME/.claude/skills/ttls-db-crud/scripts/db.py"';
-  const RD = '"$HOME/.claude/skills/ttls-redis/scripts/redis.js"';
+  const DB = '"$HOME/.claude/skills/vk-db-crud/scripts/db.py"';
+  const RD = '"$HOME/.claude/skills/vk-redis/scripts/redis.js"';
   const pass = [
     ['Bash', 'node ' + RD + ' get user:1'],
-    ['Bash', 'node ~/.claude/skills/ttls-redis/scripts/redis.js --conn dev scan "user:*"'],
+    ['Bash', 'node ~/.claude/skills/vk-redis/scripts/redis.js --conn dev scan "user:*"'],
     ['Bash', 'node ' + RD + ' get user:1 | jq .'],
     ['Bash', 'python ' + DB + ' describe dev --table t_user'],
-    ['Bash', 'python3 ~/.claude/skills/ttls-db-crud/scripts/db.py peek dev --table t_user'],
-    ['Bash', 'py -3 "' + abs('skills/ttls-db-crud/scripts/db.py') + '" query dev --sql "select 1"'],
+    ['Bash', 'python3 ~/.claude/skills/vk-db-crud/scripts/db.py peek dev --table t_user'],
+    ['Bash', 'py -3 "' + abs('skills/vk-db-crud/scripts/db.py') + '" query dev --sql "select 1"'],
     ['Bash', 'python -X utf8 ' + DB + ' doctor'],
     ['Bash', 'PYTHONIOENCODING=utf-8 python ' + DB + ' query dev --sql "select 1" | python -m json.tool'],
-    ['PowerShell', 'python "$env:USERPROFILE\\.claude\\skills\\ttls-db-crud\\scripts\\db.py" describe dev --table t_user'],
-    ['PowerShell', 'node "$env:USERPROFILE\\.claude\\skills\\ttls-redis\\scripts\\redis.js" get user:1'],
+    ['PowerShell', 'python "$env:USERPROFILE\\.claude\\skills\\vk-db-crud\\scripts\\db.py" describe dev --table t_user'],
+    ['PowerShell', 'node "$env:USERPROFILE\\.claude\\skills\\vk-redis\\scripts\\redis.js" get user:1'],
     ['Bash', 'node "$HOME/.claude/vibe-kit/tools/drivers.js" list'],
     ['Bash', 'node "$HOME/.claude/vibe-kit/tools/onboard.js" status'],
-    ['Bash', 'cat ~/.claude/skills/ttls-redis/SKILL.md'],
+    ['Bash', 'cat ~/.claude/skills/vk-redis/SKILL.md'],
   ];
   for (const [tool, cmd] of pass) { const r = guard(tool, cmd); H.ok('放行：' + cmd.slice(0, 70), !r, r); }
   // cd 进技能目录再跑脚本：不算改套件，但 cd 和别的命令串在一条里 Claude Code 会停下来要人确认，所以拦下、让它把脚本路径写全
   {
-    const r = guard('Bash', 'cd "$HOME/.claude/skills/ttls-db-crud/scripts" && python db.py doctor');
-    H.ok('cd 进技能目录再跑脚本：只说别串 cd，给出脚本的完整路径', /^\[vibe-kit\] 这条命令先 cd 到/.test(r) && /skills\/ttls-db-crud\/scripts\/db\.py"/.test(r) && !/vibe-kit 套件/.test(r), r);
+    const r = guard('Bash', 'cd "$HOME/.claude/skills/vk-db-crud/scripts" && python db.py doctor');
+    H.ok('cd 进技能目录再跑脚本：只说别串 cd，给出脚本的完整路径', /^\[vibe-kit\] 这条命令先 cd 到/.test(r) && /skills\/vk-db-crud\/scripts\/db\.py"/.test(r) && !/vibe-kit 套件/.test(r), r);
   }
   const stop = [
-    ['Bash', 'rm -rf ~/.claude/skills/ttls-db-crud'],
-    ['Bash', 'cp x.py ~/.claude/skills/ttls-db-crud/scripts/db.py'],
-    ['Bash', 'python ' + DB + ' doctor > ~/.claude/skills/ttls-db-crud/SKILL.md'],
+    ['Bash', 'rm -rf ~/.claude/skills/vk-db-crud'],
+    ['Bash', 'cp x.py ~/.claude/skills/vk-db-crud/scripts/db.py'],
+    ['Bash', 'python ' + DB + ' doctor > ~/.claude/skills/vk-db-crud/SKILL.md'],
     ['Bash', 'node ' + RD + ' get k | tee "$HOME/.claude/CLAUDE.md"'],
     ['Bash', 'python ' + DB + ' --config "$HOME/.claude/vibe-kit/config.json" doctor'],
-    ['Bash', 'node ~/.claude/skills/ttls-redis/scripts/../../../vibe-kit/hooks/pre-edit.js'],
-    ['Bash', 'python "$HOME/.claude/skills/ttls-db-crud/scripts/runner/x.py"'],
-    ['Bash', 'java -cp "$HOME/.claude/skills/ttls-db-crud/scripts/runner" DbRunner ping'],
-    ['Bash', 'python -c "open(\'' + abs('skills/ttls-db-crud/scripts/db.py') + '\',\'w\').write(\'x\')"'],
+    ['Bash', 'node ~/.claude/skills/vk-redis/scripts/../../../vibe-kit/hooks/pre-edit.js'],
+    ['Bash', 'python "$HOME/.claude/skills/vk-db-crud/scripts/runner/x.py"'],
+    ['Bash', 'java -cp "$HOME/.claude/skills/vk-db-crud/scripts/runner" DbRunner ping'],
+    ['Bash', 'python -c "open(\'' + abs('skills/vk-db-crud/scripts/db.py') + '\',\'w\').write(\'x\')"'],
     ['Bash', 'python3 -c "import os; open(os.path.expanduser(\'~/.claude/vibe-kit/config.json\'),\'w\').write(\'x\')"'],
     ['Bash', 'node -e "require(\'fs\').writeFileSync(process.env.HOME + \'/.claude/vibe-kit/config.json\', \'{}\')"'],
-    ['PowerShell', 'python -c "import shutil; shutil.rmtree(\'' + abs('skills/ttls-redis') + '\')"'],
+    ['PowerShell', 'python -c "import shutil; shutil.rmtree(\'' + abs('skills/vk-redis') + '\')"'],
   ];
   for (const [tool, cmd] of stop) { const r = guard(tool, cmd); H.ok('放行（套件可以改）：' + cmd.replace(h.root.replace(/\\/g, '/'), '…').slice(0, 70), !r, r); }
   H.ok('技能脚本的参数里读令牌：照拦', /令牌/.test(guard('Bash', 'python ' + DB + ' --config "$HOME/.claude/vibe-kit/secrets.json" doctor')));
@@ -226,5 +226,5 @@ const SECRET = 'r3dis-秘密-口令';
   for (const c of servers) { try { c.kill(); } catch (e) { /* 已经退了 */ } }
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
-  H.done('ttls-redis');
+  H.done('vk-redis');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

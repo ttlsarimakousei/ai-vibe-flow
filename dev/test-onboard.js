@@ -192,7 +192,7 @@ const PROD_SECRET = 'Prod-绝密-0001';
   H.ok('后端：命令标着没跑过', /- 快检：mvn -q -o compile（没跑过）/.test(tb) && /- 全量：mvn -q -o -DskipTests compile（没跑过）/.test(tb), tb);
   H.ok('后端：启动命令带模块、端口、上下文路径', /- 启动：mvn -o spring-boot:run -Dmaven.test.skip=true -pl app-admin -am（在根目录执行）（本地仓库缺依赖 devserver 只拉缺的那几个，再离线起），端口 8081（application-dev\.yml 里的 server\.port），上下文路径 \/admin/.test(tb), tb);
   H.ok('后端：编码里点了那个 GBK 文件', /- 编码：UTF-8；这 1 个不是 UTF-8[^\n]*old\/Gbk\.java/.test(tb), tb);
-  H.ok('后端：数据库、redis 的连接名', /- 数据库：连接 \w+（达梦，jdbc:dm:\/\/10\.0\.0\.5:5236，来自 app-admin\/src\/main\/resources\/application-dev\.yml）。[^\n]*\/ttls-db-crud[^\n]*测试、生产环境的连接没有配进来/.test(tb) && /- redis：连接 dev（10\.0\.0\.6:6379，库 1，/.test(tb), tb);
+  H.ok('后端：数据库、redis 的连接名', /- 数据库：连接 \w+（达梦，jdbc:dm:\/\/10\.0\.0\.5:5236，来自 app-admin\/src\/main\/resources\/application-dev\.yml）。[^\n]*\/vk-db-crud[^\n]*测试、生产环境的连接没有配进来/.test(tb) && /- redis：连接 dev（10\.0\.0\.6:6379，库 1，/.test(tb), tb);
   H.ok('后端：坑里有"当前环境是 dev"', /- 坑：[^\n]*当前环境是 dev/.test(tb), tb);
   H.ok('项目说明里没有口令', !tb.includes(SECRET) && !tb.includes(PROD_SECRET), tb);
   H.ok('项目说明里没有"产出位置"（那是用户定的，脚本不替他定）', !/产出位置/.test(tb.replace(/> [^\n]*/g, '')), tb);
@@ -439,13 +439,13 @@ const PROD_SECRET = 'Prod-绝密-0001';
       H.ok('探索不成：记了一次失败', rb2.code === 0 && O.failedLately(bad) === true, rb2.out + rb2.err);
       const kb = H.node(h, '-e', ['const O=require(' + JSON.stringify(path.join(h.kit, 'lib', 'onboard.js')) + ');console.log(JSON.stringify([O.kick(' + JSON.stringify(bad) + ',"测试"), O.waitFresh(' + JSON.stringify(bad) + ', 1500)]))'], { cwd: bad, env: live });
       H.ok('之后的一段时间里不再起进程、也不等', kb.out.trim() === '[false,false]' && kb.ms === undefined, kb.out + kb.err);
-      H.ok('会话开始时说清：没跑成，要改东西先跑 /ttls-onboard', /后台自动探索没跑成[^\n]*要改东西先跑 \/ttls-onboard/.test(O.startNote(bad, false)), O.startNote(bad, false));
+      H.ok('会话开始时说清：没跑成，要改东西先跑 /vk-onboard', /后台自动探索没跑成[^\n]*要改东西先跑 \/vk-onboard/.test(O.startNote(bad, false)), O.startNote(bad, false));
       const unk = H.makeRepo(path.join(h.work, 'merge-unknown'), { 'x.dat': '1\n' });
       O.explore(unk, '没探索过');
-      H.ok('探索过了、没认出是什么工程：说清，让它要改东西先跑 /ttls-onboard', !fs.existsSync(path.join(unk, '.vibe', 'project.md')) && /没认出这是什么工程：要改东西先跑 \/ttls-onboard/.test(O.startNote(unk, false)), O.startNote(unk, false));
+      H.ok('探索过了、没认出是什么工程：说清，让它要改东西先跑 /vk-onboard', !fs.existsSync(path.join(unk, '.vibe', 'project.md')) && /没认出这是什么工程：要改东西先跑 \/vk-onboard/.test(O.startNote(unk, false)), O.startNote(unk, false));
       H.setConfig(h, { autoOnboard: false });
       const offNote = runHook('session-start', Object.assign(hookIn('SessionStart', { source: 'startup' }), { cwd: H.makeRepo(path.join(h.work, 'merge-off'), { 'pom.xml': '<project/>\n' }), session_id: 's-offnote' })).text;
-      H.ok('自动探索关着、没有项目说明：会话开始时明说要先跑 /ttls-onboard', /后台自动探索关着：要改东西先跑 \/ttls-onboard/.test(offNote), offNote);
+      H.ok('自动探索关着、没有项目说明：会话开始时明说要先跑 /vk-onboard', /后台自动探索关着：要改东西先跑 \/vk-onboard/.test(offNote), offNote);
       H.setConfig(h, { autoOnboard: true });
       H.ok('有项目说明的项目：不说这些', O.startNote(a, false) === '');
     } finally { Dv2.auto = keepAuto; }
@@ -469,14 +469,14 @@ const PROD_SECRET = 'Prod-绝密-0001';
   fs.writeFileSync(path.join(h.kit, 'drivers.json'), JSON.stringify({ version: 1, drivers: {} }));
   const startIn = (dir, sid) => runHook('session-start', Object.assign(hookIn('SessionStart', { source: 'startup' }), { cwd: dir, session_id: sid })).text;
   const o1 = startIn(leg, 's-old1');
-  H.ok('会话开始：说了留着哪两个、现在叫什么、用新的', /这个项目里还留着并进套件之前的技能/.test(o1) && /urai-db-crud（[^）]*legacy-skill[\\/]+\.claude[\\/]+skills[\\/]+urai-db-crud，现在叫 \/ttls-db-crud）/.test(o1) && /redis（[^）]*现在叫 \/ttls-redis）/.test(o1) && /用 ttls- 开头的那个，旧的不要用/.test(o1) && !/my-own/.test(o1), o1);
+  H.ok('会话开始：说了留着哪两个、现在叫什么、用新的', /这个项目里还留着并进套件之前的技能/.test(o1) && /urai-db-crud（[^）]*legacy-skill[\\/]+\.claude[\\/]+skills[\\/]+urai-db-crud，现在叫 \/vk-db-crud）/.test(o1) && /redis（[^）]*现在叫 \/vk-redis）/.test(o1) && /用 vk- 开头的那个，旧的不要用/.test(o1) && !/my-own/.test(o1), o1);
   H.ok('第一次：让它提醒用户一句，不要自己去删', /这一次回答的最后提醒我一句：旧的可以删掉了/.test(o1) && /不要自己去删/.test(o1), o1);
   if (DM_JAR) {
     const reg = (readJson(path.join(h.kit, 'drivers.json')) || {}).drivers || {};
     H.ok('旧技能自带的驱动收进来登记了', reg.dm && reg.dm.from === 'rescue' && fs.existsSync(reg.dm.jar) && reg.dm.jar.startsWith(path.join(h.kit, 'drivers')) && /它自带的数据库驱动已经收进套件登记好了（达梦 /.test(o1), [reg, o1]);
   }
   const o2 = startIn(leg, 's-old2');
-  H.ok('以后的会话：只说用新的，不再让它提醒', /用 ttls- 开头的那个，旧的不要用/.test(o2) && !/提醒我一句/.test(o2), o2);
+  H.ok('以后的会话：只说用新的，不再让它提醒', /用 vk- 开头的那个，旧的不要用/.test(o2) && !/提醒我一句/.test(o2), o2);
   H.ok('旧技能的文件一个没动', fs.existsSync(path.join(leg, '.claude/skills/urai-db-crud/scripts/db.py')) && fs.existsSync(path.join(leg, '.claude/skills/redis/assets/redis-client.js')) && (!DM_JAR || fs.existsSync(path.join(leg, '.claude/skills/urai-db-crud/drivers/dm-jdbc-driver-18.jar'))));
   H.ok('同名但不是以前那个技能：不提', !/还留着并进套件之前的技能/.test(startIn(other, 's-old3')));
   H.ok('没有旧技能的项目：不提', !/还留着并进套件之前的技能/.test(startIn(own, 's-old4')));
@@ -493,13 +493,13 @@ const PROD_SECRET = 'Prod-绝密-0001';
 
   if (PY) {
     H.section('db.py、redis.js 读得了生成的配置');
-    const DB = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts', 'db.py');
+    const DB = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts', 'db.py');
     const cl = H.run(h, PY, [DB, 'conn', 'list'], { cwd: back });
     H.ok('db.py conn list：三个连接，自动探索到的标着来源', cl.code === 0 && /localdb/.test(cl.out) && /manual/.test(cl.out) && /自动探索到的，来自 app-admin\/src\/main\/resources\/application-local\.yml:3/.test(cl.out), cl.out + cl.err);
     const up = H.run(h, PY, [DB, 'conn', 'list'], { cwd: shell });
     H.ok('人在壳子上：找得到后端的配置', up.code === 0 && /backend/.test(up.out), up.out + up.err);
   }
-  const rc = H.node(h, path.join(h.cfg, 'skills', 'ttls-redis', 'scripts', 'redis.js'), ['conns'], { cwd: back });
+  const rc = H.node(h, path.join(h.cfg, 'skills', 'vk-redis', 'scripts', 'redis.js'), ['conns'], { cwd: back });
   H.ok('撤回后 redis 工具不能继续使用旧连接', /NO_CONFIG/.test(rc.out), rc.out);
 
   const wins = await watch.stop();

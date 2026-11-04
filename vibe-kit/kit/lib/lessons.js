@@ -4,14 +4,14 @@
  *
  * 整条路：
  *   审查确认成立的问题 → 主模型用 tools/lesson.js add 记一句话 → 先进候选（不进上下文）
- *   → 同一条在不同的变更里出现到门槛（默认 2 次）→ 升成项目级规则，写进出问题的文件所在仓库的 .claude/rules/ttls-lessons-<类型>.md
+ *   → 同一条在不同的变更里出现到门槛（默认 2 次）→ 升成项目级规则，写进出问题的文件所在仓库的 .claude/rules/vk-lessons-<类型>.md
  *   → 同一条在两个不同的项目里都成了规则、又不含项目特有的名字 → 列为"可以升用户级"，用户在配置页点了才写进 ~/.claude/rules/
  *
  * 放在哪：
  *   候选             <仓库>/.vibe/lessons/candidates.json          只在本机，不进上下文，不进仓库
- *   项目级规则       <仓库>/.claude/rules/ttls-lessons-<类型>.md   跟着仓库提交，同事的 Claude 也能看到
+ *   项目级规则       <仓库>/.claude/rules/vk-lessons-<类型>.md   跟着仓库提交，同事的 Claude 也能看到
  *   跨项目的记录     ~/.claude/vibe-kit/lessons/index.json         只在本机
- *   用户级规则       ~/.claude/rules/ttls-lessons-<类型>.md        只在本机，所有项目生效
+ *   用户级规则       ~/.claude/rules/vk-lessons-<类型>.md        只在本机，所有项目生效
  *
  * 规则文件就是"生效规则"的唯一来源：每条规则上面有一行注释记着编号、次数、最近一次、出处（单独一行的注释 Claude Code 不会送进上下文，
  * 2.1.120 / 2.1.259 / 2.1.283 实测）。人可以直接改字、删行；没有编号注释的行当作手写的，这里不动它。
@@ -40,9 +40,9 @@ const { KIT, CFG_DIR, normKey, readConfig, ensureVibeIgnored, updateState, readS
 const USER_RULES_DIR = path.join(CFG_DIR, 'rules');
 const STORE = path.join(KIT, 'lessons');
 const INDEX_FILE = path.join(STORE, 'index.json');
-const FILE_RE = /^ttls-lessons-([a-z0-9][\w.-]*)\.md$/i;
-// 改名之前的文件名（20260929 及之前的版本写的）。碰到就并进新名字的文件里，旧文件删掉，见 migrateNames
-const OLD_FILE_RE = /^vibe-lessons-([a-z0-9][\w.-]*)\.md$/i;
+const FILE_RE = /^vk-lessons-([a-z0-9][\w.-]*)\.md$/i;
+// 改名之前的文件名：vibe-lessons-（20260929 及之前的版本写的）、ttls-lessons-（2026-11-04 之前）。碰到就并进新名字的文件里，旧文件删掉，见 migrateNames
+const OLD_FILE_RE = /^(?:vibe|ttls)-lessons-([a-z0-9][\w.-]*)\.md$/i;
 const SAME = 0.72;   // 相似到这个程度：当成同一条
 const NEAR = 0.38;   // 到这个程度：列出来让模型自己认
 const HEADER = '<!-- vibe-kit 经验规则：审查里反复出现的问题沉淀下来的，读到对应类型的文件时 Claude Code 会自动带上。新增、合并、退役由套件的 lesson.js 做；人可以直接改字、删行（删一条要连它上面那行注释一起删）；没有编号注释的行当作手写的，工具不动。Claude 不能直接改这个文件。 -->';
@@ -89,7 +89,7 @@ function groupInfo(key) {
   const m = /^other-([a-z0-9]{1,8})$/.exec(String(key || ''));
   return m ? { title: '.' + m[1] + ' 文件', paths: ['**/*.' + m[1]] } : null;
 }
-const ruleFileOf = (dir, group) => path.join(dir, 'ttls-lessons-' + group + '.md');
+const ruleFileOf = (dir, group) => path.join(dir, 'vk-lessons-' + group + '.md');
 const projectRulesDir = (root) => path.join(root, '.claude', 'rules');
 
 /** 这个路径是不是经验规则的文件（项目级、用户级的规则文件，或者 .vibe/lessons 里的候选）：模型不能直接改，只能通过 lesson.js */
@@ -97,7 +97,7 @@ function isLessonFile(p) {
   const s = String(p || '').replace(/\\/g, '/');
   if (/(^|\/)\.vibe\/lessons(\/|$)/i.test(s)) return true;
   const base = path.basename(s);
-  return /(^|\/)\.claude\/rules\/(?:[^/]+\/)*(?:ttls|vibe)-lessons-[^/]*\.md$/i.test(s) || ((FILE_RE.test(base) || OLD_FILE_RE.test(base)) && normKey(path.dirname(path.resolve(s))) === normKey(USER_RULES_DIR));
+  return /(^|\/)\.claude\/rules\/(?:[^/]+\/)*(?:vk|ttls|vibe)-lessons-[^/]*\.md$/i.test(s) || ((FILE_RE.test(base) || OLD_FILE_RE.test(base)) && normKey(path.dirname(path.resolve(s))) === normKey(USER_RULES_DIR));
 }
 
 // ---------- 找项目 ----------
@@ -337,7 +337,7 @@ function squeeze(data, st, keep) {
 const sortRules = (data) => { data.rules.sort((a, b) => (b.count - a.count) || String(b.last).localeCompare(String(a.last))); };
 
 /**
- * 规则文件改名（vibe-lessons-*.md → ttls-lessons-*.md）。目录里还有旧名字的文件：并进新名字的文件里，旧文件删掉。
+ * 规则文件改名（vibe-lessons-*.md → vk-lessons-*.md）。目录里还有旧名字的文件：并进新名字的文件里，旧文件删掉。
  * 同事还没升级的那几天两种名字可能同时在（他的旧版套件还会往旧名字里写）：同一条（编号一样，或者文字差不多）留一条，
  * 次数取大的、出处合起来。scope 是 project 时两个文件都记下来，收工检查会催提交（旧文件的删除也要提交）。
  * 返回挪了几个文件。挪不了（只读、被占用）就留着旧的，下次再试

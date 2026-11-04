@@ -1,6 +1,6 @@
 'use strict';
 /*
- * ttls-db-crud：拿一个真的 JDBC 数据库（H2，MySQL 兼容模式）走完整的读写循环。
+ * vk-db-crud：拿一个真的 JDBC 数据库（H2，MySQL 兼容模式）走完整的读写循环。
  *   建表 → 插入含中文、NULL、空串、引号的行 → 找表 → 看结构（大小写自己试、第二次走缓存）→ 按值找 → 几条查询一起跑
  *   → 两步确认的更新（行数变了不执行）→ 反向 SQL → 查询命令里塞写语句被拦
  *   → 全自动模式：留得下备份的直接做（改、删留快照和还原脚本，新增记下表和主键，建表加列记下 DROP），留不下的不做 → 驱动登记表 → 后台执行器
@@ -25,7 +25,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
 (async () => {
   const watch = await H.watchWindows('dbcrud-win');
   const h = H.makeHome('dbcrud');
-  const DB = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts', 'db.py');
+  const DB = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts', 'db.py');
   const proj = H.makeRepo(path.join(h.work, 'shell', 'backend'), { 'pom.xml': '<project/>\n', '.gitignore': '.vibe/\n' });
   const data = H.tempDir('dbcrud-data');
   const url = 'jdbc:h2:file:' + data.replace(/\\/g, '/') + '/db;MODE=MySQL';
@@ -50,10 +50,10 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   H.ok('自检：.vibe 被 git 忽略了', /已被 git 忽略/.test(doc.out), doc.out);
   const ping = db(['conn', 'test']);
   H.ok('连上了，说了驱动是哪来的', ping.code === 0 && /连上了：main/.test(ping.out) && /驱动来自 配置里指定的/.test(ping.out), ping.out + ping.err);
-  H.ok('技能目录里没有留下 __pycache__', !fs.existsSync(path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts', '__pycache__')));
+  H.ok('技能目录里没有留下 __pycache__', !fs.existsSync(path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts', '__pycache__')));
   const walk = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)])); } catch (e) { return []; } };
   const pyc = walk(path.join(h.home, '.db-crud', 'pycache'));
-  H.ok('字节码缓存写在 ~/.db-crud/pycache/ 里（盖掉了不写字节码的环境变量）', pyc.some((f) => /ttls-db-crud[\\/]scripts[\\/]sqlguard\.cpython-\d+\.pyc$/.test(f)) && pyc.some((f) => /[\\/]argparse\.cpython-\d+\.pyc$/.test(f)), pyc.slice(0, 20));
+  H.ok('字节码缓存写在 ~/.db-crud/pycache/ 里（盖掉了不写字节码的环境变量）', pyc.some((f) => /vk-db-crud[\\/]scripts[\\/]sqlguard\.cpython-\d+\.pyc$/.test(f)) && pyc.some((f) => /[\\/]argparse\.cpython-\d+\.pyc$/.test(f)), pyc.slice(0, 20));
 
   H.section('建表、插入（两步确认）');
   const c1 = execBoth('CREATE TABLE T_ORDER (ID INT PRIMARY KEY, CUSTOMER VARCHAR(50), STATUS VARCHAR(20), AMOUNT DECIMAL(10,2), CREATED TIMESTAMP, NOTE VARCHAR(200))');
@@ -404,7 +404,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   H.ok('没有主键的表只在输出里说，不往配置里记', /没有主键的表/.test(np.out) && !/没有主键/.test(H.read(cfgFile) || ''), [np.out, H.read(cfgFile)]);
 
   H.section('执行器：交过来的内容没收全就不执行');
-  const cp = [path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts', 'runner'), H2].join(path.delimiter);
+  const cp = [path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts', 'runner'), H2].join(path.delimiter);
   const half = H.run(h, JAVA, ['-cp', cp, 'DbRunner', '--mode', 'apply', '--url', url, '--user', 'sa', '--driver-class', 'org.h2.Driver'], { input: '--@@DBCRUD-SEP@@ write\nUPDATE T_ORDER\nSET NOTE = \'half\'\n', env: { DBCRUD_PASSWORD: '' } });
   H.ok('没有结束标记（那头写到一半断了）：不执行', /"code":"INCOMPLETE"/.test(half.out) && valueOf(1, 'NOTE') !== 'half', half.out + half.err);
   const whole = H.run(h, JAVA, ['-cp', cp, 'DbRunner', '--mode', 'query', '--url', url, '--user', 'sa', '--driver-class', 'org.h2.Driver'], { input: 'SELECT COUNT(*) AS N FROM T_ORDER\n--@@DBCRUD-END@@\n', env: { DBCRUD_PASSWORD: '' } });
@@ -447,7 +447,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   H.ok('人在壳子上：往下找到后端的配置', up.code === 0 && /backend/.test(up.out), up.out + up.err);
 
   H.section('驱动：不随包带，从登记表里取');
-  H.ok('技能目录里没有 jar', !JSON.stringify(fs.readdirSync(path.join(h.cfg, 'skills', 'ttls-db-crud'), { recursive: true })).includes('.jar'));
+  H.ok('技能目录里没有 jar', !JSON.stringify(fs.readdirSync(path.join(h.cfg, 'skills', 'vk-db-crud'), { recursive: true })).includes('.jar'));
   H.write(cfgFile, ini());
   try { fs.unlinkSync(path.join(proj, '.vibe', 'db-crud.env.json')); } catch (e) { /* 没有 */ }
   const n0 = usage().filter((u) => u.incident === 'no-driver').length;
@@ -465,7 +465,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
 
   H.section('用量：只记工具的事');
   const all = H.read(path.join(h.kit, 'state', 'tool-usage.jsonl')) || '';
-  H.ok('用量里有命令、耗时、起了几次 java', usage().some((u) => u.tool === 'ttls-db-crud' && u.cmd === 'peek' && u.ms > 0 && u.java === 1 && u.dialect === 'mysql'), usage().slice(0, 3));
+  H.ok('用量里有命令、耗时、起了几次 java', usage().some((u) => u.tool === 'vk-db-crud' && u.cmd === 'peek' && u.ms > 0 && u.java === 1 && u.dialect === 'mysql'), usage().slice(0, 3));
   H.ok('用量里没有 SQL、数据、连接串', !/张三|待支付|jdbc:|SELECT|T_ORDER/i.test(all), all.slice(0, 600));
 
   H.section('后台执行器（开关，默认关）');
@@ -526,14 +526,14 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const after = db(['peek', '--table', 'T_ORDER', '--eq', 'id=2']);
   H.ok('关着的时候照旧起 java，改的数据在', after.code === 0 && /\bd\b/.test(after.out) && lastUse().java === 1 && lastUse().daemon === 0, [after.out, lastUse()]);
 
-  H.section('不连库就能定的判断（冒烟靶场 dev/testbed/ttls-db-crud/smoke，从 urai-db-crud 搬来的）');
+  H.section('不连库就能定的判断（冒烟靶场 dev/testbed/vk-db-crud/smoke，从 urai-db-crud 搬来的）');
   // 假连接指着 198.51.100.1（文档用的保留地址，永远连不上）：分类、配置读取、连库之前就该拦下的
-  const smoke = JSON.parse(H.read(path.join(__dirname, 'testbed', 'ttls-db-crud', 'smoke', 'expected.json')));
+  const smoke = JSON.parse(H.read(path.join(__dirname, 'testbed', 'vk-db-crud', 'smoke', 'expected.json')));
   const bed = path.join(h.root, 'bed');
   H.copyDir(path.join(__dirname, 'testbed'), path.join(bed, 'testbed'));
   // 靶场的用例是按"驱动都有"写的（以前随包带着）：这里给假连接用到的两种数据库各登记一个（不会真去连）
   fs.writeFileSync(path.join(h.kit, 'drivers.json'), JSON.stringify({ version: 1, drivers: { mysql: { jar: H2, from: 'manual' }, dm: { jar: H2, from: 'manual' } } }));
-  const mapArg = (a) => (a === 'python' ? PY : /^skills\/ttls-db-crud\//.test(a) ? path.join(h.cfg, a) : /^testbed\/ttls-db-crud\//.test(a) ? path.join(bed, a) : a);
+  const mapArg = (a) => (a === 'python' ? PY : /^skills\/vk-db-crud\//.test(a) ? path.join(h.cfg, a) : /^testbed\/vk-db-crud\//.test(a) ? path.join(bed, a) : a);
   for (const c of smoke.checks) {
     const [exe, ...rest] = c.cmd.map(mapArg);
     const r = H.run(h, exe, rest, { cwd: bed, env: { DBCRUD_JAVA: JAVA, DBCRUD_DAEMON: '0', SMOKE_NEVER_SET: undefined } });
@@ -542,9 +542,9 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
     const extra = (c.expect_not_contains || []).filter((s) => (r.out + r.err).includes(s));
     H.ok(c.name, r.code === (c.expect_exit || 0) && !miss.length && !extra.length, '退出码 ' + r.code + '（应该是 ' + (c.expect_exit || 0) + '）' + (miss.length ? '；缺：' + miss.join('、') : '') + (extra.length ? '；不该有：' + extra.join('、') : '') + '\n' + (r.out + r.err).slice(0, 1200));
   }
-  H.ok('靶场里没有被写进东西（扫描只看不写）', !fs.existsSync(path.join(bed, 'testbed', 'ttls-db-crud', 'smoke', 'fake-project', '.vibe')));
+  H.ok('靶场里没有被写进东西（扫描只看不写）', !fs.existsSync(path.join(bed, 'testbed', 'vk-db-crud', 'smoke', 'fake-project', '.vibe')));
 
   const wins = await watch.stop();
   H.ok('整个过程桌面上没有冒出窗口', wins.length === 0, wins);
-  H.done('ttls-db-crud（H2）');
+  H.done('vk-db-crud（H2）');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });

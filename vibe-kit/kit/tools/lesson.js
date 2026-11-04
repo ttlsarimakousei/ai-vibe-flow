@@ -46,7 +46,7 @@ function help() {
     '  ' + SELF + ' list                       这个项目现在的规则和候选',
     '  ' + SELF + ' retire <编号> --why "…"     项目规则写错了、过时了',
     '  ' + SELF + ' tidy [--apply]              查过时的规则',
-    '规则文件（.claude/rules/ttls-lessons-*.md）不要直接改，用上面的命令；升成用户级由用户在配置页里点。',
+    '规则文件（.claude/rules/vk-lessons-*.md）不要直接改，用上面的命令；升成用户级由用户在配置页里点。',
   ].join('\n'));
 }
 

@@ -76,8 +76,8 @@ process.stdin.on('end', () => {
   }
 
   // 警告放第一行最前面：终端窄的时候被截掉的是末尾，最要紧的不能丢
-  if (pct !== null && pct >= 100) line1.unshift(C.red + '⚠ 上下文超过上限了（' + k(used) + '/' + k(size) + '），Claude Code 没自动压缩：敲 /compact 压缩，或者 /ttls-handover 交接' + C.reset);
-  else if (cfg.contextStrategy === 'handover' && pct !== null && pct >= line) line1.unshift(C.red + '⚠ 上下文 ' + Math.round(pct) + '%，到手动交接线：/ttls-handover' + C.reset);
+  if (pct !== null && pct >= 100) line1.unshift(C.red + '⚠ 上下文超过上限了（' + k(used) + '/' + k(size) + '），Claude Code 没自动压缩：敲 /compact 压缩，或者 /vk-handover 交接' + C.reset);
+  else if (cfg.contextStrategy === 'handover' && pct !== null && pct >= line) line1.unshift(C.red + '⚠ 上下文 ' + Math.round(pct) + '%，到手动交接线：/vk-handover' + C.reset);
   // 放松保护的开关被绕开配置页改了（没生效）
   if (cfg._tampered) line1.unshift(C.red + '⚠ 套件开关文件被直接改过，没生效，去配置页核对' + C.reset);
   // 套件代码和安装时的指纹对不上，以前挂红字。2026-11-04 起套件可以改（仓库主人定的），状态栏不再显示；doctor.js 照样查得到

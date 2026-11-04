@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 端到端（0930）：真的 Claude Code + 按脚本回复的假模型，走一遍这一版新加的东西。
- *   套件用真的 install.js 装进假的用户目录：模型看到的技能是 ttls- 开头的六个，审查代理是 ttls-reviewer，没有旧名字
+ *   套件用真的 install.js 装进假的用户目录：模型看到的技能是 vk- 开头的六个，审查代理是 vk-reviewer，没有旧名字
  *   没探索过的项目（壳子里套着一个后端）：会话一开始套件在后台探索，第一条消息就带上了项目说明；
  *     开发环境的数据库、redis 配好了，生产环境的没进来
  *   配置文件改了（redis 换了端口）：下一个会话一开口，探索结果已经跟着更新，模型收到"哪几处变了"
@@ -51,8 +51,8 @@ const YML = path.join(back, 'src', 'main', 'resources', 'application-dev.yml');
 const PM = path.join(back, '.vibe', 'project.md');
 const INI = path.join(back, '.vibe', 'db-crud.ini');
 const RJ = path.join(back, '.vibe', 'redis.json');
-const DB_CMD = 'python "$HOME/.claude/skills/ttls-db-crud/scripts/db.py" --conn h2dev peek --table t_user --count';
-const RD_CMD = 'node "$HOME/.claude/skills/ttls-redis/scripts/redis.js" --conn dev get user:1';
+const DB_CMD = 'python "$HOME/.claude/skills/vk-db-crud/scripts/db.py" --conn h2dev peek --table t_user --count';
+const RD_CMD = 'node "$HOME/.claude/skills/vk-redis/scripts/redis.js" --conn dev get user:1';
 
 // ---------- 假模型 ----------
 let requests = [];
@@ -86,11 +86,11 @@ function answer(body, res) {
   const key = skill ? (Object.keys((skill.input_schema || {}).properties || {}).includes('skill') ? 'skill' : 'command') : '';
   const called = (n) => done.some((u) => u.name === 'Skill' && String((u.input || {})[key] || '') === n);
   if (HAS_RT) {
-    if (skill && !called('ttls-db-crud')) return tool(body, res, 'Skill', { [key]: 'ttls-db-crud' });
-    if (!ran(/ttls-db-crud\/scripts\/db\.py/)) return tool(body, res, 'Bash', { command: DB_CMD, description: '数用户表有几行' });
+    if (skill && !called('vk-db-crud')) return tool(body, res, 'Skill', { [key]: 'vk-db-crud' });
+    if (!ran(/vk-db-crud\/scripts\/db\.py/)) return tool(body, res, 'Bash', { command: DB_CMD, description: '数用户表有几行' });
   }
-  if (skill && !called('ttls-redis')) return tool(body, res, 'Skill', { [key]: 'ttls-redis' });
-  if (!ran(/ttls-redis\/scripts\/redis\.js/)) return tool(body, res, 'Bash', { command: RD_CMD, description: '看缓存里的 user:1' });
+  if (skill && !called('vk-redis')) return tool(body, res, 'Skill', { [key]: 'vk-redis' });
+  if (!ran(/vk-redis\/scripts\/redis\.js/)) return tool(body, res, 'Bash', { command: RD_CMD, description: '看缓存里的 user:1' });
   return say(body, res, '查完了。');
 }
 const server = http.createServer((req, res) => {
@@ -142,7 +142,7 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
   if (HAS_RT) H.write(path.join(kit, 'local.json'), JSON.stringify({ jdks: [{ name: '17', path: JDK.replace(/\\/g, '/') }], defaultJdk: '17', mavens: [] }));
   const skillsDir = fs.readdirSync(path.join(cfg, 'skills')).sort();
   // 2026-10-17 起安装器还把自带 OpenSpec 的技能装成用户级（openspec-* 开头）
-  H.ok('装上的技能：ttls- 开头的六个，加上自带 OpenSpec 的 openspec-*', JSON.stringify(skillsDir.filter((n) => /^ttls-/.test(n))) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']) && skillsDir.includes('openspec-propose') && skillsDir.every((n) => /^(ttls|openspec)-/.test(n)), skillsDir);
+  H.ok('装上的技能：vk- 开头的六个，加上自带 OpenSpec 的 openspec-*', JSON.stringify(skillsDir.filter((n) => /^vk-/.test(n))) === JSON.stringify(['vk-cross-review', 'vk-db-crud', 'vk-handover', 'vk-onboard', 'vk-redis', 'vk-see-page']) && skillsDir.includes('openspec-propose') && skillsDir.every((n) => /^(vk|openspec)-/.test(n)), skillsDir);
 
   // 两个假 redis：配置文件里先写旧端口，后面改成新端口
   const servers = [];
@@ -155,7 +155,7 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
     return /READY/.test(out);
   };
   H.ok('两个假 redis 起来了', await startRedis(PORT) && await startRedis(PORT + 1));
-  const RD = path.join(cfg, 'skills', 'ttls-redis', 'scripts', 'redis.js');
+  const RD = path.join(cfg, 'skills', 'vk-redis', 'scripts', 'redis.js');
   const seed = (name, port, value) => { const d = path.join(root, 'seed', name); H.write(path.join(d, '.vibe', 'redis.json'), JSON.stringify({ connections: { dev: { host: '127.0.0.1', port, password: SECRET, db: 0 } } })); return H.node(h, RD, ['set', 'user:1', value], { cwd: d }); };
   const sa = seed('a', PORT, '旧端口的张三');
   const sb = seed('b', PORT + 1, '新端口的张三');
@@ -169,7 +169,7 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
     fs.mkdirSync(dataDir, { recursive: true });
     const sd = path.join(root, 'seed', 'db');
     H.write(path.join(sd, '.vibe', 'db-crud.ini'), h2ini);
-    const DBPY = path.join(cfg, 'skills', 'ttls-db-crud', 'scripts', 'db.py');
+    const DBPY = path.join(cfg, 'skills', 'vk-db-crud', 'scripts', 'db.py');
     const db = (args) => H.run(h, PY, [DBPY].concat(args), { cwd: sd, env: { DBCRUD_DAEMON: '0' } });
     const both = (sql, n) => { const f = path.join(sd, '.vibe', 'tmp', 's' + n + '.sql'); H.write(f, sql); const a = db(['exec', '--sql-file', f]); const ack = (a.out.match(/--ack (\S+)/) || [])[1] || ''; return db(['exec', '--sql-file', f, '--ack', ack]); };
     const c1 = both('CREATE TABLE T_USER (ID INT PRIMARY KEY, NAME VARCHAR(50))', 1);
@@ -189,14 +189,14 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
   H.section('模型看到的技能和代理');
   const first = mains(r1)[0] ? mains(r1)[0].body : { tools: [], messages: [] };
   const whole = JSON.stringify(first);
-  if (process.env.E2E_DUMP === '1') { for (const m of whole.match(/[^\\"]{0,80}ttls-[a-z-]+[^\\"]{0,80}/g) || []) console.log('      ' + m.replace(/\s+/g, ' ').slice(0, 200)); }
-  for (const n of ['ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis']) H.ok('技能清单里有 ' + n, new RegExp('(^|[^\\w-])' + n + '\\b').test(whole), '');
+  if (process.env.E2E_DUMP === '1') { for (const m of whole.match(/[^\\"]{0,80}vk-[a-z-]+[^\\"]{0,80}/g) || []) console.log('      ' + m.replace(/\s+/g, ' ').slice(0, 200)); }
+  for (const n of ['vk-onboard', 'vk-see-page', 'vk-cross-review', 'vk-handover', 'vk-db-crud', 'vk-redis']) H.ok('技能清单里有 ' + n, new RegExp('(^|[^\\w-])' + n + '\\b').test(whole), '');
   H.ok('技能清单里没有旧名字', !/urai-db-crud/.test(whole) && !/(\\n|^)- (onboard|see-page|cross-review|handover|db-crud|redis):/.test(whole), (whole.match(/(\\n|^)- (onboard|see-page|cross-review|handover|db-crud|redis):[^\\]{0,80}/g) || []).join(' ｜ '));
-  H.ok('审查代理是 ttls-reviewer，没有 vibe-reviewer', /ttls-reviewer/.test(whole) && !/vibe-reviewer/.test(whole));
+  H.ok('审查代理是 vk-reviewer，没有 vibe-reviewer', /vk-reviewer/.test(whole) && !/vibe-reviewer/.test(whole));
 
   H.section('没探索过的项目：后台探索，第一条消息就带上');
   H.ok('探索好了', await waitFor(() => fs.existsSync(path.join(back, '.vibe', 'onboard.json')) && !fs.existsSync(path.join(back, '.vibe', 'onboard.lock')), 30000), H.read(path.join(kit, 'state', 'onboard.log')));
-  H.ok('会话开始时说了"正在后台自动探索"，不用自己跑 /ttls-onboard', seen(r1, /套件正在后台自动探索/) && seen(r1, /不用自己跑 \/ttls-onboard/), allText(first).slice(0, 1500));
+  H.ok('会话开始时说了"正在后台自动探索"，不用自己跑 /vk-onboard', seen(r1, /套件正在后台自动探索/) && seen(r1, /不用自己跑 \/vk-onboard/), allText(first).slice(0, 1500));
   H.ok('第一条消息带上了探索好的项目说明', seen(r1, /这个项目后台自动探索好了，项目说明在 [^\n]*backend[\\/]+\.vibe[\\/]+project\.md/) && seen(r1, /- 类型：代码工程。Maven[^\n]*Spring Boot 2\.7\.18/), allText(first).slice(0, 3000));
   const pm = H.read(PM) || '';
   H.ok('项目说明里有数据库、redis 两行，连接名照着写', /- 数据库：连接 shop_dev（MySQL，jdbc:mysql:\/\/127\.0\.0\.1:3306\/shop_dev/.test(pm) && new RegExp('- redis：连接 dev（127\\.0\\.0\\.1:' + PORT + '，库 0').test(pm) && /测试、生产环境的连接没有配进来/.test(pm), pm);
@@ -231,8 +231,8 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
   H.section('模型照技能说的查库、查缓存');
   const skillOffered = (body2.tools || []).some((t) => t.name === 'Skill');
   if (skillOffered) {
-    H.ok('技能叫得起来：ttls-redis 的说明进了对话', /# redis|ttls-redis\/scripts\/redis\.js/.test(allText(body2)) && done2.some((u) => u.name === 'Skill'), allText(body2).slice(-1500));
-    if (HAS_RT) H.ok('技能叫得起来：ttls-db-crud 的说明进了对话', /# 数据库读写/.test(allText(body2)), allText(body2).slice(-1500));
+    H.ok('技能叫得起来：vk-redis 的说明进了对话', /# redis|vk-redis\/scripts\/redis\.js/.test(allText(body2)) && done2.some((u) => u.name === 'Skill'), allText(body2).slice(-1500));
+    if (HAS_RT) H.ok('技能叫得起来：vk-db-crud 的说明进了对话', /# 数据库读写/.test(allText(body2)), allText(body2).slice(-1500));
   } else console.log('    这个版本用 -p 跑的时候不给 Skill 工具，叫技能的两项不测');
   const rdUse = done2.find((u) => u.name === 'Bash' && /redis\.js/.test(String(u.input.command)));
   const rdOut = rdUse ? String(resultOf(body2, rdUse.id) || '') : '';
@@ -250,10 +250,10 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
 
   H.section('工具的用量');
   const usage = (H.read(path.join(kit, 'state', 'tool-usage.jsonl')) || '').split(/\r?\n/).filter(Boolean).map((l) => { try { return JSON.parse(l); } catch (e) { return {}; } });
-  H.ok('查缓存那一次记下了', usage.some((u) => u.tool === 'ttls-redis' && u.cmd === 'get' && u.exit === 0), usage.slice(-4));
-  if (HAS_RT) H.ok('查库那一次记下了，起了一次 java', usage.some((u) => u.tool === 'ttls-db-crud' && u.cmd === 'peek' && u.exit === 0 && u.java === 1), usage.slice(-4));
+  H.ok('查缓存那一次记下了', usage.some((u) => u.tool === 'vk-redis' && u.cmd === 'get' && u.exit === 0), usage.slice(-4));
+  if (HAS_RT) H.ok('查库那一次记下了，起了一次 java', usage.some((u) => u.tool === 'vk-db-crud' && u.cmd === 'peek' && u.exit === 0 && u.java === 1), usage.slice(-4));
   const stats = readJson(path.join(kit, 'state', 'tool-stats.json')) || {};
-  H.ok('收工时并进了统计', JSON.stringify(stats).includes('ttls-redis'), stats);
+  H.ok('收工时并进了统计', JSON.stringify(stats).includes('vk-redis'), stats);
   H.ok('用量里没有表名、key、地址、口令', !/t_user|T_USER|user:1|127\.0\.0\.1/.test(JSON.stringify(usage) + JSON.stringify(stats)) && !(JSON.stringify(usage) + JSON.stringify(stats)).includes(SECRET), usage.slice(-4));
   const fb = fs.existsSync(path.join(kit, 'feedback')) ? fs.readdirSync(path.join(kit, 'feedback')).filter((n) => /^F\d{8}-/.test(n)) : [];
   H.ok('整个过程没有记出套件的问题', fb.length === 0, fb.map((n) => n + '\n' + (H.read(path.join(kit, 'feedback', n)) || '').slice(0, 600)).join('\n----\n'));

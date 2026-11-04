@@ -489,7 +489,7 @@ function resolveVerify(taskLine, tasksText) {
 }
 
 /**
- * 这条验法跑过了吗：在这些命令里找。/ttls-see-page 的场景要跑过 scenario-run 且带场景名；其他的看验法里提到的工具（mvn、node、curl…）有没有出现在命令里。
+ * 这条验法跑过了吗：在这些命令里找。/vk-see-page 的场景要跑过 scenario-run 且带场景名；其他的看验法里提到的工具（mvn、node、curl…）有没有出现在命令里。
  * 验法写成一句话（"按项目说明的快检"）、没提到任何工具的：跑过任何像验证的命令就算。写的是"人工…""用户…"的不查（那是要人看的），返回 true。
  */
 // 验法里提到的工具：路径、文件名里的不算（src/main/java/…、OrderService.java 里的 java）
@@ -524,8 +524,8 @@ const SKIP_CLAUSE = /(不做|不跑|不验|不测|不执行|不用跑|不用验|
 
 const HUMAN_CLAUSE = /^\s*(人工|用户|你|我)/;
 
-// 不带 ttls- 前缀的 see-page 也认：改名之前写的 tasks.md 里，验法写的是旧名字
-const SCENE_WORD = /(?:ttls-)?see-page|scenario-run|场景/i;
+// 改名之前的 see-page（没前缀的、ttls- 开头的）也认：以前写的 tasks.md 里，验法写的是旧名字
+const SCENE_WORD = /(?:vk-|ttls-)?see-page|scenario-run|场景/i;
 
 // 只说了"场景"、没说哪一个：这些都算真去验了——场景执行器、.vibe 里的脚本、探针、直接调接口
 const SCENE_LIKE = /scenario-run|\.vibe[\\/]\S*\.(?:bat|cmd|sh|ps1|js|mjs|cjs|py)\b|playwright|(?:^|[\s;&|(])curl(?:\.exe)?\s/i;
@@ -538,7 +538,7 @@ const SCENE_LIKE = /scenario-run|\.vibe[\\/]\S*\.(?:bat|cmd|sh|ps1|js|mjs|cjs|py
  *   写明了的（必须都跑过）：反引号里的命令（里面的脚本、场景文件都在跑过的命令里出现，或者里面的工具出现在命令的位置上）；
  *     反引号里单独一个脚本名；"node x.js"".vibe/x.bat"这种脚本；写了 xxx.json 的场景、或者叫得出名字而且真有这个场景文件的。
  *     反引号里单独一个 .json 只有是场景文件（路径里带 scenario、前面说了"场景"）才算；.vibe/login.json 这种数据文件、接口地址、类名不算。
- *   没写明的（没有写明的那种时，跑过其中一样就行）：只说了 /ttls-see-page、场景（场景执行器、.vibe 里的脚本、探针、curl 都算）；
+ *   没写明的（没有写明的那种时，跑过其中一样就行）：只说了 /vk-see-page、场景（场景执行器、.vibe 里的脚本、探针、curl 都算）；
  *     提到的工具（mvn、javac、node…）出现在命令的位置上。
  *   什么都认不出来（"按项目说明的快检"）：跑过任何像验证的命令就算。
  * opts.scenarioExists(名字)：项目里有没有叫这个名字的场景文件。"场景 admin 打开用户管理页"里的 admin 是账号不是场景名，
@@ -596,7 +596,7 @@ function verifyPlan(verifyText, opts) {
       const byWord = (plain.match(/场景\s*[:：]?\s*([\w.\-]+)/) || [])[1] || '';
       const name = byFile || (byWord && o.scenarioExists && o.scenarioExists(byWord.replace(/\.json$/i, '')) ? byWord : '');
       if (name) strong.push({ show: '场景 ' + name, test: (cs) => cs.some((c) => low(c).includes(name.toLowerCase())) });
-      else weak.push({ show: '/ttls-see-page 的场景（scenario-run.js），或者 .vibe 里你自己的验证脚本、探针', test: (cs) => cs.some((c) => SCENE_LIKE.test(c)), scene: true });
+      else weak.push({ show: '/vk-see-page 的场景（scenario-run.js），或者 .vibe 里你自己的验证脚本、探针', test: (cs) => cs.some((c) => SCENE_LIKE.test(c)), scene: true });
       continue;
     }
     // 技能工程的快检（tools/skills-check.js）

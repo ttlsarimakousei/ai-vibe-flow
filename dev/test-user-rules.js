@@ -69,7 +69,7 @@ H.section('以前直接改过套件的约定、规范：升级时挪进 user/，
   const kitMd = path.join(u.kit, 'CLAUDE.md');
   let t = fs.readFileSync(kitMd, 'utf8');
   t = t.replace(DELETED + '\n', '').replace(CHANGED, '- 问句只回答，F8-CHANGED 我改过的说法。')
-    .replace('## 先用现成的能力\n', '## 先用现成的能力\n\n- 查数据库表结构先用 /ttls-db-crud，F8-INLINE\n');
+    .replace('## 先用现成的能力\n', '## 先用现成的能力\n\n- 查数据库表结构先用 /vk-db-crud，F8-INLINE\n');
   t = t.replace(/\s*$/, '\n') + '\n## 我的补充\n\n- 用 Lombok 前先问我，F8-SECTION\n';
   fs.writeFileSync(kitMd, t.replace(/\n/g, '\r\n'));
   const rule = path.join(u.kit, 'rules', '20-git-commit.md');
@@ -85,7 +85,7 @@ H.section('以前直接改过套件的约定、规范：升级时挪进 user/，
   const rm = H.read(path.join(u.kit, 'user', 'remove.txt')) || '';
   H.ok('升级成功', r.code === 0, r.out.slice(-1200) + r.err);
   H.ok('套件的约定换成了新版', fs.readFileSync(kitMd, 'utf8') === fs.readFileSync(path.join(P2, 'claude', 'CLAUDE.md'), 'utf8'));
-  H.ok('新加的一节、一句挪进了 user/migrated-CLAUDE.md，带着原来那一节的标题', /## 我的补充\n\n- 用 Lombok 前先问我，F8-SECTION/.test(mig) && /## 先用现成的能力\n- 查数据库表结构先用 \/ttls-db-crud，F8-INLINE/.test(mig) && mig.includes('F8-CHANGED'), mig);
+  H.ok('新加的一节、一句挪进了 user/migrated-CLAUDE.md，带着原来那一节的标题', /## 我的补充\n\n- 用 Lombok 前先问我，F8-SECTION/.test(mig) && /## 先用现成的能力\n- 查数据库表结构先用 \/vk-db-crud，F8-INLINE/.test(mig) && mig.includes('F8-CHANGED'), mig);
   H.ok('删掉、改掉的原句记进了 remove.txt，原来手写的那句还在', rm.includes(DELETED) && rm.includes(CHANGED) && rm.includes(REMOVE_BY_HAND), rm);
   H.ok('规范里加的挪进了 user/migrated-20-git-commit.md', /F8-RULE/.test(migRule), migRule);
   H.ok('删掉的代码块：里面的句子记进 remove.txt，代码块的开头结尾不记（别的代码块不受影响）', rm.includes('git status F8-FENCE') && !/^\s*`{3}/m.test(rm) && /```bash\n```/.test(md), rm);
@@ -133,11 +133,11 @@ H.section('技能照旧换成新版：改过的先备份，记一条提示');
 {
   const w = H.freshHome('tur-w');
   install(w, P1);
-  appendLine(path.join(w.cfg, 'skills', 'ttls-handover', 'SKILL.md'), '- 我加的一句 F8-SKILL');
+  appendLine(path.join(w.cfg, 'skills', 'vk-handover', 'SKILL.md'), '- 我加的一句 F8-SKILL');
   const r = install(w, P2);
   const done = json(path.join(w.kit, 'state', 'install-done.json'));
-  H.ok('技能换成了新版', r.code === 0 && !/F8-SKILL/.test(H.read(path.join(w.cfg, 'skills', 'ttls-handover', 'SKILL.md')) || ''), r.out.slice(-600));
-  H.ok('配置页要提示的事里有这个技能和备份位置', done.notice && done.notice.items.some((x) => /技能 ttls-handover/.test(x) && /备份在/.test(x)), done);
+  H.ok('技能换成了新版', r.code === 0 && !/F8-SKILL/.test(H.read(path.join(w.cfg, 'skills', 'vk-handover', 'SKILL.md')) || ''), r.out.slice(-600));
+  H.ok('配置页要提示的事里有这个技能和备份位置', done.notice && done.notice.items.some((x) => /技能 vk-handover/.test(x) && /备份在/.test(x)), done);
 }
 
 // ---------------------------------------------------------------------------------------------

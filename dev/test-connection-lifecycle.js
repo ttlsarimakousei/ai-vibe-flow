@@ -26,7 +26,7 @@ H.ok('最后一个 Redis 自动连接也实际删除', Object.keys(JSON.parse(H.
 O.mergeRedis(p, [red], {});
 H.ok('Redis 重新识别恢复', JSON.parse(H.read(path.join(p, '.vibe/redis.json'))).connections.dev.auto);
 if (rt.python) {
-  const scripts = path.join(h.cfg, 'skills/ttls-db-crud/scripts');
+  const scripts = path.join(h.cfg, 'skills/vk-db-crud/scripts');
   const probe = path.join(h.work, 'parse.py');
   H.write(ini, '[old]\ndialect=mysql\njdbc=jdbc:mysql://127.0.0.1:1/dev\nsource=application-dev.yml:1\n; ★ 来源文件里已经找不到这个连接\n[disabled]\nenabled=false\ndialect=mysql\njdbc=jdbc:mysql://127.0.0.1:1/dev\n[manual]\ndialect=mysql\njdbc=jdbc:mysql://127.0.0.1:2/dev\n');
   H.write(probe, 'import sys\nsys.path.insert(0,sys.argv[1])\nimport dbconf\nprint(",".join(dbconf._parse(sys.argv[2]).keys()))\n');

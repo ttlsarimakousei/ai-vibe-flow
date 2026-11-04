@@ -86,7 +86,7 @@ function answer(body, res) {
   const last = afterLastAssistant(body);
   const s = scenario;
   if (s.kind === 'commit') {
-    if (!ran(/git commit/)) return tool(body, res, shell, { command: 'git add src/main/java/com/x/OrderService.java' + (s.includeRule ? ' ".claude/rules/ttls-lessons-java.md"' : '') + ' && git commit -m "fix: 查询前判空' + (s.includeRule ? '并登记经验规则' : '') + '（源自 ' + s.change + ' 1.1）"', description: '按用户确认提交当前成果' });
+    if (!ran(/git commit/)) return tool(body, res, shell, { command: 'git add src/main/java/com/x/OrderService.java' + (s.includeRule ? ' ".claude/rules/vk-lessons-java.md"' : '') + ' && git commit -m "fix: 查询前判空' + (s.includeRule ? '并登记经验规则' : '') + '（源自 ' + s.change + ' 1.1）"', description: '按用户确认提交当前成果' });
     return say(body, res, '当前成果已提交。');
   }
   if (s.kind === 'read') {
@@ -102,7 +102,7 @@ function answer(body, res) {
   if (!ran(/console\.log\('verify ok'\)/)) return tool(body, res, shell, { command: 'node -e "console.log(\'verify ok\')"', description: '快检' });
   if (!ran(/git add src\/main/)) return tool(body, res, shell, { command: 'git add src/main/java/com/x/OrderService.java && git commit -m "fix: 查询前判空（源自 ' + s.change + ' 1.1）"', description: '提交修复' });
   if (/各记一条经验/.test(allText({ messages: body.messages })) && !ran(/lesson\.js/)) return tool(body, res, shell, { command: LESSON + ' --from "' + s.change + ' 1.1" --kind 边界', description: '记经验' });
-  if ((AUTO ? /经验规则文件更新了，还没提交/ : /规则文件跟着仓库走/).test(allText({ messages: body.messages })) && (AUTO || ran(/lesson\.js/)) && !ran(/git add "?\.claude\/rules/)) return tool(body, res, shell, { command: 'git add ".claude/rules/ttls-lessons-java.md" && git commit -m "docs: 更新经验规则"', description: '提交规则文件' });
+  if ((AUTO ? /经验规则文件更新了，还没提交/ : /规则文件跟着仓库走/).test(allText({ messages: body.messages })) && (AUTO || ran(/lesson\.js/)) && !ran(/git add "?\.claude\/rules/)) return tool(body, res, shell, { command: 'git add ".claude/rules/vk-lessons-java.md" && git commit -m "docs: 更新经验规则"', description: '提交规则文件' });
   if (/\[vibe-kit 收工检查\]/.test(last)) return say(body, res, '收工检查里说的都处理了，没有别的要做的。');
   return say(body, res, '审查的问题改完了，已验证、已提交。');
 }
@@ -153,7 +153,7 @@ const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
   const L = require(path.join(kit, 'lib', 'lessons.js'));
-  const ruleFile = path.join(proj, '.claude', 'rules', 'ttls-lessons-java.md');
+  const ruleFile = path.join(proj, '.claude', 'rules', 'vk-lessons-java.md');
 
   H.section(AUTO ? '第一个变更：审查报问题，改了，脚本自己收' : '第一个变更：审查报问题，改了，被催着记经验');
   const r1 = await runClaude(port, '审一下变更 add-export 的代码，有问题就改', { kind: 'review', change: 'add-export' });
@@ -181,16 +181,16 @@ const seen = (run, re) => mains(run).some((r) => re.test(allText(r.body)));
   if (AUTO) H.ok('收工时让它提交规则文件', seen(r2, /经验规则文件更新了，还没提交/), commandsIn(r2));
   else H.ok('工具回了"已升成这个项目的规则"', seen(r2, /第 2 次出现，已升成这个项目的规则/));
   H.ok('规则文件写出来了' + (AUTO ? '，标着"自动"' : ''), fs.existsSync(ruleFile) && (H.read(ruleFile) || '').includes('- ' + RULE_TEXT) && /自动=具体/.test(H.read(ruleFile) || '') === AUTO, H.read(ruleFile));
-  H.ok('提交规则文件的命令没被拦', commandsIn(r2).some((c) => /git add "\.claude\/rules\/ttls-lessons-java\.md"/.test(c)) && !seen(r2, /会改到经验规则的文件/), commandsIn(r2));
+  H.ok('提交规则文件的命令没被拦', commandsIn(r2).some((c) => /git add "\.claude\/rules\/vk-lessons-java\.md"/.test(c)) && !seen(r2, /会改到经验规则的文件/), commandsIn(r2));
   // #112（2026-10-14 起）：只提交套件催着提交的经验规则文件，不再被当成提案提交拦下（10-07 定的"经验规则的文件不问"）；
   // 修复代码仍要这一次的真人确认，不能借上一个变更的许可
   const head2 = H.git(proj, ['show', '--name-only', '--format=%s', 'HEAD']).out.trim().split(/\r?\n/).filter(Boolean);
-  H.ok('只提交了规则文件', H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '3' && head2[0] === 'docs: 更新经验规则' && head2.slice(1).join() === '.claude/rules/ttls-lessons-java.md', head2);
+  H.ok('只提交了规则文件', H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '3' && head2[0] === 'docs: 更新经验规则' && head2.slice(1).join() === '.claude/rules/vk-lessons-java.md', head2);
   H.ok('新成果仍需本次确认，不能借上次许可', H.git(proj, ['status', '--porcelain', '--', 'src']).out.trim() !== '');
   const commit2 = await runClaude(port, '提交当前 fix-order 的修复和经验规则', { kind: 'commit', change: 'fix-order', includeRule: true });
   H.ok('真人确认后实际提交修复和规则', commit2.code === 0 && H.git(proj, ['rev-list', '--count', 'HEAD']).out.trim() === '4' && H.git(proj, ['status', '--porcelain', '--', 'src']).out.trim() === '', commit2.out + commit2.err);
   const log = H.git(proj, ['log', '--oneline', '--name-only', '-3']).out;
-  H.ok('规则文件进了仓库', /fix: 查询前判空并登记经验规则/.test(log) && /\.claude\/rules\/ttls-lessons-java\.md/.test(log), log);
+  H.ok('规则文件进了仓库', /fix: 查询前判空并登记经验规则/.test(log) && /\.claude\/rules\/vk-lessons-java\.md/.test(log), log);
   H.ok('工作区里规则文件是干净的', H.git(proj, ['status', '--porcelain', '--', '.claude/rules']).out.trim() === '', H.git(proj, ['status', '--porcelain']).out);
   if (!AUTO) H.ok('没有再被催提交规则文件', !seen(commit2, /经验规则文件更新了，还没提交/));
 

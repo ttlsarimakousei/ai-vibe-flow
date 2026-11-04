@@ -83,7 +83,7 @@ const reason = (o) => H.reasonOf(o);
     };
     const cands = () => { try { return JSON.parse(fs.readFileSync(path.join(p, '.vibe', 'lessons', 'candidates.json'), 'utf8')); } catch (e) { return { items: [] }; } };
     const list = () => { const c = cands(); return Array.isArray(c) ? c : c.items || []; };
-    const rule = () => H.read(path.join(p, '.claude', 'rules', 'ttls-lessons-java.md')) || '';
+    const rule = () => H.read(path.join(p, '.claude', 'rules', 'vk-lessons-java.md')) || '';
     const edit = () => H.tr.ran('Edit', { file_path: A, old_string: 'x', new_string: 'y' }, 'ok');
     const run = (args, text) => H.tr.ran('Bash', { command: cmd(args) }, text);
 
@@ -137,7 +137,7 @@ const reason = (o) => H.reasonOf(o);
     H.ok('"审查报的问题自动收"关着：不收', list().length === n, JSON.stringify(list()));
     H.setConfig(h, { lessonAuto: true });
     const R = require(path.join(h.kit, 'lib', 'review-runner'));
-    const text = H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || '';
+    const text = H.read(path.join(h.cfg, 'agents', 'vk-reviewer.md')) || '';
     H.ok('审查提示要求报类别和以后怎么避免', /\*\*kind\*\*：想当然/.test(text) && /\*\*avoid\*\*/.test(text) && typeof R.runsForLessons === 'function');
   }
 
@@ -346,7 +346,7 @@ const reason = (o) => H.reasonOf(o);
     const rt = H.runtime('auto');
     const repo = path.join(h.home, '.m2', 'repository');
     const inRepo = (g, a, v, ext, text) => { const f = path.join(repo, ...g.split('.'), a, v, a + '-' + v + '.' + (ext || 'jar')); H.write(f, text || 'x'); return f; };
-    const scripts = path.join(h.cfg, 'skills', 'ttls-db-crud', 'scripts');
+    const scripts = path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts');
     if (!rt.python) console.log('    这台电脑上没有 Python，查库这半不测');
     else {
       // 返回 { jar, from } 或 { err }
@@ -408,7 +408,7 @@ const reason = (o) => H.reasonOf(o);
     const api = fs.readFileSync(path.join(uiDir, 'kit-api.js'), 'utf8');
     H.ok('配置页：导航叫"查库"，没有"现在用的驱动"', /<button data-tab="data">查库<\/button>/.test(ui) && !/sec-drv|现在用的驱动|drvList/.test(ui));
     H.ok('配置页的后端：手动管驱动的接口去掉了', !/api\/kit\/drivers/.test(api) && !/driversOp|runTool/.test(api));
-    H.ok('各处提示不再让人去配置页"数据库驱动"', !['claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/dbconf.py', 'claude/skills/ttls-db-crud/scripts/vibe.py', 'kit/lib/onboard.js'].some((f) => /配置页[^。\n]{0,6}数据库驱动/.test(fs.readFileSync(path.join(from, f), 'utf8'))));
+    H.ok('各处提示不再让人去配置页"数据库驱动"', !['claude/skills/vk-db-crud/SKILL.md', 'claude/skills/vk-db-crud/scripts/db.py', 'claude/skills/vk-db-crud/scripts/dbconf.py', 'claude/skills/vk-db-crud/scripts/vibe.py', 'kit/lib/onboard.js'].some((f) => /配置页[^。\n]{0,6}数据库驱动/.test(fs.readFileSync(path.join(from, f), 'utf8'))));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -509,7 +509,7 @@ const reason = (o) => H.reasonOf(o);
       "const T = require(" + JSON.stringify(path.join(h.kit, 'lib', 'toolstats.js')) + ");",
       "const F = require(" + JSON.stringify(path.join(h.kit, 'lib', 'feedback.js')) + ");",
       "const codes = process.argv.slice(2);",
-      "const errs = {}; for (const c of codes) errs['ttls-db-crud|oracle|' + c] = { tool: 'ttls-db-crud', dialect: 'oracle', code: c, n: 3, cmds: { query: 3 } };",
+      "const errs = {}; for (const c of codes) errs['vk-db-crud|oracle|' + c] = { tool: 'vk-db-crud', dialect: 'oracle', code: c, n: 3, cmds: { query: 3 } };",
       "S.writeState('tool-stats', { errs, errsSince: Date.now() - 1000 });",
       "T.reportErrors(Date.now(), 0);",
       "console.log(JSON.stringify({ titles: F.listRecords().map((r) => r.title), left: Object.keys(S.readState('tool-stats').errs || {}).length }));",

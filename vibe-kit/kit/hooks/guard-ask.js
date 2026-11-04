@@ -21,6 +21,8 @@ function applyGate(j) {
   if (why) return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：用户说了开工，但' + why + '。调 /opsx:apply 时参数写上变更名也行（/opsx:apply <变更名>）。');
   return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：当前尚未满足双自动衔接条件，也没有用户开工许可。现在把要点交代给我：改哪些地方、新加的操作和接口、任务清单；我原话里没提过、你自己加上的，单独列出来。然后用提问框问能不能开工（选项写"开工""还要改""先不做"）。我说开工、或者我自己敲 /vk-go（或 /opsx:apply），再开始。');
 }
+// 套件装的技能（模型能调）。别的 vk- 开头的是给用户敲的命令
+const VK_SKILLS = /^vk-(onboard|see-page|cross-review|handover|db-crud|redis)$/i;
 function handle(j) {
   const manual = require('../lib/flow-policy').actionIssue(j);
   if (manual) return blockOut('PreToolUse', '[vibe-kit] ' + manual);
@@ -31,7 +33,8 @@ function handle(j) {
       const name = String(inp.skill || inp.command || inp.name || '');
       const first = name.trim().split(/\s+/)[0].replace(/^\//, '');
       // 套件的 /vk-* 命令敲了就算用户点头（开工、提交、推送、归档）：只能用户自己敲，模型调了不算（复审 V12；命令文件也写了 disable-model-invocation）
-      if (/^vk-[\w-]+$/i.test(first)) return blockOut('PreToolUse', '[vibe-kit] /' + first + ' 是给用户敲的：敲了就算用户点头，你自己调不算。要开工、提交、推送、归档，先问用户，用户说了再做。');
+      // 技能 2026-11-04 起也是 vk- 开头（vk-see-page、vk-db-crud……）：它们是给模型用的，不算命令
+      if (/^vk-[\w-]+$/i.test(first) && !VK_SKILLS.test(first)) return blockOut('PreToolUse', '[vibe-kit] /' + first + ' 是给用户敲的：敲了就算用户点头，你自己调不算。要开工、提交、推送、归档，先问用户，用户说了再做。');
       if (FLOW_SKILL.test(name)) {
         const st = flowState(j);
         const cfg = readConfigFor(j);
@@ -54,8 +57,8 @@ function handle(j) {
         if (cfg.autoSwitch && !out) hookLog('全自动模式 这个会话调了 ' + first.slice(0, 40) + (st.on ? '' : '，进了 OpenSpec 流程') + (/^(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i.test(first) ? '' : '：在写提案那一段，照有人在的样子来'));
       }
       // 技能和直接写文件共用手动交接判断，不能靠模型自己调用技能获得许可。
-      if (/^(ttls-)?handover$/i.test(first)) {
-        if (!require('../lib/session').canWriteHandover(j)) return blockOut('PreToolUse', '[vibe-kit] 当前用户没有要求交接。连续工作用自动压缩，接着处理当前任务；不要自行写交接或 clear。用户明确说交接或执行 /ttls-handover 后再写。');
+      if (/^(?:vk-|ttls-)?handover$/i.test(first)) {
+        if (!require('../lib/session').canWriteHandover(j)) return blockOut('PreToolUse', '[vibe-kit] 当前用户没有要求交接。连续工作用自动压缩，接着处理当前任务；不要自行写交接或 clear。用户明确说交接或执行 /vk-handover 后再写。');
         try { require('../lib/usage.js').bump('handover.write'); } catch (e) { /* 数不了就算了 */ } }
     } catch (e) { out = null; /* 记不了不影响调技能 */ }
     return out;

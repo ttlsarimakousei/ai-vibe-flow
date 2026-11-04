@@ -7,7 +7,7 @@
  *   时限：整个场景默认最多跑 5 分钟（--max 改），到点把已有的结果写出来退出；wait 写的毫秒数最多等 60 秒，timeout 最多 120 秒。
  *   consoleIgnore / ignore 默认按字面子串匹配，写成 "/…/" 才当正则。
  * 退出码：0 全部通过；1 有步骤失败；2 参数或场景文件有错（不是合法 JSON、没有 steps、相对地址没给 --base、忽略规则里的正则写错）。
- * 步骤格式见 ttls-see-page 技能目录里的 scenario-format.md。选择器既可以是字符串（CSS / text= / role=），也可以是语义对象
+ * 步骤格式见 vk-see-page 技能目录里的 scenario-format.md。选择器既可以是字符串（CSS / text= / role=），也可以是语义对象
  * （{"label":"用户名"}、{"role":"button","name":"登录"}、{"placeholder":"…"}、{"text":"…"}、{"testid":"…"}）。
  * 接口场景：request 调后端接口、waitResponse 等页面发出的请求返回，expectStatus / expectJson 查状态码和返回的 JSON，readJson 读出来给后面的步骤用（{{名字}}）。
  *   和页面共用登录状态；场景里全是接口步骤时不开浏览器。

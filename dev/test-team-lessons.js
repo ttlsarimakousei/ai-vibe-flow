@@ -23,7 +23,7 @@ function setup(name, config) {
   return { h, repo };
 }
 const op = (t, a) => { try { return KA.runOp('lessons', Object.assign({ kitDir: t.h.kit }, a)); } catch (e) { return { error: String((e && e.message) || e) }; } };
-const ruleFile = (dir, group) => path.join(dir, 'ttls-lessons-' + group + '.md');
+const ruleFile = (dir, group) => path.join(dir, 'vk-lessons-' + group + '.md');
 const cands = (repo) => { try { return JSON.parse(fs.readFileSync(path.join(repo, '.vibe', 'lessons', 'candidates.json'), 'utf8')).items || []; } catch (e) { return []; } };
 
 (async () => {

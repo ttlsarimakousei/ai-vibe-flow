@@ -38,7 +38,7 @@ function session(change, findings, editFiles, opts) {
   const tf = H.transcript(path.join(h.work, 't-' + seq + '.jsonl'), entries);
   return H.hook(h, 'verify-gate', { session_id: 's-auto-' + seq, cwd: proj, hook_event_name: 'Stop', transcript_path: tf, stop_hook_active: false, last_assistant_message: '改完了。没有需要沉淀的经验。' });
 }
-const ruleFile = path.join(proj, '.claude', 'rules', 'ttls-lessons-java.md');
+const ruleFile = path.join(proj, '.claude', 'rules', 'vk-lessons-java.md');
 const rules = () => L.readRuleFile(ruleFile).rules;
 const cands = () => L.readCandidates(proj);
 const found = () => L.readFindings(proj).items;
@@ -68,7 +68,7 @@ H.section('第二个变更里又出现：自动变成规则');
   H.ok('规则文件里标着"自动"', /<!-- L[0-9a-f]+ 次数=2 最近=\d{4}-\d\d-\d\d 类别=边界 自动=具体 出处=c1；c2 -->\n- 导出接口没有判断列表为空/.test(H.read(ruleFile) || ''), H.read(ruleFile));
   H.ok('读到 Java 文件才带上（paths）', /^---\npaths:\n {2}- "\*\*\/\*\.java"\n---/.test(H.read(ruleFile) || ''), H.read(ruleFile));
   H.ok('候选里没有它了', !cands().some((c) => c.state === 'candidate' && /导出接口/.test(c.text)), cands());
-  H.ok('记着规则文件要提交', L.uncommitted(proj).some((x) => x.rel === '.claude/rules/ttls-lessons-java.md'), L.uncommitted(proj));
+  H.ok('记着规则文件要提交', L.uncommitted(proj).some((x) => x.rel === '.claude/rules/vk-lessons-java.md'), L.uncommitted(proj));
   H.ok('关闭自动提交仍提醒，但不指令自动提交', /经验规则文件更新了/.test(H.reasonOf(r)) && /Ask/.test(H.reasonOf(r)));
 }
 
@@ -140,7 +140,7 @@ H.section('人删掉、改过的，脚本不再动');
 H.section('按类别出的规则：人改过字的不再被脚本改回去；人直接在文件里删掉的不再出');
 {
   const p2 = H.makeRepo(path.join(h.work, 'proj2'), { 'pom.xml': '<project/>\n', '.vibe/project.md': '# 项目说明\n', 'src/A.java': 'class A {}\n', 'src/B.java': 'class B {}\n', 'src/C.java': 'class C {}\n', 'src/D.java': 'class D {}\n' });
-  const rf = path.join(p2, '.claude', 'rules', 'ttls-lessons-java.md');
+  const rf = path.join(p2, '.claude', 'rules', 'vk-lessons-java.md');
   const run2 = (change, where, problem) => {
     H.write(path.join(p2, 'openspec', 'changes', change, 'tasks.md'), '- [x] 1.1 x；验：`mvn -q compile`\n');
     const id = 'toolu_p2_' + (++seq);
@@ -181,7 +181,7 @@ H.section('不该收的不收：写了"无"的几种写法、驳回了的、带�
   H.ok('"无线网络断开时：先提示再重试"不算"无"', L.findingOfIssue(withAvoid('src/A.java:1', 'x 没处理', '无线网络断开时：先提示再重试')).avoid !== '无');
   run3('n1', [withAvoid('src/A.java:1', '变量名拼错了', '无（一次性疏忽）')], ['src/A.java']);
   run3('n2', [withAvoid('src/B.java:1', '变量名拼错了一个字母', '无（一次性疏忽）')], ['src/B.java']);
-  H.ok('两个变更里都写"无（一次性疏忽）"：一条都不收，规则文件里没有多出"无（一次性疏忽）"这一条', items().length === 0 && !fs.existsSync(path.join(p3, '.claude', 'rules', 'ttls-lessons-java.md')), [items(), L.readCandidates(p3)]);
+  H.ok('两个变更里都写"无（一次性疏忽）"：一条都不收，规则文件里没有多出"无（一次性疏忽）"这一条', items().length === 0 && !fs.existsSync(path.join(p3, '.claude', 'rules', 'vk-lessons-java.md')), [items(), L.readCandidates(p3)]);
 
   // 审查者的原话里引了代码里的口令
   run3('n3', [finding('src/DbUtil.java:3', 'DbUtil 里 password = "Prod#2024x" 写死了', '会出错', '项目约定')], ['src/DbUtil.java']);
@@ -197,7 +197,7 @@ H.section('不该收的不收：写了"无"的几种写法、驳回了的、带�
   run3('n5', [withAvoid('src/A.java:1', '批量插入有重复的主键', '批量插入之前：先按主键去重', '数据库')], ['src/A.java']);
   run3('n6', [withAvoid('src/B.java:1', '批量更新互相死锁', '批量更新之前：先按主键排序', '数据库')], ['src/B.java']);
   const two = L.readCandidates(p3).filter((c) => /批量/.test(c.text));
-  H.ok('"先按主键去重"和"先按主键排序"：各是各的候选，没有并成一条规则', two.length === 2 && two.every((c) => c.sources.length === 1) && !fs.existsSync(path.join(p3, '.claude', 'rules', 'ttls-lessons-sql.md')) && !(L.readRuleFile(path.join(p3, '.claude', 'rules', 'ttls-lessons-java.md')).rules || []).some((r) => /批量/.test(r.text)), two);
+  H.ok('"先按主键去重"和"先按主键排序"：各是各的候选，没有并成一条规则', two.length === 2 && two.every((c) => c.sources.length === 1) && !fs.existsSync(path.join(p3, '.claude', 'rules', 'vk-lessons-sql.md')) && !(L.readRuleFile(path.join(p3, '.claude', 'rules', 'vk-lessons-java.md')).rules || []).some((r) => /批量/.test(r.text)), two);
 
   H.section('收工之前就归档了的变更、"变更：无"的小改动：照样收');
   fs.mkdirSync(path.join(p3, 'openspec', 'changes', 'archive', '2026-09-30-done-x'), { recursive: true });
@@ -266,43 +266,43 @@ H.section('工具的用量和毛病');
   const log = path.join(h.kit, 'state', 'tool-usage.jsonl');
   const line = (o) => JSON.stringify(Object.assign({ at: Date.now() }, o)) + '\n';
   let text = '';
-  for (let i = 0; i < 25; i++) text += line({ tool: 'ttls-db-crud', cmd: 'query', exit: 0, ms: 2000 + i * 10, java: 1, daemon: 0, cached: 0, dialect: 'dm', errors: [], project: 'proj' });
-  for (let i = 0; i < 6; i++) text += line({ tool: 'ttls-db-crud', cmd: 'query', exit: 2, ms: 1800, java: 1, errors: ['SQL_ERROR:42S02:942'], project: 'proj' });
-  text += line({ tool: 'ttls-db-crud', cmd: 'columns', exit: 0, ms: 90, java: 0, cached: 1, errors: [], project: 'proj' });
-  for (let i = 0; i < 4; i++) text += line({ tool: 'ttls-redis', cmd: 'get', exit: 0, ms: 3100, errors: ['TIMEOUT'], project: 'proj' });
-  text += line({ tool: 'ttls-db-crud', incident: 'no-driver', what: '找不到达梦的驱动', detail: '数据库：dm', cmd: 'ping', project: 'proj' });
-  text += line({ tool: 'ttls-db-crud', incident: 'crash', what: 'KeyError: \'rows\'', detail: 'File "db.py", line 412, in cmd_query', cmd: 'query', project: 'proj' });
-  fs.writeFileSync(log, text + '{"tool":"ttls-db-crud","cmd":"pe');     // 最后一行还没写完
+  for (let i = 0; i < 25; i++) text += line({ tool: 'vk-db-crud', cmd: 'query', exit: 0, ms: 2000 + i * 10, java: 1, daemon: 0, cached: 0, dialect: 'dm', errors: [], project: 'proj' });
+  for (let i = 0; i < 6; i++) text += line({ tool: 'vk-db-crud', cmd: 'query', exit: 2, ms: 1800, java: 1, errors: ['SQL_ERROR:42S02:942'], project: 'proj' });
+  text += line({ tool: 'vk-db-crud', cmd: 'columns', exit: 0, ms: 90, java: 0, cached: 1, errors: [], project: 'proj' });
+  for (let i = 0; i < 4; i++) text += line({ tool: 'vk-redis', cmd: 'get', exit: 0, ms: 3100, errors: ['TIMEOUT'], project: 'proj' });
+  text += line({ tool: 'vk-db-crud', incident: 'no-driver', what: '找不到达梦的驱动', detail: '数据库：dm', cmd: 'ping', project: 'proj' });
+  text += line({ tool: 'vk-db-crud', incident: 'crash', what: 'KeyError: \'rows\'', detail: 'File "db.py", line 412, in cmd_query', cmd: 'query', project: 'proj' });
+  fs.writeFileSync(log, text + '{"tool":"vk-db-crud","cmd":"pe');     // 最后一行还没写完
   const n0 = F.listRecords().length;
   const tf = H.transcript(path.join(h.work, 't-tool.jsonl'), [H.tr.user('查一下订单表')]);
   H.hook(h, 'task-anchor', { session_id: 's-tool', cwd: proj, hook_event_name: 'UserPromptSubmit', transcript_path: tf, prompt: '查一下订单表' });
   const recs = F.listRecords().slice(0, F.listRecords().length - n0);
-  H.ok('工具报的两个毛病记成了问题反馈，来源写着"工具自动记录"', recs.length === 2 && recs.every((r) => r.meta['来源'] === '工具自动记录' && r.meta['涉及'] === 'ttls-db-crud' && r.meta['会话'] === 's-tool') && recs.some((r) => /找不到数据库驱动：找不到达梦的驱动/.test(r.title) && r.meta['类型'] === '卡住') && recs.some((r) => /脚本自己出错了/.test(r.title) && /db\.py/.test(r.text)), recs.map((r) => [r.title, r.meta]));
+  H.ok('工具报的两个毛病记成了问题反馈，来源写着"工具自动记录"', recs.length === 2 && recs.every((r) => r.meta['来源'] === '工具自动记录' && r.meta['涉及'] === 'vk-db-crud' && r.meta['会话'] === 's-tool') && recs.some((r) => /找不到数据库驱动：找不到达梦的驱动/.test(r.title) && r.meta['类型'] === '卡住') && recs.some((r) => /脚本自己出错了/.test(r.title) && /db\.py/.test(r.text)), recs.map((r) => [r.title, r.meta]));
   const s = T.stats();
-  const q = s.find((x) => x.tool === 'ttls-db-crud' && x.cmd === 'query') || {};
+  const q = s.find((x) => x.tool === 'vk-db-crud' && x.cmd === 'query') || {};
   H.ok('用量累计起来了', q.n === 31 && q.fail === 6 && q.java === 1 && q.avg > 1900 && q.errors[0][0] === 'SQL_ERROR:42S02:942' && q.errors[0][1] === 6 && s.some((x) => x.cmd === 'columns' && x.cached === 1), s);
   // 同样的毛病再来一次：不另起一条
-  fs.appendFileSync(log, 'ek","exit":0,"ms":500,"java":1,"errors":[],"project":"proj","at":1}\n' + line({ tool: 'ttls-db-crud', incident: 'no-driver', what: '找不到达梦的驱动', detail: '数据库：dm', cmd: 'ping', project: 'proj' }));
+  fs.appendFileSync(log, 'ek","exit":0,"ms":500,"java":1,"errors":[],"project":"proj","at":1}\n' + line({ tool: 'vk-db-crud', incident: 'no-driver', what: '找不到达梦的驱动', detail: '数据库：dm', cmd: 'ping', project: 'proj' }));
   H.hook(h, 'verify-gate', { session_id: 's-tool', cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('查一下订单表'), H.tr.say('查到了')]), stop_hook_active: false, last_assistant_message: '查到了' });
   const again = F.listRecords().find((r) => /找不到数据库驱动/.test(r.title));
   H.ok('同样的毛病再来：次数加一，不另起一条；半行接上之后照样认', F.listRecords().length === n0 + 2 && Number(again.meta['次数']) === 2 && T.stats().some((x) => x.cmd === 'peek' && x.n === 1), [F.listRecords().length, again && again.meta]);
   H.ok('没有新的行：什么都不做', T.ingest(null).usage === 0);
   const tips = T.hints();
-  H.ok('从用量里数出来的：查库慢（建议开后台执行器）、redis 连不上、几乎都在写 SQL', tips.some((t) => /查库的命令平均每条 \d\.\d 秒/.test(t.what) && /后台执行器/.test(t.detail)) && tips.some((t) => /ttls-redis 有 4 次连不上（TIMEOUT）/.test(t.what)) && tips.some((t) => /几乎都在写 SQL/.test(t.what)), tips);
+  H.ok('从用量里数出来的：查库慢（建议开后台执行器）、redis 连不上、几乎都在写 SQL', tips.some((t) => /查库的命令平均每条 \d\.\d 秒/.test(t.what) && /后台执行器/.test(t.detail)) && tips.some((t) => /vk-redis 有 4 次连不上（TIMEOUT）/.test(t.what)) && tips.some((t) => /几乎都在写 SQL/.test(t.what)), tips);
   H.setConfig(h, { dbcrudDaemon: true });
   H.ok('后台执行器已经开着：不再建议开', !T.hints().some((t) => /后台执行器/.test(t.detail)), T.hints());
   H.setConfig(h, { dbcrudDaemon: false });
   // 2026-10-01 起没有本机导出了：工具用量、能优化的地方跟着使用情况上报（lib/usage.js），工具报的毛病是问题反馈、跟着问题上报
   const us = require(path.join(h.kit, 'lib', 'usage.js')).summary().text;
-  H.ok('使用情况只传工具次数，耗时建议留本机', /查库、查 redis 的工具（累计到现在）：[^\n]*ttls-db-crud query 31 次（出错 6）/.test(us) && /ttls-redis get 4 次/.test(us) && !/从用量里看出来能优化的：/.test(us) && T.hints().some((x) => /平均每条/.test(x.what)), us);
-  H.ok('工具报的毛病记成了问题反馈', F.listRecords().filter((r) => !F.isNoise(r)).some((r) => /ttls-db-crud 找不到数据库驱动/.test(r.title)), F.listRecords().map((r) => r.title));
+  H.ok('使用情况只传工具次数，耗时建议留本机', /查库、查 redis 的工具（累计到现在）：[^\n]*vk-db-crud query 31 次（出错 6）/.test(us) && /vk-redis get 4 次/.test(us) && !/从用量里看出来能优化的：/.test(us) && T.hints().some((x) => /平均每条/.test(x.what)), us);
+  H.ok('工具报的毛病记成了问题反馈', F.listRecords().filter((r) => !F.isNoise(r)).some((r) => /vk-db-crud 找不到数据库驱动/.test(r.title)), F.listRecords().map((r) => r.title));
 
   // 日志被工具截过（丢掉前一半），截完又长过了上次读到的位置：不能从旧位置接着读，也不能把留下的那一半再数一遍
-  const nOf = (cmd) => (T.stats(100).find((x) => x.tool === 'ttls-redis' && x.cmd === cmd) || { n: 0 }).n;
+  const nOf = (cmd) => (T.stats(100).find((x) => x.tool === 'vk-redis' && x.cmd === cmd) || { n: 0 }).n;
   const old = fs.readFileSync(log, 'utf8').split('\n').filter(Boolean);
   const later = Date.now() + 5000;
   let more = '';
-  for (let i = 0; i < 60; i++) more += JSON.stringify({ tool: 'ttls-redis', cmd: 'ttl', exit: 0, ms: 20, errors: [], project: 'proj', at: later + i }) + '\n';
+  for (let i = 0; i < 60; i++) more += JSON.stringify({ tool: 'vk-redis', cmd: 'ttl', exit: 0, ms: 20, errors: [], project: 'proj', at: later + i }) + '\n';
   fs.writeFileSync(log, old.slice(Math.floor(old.length / 2)).join('\n') + '\n' + more);
   const getBefore = nOf('get');
   const r1 = T.ingest(null);
@@ -310,7 +310,7 @@ H.section('工具的用量和毛病');
   H.ok('接着没有新的行：什么都不做', T.ingest(null).usage === 0);
   // 日志太大：由套件这头丢掉前一半（redis 那头只管追加）
   let big = '';
-  const row = (i) => JSON.stringify({ tool: 'ttls-redis', cmd: 'ping', exit: 0, ms: 5, errors: [], project: 'proj', at: later + 1000 + i, pad: 'x'.repeat(120) }) + '\n';
+  const row = (i) => JSON.stringify({ tool: 'vk-redis', cmd: 'ping', exit: 0, ms: 5, errors: [], project: 'proj', at: later + 1000 + i, pad: 'x'.repeat(120) }) + '\n';
   for (let i = 0; i < 12000; i++) big += row(i);
   fs.appendFileSync(log, big);
   const sizeBefore = fs.statSync(log).size;

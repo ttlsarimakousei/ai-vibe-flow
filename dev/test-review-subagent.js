@@ -75,7 +75,7 @@ H.section('结论入账走 SubagentStop');
 {
   const p = project();
   const r = R.prepare(opts(p));
-  const stop = (lens, text, agent) => H.hook(h, 'review-stop', { session_id: 's-stop', cwd: p.proj, hook_event_name: 'SubagentStop', agent_type: 'ttls-reviewer', agent_id: agent || 'a1', last_assistant_message: text });
+  const stop = (lens, text, agent) => H.hook(h, 'review-stop', { session_id: 's-stop', cwd: p.proj, hook_event_name: 'SubagentStop', agent_type: 'vk-reviewer', agent_id: agent || 'a1', last_assistant_message: text });
   H.ok('别的子代理不管', H.hook(h, 'review-stop', { session_id: 's-stop', cwd: p.proj, hook_event_name: 'SubagentStop', agent_type: 'general-purpose', agent_id: 'x', last_assistant_message: '做完了' }) === null);
   const lens = r.agents[0].lens;
   const bad = stop(lens, '审查任务：' + r.id + '/' + lens + '\n没有 JSON');
@@ -100,7 +100,7 @@ H.section('放行：裸开子代理拦下，带任务的放行并记发出去了
   S.setFlow(j, true, '测试', 'apply');
   S.setSessionAuto(j, true, '测试');
   H.setConfig(h, { autoRequirements: true, autoApply: true });
-  const call = (prompt) => H.hook(h, 'guard-ask', Object.assign({}, j, { tool_input: { subagent_type: 'ttls-reviewer', prompt } }));
+  const call = (prompt) => H.hook(h, 'guard-ask', Object.assign({}, j, { tool_input: { subagent_type: 'vk-reviewer', prompt } }));
   H.ok('裸开：拦下，说先 prepare', /review\.js prepare/.test(H.reasonOf(call('模式：代码\n变更：c1'))), call('模式：代码\n变更：c1'));
   const r = R.prepare(opts(p));
   H.ok('带任务：放行', !H.reasonOf(call(r.agents[0].prompt)), call(r.agents[0].prompt));
@@ -134,7 +134,7 @@ H.section('同时在跑的审查子代理最多 3 个（第 52 条，2026-11-04�
   S.setSessionAuto(j, true, '测试');
   H.setConfig(h, { autoRequirements: true, autoApply: true });
   let n = 0;
-  const call = (prompt) => H.hook(h, 'guard-ask', Object.assign({}, j, { tool_use_id: 'cap' + (++n), tool_input: { subagent_type: 'ttls-reviewer', prompt } }));
+  const call = (prompt) => H.hook(h, 'guard-ask', Object.assign({}, j, { tool_use_id: 'cap' + (++n), tool_input: { subagent_type: 'vk-reviewer', prompt } }));
   const a = R.prepare(opts(p));
   const b = R.prepare(opts(p, { change: 'c2' }));
   H.ok('（两个任务各 3 个角度）', a.agents.length === 3 && b.agents.length === 3, [a.agents.length, b.agents.length]);

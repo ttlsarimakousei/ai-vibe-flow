@@ -422,15 +422,15 @@
     </div>
     <div class="card" id="sec-guide-review" data-sec="审查">
       <h2>审查</h2>
-      <p class="hint">审查全部用子代理 ttls-reviewer，和主会话同一个模型。</p>
-      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 236" role="img" aria-label="审查从 /ttls-cross-review 进，脚本备材料，第一轮同时开 2 到 3 个子代理，走现有连接，结果交给脚本合并记账。每个审查点修完后只审修改点，没有 P1、P2 才结束，用户可以打断。">
+      <p class="hint">审查全部用子代理 vk-reviewer，和主会话同一个模型。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 236" role="img" aria-label="审查从 /vk-cross-review 进，脚本备材料，第一轮同时开 2 到 3 个子代理，走现有连接，结果交给脚本合并记账。每个审查点修完后只审修改点，没有 P1、P2 才结束，用户可以打断。">
         <defs><marker id="a8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
         <text class="h" x="20" y="24">一次审查怎么跑</text>
-        <rect class="b" x="20" y="36" width="160" height="56" rx="6"/><text class="m" x="100" y="60" text-anchor="middle">/ttls-cross-review</text><text class="s" x="100" y="79" text-anchor="middle">入口</text>
+        <rect class="b" x="20" y="36" width="160" height="56" rx="6"/><text class="m" x="100" y="60" text-anchor="middle">/vk-cross-review</text><text class="s" x="100" y="79" text-anchor="middle">入口</text>
         <path class="a" d="M180 64H218" marker-end="url(#a8)"/>
         <rect class="b" x="220" y="36" width="190" height="56" rx="6"/><text class="h" x="315" y="58" text-anchor="middle">review.js</text><text class="s" x="315" y="77" text-anchor="middle">备材料，算修改点，不发请求</text>
         <path class="a" d="M410 64H448" marker-end="url(#a8)"/>
-        <rect class="b" x="450" y="36" width="170" height="56" rx="6"/><text class="h" x="535" y="58" text-anchor="middle">ttls-reviewer × 3</text><text class="s" x="535" y="77" text-anchor="middle">每个一个角度，同时开</text>
+        <rect class="b" x="450" y="36" width="170" height="56" rx="6"/><text class="h" x="535" y="58" text-anchor="middle">vk-reviewer × 3</text><text class="s" x="535" y="77" text-anchor="middle">每个一个角度，同时开</text>
         <path class="a" d="M620 64H658" marker-end="url(#a8)"/>
         <rect class="b" x="660" y="36" width="170" height="56" rx="6"/><text class="h" x="745" y="58" text-anchor="middle">现有连接</text><text class="s" x="745" y="77" text-anchor="middle">不用管地址、key、模型名</text>
         <path class="a" d="M830 64H868" marker-end="url(#a8)"/>
@@ -533,7 +533,7 @@
   </section>
 
   <section id="tab-data" class="tab hide">
-    <div class="pagehead"><h2>查库</h2><p>查库的技能（/ttls-db-crud）用的驱动不用配：项目 pom 声明的版本直接从 Maven 本地仓库取，缺了只拉缺的那一个；项目没声明的，后台自动到 Maven 本地仓库找。都找不到时，它会问你 jar 在哪。</p></div>
+    <div class="pagehead"><h2>查库</h2><p>查库的技能（/vk-db-crud）用的驱动不用配：项目 pom 声明的版本直接从 Maven 本地仓库取，缺了只拉缺的那一个；项目没声明的，后台自动到 Maven 本地仓库找。都找不到时，它会问你 jar 在哪。</p></div>
     <p class="msg" id="dataMsg" style="margin:0 0 12px"></p>
 
     <div class="card" id="sec-dbopt" data-sec="查库快一点">
@@ -618,7 +618,7 @@
       <ul class="g-list">
         <li><b>审查</b>：需求文档的每个审查点、任务的每一组，做完都用子代理自动审查、核验、修改和复验，没有 P1、P2 才做下一步，不设次数上限。</li>
         <li><b>自测</b>：每组任务做完只审查，不自测。全部 change 做完全面自测：所有验收用例和整体用例，改过代码退回重跑，验不了的写明没验证和原因；过了停下等你核验。</li>
-        <li><b>看页面</b>：改了 .vue、.html、.css 这类文件却没跑过页面场景，全面自测时用 /ttls-see-page 看一遍：自己起服务，用无头浏览器，不开窗口。</li>
+        <li><b>看页面</b>：改了 .vue、.html、.css 这类文件却没跑过页面场景，全面自测时用 /vk-see-page 看一遍：自己起服务，用无头浏览器，不开窗口。</li>
       </ul>
       <p class="hint">需求阶段准备验收用例，设计阶段补输入、环境、步骤和预期。文档写多长都行，复杂的关系画图。只要求写需求时不会自行开工。没开自动的会话，审查、自测和复验都先用提问框问你；放弃就继续，不记待办。</p>
     </div>
@@ -661,7 +661,7 @@
   <section id="tab-lessons" class="tab hide">
     <div class="pagehead"><h2>经验规则</h2><p>审查里反复出现的问题，沉淀成读到那类文件时才带上的规则。改了开关，页面底部会出现保存条。</p></div>
     <div class="card" id="sec-lessons" data-sec="经验规则">
-      <div class="row between"><div><h2>经验规则</h2><p class="hint">审查确认成立的问题里，换个任务还会再犯的，Claude 记一句话；审查报了又确实改掉的问题，脚本也会自动收。同一条在几个不同的变更里都出现，就变成这个项目的规则，写进 <span class="mono">.claude/rules/ttls-lessons-*.md</span>，跟着仓库提交。读到那类文件时才带上，平时不占上下文。</p></div><button class="btn" id="lsRefresh">刷新</button></div>
+      <div class="row between"><div><h2>经验规则</h2><p class="hint">审查确认成立的问题里，换个任务还会再犯的，Claude 记一句话；审查报了又确实改掉的问题，脚本也会自动收。同一条在几个不同的变更里都出现，就变成这个项目的规则，写进 <span class="mono">.claude/rules/vk-lessons-*.md</span>，跟着仓库提交。读到那类文件时才带上，平时不占上下文。</p></div><button class="btn" id="lsRefresh">刷新</button></div>
       <div class="opt">
         <div><div class="t">经验规则</div><div class="d">"只收集"：记候选，不生成规则。先看看它记得像不像话。</div></div>
         <div class="ctl"><select id="k_lessons"><option value="on">开：到次数就生成规则</option><option value="collect">只收集</option><option value="off">关：不记也不催</option></select></div>
@@ -1210,7 +1210,7 @@
     try {
       const r = await api('GET', '/api/kit/feedback');
       const t = r.tools || { stats: [], hints: [] };
-      $('tuList').innerHTML = t.stats.length ? t.stats.map((x) => '<tr><td>' + esc(x.tool) + '</td><td class="mono">' + esc(x.cmd) + '</td><td class="num">' + x.n + '</td><td class="num">' + (x.fail || '') + '</td><td class="num">' + dur(x.avg) + '</td><td class="num">' + dur(x.max) + '</td><td class="num">' + (x.tool === 'ttls-db-crud' ? x.java : '') + '</td><td class="mono" style="font-size:12px">' + esc((x.errors || []).map((e) => e[0] + ' ×' + e[1]).join('，')) + '</td></tr>').join('') : '<tr><td colspan="8" class="dim">还没用过。</td></tr>';
+      $('tuList').innerHTML = t.stats.length ? t.stats.map((x) => '<tr><td>' + esc(x.tool) + '</td><td class="mono">' + esc(x.cmd) + '</td><td class="num">' + x.n + '</td><td class="num">' + (x.fail || '') + '</td><td class="num">' + dur(x.avg) + '</td><td class="num">' + dur(x.max) + '</td><td class="num">' + (x.tool === 'vk-db-crud' ? x.java : '') + '</td><td class="mono" style="font-size:12px">' + esc((x.errors || []).map((e) => e[0] + ' ×' + e[1]).join('，')) + '</td></tr>').join('') : '<tr><td colspan="8" class="dim">还没用过。</td></tr>';
       $('tuHints').innerHTML = (t.hints || []).map((x) => '<li><b>' + esc(x.what) + '</b>。' + esc(x.detail) + '</li>').join('');
     } catch (e) { say($('dataMsg'), e.message, false); }
   }

@@ -25,21 +25,23 @@ const DROPPED_FILES = ['lib/idea-run.js', 'lib/merge-push.js', 'tools/merge-push
 const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。自己的约定写在 ~/.claude/vibe-kit/user/ 里的 .md（更新不碰），然后运行 node ~/.claude/vibe-kit/install.js --sync -->';
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
-const SKILLS = ['ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis'];
-const AGENTS = ['ttls-reviewer.md'];
+const SKILLS = ['vk-onboard', 'vk-see-page', 'vk-cross-review', 'vk-handover', 'vk-db-crud', 'vk-redis'];
+const AGENTS = ['vk-reviewer.md'];
 /** 一个目录里套件的斜杠命令文件（vk-*.md）；目录不在返回空 */
 function kitCommands(dir) { try { return fs.readdirSync(dir).filter((f) => /^vk-[\w-]+\.md$/i.test(f)).sort(); } catch (e) { return []; } }
-// 改名之前套件自己装的（名字太普通，会和别人的套件撞）：装这一版时删掉
-const OLD_SKILLS = ['onboard', 'see-page', 'cross-review', 'handover'];
-const OLD_AGENTS = ['vibe-reviewer.md'];
+// 改名之前套件自己装的：装这一版时删掉。没前缀的（名字太普通，会和别人的套件撞，0929 改的）；ttls- 开头的（2026-11-04 改成 vk-，仓库主人定的）
+const OLD_SKILLS = ['onboard', 'see-page', 'cross-review', 'handover', 'ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis'];
+const OLD_AGENTS = ['vibe-reviewer.md', 'ttls-reviewer.md'];
+/** 旧名字现在叫什么：去掉旧前缀，加上 vk- */
+const nowName = (n) => 'vk-' + String(n).replace(/^ttls-/, '').replace(/^vibe-/, '').replace(/\.md$/, '');
 // 并进套件之前单独装的技能：认得出是它才收。urai-db-crud 自带的驱动先挪进套件的驱动目录
 const skillName = (d) => { try { return (/^name:\s*(\S+)\s*$/m.exec(fs.readFileSync(path.join(d, 'SKILL.md'), 'utf8')) || [])[1] || ''; } catch (e) { return ''; } };
 const isDbCrud = (d) => (fs.existsSync(path.join(d, 'scripts', 'db.py')) && fs.existsSync(path.join(d, 'scripts', 'sqlguard.py'))) || /^(urai-)?db-crud$/.test(skillName(d));
 const ABSORBED = [
-  { name: 'urai-db-crud', now: 'ttls-db-crud', is: isDbCrud, drivers: true },
-  { name: 'db-crud', now: 'ttls-db-crud', is: isDbCrud, drivers: true },
+  { name: 'urai-db-crud', now: 'vk-db-crud', is: isDbCrud, drivers: true },
+  { name: 'db-crud', now: 'vk-db-crud', is: isDbCrud, drivers: true },
   // 名字叫 redis 的技能别人也可能有：SKILL.md 里的名字是 redis、带着那个直连客户端的才算
-  { name: 'redis', now: 'ttls-redis', is: (d) => skillName(d) === 'redis' && (fs.existsSync(path.join(d, 'assets', 'redis-client.js')) || /redis-client\.js/.test((() => { try { return fs.readFileSync(path.join(d, 'SKILL.md'), 'utf8'); } catch (e) { return ''; } })())) },
+  { name: 'redis', now: 'vk-redis', is: (d) => skillName(d) === 'redis' && (fs.existsSync(path.join(d, 'assets', 'redis-client.js')) || /redis-client\.js/.test((() => { try { return fs.readFileSync(path.join(d, 'SKILL.md'), 'utf8'); } catch (e) { return ''; } })())) },
 ];
 const HOOK_MARK = 'vibe-kit/hooks/';
 // 老版本走 HTTP 的钩子登记成这个地址：升级时认出来摘掉
@@ -558,7 +560,7 @@ function commitMode() { const m = kitConfig().commitMode; return COMMIT_MODE_TEX
 function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'; }
 // 审查不设次数上限（用户 2026-11-03 定的）
 function reviewModeText() {
-  return '每个产物、每整组 1.x 分别审，子代理 ttls-reviewer 审，第一轮 2～3 个角度，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；子代理连续 3 次没交结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
+  return '每个产物、每整组 1.x 分别审，子代理 vk-reviewer 审，第一轮 2～3 个角度，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；子代理连续 3 次没交结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
 }
 const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动逐产物审修；Apply 按已授权范围逐整组任务审修、自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
 const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
@@ -812,7 +814,7 @@ if (mode === 'uninstall') {
         + '不再用这台电脑上的套件了，就把这两处删掉：' + path.join(KIT, 'secrets.json') + '、' + path.join(KIT, 'router-data'));
     }
     // 经验规则是你攒下来的，Claude Code 自己会加载它们，和套件装没装无关：留着
-    try { const rd = path.join(CLAUDE, 'rules'); const n = fs.readdirSync(rd).filter((f) => /^(ttls|vibe)-lessons-.*\.md$/i.test(f)).length; if (n) console.log('  用户级的经验规则也留着（' + rd + ' 里的 ttls-lessons-*.md，' + n + ' 个文件）：Claude Code 自己会按文件类型加载，不想要就手动删掉。各个项目里的 .claude/rules/ttls-lessons-*.md 跟着仓库走，没有动'); } catch (e) { /* 没有规则目录 */ }
+    try { const rd = path.join(CLAUDE, 'rules'); const n = fs.readdirSync(rd).filter((f) => /^(vk|ttls|vibe)-lessons-.*\.md$/i.test(f)).length; if (n) console.log('  用户级的经验规则也留着（' + rd + ' 里的 vk-lessons-*.md，' + n + ' 个文件）：Claude Code 自己会按文件类型加载，不想要就手动删掉。各个项目里的 .claude/rules/vk-lessons-*.md 跟着仓库走，没有动'); } catch (e) { /* 没有规则目录 */ }
     process.exit(0);
   };
   finish();
@@ -828,20 +830,20 @@ function removeOldNames() {
     const d = path.join(CLAUDE, 'skills', n);
     if (!fs.existsSync(d)) continue;
     const was = path.join(KIT, 'pristine', 'skills', n);
-    if (!fs.existsSync(was)) { console.log('  [!] ' + d + ' 不是套件装的（你自己的同名技能），没有动它。套件的这个技能现在叫 ttls-' + n); continue; }
+    if (!fs.existsSync(was)) { console.log('  [!] ' + d + ' 不是套件装的（你自己的同名技能），没有动它。套件的这个技能现在叫 ' + nowName(n)); continue; }
     if (!sameDir(d, was)) console.log('  [!] 旧技能 ' + n + ' 被改过，删除前备份在 ' + backup(d, 'skills/' + n));
     // 整个目录一步挪走再删：删到一半被占着的话，留下的半截目录 Claude Code 还会列出来
     if (!moveAway(d, n, false)) { console.log('  [!] ' + d + ' 被别的程序占着，这次没删掉（下次装的时候再删）'); continue; }
-    gone.push('/' + n + ' → /ttls-' + n);
+    gone.push('/' + n + ' → /' + nowName(n));
   }
   for (const n of OLD_AGENTS) {
     const f = path.join(CLAUDE, 'agents', n);
     if (!fs.existsSync(f)) continue;
     const was = path.join(KIT, 'pristine', 'agents', n);
-    if (!fs.existsSync(was)) { console.log('  [!] ' + f + ' 不是套件装的，没有动它。套件的审查代理现在叫 ttls-reviewer'); continue; }
+    if (!fs.existsSync(was)) { console.log('  [!] ' + f + ' 不是套件装的，没有动它。套件的审查代理现在叫 vk-reviewer'); continue; }
     if (!same(f, was)) console.log('  [!] 旧的审查代理 ' + n + ' 被改过，删除前备份在 ' + backup(f, 'agents/' + n));
     fs.unlinkSync(f);
-    gone.push(n.replace(/\.md$/, '') + ' → ttls-reviewer');
+    gone.push(n.replace(/\.md$/, '') + ' → ' + nowName(n));
   }
   return gone;
 }
@@ -907,7 +909,7 @@ if (mode === 'install') {
     const top = gaps.map((g) => g.min).filter(Boolean).sort((a, b) => (D.satisfies(a, '>=' + b) ? 1 : -1)).pop();
     if (gaps.length) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：' + gaps.map((g) => g.label + '要 Node ' + g.node + '，' + g.without).join('；') + (top ? '。要用就把 Node 升到 ' + top + ' 以上' : ''));
   } else {
-    if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/ttls-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
+    if (major < 20) console.log('  [!] 这台电脑的 Node 是 ' + process.versions.node + '：套件能装，但看页面（/vk-see-page）要 Node 20 以上，用不了；要看页面就把 Node 升到 20 以上');
     for (const dep of ['pixelmatch', 'pngjs', 'playwright-core']) {
       if (!fs.existsSync(path.join(SRC, 'kit', 'page', 'node_modules', dep))) { console.log('  [X] 安装包不完整：缺 kit/page/node_modules/' + dep + '。重新拷一份完整的包'); process.exit(1); }
     }
@@ -1157,8 +1159,8 @@ if (mode === 'install') {
   // 留一份原样的副本，下次更新和卸载时用来判断你有没有改过
   removeDir(path.join(KIT, 'pristine'));
   copyDir(path.join(SRC, 'claude'), path.join(KIT, 'pristine'));
-  console.log('  [OK] 技能：' + SKILLS.map((n) => '/' + n).join('  ') + '；审查代理：ttls-reviewer');
-  if (renamed.length) console.log('  [OK] 技能和代理改名了（加了 ttls- 前缀，免得和别的套件撞名）：' + renamed.join('，') + '。旧名字的已经删掉');
+  console.log('  [OK] 技能：' + SKILLS.map((n) => '/' + n).join('  ') + '；审查代理：vk-reviewer');
+  if (renamed.length) console.log('  [OK] 技能和代理改名了（统一 vk- 开头）：' + renamed.join('，') + '。旧名字的已经删掉');
   for (const a of absorbed) {
     console.log('  [OK] 以前单独装的 ' + a.name + ' 技能并进套件了，现在叫 ' + a.now + '。旧的挪到了 ' + a.backup + '（不会被自动删）');
     if (a.drivers.length) console.log('       它自带的驱动挪到了套件的驱动目录并登记好：' + a.drivers.map((u) => u.name + ' ' + path.basename(u.jar)).join('、'));

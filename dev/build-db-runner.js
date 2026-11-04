@@ -11,7 +11,7 @@ const H = require('./lib/harness');
 const R = require('./lib/db-runner-record');
 const rt = H.runtime(process.argv[2] || 'auto');
 const h = H.freshHome('build-runner');
-const dir = path.join(H.SRC, 'claude/skills/ttls-db-crud/scripts/runner');
+const dir = path.join(H.SRC, 'claude/skills/vk-db-crud/scripts/runner');
 const javac = rt.java ? path.join(path.dirname(rt.java), 'javac.exe') : '';
 H.ok('找到了 javac', !!javac && fs.existsSync(javac), rt.java);
 if (javac && fs.existsSync(javac)) {

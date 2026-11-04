@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 假 redis：认 ttls-redis 的客户端会发的那几条命令。数据在内存里，分库（0 到 15）。
+ * 假 redis：认 vk-redis 的客户端会发的那几条命令。数据在内存里，分库（0 到 15）。
  * key 和值按字节存（内部用 latin1 的字符串表示字节），二进制的 key 不会被弄坏。
  * 用法：node fake-redis.js <端口> [口令] [--many <N>] [--slow-scan <毫秒>]
  *   --many N         0 号库里另外放 N 个 bulk:<序号> 的 key（测库很大的时候遍历看不完）

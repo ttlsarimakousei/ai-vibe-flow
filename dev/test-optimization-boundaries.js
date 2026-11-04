@@ -14,7 +14,7 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
   const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'links/example.js': 'const source=1;\n', 'openspec/changes/add-x/tasks.md': '- [x] 1.1 实现 a.js；验：node a.js\n- [ ] 2.1 [代码审查] 独立审查；验：完整结果\n- [ ] 2.2 [审查意见处理] 处理审查发现；验：处理记录和复验\n- [ ] 3.1 改库；验：查库（留给用户：需确认）\n' });
   const d = path.join(p, 'openspec/changes/add-x');
   const handoverTranscript = path.join(h.root, 'handover.jsonl');
-  const handoverEvent = { cwd: p, session_id: 'handover-check', transcript_path: handoverTranscript, tool_name: 'Skill', tool_input: { skill: 'ttls-handover' } };
+  const handoverEvent = { cwd: p, session_id: 'handover-check', transcript_path: handoverTranscript, tool_name: 'Skill', tool_input: { skill: 'vk-handover' } };
   for (const said of ['继续', '不要交接', '交接文档有什么用？']) {
     H.transcript(handoverTranscript, [H.tr.user(said)]);
     H.ok(said + '不授权交接技能', !!H.hook(h, 'guard-ask', handoverEvent));
@@ -24,7 +24,7 @@ const rejected = (fn) => { try { fn(); return false; } catch (e) { return e.mess
     H.transcript(handoverTranscript, [H.tr.user(said)]);
     H.ok(said + '允许手动交接技能', H.hook(h, 'guard-ask', handoverEvent) === null);
   }
-  H.transcript(handoverTranscript, [H.tr.user('<command-name>/ttls-handover</command-name><command-args></command-args>')]);
+  H.transcript(handoverTranscript, [H.tr.user('<command-name>/vk-handover</command-name><command-args></command-args>')]);
   H.ok('用户执行交接命令允许写当前记录', H.hook(h, 'pre-edit', Object.assign({}, handoverEvent, { tool_name: 'Write', tool_input: { file_path: path.join(p, '.vibe/handover.md'), content: '# 当前事实\n' } })) === null);
   H.ok('明确选择旧策略的有效全自动仍可交接', S.canWriteHandover(handoverEvent, { contextStrategy: 'handover', autoMode: true, autoHandover: true }));
   H.transcript(handoverTranscript, [H.tr.user('继续')]);

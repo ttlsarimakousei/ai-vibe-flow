@@ -206,7 +206,7 @@ function kitIssueTodo(j, lastSaid) {
  *   开着"审查报的问题自动收"（lessonAuto，默认开）时脚本自己收，下面这一条不催。关着的时候：
  *   这个会话里有一次审查报了问题、之后也处理了（改了东西），却既没用 lesson.js 记过、也没说"没有需要沉淀的经验"：
  *   拦一次，让它挑"换个任务还会再犯"的各记一句话。每次审查只催一次；复审那几轮不催；审查意见还没处理的先不催。
- *   项目级的规则文件（.claude/rules/ttls-lessons-*.md）改了还没提交：催一次提交（跟着自动提交的开关走），同一批最多催两次。
+ *   项目级的规则文件（.claude/rules/vk-lessons-*.md）改了还没提交：催一次提交（跟着自动提交的开关走），同一批最多催两次。
  */
 const SAID_NO_LESSON = /(没有|没|无|不)(什么)?(需要|要|可以?|值得)?(沉淀|记下来|记录)的?(经验|教训)|没有?可沉淀|无需沉淀|不需要沉淀/;
 function lessonTodo(j, cfg, entries, reviews, lastSaid) {
@@ -553,7 +553,7 @@ function handoverQuestion(j, cfg, entries, wroteHo) {
     + '问题："' + '上下文已用 ' + pct + '%' + '，现在交接吗？"；header："交接"；两个选项：\n'
     + '  1. label "现在交接"，description "写好交接记录；然后我输入 /clear，再说一句继续，新会话就接着干"\n'
     + '  2. label "再做一会儿"，description "' + '再涨 10% 时再问' + '"\n'
-    + '我选"现在交接"：执行 /ttls-handover 写交接记录，写完只回我一句"交接记录写好了。输入 /clear，然后说一句"继续"，新会话会先读交接记录再接着干"。\n'
+    + '我选"现在交接"：执行 /vk-handover 写交接记录，写完只回我一句"交接记录写好了。输入 /clear，然后说一句"继续"，新会话会先读交接记录再接着干"。\n'
     + '我选"再做一会儿"：什么都不用做，直接结束这一轮。\n'
     + '（如果你没有 AskUserQuestion 这个工具，就用一句话直接问我。）';
 }
@@ -692,7 +692,7 @@ function autoHandover(j, cfg, entries, wroteHo) {
   if (u.pct < u.line || cfg.autoHandover === false) return out;
   if (wroteHo) { writeState(key, Object.assign({}, h, { autoAtPct: u.pct, at: Date.now() })); return out; }
   if (h.autoAtPct != null && u.pct < h.autoAtPct + 10) return out;
-  out.line = '另外，上下文已经用了 ' + u.pct + '%（' + tok(u.used) + ' / ' + tok(u.size) + '），过了 ' + u.line + '% 的交接线：先执行 /ttls-handover 写一份交接记录（万一会话断了能接上），写完接着做上面的事，不要停下等我。';
+  out.line = '另外，上下文已经用了 ' + u.pct + '%（' + tok(u.used) + ' / ' + tok(u.size) + '），过了 ' + u.line + '% 的交接线：先执行 /vk-handover 写一份交接记录（万一会话断了能接上），写完接着做上面的事，不要停下等我。';
   out.mark = () => writeState(key, Object.assign({}, readState(key), { autoAtPct: u.pct, at: Date.now() }));
   return out;
 }
@@ -818,7 +818,7 @@ async function handle(j) {
       const text = String((results.get(c.id) || {}).text || '');
       return /^(Bash|PowerShell)$/.test(c.name) && /probe-run\.js/.test(String(c.input.command || '')) && !failed(c) && /PAGE_PROBE\s+\{"ok":true[,}]/.test(text) && !/Exit code:?\s*[1-9]|running in (?:the )?background|still running|后台运行/i.test(text);
     });
-    if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !probePassed && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /ttls-see-page 跑受影响的页面；场景做不了的，用 page/probe-run.js 执行 .vibe/tmp/<事由>/ 下的探针，断言通过并返回实际读到的值。失败、超时或只启动不算通过。这次改动确实不影响页面显示，就说明原因。');
+    if (lp >= 0 && !ranAfter(lp, /scenario-run/) && !probePassed && !SAID_NO_PAGE.test(lastSaid)) todo.push('这一轮改了页面文件（' + names(pageEdits) + '），还没在浏览器里看过。按 /vk-see-page 跑受影响的页面；场景做不了的，用 page/probe-run.js 执行 .vibe/tmp/<事由>/ 下的探针，断言通过并返回实际读到的值。失败、超时或只启动不算通过。这次改动确实不影响页面显示，就说明原因。');
     // 它说要攒着打勾：不行，做完一项勾一项（提交按提交方式来）
     if (saidTickLater(lastSaid) && !proposalBusy() && !reviewOpenFor(sid, entries, changes)) todo.push('打勾不攒：每项任务做完就把那一项打成 [x]，不等提交、不等这一组做完一起勾（提交才按档位攒）。现在把已经做完的任务都勾上，再收工。');
   } else if (sameTurn && codeNeedingCheck.length > (gate.codeEditsAtBlock || 0)) {

@@ -15,7 +15,7 @@ const { allChanges } = require('./session-projects');
 // ===================== 全自动模式只在走 OpenSpec 流程时算开着 =====================
 /*
  * 用户 2026-09-30 定的。起因：全自动开着，另开一个窗口做检索，那个窗口收工时自己去接着做没做完的变更，差点和正在做这个变更的窗口打架；
- * 只敲了 /ttls-onboard，收工检查却催着"直接开始 /opsx:apply"（议题 #9）。
+ * 只敲了 /vk-onboard，收工检查却催着"直接开始 /opsx:apply"（议题 #9）。
  * 每个会话记一份"现在是不是在走 OpenSpec 流程"（state/<会话>-flow.json）。用户 2026-11-03 定的：进流程只有三种：
  *   用户敲 /opsx:…（hooks/task-anchor.js）；话里明确有 openspec，模型去调；模型判断改动较大、提问框问了、用户选了探索（hooks/guard-ask.js、guard-spec.js 核对）
  * 不按句子猜需求，不因为话里点了变更的名字就进（接回用 /vk-resume）。进了之后中途怎么说都不退出：

@@ -1,11 +1,11 @@
 # 查库和 redis
 
-`/ttls-db-crud` 和 `/ttls-redis` 跟着套件一起装、一起更新。回到[用户手册](../README.md)。
+`/vk-db-crud` 和 `/vk-redis` 跟着套件一起装、一起更新。回到[用户手册](../README.md)。
 
 | 技能 | 要什么 | 连接配置 |
 |---|---|---|
-| `/ttls-db-crud`（达梦、神通、MySQL、Oracle、人大金仓） | Python 3、java 8 以上、数据库的驱动 | 项目的 `.vibe/db-crud.ini` |
-| `/ttls-redis` | 什么都不用装，只用 Node 自带的模块 | 项目的 `.vibe/redis.json` |
+| `/vk-db-crud`（达梦、神通、MySQL、Oracle、人大金仓） | Python 3、java 8 以上、数据库的驱动 | 项目的 `.vibe/db-crud.ini` |
+| `/vk-redis` | 什么都不用装，只用 Node 自带的模块 | 项目的 `.vibe/redis.json` |
 
 连接配置一般不用手写：后台自动探索从项目的配置文件里找**开发环境**的连接写进去（测试、生产的不配，见[项目说明和自动探索](项目说明和自动探索.md)）。口令不经过模型、不上命令行。对话里直接说"哪张表存了订单""看一下缓存里 user:1 是什么"就行。
 

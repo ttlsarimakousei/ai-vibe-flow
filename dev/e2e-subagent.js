@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 端到端：真的 Claude Code + 假模型，审查子代理走完一个审查点（问题表第 45 条）。交互界面（后台子代理的通知只有交互界面才接着一轮）。
- *   用户说"审查"→ prepare → 一条回复开 3 个 ttls-reviewer → 第一个角度回坏 JSON，SubagentStop 回 block，看到 reason 重写 → 交齐入账
+ *   用户说"审查"→ prepare → 一条回复开 3 个 vk-reviewer → 第一个角度回坏 JSON，SubagentStop 回 block，看到 reason 重写 → 交齐入账
  *   → status 看到 1 条 P2 → 改代码、快检、resolve → 再 prepare，只开 1 个，只审修改点 → 交 0 条 → 这个点过了
  * 2.1.120 子代理在前台，工具结果是全文；2.1.259 起在后台，工具结果只说已启动，做完来通知：主会话这一轮先收工，收工检查不能催它再开一个。
  * 套件用真的 install.js 装进假的用户目录。
@@ -123,7 +123,7 @@ const textOfResult = (b) => (typeof b.content === 'string' ? b.content : (b.cont
     return send(body, res, [{ type: 'text', text: 'E2E-END' }], 'end_turn');
   });
 
-  child = spawn(WINPTY, ['-Xallow-non-tty', '-Xplain', EXE, '审查 c1 的代码，用 ttls-reviewer'], { cwd: proj, env: claudeEnv(h, gw.port, { TERM: 'xterm-256color', ANTHROPIC_MODEL: 'vk-e2e' }), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  child = spawn(WINPTY, ['-Xallow-non-tty', '-Xplain', EXE, '审查 c1 的代码，用 vk-reviewer'], { cwd: proj, env: claudeEnv(h, gw.port, { TERM: 'xterm-256color', ANTHROPIC_MODEL: 'vk-e2e' }), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   child.stdout.on('data', () => {}); child.stderr.on('data', () => {}); child.stdin.on('error', () => {});
   const timer = setTimeout(() => { note('到时间，结束'); killTree(child.pid); }, SECONDS * 1000);
   await new Promise((r) => child.on('close', r));

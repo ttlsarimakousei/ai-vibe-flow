@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 数据库驱动（JDBC 的 jar）。ttls-db-crud 连库要用。
+ * 数据库驱动（JDBC 的 jar）。vk-db-crud 连库要用。
  *
  * 驱动不随安装包带：达梦、神通、金仓、Oracle 的驱动是厂商的，只限内部用。每台电脑自己备：
  *   查库时项目 pom 声明的版本直接从 Maven 本地仓库取（dbconf.py），不经过这里；这里管没声明版本的：后台探索到 Maven 本地仓库找、登记几个版本，连不上时按顺序换（问题表第 21、36 条）。配置页上的手动管理 2026-11-02 去掉了，命令行 tools/drivers.js 留着。
@@ -30,7 +30,7 @@ const KIT = path.join(__dirname, '..');
 const REGISTRY = path.join(KIT, 'drivers.json');
 const STORE = path.join(KIT, 'drivers');
 
-// 和 ttls-db-crud 的 scripts/dbconf.py 里的 DIALECT_INFO 对着：加一种数据库两边都要加
+// 和 vk-db-crud 的 scripts/dbconf.py 里的 DIALECT_INFO 对着：加一种数据库两边都要加
 const DIALECTS = {
   dm: { name: '达梦', url: 'jdbc:dm:', names: [/dm\d*-?jdbc-?driver/i, /^dm\d*\.jar$/i, /dameng/i], classes: ['dm/jdbc/driver/DmDriver.class'] },
   oscar: { name: '神通', url: 'jdbc:oscar:', names: [/oscar/i, /shentong/i], classes: ['com/oscar/Driver.class'] },

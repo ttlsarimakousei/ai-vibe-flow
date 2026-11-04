@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 查库技能的执行器（ttls-db-crud/scripts/runner）：DbRunner.java 和编好的 class 一起进安装包。编译记录 DbRunner.build.json 记着
+ * 查库技能的执行器（vk-db-crud/scripts/runner）：DbRunner.java 和编好的 class 一起进安装包。编译记录 DbRunner.build.json 记着
  * 这批 class 是拿哪一份源码（sha256）、哪个 javac、按哪个 Java 版本编的，每个 class 的 sha256 是多少（K1-6，Codex 改进路线第 11 节）。
  * 以前打包时比修改时间（class 比 .java 旧就不打），重新检出之后修改时间说明不了什么：.java 改了没重编也照样打进包。
  *   dev/build-db-runner.js  编完写记录（write）

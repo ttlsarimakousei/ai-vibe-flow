@@ -177,7 +177,7 @@ function archivedChanges(changesDir, days) {
 }
 
 // ===================== 审查记录 =====================
-// 只记"真审了"：ttls-reviewer 的调用有结果、不是报错、结果里有"结论：问题 N 条"。
+// 只记"真审了"：vk-reviewer 的调用有结果、不是报错、结果里有"结论：问题 N 条"。
 // 模式按审查提示的第一行"模式：提案 / 代码 / 复审提案 / 复审代码"认（老写法第一句"审提案"也认）；变更按提示里点名的认，没点名的不记到任何变更头上。
 // 提案审过记在 reviewed-proposal，代码审过记在 reviewed。记录里带变更目录的创建时间：同名变更归档后重建，不继承以前的"审过"。
 function changeBorn(dir) { try { const st = fs.statSync(dir); return Math.round(st.birthtimeMs || st.ctimeMs || 0); } catch (e) { return 0; } }

@@ -17,7 +17,7 @@ const h = H.makeHome('uidata');
 fs.writeFileSync(path.join(h.cfg, 'settings.json'), '{}\n');
 fs.writeFileSync(path.join(h.kit, 'VERSION'), '20260930.0000\n');
 const line = (o) => JSON.stringify(Object.assign({ at: Date.now() }, o)) + '\n';
-fs.writeFileSync(path.join(h.kit, 'state', 'tool-usage.jsonl'), Array.from({ length: 22 }, () => line({ tool: 'ttls-db-crud', cmd: 'peek', exit: 0, ms: 1900, java: 1, errors: [], project: 'p' })).join('') + line({ tool: 'ttls-redis', cmd: 'get', exit: 0, ms: 12, errors: [], project: 'p' }));
+fs.writeFileSync(path.join(h.kit, 'state', 'tool-usage.jsonl'), Array.from({ length: 22 }, () => line({ tool: 'vk-db-crud', cmd: 'peek', exit: 0, ms: 1900, java: 1, errors: [], project: 'p' })).join('') + line({ tool: 'vk-redis', cmd: 'get', exit: 0, ms: 12, errors: [], project: 'p' }));
 
 const call = (method, url, body) => new Promise((resolve) => {
   const data = body ? Buffer.from(JSON.stringify(body)) : null;
@@ -52,7 +52,7 @@ const call = (method, url, body) => new Promise((resolve) => {
   const def = (await call('GET', '/api/kit')).json.config;
   H.ok('默认：自动探索开、审查问题自动收开、后台执行器关', def.autoOnboard === true && def.lessonAuto === true && def.dbcrudDaemon === false && def.dbcrudDaemonIdleMinutes === 5, def);
   const fb = (await call('GET', '/api/kit/feedback')).json;
-  H.ok('工具用量跟着问题反馈的接口一起给', fb.tools && fb.tools.stats.some((x) => x.tool === 'ttls-db-crud' && x.cmd === 'peek' && x.n === 22 && x.avg === 1900) && fb.tools.hints.some((x) => /后台执行器/.test(x.detail)), fb.tools);
+  H.ok('工具用量跟着问题反馈的接口一起给', fb.tools && fb.tools.stats.some((x) => x.tool === 'vk-db-crud' && x.cmd === 'peek' && x.n === 22 && x.avg === 1900) && fb.tools.hints.some((x) => /后台执行器/.test(x.detail)), fb.tools);
 
   H.section('页面');
   let launch = null;
@@ -81,7 +81,7 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('页面上写清驱动不用配', /驱动不用配/.test(await page.locator('#tab-data .pagehead').innerText()));
     H.ok('手动管驱动的表和按钮都不在了', (await page.locator('#drvList, #drvAuto, #drvRefresh').count()) === 0);
     await page.waitForSelector('#tuList tr td.mono');
-    H.ok('用量的表和"能优化的地方"', /ttls-db-crud\s+peek\s+22/.test((await page.locator('#tuList').innerText()).replace(/\t/g, ' ')) && /后台执行器/.test(await page.locator('#tuHints').innerText()), [await page.locator('#tuList').innerText(), await page.locator('#tuHints').innerText()]);
+    H.ok('用量的表和"能优化的地方"', /vk-db-crud\s+peek\s+22/.test((await page.locator('#tuList').innerText()).replace(/\t/g, ' ')) && /后台执行器/.test(await page.locator('#tuHints').innerText()), [await page.locator('#tuList').innerText(), await page.locator('#tuHints').innerText()]);
     // 后台执行器的开关：走底部的保存条
     await page.locator('#k_dbcrudDaemon').setChecked(true, { force: true });
     await page.waitForSelector('#savebar.on');

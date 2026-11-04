@@ -29,7 +29,7 @@ H.node(h, TOOL, ['add', '--file', 'src/main/java/com/x/OrderService.java', '--te
 // 已经是规则了又犯两次：配置页上要标"没管住"
 H.node(h, TOOL, ['add', '--file', 'src/main/java/com/x/OrderService.java', '--text', '调 OrderMapper.selectByIds 之前：先判空列表，传空列表会拼出 in () 报错', '--from', 'add-refund 1.1'], { cwd: A });
 H.node(h, TOOL, ['add', '--file', 'src/main/java/com/x/OrderService.java', '--text', '调 OrderMapper.selectByIds 之前：先判空列表，传空列表会拼出 in () 报错', '--from', 'add-stock 1.1'], { cwd: A });
-const jf = path.join(A, '.claude', 'rules', 'ttls-lessons-java.md');
+const jf = path.join(A, '.claude', 'rules', 'vk-lessons-java.md');
 fs.writeFileSync(jf, fs.readFileSync(jf, 'utf8') + '- 金额一律用 BigDecimal，不用 double\n');
 
 const call = (method, url, body) => new Promise((resolve) => {
@@ -70,7 +70,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     H.ok('等确认的一条', d.pending.length === 1 && d.pending[0].projects.length === 2, d.pending);
     H.ok('还没有用户级规则', d.user.length === 0);
     const pr = await call('POST', '/api/kit/lessons/promote', { id: d.pending[0].id });
-    H.ok('点"升成用户级"', pr.status === 200 && pr.json.user.length === 1 && pr.json.pending.length === 0 && fs.existsSync(path.join(h.cfg, 'rules', 'ttls-lessons-sql.md')), pr.text);
+    H.ok('点"升成用户级"', pr.status === 200 && pr.json.user.length === 1 && pr.json.pending.length === 0 && fs.existsSync(path.join(h.cfg, 'rules', 'vk-lessons-sql.md')), pr.text);
     const uid = pr.json.user[0].rules[0].id;
     const ed = await call('POST', '/api/kit/lessons/edit', { scope: 'user', id: uid, text: 'MyBatis 的 foreach 传空列表会拼出 in ()：调用前先判空' });
     H.ok('改用户级规则的字', ed.status === 200 && ed.json.user[0].rules[0].text === 'MyBatis 的 foreach 传空列表会拼出 in ()：调用前先判空', ed.text);
@@ -87,7 +87,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       req.on('error', () => resolve(0));
       req.write(data); req.end();
     });
-    H.ok('不带页面的请求头改不了', noHeader === 403 && fs.existsSync(path.join(h.cfg, 'rules', 'ttls-lessons-sql.md')), noHeader);
+    H.ok('不带页面的请求头改不了', noHeader === 403 && fs.existsSync(path.join(h.cfg, 'rules', 'vk-lessons-sql.md')), noHeader);
     const sv = await call('POST', '/api/kit/config', { lessons: 'collect', lessonThreshold: 3, lessonMaxPerGroup: 8, lessonMaxChars: 100, lessonPromote: 'auto', autoMemory: 'on' });
     H.ok('保存设置', sv.status === 200 && sv.json.config.lessons === 'collect' && sv.json.config.lessonThreshold === 3 && sv.json.config.lessonMaxPerGroup === 8 && sv.json.config.lessonMaxChars === 100 && sv.json.config.lessonPromote === 'auto' && sv.json.config.autoMemory === 'on', sv.text);
     const sv2 = await call('POST', '/api/kit/config', { lessons: 'on', lessonThreshold: 99, lessonMaxPerGroup: 1, autoMemory: 'off', lessonPromote: 'ask' });
@@ -119,7 +119,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         await ep.click('nav button[data-tab="lessons"]');
         await ep.waitForFunction(() => document.querySelectorAll('#lsAddWhere option').length >= 2, null, { timeout: 30000 });
         const msg = () => ep.textContent('#lsMsg');
-        const ruleFile = path.join(A, '.claude', 'rules', 'ttls-lessons-web.md');
+        const ruleFile = path.join(A, '.claude', 'rules', 'vk-lessons-web.md');
         await ep.selectOption('#lsAddWhere', A);
         await ep.selectOption('#lsAddGroup', 'web');
         await ep.click('#lsAdd');

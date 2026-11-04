@@ -21,7 +21,7 @@ const FORMAT = 1;
  * without 是 Node 不够时这个组件怎么样（安装器原样说）。node 写了就用它，不按主包算（主包写得比依赖松、又确认过时用）
  */
 const COMPONENTS = [
-  { id: 'page', dir: 'page', main: 'playwright-core', label: '看页面（/ttls-see-page）', without: '套件照样装，看页面用不了' },
+  { id: 'page', dir: 'page', main: 'playwright-core', label: '看页面（/vk-see-page）', without: '套件照样装，看页面用不了' },
   { id: 'openspec', dir: 'openspec', main: '@fission-ai/openspec', label: '自带的 OpenSpec（/opsx:* 命令）', without: '套件照样装，照旧用你自己装的 OpenSpec' },
 ];
 

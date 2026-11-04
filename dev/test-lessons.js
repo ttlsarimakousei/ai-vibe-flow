@@ -22,7 +22,7 @@ const files = {
 const A = H.makeRepo(path.join(h.work, 'projA'), files);
 const B = H.makeRepo(path.join(h.work, 'projB'), { 'pom.xml': '<project/>\n', 'src/main/resources/mapper/UserMapper.xml': '<mapper/>\n', 'src/main/java/U.java': 'class U {}\n' });
 const lesson = (cwd, args) => H.node(h, TOOL, args, { cwd });
-const ruleFile = (root, g) => path.join(root, '.claude', 'rules', 'ttls-lessons-' + g + '.md');
+const ruleFile = (root, g) => path.join(root, '.claude', 'rules', 'vk-lessons-' + g + '.md');
 const JAVA = 'src/main/java/com/x/OrderService.java';
 const T1 = ['--when', '调 OrderMapper.selectByIds 之前', '--do', '先判空列表，传空列表会拼出 in () 报错'];
 
@@ -90,7 +90,7 @@ H.section('换了说法：列出相近的，让模型自己认');
   H.ok('候选没变', L.readCandidates(A).length === 1 && L.readCandidates(A)[0].sources.length === 1);
   const r2 = lesson(A, args.concat(['--same', id1]));
   H.ok('认了是同一条：第 2 次，升成规则', /第 2 次出现，已升成这个项目的规则/.test(r2.out), r2.out);
-  H.ok('告诉它怎么提交', /git -C ".*projA" add "\.claude\/rules\/ttls-lessons-java\.md"/.test(r2.out) && /docs: 更新经验规则/.test(r2.out), r2.out);
+  H.ok('告诉它怎么提交', /git -C ".*projA" add "\.claude\/rules\/vk-lessons-java\.md"/.test(r2.out) && /docs: 更新经验规则/.test(r2.out), r2.out);
 }
 
 H.section('规则文件');
@@ -105,7 +105,7 @@ H.section('规则文件');
   H.ok('读回来一样', d.rules.length === 1 && d.rules[0].id === id1 && d.rules[0].count === 2 && d.rules[0].names.join() === 'OrderMapper' && d.rules[0].from.length === 2 && d.paths.join() === '**/*.java', d);
   H.ok('再写一遍不走样', L.renderRuleFile(d, 'project', 'java') === t);
   H.ok('候选里已经没有它了', !L.readCandidates(A).some((c) => c.id === id1));
-  H.ok('记下了要提交的文件', L.uncommitted(A).length === 1 && L.uncommitted(A)[0].rel === '.claude/rules/ttls-lessons-java.md', L.uncommitted(A));
+  H.ok('记下了要提交的文件', L.uncommitted(A).length === 1 && L.uncommitted(A)[0].rel === '.claude/rules/vk-lessons-java.md', L.uncommitted(A));
 }
 
 H.section('规则文件模型能直接改（2026-11-04 起套件可以改，仓库主人定的）');
@@ -114,23 +114,23 @@ H.section('规则文件模型能直接改（2026-11-04 起套件可以改，仓�
   const base = { session_id: 's-guard', cwd: A, hook_event_name: 'PreToolUse', transcript_path: H.transcript(path.join(h.root, 'tg.jsonl'), [H.tr.user('x')]) };
   const edit = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: f, old_string: '- 调', new_string: '- 改' } }));
   H.ok('Edit 放行', edit === null, edit);
-  const wr = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(A, '.claude', 'rules', 'ttls-lessons-web.md'), content: '- x\n' } }));
+  const wr = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(A, '.claude', 'rules', 'vk-lessons-web.md'), content: '- x\n' } }));
   H.ok('Write 新的规则文件放行', wr === null, wr);
   const cand = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Edit', tool_input: { file_path: L.candidatesFile(A), old_string: 'a', new_string: 'b' } }));
   H.ok('候选文件放行', cand === null, cand);
-  const userRule = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(h.cfg, 'rules', 'ttls-lessons-java.md'), content: '- x\n' } }));
+  const userRule = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(h.cfg, 'rules', 'vk-lessons-java.md'), content: '- x\n' } }));
   H.ok('用户级的放行', userRule === null, userRule);
   const other = H.hook(h, 'pre-edit', Object.assign({}, base, { tool_name: 'Write', tool_input: { file_path: path.join(A, '.claude', 'rules', 'team-style.md'), content: '- 团队自己的规则\n' } }));
   H.ok('别的规则文件不管', other === null, other);
   const cmd = (c, tool) => H.hook(h, 'guard-commit', Object.assign({}, base, { tool_name: tool || 'Bash', tool_input: { command: c } }));
-  for (const c of ['echo "- x" >> .claude/rules/ttls-lessons-java.md', 'rm .claude/rules/ttls-lessons-java.md', "sed -i 's/a/b/' .claude/rules/ttls-lessons-java.md", 'cd .claude/rules && rm ttls-lessons-java.md', 'git checkout -- .claude/rules/ttls-lessons-java.md', 'rm -rf .vibe/lessons']) {
+  for (const c of ['echo "- x" >> .claude/rules/vk-lessons-java.md', 'rm .claude/rules/vk-lessons-java.md', "sed -i 's/a/b/' .claude/rules/vk-lessons-java.md", 'cd .claude/rules && rm vk-lessons-java.md', 'git checkout -- .claude/rules/vk-lessons-java.md', 'rm -rf .vibe/lessons']) {
     const r = cmd(c);
     const cdOnly = /^cd /.test(c) && r && r.decision === 'block' && /cd 和别的命令串在一/.test(H.reasonOf(r));
     H.ok('命令不按经验规则拦：' + c, !(r && /经验规则/.test(H.reasonOf(r))) && (r === null || cdOnly), r);
   }
-  const ps = cmd('Remove-Item .claude\\rules\\ttls-lessons-java.md', 'PowerShell');
+  const ps = cmd('Remove-Item .claude\\rules\\vk-lessons-java.md', 'PowerShell');
   H.ok('PowerShell 删也放行', ps === null, ps);
-  for (const c of ['cat .claude/rules/ttls-lessons-java.md', 'git add .claude/rules/ttls-lessons-java.md', 'git -C "' + A.replace(/\\/g, '/') + '" add ".claude/rules/ttls-lessons-java.md"', 'git diff -- .claude/rules/ttls-lessons-java.md', 'node "' + TOOL.replace(/\\/g, '/') + '" list']) {
+  for (const c of ['cat .claude/rules/vk-lessons-java.md', 'git add .claude/rules/vk-lessons-java.md', 'git -C "' + A.replace(/\\/g, '/') + '" add ".claude/rules/vk-lessons-java.md"', 'git diff -- .claude/rules/vk-lessons-java.md', 'node "' + TOOL.replace(/\\/g, '/') + '" list']) {
     const r = cmd(c);
     H.ok('命令放行：' + c.slice(0, 50), r === null, r);
   }
@@ -143,7 +143,7 @@ H.section('规则文件改了没提交：收工时催一次');
   // 同一轮：同一份会话记录（用户那句话的编号不变）
   const turn = [H.tr.user('记一下经验'), H.tr.say('好了')];
   const r = stop('s-commit', turn);
-  H.ok('催提交', r && r.decision === 'block' && /经验规则文件更新了，还没提交：projA 的 \.claude\/rules\/ttls-lessons-java\.md/.test(H.reasonOf(r)), r);
+  H.ok('催提交', r && r.decision === 'block' && /经验规则文件更新了，还没提交：projA 的 \.claude\/rules\/vk-lessons-java\.md/.test(H.reasonOf(r)), r);
   const r2 = stop('s-commit', turn, { stop_hook_active: true });
   H.ok('同一轮不催第二次', !r2 || !/经验规则文件更新了/.test(H.reasonOf(r2)), r2);
   H.setConfig(h, { autoCommit: 'off' });
@@ -155,7 +155,7 @@ H.section('规则文件改了没提交：收工时催一次');
   H.ok('提交方式"询问"、人工模式：不问，直接单独提交', /经验规则文件更新了/.test(H.reasonOf(r3b)) && !/Ask/.test(H.reasonOf(r3b)) && /docs: 更新经验规则/.test(H.reasonOf(r3b)), H.reasonOf(r3b));
   H.setConfig(h, { commitMode: 'off' });
   H.setConfig(h, { autoCommit: 'task' });
-  H.git(A, ['add', '.claude/rules/ttls-lessons-java.md', '.gitignore']);
+  H.git(A, ['add', '.claude/rules/vk-lessons-java.md', '.gitignore']);
   const c = H.git(A, ['commit', '-q', '-m', 'docs: 更新经验规则']);
   H.ok('提交成功', c.code === 0, c.err);
   const r4 = stop('s-commit-2', [H.tr.user('继续'), H.tr.say('好了')]);
@@ -175,7 +175,7 @@ H.section('已经是规则了还犯：记"没管住"');
   const r3 = lesson(A, ['add', '--file', JAVA].concat(T1, ['--from', 'add-stock 1.1']));
   d = L.readRuleFile(ruleFile(A, 'java'));
   H.ok('两次没管住：建议改成脚本检查', d.rules[0].miss === 2 && /建议改成脚本检查/.test(r3.out), r3.out);
-  H.git(A, ['add', '.claude/rules/ttls-lessons-java.md']); H.git(A, ['commit', '-q', '-m', 'docs: 更新经验规则']);
+  H.git(A, ['add', '.claude/rules/vk-lessons-java.md']); H.git(A, ['commit', '-q', '-m', 'docs: 更新经验规则']);
 }
 
 H.section('条数上限：满了挤掉最久没再出现的；手写的行不动');
@@ -226,7 +226,7 @@ let pendingId = '';
   const p = L.pendingUser();
   pendingId = p[0] && p[0].id;
   H.ok('待确认一条', p.length === 1 && Object.keys(p[0].projects).length === 2, p);
-  H.ok('还没写用户级规则', !fs.existsSync(path.join(h.cfg, 'rules', 'ttls-lessons-sql.md')));
+  H.ok('还没写用户级规则', !fs.existsSync(path.join(h.cfg, 'rules', 'vk-lessons-sql.md')));
   const sl = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ cwd: A, model: { display_name: 'm' } }) });
   H.ok('状态栏提醒', /经验待确认 1 条/.test(sl.out), sl.out);
   // 带项目特有名字的，两个项目里都有也不升
@@ -236,9 +236,9 @@ let pendingId = '';
   lesson(B, ['add', '--file', 'src/main/java/U.java'].concat(t2, ['--from', 'n2 1.1']));
   H.ok('带项目特有名字的不列为待确认', L.pendingUser().length === 1, L.pendingUser());
   const help = lesson(A, ['promote', pendingId]);
-  H.ok('命令行里没有"升用户级"（只能用户在配置页点）', !fs.existsSync(path.join(h.cfg, 'rules', 'ttls-lessons-sql.md')) && /经验规则/.test(help.out), help.out);
+  H.ok('命令行里没有"升用户级"（只能用户在配置页点）', !fs.existsSync(path.join(h.cfg, 'rules', 'vk-lessons-sql.md')) && /经验规则/.test(help.out), help.out);
   const r = L.promoteUser(pendingId);
-  const uf = path.join(h.cfg, 'rules', 'ttls-lessons-sql.md');
+  const uf = path.join(h.cfg, 'rules', 'vk-lessons-sql.md');
   H.ok('用户点了：写进用户目录的规则', r.ok && fs.existsSync(uf) && /几个项目的审查里都出现过/.test(H.read(uf)) && /foreach 传空列表/.test(H.read(uf)), H.read(uf));
   H.ok('用户级的 paths', /  - "\*\*\/\*\.xml"\n  - "\*\*\/\*\.sql"\n/.test(H.read(uf)), H.read(uf));
   H.ok('不再待确认', L.pendingUser().length === 0);

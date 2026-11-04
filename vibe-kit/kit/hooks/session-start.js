@@ -1,7 +1,7 @@
 'use strict';
 /*
  * SessionStart 钩子：会话一开始（新开、/clear、压缩之后、恢复）就把这几样东西确定性地交给模型，不指望它自己想起来去读：
- *   1. 项目说明 .vibe/project.md —— /ttls-onboard 查到的"怎么编译、怎么快检、怎么启动、什么编码"。只在本机，不进仓库
+ *   1. 项目说明 .vibe/project.md —— /vk-onboard 查到的"怎么编译、怎么快检、怎么启动、什么编码"。只在本机，不进仓库
  *   2. 压缩和恢复后核对本机事实；旧交接只由用户明确点名后提示读取，不自动带入
  *   3. 这个目录是不是一层"壳子"（下面套着各个子项目，各是独立的 git 仓库）—— 是的话列出子项目，告诉它在这一层对子项目跑命令怎么写（不 cd：git -C、mvn -f、npm --prefix）；不是壳子也提一句 Bash 里别把 cd 和别的命令串在一条里
  * 本机环境（JDK、Maven 在哪）不在这里：它写在全局约定里，每个会话本来就能看到。
@@ -117,7 +117,7 @@ async function handle(j) {
       if (text.length > MAX_PROJECT_CHARS) text = text.slice(0, MAX_PROJECT_CHARS) + '\n…（太长，后面的自己去读 ' + project + '）';
       out.push('项目说明（' + project + '；和实际对不上时以实际为准，并更新这个文件）：\n' + text);
     } else {
-      // 没有项目说明：是正在探索、探索过了没认出来、还是自动探索关着，明说，它才知道要不要自己跑 /ttls-onboard
+      // 没有项目说明：是正在探索、探索过了没认出来、还是自动探索关着，明说，它才知道要不要自己跑 /vk-onboard
       let note = '';
       try { note = OB ? OB.startNote(cwd, exploring) : ''; } catch (e) { note = ''; }
       if (note) out.push(note);
@@ -174,7 +174,7 @@ async function handle(j) {
     } catch (e) { /* 老版本没有 */ }
     // .vibe 一出现就进 .gitignore
     for (const d of [cwd].concat(repos)) if (fs.existsSync(path.join(d, '.vibe'))) ensureVibeIgnored(path.join(d, '.vibe'));
-    // 经验规则的文件改过名（vibe-lessons-*.md → ttls-lessons-*.md）：项目里还是旧名字的挪一下，收工检查会催提交
+    // 经验规则的文件改过名（vibe-lessons-*.md → vk-lessons-*.md）：项目里还是旧名字的挪一下，收工检查会催提交
     try { const ls = require('../lib/lessons.js'); let n = ls.migrateNames(ls.USER_RULES_DIR, 'user'); for (const d of [cwd].concat(repos)) n += ls.migrateNames(ls.projectRulesDir(d), 'project', d); if (n) hookLog('session-start 经验规则的文件改名 ' + n + ' 个'); } catch (e) { /* 挪不了不影响会话开始 */ }
     // .vibe/tmp、.vibe/out 下做完了的过程文件目录清掉：已归档变更的（归档之后又动过的不算），或者 tmp 里 tmpKeepDays 天没动过的（还没归档的变更的不清）。
     // .vibe 里堆着的零散旧文件提醒一次（七天一次）

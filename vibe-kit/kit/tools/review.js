@@ -1,5 +1,5 @@
 'use strict';
-/* 审查脚本的命令行：备材料（prepare）、看结果（status）、取消、登记处理结果。审查本身是子代理 ttls-reviewer 做的，这里不发请求。 */
+/* 审查脚本的命令行：备材料（prepare）、看结果（status）、取消、登记处理结果。审查本身是子代理 vk-reviewer 做的，这里不发请求。 */
 const R = require('../lib/review-runner');
 const args = process.argv.slice(2); const val = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 // --base 可以写几次（几个仓库各写一个：--base <仓库相对路径>=<提交>，#189）
@@ -9,7 +9,7 @@ const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), 
 const HELP = [
   '用法：node review.js <prepare|status|cancel|resolve> [参数]',
   '',
-  'prepare：备一轮审查（run 是它的别名）。不发请求，输出每个子代理的提示；照它开 ttls-reviewer',
+  'prepare：备一轮审查（run 是它的别名）。不发请求，输出每个子代理的提示；照它开 vk-reviewer',
   '  OpenSpec 变更的需求文档：prepare --change <变更名> --mode proposal --point proposal|specs|design|tasks --project <项目>',
   '  OpenSpec 变更的代码：    prepare --change <变更名> --mode code --point group-1 --project <项目> [--base <改之前的提交>]',
   '  不走 OpenSpec 的改动：   prepare --mode code --project <项目> --base <改之前的提交>（不带 --change；--change 只认 openspec/changes 下已有的变更）',

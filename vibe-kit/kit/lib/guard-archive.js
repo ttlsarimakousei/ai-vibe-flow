@@ -98,7 +98,7 @@ function archiveIssue(t, dir, j) {
   }
   const tail = !cfg.autoMode ? '确实要放弃这个变更，告诉我，我来删。'
     : waiting ? '留给用户做的任务还没做，这个变更先不归档：写进最后的交代，接着做别的。' : '';
-  const order = cfg.autoMode ? '任务全部打勾 → /ttls-cross-review 审代码 → 修掉成立的问题并验证 → 再归档' : '任务全部打勾 → 要不要审查、自测由我决定 → 我说归档再归档';
+  const order = cfg.autoMode ? '任务全部打勾 → /vk-cross-review 审代码 → 修掉成立的问题并验证 → 再归档' : '任务全部打勾 → 要不要审查、自测由我决定 → 我说归档再归档';
   return { name, msg: '[vibe-kit] ' + who + '变更 ' + name + ' 还不能归档：' + issues.map((s) => s.replace(/。$/, '')).join('；') + '。顺序是：' + order + '。' + tail };
 }
 

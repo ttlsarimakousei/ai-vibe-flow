@@ -102,7 +102,7 @@ H.section('问句、插话不退出流程（第 44 条）');
   const j = session(proj);
   anchor(j, '/opsx:apply c1');
   H.ok('开工了', fl(j).on === true && fl(j).stage === 'apply', fl(j));
-  for (const p of ['检查一下这里对不对', '为什么这么写？', '看看日志', '/ttls-onboard', '继续', '好的', '这个是什么意思']) {
+  for (const p of ['检查一下这里对不对', '为什么这么写？', '看看日志', '/vk-onboard', '继续', '好的', '这个是什么意思']) {
     anchor(j, p);
     H.ok('"' + p + '"之后还在流程、还在 apply', fl(j).on === true && fl(j).stage === 'apply', fl(j));
   }

@@ -75,7 +75,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   {
     // 这一节测"询问"那一档（2026-10-17 晚上起默认是"关"）
     const h = H.makeHome('t1008-commit', null, Object.assign({ specGate: false, commitMode: 'ask' }, QUIET));
-    const proj = H.makeRepo(path.join(h.work, 'tool'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', '.claude/rules/ttls-lessons-java.md': '- x\n' });
+    const proj = H.makeRepo(path.join(h.work, 'tool'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', '.claude/rules/vk-lessons-java.md': '- x\n' });
     const A = path.join(proj, 'src', 'A.java');
     const tf = path.join(h.root, 'c.jsonl');
     const editA = () => H.tr.ran('Edit', { file_path: A, old_string: 'class A {}', new_string: 'class A { int x; }' }, 'ok');
@@ -86,7 +86,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('"先别提交"：拦', blocked(commit('c1', [H.tr.user('先别提交，我看看')])));
     H.ok('提问框里选了"提交"：放行', commit('c1', [H.tr.user('修一下'), editA(), answered('改好了，提交吗？', '提交')]) === null);
     H.ok('提问框里选了"还要改"：拦', blocked(commit('c1', [H.tr.user('修一下'), editA(), answered('改好了，提交吗？', '还要改')])));
-    H.ok('经验规则的文件：套件自己催的，不问', commit('c1', [H.tr.user('修一下')], 'git add .claude/rules/ttls-lessons-java.md && git commit -m "docs: 更新经验规则"') === null);
+    H.ok('经验规则的文件：套件自己催的，不问', commit('c1', [H.tr.user('修一下')], 'git add .claude/rules/vk-lessons-java.md && git commit -m "docs: 更新经验规则"') === null);
     H.write(path.join(proj, 'openspec/changes/archive/2026-10-10-add-x/tasks.md'), '- [x] 1.1 完成\n');
     H.ok('提案单独确认，归档产物按实际文件提交', blocked(commit('c1', [H.tr.user('修一下')], 'git commit -m "docs: 提案 add-x"')) && commit('c1', [H.tr.user('修一下')], 'git add openspec/changes/archive/2026-10-10-add-x/tasks.md && git commit -m "docs: 归档 add-x"') === null);
     H.ok('提交信息不合规范的照旧先拦格式', /提交信息不符合公司规范/.test(H.reasonOf(commit('c1', [H.tr.user('修一下')], 'git commit -m "改了点东西"'))));
@@ -263,7 +263,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = (H.read(path.join(h.cfg, 'CLAUDE.md')) || '') + (H.read(path.join(h.kit, 'hook-rules.md')) || '');
     H.ok('提交说明：文档定稿后按提交方式提交一次', /定稿后按提交方式一起提交一次/.test(md) && /同一套文档定稿后按提交方式提交一次/.test(md), md.slice(0, 300));
-    H.ok('交叉审查的技能也改了说法', /人工/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))) && /Ask/.test(H.read(path.join(h.cfg,'skills','ttls-cross-review','SKILL.md'))));
+    H.ok('交叉审查的技能也改了说法', /人工/.test(H.read(path.join(h.cfg,'skills','vk-cross-review','SKILL.md'))) && /Ask/.test(H.read(path.join(h.cfg,'skills','vk-cross-review','SKILL.md'))));
     // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
     const later = '1.2 做完了，验证过了。打勾攒着等这一阶段提交时一起勾。';
     const r4 = stop('v5', [H.tr.user('接着做 add-x 的 1.2'), editA, H.tr.say(later)], later);
@@ -298,10 +298,10 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt: '/opsx:propose add-z', transcript_path: tf });
     H.ok('敲 /opsx:propose 照样进流程（写提案那一段）', flow().on === true && flow().stage === 'plan', flow());
     // 审查者的说法
-    const agent = H.read(path.join(h.cfg, 'agents', 'ttls-reviewer.md')) || '';
+    const agent = H.read(path.join(h.cfg, 'agents', 'vk-reviewer.md')) || '';
     H.ok('审查者：不编译、不跑测试，不限文件数', /不编译、不跑测试、不起服务/.test(agent) && !/最多读 20 个文件/.test(agent) && !/能跑的就跑/.test(agent), agent.slice(0, 200));
-    const skill = H.read(path.join(h.cfg, 'skills', 'ttls-cross-review', 'SKILL.md')) || '';
-    H.ok('技能走 prepare 和子代理，没有兼容方式', /review\.js" prepare/.test(skill) && /ttls-reviewer/.test(skill) && !/兼容/.test(skill), skill.slice(0, 200));
+    const skill = H.read(path.join(h.cfg, 'skills', 'vk-cross-review', 'SKILL.md')) || '';
+    H.ok('技能走 prepare 和子代理，没有兼容方式', /review\.js" prepare/.test(skill) && /vk-reviewer/.test(skill) && !/兼容/.test(skill), skill.slice(0, 200));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -315,7 +315,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     fs.writeFileSync(path.join(h.kit, 'state', sid + '.json'), JSON.stringify({ pct: 80, used: 800000, size: 1000000, windowSize: 1000000, at: Date.now() }));
     const say = (prompt) => { const o = H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: tf }); return o ? String(o.raw || JSON.stringify(o)) : ''; };
     const r1 = say('把 A 的判空改一下');
-    H.ok('选了"不问"：只提醒过线，说清我没让交接就不要交接', /过了公司规定的交接线/.test(r1) && /我没让你交接就不要交接/.test(r1) && !/就执行 \/ttls-handover 写交接记录/.test(r1), r1);
+    H.ok('选了"不问"：只提醒过线，说清我没让交接就不要交接', /过了公司规定的交接线/.test(r1) && /我没让你交接就不要交接/.test(r1) && !/就执行 \/vk-handover 写交接记录/.test(r1), r1);
     const stop = H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tf, [H.tr.user('把 A 的判空改一下'), H.tr.say('改好了')]), stop_hook_active: false, last_assistant_message: '改好了' });
     H.ok('收工时也不问、不让它交接', !/交接/.test(H.reasonOf(stop)), H.reasonOf(stop));
     H.setConfig(h, { handoverAsk: 'ask' });

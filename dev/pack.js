@@ -40,14 +40,14 @@ const stray = RUNTIME.filter((r) => fs.existsSync(path.join(SRC, r)));
 if (stray.length) fail('源目录里有运行时才该有的东西：' + stray.join('、') + '。多半是测试跑到源目录里了，清掉再打包');
 for (const need of ['kit/lib/big-task.js', 'kit/lib/guard-explore.js', 'kit/lib/session-state.js', 'kit/lib/session-transcript.js', 'kit/lib/session-config.js', 'kit/lib/session-flow.js', 'kit/lib/session-voice.js', 'kit/lib/session-out.js', 'kit/lib/session-projects.js', 'kit/lib/session-proposal.js', 'kit/lib/session-plan.js', 'kit/lib/session-review.js', 'kit/lib/session-kitfiles.js', 'kit/lib/shell-words.js', 'kit/lib/guard-git.js', 'kit/lib/guard-kit.js', 'kit/lib/guard-process.js', 'kit/lib/guard-archive.js', 'kit/lib/apply-scope.js', 'kit/lib/entry-check.js', 'kit/lib/evidence.js', 'kit/lib/feedback.js', 'kit/lib/invocation.js', 'kit/lib/local-backup.js', 'kit/lib/permissions.js', 'kit/lib/readiness.js', 'kit/lib/redact.js', 'kit/lib/review-runner.js', 'kit/lib/task-types.js', 'kit/lib/work-sessions.js', 'kit/lib/workflow.js', 'kit/lib/workspace.js', 'kit/hooks/after-tool.js', 'kit/tools/review.js', 'kit/tools/workflow.js', 'kit/hooks/guard-read.js', 'kit/.ignore', 'publish.js', '发布到 GitLab（双击我）.bat', '.gitattributes', 'kit/lib/gitlab.js', 'kit/lib/updater.js', 'kit/lib/issues.js', 'install.js', 'README.md', '更新说明.md',
   '手册/保护和放行.md', '手册/审查和自测.md', '手册/提交和推送.md', '手册/开关一览.md', '手册/查库和redis.md', '手册/自动更新和上报.md', '手册/上下文和token.md', '手册/配置页.md', '手册/项目说明和自动探索.md',
-  '安装（双击我）.bat', 'settings.fragment.json', 'claude/CLAUDE.md', 'kit/lib/session.js', 'kit/lib/flow-policy.js', 'kit/lib/openspec.js', 'kit/openspec/package.json', 'kit/openspec/node_modules/@fission-ai/openspec/bin/openspec.js', 'kit/lib/lessons.js', 'kit/tools/lesson.js', 'kit/ui/ui.html', 'kit/ui/kit-api.js', 'kit/ui/kit-worker.js', 'kit/lib/config-page.js', 'kit/lib/router-retire.js', 'kit/lib/guard-mcp.js', 'kit/page/node_modules/playwright-core/package.json', 'kit/page/node_modules/pixelmatch/package.json', 'kit/page/node_modules/pngjs/package.json', 'kit/lib/deps.js', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.build.json', 'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/lib/proposal-files.js', 'kit/lib/state-store.js', 'kit/lib/intent.js', 'kit/lib/connection-lifecycle.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/ttls-reviewer.md',
+  '安装（双击我）.bat', 'settings.fragment.json', 'claude/CLAUDE.md', 'kit/lib/session.js', 'kit/lib/flow-policy.js', 'kit/lib/openspec.js', 'kit/openspec/package.json', 'kit/openspec/node_modules/@fission-ai/openspec/bin/openspec.js', 'kit/lib/lessons.js', 'kit/tools/lesson.js', 'kit/ui/ui.html', 'kit/ui/kit-api.js', 'kit/ui/kit-worker.js', 'kit/lib/config-page.js', 'kit/lib/router-retire.js', 'kit/lib/guard-mcp.js', 'kit/page/node_modules/playwright-core/package.json', 'kit/page/node_modules/pixelmatch/package.json', 'kit/page/node_modules/pngjs/package.json', 'kit/lib/deps.js', 'claude/skills/vk-db-crud/scripts/runner/DbRunner.build.json', 'kit/lib/drivers.js', 'kit/lib/discover.js', 'kit/lib/onboard.js', 'kit/lib/toolstats.js', 'kit/lib/proposal-files.js', 'kit/lib/state-store.js', 'kit/lib/intent.js', 'kit/lib/connection-lifecycle.js', 'kit/tools/drivers.js', 'kit/tools/onboard.js', 'claude/agents/vk-reviewer.md',
   // source-hint.js 是个空壳，但不能没有：20260930.1505 和更早的版本自动更新到新版时，装后自检（跑的是旧版的代码）要载它，载不到就装回旧版，永远升不上来
   'kit/hooks/source-hint.js', 'kit/hooks/guard-push.js', 'kit/hooks/review-stop.js', 'claude/commands/vk-go.md', 'claude/commands/vk-resume.md', 'claude/commands/vk-config.md', 'claude/commands/vk-fix.md', 'claude/commands/vk-auto.md', 'kit/lib/perf.js', 'kit/lib/report.js', 'kit/lib/outputs.js', 'kit/lib/archive-extract.js', 'kit/lib/tidy.js', 'kit/tools/skills-check.js', 'kit/lib/usage.js', 'kit/lib/pull.js', 'kit/tools/diagnose.js', 'kit/page/probe-run.js',
-  'claude/skills/ttls-onboard/SKILL.md', 'claude/skills/ttls-see-page/SKILL.md', 'claude/skills/ttls-cross-review/SKILL.md', 'claude/skills/ttls-handover/SKILL.md',
+  'claude/skills/vk-onboard/SKILL.md', 'claude/skills/vk-see-page/SKILL.md', 'claude/skills/vk-cross-review/SKILL.md', 'claude/skills/vk-handover/SKILL.md',
   // K3（2026-11-01）：只提交本会话改过的文件、失败摘要、检查点
   'kit/lib/edited-files.js', 'kit/tools/commit.js', 'kit/lib/fail-summary.js', 'kit/lib/checkpoint.js', 'kit/tools/checkpoint.js', 'kit/lib/sql-check.js', 'kit/lib/fix-pass.js', 'kit/lib/idea-config.js', 'kit/lib/maven-offline.js', 'kit/lib/review-scope.js', 'kit/tools/doctor.js', 'kit/lib/stage-rules.js', 'kit/lib/diag.js', 'kit/lib/config-fields.js',
-  'claude/skills/ttls-db-crud/SKILL.md', 'claude/skills/ttls-db-crud/scripts/db.py', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.class', 'claude/skills/ttls-db-crud/scripts/runner/DbRunner.java',
-  'claude/skills/ttls-redis/SKILL.md', 'claude/skills/ttls-redis/scripts/redis.js']) {
+  'claude/skills/vk-db-crud/SKILL.md', 'claude/skills/vk-db-crud/scripts/db.py', 'claude/skills/vk-db-crud/scripts/runner/DbRunner.class', 'claude/skills/vk-db-crud/scripts/runner/DbRunner.java',
+  'claude/skills/vk-redis/SKILL.md', 'claude/skills/vk-redis/scripts/redis.js']) {
   if (!fs.existsSync(path.join(SRC, need))) fail('缺文件：' + need);
 }
 // 必备清单只列了一部分钩子和库（审核 P06）：再扫一遍 kit 里所有 .js 的相对 require，指到的文件都得在，漏了一个库、删错一个钩子都查得出来
@@ -76,7 +76,7 @@ const files = walk(SRC, '', []);
   if (old.length) fail('源目录里还有改名之前的技能或代理：' + old.join('、'));
   // 执行器：class 要是从现在这份 DbRunner.java 编出来的，按编译记录（源码和每个 class 的 sha256）核对。
   // 以前比修改时间：重新检出之后时间说明不了什么，.java 改了没重编照样打进包（Codex 改进路线第 11 节）
-  const rd = path.join(SRC, 'claude', 'skills', 'ttls-db-crud', 'scripts', 'runner');
+  const rd = path.join(SRC, 'claude', 'skills', 'vk-db-crud', 'scripts', 'runner');
   const rc = require('./lib/db-runner-record').check(rd);
   if (!rc.ok) fail(rc.why);
   for (const n of Object.keys(rc.rec.classes)) {
@@ -137,8 +137,8 @@ console.log('  [OK] 检查过了：' + code.length + ' 个脚本语法正确，�
   try { man = D.scan(SRC); } catch (e) { fail('依赖清单生成不了：' + e.message + '。安装包里的依赖不全，重新装一遍再打包（升级 OpenSpec 的做法见 docs/release.md）'); }
   const bad = D.consistency(man);
   if (bad.length) fail('组件写的 Node 要求比里面的包松：' + bad.slice(0, 5).join('；') + '。先确认这个组件在那个 Node 版本上能不能用，再在 kit/lib/deps.js 的 COMPONENTS 里给它写明 node');
-  const rec = require('./lib/db-runner-record').read(path.join(SRC, 'claude', 'skills', 'ttls-db-crud', 'scripts', 'runner'));
-  man.runner = Object.assign({ dir: 'claude/skills/ttls-db-crud/scripts/runner' }, rec);
+  const rec = require('./lib/db-runner-record').read(path.join(SRC, 'claude', 'skills', 'vk-db-crud', 'scripts', 'runner'));
+  man.runner = Object.assign({ dir: 'claude/skills/vk-db-crud/scripts/runner' }, rec);
   fs.writeFileSync(path.join(SRC, 'kit', D.FILE), JSON.stringify(man, null, 2) + '\n');
   console.log('  [OK] 依赖清单 kit/' + D.FILE + '：' + man.components.map((c) => c.id + ' ' + c.packages.length + ' 个包（要 Node ' + c.node + '）').join('，') + '；查库执行器按编译记录核对过，是从现在的 DbRunner.java 编的');
 }

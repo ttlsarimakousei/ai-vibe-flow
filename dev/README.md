@@ -94,7 +94,8 @@ node dev/pack.js
 | `ui-kit-0929.js` | 配置页重排之后：接口、页面上每个开关都在、保存条、三张表。第二个参数给目录就存截图 |
 | `check-old-repro-0929.js` | 拿 20260928.2054 / 2055 跑同样的输入，确认修之前确实有那些毛病 |
 | `e2e-auto-0929.js` | 真的 Claude Code 加假模型，全自动模式走两个会话：放行、审查、报告、id 重复的复审、归档 |
-| `test-ttls.js` | 改名（`ttls-` 前缀）和并进来的两个技能：从上一版升上来，旧名字的技能删掉、改过的先备份、驱动挪过来、经验规则的文件改名。要一个上一版的目录 |
+| `test-ttls.js` | 改名（技能加前缀，现在是 `vk-`）和并进来的两个技能：从上一版升上来，旧名字的技能删掉、改过的先备份、驱动挪过来、经验规则的文件改名。要一个上一版的目录 |
+| `test-vk-names.js [上一版的 vibe-kit 目录]` | ttls- 改成 vk-（2026-11-04）：从 1301 升上来，ttls- 的技能、代理删掉（改过的先备份），不是套件装的同名的不动，ttls-lessons-* 并进 vk-lessons-*，会话里的旧名字照认，模型调 vk- 开头的技能不当命令拦。默认拿 dev/baseline/20261104.1301 |
 | `test-dbcrud.js` | 查库：拿 H2（MySQL 兼容模式）走完整的读写循环，最后照冒烟靶场把不连库的判断过一遍。要运行环境的目录 |
 | `test-redis.js` | 查 redis：客户端对着假 redis 走一遍；模型跑技能自带的脚本钩子放行，改套件的东西照拦 |
 | `test-onboard.js` | 后台自动探索：认工程、只配开发环境的连接、文件改了跟着改、找驱动不拖住项目说明、项目里留着旧技能的提醒 |
@@ -102,8 +103,8 @@ node dev/pack.js
 | `ui-data-0930.js` | 配置页"数据库驱动"那一页：接口和页面 |
 | `e2e-0930.js` | 真的 Claude Code 加假模型：技能清单、后台探索、配置改了跟着改、模型照技能说的查库查缓存 |
 | `lib/fake-redis.js` | 假 redis：认客户端会发的那几条命令 |
-| `testbed/ttls-db-crud/smoke/` | 查库的冒烟靶场：假连接配置、放着各种写法的配置文件的假项目、用例 |
-| `docs/ttls-db-crud/` | 查库技能的设计说明、维护须知、使用说明、验证记录（从 skytech-skills 搬来的，在这里维护） |
+| `testbed/vk-db-crud/smoke/` | 查库的冒烟靶场：假连接配置、放着各种写法的配置文件的假项目、用例 |
+| `docs/vk-db-crud/` | 查库技能的设计说明、维护须知、使用说明、验证记录（从 skytech-skills 搬来的，在这里维护） |
 | `lib/fake-site.js` | 假网站：登录失败也返回 200、被按钮盖住的上传控件 |
 | `check-old-repro.js` | 拿上一版跑同样的输入，确认修之前确实有那个毛病 |
 | `diff-hooks.js` | 同一批输入喂给上一版和这一版的钩子，比输出：没动的地方必须一字不差 |
@@ -233,13 +234,13 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 - 微软安装包（MSI、python.org 的 exe 安装器）装不了，报 2203 / 0x80070003。用压缩包、NuGet 包解开。
 - 往 `AppData\Local`、`AppData\Roaming` 下面新建的顶层目录，实际落在应用自己的私有目录里，别的程序看不到。放在已经有的目录下面（`AppData\Local\Programs\…`）才是真的。装完用资源管理器看一眼在不在。
 
-达梦、神通、Oracle、金仓、MySQL 的真库这里测不了，见 `docs/ttls-db-crud/验证记录.md`。
+达梦、神通、Oracle、金仓、MySQL 的真库这里测不了，见 `docs/vk-db-crud/验证记录.md`。
 
 便携版目录的做法（2026-10-16）：python.org 在 NuGet 上的 `python` 包，解开后 `tools` 目录就是完整的 Python，放成 `<目录>\python`；Temurin 17 的 zip 解开放成 `<目录>\jdk`；H2 的 jar 放成 `<目录>\h2.jar`。下载后按官方给的校验值核对（NuGet 的 packageHash、Adoptium 接口的 checksum、Maven 中央仓库的 .sha1）。
 
 打包自查和验收解压安装包用 Windows PowerShell 自带的 Expand-Archive（`dev/lib/unzip.js`），不用 tar.exe：tar.exe 按系统代码页转文件名，英文系统上中文文件名转不过去就报错退出。
 
-改了 `DbRunner.java` 要重新编译：`node dev/build-db-runner.js auto`（同时写编译记录，打包按它核对），见 `docs/ttls-db-crud/维护须知.md`。
+改了 `DbRunner.java` 要重新编译：`node dev/build-db-runner.js auto`（同时写编译记录，打包按它核对），见 `docs/vk-db-crud/维护须知.md`。
 
 ## 推送只推到临时目录
 

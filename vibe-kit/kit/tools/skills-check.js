@@ -73,7 +73,7 @@ function readSkill(file, level, note, plugin, kind) {
     if (kind !== '代理' && desc.length > MAX_DESC) problems.push('description 有 ' + desc.length + ' 个字符，超过 ' + MAX_DESC + ' 的部分模型看不到');
   }
   // 套件自己的 /vk-* 命令有意只让用户敲（敲了算用户点头，复审 V12），不算问题
-  if (kind !== '代理' && !/^vk-/i.test(name) && /^true$/i.test(fm['disable-model-invocation'] || '')) problems.push('写了 disable-model-invocation: true：模型不会自己用它，只能你手动输入 /' + name);
+  if (kind !== '代理' && !(kind === '命令' && /^vk-/i.test(name)) && /^true$/i.test(fm['disable-model-invocation'] || '')) problems.push('写了 disable-model-invocation: true：模型不会自己用它，只能你手动输入 /' + name);
   return { name, level, note: note || '', file, desc, chars: name.length + desc.length + 4, problems, kind };
 }
 
@@ -179,7 +179,7 @@ function report(r) {
   }
   L.push('');
   L.push('description 写得再好，模型也可能因为"不知道手头的资料过时了"而不去用技能（比如照着项目里的旧 DDL 写代码）。');
-  L.push('这种情况在项目的 CLAUDE.md 里写一句最管用：写清"什么事用哪个技能、项目里哪些资料不能当真"（比如"表结构用 /ttls-db-crud 查真实的库，db/ 下的 DDL 是旧的"）。');
+  L.push('这种情况在项目的 CLAUDE.md 里写一句最管用：写清"什么事用哪个技能、项目里哪些资料不能当真"（比如"表结构用 /vk-db-crud 查真实的库，db/ 下的 DDL 是旧的"）。');
   return L.join('\n');
 }
 

@@ -23,7 +23,7 @@ const other = H.makeRepo(path.join(h.work, 'other-proj'), { 'pom.xml': '<project
 H.section('出错的指纹：哪台电脑、哪个项目算出来都一样');
 {
   const n0 = F.listRecords().length;
-  const err = (user, pid) => { const e = new Error("EBUSY: resource busy or locked, open 'C:\\Users\\" + user + "\\proj\\.claude\\rules\\ttls-lessons-java.md." + pid + ".tmp'"); e.stack = 'Error: ' + e.message + '\n    at Object.writeFileSync (node:fs:2425:20)\n    at writeFileAtomic (C:\\Users\\' + user + '\\.claude\\vibe-kit\\lib\\lessons.js:301:8)\n    at handle (C:\\Users\\' + user + '\\.claude\\vibe-kit\\hooks\\verify-gate.js:696:21)'; return e; };
+  const err = (user, pid) => { const e = new Error("EBUSY: resource busy or locked, open 'C:\\Users\\" + user + "\\proj\\.claude\\rules\\vk-lessons-java.md." + pid + ".tmp'"); e.stack = 'Error: ' + e.message + '\n    at Object.writeFileSync (node:fs:2425:20)\n    at writeFileAtomic (C:\\Users\\' + user + '\\.claude\\vibe-kit\\lib\\lessons.js:301:8)\n    at handle (C:\\Users\\' + user + '\\.claude\\vibe-kit\\hooks\\verify-gate.js:696:21)'; return e; };
   F.recordHookError('verify-gate', { session_id: 's-a', cwd: proj }, err('zhangsan', 12345));
   F.recordHookError('verify-gate', { session_id: 's-b', cwd: other }, err('lisi', 777));
   const recs = F.listRecords().slice(0, F.listRecords().length - n0);
@@ -38,15 +38,15 @@ H.section('工具报的毛病：不是这个会话的项目里出的，不算到
   const log = path.join(h.kit, 'state', 'tool-usage.jsonl');
   const line = (o) => JSON.stringify(Object.assign({ at: Date.now() }, o)) + '\n';
   fs.mkdirSync(path.dirname(log), { recursive: true });
-  fs.writeFileSync(log, line({ tool: 'ttls-db-crud', incident: 'crash', what: "KeyError: 'rows'", detail: 'File "db.py", line 412', cmd: 'query', project: 'other-proj' }) + line({ tool: 'ttls-redis', incident: 'crash', what: 'TypeError: x is not a function', detail: 'redis.js:88', cmd: 'get', project: 'proj' }));
+  fs.writeFileSync(log, line({ tool: 'vk-db-crud', incident: 'crash', what: "KeyError: 'rows'", detail: 'File "db.py", line 412', cmd: 'query', project: 'other-proj' }) + line({ tool: 'vk-redis', incident: 'crash', what: 'TypeError: x is not a function', detail: 'redis.js:88', cmd: 'get', project: 'proj' }));
   const n0 = F.listRecords().length;
   T.ingest({ session_id: 's-mine', cwd: proj, transcript_path: '' });
   const recs = F.listRecords().slice(0, F.listRecords().length - n0);
-  const a = recs.find((r) => /ttls-db-crud/.test(r.title));
-  const b = recs.find((r) => /ttls-redis/.test(r.title));
+  const a = recs.find((r) => /vk-db-crud/.test(r.title));
+  const b = recs.find((r) => /vk-redis/.test(r.title));
   H.ok('别的项目里出的：记下来了，但不算这个会话的，说了是哪个项目', a && a.meta['会话'] !== 's-mine' && /项目：other-proj/.test(a.text), a && [a.meta, a.text.slice(0, 300)]);
   H.ok('这个项目里出的：算这个会话的', b && b.meta['会话'] === 's-mine', b && b.meta);
-  H.ok('这个会话的"套件问题"里只有自己的那条', F.sessionRecords('s-mine').length === 1 && /ttls-redis/.test(F.sessionRecords('s-mine')[0].title), F.sessionRecords('s-mine').map((r) => r.title));
+  H.ok('这个会话的"套件问题"里只有自己的那条', F.sessionRecords('s-mine').length === 1 && /vk-redis/.test(F.sessionRecords('s-mine')[0].title), F.sessionRecords('s-mine').map((r) => r.title));
 }
 
 H.section('通行证只管申请时说的那条规矩');

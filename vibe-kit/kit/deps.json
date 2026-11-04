@@ -4,7 +4,7 @@
     {
       "id": "page",
       "dir": "page",
-      "label": "看页面（/ttls-see-page）",
+      "label": "看页面（/vk-see-page）",
       "main": "playwright-core",
       "node": ">=20",
       "hash": "sha256-8bc066975f4348df80d9517b089fb7ba58f7bd4fddf6abab14a9e3826787213e",
@@ -687,12 +687,12 @@
     }
   ],
   "runner": {
-    "dir": "claude/skills/ttls-db-crud/scripts/runner",
+    "dir": "claude/skills/vk-db-crud/scripts/runner",
     "javac": "javac 17.0.20.1",
     "release": "8",
     "source": {
       "file": "DbRunner.java",
-      "sha256": "228a5177ddedb1e8b39f8b217e170bd846744dd33cc9dc0b0dc35a73b57d80cb"
+      "sha256": "1c23b86a21eb9dc8ed7291c886d7985aee18840265e16b6badf1a41bf4c27211"
     },
     "classes": {
       "DbRunner$1.class": "c61c68ed26a85a80b5887cd0b3b5dc48320c980ea00d557dd634899bf515edff",

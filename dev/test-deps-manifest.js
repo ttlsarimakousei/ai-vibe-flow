@@ -16,7 +16,7 @@ const H = require('./lib/harness');
 const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'install.js')) ? path.resolve(process.argv[2]) : null;
 const json = (f) => { try { return JSON.parse(H.read(f)); } catch (e) { return null; } };
 const sha256 = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
-const RUNNER = path.join('claude', 'skills', 'ttls-db-crud', 'scripts', 'runner');
+const RUNNER = path.join('claude', 'skills', 'vk-db-crud', 'scripts', 'runner');
 
 // ---------------------------------------------------------------------------------------------
 H.section('版本范围的判断（engines.node 的写法）');
@@ -143,7 +143,7 @@ H.section('安装器读清单：包不全、版本对不上不装；Node 不够�
   H.write(manFile, JSON.stringify(m, null, 2) + '\n');
   const r3 = install('tdm-node');
   H.write(manFile, m0);
-  H.ok('Node 不够看页面：照样装，说清哪个组件用不了、要多少', r3.code === 0 && /这台电脑的 Node 是 [\d.]+：看页面（\/ttls-see-page）要 Node >=99，套件照样装，看页面用不了。要用就把 Node 升到 99\.0\.0 以上/.test(r3.out), r3.out.slice(-1500));
+  H.ok('Node 不够看页面：照样装，说清哪个组件用不了、要多少', r3.code === 0 && /这台电脑的 Node 是 [\d.]+：看页面（\/vk-see-page）要 Node >=99，套件照样装，看页面用不了。要用就把 Node 升到 99\.0\.0 以上/.test(r3.out), r3.out.slice(-1500));
   H.ok('够用的组件不说（这台电脑的 Node 够自带的 OpenSpec）', !/自带的 OpenSpec（\/opsx:\* 命令）要 Node/.test(r3.out), r3.out.slice(-1500));
   H.ok('装好的套件里带着清单', fs.existsSync(path.join(r3.u.kit, 'deps.json')));
 }

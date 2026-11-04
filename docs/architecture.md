@@ -26,7 +26,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；MCP 工具的返回原样给模型 |
-| 审查子代理结束 | `review-stop.js` | 只管 `ttls-reviewer`：`last_assistant_message` 入账，没交结构化结论让它接着写 |
+| 审查子代理结束 | `review-stop.js` | 只管 `vk-reviewer`：`last_assistant_message` 入账，没交结构化结论让它接着写 |
 | 模型说做完了 | `verify-gate.js` | 自动阶段按产物或整组任务催审修，人工阶段 Ask；提醒提交与自动提交分开；核对材料、修订链和实际验证结果，交付用例及结果，用户决定验收归档 |
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
@@ -42,7 +42,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | `openspec.js` | 套件自带的 OpenSpec（`kit/openspec/`，2026-10-17 集成）：能不能用（Node 版本）、把命令里的 `openspec` 改成调用自带的那份、项目没初始化时 `init --tools none`、安装时生成用户级 `/opsx:*` 命令和技能 |
 | `feedback.js` | 问题反馈的记录（`~/.claude/vibe-kit/feedback/`），拦截编号和通行证，拦得最多的规矩、放行记录、开关改动记录 |
 | `report.js` | 全自动模式的报告 |
-| `lessons.js` | 经验规则：审查里反复出现的问题沉淀成 `.claude/rules/ttls-lessons-*.md` |
+| `lessons.js` | 经验规则：审查里反复出现的问题沉淀成 `.claude/rules/vk-lessons-*.md` |
 | `review-scope.js` | 审查怎么分轮（2026-11-02，问题表第 37 条）：第一轮几个角度、后面只审修改点（和上一轮的内容比）、按阶段的提示、合并问题（只合不同角度之间的）、定过的问题历轮累计（`closed`）、审查记录。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json` |
 | `maven-offline.js` | devserver 起后端先离线、缺依赖只拉缺的（问题表第 35 条）：加 `-o`、从 Maven 报错里取缺的依赖、拼 `dependency:get` |
 | `outputs.js` | 代码之外的产出位置 |
@@ -72,8 +72,8 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - `CLAUDE.md`：全局约定的模板。里面的 `{{AUTO_COMMIT}}`、`{{AUTO_MODE}}` 这类占位由 `install.js` 的 `fill()` 按开关生成。生成后放在 `~/.claude/CLAUDE.md` 两行标记之间，每个请求都带着，所以要短。
 - `rules/`：规范。启用的并进全局约定（`20-git-commit.md`）；开头标着 `<!-- vibe-kit:钩子送 -->` 的（`10-openspec.md`，2026-11-01，J4）不进全局约定，安装器和 `--sync` 填好占位符写成 `~/.claude/vibe-kit/hook-rules.md`，由 `lib/stage-rules.js` 在进 OpenSpec 流程时送：开口（task-anchor）、模型自己跑 openspec 或改 openspec/ 下的文件（after-tool）；压缩后还在流程里的马上重送（session-start）。记录在 `<会话>-stage-rules.json`。文件名前加下划线就停用。
 - 用户自己的约定和规范不在这里：装好后的 `~/.claude/vibe-kit/user/*.md` 接在套件的规范后面生成进全局约定，`user/remove.txt` 一行一句从套件的约定、规范里去掉（模板里的原句、换完占位符的句子都认）；安装器不拷进、不覆盖这个目录，打包时它出现在源目录里就报错（F8，2026-11-01）。
-- `skills/`：六个技能，都带 `ttls-` 前缀：`ttls-onboard`、`ttls-see-page`、`ttls-cross-review`、`ttls-handover`、`ttls-db-crud`、`ttls-redis`。
-- `agents/ttls-reviewer.md`：审查子代理，不写 model（跟主会话同模型）。提示由 `review.js prepare` 生成，第三行是"审查任务"，交 JSON 结论；需求和探索记录里没有的标 `scope: out`。结论由 `review-stop.js`（SubagentStop）入账。
+- `skills/`：六个技能，都是 `vk-` 开头（2026-11-04 从 `ttls-` 改过来）：`vk-onboard`、`vk-see-page`、`vk-cross-review`、`vk-handover`、`vk-db-crud`、`vk-redis`。
+- `agents/vk-reviewer.md`：审查子代理，不写 model（跟主会话同模型）。提示由 `review.js prepare` 生成，第三行是"审查任务"，交 JSON 结论；需求和探索记录里没有的标 `scope: out`。结论由 `review-stop.js`（SubagentStop）入账。
 
 ## 配置页（vibe-kit/kit/ui）
 
@@ -91,7 +91,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 钩子流水账 | `state/hooks.log`（出问题先看它） |
 | 问题反馈 | `~/.claude/vibe-kit/feedback/`（装新版、卸载都不删），对应的议题记在 `feedback/issues.json` |
 | 安装清单 | `~/.claude/vibe-kit/installed.json`：套件往 settings.json 里加了什么，卸载时只收回这些 |
-| 项目里的 | 子项目的 `.vibe/`（项目说明、交接记录、过程文件、报告），自动加进那个仓库的 `.gitignore`；经验规则 `.claude/rules/ttls-lessons-*.md` 跟着仓库提交 |
+| 项目里的 | 子项目的 `.vibe/`（项目说明、交接记录、过程文件、报告），自动加进那个仓库的 `.gitignore`；经验规则 `.claude/rules/vk-lessons-*.md` 跟着仓库提交 |
 
 ## 安装、更新、上报
 

@@ -105,7 +105,7 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
     const ok = require('../lib/session').reviewAllowed('proposal', art.dir);
     const waiting = !ok && require('../lib/review-runner').inFlight(art.dir, 'proposal');
     if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没送回来。等子代理做完的通知到了（到了会自动接着一轮），跑 review.js status 看结论，改完再开工打勾；不要再开一个审查。']);
-    if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先按 /ttls-cross-review 的提案模式审一遍：审查提示第一行写"模式：提案"，第二行写"变更：' + art.name + '"。成立的问题改掉并在 revisions.md 记录，再开工。']);
+    if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先按 /vk-cross-review 的提案模式审一遍：审查提示第一行写"模式：提案"，第二行写"变更：' + art.name + '"。成立的问题改掉并在 revisions.md 记录，再开工。']);
   }
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);

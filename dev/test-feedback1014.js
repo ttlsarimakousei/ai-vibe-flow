@@ -5,7 +5,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const h = H.makeHome('feedback1014', process.argv[2], { autoVerify: false, autoSeePage: false, autoCommit: 'off', commitMode: 'off', specGate: false, lessons: 'off', vibeTidy: false });
   const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n', 'openspec/changes/add-a/proposal.md': '审查材料：large.js\n', 'openspec/changes/add-a/tasks.md': '- [ ] 1.1 修改 a.js；验：node --check a.js\n' });
   const d = path.join(p, 'openspec/changes/add-a'); const S = require(path.join(h.kit, 'lib/session')); const I = require(path.join(h.kit, 'lib/invocation')); const E = require(path.join(h.kit, 'lib/evidence'));
-  H.ok('#110 查库只读命令不收集测试指纹', E.actual({ cwd: p, tool_name: 'Bash', tool_input: { command: 'python "' + path.join(h.cfg, 'skills/ttls-db-crud/scripts/db.py') + '" find MENU --tables-only' }, tool_response: { exit_code: 0 } }) === null);
+  H.ok('#110 查库只读命令不收集测试指纹', E.actual({ cwd: p, tool_name: 'Bash', tool_input: { command: 'python "' + path.join(h.cfg, 'skills/vk-db-crud/scripts/db.py') + '" find MENU --tables-only' }, tool_response: { exit_code: 0 } }) === null);
   H.write(path.join(p, '.claude/rules/learned-rules.md'), '经验\n'); H.git(p, ['add', '.claude/rules/learned-rules.md']);
   S.setFlow({ session_id: 'metadata' }, true, '写提案', 'plan');
   const transcript = H.transcript(path.join(h.root, 't.jsonl'), [H.tr.user('继续整理规则')]);

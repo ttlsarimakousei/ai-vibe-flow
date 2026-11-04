@@ -23,10 +23,10 @@ const REPO = path.join(__dirname, '..', '..');
 const KIT = 'vibe-kit/kit';
 // 独立模块。suites：dev/ 下的测试脚本；dirs：整个算进去的目录（仓库根起的相对路径）
 const MODULES = [
-  { name: '查库（H2）', suites: ['test-dbcrud.js'], dirs: ['vibe-kit/claude/skills/ttls-db-crud/'] },
+  { name: '查库（H2）', suites: ['test-dbcrud.js'], dirs: ['vibe-kit/claude/skills/vk-db-crud/'] },
   { name: '起服务', suites: ['test-devserver-0929.js'], dirs: [] },
-  { name: '看页面', suites: ['test-page-0929.js'], dirs: ['vibe-kit/kit/page/', 'vibe-kit/claude/skills/ttls-see-page/'] },
-  { name: '查 redis', suites: ['test-redis.js'], dirs: ['vibe-kit/claude/skills/ttls-redis/'] },
+  { name: '看页面', suites: ['test-page-0929.js'], dirs: ['vibe-kit/kit/page/', 'vibe-kit/claude/skills/vk-see-page/'] },
+  { name: '查 redis', suites: ['test-redis.js'], dirs: ['vibe-kit/claude/skills/vk-redis/'] },
 ];
 
 const rel = (abs) => path.relative(REPO, abs).split(path.sep).join('/');

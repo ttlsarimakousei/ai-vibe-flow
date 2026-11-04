@@ -90,7 +90,7 @@ const denied = (o) => !!(o && (o.decision === 'block' || o.hookSpecificOutput &&
   } else {
     H.section('#11、#16：SQL 走文件，确认串只含 ASCII，旧串仍可核对');
     const rt = H.runtime(process.argv[2] || 'auto');
-    const script = path.join(h.cfg, 'skills/ttls-db-crud/scripts');
+    const script = path.join(h.cfg, 'skills/vk-db-crud/scripts');
     const py = ['import sys,json', 'sys.dont_write_bytecode=True', 'sys.path.insert(0,' + JSON.stringify(script) + ')', 'import db,sqlguard', 'db.journal.pending_put=lambda *x: None', 'r={}', 'r["ack"]=db.new_ack({},"UPDATE","中文表",3,"x")', 'r["unknown"]=db.new_ack({},"CREATE",None,None,"x")', 'r["newRows"]=sqlguard.rows_in_token(r["ack"])', 'r["oldRows"]=sqlguard.rows_in_token("UPDATE-T-3行-12345678")', 'r["oldUnknown"]=sqlguard.rows_in_token("CREATE-T-行数未知-12345678")', 'print(json.dumps(r,ensure_ascii=False))'].join('\n');
     const p = H.run(h, rt.python, ['-c', py], { cwd: proj });
     let data = {}; try { data = JSON.parse(p.out.trim()); } catch (e) { /* 失败给出实际输出 */ }

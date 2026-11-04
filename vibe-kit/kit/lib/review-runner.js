@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 审查脚本（用户 2026-11-03 定的：审查全部用子代理 ttls-reviewer，和主会话同模型）。脚本不发请求，只备材料、算修改点、记账：
+ * 审查脚本（用户 2026-11-03 定的：审查全部用子代理 vk-reviewer，和主会话同模型）。脚本不发请求，只备材料、算修改点、记账：
  *   prepare：算这一轮审什么（第一轮 2～3 个角度，后面只审修改点），每个角度写一份范围文件，输出每个子代理的提示。输入没变就复用同一个任务，已交的角度不重开。
  *   submit：子代理最后一条回复由 hooks/review-stop.js（SubagentStop）交到这里，角度交齐才合并入账；JSON 不对回 block 让子代理重写，同一角度最多 2 次。
  * 没有次数上限、文件上限，不收敛也不停。只有子代理连续 3 次拿不到结论才不再催，也不算通过（flow-policy.js 的 halted）。
@@ -285,8 +285,8 @@ function agentsOf(job) {
   const open = job.lenses.filter((l) => !['submitted', 'sent'].includes(job.state[l].status));
   const sent = job.lenses.filter((l) => job.state[l].status === 'sent');
   const status = 'review.js status' + (job.change ? ' --change ' + job.change : '') + ' --mode ' + job.mode + (job.point ? ' --point ' + job.point : '') + ' --project ' + job.root.replace(/\\/g, '/');
-  return { status: 'prepared', id: job.id, round: job.round, scope: job.scoped ? 'changes' : 'full', lenses: job.lenses, running: sent, agents: open.map((l) => ({ lens: l, subagent_type: 'ttls-reviewer', description: '审查 ' + (job.point || job.mode) + ' ' + l, prompt: promptOf(job, l) })),
-    next: open.length ? '一条回复里同时开这 ' + open.length + ' 个子代理：Agent 工具，subagent_type 写 ttls-reviewer，prompt 原样用 agents 里的。都回来之后（2.1.259 起在后台，做完会来通知，这期间不用等也不要再开）跑 ' + status + ' 看汇总。' : '这几个角度正在跑，不要再开。都回来之后跑 ' + status + ' 看汇总。' };
+  return { status: 'prepared', id: job.id, round: job.round, scope: job.scoped ? 'changes' : 'full', lenses: job.lenses, running: sent, agents: open.map((l) => ({ lens: l, subagent_type: 'vk-reviewer', description: '审查 ' + (job.point || job.mode) + ' ' + l, prompt: promptOf(job, l) })),
+    next: open.length ? '一条回复里同时开这 ' + open.length + ' 个子代理：Agent 工具，subagent_type 写 vk-reviewer，prompt 原样用 agents 里的。都回来之后（2.1.259 起在后台，做完会来通知，这期间不用等也不要再开）跑 ' + status + ' 看汇总。' : '这几个角度正在跑，不要再开。都回来之后跑 ' + status + ' 看汇总。' };
 }
 /** 备一轮审查：不发请求。输入没变就复用同一个任务、不加轮数 */
 function prepare(opts) {

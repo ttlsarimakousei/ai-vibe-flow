@@ -256,8 +256,8 @@ function traceHint(j, cfg) {
   return '这像是在做完的功能上发现的问题' + (archived ? '' : '（变更还没归档）') + '：' + trace + SMALL_FIX_TEXT;
 }
 
-// 技能改名（加了 ttls- 前缀）之前的名字也认：会话记录里可能还是旧的
-const FLOW = /^(opsx:|openspec-|(ttls-)?onboard$|(ttls-)?see-page$|(ttls-)?cross-review$)/i;
+// 技能改名之前的名字也认（没前缀的、ttls- 开头的）：会话记录里可能还是旧的
+const FLOW = /^(opsx:|openspec-|(?:vk-|ttls-)?onboard$|(?:vk-|ttls-)?see-page$|(?:vk-|ttls-)?cross-review$)/i;
 const INTERRUPT = /\[Request interrupted by user/;
 const isUser = (e) => e && e.type === 'user' && !e.isSidechain;
 /** 用户真的说了一句话：不是自动附带的条目、不是工具结果、不是斜杠命令、不是打断标记 */
@@ -309,7 +309,7 @@ function scanWholeFile(file) {
 /**
  * 交接之后的新会话：刚写好的交接记录（一小时内、还没接过），用户点名要读（"按交接记录继续""读取 .vibe/handover.md"）时接上；
  *   一句"继续"不算，说别的不打扰。以前的 autoResume 开关（第一句话不管说什么都接上）2026-10-17 删掉了。
- * 这条路什么版本都通。写交接记录的那个老会话里用户再说话不算：会话里跑过 /ttls-handover（改名之前叫 /handover）、用 Skill 工具调过它、
+ * 这条路什么版本都通。写交接记录的那个老会话里用户再说话不算：会话里跑过 /vk-handover（改名之前叫 /handover）、用 Skill 工具调过它、
  * 或者自己写过这份 handover.md 的都跳过。只接一次。
  */
 const RESUME_WORDS = /继续|接着|接上|交接|上次|恢复|continue|resume/i;
@@ -387,7 +387,7 @@ function anchorLines(j, cfg, note) {
         let s = '进行中的 OpenSpec 变更：' + c.name + '，任务 ' + c.done + '/' + c.total + (c.next ? '，下一项：' + c.next : '');
         if (mine.length > 1) s += '（另有 ' + (mine.length - 1) + ' 个没做完：' + mine.slice(1, 4).map((x) => x.name).join('、') + '）';
         // 还没开工的变更，提案没审过：每条消息带一句，直到审了
-        if (cfg.autoMode && cfg.specGate !== false && c.done === 0 && !require('../lib/session').reviewAllowed('proposal', c.dir)) s += '。这个提案还没审过：apply 之前先按 /ttls-cross-review 的提案模式审一遍（审查提示第一行写"模式：提案"，写上变更名）';
+        if (cfg.autoMode && cfg.specGate !== false && c.done === 0 && !require('../lib/session').reviewAllowed('proposal', c.dir)) s += '。这个提案还没审过：apply 之前先按 /vk-cross-review 的提案模式审一遍（审查提示第一行写"模式：提案"，写上变更名）';
         lines.push(s);
       }
     }
@@ -410,16 +410,16 @@ function anchorLines(j, cfg, note) {
           // 全自动：每涨 10 个百分点说一次（收工检查也按这个记录，写过交接记录的不再催）
           if (asked.autoAtPct == null || pct >= asked.autoAtPct + 10) {
             lines.push(cfg.autoHandover !== false
-              ? '上下文已经用了 ' + pct + '%，过了交接线。全自动模式：先执行 /ttls-handover 写一份交接记录（万一会话断了能接上），写完继续做，不要停下等我。'
+              ? '上下文已经用了 ' + pct + '%，过了交接线。全自动模式：先执行 /vk-handover 写一份交接记录（万一会话断了能接上），写完继续做，不要停下等我。'
               : '上下文已经用了 ' + pct + '%，过了交接线。全自动模式：继续做，不用写交接记录（靠 Claude Code 自己的压缩），不要停下等我。');
             writeState(hk, Object.assign({}, asked, { autoAtPct: pct, at: Date.now() }));
           }
         }
         else if (declined) lines.push('上下文已经用了 ' + pct + '%，过了交接线。我说过再做一会儿：接着做我说的事，到 ' + (asked.askedAtPct + 10) + '% 会再问我要不要交接。');
         // 和收工检查说法一致：开着"到线问一句"的，收工时会让它用提问框问我，不叫它自己先交接
-        else if ((cfg.handoverAsk || 'off') !== 'off') lines.push('上下文已经用了 ' + pct + '%，过了公司规定的交接线。做完手头这一小步就收工，收工时会让你用提问框问我要不要交接（我选交接就执行 /ttls-handover）；新的大任务留到新会话里做。');
+        else if ((cfg.handoverAsk || 'off') !== 'off') lines.push('上下文已经用了 ' + pct + '%，过了公司规定的交接线。做完手头这一小步就收工，收工时会让你用提问框问我要不要交接（我选交接就执行 /vk-handover）；新的大任务留到新会话里做。');
         // 开关选了"不问，只提醒"：只说一句，不让它自己写交接记录（用户 2026-10-07：没让交接就不要交接）
-        else lines.push('上下文已经用了 ' + pct + '%，过了公司规定的交接线。我没让你交接就不要交接，接着做我说的事；要交接我会说（/ttls-handover）。新的大任务留到新会话里做。');
+        else lines.push('上下文已经用了 ' + pct + '%，过了公司规定的交接线。我没让你交接就不要交接，接着做我说的事；要交接我会说（/vk-handover）。新的大任务留到新会话里做。');
       }
     }
     lines.overLine = overLine && !cfg.autoMode;
@@ -499,7 +499,7 @@ async function handle(j) {
       if (on && !prevOn && !cont) U.bump('flow.enter');
       if (applyStart) U.bump('flow.apply');
       if (resumed) U.bump('handover.resume');
-      if (/^\s*\/(ttls-)?handover(\s|$)/i.test(said)) U.bump('handover.write');
+      if (/^\s*\/(?:vk-|ttls-)?handover(\s|$)/i.test(said)) U.bump('handover.write');
     } catch (e) { /* 数不了不影响对话 */ }
   }
   // 开工前不再自动拉代码（用户 2026-10-17 定的：交给用户自己拉）

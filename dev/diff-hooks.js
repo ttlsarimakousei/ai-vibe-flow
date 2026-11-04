@@ -57,8 +57,8 @@ const norm = (s, kit, proj) => String(s)
   .replace(/拦截编号 [A-Z0-9]{4,6}/g, '拦截编号 ####')
   .replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}[ T]\d{1,2}:\d{2}(:\d{2})?/g, '<时间>')
   .replace(/c\d+([\\/])proj/g, 'c#$1proj')
-  // 技能、审查代理、经验规则文件改了名（加了 ttls- 前缀）：只是名字不同，不算行为变了
-  .replace(/\/ttls-(cross-review|see-page|handover|onboard)\b/g, '/$1').replace(/ttls-reviewer/g, 'vibe-reviewer').replace(/ttls-lessons-/g, 'vibe-lessons-');
+  // 技能、审查代理、经验规则文件改了名（0929 加了 ttls- 前缀，2026-11-04 改成 vk-）：只是名字不同，不算行为变了
+  .replace(/\/(?:ttls|vk)-(cross-review|see-page|handover|onboard)\b/g, '/$1').replace(/(?:ttls|vk)-(db-crud|redis)\b/g, '$1').replace(/(?:ttls|vk)-reviewer/g, 'vibe-reviewer').replace(/(?:ttls|vk)-lessons-/g, 'vibe-lessons-');
 
 const cases = [];
 const OLD_VERSION = (H.read(path.join(OLD, 'kit', 'VERSION')) || '').trim() || '00000000.0000';

@@ -27,7 +27,7 @@ const KINDS = ['误拦', '漏拦', '卡住', '出错', '提示不清', '建议',
 const TEMPLATE = [
   '# 一句话说清问题（例：打勾时说提案没审过，但已经审了 6 轮）',
   '类型：误拦 / 漏拦 / 卡住 / 出错 / 提示不清 / 建议（选一个）',
-  '涉及：哪道检查、哪个技能或工具（例：guard-spec 打勾检查、verify-gate 收工检查、devserver、ttls-cross-review 技能、ttls-db-crud、ttls-redis）',
+  '涉及：哪道检查、哪个技能或工具（例：guard-spec 打勾检查、verify-gate 收工检查、devserver、vk-cross-review 技能、vk-db-crud、vk-redis）',
   '',
   '## 现象',
   '套件的原话（拦截提示原文照贴）；当时在做什么（哪个文件、哪条命令）。',

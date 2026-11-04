@@ -130,10 +130,10 @@ function unzip(zip, name) {
   H.ok('看页面用的依赖也在', fs.existsSync(path.join(u.kit, 'page', 'node_modules', 'playwright-core', 'package.json')));
   if (V2 > '20260929.2205') {
     const sk = fs.readdirSync(path.join(u.cfg, 'skills')).sort();
-    H.ok('自动更新之后：技能是 ttls- 开头的六个' + (RENAMED ? '，旧名字的、以前单独装的都收掉了' : ''), JSON.stringify(sk.filter((n) => /^ttls-/.test(n))) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']) && sk.every((n) => /^(ttls|openspec)-/.test(n)), sk); // 2026-10-17 起还装自带 OpenSpec 的 openspec-* 技能
-    H.ok('审查代理是 ttls-reviewer', fs.existsSync(path.join(u.cfg, 'agents', 'ttls-reviewer.md')) && !fs.existsSync(path.join(u.cfg, 'agents', 'vibe-reviewer.md')), fs.readdirSync(path.join(u.cfg, 'agents')));
+    H.ok('自动更新之后：技能是 vk- 开头的六个' + (RENAMED ? '，旧名字的、以前单独装的都收掉了' : ''), JSON.stringify(sk.filter((n) => /^vk-/.test(n))) === JSON.stringify(['vk-cross-review', 'vk-db-crud', 'vk-handover', 'vk-onboard', 'vk-redis', 'vk-see-page']) && sk.every((n) => /^(vk|openspec)-/.test(n)), sk); // 2026-10-17 起还装自带 OpenSpec 的 openspec-* 技能
+    H.ok('审查代理是 vk-reviewer', fs.existsSync(path.join(u.cfg, 'agents', 'vk-reviewer.md')) && !fs.existsSync(path.join(u.cfg, 'agents', 'vibe-reviewer.md')), fs.readdirSync(path.join(u.cfg, 'agents')));
     const md = H.read(path.join(u.cfg, 'CLAUDE.md')) || '';
-    H.ok('全局约定里的斜杠命令换成了新名字', /\/ttls-see-page/.test(md) && /\/ttls-handover/.test(md) && !/(^|[^\w.\\/-])\/(cross-review|see-page|handover|onboard)\b/.test(md), (md.match(/[^\n]*\/(cross-review|see-page|handover|onboard)\b[^\n]*/g) || []).slice(0, 3));
+    H.ok('全局约定里的斜杠命令换成了新名字', /\/vk-see-page/.test(md) && /\/vk-handover/.test(md) && !/(^|[^\w.\\/-])\/(cross-review|see-page|handover|onboard)\b/.test(md), (md.match(/[^\n]*\/(cross-review|see-page|handover|onboard)\b[^\n]*/g) || []).slice(0, 3));
     const perm = (readJson(path.join(u.cfg, 'settings.json')).permissions || {});
     // 20261030 起 push 只留钩子这一道确认（用户定的）：升到之后的版本，套件以前加的 Bash(git push:*) 收回
     const pushRule = (perm.ask || []).includes('Bash(git push:*)');

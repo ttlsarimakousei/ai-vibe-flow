@@ -36,7 +36,7 @@ const mk = (name, tasks, extra) => {
 };
 const tfile = path.join(h.root, 'transcript.jsonl');
 const base = (sid) => ({ session_id: sid, transcript_path: tfile, cwd: proj, hook_event_name: 'PreToolUse' });
-const review = (id, mode, change, issues) => [H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt: '模式：' + mode + '\n变更：openspec/changes/' + change + '/\n材料…' }, id), H.tr.result(id, '审完了。\n结论：问题 ' + issues + ' 条')];
+const review = (id, mode, change, issues) => [H.tr.call('Agent', { subagent_type: 'vk-reviewer', prompt: '模式：' + mode + '\n变更：openspec/changes/' + change + '/\n材料…' }, id), H.tr.result(id, '审完了。\n结论：问题 ' + issues + ' 条')];
 const entriesOf = () => S.tailEntries(tfile, 8000000).filter((e) => e && !e.isSidechain);
 
 // ---------------------------------------------------------------------------------------------

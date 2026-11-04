@@ -141,13 +141,13 @@ function codeReviewIssue(dir) {
   // 每个审查点都审过了或者停了（第 26 条）：停了的不再挡（复审 V8：以前归档要求全部通过，到上限的点又不能再自动审，两头堵住）；没解决的写在收工报告里，归档本来就要用户点头
   try { const ps = P.points(dir, 'code'); if (ps.length && ps.every((p) => P.settled(dir, p) || P.halted(dir, p))) return ''; } catch (e) { /* 算不了照下面的老规矩 */ }
   const r = reviewRecord('code', dir);
-  if (!r) return '还没做过代码审查（/ttls-cross-review 的代码模式，前端后端都在内；审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
+  if (!r) return '还没做过代码审查（/vk-cross-review 的代码模式，前端后端都在内；审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
   if (r.fingerprint && !codeReviewed(dir)) return '代码或任务验法在审查后变更，需要针对变更部分复验和补审；仅打勾不会触发重复审查。';
   if (r.legacy) return '';
   const late = unreviewedAfter(dir, r);
   if (!late.length) return '';
   const rel = (f) => path.basename(f);
-  return '代码审查之后又做了 ' + late.length + ' 项任务，这部分代码没审到：' + late.slice(0, 3).map((x) => '"' + x.task.slice(0, 30) + '"（' + x.files.slice(0, 2).map(rel).join('、') + '）').join('；') + '。再按 /ttls-cross-review 的代码模式审一遍这几项的改动（审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
+  return '代码审查之后又做了 ' + late.length + ' 项任务，这部分代码没审到：' + late.slice(0, 3).map((x) => '"' + x.task.slice(0, 30) + '"（' + x.files.slice(0, 2).map(rel).join('、') + '）').join('；') + '。再按 /vk-cross-review 的代码模式审一遍这几项的改动（审查提示第一行写"模式：代码"，第二行写"变更：' + path.basename(dir) + '"）';
 }
 
 /** 会话记录里有没有接着交接记录干：读过 .vibe/handover.md，或者用户说了"接着上一个会话的交接记录继续" */
@@ -156,10 +156,10 @@ function handoverReadIn(entries) {
   return toolCalls(entries, 0).some((c) => (c.name === 'Read' && /(^|[\\/])\.vibe[\\/]handover\.md$/i.test(String(c.input.file_path || ''))) || (/^(Bash|PowerShell)$/.test(c.name) && /(?:^|[\s"'\\/])handover\.md/i.test(String(c.input.command || '')) && READ_CMD.test(String(c.input.command || ''))));
 }
 
-/** 这一段调用里写过交接记录吗：用户敲了 /ttls-handover（改名之前叫 /handover）、用 Skill 调了它、写了 .vibe/handover.md */
+/** 这一段调用里写过交接记录吗：用户敲了 /vk-handover（改名之前叫 /handover）、用 Skill 调了它、写了 .vibe/handover.md */
 function handoverWrittenIn(calls, prompt, failed) {
-  if (/<command-name>\s*\/?(ttls-)?handover\s*<\/command-name>/.test(String(prompt || ''))) return true;
-  return calls.some((c) => !(failed && failed(c)) && ((c.name === 'Skill' && /^\/?(ttls-)?handover$/i.test(String(c.input.skill || c.input.command || ''))) || (/^(Write|Edit|MultiEdit)$/.test(c.name) && /(^|[\\/])\.vibe[\\/]handover\.md$/i.test(String(c.input.file_path || '')))));
+  if (/<command-name>\s*\/?(?:vk-|ttls-)?handover\s*<\/command-name>/.test(String(prompt || ''))) return true;
+  return calls.some((c) => !(failed && failed(c)) && ((c.name === 'Skill' && /^\/?(?:vk-|ttls-)?handover$/i.test(String(c.input.skill || c.input.command || ''))) || (/^(Write|Edit|MultiEdit)$/.test(c.name) && /(^|[\\/])\.vibe[\\/]handover\.md$/i.test(String(c.input.file_path || '')))));
 }
 
 module.exports = { reviewRecord, recordReview, proposalReviewed, reviewAllowed, syncTicks, taskCodeFiles, projectRootsOf, unreviewedAfter, codeReviewed, codeReviewIssue, handoverReadIn, handoverWrittenIn };

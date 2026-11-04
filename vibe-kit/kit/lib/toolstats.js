@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 套件里的工具（ttls-db-crud、ttls-redis）用得怎么样：用量统计，和工具自己出的毛病。
+ * 套件里的工具（vk-db-crud、vk-redis）用得怎么样：用量统计，和工具自己出的毛病。
  *
  * 工具每跑一条命令往 state/tool-usage.jsonl 里追加一行（db-crud 是 Python 写的，redis 是 Node 写的，所以用文件接）：
  *   用量  { tool, cmd, exit, ms, java, daemon, cached, dialect, errors: [类别…], project, at }
@@ -21,6 +21,8 @@ const STATS = 'tool-stats';
 const MAX_READ = 512 * 1024;
 const MAX_LOG = 2 * 1024 * 1024;          // 日志到这么大就丢掉前一半
 /** 日志第一行的指纹：文件被截过（丢掉了前面的）它就变了 */
+// 查库工具的名字：改名之前统计文件里记的是 ttls-db-crud（2026-11-04 改成 vk-db-crud）
+const DB_TOOL = /^(?:vk|ttls)-db-crud$/;
 function headOf(file) {
   try {
     const fd = fs.openSync(file, 'r');
@@ -251,7 +253,7 @@ function hints() {
   const out = [];
   const all = stats(100);
   const cfg = (() => { try { return JSON.parse(fs.readFileSync(path.join(KIT, 'config.json'), 'utf8').replace(/^\uFEFF/, '')); } catch (e) { return {}; } })();
-  const db = all.filter((s) => s.tool === 'ttls-db-crud' && s.java > 0);
+  const db = all.filter((s) => DB_TOOL.test(s.tool) && s.java > 0);
   const dbN = db.reduce((a, s) => a + s.n, 0);
   const dbMs = db.reduce((a, s) => a + s.avg * s.n, 0);
   if (dbN >= 20 && dbMs / dbN >= 1500 && cfg.dbcrudDaemon !== true) out.push({ what: '查库的命令平均每条 ' + (dbMs / dbN / 1000).toFixed(1) + ' 秒（共 ' + dbN + ' 条）', detail: '时间多半花在起 java、连库上。配置页"查库"那一页的"查库快一点"里可以打开后台执行器：连接留着，几分钟不用自己退。' });
@@ -263,7 +265,7 @@ function hints() {
       else if (/^TIMEOUT|^CONN_REFUSED|^HOST_UNRESOLVED|^NET_UNREACHABLE/.test(e)) out.push({ what: s.tool + ' 有 ' + n + ' 次连不上（' + e + '）', detail: '探索到的地址在这台电脑上连不通：库没起、要走 VPN、或者是别的环境的地址。' });
       else if (/^AUTH_FAILED/.test(e)) out.push({ what: s.tool + ' 有 ' + n + ' 次口令不对', detail: '项目配置里的口令和库里的对不上，或者配置里的口令是加密的。' });
     }
-    if (s.tool === 'ttls-db-crud' && s.cmd === 'query' && s.n >= 30) { const peek = all.find((x) => x.tool === s.tool && x.cmd === 'peek'); if (!peek || peek.n * 5 < s.n) out.push({ what: '查数据几乎都在写 SQL（query ' + s.n + ' 次，peek ' + (peek ? peek.n : 0) + ' 次）', detail: '看一张表、按值找数据用 peek 不用写 SQL。模型没用上，可能是技能说明里那张"先挑最省事的命令"的表没起作用。' }); }
+    if (DB_TOOL.test(s.tool) && s.cmd === 'query' && s.n >= 30) { const peek = all.find((x) => x.tool === s.tool && x.cmd === 'peek'); if (!peek || peek.n * 5 < s.n) out.push({ what: '查数据几乎都在写 SQL（query ' + s.n + ' 次，peek ' + (peek ? peek.n : 0) + ' 次）', detail: '看一张表、按值找数据用 peek 不用写 SQL。模型没用上，可能是技能说明里那张"先挑最省事的命令"的表没起作用。' }); }
   }
   const seen = new Set();
   return out.filter((x) => (seen.has(x.what) ? false : seen.add(x.what))).slice(0, 12);

@@ -3,7 +3,7 @@
  * .vibe/ 里只放套件长期要用的东西；模型的临时脚本、草稿一件事一个目录：事由是变更名的留到变更归档（归档后这里自己清），别的做完就删。
  *
  *   .vibe/project.md、handover.md、login.json      项目说明、交接记录、账号
- *   .vibe/cp.txt、javac.args、*baseline*、*.args    快检的中间文件（/ttls-onboard 建的；别的名字要先写进项目说明）
+ *   .vibe/cp.txt、javac.args、*baseline*、*.args    快检的中间文件（/vk-onboard 建的；别的名字要先写进项目说明）
  *   .vibe/scenarios/、out/、design/                 看页面的场景、结果、设计图
  *   .vibe/run/                                      tools/devserver.js 记着起过的服务、它们的日志
  *   .vibe/pending/                                  全自动模式下放哪还没定的产出（等用户定，不自动删）

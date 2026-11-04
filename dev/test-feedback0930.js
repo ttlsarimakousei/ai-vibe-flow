@@ -8,7 +8,7 @@
  *   #5       用临时 index 提交（GIT_INDEX_FILE），新文件明明加了却说没 git add
  *   #7       全自动报告说"revisions.md 里没有自动模式决定的条目"，其实有 7 条，是上一轮记的
  *   #8       会话的当前目录漂到了子项目里，壳子里定过的产出位置认不出来；占位写法（<需求编号>）不认
- *   #9       只敲了 /ttls-onboard，收工检查却催着"直接开始 /opsx:apply"
+ *   #9       只敲了 /vk-onboard，收工检查却催着"直接开始 /opsx:apply"
  *   用户的事：全自动模式只在走 OpenSpec 流程时算数；变更没归档之前过程文件先留着；
  *            工具的调用记录里的错定期汇总上报；提示规则去掉了；全自动报告列出改过的库
  * 用法：node dev/test-feedback0930.js
@@ -25,7 +25,7 @@ const state = (name) => readJson(path.join(h.kit, 'state', name + '.json'));
 const dropState = (name) => { try { fs.unlinkSync(path.join(h.kit, 'state', name + '.json')); } catch (e) { /* 没有 */ } };
 const hookLog = () => H.read(path.join(h.kit, 'state', 'hooks.log')) || '';
 const tfile = path.join(h.root, 'transcript.jsonl');
-const reviewCall = (id, prompt, issues) => [H.tr.call('Agent', { subagent_type: 'ttls-reviewer', prompt }, id), H.tr.result(id, '审完了。\n结论：问题 ' + issues + ' 条')];
+const reviewCall = (id, prompt, issues) => [H.tr.call('Agent', { subagent_type: 'vk-reviewer', prompt }, id), H.tr.result(id, '审完了。\n结论：问题 ' + issues + ' 条')];
 const mkChange = (root, name, tasks, extra) => {
   const d = path.join(root, 'openspec', 'changes', name);
   H.write(path.join(d, 'proposal.md'), '# ' + name + '\n');
@@ -76,7 +76,7 @@ H.section('#3 验法里提到的结果文件不是要跑的东西');
   H.ok('脚本没跑过照样不算', !plan.test(['git status', 'ls .vibe/out']));
   const v2 = '`node .vibe/tmp/x/probe.js --out .vibe/out/x/result.json`';
   H.ok('反引号里的命令带着结果文件：只要求脚本出现在跑过的命令里', S.verifyRan(v2, ['node .vibe/tmp/x/probe.js']) && !S.verifyRan(v2, ['git status', 'cat .vibe/out/x/result.json']), S.verifyPlan(v2).need);
-  H.ok('场景文件照旧要跑过', !S.verifyRan('/ttls-see-page 场景 `.vibe/scenarios/login.json`', ['node x.js']) && S.verifyRan('/ttls-see-page 场景 `.vibe/scenarios/login.json`', ['node x/scenario-run.js .vibe/scenarios/login.json']));
+  H.ok('场景文件照旧要跑过', !S.verifyRan('/vk-see-page 场景 `.vibe/scenarios/login.json`', ['node x.js']) && S.verifyRan('/vk-see-page 场景 `.vibe/scenarios/login.json`', ['node x/scenario-run.js .vibe/scenarios/login.json']));
   H.ok('没加反引号、写着"场景跑完看 out/report.json"：不把 report 当场景名', !/场景 report/.test(S.verifyPlan('接口场景跑完看 .vibe/out/login/report.json').need), S.verifyPlan('接口场景跑完看 .vibe/out/login/report.json').need);
 }
 
@@ -208,15 +208,15 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   const flow = (sid) => readJson(path.join(h.kit, 'state', sid + '-flow.json'));
   const stop = (sid, entries, said) => H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tfile, entries), stop_hook_active: false, last_assistant_message: said || '做完了' });
   const ask = (sid) => H.hook(h, 'guard-ask', { session_id: sid, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '要不要接着做？', options: [{ label: '要' }, { label: '不要' }] }] } });
-  // 议题原样：只敲了 /ttls-onboard
+  // 议题原样：只敲了 /vk-onboard
   const s1 = 's-onboard';
-  H.transcript(tfile, [H.tr.user('/ttls-onboard')]);
-  prompt(s1, '/ttls-onboard');
-  H.ok('敲 /ttls-onboard：这一轮不在流程里', flow(s1).on === false, flow(s1));
-  const r1 = stop(s1, [H.tr.user('/ttls-onboard'), H.tr.ran('Read', { file_path: path.join(chgA, 'tasks.md') }, 'x'), H.tr.say('项目说明核过了')], '项目说明核过了，命令都能跑通');
+  H.transcript(tfile, [H.tr.user('/vk-onboard')]);
+  prompt(s1, '/vk-onboard');
+  H.ok('敲 /vk-onboard：这一轮不在流程里', flow(s1).on === false, flow(s1));
+  const r1 = stop(s1, [H.tr.user('/vk-onboard'), H.tr.ran('Read', { file_path: path.join(chgA, 'tasks.md') }, 'x'), H.tr.say('项目说明核过了')], '项目说明核过了，命令都能跑通');
   H.ok('议题原样：收工时不催"直接开始 /opsx:apply"', !/直接开始 \/opsx:apply/.test(H.reasonOf(r1)) && !/全自动模式/.test(H.reasonOf(r1)), H.reasonOf(r1));
   H.ok('不在流程里：提问框照常能用，不出全自动报告', ask(s1) === null && !/全自动报告/.test(H.reasonOf(r1)));
-  prompt(s1, '你在干嘛我不是只执行了 /ttls-onboard 吗');
+  prompt(s1, '你在干嘛我不是只执行了 /vk-onboard 吗');
   H.ok('用户问了一句：还是不在流程里', flow(s1).on === false, flow(s1));
   // 用户的原话：全自动开着，另开一个窗口做检索
   const s2 = 's-search';
@@ -238,8 +238,8 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   H.ok('再说"继续"：接回流程', flow(s3).on === true, flow(s3));
   prompt(s3, '3.3 我执行过了，接着归档');
   H.ok('流程里说了一句不是问句的话：还在流程里', flow(s3).on === true, flow(s3));
-  prompt(s3, '/ttls-cross-review add-ec-expiry-remind');
-  H.ok('流程里自己敲 /ttls-cross-review：跟上一轮一样', flow(s3).on === true);
+  prompt(s3, '/vk-cross-review add-ec-expiry-remind');
+  H.ok('流程里自己敲 /vk-cross-review：跟上一轮一样', flow(s3).on === true);
   prompt(s3, '等等，先停一下');
   H.ok('说"等等"：还在流程里，这一轮不催', flow(s3).on === true && (flow(s3).paused === true || flow(s3).stage === 'plan'), flow(s3));
   // 没在流程里的会话说"继续"：不算
@@ -296,10 +296,10 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
     H.ok('会话开始时分别说明两开关和当前范围', /需求自动关，Apply 自动开/.test(H.reasonOf(ss)) && /不推进别的会话/.test(H.reasonOf(ss)));
   // 查库、查 redis 的工具：跑之前留一张条子，说这个会话算不算全自动
   const tk = () => ((readJson(path.join(h.kit, 'state', 'tool-flow.json')).byCwd || {})[S.normKey(proj)]) || {};
-  H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python "$HOME/.claude/skills/ttls-db-crud/scripts/db.py" --conn dev exec --sql-file .vibe/tmp/x/a.sql' } });
+  H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python "$HOME/.claude/skills/vk-db-crud/scripts/db.py" --conn dev exec --sql-file .vibe/tmp/x/a.sql' } });
   H.ok('不在流程里的会话跑查库的工具：条子上写着不算全自动', tk().auto === false && tk().at > 0, tk());
   prompt(s3, '/opsx:apply add-ec-expiry-remind');
-  H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "$HOME/.claude/skills/ttls-redis/scripts/redis.js" --conn dev set k v' } });
+  H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "$HOME/.claude/skills/vk-redis/scripts/redis.js" --conn dev set k v' } });
   H.ok('在流程里的会话跑：条子上写着算', tk().auto === true, tk());
   H.setConfig(h, { autoMode: false });
   dropState('tool-flow');
@@ -480,9 +480,9 @@ H.section('工具的调用记录里的错：每天汇总一次，记成问题反
   const log = path.join(h.kit, 'state', 'tool-usage.jsonl');
   for (const n of ['tool-stats', 'tool-usage-pos']) dropState(n);
   const line = (o) => JSON.stringify(Object.assign({ at: Date.now(), exit: 2, ms: 900, java: 1, project: 'p' }, o)) + '\n';
-  fs.writeFileSync(log, line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }) + line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] })
-    + line({ tool: 'ttls-db-crud', cmd: 'peek', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }) + line({ tool: 'ttls-db-crud', cmd: 'exec', dialect: 'mysql', errors: ['BLOCKED'] , exit: 3 })
-    + line({ tool: 'ttls-redis', cmd: 'get', errors: ['CONN_REFUSED'], exit: 0 }) + line({ tool: 'ttls-db-crud', cmd: 'peek', dialect: 'dm', errors: [], exit: 0 }));
+  fs.writeFileSync(log, line({ tool: 'vk-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }) + line({ tool: 'vk-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] })
+    + line({ tool: 'vk-db-crud', cmd: 'peek', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }) + line({ tool: 'vk-db-crud', cmd: 'exec', dialect: 'mysql', errors: ['BLOCKED'] , exit: 3 })
+    + line({ tool: 'vk-redis', cmd: 'get', errors: ['CONN_REFUSED'], exit: 0 }) + line({ tool: 'vk-db-crud', cmd: 'peek', dialect: 'dm', errors: [], exit: 0 }));
   const n0 = F.listRecords().length;
   const first = T.ingest(null);
   H.ok('读进来了，还没到时候：先攒着，不记问题', first.usage === 6 && first.reported.length === 0 && F.listRecords().length === n0 && Object.keys(state('tool-stats').errs || {}).length === 2, [first, state('tool-stats').errs]);
@@ -492,14 +492,14 @@ H.section('工具的调用记录里的错：每天汇总一次，记成问题反
   const recs = F.listRecords().filter((r) => ids.includes(r.meta.id));
   const dm = recs.find((r) => /SQL_ERROR/.test(r.title)) || { meta: {}, text: '', title: '' };
   const rd = recs.find((r) => /CONN_REFUSED/.test(r.title)) || { meta: {}, text: '', title: '' };
-  H.ok('满一天：一种错一条，类型是"工具报错"', ids.length === 2 && dm.meta['类型'] === '工具报错' && dm.meta['涉及'] === 'ttls-db-crud' && dm.title === '达梦 SQL_ERROR:08001:-2106' && rd.meta['涉及'] === 'ttls-redis', recs.map((r) => [r.title, r.meta['类型'], r.meta['涉及']]));
+  H.ok('满一天：一种错一条，类型是"工具报错"', ids.length === 2 && dm.meta['类型'] === '工具报错' && dm.meta['涉及'] === 'vk-db-crud' && dm.title === '达梦 SQL_ERROR:08001:-2106' && rd.meta['涉及'] === 'vk-redis', recs.map((r) => [r.title, r.meta['类型'], r.meta['涉及']]));
   H.ok('写了次数、哪几条命令出的、这种错一般是怎么回事', /最近 25 小时出了 3 次（query 2 次、peek 1 次）/.test(dm.text) && /SQLSTATE 08 类是连接异常/.test(dm.text) && /连不上/.test(rd.text), dm.text.slice(0, 500));
   H.ok('不算到任何会话头上，不带项目名', !dm.meta['会话'] && dm.meta['项目'] === '（不知道）', dm.meta);
   H.ok('报完清零，下一个周期重新攒', Object.keys(state('tool-stats').errs || {}).length === 0 && state('tool-stats').reportAt > 0, state('tool-stats'));
   const I = require(path.join(h.kit, 'lib', 'issues.js'));
   H.ok('会跟着问题上报传到 GitLab（不算"不是问题的"）', !F.isNoise(dm) && typeof I.sync === 'function');
   // 下一个周期又出了同一种错：还是那一条，后面加一句
-  fs.appendFileSync(log, line({ tool: 'ttls-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }));
+  fs.appendFileSync(log, line({ tool: 'vk-db-crud', cmd: 'query', dialect: 'dm', errors: ['SQL_ERROR:08001:-2106'] }));
   T.ingest(null);
   const ids2 = T.reportErrors(Date.now() + 26 * 3600000);
   const again = F.listRecords().find((r) => r.meta.id === dm.meta.id);

@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 改名（ttls- 前缀）和并进来的两个技能：从上一版升上来会怎样。
+ * 改名（技能加前缀，现在是 vk-）和并进来的两个技能：从上一版升上来会怎样。
  *   旧名字的技能、代理删掉（改过的先备份），不是套件装的同名技能不动
  *   以前单独装的 urai-db-crud、redis 删掉（先备份），urai-db-crud 自带的驱动挪进套件的驱动目录并登记
  *   会话记录里的旧名字照样认；经验规则的文件改名，旧文件里的规则并进新文件
@@ -30,14 +30,14 @@ const REAL_REDIS = path.join(os.homedir(), '.claude', 'skills', 'redis');
 const HAS_REAL = fs.existsSync(path.join(REAL_DBCRUD, 'drivers')) && lsdir(path.join(REAL_DBCRUD, 'drivers')).some((n) => /\.jar$/.test(n));
 
 (async () => {
-  const oldPkg = asPackage('ttls-old', OLD);
-  const newPkg = asPackage('ttls-new', H.SRC);
+  const oldPkg = asPackage('rn-old', OLD);
+  const newPkg = asPackage('rn-new', H.SRC);
   console.log('    上一版 ' + OLD_VERSION + '；这台电脑上' + (HAS_REAL ? '有' : '没有') + '用户自己装的 urai-db-crud（带驱动）');
 
   H.section('包里的东西');
   const all = fs.readdirSync(newPkg, { recursive: true }).map((x) => String(x).replace(/\\/g, '/'));
   H.ok('安装包里没有 jar（驱动不随包带）', !all.some((f) => /\.jar$/i.test(f) && !/node_modules/.test(f)), all.filter((f) => /\.jar$/i.test(f)));
-  H.ok('技能的名字都带 ttls- 前缀', JSON.stringify(lsdir(path.join(newPkg, 'claude', 'skills'))) === JSON.stringify(['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page']) && JSON.stringify(lsdir(path.join(newPkg, 'claude', 'agents'))) === '["ttls-reviewer.md"]', lsdir(path.join(newPkg, 'claude', 'skills')));
+  H.ok('技能的名字都是 vk- 开头', JSON.stringify(lsdir(path.join(newPkg, 'claude', 'skills'))) === JSON.stringify(['vk-cross-review', 'vk-db-crud', 'vk-handover', 'vk-onboard', 'vk-redis', 'vk-see-page']) && JSON.stringify(lsdir(path.join(newPkg, 'claude', 'agents'))) === '["vk-reviewer.md"]', lsdir(path.join(newPkg, 'claude', 'skills')));
   for (const n of lsdir(path.join(newPkg, 'claude', 'skills'))) {
     const t = H.read(path.join(newPkg, 'claude', 'skills', n, 'SKILL.md')) || '';
     H.ok(n + '：说明里的名字和目录一样', new RegExp('^name: ' + n + '$', 'm').test(t), t.slice(0, 200));
@@ -47,7 +47,7 @@ const HAS_REAL = fs.existsSync(path.join(REAL_DBCRUD, 'drivers')) && lsdir(path.
   H.ok('约定、技能、钩子的提示里没有旧的斜杠命令', stale.length === 0, stale);
 
   H.section('从上一版升上来');
-  const h = H.freshHome('ttls-up');
+  const h = H.freshHome('rn-up');
   const i1 = install(h, oldPkg);
   H.ok('上一版装上了，技能是旧名字', i1.code === 0 && ['cross-review', 'handover', 'onboard', 'see-page'].every((n) => fs.existsSync(path.join(h.cfg, 'skills', n, 'SKILL.md'))) && fs.existsSync(path.join(h.cfg, 'agents', 'vibe-reviewer.md')), i1.out + i1.err);
   // 用户改过其中一个；另外有用户自己的技能，和以前单独装的两个
@@ -61,14 +61,14 @@ const HAS_REAL = fs.existsSync(path.join(REAL_DBCRUD, 'drivers')) && lsdir(path.
 
   const i2 = install(h, newPkg);
   H.ok('这一版装上了', i2.code === 0, i2.out + i2.err);
-  H.ok('新名字的六个技能和代理都在', ['ttls-cross-review', 'ttls-db-crud', 'ttls-handover', 'ttls-onboard', 'ttls-redis', 'ttls-see-page'].every((n) => fs.existsSync(path.join(h.cfg, 'skills', n, 'SKILL.md'))) && fs.existsSync(path.join(h.cfg, 'agents', 'ttls-reviewer.md')), lsdir(path.join(h.cfg, 'skills')));
+  H.ok('新名字的六个技能和代理都在', ['vk-cross-review', 'vk-db-crud', 'vk-handover', 'vk-onboard', 'vk-redis', 'vk-see-page'].every((n) => fs.existsSync(path.join(h.cfg, 'skills', n, 'SKILL.md'))) && fs.existsSync(path.join(h.cfg, 'agents', 'vk-reviewer.md')), lsdir(path.join(h.cfg, 'skills')));
   H.ok('旧名字的技能和代理删掉了', !['cross-review', 'handover', 'onboard', 'see-page'].some((n) => fs.existsSync(path.join(h.cfg, 'skills', n))) && !fs.existsSync(path.join(h.cfg, 'agents', 'vibe-reviewer.md')), [lsdir(path.join(h.cfg, 'skills')), lsdir(path.join(h.cfg, 'agents'))]);
-  H.ok('安装器说了改名的事', /技能和代理改名了/.test(i2.out) && /\/handover → \/ttls-handover/.test(i2.out) && /vibe-reviewer → ttls-reviewer/.test(i2.out), i2.out);
+  H.ok('安装器说了改名的事', /技能和代理改名了/.test(i2.out) && /\/handover → \/vk-handover/.test(i2.out) && /vibe-reviewer → vk-reviewer/.test(i2.out), i2.out);
   const bk = (i2.out.match(/旧技能 see-page 被改过，删除前备份在 (\S+)/) || [])[1] || '';
   H.ok('改过的那个先备份了', !!bk && /我自己加的一句/.test(H.read(path.join(bk, 'SKILL.md')) || ''), i2.out);
   H.ok('没改过的不备份、不提', !/旧技能 (handover|onboard|cross-review) 被改过/.test(i2.out), i2.out);
   H.ok('用户自己的技能没动', fs.existsSync(path.join(h.cfg, 'skills', 'my-own', 'SKILL.md')));
-  H.ok('以前单独装的 urai-db-crud、redis 收走了，说了挪到哪', !fs.existsSync(path.join(h.cfg, 'skills', 'urai-db-crud')) && !fs.existsSync(path.join(h.cfg, 'skills', 'redis')) && /urai-db-crud 技能并进套件了，现在叫 ttls-db-crud/.test(i2.out) && /redis 技能并进套件了，现在叫 ttls-redis/.test(i2.out), i2.out);
+  H.ok('以前单独装的 urai-db-crud、redis 收走了，说了挪到哪', !fs.existsSync(path.join(h.cfg, 'skills', 'urai-db-crud')) && !fs.existsSync(path.join(h.cfg, 'skills', 'redis')) && /urai-db-crud 技能并进套件了，现在叫 vk-db-crud/.test(i2.out) && /redis 技能并进套件了，现在叫 vk-redis/.test(i2.out), i2.out);
   const bk2 = (i2.out.match(/urai-db-crud 技能并进套件了[^\n]*挪到了 (\S+?)（/) || [])[1] || '';
   H.ok('整个旧技能挪进了 vibe-kit/retired（不参加备份的轮转，不会被自动删）', !!bk2 && fs.existsSync(path.join(bk2, 'scripts', 'db.py')) && path.dirname(bk2) === path.join(h.kit, 'retired'), bk2);
   // 用户后来又把旧技能装回来：是用户要的，再装套件时不再收
@@ -91,10 +91,10 @@ const HAS_REAL = fs.existsSync(path.join(REAL_DBCRUD, 'drivers')) && lsdir(path.
   const st = JSON.parse(H.read(path.join(h.cfg, 'settings.json')) || '{}');
   H.ok('钩子照常登记着', JSON.stringify(st.hooks || {}).includes('vibe-kit/hooks/'), st.hooks);
   const md = H.read(path.join(h.cfg, 'CLAUDE.md')) || '';
-  H.ok('全局约定里是新名字', /\/ttls-see-page/.test(md) && !/[^-\w]\/(see-page|onboard|handover|cross-review)\b/.test(md), md.slice(0, 300));
+  H.ok('全局约定里是新名字', /\/vk-see-page/.test(md) && !/[^-\w]\/(see-page|onboard|handover|cross-review)\b/.test(md), md.slice(0, 300));
 
   H.section('不是套件装的同名技能：不动');
-  const h2 = H.freshHome('ttls-own');
+  const h2 = H.freshHome('rn-own');
   H.write(path.join(h2.cfg, 'skills', 'handover', 'SKILL.md'), '---\nname: handover\ndescription: 别的套件的交接技能\n---\n');
   H.write(path.join(h2.cfg, 'skills', 'redis', 'SKILL.md'), '---\nname: redis\ndescription: 别人写的 redis 技能，没有那个客户端\n---\n');
   H.write(path.join(h2.cfg, 'agents', 'vibe-reviewer.md'), '---\nname: vibe-reviewer\n---\n别人的\n');
@@ -112,40 +112,40 @@ const HAS_REAL = fs.existsSync(path.join(REAL_DBCRUD, 'drivers')) && lsdir(path.
   const tf = H.transcript(path.join(h.work, 't1.jsonl'), [H.tr.user('审一下')].concat(rv('vibe-reviewer', 'toolu_old1')));
   H.ok('用旧名字调的审查代理算审过', S.syncReviews(S.tailEntries(tf, 600000), proj).length === 1 && !S.codeReviewIssue(c1), S.codeReviewIssue(c1));
   fs.rmSync(path.join(h.kit, 'state', 'reviewed.json'), { force: true });
-  const tf2 = H.transcript(path.join(h.work, 't2.jsonl'), [H.tr.user('审一下')].concat(rv('ttls-reviewer', 'toolu_new1')));
+  const tf2 = H.transcript(path.join(h.work, 't2.jsonl'), [H.tr.user('审一下')].concat(rv('vk-reviewer', 'toolu_new1')));
   H.ok('用新名字调的也算', S.syncReviews(S.tailEntries(tf2, 600000), proj).length === 1 && !S.codeReviewIssue(c1), S.codeReviewIssue(c1));
   const calls = (name) => [{ name: 'Skill', input: { skill: name } }];
-  H.ok('用 Skill 调 handover、ttls-handover 都算写过交接记录', S.handoverWrittenIn(calls('handover'), '') && S.handoverWrittenIn(calls('ttls-handover'), '') && S.handoverWrittenIn(calls('/ttls-handover'), '') && !S.handoverWrittenIn(calls('ttls-onboard'), ''));
-  H.ok('用户敲的斜杠命令新旧都认', S.handoverWrittenIn([], '<command-name>/handover</command-name>') && S.handoverWrittenIn([], '<command-name>/ttls-handover</command-name>'));
+  H.ok('用 Skill 调 handover、vk-handover 都算写过交接记录', S.handoverWrittenIn(calls('handover'), '') && S.handoverWrittenIn(calls('vk-handover'), '') && S.handoverWrittenIn(calls('/vk-handover'), '') && !S.handoverWrittenIn(calls('vk-onboard'), ''));
+  H.ok('用户敲的斜杠命令新旧都认', S.handoverWrittenIn([], '<command-name>/handover</command-name>') && S.handoverWrittenIn([], '<command-name>/vk-handover</command-name>'));
 
   H.section('经验规则的文件改名');
   const L = require(path.join(h.kit, 'lib', 'lessons.js'));
   H.ok('用户级的旧文件还没动（装的时候不碰）', fs.existsSync(path.join(h.cfg, 'rules', 'vibe-lessons-java.md')));
   const oldRule = path.join(proj, '.claude', 'rules', 'vibe-lessons-java.md');
-  const newRule = path.join(proj, '.claude', 'rules', 'ttls-lessons-java.md');
+  const newRule = path.join(proj, '.claude', 'rules', 'vk-lessons-java.md');
   H.write(oldRule, '---\npaths:\n  - "**/*.java"\n---\n\n# 写Java时注意（这个项目的审查里反复出现过）\n\n- 手写的一条，没有编号\n\n<!-- L111111 次数=2 最近=2026-09-25 类别=边界 出处=c1 1.1；c2 2.1 -->\n- 导出接口要先判断列表为空，空的时候返回空文件\n<!-- L222222 次数=4 最近=2026-09-27 没管住=1 类别=权限 出处=c3 1.2 -->\n- 新加的接口要在权限表里登记角色\n');
   // 同事还没升级的那几天：新文件里已经有一条一样的（次数少）和一条别的
   H.write(newRule, '---\npaths:\n  - "**/*.java"\n---\n\n# 写Java时注意（这个项目的审查里反复出现过）\n\n<!-- L222222 次数=2 最近=2026-09-29 类别=权限 出处=c9 3.1 -->\n- 新加的接口要在权限表里登记角色\n<!-- L333333 次数=2 最近=2026-09-29 类别=数据库 出处=c9 3.2 -->\n- 批量更新要带上租户条件\n');
   H.git(proj, ['add', '-A']); H.git(proj, ['commit', '-q', '-m', 'docs: 规则']);
-  H.ok('旧名字的文件照样受保护（不许直接改）', L.isLessonFile(oldRule) && L.isLessonFile(newRule));
-  const guard = H.hook(h, 'pre-edit', { session_id: 's-ttls', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: oldRule, content: '- x\n' }, transcript_path: tf });
-  H.ok('钩子拦住直接改旧名字的规则文件', guard && guard.decision === 'block' && /经验规则的文件/.test(H.reasonOf(guard)), guard);
-  H.hook(h, 'session-start', { session_id: 's-ttls', cwd: proj, hook_event_name: 'SessionStart', source: 'startup', transcript_path: tf });
+  H.ok('旧名字的文件也认得是经验规则', L.isLessonFile(oldRule) && L.isLessonFile(newRule));
+  const guard = H.hook(h, 'pre-edit', { session_id: 's-rn', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: oldRule, content: '- x\n' }, transcript_path: tf });
+  H.ok('直接改规则文件：放行（2026-11-04 起套件可以改）', guard === null, guard);
+  H.hook(h, 'session-start', { session_id: 's-rn', cwd: proj, hook_event_name: 'SessionStart', source: 'startup', transcript_path: tf });
   const merged = L.readRuleFile(newRule);
   H.ok('会话开始：旧文件并进了新文件，旧文件没了', !fs.existsSync(oldRule) && merged.rules.length === 3 && merged.manual.some((l) => /手写的一条/.test(l)), [fs.existsSync(oldRule), merged]);
   const r2 = merged.rules.find((r) => r.id === 'L222222') || {};
   H.ok('两边都有的那条留一条：次数取大的，出处合起来', r2.count === 4 && r2.miss === 1 && r2.last === '2026-09-29' && r2.from.length === 2, r2);
-  H.ok('用户级的也挪了', !fs.existsSync(path.join(h.cfg, 'rules', 'vibe-lessons-java.md')) && /分页参数为空/.test(H.read(path.join(h.cfg, 'rules', 'ttls-lessons-java.md')) || ''));
+  H.ok('用户级的也挪了', !fs.existsSync(path.join(h.cfg, 'rules', 'vibe-lessons-java.md')) && /分页参数为空/.test(H.read(path.join(h.cfg, 'rules', 'vk-lessons-java.md')) || ''));
   const un = L.uncommitted(proj).map((x) => x.rel).sort();
-  H.ok('两个文件都记着要提交（旧文件的删除也要提交）', JSON.stringify(un) === JSON.stringify(['.claude/rules/ttls-lessons-java.md', '.claude/rules/vibe-lessons-java.md']), un);
+  H.ok('两个文件都记着要提交（旧文件的删除也要提交）', JSON.stringify(un) === JSON.stringify(['.claude/rules/vk-lessons-java.md', '.claude/rules/vibe-lessons-java.md']), un);
   H.ok('再来一次不重复挪', L.migrateNames(L.projectRulesDir(proj), 'project', proj) === 0);
 
   H.section('卸载');
   const u = H.node(h, path.join(h.kit, 'install.js'), ['--uninstall'], { cwd: h.root, timeout: 120000 });
-  H.ok('新名字的技能和代理收回了', u.code === 0 && !lsdir(path.join(h.cfg, 'skills')).some((n) => /^ttls-/.test(n)) && !fs.existsSync(path.join(h.cfg, 'agents', 'ttls-reviewer.md')), [u.out + u.err, lsdir(path.join(h.cfg, 'skills'))]);
+  H.ok('新名字的技能和代理收回了', u.code === 0 && !lsdir(path.join(h.cfg, 'skills')).some((n) => /^vk-/.test(n)) && !fs.existsSync(path.join(h.cfg, 'agents', 'vk-reviewer.md')), [u.out + u.err, lsdir(path.join(h.cfg, 'skills'))]);
   H.ok('用户自己的技能还在', fs.existsSync(path.join(h.cfg, 'skills', 'my-own', 'SKILL.md')));
   if (HAS_REAL) H.ok('驱动留着，说了', fs.existsSync(path.join(h.kit, 'drivers.json')) && lsdir(path.join(h.kit, 'drivers')).length === 5 && /数据库驱动（drivers、drivers\.json）/.test(u.out), u.out);
-  H.ok('用户级的经验规则留着', fs.existsSync(path.join(h.cfg, 'rules', 'ttls-lessons-java.md')) && /用户级的经验规则也留着/.test(u.out), u.out);
+  H.ok('用户级的经验规则留着', fs.existsSync(path.join(h.cfg, 'rules', 'vk-lessons-java.md')) && /用户级的经验规则也留着/.test(u.out), u.out);
 
   H.done('改名和并进来的技能');
 })().catch((e) => { console.log('测试脚本出错：' + ((e && e.stack) || e)); H.cleanup(); process.exit(2); });
