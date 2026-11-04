@@ -4,17 +4,17 @@
 
 ## 最近一次发版
 
-20261104.0435（新流程、删路由、审查子代理、状态栏），已推到 GitHub（main 和标签 v20261104.0435），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。这一版做了什么、提交号、测试、自审：[feedback-20261103.md](feedback-20261103.md)。复审：[reviews/claude/20261104-下个版本-复审.md](../reviews/claude/20261104-下个版本-复审.md)。
+20261104.1301，已推到 GitHub（main 和标签 v20261104.1301），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。和 0435 比：`/vk-auto` 改回纯开关；历史 plan.md 不完善的问题（第 49、50、51 条）；`/vk-resume <变更名>` 能切当前 change。提交号、测试、自审：[feedback-20261104.md](feedback-20261104.md)。复审：[reviews/claude/20261104-第49和50条-复审.md](../reviews/claude/20261104-第49和50条-复审.md)。0435 也已推到 GitHub，没有必要发内网，直接发 1301。
 
-全量回归 116 套、三个 Claude Code 版本的端到端：6473 项全过。从 0653、1436、2248 三个包验收升级都过；`dev/probes/up-no-router.js` 用 2248 的真路由走了自动更新和手动安装两条路，38 项过。
+全量回归 114 套 6214 项过，1 项是 `test-doctor` 机器忙时多写诊断记录，单独跑过。从 1436、2248、0435 验收升级都过。
 
 ## 在做的
 
-下一版在发（仓库主人说"修完再发"）：`/vk-auto` 改回纯开关，第 49、50、51 条修完（[feedback-20261104.md](feedback-20261104.md)），复审修完。现在跑全量回归，之后打包、验收升级、release。
+没有。
 
 ## 待仓库主人做的
 
-- 内网 GitLab 发布 20261104.0435（`publish.js`，只能仓库主人做）。发之前先用 cch 切走：升级时路由、`router-data/` 里的 key 一起删。
+- 内网 GitLab 发布 20261104.1301（`publish.js`，只能仓库主人做）。发之前先用 cch 切走：升级时路由、`router-data/` 里的 key 一起删。
 
 ## 要注意的
 
