@@ -107,13 +107,12 @@ function exploreIssues(task, change) {
 function forSession(j) {
   const all = tasks((j && j.cwd) || process.cwd());
   const st = flowState(j);
-  // 切到了表外的 change（/vk-resume <变更名>、开工点名）：这个会话不归哪个大任务
-  if (st.current && !all.some((t) => t.changes.some((c) => c.name === st.current))) return null;
   if (st.task) { const t = all.find((x) => x.name === st.task); if (t) return t; }
+  // 切到了表外的 change（/vk-resume <变更名>、开工点名）、还没做完：这个会话不归哪个大任务。做完了、归档了不算，不然后面开的大任务全失效（复审 R1）
+  if (st.current && !all.some((t) => t.changes.some((c) => c.name === st.current)) && currentAlive(j)) return null;
   const dirs = flowChanges(j);
   const hit = all.find((t) => t.changes.some((c) => dirs.includes(normKey(c.dir))));
   if (hit) return hit;
-  if (dirs.length) return null;
   const open = all.filter((t) => t.changes.some((c) => !c.archived) || !t.changes.length);
   return open.length === 1 ? open[0] : null;
 }
@@ -139,6 +138,19 @@ function goneRow(task, i) {
   if (c.exists || c.archived) return false;
   const later = task.changes.slice(i + 1);
   return task.legacy ? later.some((x) => x.exists || x.archived) : later.some((x) => x.exists && (!x.total || x.todo));
+}
+/** 切到的 change 还算数吗：表里的没归档、没勾完（还没建的也算，切过去就是要写它）；表外的目录在、没勾完 */
+function currentAlive(j) {
+  const name = flowState(j).current;
+  if (!name) return false;
+  const cwd = (j && j.cwd) || process.cwd();
+  for (const t of tasks(cwd)) { const c = t.changes.find((x) => x.name === name); if (c) return !c.archived && (!c.total || c.todo > 0); }
+  for (const d of changeRoots(cwd)) { const c = changeInfo(name, d); if (c.exists) return !c.total || c.todo > 0; }
+  return false;
+}
+/** 收工时：切到的 change 做完了、归档了、没了，指针清掉。不清的话它之后回改加了任务又抢回来，打勾顺序也一直豁免（复审 R4） */
+function dropDeadCurrent(j) {
+  if (flowState(j).current && !currentAlive(j)) updateState(String(j.session_id) + '-flow', (s) => { delete s.current; });
 }
 /** 这个会话当前的 change：用户用 /vk-resume <变更名> 切过、还没做完的就是它；做完了回到表的顺序（问题表第 49、50 条） */
 function phaseFor(j, task) {
@@ -172,7 +184,7 @@ function progressText(task) {
   const parts = ['共 ' + task.changes.length + ' 个'];
   const later = [];
   for (const [i, c] of task.changes.entries()) {
-    if (task.legacy && goneRow(task, i)) parts.push(c.name + ' 目录不在，跳过');
+    if (goneRow(task, i)) parts.push(c.name + (task.legacy ? ' 目录不在，跳过' : ' 还没建，后面做完了回来算'));
     else if (c.archived) parts.push(c.name + ' 已归档');
     else if (c.total && !c.todo) parts.push(c.name + ' 任务全勾完');
     else if (c.total) parts.push(c.name + ' 做到 ' + c.done + '/' + c.total);
@@ -270,4 +282,4 @@ function bar(j) {
   return { steps, next };
 }
 
-module.exports = { phaseFor, goneRow, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
+module.exports = { phaseFor, goneRow, currentAlive, dropDeadCurrent, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };

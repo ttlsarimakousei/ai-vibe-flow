@@ -397,6 +397,7 @@ function nextStepTodo(j, cfg, turnId, policy) {
   const st = flowState(j);
   if (!st.on || st.paused) return [];
   const B = require('../lib/big-task');
+  B.dropDeadCurrent(j);
   const task = B.forSession(j);
   if (!task) return [];
   try { B.noteAuto(j, !!cfg.autoSession); } catch (e) { /* 记不了：接回时不恢复自动 */ }
@@ -414,11 +415,11 @@ function nextStepTodo(j, cfg, turnId, policy) {
   if (ph.phase === 'plan' && st.stage === 'apply') {
     // 开工了、第一项还没勾的（phaseOf 也算 plan）不是接下一个（复审 20261104 R1）：这个 change 还没写任务，或者前一个是这次开工之后才做完的，才接
     const i = fresh.changes.findIndex((c) => c.name === ph.change);
-    const cur = fresh.changes[i]; const prev = fresh.changes[i - 1];
+    const cur = fresh.changes[i]; const prev = fresh.changes.slice(0, Math.max(i, 0)).reverse().find((c) => c.exists);
     let prevDoneNow = false;
-    if (prev && prev.exists && !prev.archived && prev.total && !prev.todo) { try { prevDoneNow = fs.statSync(path.join(prev.dir, 'tasks.md')).mtimeMs >= (Number(st.lastApplyAt) || 0); } catch (e) { prevDoneNow = false; } }
+    if (prev && !prev.archived && prev.total && !prev.todo) { try { prevDoneNow = fs.statSync(path.join(prev.dir, 'tasks.md')).mtimeMs >= (Number(st.lastApplyAt) || 0); } catch (e) { prevDoneNow = false; } }
     if (cur && cur.total && !prevDoneNow) return [];
-    const note = prev ? prev.name + ' 做完了，先在探索记录"落地偏差"写下和计划不一样的地方（' + fresh.explore + '）。' : '';
+    const note = prevDoneNow ? prev.name + ' 做完了，先在探索记录"落地偏差"写下和计划不一样的地方（' + fresh.explore + '）。' : '';
     const text = cfg.autoSession === true ? note + '接着做 ' + ph.change + '：读探索记录的公共几节、' + ph.change + ' 那一节和前面 change 的 design、revisions，用 /opsx:new 或 openspec new change 建变更，一份一份写需求。' : note + '用提问框问用户要不要接着做 ' + ph.change + '（选项写"接着做 ' + ph.change + '""先停"）。';
     const prompt = policy.oncePrompt(j, 'next|' + ph.change, 'next', text);
     if (!prompt) return [];
@@ -593,7 +594,10 @@ const under = (file, dir) => { const f = normKey(file); const d = normKey(dir); 
 function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
   if (!cfg.autoMode || saidStuck(lastSaid)) return [];
   const flow = flowChanges(j); const policy = require('../lib/flow-policy');
-  for (const c of sessionChanges(j.session_id, entries, changes).filter(c => flow.includes(normKey(c.dir)))) {
+  const current = flowState(j).current;
+  const touched = sessionChanges(j.session_id, entries, changes).filter(c => flow.includes(normKey(c.dir)));
+  // 用户切到的 change 排最前面（复审 R3）：不然按修改时间，会把模型拉回刚做过的那个
+  for (const c of touched.filter(c => c.name === current).concat(touched.filter(c => c.name !== current))) {
     if (busy && busy(c.dir, 'code') || policy.pending(c.dir, 'code')) continue;
     const remaining = require('../lib/task-types').automatedLeft(c.dir);
     if (!remaining.length) continue;

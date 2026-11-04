@@ -114,8 +114,13 @@ function resumeTask(j) {
   const m = RESUME_CMD.exec(raw) || RESUME_TAG.exec(raw);
   if (!m) return null;
   const S = require('../lib/session'); const B = require('../lib/big-task');
-  const want = String(m[1] || '').trim();
+  const typed = String(m[1] || '').trim();
   const all = B.tasks(j.cwd || process.cwd());
+  // 不分大小写；后面多写了话（/vk-resume c2 继续做）认第一个词
+  const known = all.flatMap((t) => [t.name].concat(t.changes.map((c) => c.name))).concat(S.allChanges(j.cwd || process.cwd()).map((c) => c.name));
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  const want = !typed ? '' : known.find((n) => n === typed) || known.find((n) => same(n, typed)) || known.find((n) => same(n, typed.split(/\s+/)[0])) || typed;
+  if (!want && S.flowState(j).current) S.updateState(String(j.session_id) + '-flow', (s) => { delete s.current; });
   const byName = want ? all.find((t) => t.name === want) : null;
   const inTask = want && !byName ? all.find((t) => t.changes.some((c) => c.name === want)) : null;
   const pointed = inTask ? inTask.changes.find((c) => c.name === want) : null;

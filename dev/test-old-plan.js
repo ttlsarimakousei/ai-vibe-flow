@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 历史上写得不完善的 plan.md、/vk-resume 切当前 change（问题表第 49、50 条，2026-11-04）：
- *   目录不在的行不占"当前 change"；老任务不按表的顺序拦打勾，新任务照拦；表外的 change 能开工；/vk-resume <变更名> 切得过去，做完了回到表的顺序；标题不把表头当名字。
+ *   切 change 的指针只在还没做完时算数，不能挡后面的大任务（复审 20261104）；目录不在的行不占"当前 change"；老任务不按表的顺序拦打勾，新任务照拦；表外的 change 能开工；/vk-resume <变更名> 切得过去，做完了回到表的顺序；标题不把表头当名字。
  * 用法：node dev/test-old-plan.js [旧版的 vibe-kit 目录]（拿 20261104.0435 跑要不过）
  */
 const fs = require('fs');
@@ -41,7 +41,7 @@ const session = (proj, say) => { const sid = 's' + (++seq); return { session_id:
 const bar = (proj, sid) => { const r = spawnSync(process.execPath, [path.join(h.kit, 'statusline.js')], { input: JSON.stringify({ session_id: sid, workspace: { current_dir: proj }, context_window: { used_percentage: 30, context_window_size: 1000000, current_usage: { input_tokens: 300000 } } }), env: H.envFor(h), encoding: 'utf8', windowsHide: true }); return plain(r.stdout).trim().split(/\r?\n/).slice(1).join(' / '); };
 const clearBar = () => fs.rmSync(path.join(h.kit, 'state', 'changes-cache.json'), { force: true });
 const tick = (j, name, n) => H.reasonOf(H.hook(h, 'pre-edit', Object.assign({}, j, { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(j.cwd, 'openspec', 'changes', name, 'tasks.md'), old_string: '- [ ] 1.' + n, new_string: '- [x] 1.' + n } })));
-const resume = (j, arg) => { const prompt = '/vk-resume' + (arg ? ' ' + arg : ''); H.transcript(j.transcript_path, [H.tr.user(prompt)]); return H.hook(h, 'task-anchor', Object.assign({}, j, { hook_event_name: 'UserPromptSubmit', prompt })) || {}; };
+const resume = (j, arg, keep) => { const prompt = '/vk-resume' + (arg ? ' ' + arg : ''); if (!keep) H.transcript(j.transcript_path, [H.tr.user(prompt)]); return H.hook(h, 'task-anchor', Object.assign({}, j, { hook_event_name: 'UserPromptSubmit', prompt })) || {}; };
 const said = (o) => String(o.systemMessage || '') + JSON.stringify(o.hookSpecificOutput || '');
 const phase = (proj) => B.phaseOf(B.tasks(proj)[0]);
 
@@ -170,6 +170,100 @@ H.section('/vk-resume <变更名> 切当前 change');
   H.ok('没有这个名字：说没找到，列出来', /没找到 no-such/.test(said(none)) && /大任务名或变更名/.test(said(none)), said(none));
   S.setFlow(k, false, '测试');
   H.ok('退出流程：切的不算了', !S.flowState(k).current);
+}
+
+H.section('切 change 的指针：不能挡后面的大任务（复审 R1、R2、R4）');
+{
+  const t1 = project(null);
+  const d = change(t1, 'small-x', 1, 1);
+  const j = session(t1, '开工');
+  S.setFlow(j, true, '测试', 'apply');
+  S.flowTouch(j, d);
+  A.grant(j, '开工', '', {});
+  H.ok('（没有 plan.md 开工：记下了这个 change）', S.flowState(j).current === 'small-x', S.flowState(j).current);
+  fs.mkdirSync(path.join(t1, 'openspec', 'changes', 'archive'), { recursive: true });
+  fs.renameSync(d, path.join(t1, 'openspec', 'changes', 'archive', '2026-11-01-small-x'));
+  newPlan(t1, '导出', ['c1', 'c2']);
+  const d1 = change(t1, 'c1', 0, 1);
+  S.flowTouch(j, d1);
+  H.ok('表外的归档了、后来开了大任务：归到大任务，不是 null', (B.forSession(j) || {}).name === '导出', B.forSession(j));
+  clearBar();
+  H.ok('状态栏走大任务（有探索）', /探索✓/.test(bar(t1, j.session_id)) && /c1\(1\/2\)/.test(bar(t1, j.session_id)), bar(t1, j.session_id));
+
+  const t2 = project(null);
+  const old = change(t2, 'old-y', 1, 0);
+  newPlan(t2, '导出', ['c1']);
+  const k = session(t2, '继续');
+  S.setFlow(k, true, '测试', 'plan');
+  S.flowTouch(k, old);
+  H.ok('碰过表外的老 change、探索完第一个还没碰：还是这个大任务', (B.forSession(k) || {}).name === '导出', B.forSession(k));
+
+  const t3 = project(null);
+  newPlan(t3, '导出', ['c1', 'c2']);
+  const a1 = change(t3, 'c1', 1, 1); const a2 = change(t3, 'c2', 1, 1);
+  const m = session(t3, '/vk-resume');
+  resume(m, 'c2');
+  H.ok('（切到 c2）', S.flowState(m).current === 'c2');
+  change(t3, 'c2', 2, 0);
+  H.hook(h, 'verify-gate', Object.assign({}, m, { hook_event_name: 'Stop' }));
+  H.ok('c2 做完、收工：指针清了', !S.flowState(m).current, S.flowState(m).current);
+  change(t3, 'c2', 2, 1);
+  H.ok('c2 回改加了任务：不再抢回来，当前是表的顺序', B.phaseFor(m, B.tasks(t3)[0]).change === 'c1', B.phaseFor(m, B.tasks(t3)[0]));
+  void a1; void a2;
+
+  const t4 = project(null);
+  newPlan(t4, '导出', ['c1']);
+  change(t4, 'c1', 1, 1); change(t4, 'solo-c', 1, 1);
+  const q = session(t4, '/vk-resume');
+  resume(q, 'c1');
+  H.ok('（接回大任务）', S.flowState(q).task === '导出');
+  A.grant(q, '开工 solo-c', '', {});
+  H.ok('开工表外的：不归大任务，记着的大任务清了', B.forSession(q) === null && !S.flowState(q).task, [S.flowState(q).task, S.flowState(q).current]);
+  A.grant(q, '开工 c1', '', {});
+  H.ok('回头开工表里的：指针清了，归大任务', !S.flowState(q).current && (B.forSession(q) || {}).name === '导出', S.flowState(q).current);
+}
+
+H.section('/vk-resume：不写名字回到表的顺序（几个大任务也是）；名字不分大小写、多写了话也认');
+{
+  const p = project('# 计划\n\n## 甲\n\n' + TABLE(['a1', 'a2']) + '\n## 乙\n\n' + TABLE(['b1']));
+  change(p, 'a1', 1, 1); change(p, 'a2', 1, 1); change(p, 'b1', 1, 1);
+  const j = session(p, '/vk-resume');
+  resume(j, 'a2');
+  H.ok('（切到 a2）', S.flowState(j).current === 'a2');
+  resume(j);
+  H.ok('几个大任务、不写名字：只列清单，指针也清了', !S.flowState(j).current, S.flowState(j).current);
+  const k = session(p, '/vk-resume');
+  H.ok('不分大小写', /切到 a2/.test(said(resume(k, 'A2'))) && S.flowState(k).current === 'a2', S.flowState(k).current);
+  const m = session(p, '/vk-resume');
+  H.ok('后面多写了话：认第一个词', /切到 a2/.test(said(resume(m, 'a2 继续做'))) && S.flowState(m).current === 'a2', S.flowState(m).current);
+}
+
+H.section('新任务：跳过的行不说成"后面还有"；接下一个不把没做过的行说成"做完了"（复审 R7）');
+{
+  const n = project(null);
+  newPlan(n, '导出', ['c1', 'c2', 'c3']);
+  change(n, 'c2', 1, 1);
+  const txt = B.progressText(B.tasks(n)[0]);
+  H.ok('说还没建', /c1 还没建/.test(txt) && !/后面还有 c1/.test(txt), txt);
+}
+
+H.section('自动模式：催的时候先看切到的那个（复审 R3）');
+{
+  const n = project(null);
+  newPlan(n, '导出', ['c1', 'c2']);
+  const d1 = change(n, 'c1', 1, 1); const d2 = change(n, 'c2', 1, 1);
+  H.write(path.join(d1, 'tasks.md'), '## 1. 实现\n\n- [x] 1.1 c1-做了\n- [ ] 1.2 c1-没做\n');
+  H.write(path.join(d2, 'tasks.md'), '## 1. 实现\n\n- [x] 1.1 c2-做了\n- [ ] 1.2 c2-没做\n');
+  // c1 是这个会话刚做过的：按修改时间排它在前面
+  const older = new Date(Date.now() - 60000); fs.utimesSync(path.join(d2, 'tasks.md'), older, older); fs.utimesSync(d2, older, older);
+  const j = session(n, '开工 c1');
+  H.transcript(j.transcript_path, [H.tr.user('开工 c1'), H.tr.say('做了 1.1'), H.tr.user('/vk-resume c2'), H.tr.say('好的')]);
+  S.setSessionAuto(j, true, '测试');
+  resume(j, 'c2', true);
+  S.flowTouch(j, d1); S.flowTouch(j, d2);
+  for (const d of [d1, d2]) { H.reviewPoints(h, d, 'proposal'); H.reviewPoints(h, d, 'code'); }
+  const r = H.reasonOf(H.hook(h, 'verify-gate', Object.assign({}, j, { hook_event_name: 'Stop' })));
+  H.ok('催的是切到的 c2，不把模型拉回刚做过的 c1', /c2-没做/.test(r) && !/c1-没做/.test(r), r.slice(0, 300));
 }
 
 H.section('大任务名');
