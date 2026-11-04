@@ -46,6 +46,9 @@ H.section('第 28 条：自动模式按会话开，/vk-auto 开、/vk-auto off �
   const say = (sid, prompt) => { n++; return H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'a28-' + n + '.jsonl'), [H.tr.user(prompt)]) }); };
   const r1 = say('s-on', '/vk-auto');
   H.ok('敲 /vk-auto：这个会话开了，模型拿到怎么做', sa('s-on') === true && /这个会话的自动模式开了/.test(textOf(r1)) && /不自己加需求/.test(textOf(r1)), textOf(r1).slice(0, 400));
+  H.ok('/vk-auto 只是开关：不让模型提问（用户 2026-11-04 定的）', /只是个开关/.test(textOf(r1)) && /不要提问/.test(textOf(r1)) && !/先用提问框问/.test(textOf(r1)), textOf(r1).slice(0, 200));
+  const cmd = H.read(path.join(H.SRC, 'claude', 'commands', 'vk-auto.md')) || '';
+  H.ok('命令文件也一样，参数只有 off', /只是个开关/.test(cmd) && !/先用提问框问/.test(cmd) && /argument-hint: \[off\]/.test(cmd), cmd.slice(0, 300));
   H.ok('这个会话按开着算（需求、实施两段都开）', S.readConfigFor({ session_id: 's-on', cwd: p }).autoApply === true && S.readConfigFor({ session_id: 's-on', cwd: p }).autoRequirements === true);
   say('s-off', '改一下 A');
   H.ok('别的会话不受影响', S.readConfigFor({ session_id: 's-off', cwd: p }).autoApply === false);
