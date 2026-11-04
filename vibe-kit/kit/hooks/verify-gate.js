@@ -407,7 +407,7 @@ function nextStepTodo(j, cfg, turnId, policy) {
     if (now && now !== state.selfTest.code) B.setTaskState(task, { selfTest: null });
   }
   const fresh = B.named(root, task.name) || task;
-  const ph = B.phaseOf(fresh);
+  const ph = B.phaseFor(j, fresh);
   const open = fresh.changes.filter((c) => c.exists && !c.archived);
   // 代码审查还没收尾的不往下走：stop() 在催
   if (open.some((c) => c.total && !c.todo && policy.pending(c.dir, 'code'))) return [];

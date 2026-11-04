@@ -88,7 +88,25 @@ function decideFlow(j, cfg, note, resumed) {
   if (cfg.autoSwitch && (!!prev.on !== on || (on && prevStage !== nowStage))) hookLog('全自动模式 这个会话' + (on ? (prev.on ? '' : '进了 OpenSpec 流程：' + why + '，') + (nowStage === 'apply' ? '在做任务那一段' : '在写需求那一段') : '不在流程里了'));
   return { on, cont: !flowCmd && !resumed && !!prev.on, stage: nowStage, applyStart };
 }
-/** /vk-resume：接回没做完的大任务（用户 2026-11-03 定的）。阶段从文件算；死机前开着自动就接着开；提交、推送、归档的许可不恢复 */
+/**
+ * 切到表外的 change（没有 plan.md、或者不在表里）：/vk-resume <变更名>，不归哪个大任务（问题表第 49、50 条）
+ */
+function resumeOutside(j, c, S) {
+  const list = require('../lib/task-types').tasks(c.dir);
+  const done = list.filter((x) => x.done).length;
+  if (list.length && done === list.length) return { user: '[vibe-kit] ' + c.name + ' 的任务都勾完了，没切。', model: '用户敲了 /vk-resume ' + c.name + '，这个变更的任务都勾完了，没切。告诉用户，不用做别的。' };
+  const stage = done ? 'apply' : 'plan';
+  S.updateState(String(j.session_id) + '-flow', (s) => { delete s.task; s.current = c.name; s.paused = false; s.aside = false; s.holdApply = false; });
+  S.setFlow(j, true, '切到 ' + c.name, stage);
+  S.flowTouch(j, c.dir);
+  if (stage === 'apply') { try { require('../lib/apply-scope').grant(j, c.name, ''); } catch (e) { /* 开工范围记不了：改代码时会说 */ } }
+  const step = stage === 'apply' ? '接着做任务' : list.length ? '任务写好了，还没开工，用户说开工再做' : '写需求';
+  return { user: '[vibe-kit] 切到 ' + c.name + '（不在 plan.md 的表里）：做到 ' + done + '/' + list.length + '。下一步：' + step + '。', model: '用户敲了 /vk-resume ' + c.name + '，切到这个变更（不在 plan.md 的表里），做到 ' + done + '/' + list.length + '。先读它的文档，再' + step + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。' };
+}
+/**
+ * /vk-resume：接回没做完的大任务（用户 2026-11-03 定的）。阶段从文件算；死机前开着自动就接着开；提交、推送、归档的许可不恢复。
+ * 写变更名就切到这个 change（第 49、50 条）：状态栏跟着它，打勾不按表的顺序拦，做完了回到表的顺序。写大任务名、不写：回到表的顺序。
+ */
 const RESUME_CMD = /^\s*\/vk-resume(?:\s+([\s\S]*?))?\s*$/i;
 const RESUME_TAG = /<command-name>\s*\/?vk-resume\s*<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/i;
 function resumeTask(j) {
@@ -97,26 +115,32 @@ function resumeTask(j) {
   if (!m) return null;
   const S = require('../lib/session'); const B = require('../lib/big-task');
   const want = String(m[1] || '').trim();
-  const open = B.tasks(j.cwd || process.cwd()).filter((t) => B.phaseOf(t).phase !== 'done');
+  const all = B.tasks(j.cwd || process.cwd());
+  const byName = want ? all.find((t) => t.name === want) : null;
+  const inTask = want && !byName ? all.find((t) => t.changes.some((c) => c.name === want)) : null;
+  const pointed = inTask ? inTask.changes.find((c) => c.name === want) : null;
+  if (want && !byName && !inTask) { const c = S.allChanges(j.cwd || process.cwd()).find((x) => x.name === want); if (c) return resumeOutside(j, c, S); }
+  if (pointed && (pointed.archived || (pointed.total && !pointed.todo))) return { user: '[vibe-kit] ' + want + (pointed.archived ? ' 已归档' : ' 的任务都勾完了') + '，没切。', model: '用户敲了 /vk-resume ' + want + '，这个变更' + (pointed.archived ? '已归档' : '的任务都勾完了') + '，没切。告诉用户，不用做别的。' };
+  const open = all.filter((t) => B.phaseOf(t).phase !== 'done');
   if (!open.length) return { user: '[vibe-kit] 没有没做完的大任务。', model: '用户敲了 /vk-resume，但 openspec/plan.md 里没有没做完的大任务。告诉用户，不用做别的。' };
-  const task = want ? open.find((t) => t.name === want || t.changes.some((c) => c.name === want)) : open.length === 1 ? open[0] : null;
+  const task = want ? open.find((t) => t === byName || t === inTask) : open.length === 1 ? open[0] : null;
   if (!task) {
     const list = open.map((t) => t.name + '（' + B.progressText(t) + '）').join('；');
-    return { user: '[vibe-kit] ' + (want ? '没找到 ' + want + '。' : '') + '没做完的大任务：' + list + '。敲 /vk-resume <名字> 接回。', model: '用户敲了 /vk-resume，' + (want ? '没找到 ' + want + '，' : '') + '有几个没做完的大任务：' + list + '。列给用户，等用户敲 /vk-resume <名字>，不要自己选。' };
+    return { user: '[vibe-kit] ' + (want ? '没找到 ' + want + '。' : '') + '没做完的大任务：' + list + '。敲 /vk-resume <大任务名或变更名> 接回。', model: '用户敲了 /vk-resume，' + (want ? '没找到 ' + want + '，' : '') + '有几个没做完的大任务：' + list + '。列给用户，等用户敲 /vk-resume <名字>，不要自己选。' };
   }
-  const ph = B.phaseOf(task);
+  S.updateState(String(j.session_id) + '-flow', (s) => { s.task = task.name; s.paused = false; s.aside = false; s.holdApply = false; if (pointed) s.current = want; else delete s.current; });
+  const ph = B.phaseFor(j, task);
   const stage = ph.phase === 'explore' || ph.phase === 'plan' ? 'plan' : 'apply';
   S.setFlow(j, true, '接回大任务 ' + task.name, stage);
-  S.updateState(String(j.session_id) + '-flow', (s) => { s.task = task.name; s.paused = false; s.aside = false; s.holdApply = false; });
   for (const c of task.changes) if (c.exists) S.flowTouch(j, c.dir);
   const autoBack = B.taskState(task).auto === true;
   if (autoBack) S.setSessionAuto(j, true, '/vk-resume 接回');
   if (stage === 'apply') { try { require('../lib/apply-scope').grant(j, ph.change || (task.changes.find((c) => c.exists) || {}).name || '', ''); } catch (e) { /* 开工范围记不了：改代码时会说 */ } }
-  const STEP = { explore: '接着探索，把结果写进探索记录', plan: '写 ' + ph.change + ' 的需求', apply: '接着做 ' + ph.change + ' 的任务', selftest: '任务都做完了：全面自测', verify: '等用户人工核验', archive: '接着按表的顺序归档 ' + ph.change };
+  const STEP = { explore: '接着探索，把结果写进探索记录', plan: (task.changes.find((c) => c.name === ph.change) || {}).total ? ph.change + ' 的任务写好了，还没开工' + (autoBack || S.readConfigFor(j).autoSession === true ? '，开着自动，接着开工' : '，用户说开工再做') : '写 ' + ph.change + ' 的需求', apply: '接着做 ' + ph.change + ' 的任务', selftest: '任务都做完了：全面自测', verify: '等用户人工核验', archive: '接着按表的顺序归档 ' + ph.change };
   const rel = task.explore ? '探索记录 ' + task.explore + '（公共几节和 ' + (ph.change || '要做的 change') + ' 那一节）、' : '';
   return {
-    user: '[vibe-kit] 接回大任务 ' + task.name + '：' + B.progressText(task) + (autoBack ? '；自动已恢复' : '') + '。下一步：' + STEP[ph.phase] + '。',
-    model: '用户敲了 /vk-resume，接回大任务 ' + task.name + '：' + B.progressText(task) + '。先读 ' + task.planFile + '、' + rel + '前面 change 的 design 和 revisions，再' + STEP[ph.phase] + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。',
+    user: '[vibe-kit] ' + (pointed ? '切到 ' + want + '，大任务 ' : '接回大任务 ') + task.name + '：' + B.progressText(task) + (autoBack ? '；自动已恢复' : '') + '。下一步：' + STEP[ph.phase] + '。',
+    model: '用户敲了 /vk-resume' + (pointed ? ' ' + want + '，切到这个 change（用户定的，不按表的顺序），大任务 ' : '，接回大任务 ') + task.name + '：' + B.progressText(task) + '。先读 ' + task.planFile + '、' + rel + '前面 change 的 design 和 revisions，再' + STEP[ph.phase] + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。',
   };
 }
 /** 有没做完的大任务、这个会话又没在流程里：第一句话告诉用户一次（模型知道用户不知道，死机回来找不到） */

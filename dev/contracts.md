@@ -678,6 +678,17 @@ MCP 工具的令牌保护（第 48 条，硬规矩第 6 条只能收紧）：不
 - session.js 的每个导出都有人用
 - 假用户目录真装一遍
 
+### test-old-plan.js
+
+历史上写得不完善的 plan.md、/vk-resume 切当前 change（问题表第 49、50 条，2026-11-04）：
+
+- 目录不在的行（改名、删了，没归档）
+- 打勾的顺序：老任务不拦，新任务照拦
+- 表外的 change 能开工
+- /vk-resume <变更名> 切当前 change
+- 大任务名
+- 钩子不改写 plan.md
+
 ### test-onboard.js
 
 后台自动探索（kit/lib/onboard.js、kit/lib/discover.js）：

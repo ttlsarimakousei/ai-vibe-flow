@@ -149,7 +149,7 @@ function automaticApply(j) {
   let c = null;
   if (task) {
     if (B.exploreIssues(task).length) return false;
-    const name = B.phaseOf(task).change;
+    const name = B.phaseFor(j, task).change;
     c = name ? S.allChanges(j.cwd).find((x) => x.name === name) : null;
   } else if (st.planReady) {
     const changes = S.allChanges(j.cwd).filter((x) => S.flowChanges(j).includes(S.normKey(x.dir)));
@@ -244,7 +244,7 @@ function applyingNow(j, dir) {
   if (S.flowStage(j) !== 'apply') return false;
   const B = require('./big-task');
   const task = B.forSession(j);
-  return !task || B.phaseOf(task).change === path.basename(dir);
+  return !task || B.phaseFor(j, task).change === path.basename(dir);
 }
 /** lastEditAt：这一轮最后一次改代码、页面的时间（收工检查算），用户说不用审、不用测之后又改了才再问 */
 function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {

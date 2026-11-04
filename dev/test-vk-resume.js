@@ -86,7 +86,7 @@ H.section('几个大任务');
   ticks(proj, 'a1', 1, 1); ticks(proj, 'b1', 0, 2);
   const j = session(proj);
   const r = say(j, '/vk-resume');
-  H.ok('列出来让用户选，不进流程', /甲/.test(r.systemMessage || '') && /乙/.test(r.systemMessage || '') && /vk-resume <名字>/.test(r.systemMessage || '') && !fl(j).on, r);
+  H.ok('列出来让用户选，不进流程', /甲/.test(r.systemMessage || '') && /乙/.test(r.systemMessage || '') && /vk-resume <大任务名或变更名>/.test(r.systemMessage || '') && !fl(j).on, r);
   H.ok('写名字接回', (say(j, '/vk-resume 乙'), fl(j).task === '乙' && fl(j).on === true), fl(j));
   const k = session(proj);
   say(k, '/vk-resume a1');

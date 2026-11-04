@@ -45,7 +45,7 @@ function flowState(j) { const k = flowKey(j); return k ? readState(k) : {}; }
 function setFlow(j, on, why, stage) {
   const k = flowKey(j);
   if (!k) return false;
-  updateState(k, (st) => { st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; if (stage === 'plan' || stage === 'apply') st.stage = stage; return st; });
+  updateState(k, (st) => { st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; else delete st.current; if (stage === 'plan' || stage === 'apply') st.stage = stage; return st; });
   return !!on;
 }
 

@@ -107,10 +107,13 @@ function exploreIssues(task, change) {
 function forSession(j) {
   const all = tasks((j && j.cwd) || process.cwd());
   const st = flowState(j);
+  // 切到了表外的 change（/vk-resume <变更名>、开工点名）：这个会话不归哪个大任务
+  if (st.current && !all.some((t) => t.changes.some((c) => c.name === st.current))) return null;
   if (st.task) { const t = all.find((x) => x.name === st.task); if (t) return t; }
   const dirs = flowChanges(j);
   const hit = all.find((t) => t.changes.some((c) => dirs.includes(normKey(c.dir))));
   if (hit) return hit;
+  if (dirs.length) return null;
   const open = all.filter((t) => t.changes.some((c) => !c.archived) || !t.changes.length);
   return open.length === 1 ? open[0] : null;
 }
@@ -127,6 +130,24 @@ function setTaskState(task, patch) {
 }
 
 /**
+ * 表里这一行的目录不在、也没归档，后面的 change 又已经开始了：多半是改名或者删了，不算当前（问题表第 50 条）。
+ * 老任务一直跳过（老表的行可能早就不用了）；新任务探索记录里定了要做，只在后面还有没做完的时跳过，做完了回来算。
+ * 表最后面还没建的行不算：那是计划要做的。
+ */
+function goneRow(task, i) {
+  const c = task.changes[i];
+  if (c.exists || c.archived) return false;
+  const later = task.changes.slice(i + 1);
+  return task.legacy ? later.some((x) => x.exists || x.archived) : later.some((x) => x.exists && (!x.total || x.todo));
+}
+/** 这个会话当前的 change：用户用 /vk-resume <变更名> 切过、还没做完的就是它；做完了回到表的顺序（问题表第 49、50 条） */
+function phaseFor(j, task) {
+  const name = flowState(j).current;
+  const c = name ? task.changes.find((x) => x.name === name) : null;
+  if (c && !c.archived && (!c.total || c.todo)) return { phase: !c.total || !c.done ? 'plan' : 'apply', change: name };
+  return phaseOf(task);
+}
+/**
  * 大任务走到哪一步：explore 探索 / plan 写需求（还没开工）/ apply 做任务 / selftest 全面自测 / verify 等人工核验 / archive 归档中 / done。
  * change 是当前要做的那个：按表的顺序，最前面没做完的。回改前面的 change 补了任务，它就排回前面。
  */
@@ -134,14 +155,15 @@ function phaseOf(task) {
   const list = task.changes;
   const started = list.some((c) => c.exists || c.archived);
   if (!list.length || (!started && exploreIssues(task).length)) return { phase: 'explore', change: '' };
-  for (const c of list) {
-    if (c.archived) continue;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.archived || goneRow(task, i)) continue;
     if (!c.total || (c.todo && !c.done)) return { phase: 'plan', change: c.name };
     if (c.todo) return { phase: 'apply', change: c.name };
   }
-  const left = list.filter((c) => !c.archived);
+  const left = list.filter((c, i) => !c.archived && !goneRow(task, i));
   if (!left.length) return { phase: 'done', change: '' };
-  if (left.length < list.length) return { phase: 'archive', change: left[0].name };
+  if (list.some((c) => c.archived)) return { phase: 'archive', change: left[0].name };
   return { phase: taskState(task).selfTest ? 'verify' : 'selftest', change: '' };
 }
 
@@ -149,8 +171,9 @@ function phaseOf(task) {
 function progressText(task) {
   const parts = ['共 ' + task.changes.length + ' 个'];
   const later = [];
-  for (const c of task.changes) {
-    if (c.archived) parts.push(c.name + ' 已归档');
+  for (const [i, c] of task.changes.entries()) {
+    if (task.legacy && goneRow(task, i)) parts.push(c.name + ' 目录不在，跳过');
+    else if (c.archived) parts.push(c.name + ' 已归档');
     else if (c.total && !c.todo) parts.push(c.name + ' 任务全勾完');
     else if (c.total) parts.push(c.name + ' 做到 ' + c.done + '/' + c.total);
     else if (c.exists) parts.push(c.name + ' 在写需求');
@@ -218,16 +241,17 @@ function bar(j) {
   const P = require('./flow-policy');
   let ph; let list; let dir = '';
   if (task) {
-    ph = phaseOf(task); list = task.changes;
+    ph = phaseFor(j, task); list = task.changes;
     const c = ph.change ? list.find((x) => x.name === ph.change) : null;
     if (c && c.exists) dir = c.dir;
   } else {
     const dirs = flowChanges(j);
     const hit = S.allChanges(j.cwd || process.cwd()).filter((c) => dirs.includes(normKey(c.dir)));
     if (!hit.length) return { steps: '', next: '' };
-    dir = hit[0].dir; list = hit.map((c) => ({ name: c.name }));
+    const pick = hit.find((c) => c.name === flowState(j).current) || hit[0];
+    dir = pick.dir; list = hit.map((c) => ({ name: c.name }));
     const tasks = T.tasks(dir); const done = tasks.filter((x) => x.done).length;
-    ph = { phase: !tasks.length || !done ? 'plan' : done < tasks.length ? 'apply' : 'verify', change: hit[0].name };
+    ph = { phase: !tasks.length || !done ? 'plan' : done < tasks.length ? 'apply' : 'verify', change: pick.name };
   }
   const name = ph.change || (list.length ? list[list.length - 1].name : '');
   const idx = list.findIndex((x) => x.name === name) + 1;
@@ -246,4 +270,4 @@ function bar(j) {
   return { steps, next };
 }
 
-module.exports = { bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
+module.exports = { phaseFor, goneRow, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
