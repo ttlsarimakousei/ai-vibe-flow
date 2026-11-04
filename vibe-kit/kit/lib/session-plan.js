@@ -14,7 +14,8 @@ const { codeReviewIssue } = require('./session-review');
 
 // ===================== 大需求的计划：openspec/plan.md =====================
 // 一个大需求拆成几个变更做，模型下次怎么知道哪些做完了？靠 plan.md：每个大任务一节（## 名字、探索记录：路径、模块 | 变更名 | 状态 | 说明 的表）。
-// 状态不靠人记：会话开头的汇总按 changes/ 和 changes/archive/ 的实际情况算。钩子只算不写（不动跟踪文件），文件里的状态列跑 tools/plan.js 才更新。
+// 状态不靠人记：会话开头的汇总按 changes/ 和 changes/archive/ 的实际情况算。状态列跑 tools/plan.js 才更新。
+// 钩子以前只算不写；2026-11-04 起（仓库主人定的，第 55 条）表外的 change 由钩子补成表里普通的一行（planAddUnlisted）。
 // 老的 plan.md 没有分节，整张表算一个大任务（lib/big-task.js 按老任务算）。
 /**
  * 这一格是不是 change 名（问题表第 51 条）：OpenSpec 的变更名只能是英文、数字加连字符。
@@ -26,6 +27,15 @@ function isChangeName(name, openspecDir) {
   const changes = path.join(openspecDir, 'changes');
   try { if (fs.existsSync(path.join(changes, name))) return true; } catch (e) { /* 当不是 */ }
   try { return fs.readdirSync(path.join(changes, 'archive')).some((n) => n.replace(/^\d{4}-\d{2}-\d{2}-/, '') === name); } catch (e) { return false; }
+}
+/** 格子里带了说明（"补充 add-x（中途加）"）：里面真有这个变更（进行中或已归档）就认它（第 55 条） */
+function realNameIn(cell, openspecDir) {
+  for (const w of String(cell || '').match(/[\w.-]*[a-z0-9][\w.-]*/gi) || []) {
+    if (ENGLISH_PLACEHOLDER.test(w)) continue;
+    try { if (fs.existsSync(path.join(openspecDir, 'changes', w, 'proposal.md')) || fs.existsSync(path.join(openspecDir, 'changes', w, 'tasks.md'))) return w; } catch (e) { /* 不是 */ }
+    try { if (fs.readdirSync(path.join(openspecDir, 'changes', 'archive')).some((n) => n.replace(/^\d{4}-\d{2}-\d{2}-/, '') === w)) return w; } catch (e) { /* 没有归档 */ }
+  }
+  return '';
 }
 function readPlan(openspecDir) {
   const file = path.join(openspecDir, 'plan.md');
@@ -46,8 +56,9 @@ function readPlan(openspecDir) {
     const cells = l.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((s) => s.trim());
     if (!cols) { const c = cells.findIndex((x) => /变更|change/i.test(x) && !/状态|status/i.test(x)); const s = cells.findIndex((x) => /状态|status/i.test(x)); if (c >= 0 && s >= 0) cols = { change: c, status: s }; continue; }
     if (cells.every((x) => /^:?-*:?$/.test(x))) continue;
-    const name = (cells[cols.change] || '').replace(/`/g, '').trim();
-    if (!name || !isChangeName(name, openspecDir)) continue;
+    let name = (cells[cols.change] || '').replace(/`/g, '').trim();
+    if (!name) continue;
+    if (!isChangeName(name, openspecDir)) { name = realNameIn(name, openspecDir); if (!name) continue; }
     rows.push({ line: i, name, status: cells[cols.status] || '', cells, cols, task: section ? section.name : '' });
   }
   // 只认这一行：\s 会跨行，"# 计划"后面紧跟表时会把表头当标题（问题表第 50 条）
@@ -174,6 +185,43 @@ function planUnlisted(openspecDir) {
   return changeNames(path.join(openspecDir, 'changes')).filter((n) => !listed.has(n));
 }
 
+/**
+ * 进行中、却不在表里的变更：补成表里普通的一行（| | 名字 | 状态 | |），和别的行一样（仓库主人 2026-11-04 定的，第 55 条：
+ * 以前只提醒"用户说它属于这个大需求再加一行"，旧版本建的 change 就一直不在表里，/vk-resume 认不出、按表的顺序挑了别的）。
+ * 补进哪个大任务：表里只有一个大任务的补进它；有几个的补进 opts.prefer（这个会话在做的那个），没有就补进最后一个。
+ * opts.single：只在表里只有一个大任务时补（会话开始时还不知道这个会话做哪个）。opts.names：只补这几个。
+ * 返回 { added: [名字], task: 大任务名 }。写不了、没有 plan.md 返回 { added: [] }
+ */
+function planAddUnlisted(openspecDir, opts) {
+  const o = opts || {};
+  const none = { added: [], task: '' };
+  try {
+    const p = readPlan(openspecDir);
+    if (!p) return none;
+    const want = (planUnlisted(openspecDir) || []).filter((n) => !o.names || o.names.includes(n));
+    if (!want.length) return none;
+    const tasks = [...new Set(p.rows.map((r) => r.task).concat(p.sections.map((s) => s.name)))];
+    if (o.single && tasks.length > 1) return none;
+    const pick = tasks.length <= 1 ? (tasks[0] || '') : (o.prefer && tasks.includes(o.prefer) ? o.prefer : p.sections[p.sections.length - 1].name);
+    const changesDir = path.join(openspecDir, 'changes');
+    const own = p.rows.filter((r) => r.task === pick);
+    const lines = p.lines.slice();
+    if (own.length) {
+      const last = own[own.length - 1];
+      const row = (n) => { const cells = last.cells.map(() => ''); cells[last.cols.change] = n; cells[last.cols.status] = planStatusOf(n, changesDir); return '| ' + cells.join(' | ') + ' |'; };
+      lines.splice(last.line + 1, 0, ...want.map(row));
+    } else {
+      // 这个大任务还没有表：在它那一节（或者文件末尾）建一张
+      const sec = p.sections.find((s) => s.name === pick);
+      let at = lines.length;
+      if (sec) { at = sec.line + 1; while (at < lines.length && !/^##\s/.test(lines[at])) at++; while (at > sec.line + 1 && !lines[at - 1].trim()) at--; }
+      lines.splice(at, 0, '', '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|', ...want.map((n) => '| | ' + n + ' | ' + planStatusOf(n, changesDir) + ' | |'));
+    }
+    fs.writeFileSync(p.file, lines.join(p.eol));
+    return { added: want, task: pick };
+  } catch (e) { return none; }
+}
+
 /** 产物内容的指纹：打勾不算改 */
 function artifactHash(file) { try { return crypto.createHash('sha1').update(normTicks(fs.readFileSync(file, 'utf8'))).digest('hex'); } catch (e) { return ''; } }
 
@@ -206,4 +254,4 @@ function snapshotArtifacts(dir) {
   return files;
 }
 
-module.exports = { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, artifactHash, snapshotArtifacts };
+module.exports = { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, planAddUnlisted, artifactHash, snapshotArtifacts };

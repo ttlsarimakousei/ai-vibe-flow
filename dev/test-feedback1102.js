@@ -758,7 +758,7 @@ const reason = (o) => H.reasonOf(o);
   }
 
   // ---------------------------------------------------------------------------------------------
-  H.section('第 38 条：需求跑着不再被催去改 plan.md');
+  H.section('第 38 条：需求跑着不再被催去改 plan.md；第 55 条起表外的 change 由套件补进表（2026-11-04）');
   {
     const h = H.makeHome('t1102-plan', from);
     const row = (name, status) => '| 模块 | ' + name + ' | ' + status + ' | |';
@@ -775,17 +775,17 @@ const reason = (o) => H.reasonOf(o);
     H.ok('变更不在计划表里：不让模型去改 plan.md', !/在表里加一行|plan\.md/.test(textOf(o0)), textOf(o0));
     // 前面还有别的事要拦（写完 proposal 要问用户）：这一次提醒不出，等真正收工
     const o1 = stop(p1, 's-plan-1');
-    H.ok('这一条不拦收工，真正收工时提醒用户一句', !(o1 && o1.decision === 'block') && /不在计划表[\s\S]*告诉 Claude 加一行/.test(textOf(o1)) && !!o1.systemMessage, textOf(o1));
+    H.ok('这一条不拦收工，真正收工时补进表、说一句', !(o1 && o1.decision === 'block') && /不在计划表里，补进了/.test(textOf(o1)) && !!o1.systemMessage && /\|\s*\|\s*new-one\s*\|/.test(H.read(path.join(p1, 'openspec', 'plan.md'))), textOf(o1));
     H.ok('同一个变更只提醒一次', !/不在计划表/.test(textOf(stop(p1, 's-plan-1'))));
     H.write(path.join(h.work, 'b', 'openspec', 'changes', 'archive', '2026-10-01-done-one', 'proposal.md'), '# x\n');
     const p2 = mk('b', { 'openspec/plan.md': planOf([row('done-one', '已归档 2026-10-01')]) });
-    stop(p2, 's-plan-3');
-    H.ok('计划里的变更都做完了：不提醒', !/不在计划表/.test(textOf(stop(p2, 's-plan-3'))), textOf(stop(p2, 's-plan-3')));
+    stop(p2, 's-plan-3'); stop(p2, 's-plan-3');
+    H.ok('计划里的变更都做完了：照样补进表（第 55 条）', /\|\s*\|\s*new-one\s*\|/.test(H.read(path.join(p2, 'openspec', 'plan.md'))), H.read(path.join(p2, 'openspec', 'plan.md')));
     const p3 = mk('c', {});
     stop(p3, 's-plan-5');
     H.ok('没有 plan.md：不提', !/计划表|plan\.md/.test(textOf(stop(p3, 's-plan-5'))));
     const start = H.hook(h, 'session-start', { session_id: 's-plan-6', hook_event_name: 'SessionStart', source: 'startup', cwd: p1 });
-    H.ok('会话开头说实话：文件里的状态列跑 plan.js 才更新；没有用户的话不自己加行', /跑 plan\.js 才更新/.test(textOf(start)) && /不要自己往表里加行/.test(textOf(start)) && !/由钩子按实际情况维护/.test(textOf(start)), textOf(start).slice(0, 600));
+    H.ok('会话开头说实话：文件里的状态列跑 plan.js 才更新；表外的 change 套件会补进表', /跑 plan\.js 才更新/.test(textOf(start)) && /表外的 change 套件会补进表/.test(textOf(start)) && !/由钩子按实际情况维护/.test(textOf(start)), textOf(start).slice(0, 600));
   }
 
   const wins = await watch.stop();

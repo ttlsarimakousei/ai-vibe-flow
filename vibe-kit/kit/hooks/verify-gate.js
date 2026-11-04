@@ -420,20 +420,17 @@ function nextStepTodo(j, cfg, turnId, policy) {
  * 以前拦住收工让模型自己判断"属于这个大需求就加一行"：它判断不了，最省事的就是加，需求跑着跑着就去改 plan.md。
  * 计划里的变更都做完了（全归档）：那个大需求结束了，新变更和它没关系，不提醒。每个变更只提醒一次
  */
-function planUnlistedTodo(touched) {
+// 这一轮动过、却不在计划表里的变更：补成表里普通的一行（第 55 条，2026-11-04 起；以前只提醒用户让 Claude 加一行）
+function planUnlistedTodo(touched, j) {
   const out = [];
-  updateState('plan-unlisted', (st) => {
-    for (const [k, a] of touched) {
-      if (st[k]) continue;
-      const osDir = path.join(a.root, 'openspec');
-      const unlisted = planUnlisted(osDir);
-      if (!unlisted || !unlisted.includes(a.name)) continue;
-      st[k] = Date.now();
-      const s = refreshPlan(osDir);
-      if (s && !s.active.length && !s.next) continue;
-      out.push('变更 ' + a.name + ' 不在计划表 ' + path.join(osDir, 'plan.md') + ' 里。它属于这个大需求的话，告诉 Claude 加一行；不属于就不用管。');
-    }
-  });
+  let prefer = ''; try { const t = require('../lib/big-task').forSession(j); prefer = t ? t.name : ''; } catch (e) { prefer = ''; }
+  for (const [, a] of touched) {
+    const osDir = path.join(a.root, 'openspec');
+    const unlisted = planUnlisted(osDir);
+    if (!unlisted || !unlisted.includes(a.name)) continue;
+    const add = require('../lib/session').planAddUnlisted(osDir, { prefer, names: [a.name] });
+    if (add.added.length) out.push('变更 ' + a.name + ' 不在计划表里，补进了 ' + path.join(osDir, 'plan.md') + (add.task ? '（大任务 ' + add.task + '）' : '') + '。');
+  }
   return out;
 }
 /** 设计只能写读过的东西：这一轮新写的 design.md，Context（现状）里列的文件，会话记录里得真的读过至少一个 */
@@ -974,7 +971,7 @@ async function handle(j) {
   const ask = handoverQuestion(j, cfg, entries, wroteHo);
   if (ask) return blockOut('Stop', ask);
   // 计划表的提醒放到真正收工这一刻：前面还有事要拦时提示送不到用户，又记成提醒过了
-  if (planTouched) notices.push(...planUnlistedTodo(planTouched));
+  if (planTouched) notices.push(...planUnlistedTodo(planTouched, j));
   return notices.length ? { systemMessage: '[vibe-kit 提醒] ' + notices.join('\n') } : null;
 }
 

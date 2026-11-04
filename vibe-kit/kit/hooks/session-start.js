@@ -142,12 +142,14 @@ async function handle(j) {
     // 大需求的计划（openspec/plan.md）：按实际情况计算状态，仅读汇总和不在表里的变更；没有计划却有好几个变更的，提醒建一个（三天最多提一次）
     for (const changes of changeRoots(cwd)) {
       const osDir = path.dirname(changes);
+      // 表外的 change 补进表（第 55 条）：会话开始时还不知道做哪个大任务，只在表里只有一个大任务时补
+      try { const add = require('../lib/session').planAddUnlisted(osDir, { single: true }); if (add.added.length) hookLog('session-start 表外的 change 补进 plan.md：' + add.added.join('、')); } catch (e) { /* 补不了照旧 */ }
       const s = refreshPlan(osDir);
       if (s) {
         const unlisted = planUnlisted(osDir) || [];
         const each = (x) => (x.name ? '大任务 ' + x.name + '：' : '') + '共 ' + x.total + ' 个变更，已归档 ' + x.archived + (x.active.length ? '，进行中：' + x.active.join('、') : '') + (x.next ? '，下一个未开始：' + x.next : '，都做完了');
-        out.push('计划 ' + s.file + '：' + (s.tasks || [s]).map(each).join('；') + '。这里的汇总是按实际情况算的，文件里的状态列跑 plan.js 才更新，不用手改；做下一个之前先读它。没有用户的话，不要自己往表里加行、改行。'
-          + (unlisted.length ? '不在计划里的变更：' + unlisted.join('、') + '。用户说它属于这个大需求，再加一行。' : ''));
+        out.push('计划 ' + s.file + '：' + (s.tasks || [s]).map(each).join('；') + '。这里的汇总是按实际情况算的，文件里的状态列跑 plan.js 才更新，不用手改；做下一个之前先读它。表外的 change 套件会补进表，不用你加行。'
+          + (unlisted.length ? '还不在表里的变更：' + unlisted.join('、') + '（有几个大任务，接回或收工时补进在做的那个）。' : ''));
         continue;
       }
       const miss = planMissingInfo(osDir, 60);
