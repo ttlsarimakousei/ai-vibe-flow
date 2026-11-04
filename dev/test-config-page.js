@@ -10,7 +10,7 @@ const { spawn } = require('child_process');
 const H = require('./lib/harness');
 
 const FROM = process.argv[2];
-const PORT = 18798;
+const PORT = 18821;
 const h = H.makeHome('config-page', FROM);
 const page = path.join(h.kit, 'lib', 'config-page.js');
 const stateFile = path.join(h.kit, 'state', 'config-page.json');
