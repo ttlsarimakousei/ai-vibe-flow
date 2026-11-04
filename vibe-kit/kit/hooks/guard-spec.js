@@ -133,7 +133,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   // 按表的顺序（用户 2026-11-03 定的）：回改前面的 change 补了任务，先做它，再回来
   try {
     const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.name);
-    if (task) { const at = task.changes.findIndex((c) => c.name === art.name); const before = task.changes.slice(0, at).find((c) => !c.archived && c.todo > 0 && c.done > 0); if (before) return done(['按 openspec/plan.md 表的顺序做：' + before.name + ' 还有没勾的任务（' + before.done + '/' + before.total + '），先做完它，再回 ' + art.name + '。']); }
+    // 老任务的表不是按这个规矩写的（第 50 条）；用户用 /vk-resume 切过去的是他定的，不挡
+    if (task && !task.legacy && flowState(j).current !== art.name) { const at = task.changes.findIndex((c) => c.name === art.name); const before = task.changes.slice(0, at).find((c) => !c.archived && c.todo > 0 && c.done > 0); if (before) return done(['按 openspec/plan.md 表的顺序做：' + before.name + ' 还有没勾的任务（' + before.done + '/' + before.total + '），先做完它，再回 ' + art.name + '。']); }
   } catch (e) { /* 算不了不挡打勾 */ }
   if (!cfg.autoMode) return done([]);
   const policy = require('../lib/flow-policy');
