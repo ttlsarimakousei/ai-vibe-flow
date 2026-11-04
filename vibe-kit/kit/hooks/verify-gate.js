@@ -731,6 +731,8 @@ async function handle(j) {
   const sid = String(j.session_id || 'unknown');
   const notices = [];
   let planTouched = null;
+  // /vk-resume 没写名字、提问框问了切到哪个，用户答了：照 /vk-resume <名字> 切过去，接着照提醒做（第 54 条）
+  try { const picked = require('./task-anchor').resumePicked(j); if (picked) return Object.assign(blockOut('Stop', picked.model), picked.user ? { systemMessage: picked.user } : {}); } catch (e) { /* 认不出：照常收工 */ }
   // 收工的时候也看一眼要不要检查更新、上报问题（全自动模式下用户好几个小时不开口，只有这里会经过）
   try { require('../lib/updater.js').kick('收工'); } catch (e) { /* 老版本没有，或者甩不出去：不影响收工 */ }
   // 查库、查 redis 的工具自己报的毛病：读进来记成问题反馈（算这个会话的，交代里的"套件问题"会列出来）

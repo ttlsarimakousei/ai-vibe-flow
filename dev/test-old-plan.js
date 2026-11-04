@@ -133,9 +133,9 @@ H.section('/vk-resume <变更名> 切当前 change');
   H.ok('做完了：回到表的顺序', /first-c/.test(bar(p, j.session_id)), bar(p, j.session_id));
   change(p, 'second-c', 1, 1);
   resume(j, 'second-c');
-  resume(j);
+  resume(j, '计划');
   clearBar();
-  H.ok('/vk-resume 不写名字：回到表的顺序', !S.flowState(j).current && /first-c/.test(bar(p, j.session_id)), [S.flowState(j).current, bar(p, j.session_id)]);
+  H.ok('/vk-resume <大任务名>：回到表的顺序（不写名字改成提问框问了，第 54 条）', !S.flowState(j).current && /first-c/.test(bar(p, j.session_id)), [S.flowState(j).current, bar(p, j.session_id)]);
   const f = resume(session(p, '/vk-resume'), 'third-c');
   H.ok('任务都勾完的：没切，说清楚', /third-c 的任务都勾完了，没切/.test(said(f)), said(f));
 }
@@ -146,7 +146,7 @@ H.section('/vk-resume <变更名> 切当前 change');
   const j = session(n, '/vk-resume');
   const r = resume(j, 'c2');
   H.ok('新任务也能切', /切到 c2/.test(said(r)) && S.flowState(j).current === 'c2', said(r));
-  H.ok('还没开工的：下一步不说去写需求', /任务写好了，还没开工/.test(said(r)) && !/写 c2 的需求/.test(said(r)), said(r));
+  H.ok('还没开工的：接回就算开工，不说去写需求（第 53 条）', /接回就算开工/.test(said(r)) && !/写 c2 的需求/.test(said(r)) && S.flowState(j).stage === 'apply', said(r));
   A.grant(j, '开工 c2', '', {});
   H.ok('用户切过去的：打勾不按表的顺序拦', !/按 openspec\/plan\.md 表的顺序做/.test(tick(j, 'c2', 1)), tick(j, 'c2', 1));
   A.grant(j, '开工 c1', '', {});
@@ -165,7 +165,7 @@ H.section('/vk-resume <变更名> 切当前 change');
   change(q, 'real-c', 1, 1); change(q, 'unlisted-c', 1, 1);
   const k = session(q, '/vk-resume');
   const r2 = resume(k, 'unlisted-c');
-  H.ok('表外的：切得过去，不归大任务', /不在 plan\.md 的表里/.test(said(r2)) && B.forSession(k) === null && !tick(k, 'unlisted-c', 2), [said(r2), tick(k, 'unlisted-c', 2)]);
+  H.ok('表外的：先补进 plan.md（第 55 条），切得过去，能打勾', /\|\s*\|\s*unlisted-c\s*\|/.test(H.read(path.join(q, 'openspec', 'plan.md'))) && /切到 unlisted-c/.test(said(r2)) && S.flowState(k).current === 'unlisted-c' && !tick(k, 'unlisted-c', 2), [said(r2), tick(k, 'unlisted-c', 2)]);
   const none = resume(session(q, '/vk-resume'), 'no-such');
   H.ok('没有这个名字：说没找到，列出来', /没找到 no-such/.test(said(none)) && /大任务名或变更名/.test(said(none)), said(none));
   S.setFlow(k, false, '测试');
@@ -217,21 +217,22 @@ H.section('切 change 的指针：不能挡后面的大任务（复审 R1、R2�
   const q = session(t4, '/vk-resume');
   resume(q, 'c1');
   H.ok('（接回大任务）', S.flowState(q).task === '导出');
+  H.ok('接回时表外的 solo-c 补进了表（第 55 条）', /\|\s*\|\s*solo-c\s*\|/.test(H.read(path.join(t4, 'openspec', 'plan.md'))));
   A.grant(q, '开工 solo-c', '', {});
-  H.ok('开工表外的：不归大任务，记着的大任务清了', B.forSession(q) === null && !S.flowState(q).task, [S.flowState(q).task, S.flowState(q).current]);
+  H.ok('开工 solo-c：它已经在表里，归大任务 导出', (B.forSession(q) || {}).name === '导出', [S.flowState(q).task, S.flowState(q).current]);
   A.grant(q, '开工 c1', '', {});
   H.ok('回头开工表里的：指针清了，归大任务', !S.flowState(q).current && (B.forSession(q) || {}).name === '导出', S.flowState(q).current);
 }
 
-H.section('/vk-resume：不写名字回到表的顺序（几个大任务也是）；名字不分大小写、多写了话也认');
+H.section('/vk-resume：不写名字只出提问框，指针不动（第 54 条）；名字不分大小写、多写了话也认');
 {
   const p = project('# 计划\n\n## 甲\n\n' + TABLE(['a1', 'a2']) + '\n## 乙\n\n' + TABLE(['b1']));
   change(p, 'a1', 1, 1); change(p, 'a2', 1, 1); change(p, 'b1', 1, 1);
   const j = session(p, '/vk-resume');
   resume(j, 'a2');
   H.ok('（切到 a2）', S.flowState(j).current === 'a2');
-  resume(j);
-  H.ok('几个大任务、不写名字：只列清单，指针也清了', !S.flowState(j).current, S.flowState(j).current);
+  const r0 = resume(j);
+  H.ok('几个大任务、不写名字：列出 change 让用户在提问框里选，指针不动', S.flowState(j).current === 'a2' && /提问框/.test(said(r0)) && /a1/.test(said(r0)) && /b1/.test(said(r0)), [S.flowState(j).current, said(r0)]);
   const k = session(p, '/vk-resume');
   H.ok('不分大小写', /切到 a2/.test(said(resume(k, 'A2'))) && S.flowState(k).current === 'a2', S.flowState(k).current);
   const m = session(p, '/vk-resume');
