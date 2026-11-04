@@ -18,7 +18,7 @@ const FROM = process.argv[2] && fs.existsSync(path.join(process.argv[2], 'kit'))
 const SRC = FROM || H.SRC;
 const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'deny'));
 const ago = (f, ms) => { const t = (Date.now() - ms) / 1000; fs.utimesSync(f, t, t); };
-const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false };
+const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false };
 const DESIGN_OK = ['## Context', '', '- 读过 src/A.java：现在只有查询', '- 读过 pom.xml：Spring Boot 2.7', '', '## Decisions', '', '- 导出放在 A.java 里，不新开类：只有一个接口', '',
   '## 验收用例', '', '| 编号 | 对应场景 | 前置数据和环境 | 步骤 | 预期 | 谁来测 | 对应任务 |', '|---|---|---|---|---|---|---|',
   '| AC-1 | 正常导出 | 测试库里有 3 条订单 | 调 GET /export | 返回 3 行，状态码 200 | Claude：curl http://localhost:8080/export | 1 |', ''].join('\n');

@@ -374,7 +374,7 @@ H.section('收工检查：改了产物有没有记修订，不再只看会话记
   const revs = path.join(chg, 'revisions.md');
   const stop = (entries, said, active) => H.hook(h, 'verify-gate', { session_id: sid, cwd: proj, hook_event_name: 'Stop', transcript_path: H.transcript(tfile, entries), stop_hook_active: !!active, last_assistant_message: said || '改好了，没验证：这一轮只改了文档' });
   const snap = () => H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', transcript_path: tfile, prompt: '看一下进度' });
-  H.setConfig(h, { autoMode: false, autoCommit: 'off', commitMode: 'off', autoCrossReview: false, lessons: 'off', vibeTidy: false });
+  H.setConfig(h, { autoMode: false, autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false });
   H.transcript(tfile, [H.tr.user('看一下进度')]);
   snap();
   // 几个小时之前：改了 tasks.md 的验法，修订记录是用命令追加的（会话记录里看不到"改过 revisions.md"）
@@ -404,7 +404,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
 {
   for (const n of fs.readdirSync(changes)) if (n !== 'archive') fs.rmSync(path.join(changes, n), { recursive: true, force: true });
   for (const n of ['reviewed', 'reviewed-proposal', 'review-rounds', 'review-nudged', 'task-ticks']) dropState(n);
-  H.setConfig(h, { autoMode: true, kitBypass: 'ask', autoCommit: 'off', commitMode: 'off', autoCrossReview: true, lessons: 'off', vibeTidy: false, autoVerify: false, autoSeePage: false });
+  H.setConfig(h, { autoMode: true, kitBypass: 'ask', autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, autoVerify: false, autoSeePage: false });
   const sid = 's-report';
   const chg = mk('miping', ['- [x] 3.1 移除审核按钮：src/main/java/A.java；验：`mvn -q -o compile`',
     '- [ ] 3.2 审核接口角色：src/main/java/B.java；验：javac 快检；对照场景 `checklist_role_compare.json`',
@@ -482,7 +482,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
 // ---------------------------------------------------------------------------------------------
 H.section('归档之后主规格跟上了没有；规格增量要放在认得的标题下面（F20260929-014）');
 {
-  H.setConfig(h, { autoMode: false, autoCommit: 'off', commitMode: 'off', autoCrossReview: false, lessons: 'off', vibeTidy: false, autoVerify: false });
+  H.setConfig(h, { autoMode: false, autoCommit: 'off', commitMode: 'off', lessons: 'off', vibeTidy: false, autoVerify: false });
   const sid = 's-spec';
   const arch = path.join(changes, 'archive', '2026-09-29-secret-level-compare-fix');
   const delta = ['## MODIFIED Requirements', '', '### Requirement: 密级比较', '系统 SHALL 按数值比较密级。', '', '#### Scenario: 低密看高密', '- WHEN 低密账号查高密记录', '- THEN 返回空', '', '## ADDED Requirements', '', '### Requirement: 密级为空', '系统 SHALL 把空密级当成最低。', '', '#### Scenario: 空密级', '- WHEN 记录的密级为空', '- THEN 所有人可见', ''].join('\n');

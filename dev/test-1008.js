@@ -15,7 +15,7 @@ const H = require('./lib/harness');
 
 const S = require(path.join(H.SRC, 'kit', 'lib', 'session.js'));
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } };
-const QUIET = { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false };
+const QUIET = { autoVerify: false, autoSeePage: false, lessons: 'off', vibeTidy: false };
 /** 把一个变更记成代码审过了（和 verify-gate 记的一样：时间、变更目录的出生时间） */
 const markCodeReviewed = (h, dir) => { const f = path.join(h.kit, 'state', 'reviewed.json'); fs.writeFileSync(f, JSON.stringify(Object.assign(readJson(f), { [S.normKey(dir)]: { done: true, at: Date.now() - 3600000, born: S.changeBorn(dir), issues: 0 } }))); };
 const markProposalReviewed = (h, dir) => { const f = path.join(h.kit, 'state', 'reviewed-proposal.json'); fs.writeFileSync(f, JSON.stringify(Object.assign(readJson(f), { [S.normKey(dir)]: { done: true, at: Date.now() - 3600000, born: S.changeBorn(dir), issues: 0 } }))); };
@@ -234,7 +234,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
   // ---------------------------------------------------------------------------------------------
   H.section('审查过程不进提交：提案审完询问提交，审查未收尾不催提交');
   {
-    const h = H.makeHome('t1008-rev', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', specGate: false, commitMode: 'ask' });
+    const h = H.makeHome('t1008-rev', null, { autoVerify: false, autoSeePage: false, lessons: 'off', specGate: false, commitMode: 'ask' });
     const proj = H.makeRepo(path.join(h.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n', 'openspec/changes/add-x/tasks.md': '- [ ] 1.1 改 src/A.java；验：mvn -q compile\n' });
     const chg = path.join(proj, 'openspec', 'changes', 'add-x');
     const tf = path.join(h.root, 'r.jsonl');

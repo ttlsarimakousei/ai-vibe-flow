@@ -211,7 +211,7 @@
 | 新版没装上 | 配置页"更新和上报"点"测试连接"；日志 `~/.claude/vibe-kit/update/update.log` |
 | 上下文过了上限还不压缩、网关报请求太大 | 敲 `/compact`；原因见[上下文和 token](手册/上下文和token.md) |
 | 装了技能它却不用 | 见[项目说明和自动探索](手册/项目说明和自动探索.md)最后一节 |
-| 想看套件认为流程走到哪了 | `node "%USERPROFILE%\.claude\vibe-kit\tools\diagnose.js" flow --session <会话编号>`；`push` 看推送，`hooks` 看钩子 |
+| 想看套件认为流程走到哪了 | `node "%USERPROFILE%\.claude\vibe-kit\tools\diagnose.js" flow --session <会话编号>` |
 
 ## 附录
 

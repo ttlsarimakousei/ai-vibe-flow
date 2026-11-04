@@ -18,7 +18,7 @@ const os = require('os');
 const path = require('path');
 const H = require('./lib/harness');
 
-const h = H.makeHome('fb0930', null, { autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', vibeTidy: true, specGate: true, lessons: 'off' });
+const h = H.makeHome('fb0930', null, { autoVerify: false, autoSeePage: false, autoCommit: 'off', commitMode: 'off', vibeTidy: true, specGate: true, lessons: 'off' });
 const S = require(path.join(h.kit, 'lib', 'session.js'));
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return {}; } };
 const state = (name) => readJson(path.join(h.kit, 'state', name + '.json'));

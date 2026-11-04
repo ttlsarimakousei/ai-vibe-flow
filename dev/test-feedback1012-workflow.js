@@ -1,7 +1,7 @@
 'use strict';
 /* #51—#63：计划不自动写脏、产出选择、交付文件、探针结果与审查诊断。只操作假用户目录。 */
 const fs = require('fs'); const path = require('path'); const H = require('./lib/harness');
-const cfg = { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false, autoCommit: 'off', commitMode: 'off', handoverAsk: false };
+const cfg = { autoVerify: false, autoSeePage: false, lessons: 'off', vibeTidy: false, specGate: false, autoCommit: 'off', commitMode: 'off', handoverAsk: false };
 const h = H.makeHome('feedback1012-workflow', process.argv[2], cfg);
 const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'web/a.css': 'a{}\n', 'openspec/changes/add-a/tasks.md': '- [x] 1.1 实现 a.js；验：node --check a.js\n', 'openspec/plan.md': '| 模块 | 变更名 | 状态 | 说明 |\n|---|---|---|---|\n| A | add-a | 旧状态 | 功能 |\n' });
 const S = require(path.join(h.kit, 'lib/session')); const O = require(path.join(h.kit, 'lib/outputs'));

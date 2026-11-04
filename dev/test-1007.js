@@ -136,7 +136,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   // ---------------------------------------------------------------------------------------------
   H.section('提交方式（2026-10-17 起关 / 询问 / 自动三档）：自动做完一项就提交，询问在自动模式下记进报告');
   {
-    const ph = H.makeHome('t1007-phase', null, { autoApply: true, commitMode: 'auto', autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false });
+    const ph = H.makeHome('t1007-phase', null, { autoApply: true, commitMode: 'auto', autoVerify: false, autoSeePage: false, lessons: 'off', vibeTidy: false, specGate: false });
     const pp = H.makeRepo(path.join(ph.work, 'shop'), { 'pom.xml': '<project/>\n', 'src/main/java/A.java': 'class A {}\n', 'src/main/java/B.java': 'class B {}\n', 'openspec/changes/add-x/tasks.md': ['- [ ] 1.1 改 src/main/java/A.java', '- [ ] 1.2 改 src/main/java/B.java', '- [ ] 2.1 改 src/main/java/A.java', '- [ ] 2.2 改 src/main/java/B.java', ''].join('\n') });
     const chg = path.join(pp, 'openspec', 'changes', 'add-x');
     const tasks = path.join(chg, 'tasks.md');

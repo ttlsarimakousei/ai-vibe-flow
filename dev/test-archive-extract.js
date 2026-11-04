@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 const from = process.argv[2] ? path.resolve(process.argv[2]) : H.SRC;
-const h = H.makeHome('archive-extract', from, { autoUpdate: 'off', issueUpload: 'off', usageReport: 'off', autoVerify: false, autoSeePage: false, autoCrossReview: false, autoCommit: 'off', commitMode: 'off', specGate: false });
+const h = H.makeHome('archive-extract', from, { autoUpdate: 'off', issueUpload: 'off', usageReport: 'off', autoVerify: false, autoSeePage: false, autoCommit: 'off', commitMode: 'off', specGate: false });
 const repo = H.makeRepo(path.join(h.work, '中文 项目'), { 'src/a.js': 'const a = 1;\n' });
 const tmp = path.join(repo, '.vibe/tmp/1011-查包');
 fs.mkdirSync(tmp, { recursive: true });

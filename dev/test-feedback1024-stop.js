@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 
-const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false };
+const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false };
 const h = H.makeHome('feedback1024-stop', process.argv[2], QUIET);
 const S = require(path.join(h.kit, 'lib/session'));
 const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput && o.hookSpecificOutput.permissionDecision === 'deny'));

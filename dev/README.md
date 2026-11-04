@@ -146,6 +146,7 @@ node dev/pack.js
 | `test-guard-mcp.js [旧套件目录]` | MCP 工具的令牌保护：四层，别的不查 |
 | `test-statusline-bar.js [旧套件目录]` | 状态栏（第 46、47 条）：没进流程一行，流程里步骤条和下一项，折叠、截断、缓存 |
 | `test-no-leftovers.js [旧套件目录]` | 删干净了没有：扫已删的名字（留着的进白名单，写理由和能删的条件）、session.js 没人用的导出、假用户目录真装一遍。`dev/pack.js` 打包前也跑 |
+| `prune-deps.js [--check]` | 删随包依赖里运行时用不到的文件（类型声明、TS 源码、source map、包根目录的 README 和更新记录）。升级依赖后跑；`pack.js` 打包前查 |
 | `probes/cc-vk-config.js` | 探测：敲 /vk-config 发不发模型请求、屏幕上有没有地址 |
 | `probes/up-no-router.js [旧版本号] [端口]` | 探测：真装着旧路由的电脑升到这一版（自动更新、手动安装两条路）：自检不过要用的东西留到新代码跑起来才收 |
 | `lib/hook-thread.js` | `H.hook` 在工作线程里调钩子用的线程脚本 |

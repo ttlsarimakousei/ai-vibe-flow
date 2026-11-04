@@ -23,7 +23,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   // ---------------------------------------------------------------------------------------------
   H.section('审查：只回思考时少想重试、再拆半批；碰到输出上限记问题反馈（#226、第 6、7 条）；不带变更也能登记决定（#234）');
   {
-    const h = H.makeHome('t1028-review', from, { autoVerify: false, autoSeePage: false, autoCrossReview: false, specGate: false, commitMode: 'off' });
+    const h = H.makeHome('t1028-review', from, { autoVerify: false, autoSeePage: false, specGate: false, commitMode: 'off' });
     const p = H.makeRepo(path.join(h.work, 'plain'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'b.js': 'const b=1;\n' });
     const base = H.git(p, ['rev-parse', 'HEAD']).out.trim();
     H.write(path.join(p, 'a.js'), 'const a=2;\n'); H.write(path.join(p, 'b.js'), 'const b=2;\n');
@@ -52,7 +52,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   // ---------------------------------------------------------------------------------------------
   H.section('中途打开 Apply 自动：说"开始实施"也算开工；不算自动时提示写清为什么（第 8 条、#227）');
   {
-    const h = H.makeHome('t1028-auto', from, { specGate: true, autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false });
+    const h = H.makeHome('t1028-auto', from, { specGate: true, autoVerify: false, autoSeePage: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false });
     const S = require(path.join(h.kit, 'lib/session'));
     const DESIGN = '## Context\n\n- 读过 src/A.java\n\n## Decisions\n\n- 放在 A.java\n\n## 验收用例\n\n| 编号 | 场景 | 前置 | 步骤 | 预期 | 谁来测 | 任务 |\n|---|---|---|---|---|---|---|\n| AC-1 | 导出 | 有数据 | 调接口 | 返回 200 | 人工 | 1 |\n';
     const p = H.makeRepo(path.join(h.work, 'one'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n',
@@ -78,7 +78,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   // ---------------------------------------------------------------------------------------------
   H.section('审查、提交：同一句许可这一轮里能用好几次（第 16 条）');
   {
-    const h = H.makeHome('t1028-perm', from, { autoVerify: false, autoSeePage: false, autoCrossReview: false, commitMode: 'off', specGate: false, kitLock: false });
+    const h = H.makeHome('t1028-perm', from, { autoVerify: false, autoSeePage: false, commitMode: 'off', specGate: false, kitLock: false });
     const p = H.makeRepo(path.join(h.work, 'perm'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n', 'b.js': 'const b=1;\n' });
     let seq = 0;
     const run = (command, entries) => H.hook(h, 'guard-commit', { session_id: 'perm', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'perm-' + (++seq), tool_input: { command }, transcript_path: H.transcript(path.join(h.root, 'p' + seq + '.jsonl'), entries) });
@@ -106,7 +106,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   // ---------------------------------------------------------------------------------------------
   H.section('#225 产出位置：提问框答"项目根目录"认得出；问过位置后记进项目说明的算定过；两种拦截话第一行一样');
   {
-    const h = H.makeHome('t1028-out', from, { autoVerify: false, autoSeePage: false, autoCrossReview: false, specGate: false, commitMode: 'off' });
+    const h = H.makeHome('t1028-out', from, { autoVerify: false, autoSeePage: false, specGate: false, commitMode: 'off' });
     const p = H.makeRepo(path.join(h.work, 'test-skill'), { '.gitignore': '.vibe/\n', 'a.js': 'const a=1;\n' });
     let seq = 0;
     const ask = (q, a) => H.tr.ran('AskUserQuestion', { questions: [{ question: q }] }, 'User has answered your questions: "' + q + '"="' + a + '". You can now continue with the user\'s answers in mind.');

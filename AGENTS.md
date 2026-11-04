@@ -34,7 +34,7 @@
 | `vibe-kit/kit/hooks/` | 钩子。每个导出 `handle(j)`，全走命令方式 |
 | `vibe-kit/kit/lib/` | 钩子、工具、配置页共用的库。`session.js` 是最底层，别的都依赖它 |
 | `vibe-kit/kit/tools/` | 给模型和用户在命令行用的工具（问题反馈、经验规则、起服务、溯源……） |
-| `vibe-kit/kit/page/` | 看页面的执行器（Playwright 脚本，用系统 Edge）。`node_modules/` 是有意带进仓库的：内网离线，装不了依赖 |
+| `vibe-kit/kit/page/` | 看页面的执行器（`playwright-core` 脚本，用系统 Edge）。`node_modules/` 是有意带进仓库的：内网离线，装不了依赖；运行时用不到的文件 `dev/prune-deps.js` 删掉了，升级后再跑一次 |
 | `vibe-kit/kit/openspec/` | 套件自带的 OpenSpec（2026-10-17 集成，打包时的最新版）。`node_modules/` 同样有意带进仓库；怎么用上、怎么降级见 `kit/lib/openspec.js`，升级见 docs/release.md |
 | `vibe-kit/kit/statusline.js` | 状态栏 |
 | `vibe-kit/kit/ui/` | 配置页 `ui.html` 和它的后端 `kit-api.js`、`kit-worker.js`；起它的是 `kit/lib/config-page.js` |

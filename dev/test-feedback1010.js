@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
-const quiet = { autoVerify: false, autoSeePage: false, autoCrossReview: false, lessons: 'off', vibeTidy: false, specGate: false, autoCommit: 'task' };
+const quiet = { autoVerify: false, autoSeePage: false, lessons: 'off', vibeTidy: false, specGate: false, autoCommit: 'task' };
 const denied = (r) => !!r && (r.decision === 'block' || r.hookSpecificOutput && r.hookSpecificOutput.permissionDecision === 'deny');
 function jar(file, version) {
   const entries = { 'com/mysql/cj/jdbc/Driver.class': Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 52, 0]), 'META-INF/MANIFEST.MF': Buffer.from('Implementation-Version: ' + version + '\n') };

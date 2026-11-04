@@ -21,10 +21,12 @@ const GONE = [
   'hook-host', 'hook-worker', 'hook-health', 'router-smoke', 'idea-mcp', 'idea-tools', 'fake-busy', 'fake-idea', 'cc-http-hooks', 'cc-stream-cut',
   'statusUsage', 'hookTransport', 'reviewExecutor', 'reviewMaxFiles', 'requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewMaxRounds', 'reviewLoop',
   'nearGatewayLimit', 'gatewayLimit', 'autoCompactAt', 'autoCompactWindowOf', 'flagVersion', 'ensureRouter', 'router/service.js', 'router/ui.html', 'router/kit-api', 'router/router.js',
-  '127.0.0.1:15730', 'model-router', 'vibe-kit-router', '模型路由和配置', '观察期',
+  'autoCrossReview', 'releaseThread', 'planIntent', 'handoverStage', 'review-waivers', 'handover-consumed', 'hook-stats', 'textDlg', '127.0.0.1:15730', 'model-router', 'vibe-kit-router', '模型路由和配置', '观察期',
 ];
 // [相对仓库的文件, 名字, 理由, 什么时候能删]
 const KEEP = [
+  ['vibe-kit/kit/lib/config-fields.js', 'autoCrossReview', 'REMOVED 名单：升级时清旧开关', OLD_UPDATERS],
+  ['vibe-kit/kit/lib/router-retire.js', 'hook-stats', '收回旧状态文件', OLD_UPDATERS],
   ['vibe-kit/kit/lib/router-retire.js', 'vibe-kit-router', '升级时收回路由和旧开关、旧状态', OLD_UPDATERS],
   ['vibe-kit/kit/lib/router-retire.js', 'model-router', '升级时收回路由和旧开关、旧状态', OLD_UPDATERS],
   ['vibe-kit/kit/lib/router-retire.js', 'statusUsage', '升级时收回路由和旧开关、旧状态', OLD_UPDATERS],
@@ -111,6 +113,17 @@ for (const f of ['router', 'kit/lib/hook-host.js', 'kit/lib/hook-worker.js', 'ki
 }
 H.ok('钩子文件一个不少：guard-push、source-hint 留空壳（硬规矩 11）', fs.existsSync(path.join(KIT_ROOT, 'kit', 'hooks', 'guard-push.js')) && fs.existsSync(path.join(KIT_ROOT, 'kit', 'hooks', 'source-hint.js')));
 
+H.section('随包依赖：只留用得上的（2026-11-04）');
+if (!FROM) {
+  const page = path.join(KIT_ROOT, 'kit', 'page', 'node_modules');
+  H.ok('看页面的依赖只有三个包，playwright-core 只有一份', fs.readdirSync(page).sort().join() === 'pixelmatch,playwright-core,pngjs', fs.readdirSync(page));
+  H.ok('套件的代码只 require playwright-core', !/require\('playwright'\)/.test(fs.readFileSync(path.join(KIT_ROOT, 'kit', 'page', 'browser.js'), 'utf8') + fs.readFileSync(path.join(KIT_ROOT, 'kit', 'page', 'scenario-run.js'), 'utf8')));
+  const r = require('child_process').spawnSync(process.execPath, [path.join(__dirname, 'prune-deps.js'), '--check'], { encoding: 'utf8', windowsHide: true });
+  H.ok('依赖里没有类型声明、source map 这些', r.status === 0, r.stdout);
+  H.ok('LICENSE 留着', fs.existsSync(path.join(page, 'playwright-core', 'LICENSE')));
+  H.ok('OpenSpec 的模板留着', fs.readdirSync(path.join(KIT_ROOT, 'kit', 'openspec', 'node_modules', '@fission-ai', 'openspec', 'schemas', 'spec-driven', 'templates')).some((n) => /\.md$/.test(n)));
+}
+
 H.section('session.js 的每个导出都有人用');
 {
   const lib = path.join(KIT_ROOT, 'kit');
@@ -125,7 +138,11 @@ H.section('假用户目录真装一遍');
 {
   const pkg = FROM ? (() => { const d = path.join(H.tempDir('nl-pkg'), 'vibe-kit'); H.copyDir(FROM, d, (n) => n === 'node_modules' || n === '.git'); H.stubDeps(d); return d; })() : H.makePackage('nl-pkg', '20261104.0100');
   const u = H.freshHome('nl-inst');
+  // 旧版留下的依赖（新旧文件混在一起会坏）
+  H.write(path.join(u.kit, 'page', 'node_modules', 'playwright', 'old-runner.js'), '// 旧版的\n');
+  H.write(path.join(u.kit, 'page', 'node_modules', 'playwright-core', 'old-alpha.js'), '// 旧版的\n');
   const r = H.node(u, path.join(pkg, 'install.js'), ['--no-open'], { cwd: u.root, timeout: 240000 });
+  H.ok('升级时旧的依赖文件清掉了', FROM ? true : !fs.existsSync(path.join(u.kit, 'page', 'node_modules', 'playwright', 'old-runner.js')) && !fs.existsSync(path.join(u.kit, 'page', 'node_modules', 'playwright-core', 'old-alpha.js')));
   H.ok('装好了', r.code === 0, r.out.slice(-300));
   const st = JSON.parse(H.read(path.join(u.cfg, 'settings.json')) || '{}');
   const hooks = Object.values(st.hooks || {}).flat().flatMap((g) => (g && g.hooks) || []);
