@@ -5,11 +5,11 @@
       "id": "page",
       "dir": "page",
       "label": "看页面（/ttls-see-page）",
-      "main": "playwright",
+      "main": "playwright-core",
       "node": ">=20",
-      "hash": "sha256-c2613251b7d9ddbe967f1644cd867e0cab265951fe8ed6aa03f6ae396caa4a70",
-      "files": 322,
-      "bytes": 32624552,
+      "hash": "sha256-2a2931b8420f393a364877389676cd29b9ec312bffec8b3bfc697e8324ce7f29",
+      "files": 135,
+      "bytes": 12157360,
       "packages": [
         {
           "name": "pixelmatch",
@@ -18,38 +18,20 @@
           "license": "ISC",
           "source": "npm:pixelmatch@7.2.0",
           "integrity": "",
-          "hash": "sha256-5cc36f697982b8f665164565598396574a5e5c5c17fdaecf92944cee6564612a",
-          "files": 6,
-          "bytes": 21538
-        },
-        {
-          "name": "playwright",
-          "version": "1.62.1",
-          "node": ">=20",
-          "license": "Apache-2.0",
-          "source": "npm:playwright@1.62.1",
-          "integrity": "",
-          "hash": "sha256-0d97960a68d85b244bcbe36e8c210799669345128bc7560a3a87dfc57180f0ee",
-          "files": 176,
-          "bytes": 18517771,
-          "nested": [
-            {
-              "name": "playwright-core",
-              "version": "1.62.1",
-              "node": ">=20"
-            }
-          ]
+          "hash": "sha256-4f31a9de68c5ee842ea48689a6b6a21b7e489c6e664c0160fb59f6aa58399964",
+          "files": 4,
+          "bytes": 14900
         },
         {
           "name": "playwright-core",
-          "version": "1.63.0-alpha-2026-08-31",
+          "version": "1.62.1",
           "node": ">=20",
           "license": "Apache-2.0",
-          "source": "npm:playwright-core@1.63.0-alpha-2026-08-31",
+          "source": "npm:playwright-core@1.62.1",
           "integrity": "",
-          "hash": "sha256-7e836a8906b631d57b128079b988b9bba98449dfa8a63f04299d1600f1d739c4",
-          "files": 113,
-          "bytes": 13435142
+          "hash": "sha256-21b8fc022dec9cb005027e34ab9473db0b64d9858fae6e0af386582ef1de6def",
+          "files": 106,
+          "bytes": 11504735
         },
         {
           "name": "pngjs",
@@ -58,9 +40,9 @@
           "license": "MIT",
           "source": "npm:pngjs@7.0.0",
           "integrity": "",
-          "hash": "sha256-cdd6472c7bfb419fb66d154ad62e9962788b49ffa290b7e6d3b57b51c5a62b81",
-          "files": 27,
-          "bytes": 650101
+          "hash": "sha256-cddb68c1ac4e931ce7f3627cf1f2867d55ebb43dea20af7b22f6651c2ebf5e05",
+          "files": 25,
+          "bytes": 637725
         }
       ]
     },
@@ -70,9 +52,9 @@
       "label": "自带的 OpenSpec（/opsx:* 命令）",
       "main": "@fission-ai/openspec",
       "node": ">=20.19.0",
-      "hash": "sha256-5bbf0cf31ad9959bbf873b96f4c408c538d863c4255f2dd493bc55a035fa8c19",
-      "files": 2103,
-      "bytes": 11430372,
+      "hash": "sha256-fb9916cb27db5c42b7c2fa105486bfb9b5cb322b8d98baf1c4d8026ac5e976b2",
+      "files": 964,
+      "bytes": 6340250,
       "packages": [
         {
           "name": "@fission-ai/openspec",
@@ -81,9 +63,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@fission-ai/openspec/-/openspec-1.14.3.tgz",
           "integrity": "sha512-ALFW1d5bSm6t27Kmcle93SDFuqUc8fLwy5ZdBfIiNffo0Yk9AEOJxw6xDqBv38eMM7l7TeOZBB/7C08luxYGfg==",
-          "hash": "sha256-76a43fc67bbf8e22aa8f59fb832b81a809653492b607f333785922641478f179",
-          "files": 431,
-          "bytes": 2223672
+          "hash": "sha256-09415a677e95d6e577375d721610d6356bad0153a4a64843f27abeb29de73de7",
+          "files": 219,
+          "bytes": 1872974
         },
         {
           "name": "@inquirer/ansi",
@@ -92,9 +74,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/ansi/-/ansi-2.0.9.tgz",
           "integrity": "sha512-0Ywt3S8tqM6TWUcsRlBFQ1x+X3/o8kktX0ZiKAnByYb9GFDknnOhse1PVtfiD2BXPI8ar+BWx9PV9R0lQIcygw==",
-          "hash": "sha256-5a44280d842a023ce07216d2b569882088398ff245c265e26e08758095fef07d",
-          "files": 5,
-          "bytes": 6025
+          "hash": "sha256-44004fbdfffb8f1fd7ac0ed094075e8b382290bd404fe29c72e8ef8ecc527c84",
+          "files": 3,
+          "bytes": 3389
         },
         {
           "name": "@inquirer/checkbox",
@@ -103,9 +85,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/checkbox/-/checkbox-5.2.6.tgz",
           "integrity": "sha512-XkOardciF3tow2NUlY6/Qjk1QqYa+6WpmVLTpxXl97Uv4erczDEZ+xg1j6LqBf0ekcRSUiICQA4nQXHHkVKQ9w==",
-          "hash": "sha256-5a4e97e05f8e138dd0145c77957a17dafd1fc58168a8878d7f7b233b8950b471",
-          "files": 5,
-          "bytes": 21703
+          "hash": "sha256-83bbc49457e809aabcd5289961a15bdf3dfe89936303e93e4b526447ebd7a89f",
+          "files": 3,
+          "bytes": 11161
         },
         {
           "name": "@inquirer/confirm",
@@ -114,9 +96,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/confirm/-/confirm-6.3.3.tgz",
           "integrity": "sha512-ImOBgpl/sJTFp8naeSkNu4S0Sf8F8pxv3/CUx+LoBAdQvCVqFz6rSB2A/oZYsJge3+yphbEDxEkfaRNYq1OU0A==",
-          "hash": "sha256-bac1924c361b295666cfb7e3538f3f922954f93a3859fb8e281a59d716cd7060",
-          "files": 5,
-          "bytes": 11902
+          "hash": "sha256-5da2177056514f92f904220aa2e656f3c47ae2cebdd787e6b5c62ed38973a19a",
+          "files": 3,
+          "bytes": 6504
         },
         {
           "name": "@inquirer/core",
@@ -125,9 +107,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/core/-/core-12.0.4.tgz",
           "integrity": "sha512-M5fB67y7jPObI45vhD82RskWwCSm0scOvenV/I6K8tIi2gfr9DXqQqJ+iw+Wi6SgapikdOiJibYzz1gW47fsDg==",
-          "hash": "sha256-c0b9e87d3b1fd3979b82090dc317c50fa887ed89d608be9b3a7e082cb3fb5ddf",
-          "files": 43,
-          "bytes": 60821
+          "hash": "sha256-4b76c61453ea84207c893990911bf6a21686f1b52cde6cdfdf22ded3e492b237",
+          "files": 22,
+          "bytes": 36373
         },
         {
           "name": "@inquirer/editor",
@@ -136,9 +118,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/editor/-/editor-5.3.4.tgz",
           "integrity": "sha512-imzxQDfw26NpcJAubMj/dE5RjU9Mp80IcT+FzsD6YoxXmL8L1QYnAFdCNv7ccGWh//73+0YP+1kfhwnExdl2VQ==",
-          "hash": "sha256-15b7a0003eb7b8b95ccc259589e5b447bc5979acec34fbf1c6dd6fcbfd1e1469",
-          "files": 5,
-          "bytes": 12279
+          "hash": "sha256-b0df7533c84ba9171f9d7b3bc1491c943673220f5dd3000774a60b7b6fcd6303",
+          "files": 3,
+          "bytes": 5428
         },
         {
           "name": "@inquirer/expand",
@@ -147,9 +129,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/expand/-/expand-5.1.6.tgz",
           "integrity": "sha512-JfiLKi7qGuHmcQO/DqR10UFEp054Y1FXZaszP5ZEfHhgHeuFoT5nNFQIXFhed/5/p07SbsV2tIJFwG/dg5+NmQ==",
-          "hash": "sha256-d57f6bff98b70f0266c360c3d54a78585fcfc6c9ab68101dadf4111db69a4f31",
-          "files": 5,
-          "bytes": 12639
+          "hash": "sha256-c4f33cf4e5495fe792fb6bfa280a1e9c0c0f923986c64bb3f6353ae009f198d3",
+          "files": 3,
+          "bytes": 6932
         },
         {
           "name": "@inquirer/external-editor",
@@ -158,9 +140,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/external-editor/-/external-editor-3.0.6.tgz",
           "integrity": "sha512-rWmw6WG8JZ7LMn/srXEylYGhL6EXXJeROE7/4x4GREh6NgzqJBDbIgpNGsYoLPfobeb4VZtEYzPGnT5EFNYhiQ==",
-          "hash": "sha256-4efca52cdfe1c72b15ae1f5ba34f9b8b240a147c42b60c0f626bddd713229279",
-          "files": 9,
-          "bytes": 18202
+          "hash": "sha256-8cb62a727446db84b3572bd8069627dccfb3501f8139580cee5c8d343bef6835",
+          "files": 5,
+          "bytes": 10373
         },
         {
           "name": "@inquirer/figures",
@@ -169,9 +151,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/figures/-/figures-2.0.9.tgz",
           "integrity": "sha512-EAWgUTGQ/Umgga51dE3B2PUHbufuXarDfg86uVgoSgNHNNQnyFKcOrQLWVqYMghuSyHh8+2HUH0Js9cTC1WAdg==",
-          "hash": "sha256-fbaeb63b4acf1c4ac175077ae0fcc5af415065a902130aef8374399f82690d91",
-          "files": 4,
-          "bytes": 20001
+          "hash": "sha256-1becf3978eaf23f8b4816e2bf695c1bc4ff661981ca7922ff50209e9c330dcbe",
+          "files": 3,
+          "bytes": 11890
         },
         {
           "name": "@inquirer/input",
@@ -180,9 +162,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/input/-/input-5.1.7.tgz",
           "integrity": "sha512-Icrs9tuMBCxGI+lFYNO71VFOnqGO8IIrLIGqnTGh07X8jZ2la9QLAYxXcikHZQjjVhIZUtU2xyH89DVN/pPhVg==",
-          "hash": "sha256-e2fed2618209798e1fe4dbd316825e5e5fea6b802371a4ad8ef9d6436dc0c5ec",
-          "files": 5,
-          "bytes": 13543
+          "hash": "sha256-6fc49b885faf10b24cc3c07dd864879a96ff5896e825f87b253f4ac02af7b140",
+          "files": 3,
+          "bytes": 6536
         },
         {
           "name": "@inquirer/number",
@@ -191,9 +173,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/number/-/number-4.2.4.tgz",
           "integrity": "sha512-C6g80U4U2+w2Vxa1CB0MN3a2WnQIfzLSUG0lduO3Au9GsirJsKATZkOwZPK+vZ1BlAlz+/Z5ParfQCS9E0svmg==",
-          "hash": "sha256-cd11d53748901387ef433608294e1b6b00837018012f95e5412294390407c7a3",
-          "files": 7,
-          "bytes": 14207
+          "hash": "sha256-2e08efed24ef2877505c82b0273b337d3a2865d19c64746870d6d547c49c13ed",
+          "files": 4,
+          "bytes": 7411
         },
         {
           "name": "@inquirer/password",
@@ -202,9 +184,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/password/-/password-5.2.3.tgz",
           "integrity": "sha512-1Uo2qfI2K3wXbfunMpvwAzoZPIUf5iEETwDGqRVbswoorXGqYQJ/bfIJFeLj+pxjq+e2UFPNOmx+fsIl4Urigw==",
-          "hash": "sha256-8afedbbe329d620e621a15465d340032c99d353bf29ff704bfc44260136c4ef8",
-          "files": 5,
-          "bytes": 11658
+          "hash": "sha256-556ca9f72bb76e7fe760f4cadfa8fda19569e401df7df39c9c5a1f7cdeb0d04e",
+          "files": 3,
+          "bytes": 5799
         },
         {
           "name": "@inquirer/prompts",
@@ -213,9 +195,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/prompts/-/prompts-8.7.3.tgz",
           "integrity": "sha512-DHK20kO+H5k/XcJQpHQUpVQbMYHHhZchlGWhZVMUV4WIuRuBW5744hipOtriE1vMqPLgnIyXFMHWKkIbTepa4Q==",
-          "hash": "sha256-3adc5e5afb11d5abca7f8ba5fd6c14c5b57e00091672128d5e5fbfb55846fa0c",
-          "files": 5,
-          "bytes": 25462
+          "hash": "sha256-b11fdb05c5ac786d372f3934a3a4284cee7bee028a09c9b5f8bd8068f3080154",
+          "files": 3,
+          "bytes": 3715
         },
         {
           "name": "@inquirer/rawlist",
@@ -224,9 +206,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/rawlist/-/rawlist-5.3.6.tgz",
           "integrity": "sha512-2exExhQ5xTBqfN/rRlZkvM1Gm3b0eiLcWe2NqxWxe7qYmnU4M3j/n9TwzfPUb+Q7dAAz9TmBtDWWdF3jbp4ZLA==",
-          "hash": "sha256-9dadd03760c3fd86104761877c1463166b212c4a0fa7c0286c4ef00caa182144",
-          "files": 5,
-          "bytes": 14434
+          "hash": "sha256-02c0a84bac4ca63e8caf08be92a5b546f14e8d7abfca0d196665a73f72937792",
+          "files": 3,
+          "bytes": 8486
         },
         {
           "name": "@inquirer/search",
@@ -235,9 +217,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/search/-/search-4.3.4.tgz",
           "integrity": "sha512-xsk0UeFP04jsbEeFMzghjUaH2aHXyt+WykSajQzq/8qyBNHsgGYHea/sFwv5T08kW7Sp+KDX8aF124zPUIs1Ww==",
-          "hash": "sha256-9c3c18083e2ac9ad6276ffff1ff1318ac01d947ceaef72ae8062c236ffe8f9b5",
-          "files": 5,
-          "bytes": 20932
+          "hash": "sha256-dd6bae88d1b3012329ba233e08be940d9dbe550895e80ceebdf307325da9c110",
+          "files": 3,
+          "bytes": 10641
         },
         {
           "name": "@inquirer/select",
@@ -246,9 +228,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/select/-/select-5.2.6.tgz",
           "integrity": "sha512-jFu7CFghlr0vpi/326a4wz6BGkJH9X3H/iIu+ahyV2Ja52ktqQE3fC9BYP47JKeSPQYGUv5xquE2Vp9PbepZ3g==",
-          "hash": "sha256-2df16b2580a58e24177d8306068e63e3eed54fd8ede8696ac56cf1a67eb2f83e",
-          "files": 5,
-          "bytes": 18533
+          "hash": "sha256-bd03fb27135d50bbf3aae16e344e38a0fc3005919288258de93425670504f7ba",
+          "files": 3,
+          "bytes": 10371
         },
         {
           "name": "@inquirer/type",
@@ -257,9 +239,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/@inquirer/type/-/type-4.2.0.tgz",
           "integrity": "sha512-2rnHX8RPo4glJYqnFc/v3nQeIhDcjyRRyaT7MGcfL/8xv/8K03SXYoA2tX06WVSKywWOE/ncbG3dtuzLjR5TCQ==",
-          "hash": "sha256-1a007c5b1f212b3dc217b00eccb8ff2173ca479d2504d966852eb6dfdc42052a",
-          "files": 8,
-          "bytes": 6401
+          "hash": "sha256-b8fb69485fd9b9150fe624db55c98697dcb395cedaa1bb775de4e00d3ddbd6c5",
+          "files": 5,
+          "bytes": 3210
         },
         {
           "name": "ansi-regex",
@@ -268,9 +250,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.4.0.tgz",
           "integrity": "sha512-KzTVk2tCWAHtYrvvvaP8bJKJq2pVinhLcGEQdtLIYPbmNGNyYe8QwNaTUYQp2J7/vIsUKt5QCqAfUkYyG9DkOw==",
-          "hash": "sha256-d26c424038b829d8a17e9dc22520b1aba3d581de40bb1c530231d09d1ee94cec",
-          "files": 5,
-          "bytes": 6208
+          "hash": "sha256-91dde40b5d4258b223984d0b2e6790f9ba4a03fd5d0446789c2963752be96337",
+          "files": 3,
+          "bytes": 3085
         },
         {
           "name": "balanced-match",
@@ -279,9 +261,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
           "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
-          "hash": "sha256-c62bb4d2b24b815dccee1f58ed95e9ca81ecde786c50206bac90b1f3b66f0d1c",
-          "files": 13,
-          "bytes": 17584
+          "hash": "sha256-d33177f22069aa9edd4815fce7f5671831631b2d53f4a2b370999fa888da6925",
+          "files": 6,
+          "bytes": 6186
         },
         {
           "name": "brace-expansion",
@@ -290,9 +272,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
           "integrity": "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==",
-          "hash": "sha256-cb34c1d04406d2d1ae04ebf6c07f7abe891c6c0229dc2e2a1b6ba204310a11f5",
-          "files": 13,
-          "bytes": 84997
+          "hash": "sha256-117f852683fcd0a8eb62f0171ce7c9c059da21817aa7f2b5451d76f043ba8970",
+          "files": 6,
+          "bytes": 30470
         },
         {
           "name": "chalk",
@@ -301,9 +283,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/chalk/-/chalk-5.6.2.tgz",
           "integrity": "sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==",
-          "hash": "sha256-7a2df18a110277264bb808f948283c11bdf2a0ade08318abf55b58c07226168b",
-          "files": 12,
-          "bytes": 44342
+          "hash": "sha256-2b6b28ab4ca2c74435504882339b70d612dc94a901e1a6a76e3e4541a44f7fe2",
+          "files": 7,
+          "bytes": 19484
         },
         {
           "name": "chardet",
@@ -312,9 +294,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/chardet/-/chardet-2.2.0.tgz",
           "integrity": "sha512-rddelWYNPRrXq6PtNEN2S3f6t9ILzvqaN5pVgi4kqt9jHQaXIial9PznB5iSPVlQSLNaaH22ItWz3EJtQ10+OA==",
-          "hash": "sha256-bc856065d890c3dcdad4982ea1d276bc067718252e45921d2c8959c72596a46a",
-          "files": 39,
-          "bytes": 178969
+          "hash": "sha256-a5c8a83d52d551417d698cd1fcf3dbe86a146038cbc435259bcf894e90623374",
+          "files": 14,
+          "bytes": 83778
         },
         {
           "name": "cli-cursor",
@@ -323,9 +305,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/cli-cursor/-/cli-cursor-5.0.0.tgz",
           "integrity": "sha512-aCj4O5wKyszjMmDT4tZj93kxyydN/K5zPWSCe6/0AV/AA1pqe5ZBIw0a2ZfPQV7lL5/yb5HsUreJ6UFAF1tEQw==",
-          "hash": "sha256-113cacbd91cf020116a6172d96e3b8c433c93434c936f335e25e2ea2d1ee1406",
-          "files": 5,
-          "bytes": 4109
+          "hash": "sha256-fb582caa5af0ba583ba32af44a14618d0254391fc840848c5c87cdc2667c5759",
+          "files": 3,
+          "bytes": 2763
         },
         {
           "name": "cli-spinners",
@@ -334,9 +316,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/cli-spinners/-/cli-spinners-3.4.0.tgz",
           "integrity": "sha512-bXfOC4QcT1tKXGorxL3wbJm6XJPDqEnij2gQ2m7ESQuE+/z9YFIWnl/5RpTiKWbMq3EVKR4fRLJGn6DVfu0mpw==",
-          "hash": "sha256-9867b432182fb6ca07d23e3695db3db7c0e88e9801e5ee76f1d7b5e3df181cb1",
-          "files": 6,
-          "bytes": 33914
+          "hash": "sha256-33a35961683bdf3c8e4fa98ee42958a8690552c5c05192d853da4d58f9bd2991",
+          "files": 4,
+          "bytes": 30058
         },
         {
           "name": "cli-width",
@@ -345,9 +327,9 @@
           "license": "ISC",
           "source": "https://registry.npmjs.org/cli-width/-/cli-width-4.1.0.tgz",
           "integrity": "sha512-ouuZd4/dm2Sw5Gmqy6bGyNNNe1qt9RpmxveLSO7KcgsTnU7RXfsw+/bukWGo1abgBiMAic068rclZsO4IWmmxQ==",
-          "hash": "sha256-875173bc3ff5e5ba5535c10302fd4c87399eec8f6a65d632e70ac674b69a86bd",
-          "files": 5,
-          "bytes": 4767
+          "hash": "sha256-b79b74cdfbfc23beb32e2b405e541982c538708f91034e2004cdfea4752b5ac9",
+          "files": 3,
+          "bytes": 2637
         },
         {
           "name": "commander",
@@ -356,9 +338,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/commander/-/commander-14.0.3.tgz",
           "integrity": "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==",
-          "hash": "sha256-4b11923f532c78b0d344395157f6d9183766b8f714352176976d167ff19e46d3",
-          "files": 14,
-          "bytes": 208654
+          "hash": "sha256-83f700eb95819ac8a1b4076b00f090bd7cd9ae48a625385d7370f241d9a4bb43",
+          "files": 11,
+          "bytes": 130434
         },
         {
           "name": "cross-spawn",
@@ -367,9 +349,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/cross-spawn/-/cross-spawn-7.0.6.tgz",
           "integrity": "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==",
-          "hash": "sha256-263e04739902ba8ffe5ddc03f760e0867ac1bc4143bb204acf5510d47fdd3763",
-          "files": 9,
-          "bytes": 16094
+          "hash": "sha256-00cc936da5ea584e7aba25f93418580392f0d6e7991db4182c05acb15e0b2ede",
+          "files": 8,
+          "bytes": 11977
         },
         {
           "name": "diff",
@@ -378,9 +360,9 @@
           "license": "BSD-3-Clause",
           "source": "https://registry.npmjs.org/diff/-/diff-9.0.0.tgz",
           "integrity": "sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==",
-          "hash": "sha256-6b9184d58717482979a6e3ad5d96dce92208a7fb87a5bbead93003696629c13a",
-          "files": 136,
-          "bytes": 615597
+          "hash": "sha256-29b8ba29f33f72a780f4de5c0e4c21714eab37c75bebae978293527650f24748",
+          "files": 51,
+          "bytes": 422366
         },
         {
           "name": "fast-string-truncated-width",
@@ -389,9 +371,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/fast-string-truncated-width/-/fast-string-truncated-width-3.0.3.tgz",
           "integrity": "sha512-0jjjIEL6+0jag3l2XWWizO64/aZVtpiGE3t0Zgqxv0DPuxiMjvB3M24fCyhZUO4KomJQPj3LTSUnDP3GpdwC0g==",
-          "hash": "sha256-b63fe40553eb2f815512a0d57777f37d2b66be32162d18a78e34bfed5a1f15a6",
-          "files": 9,
-          "bytes": 12139
+          "hash": "sha256-e069a54a699cad551a853f80524bcaed8e60c8f5d8fc80e82e6579e7277ae665",
+          "files": 5,
+          "bytes": 8303
         },
         {
           "name": "fast-string-width",
@@ -400,9 +382,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/fast-string-width/-/fast-string-width-3.0.2.tgz",
           "integrity": "sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==",
-          "hash": "sha256-ca625d28dd629442fdf31803ef3700f8d280f8eb974561d656a76941f267cb2b",
-          "files": 5,
-          "bytes": 3515
+          "hash": "sha256-d3b9ac70c720ce9301be2eb3d8452b0ddf003b3e1663674eeeeb0d7d04c49f95",
+          "files": 3,
+          "bytes": 2294
         },
         {
           "name": "fast-wrap-ansi",
@@ -411,9 +393,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/fast-wrap-ansi/-/fast-wrap-ansi-0.2.2.tgz",
           "integrity": "sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==",
-          "hash": "sha256-127d0321757a4c337325136ddbb71e4f4ba4b58d77f541b9db4975ca28725d6a",
-          "files": 5,
-          "bytes": 10710
+          "hash": "sha256-8cebe7857eaf858742d4dd531c854b34be994befe04c2ba171b820bfbba5306a",
+          "files": 3,
+          "bytes": 10142
         },
         {
           "name": "fdir",
@@ -422,9 +404,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/fdir/-/fdir-6.5.0.tgz",
           "integrity": "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==",
-          "hash": "sha256-474346744b954f1fea29ab4293c081c0f18e378353bbb31d466aaf844a0c5a0e",
-          "files": 7,
-          "bytes": 53291
+          "hash": "sha256-39ed4406630207963b1bfda76fcc397900903b07caca9a9d57983791c3f6193d",
+          "files": 4,
+          "bytes": 39182
         },
         {
           "name": "get-east-asian-width",
@@ -433,9 +415,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/get-east-asian-width/-/get-east-asian-width-1.7.0.tgz",
           "integrity": "sha512-XjH1AECxf0giL2V1aU8vKyRR2ppRUb5c0EvT7zuJTokQ74bNo52zOtghqdWIqrhUD79fo3x0WfKZdOqxF6LG1Q==",
-          "hash": "sha256-a46fe6bb9b1b875efbcdeeabd89f991c1c5cb2d619f1bbf8a10c986d8dab914c",
-          "files": 8,
-          "bytes": 14724
+          "hash": "sha256-7954a2f15ff067cf0c764aa117f4f8277dca208939a53c30d18e78f4a9732fce",
+          "files": 6,
+          "bytes": 11315
         },
         {
           "name": "iconv-lite",
@@ -444,9 +426,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.7.3.tgz",
           "integrity": "sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==",
-          "hash": "sha256-74c00c3f93ee782a95e2f77ef6caa10b3e8e13f241e3d5a930ac68296415b33e",
-          "files": 27,
-          "bytes": 344185
+          "hash": "sha256-4ae43e8ca450a7982e0a75c93399b071c01d5d877412100de10efd0eaacfea7b",
+          "files": 24,
+          "bytes": 326691
         },
         {
           "name": "is-interactive",
@@ -455,9 +437,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/is-interactive/-/is-interactive-2.0.0.tgz",
           "integrity": "sha512-qP1vozQRI+BMOPcjFzrjXuQvdak2pHNUMZoeG2eRbiSqyvbEf/wQtEOTOX1guk6E3t36RkaqiSt8A/6YElNxLQ==",
-          "hash": "sha256-510c4f00ac1112547cd4ba2e4daedf24e6735f6c61606a0298ea8ed7fe5e82ae",
-          "files": 5,
-          "bytes": 4726
+          "hash": "sha256-998c55262e18e66098dff70635ffd075cf1526e6074670e6939a4ee6e74bbb5e",
+          "files": 3,
+          "bytes": 2044
         },
         {
           "name": "is-unicode-supported",
@@ -466,9 +448,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/is-unicode-supported/-/is-unicode-supported-2.1.0.tgz",
           "integrity": "sha512-mE00Gnza5EEB3Ds0HfMyllZzbBrmLOX3vfWoj9A9PEnTfratQ/BcaJOuMhnkhjXvb2+FkY3VuHqtAGpTPmglFQ==",
-          "hash": "sha256-0caa6c6f796e2f52050bcf2d481adc68ad6778d4fd66988e2acc02c966972aba",
-          "files": 5,
-          "bytes": 3958
+          "hash": "sha256-77bb00aeb3d8c8d891d00234536e8c74d1d074a22c6d83bbd6b8e8c04ecdc489",
+          "files": 3,
+          "bytes": 2621
         },
         {
           "name": "isexe",
@@ -477,9 +459,9 @@
           "license": "ISC",
           "source": "https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz",
           "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==",
-          "hash": "sha256-42fbf8faa73225360b5ef894fb5e749e259dee0ffc3c92484942f27a1ceaaaf6",
-          "files": 8,
-          "bytes": 10956
+          "hash": "sha256-6576702f1ccb3489d869a6cd42cfdb3cfddf326b94ce3dc76becfcc8f49096ae",
+          "files": 7,
+          "bytes": 9561
         },
         {
           "name": "log-symbols",
@@ -488,9 +470,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/log-symbols/-/log-symbols-7.0.1.tgz",
           "integrity": "sha512-ja1E3yCr9i/0hmBVaM0bfwDjnGy8I/s6PP4DFp+yP+a+mrHO4Rm7DtmnqROTUkHIkqffC84YY7AeqX6oFk0WFg==",
-          "hash": "sha256-8a58340a8868c70a245a03e1ce36182bdd439ca83affd06bef1dd91054a0df35",
-          "files": 8,
-          "bytes": 4396
+          "hash": "sha256-491ecba6e88d74aacdd3b75016f33e3daf347e44f6a8574a3e793598f2c5e789",
+          "files": 6,
+          "bytes": 2849
         },
         {
           "name": "mimic-function",
@@ -499,9 +481,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/mimic-function/-/mimic-function-5.0.1.tgz",
           "integrity": "sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA==",
-          "hash": "sha256-1502a650be8445db8c41a9b5280287064557f554d99312c2f930be0a1a54ddc0",
-          "files": 5,
-          "bytes": 8096
+          "hash": "sha256-47a722caade95087f299077c6dc5079ddb8310453606f9ce64ae666e2c17bef4",
+          "files": 3,
+          "bytes": 4987
         },
         {
           "name": "mute-stream",
@@ -510,9 +492,9 @@
           "license": "ISC",
           "source": "https://registry.npmjs.org/mute-stream/-/mute-stream-3.0.0.tgz",
           "integrity": "sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw==",
-          "hash": "sha256-891661b9fd8067faa68d18657c74fc4fb86a8f11bfc11a48e76d2c492e1b398d",
-          "files": 4,
-          "bytes": 6498
+          "hash": "sha256-79ac8337c5cf56623480c99c487a6b3fac73ac3dc5c4e0f5343311caea876a84",
+          "files": 3,
+          "bytes": 4837
         },
         {
           "name": "onetime",
@@ -521,9 +503,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/onetime/-/onetime-7.0.0.tgz",
           "integrity": "sha512-VXJjc87FScF88uafS3JllDgvAm+c/Slfz06lorj2uAY34rlUu0Nt+v8wreiImcrgAjjIHp1rXpTDlLOGw29WwQ==",
-          "hash": "sha256-3b6cd1e5d639c3d0aff7465c3b4e9289b5d8099e48daf2cce443ada9fc6d86a5",
-          "files": 5,
-          "bytes": 5447
+          "hash": "sha256-1ef122c6f67172a98c6b084683152ee096055d3186a56df94a3ee253ce8360e2",
+          "files": 3,
+          "bytes": 2986
         },
         {
           "name": "ora",
@@ -532,9 +514,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/ora/-/ora-9.4.1.tgz",
           "integrity": "sha512-6VlU9MLXbjVQD04AZCMX28hVtA5bUoadvUqO76MUCVA0ilwJbMiHsITRPfyVm6p/BC0Av/BXMujx39WCe1LEqw==",
-          "hash": "sha256-ac38f8de8e5cd7d0b8bde5fc5a092d2baead522f51b4b890ce4c42856c8d88ed",
-          "files": 5,
-          "bytes": 40673
+          "hash": "sha256-3101ba4395fdb09021834e6d49721c527d3aaf80f4eb3d987758abe28a826929",
+          "files": 3,
+          "bytes": 20161
         },
         {
           "name": "path-key",
@@ -543,9 +525,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/path-key/-/path-key-3.1.1.tgz",
           "integrity": "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==",
-          "hash": "sha256-3c5f924e98da11392f7ce5b878147fb4967e6634f65e99277f93c6e37086c5a8",
-          "files": 5,
-          "bytes": 4553
+          "hash": "sha256-5b4abadcb1c062cee4df70515e7840f3f32980f460bff69cccc29b93e5412347",
+          "files": 3,
+          "bytes": 2174
         },
         {
           "name": "picomatch",
@@ -554,9 +536,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz",
           "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==",
-          "hash": "sha256-1dd1bd4bbdcc865b4016199a3aa42cab4d9713ebf03450599fca520519719d9b",
-          "files": 10,
-          "bytes": 93759
+          "hash": "sha256-446358fa85c47bccc8d8f3627597726bf0501d6e75072f26a369f9135a9f1ff3",
+          "files": 9,
+          "bytes": 65440
         },
         {
           "name": "restore-cursor",
@@ -565,9 +547,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/restore-cursor/-/restore-cursor-5.1.0.tgz",
           "integrity": "sha512-oMA2dcrw6u0YfxJQXm342bFKX/E4sG9rbTzO9ptUcR/e8A33cHuvStiYOwH7fszkZlZ1z/ta9AAoPk2F4qIOHA==",
-          "hash": "sha256-7d16b9eba51c071da5366c59f23b034482e91cb9cc18100162d7135337b3c4bf",
-          "files": 5,
-          "bytes": 3129
+          "hash": "sha256-c52a31a3ed07a06607757d154804b12051563c450a202999ae98bd5429128705",
+          "files": 3,
+          "bytes": 2473
         },
         {
           "name": "safer-buffer",
@@ -576,9 +558,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/safer-buffer/-/safer-buffer-2.1.2.tgz",
           "integrity": "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==",
-          "hash": "sha256-257cf8cca8eceef9609aacd8255cf75f6cd04c3f9a7be256c062c48629b94294",
-          "files": 7,
-          "bytes": 42299
+          "hash": "sha256-8f14926303395328e19add7aeef3c65c32091e6f0690ee7db131247b104b20e5",
+          "files": 6,
+          "bytes": 34038
         },
         {
           "name": "shebang-command",
@@ -587,9 +569,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/shebang-command/-/shebang-command-2.0.0.tgz",
           "integrity": "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==",
-          "hash": "sha256-4cfb9c67a2ee871a61a6b5acfae1d0cf54bcab66bd3602b43380f202f2d48c9f",
-          "files": 4,
-          "bytes": 2556
+          "hash": "sha256-a40262156a5a6e8658df9ed4234b989eafa01f3b3dab881af36e278448acdfc1",
+          "files": 3,
+          "bytes": 2061
         },
         {
           "name": "shebang-regex",
@@ -598,9 +580,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/shebang-regex/-/shebang-regex-3.0.0.tgz",
           "integrity": "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==",
-          "hash": "sha256-494e7d44b4a4547730a4ffe7b59293b90b18873f8a35d1f9429ed65728cd32bd",
-          "files": 5,
-          "bytes": 2828
+          "hash": "sha256-5992b2eea472008e6e6ac2c59a38610f7448b2b650d336b885f11e5011887a4b",
+          "files": 3,
+          "bytes": 1733
         },
         {
           "name": "signal-exit",
@@ -609,9 +591,9 @@
           "license": "ISC",
           "source": "https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz",
           "integrity": "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==",
-          "hash": "sha256-ab43ef292ab40d22b25a4e5e3161f4eaf2434be13f9f2597679774567849d499",
-          "files": 29,
-          "bytes": 76966
+          "hash": "sha256-23fbd8f3eb01e255c2f4688ef4c9a6594a17c57a792db337b6d188d4fb3b560d",
+          "files": 10,
+          "bytes": 25394
         },
         {
           "name": "stdin-discarder",
@@ -620,9 +602,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/stdin-discarder/-/stdin-discarder-0.3.2.tgz",
           "integrity": "sha512-eCPu1qRxPVkl5605OTWF8Wz40b4Mf45NY5LQmVPQ599knfs5QhASUm9GbJ5BDMDOXgrnh0wyEdvzmL//YMlw0A==",
-          "hash": "sha256-65c1e89232bc0e59cf5a791bd8eb9c25f0e93ba8d2ca388d342d777629f9583a",
-          "files": 5,
-          "bytes": 4610
+          "hash": "sha256-5c20d7239b977e5776e16514fea0ab30702647a052c5c8ffc56a5b1ed259f643",
+          "files": 3,
+          "bytes": 3522
         },
         {
           "name": "string-width",
@@ -631,9 +613,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/string-width/-/string-width-8.3.0.tgz",
           "integrity": "sha512-ZbmZM0JCihQN91dWnxoipT2KOEyHqEyfRXUyjuRhW8b/xnqPDoq4gWEVApTVa9db2wN8mmoikgFBbjh71+cGeQ==",
-          "hash": "sha256-6c8eb7242f451031a30e02714d42df25358277d9cd6fe9fb05624a8b8608ca96",
-          "files": 5,
-          "bytes": 11986
+          "hash": "sha256-9f042e13314da8416105249882fde2ee29c47f80f30bc0b9337541225643c50b",
+          "files": 3,
+          "bytes": 8702
         },
         {
           "name": "strip-ansi",
@@ -642,9 +624,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.2.0.tgz",
           "integrity": "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==",
-          "hash": "sha256-cf70e8a54eb8bb90f5f83eca0c6ee368e51710c4133b585a0b916a8e8f557124",
-          "files": 5,
-          "bytes": 4276
+          "hash": "sha256-5a1909e5c819ce1fa7a2937c8748c4bd20923a4df9c6e008f6a04841022506cb",
+          "files": 3,
+          "bytes": 2704
         },
         {
           "name": "tinyglobby",
@@ -653,9 +635,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/tinyglobby/-/tinyglobby-0.2.17.tgz",
           "integrity": "sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==",
-          "hash": "sha256-8c594495fe6f1abc0322b0f578a91102bc697d731c61eb3e5e1c608a18b419df",
-          "files": 7,
-          "bytes": 39288
+          "hash": "sha256-ea63c336d32afa5d0ca2e18638f2ee81886d2df0e23778fa1ac4a65148addb7b",
+          "files": 4,
+          "bytes": 28981
         },
         {
           "name": "which",
@@ -664,9 +646,9 @@
           "license": "ISC",
           "source": "https://registry.npmjs.org/which/-/which-2.0.2.tgz",
           "integrity": "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==",
-          "hash": "sha256-73c3056a5891f31595febad7da09daeb0bf0ae60ed36183583ea0825e512ebac",
-          "files": 6,
-          "bytes": 9975
+          "hash": "sha256-e244955423870d22cdd48f5fabb9e8d98fd832da21e7d92a8ad72c852cad0abc",
+          "files": 4,
+          "bytes": 5956
         },
         {
           "name": "yaml",
@@ -675,9 +657,9 @@
           "license": "ISC",
           "source": "https://registry.npmjs.org/yaml/-/yaml-2.9.1.tgz",
           "integrity": "sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==",
-          "hash": "sha256-942cc81f98ddc4d8c7d1580107f80b94bce72150822f23ecbacc920a78c9ab4a",
-          "files": 233,
-          "bytes": 686297
+          "hash": "sha256-b25eb564677373ec75579288910ae769f3ff4c5e8cbf805f8b2dd9eaeedcc385",
+          "files": 154,
+          "bytes": 585425
         },
         {
           "name": "yoctocolors",
@@ -686,9 +668,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/yoctocolors/-/yoctocolors-2.2.0.tgz",
           "integrity": "sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg==",
-          "hash": "sha256-ebd10b2e37f82c38d7d7906872cf1faa0c20b63f4a53db60b8c3a03e0aa6f2a4",
-          "files": 7,
-          "bytes": 13519
+          "hash": "sha256-180809004a3f65edcecc4fa491debfbb8f5986d447a33354539aecdd1aef4a7f",
+          "files": 4,
+          "bytes": 6817
         },
         {
           "name": "zod",
@@ -697,9 +679,9 @@
           "license": "MIT",
           "source": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz",
           "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
-          "hash": "sha256-200d6cde568e65b5cbe3c5c93907071d9d73314bdff23fbb8f7b77c8967a5f3b",
-          "files": 840,
-          "bytes": 6148944
+          "hash": "sha256-ad51c1a66bc2a4c44be6a9671d156147ee84260a39468b46ba819eff29eea11c",
+          "files": 259,
+          "bytes": 2318002
         }
       ]
     }
