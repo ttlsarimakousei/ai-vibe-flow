@@ -26,7 +26,6 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；MCP 工具的返回原样给模型 |
-| 审查子代理结束 | `review-stop.js` | 只管 `vk-reviewer`：`last_assistant_message` 入账，没交结构化结论让它接着写 |
 | 模型说做完了 | `verify-gate.js` | 自动阶段文档没写到 tasks 催接着写，写完催审整套，任务全部做完催审整个 change；人工阶段 Ask；提醒提交与自动提交分开；核对材料、修订链和实际验证结果，交付用例及结果，用户决定验收归档 |
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
@@ -44,6 +43,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | `feedback.js` | 问题反馈的记录（`~/.claude/vibe-kit/feedback/`），拦截编号和通行证，拦得最多的规矩、放行记录、开关改动记录 |
 | `report.js` | 全自动模式的报告 |
 | `lessons.js` | 经验规则：审查里反复出现的问题沉淀成 `.claude/rules/vk-lessons-*.md` |
+| `review-facts.js` | 审查材料里脚本先查好的（第 72 条）：文档点名的类、方法、表在代码里的位置，改到的方法哪里用到；一个请求放不下时分批 |
 | `review-scope.js` | 审查怎么分轮（2026-11-02，问题表第 37 条）：第一轮几个角度、后面只审修改点（和上一轮的内容比）、按阶段的提示、合并问题（只合不同角度之间的）、定过的问题历轮累计（`closed`）、审查记录。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json` |
 | `maven-offline.js` | devserver 起后端先离线、缺依赖只拉缺的（问题表第 35 条）：加 `-o`、从 Maven 报错里取缺的依赖、拼 `dependency:get` |
 | `outputs.js` | 代码之外的产出位置 |
@@ -74,7 +74,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - `rules/`：规范。启用的并进全局约定（`20-git-commit.md`）；开头标着 `<!-- vibe-kit:钩子送 -->` 的（`10-openspec.md`，2026-11-01，J4）不进全局约定，安装器和 `--sync` 填好占位符写成 `~/.claude/vibe-kit/hook-rules.md`，由 `lib/stage-rules.js` 在进 OpenSpec 流程时送：开口（task-anchor）、模型自己跑 openspec 或改 openspec/ 下的文件（after-tool）；压缩后还在流程里的马上重送（session-start）。记录在 `<会话>-stage-rules.json`。文件名前加下划线就停用。
 - 用户自己的约定和规范不在这里：装好后的 `~/.claude/vibe-kit/user/*.md` 接在套件的规范后面生成进全局约定，`user/remove.txt` 一行一句从套件的约定、规范里去掉（模板里的原句、换完占位符的句子都认）；安装器不拷进、不覆盖这个目录，打包时它出现在源目录里就报错（F8，2026-11-01）。
 - `skills/`：六个技能，都是 `vk-` 开头（2026-11-04 从 `ttls-` 改过来）：`vk-onboard`、`vk-see-page`、`vk-cross-review`、`vk-handover`、`vk-db-crud`、`vk-redis`。
-- `agents/vk-reviewer.md`：审查子代理，不写 model（跟主会话同模型）。提示由 `review.js prepare` 生成，第三行是"审查任务"，交 JSON 结论；需求和探索记录里没有的标 `scope: out`。结论由 `review-stop.js`（SubagentStop）入账。
+- 审查不开子代理（2026-11-05 起）：`kit/review-prompt.md` 是审查的规矩，`review.js run` 把它、范围、材料、脚本查好的事实（`lib/review-facts.js`）拼成提示，每个角度一个后台进程调 `claude -p`（`--tools ""`，`disableAllHooks`，模型名 sonnet），结论写进输出。`review-stop.js`、`claim`、`heartbeat` 这些子代理时期的代码还在，没人走了，以后可以清（`hooks/` 下的文件不能删）。
 
 ## 配置页（vibe-kit/kit/ui）
 
