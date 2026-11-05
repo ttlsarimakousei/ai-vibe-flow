@@ -188,6 +188,7 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 | 默认怎么跑 | 前台：主会话等，工具结果和 PostToolUse 的 `content` 都是子代理全文 | 后台：工具结果只说已启动，主会话这一轮接着走到 Stop；每个子代理做完来一条通知，触发 UserPromptSubmit（`prompt` 以 `<task-notification>` 开头）和新一轮 |
 | 一条回复 3 个调用 | 同时跑 | 同时跑 |
 | 代理文件不写 model | 请求的 model 和主会话一样 | 同左 |
+| 代理文件写 `model: sonnet`（2026-11-05 实测） | 设了 `ANTHROPIC_DEFAULT_SONNET_MODEL` 发它；没设发 `claude-sonnet-4-6`；主会话不受影响 | 同左；没设时 2.1.259 发 `claude-sonnet-5`，2.1.289 发 `claude-sonnet-5-5` |
 | 子代理里 Bash 跑 node，stdin 带中文 JSON | 字节一致 | 同左 |
 | 子代理里的钩子 | `session_id`、`transcript_path` 和主会话一样，多 `agent_id`、`agent_type`；PreToolUse 拦得到 | 同左 |
 | SubagentStop | `last_assistant_message` 是全文（60000 字没截断）；回 `decision: "block"` 加 `reason`，子代理看到 reason 接着写 | 同左 |

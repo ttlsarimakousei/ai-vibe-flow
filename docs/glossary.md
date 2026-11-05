@@ -18,7 +18,7 @@
 | 变更 | OpenSpec 的一个 change，`openspec/changes/<名字>/` 下面的 proposal、design、specs、tasks |
 | 提案的门槛 | 写提案、任务、打勾、归档时的检查（`guard-spec`、归档门槛）。开关 `specGate` |
 | 验法 | tasks.md 里每项任务写的"验：…"，打勾之前要在会话里跑过 |
-| 交叉审查 | 子代理 `vk-reviewer` 审，和主会话同一个模型：四份需求文档写完审一次整套（审查点 `tasks`），一个 change 的任务全部做完审一次（审查点 `change`） |
+| 交叉审查 | 子代理 `vk-reviewer` 审，默认用 Sonnet：四份需求文档写完审一次整套（审查点 `tasks`），一个 change 的任务全部做完审一次（审查点 `change`） |
 | 多轮审查 | 审查报了问题、改了之后再审改动点，直到报"问题 0 条"。开关 `reviewLoop` |
 | 交接线 | 上下文用到上限的百分之多少要交接（默认 70%）。到线时用提问框问要不要写交接记录、开新会话 |
 | 交接记录 | `.vibe/handover.md`，`/vk-handover` 写的。只有你明确让它交接时才写；新会话一句"继续"接不上，要你点名用哪一份（全局约定"省着用"一节、vk-handover 技能） |

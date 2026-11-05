@@ -38,6 +38,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 文件 | 管什么 |
 |---|---|
 | `session.js` | 公共入口：开关与封条、会话记录、变更、壳子、审查记账、阶段展示、真人动作和压缩窗口。状态锁、调用缓存、意图与范围指纹拆到专用模块，保持旧调用方接口 |
+| `plan-link.js` | 哪些 change 可能是一件事（第 61、62 条）：名字前缀、文档互相提到、任务改同一批文件。只给线索，问过的记在 `state/plan-link.json` |
 | `flow-policy.js` | 两阶段资格、审查点（`points` 必审：整套文档 `tasks`、整个 change `change`；`reviewable` 加上用户点名才审的单份文档和组）、轮数与关联指纹、人工 Ask 去重、定稿后的 apply 衔接 |
 | `openspec.js` | 套件自带的 OpenSpec（`kit/openspec/`，2026-10-17 集成）：能不能用（Node 版本）、把命令里的 `openspec` 改成调用自带的那份、项目没初始化时 `init --tools none`、安装时生成用户级 `/opsx:*` 命令和技能 |
 | `feedback.js` | 问题反馈的记录（`~/.claude/vibe-kit/feedback/`），拦截编号和通行证，拦得最多的规矩、放行记录、开关改动记录 |
