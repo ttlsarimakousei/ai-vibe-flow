@@ -8,22 +8,22 @@
 
 ## 最近一次发版
 
-20261106.0052，已推到 GitHub（main 和标签 v20261106.0052），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。和 1915 比只改审查（第 72 条）：不开子代理，`review.js run` 调 `claude -p`。仓库主人说不再测、立马发，**这批没做别的模型复审，代码审查的质量对比也没做完，真网关没跑过**。
+20261106.0234，已推到 GitHub（main 和标签 v20261106.0234），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。和 0052 比（第 73 条，[feedback-20261105-3.md](feedback-20261105-3.md)）：`claude -p` 不连 MCP、不带全局约定、少一个请求，角度数按差异算；子代理代码删了；升级时清残留。上一版 0052（第 72 条）审查改成 `claude -p`。**这两版都没做别的模型复审，代码审查的质量对比没做完，真网关没跑过**，仓库主人定的先发。
 
-全量回归（`--since v20261105.1915`）121 套 6989 项，失败 11 项：10 项旧断言，1 项真问题（等待循环和后台进程同时入账，修了）。修后重跑这 8 套、`test-review-subagent`、`test-feedback1105` 和三个版本的审查端到端都过，没有再跑一遍全量。从 1257、1915 验收升级各 33 项过。
+全量回归（`--since v20261106.0052`）121 套 6987 项全过。从 1915、0052 验收升级各 33 项过。
 
 ## 待仓库主人做的
 
-- 内网 GitLab 发布 20261106.0052：解压包，在包目录里跑 `node publish.js --now`（要马上装；不加等 24 小时）。
-- 发布后实际审一次，看用时和问题数；`claude` 在同事电脑上找不找得到（先用 Claude Code 给的 `CLAUDE_CODE_EXECPATH`，没有就找命令行的 `claude`）。
+- 内网 GitLab 发布 20261106.0234：解压包，在包目录里跑 `node publish.js --now`（要马上装；不加等 24 小时）。
+- 发布后实际审一次，看用时、问题数，审查记录里每轮写了 token；`claude` 在同事电脑上找不找得到（先用 `CLAUDE_CODE_EXECPATH`，没有就找命令行的 `claude`）。
 - 内网网关认 `claude-sonnet-5`、`claude-sonnet-5-5`（2.1.263、2.1.316 跑过）；2.1.120 的 `claude-sonnet-4-6` 还没确认。
 
 ## 要注意的
 
 - 审查点：`flow-policy.js` 的 `points` 只有必审的（`tasks`、`change`、`cross-*`），`written` 是写好了哪几份，`reviewable` 加上用户点名才审的单份文档和组。`change` 的指纹分"文档和任务 : 代码"两段，后面的变更开工了只比前一段（`sameInput`）。
 - 基线记真正开工那一刻，大任务只记现在要做的 change（`apply-scope.grant`）；`change` 审查不送"开工前就有改动、开工后没动过"的文件。
-- 审查（第 72 条）：`review.js run` → `review-runner.run`：`prepare` 备材料和提示（`<角度>.prompt.md`），每个角度一个后台进程 `review.js worker` 跑 `claude -p`（`--tools ""`、`disableAllHooks`），交齐 `finish` 入账（只让一个进程做）。最多等 9 分钟，返回 `running` 再跑一次。`guard-commit` 把 timeout 改成 10 分钟。测试支架默认 `VIBE_KIT_REVIEW_NO_RUN=1`（只备材料），`VIBE_KIT_CLAUDE_EXE` 指定 claude。
-- 子代理时期的代码还在、没人走：`review-stop.js`、`claim`、`heartbeat`、`dispatch`、`taskOf`、`launchedText`，以后可以清（`hooks/` 下的文件不能删）。两次代码审查的范围文件没列代码文件的疑点还没查（`materials` 基线之后没改动时只剩文档，也不报错），见未结清单。
+- 审查（第 72、73 条）：`review.js run` → `review-runner.run`：`prepare` 备材料和提示（`<角度>.prompt.md`），每个角度一个后台进程 `review.js worker` 跑 `claude -p`（`--tools ""`、`--strict-mcp-config`、`disableAllHooks`、`CLAUDE_CODE_DISABLE_CLAUDE_MDS`），交齐 `finish` 入账（只让一个进程做）。最多等 9 分钟，返回 `running` 再跑一次。`guard-commit` 把 timeout 改成 10 分钟。测试支架默认 `VIBE_KIT_REVIEW_NO_RUN=1`（只备材料），`VIBE_KIT_CLAUDE_EXE` 指定 claude。
+- `review-stop.js` 是空壳。两次代码审查的范围文件没列代码文件的疑点还没查（`materials` 基线之后没改动时只剩文档，也不报错），见未结清单。升级残留用 `dev/probes/upgrade-residue.js` 查。
 - 审查的边界（第 64、70 条）：`review-scope.js` 的 `lensesFor`（按 `reviewSmallChars` 定 1～3 个）、`SCOPE_NOTE`，`review-runner.js` 的 `areasOf`、`pathFacts`，`kit/review-prompt.md`，`review-facts.js`。测试支架默认 `reviewSmallChars: 0`（不分大小）。
 - 开着 `/vk-auto`：开始写文档以后只有探索记录里真有没定的才不生效（`session-flow.flowView`、`big-task.exploreOpen`），插话不取消；在流程里审查不用先问（`flow-policy.actionIssue`）。
 - `keepCurrent`：`/vk-resume` 切到全勾完的 change，算在做它，等用户说下一步。`oldDone`：这个会话碰它之前就勾完的 change，只改文档不催审；接回不算碰过。
@@ -32,7 +32,7 @@
 - 补丁脚本里带反斜杠的不要用 heredoc 或 `node -e`，用 Write 写成文件再跑；Bash 里不要 `cd`。`.bat` 按字节改。"桌面没冒窗口"那项偶尔不过（今天在两套端到端上各一次，重跑都过），原因没查，重跑确认。
 - 钩子出错放行会藏住"名字没定义"：改了钩子入口要跑真 CLI（`dev/probes/cc-vk-config.js`、`cc-vk-resume.js`，Git Bash 下参数写 `//vk-…`）。
 - OpenSpec 1.16.0 要 Node 22.12，仓库主人定了先不升。
-- 测试里拿旧版比：`dev/baseline/20261106.0052/vibe-kit`（最新）。`hooks/` 下的文件不能删。这台电脑没装 vibe-kit。系统临时目录里有 11-04 留下的 `vkt-*` 目录，要清的话仓库主人自己删。
+- 测试里拿旧版比：`dev/baseline/20261106.0234/vibe-kit`（最新）。`hooks/` 下的文件不能删。这台电脑没装 vibe-kit。系统临时目录里有 11-04 留下的 `vkt-*` 目录，要清的话仓库主人自己删。
 
 ## 环境
 
