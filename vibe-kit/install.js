@@ -26,7 +26,6 @@ const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
 const SKILLS = ['vk-onboard', 'vk-see-page', 'vk-cross-review', 'vk-handover', 'vk-db-crud', 'vk-redis'];
-const AGENTS = []; // 审查不用子代理了（第 72 条，2026-11-05），套件不再装审查代理
 /** 一个目录里套件的斜杠命令文件（vk-*.md）；目录不在返回空 */
 function kitCommands(dir) { try { return fs.readdirSync(dir).filter((f) => /^vk-[\w-]+\.md$/i.test(f)).sort(); } catch (e) { return []; } }
 // 改名之前套件自己装的：装这一版时删掉。没前缀的（名字太普通，会和别人的套件撞，0929 改的）；ttls- 开头的（2026-11-04 改成 vk-，仓库主人定的）
@@ -393,7 +392,8 @@ function mergeSettings(s, remove, hooksOnly) {
   };
   // 钩子：先把自己以前加的摘掉（按单个钩子摘，不连累同一组里别人的钩子；命令方式、HTTP 方式的都认），再加新的。重复安装不会越加越多
   s.hooks = s.hooks || {};
-  for (const ev of Object.keys(OURS)) {
+  // 所有时机都扫：只扫 OURS 里有的，不再登记的时机（SubagentStop）会一直留在 settings.json 里（第 73 条升级残留）
+  for (const ev of new Set(Object.keys(OURS).concat(Object.keys(s.hooks)))) {
     const groups = Array.isArray(s.hooks[ev]) ? s.hooks[ev] : [];
     const kept = [];
     for (const g of groups) {
@@ -401,7 +401,7 @@ function mergeSettings(s, remove, hooksOnly) {
       const rest = g.hooks.filter((h) => !isOurHook(h));
       if (rest.length) kept.push(Object.assign({}, g, { hooks: rest }));
     }
-    s.hooks[ev] = remove ? kept : kept.concat(OURS[ev]);
+    s.hooks[ev] = remove ? kept : kept.concat(OURS[ev] || []);
     if (!s.hooks[ev].length) delete s.hooks[ev];
   }
   if (!Object.keys(s.hooks).length) delete s.hooks;
@@ -779,12 +779,6 @@ if (mode === 'uninstall') {
     if (!sameDir(d, path.join(KIT, 'pristine', 'skills', n))) console.log('  [!] 技能 ' + n + ' 被改过，删除前备份在 ' + backup(d, 'skills/' + n));
     if (!moveAway(d, n, false)) removeDir(d);
   }
-  for (const n of AGENTS) {
-    const f = path.join(CLAUDE, 'agents', n);
-    if (!fs.existsSync(f)) continue;
-    if (!same(f, path.join(KIT, 'pristine', 'agents', n))) console.log('  [!] 审查代理 ' + n + ' 被改过，删除前备份在 ' + backup(f, 'agents/' + n));
-    fs.unlinkSync(f);
-  }
   // 套件的斜杠命令（vk-*）：改过的先备份再删
   for (const n of kitCommands(path.join(KIT, 'pristine', 'commands'))) {
     const f = path.join(CLAUDE, 'commands', n);
@@ -929,6 +923,8 @@ if (mode === 'install') {
   copyDir(path.join(SRC, 'kit'), KIT, ['VERSION', 'user']);
   // 新版删掉了的文件：拷贝不会删，旧版留下的要清掉（自检会挨个载 lib 下的每个文件）。hooks 下的文件不删（AGENTS.md 硬规矩第 11 条）
   for (const rel of DROPPED_FILES) { try { fs.unlinkSync(path.join(KIT, rel)); } catch (e) { /* 没有 */ } }
+  // 老版本留下的状态文件（第 73 条升级残留）：路由还在的等 router-retire 收，它要读
+  if (!fs.existsSync(path.join(KIT, 'router'))) for (const n of ['hook-stats.json', 'hook-miss.json', 'gateway.json', 'idea-mcp.json', 'idea-mcp.lock']) { try { fs.unlinkSync(path.join(KIT, 'state', n)); } catch (e) { /* 没有 */ } }
   for (const f of ['install.js', 'settings.fragment.json']) copyFile(path.join(SRC, f), path.join(KIT, f));
   // 套件代码的指纹：会话开始时比一遍，被改过的告诉模型和你、记一条问题反馈（算法和 kit/lib/session.js 的 kitCodeHashes 一样）
   {
@@ -1124,16 +1120,6 @@ if (mode === 'install') {
     if (fs.existsSync(d) && !moveAway(d, n, false)) removeDir(d);
     copyDir(path.join(SRC, 'claude', 'skills', n), d);
   }
-  fs.mkdirSync(path.join(CLAUDE, 'agents'), { recursive: true });
-  for (const n of AGENTS) {
-    const d = path.join(CLAUDE, 'agents', n);
-    if (fs.existsSync(d) && !same(d, path.join(SRC, 'claude', 'agents', n)) && !same(d, path.join(KIT, 'pristine', 'agents', n))) {
-      const bak = backup(d, 'agents/' + n);
-      console.log('  [!] 已有同名代理 ' + n + '，原文件备份在 ' + bak);
-      noticeItems.push('审查代理 ' + n + ' 你改过，这次换成了新版。原文件备份在 ' + bak);
-    }
-    copyFile(path.join(SRC, 'claude', 'agents', n), d);
-  }
   // 套件的斜杠命令（/vk-go、/vk-commit、/vk-push、/vk-archive、/vk-review、/vk-test、/vk-fix，用户 2026-10-30 定的）：装成用户级命令，
   // 敲了钩子直接认成许可，和说中文并存。同名的你自己的、改过的，先备份
   const cmds = kitCommands(path.join(SRC, 'claude', 'commands'));
@@ -1160,6 +1146,8 @@ if (mode === 'install') {
   // 留一份原样的副本，下次更新和卸载时用来判断你有没有改过
   removeDir(path.join(KIT, 'pristine'));
   copyDir(path.join(SRC, 'claude'), path.join(KIT, 'pristine'));
+  try { fs.rmdirSync(RETIRED); } catch (e) { /* 没有，或者里面有东西（挪走的旧技能，留着） */ }
+  try { fs.rmdirSync(path.join(CLAUDE, 'agents')); } catch (e) { /* 没有，或者有用户自己的代理 */ }
   console.log('  [OK] 技能：' + SKILLS.map((n) => '/' + n).join('  ') + '');
   if (renamed.length) console.log('  [OK] 技能和代理改名了（统一 vk- 开头）：' + renamed.join('，') + '。旧名字的已经删掉');
   for (const a of absorbed) {
