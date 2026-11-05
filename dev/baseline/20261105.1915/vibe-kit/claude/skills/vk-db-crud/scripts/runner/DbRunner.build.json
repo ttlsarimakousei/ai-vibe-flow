@@ -1,0 +1,15 @@
+{
+  "javac": "javac 17.0.20.1",
+  "release": "8",
+  "source": {
+    "file": "DbRunner.java",
+    "sha256": "1c23b86a21eb9dc8ed7291c886d7985aee18840265e16b6badf1a41bf4c27211"
+  },
+  "classes": {
+    "DbRunner$1.class": "c61c68ed26a85a80b5887cd0b3b5dc48320c980ea00d557dd634899bf515edff",
+    "DbRunner$Found.class": "9c99ad89fc92d71a1d213e72c072ca53db730fb3a9b29cf9a183d84a2ce9a119",
+    "DbRunner$RowFlags.class": "8a5cd7eeaaa6f576b125cd8c0b362deadf9bf0641b6e6890eba7ac06cdbca529",
+    "DbRunner$Scope.class": "791d61b17b9c33a5d7b3281f6ac9e1ed2f8e5e34005a7c4cd827d4fa22ccfcd9",
+    "DbRunner.class": "53d503c41795e096a2aa804fbdfa780c2f0030c0d17c0523367c50b891396b07"
+  }
+}
