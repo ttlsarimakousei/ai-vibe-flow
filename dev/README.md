@@ -153,6 +153,7 @@ node dev/pack.js
 | `probes/cc-vk-config.js` | 探测：敲 /vk-config 发不发模型请求、屏幕上有没有地址 |
 | `probes/review-timing.js [--days N] [--anon] [--all-agents]` | 诊断（第 64、71 条）：单个文件，拷到内网直接跑，不用装套件、不发请求。读会话记录，算审查子代理的请求数、每个请求等多久、读了什么、读没读到范围外，主会话的请求花在哪、钩子拦了几次、送了多少字。报告只有路径、次数、时间，没有文件内容和命令参数 |
 | `probes/review-effort.js [--model 名字] [--times N]` | 内网对比（第 71 条）：同一段代码按默认、low、medium、high、关掉思考各审几次，看网关认不认 effort。单个文件，会发真请求，不读项目、不留会话记录、关掉钩子 |
+| `probes/review-oneshot.js --list` / `--job <编号> [--turns N]` | 内网对比（第 71 条）：拿一次审过的审查，把审查开始那一刻的材料（从会话记录还原，不是现在修过的）一次发给 `claude -p`，和子代理当时的结果比用时、输出、问题。单个文件，会发真请求 |
 | `probes/cc-reviewer-opts.js <版本号>` | 探测：代理文件写 effort 时请求里发什么；SubagentStart 的 additionalContext 进不进子代理第一个请求；代理文件里的 hooks 只对子代理生效吗、Read 拦不拦得到、deny 和 additionalContext 送不送得到模型 |
 | `probes/up-no-router.js [旧版本号] [端口]` | 探测：真装着旧路由的电脑升到这一版（自动更新、手动安装两条路）：自检不过要用的东西留到新代码跑起来才收 |
 | `lib/hook-thread.js` | `H.hook` 在工作线程里调钩子用的线程脚本 |
