@@ -276,7 +276,7 @@ function scopeText(job, lens, plan, round, material) {
     if ((round.carry || []).length) out.push('', '## 上游审查留给这一步的要点', '', '这一步要覆盖到，没覆盖到的报 P2：', '', '```json', JSON.stringify(round.carry, null, 1), '```');
     const areas = areasOf(job, material, round);
     if (areas.length) out.push('', '## 这次涉及的目录', '', areas.join('、'), '', '这些目录之外不主动看：要审的内容直接调用到的地方，只读调用的那几行。框架和基础设施（登录鉴权、网关、ORM、基类）不读实现。');
-    if (round.paths && (round.paths.found.length || round.paths.missing.length)) out.push('', '## 脚本核过的路径', '', '这些不用再开文件确认在不在。要核对的是文档说它里面是什么样：只开点名的文件，读相关的那一段，不顺着往外找。', '', '- 在：' + (round.paths.found.join('、') || '无'), '- 不在（文档提到了，又没写新建）：' + (round.paths.missing.join('、') || '无'));
+    if (round.paths && (round.paths.found.length || round.paths.missing.length || round.paths.context)) out.push('', '## 脚本核过的路径', '', '这些不用再开文件确认在不在。要核对的是文档说它里面是什么样：只开点名的文件，读相关的那一段，不顺着往外找。', '', '- 在：' + (round.paths.found.join('、') || '无') + (round.paths.context ? '；design 现状里列的探索路径 ' + round.paths.context + ' 个也都在，不用开' : ''), '- 不在（文档提到了，又没写新建）：' + (round.paths.missing.join('、') || '无'));
     out.push('', '## 要审的文件', '');
     for (const [file, cur] of material.currents) out.push('- ' + file + (cur.role ? '（' + cur.role + '，只用来核对）' : '') + (cur.note ? '（' + cur.note + '）' : '') + (cur.source && cur.source !== file ? '：' + cur.source : ''));
     if ((material.bases || []).length) out.push('', '基线：' + material.bases.map((b) => b.root + ' 的 ' + b.ref).join('；') + '。改动用 `git -C <仓库> diff <基线> -- <文件>` 看，新文件整个读。');
@@ -296,16 +296,21 @@ function areasOf(job, material, round) {
   for (const f of files) { const d = path.dirname(String(f).replace(/\\/g, '/')); if (d && d !== '.' && !/(^|\/)(openspec|\.vibe)(\/|$)/.test(d)) dirs.add(d); }
   return [...dirs].sort().slice(0, 15);
 }
-/** 文档点名的路径，脚本先核一遍（第 64 条）：在不在是能确定判断的，不用子代理一个个开文件。这个变更里任一处写明新建的不算不在；revisions.md 记的是历史，不算 */
-function pathFacts(change) {
+/**
+ * 文档点名的路径，脚本先核一遍（第 64 条）：在不在是能确定判断的，不用子代理一个个开文件。这个变更里任一处写明新建的不算不在；revisions.md 记的是历史，不算。
+ * design 现状里列的是探索时读过的（contextOnly）：不逐个列、不算涉及的目录，只报个数（第 70 条：列出来等于把边界放宽；不在的照样报）
+ */
+function pathFacts(change, contextOnly) {
   const roots = S.projectRootsOf(change.dir).concat(change.dir);
-  const found = new Set(); const missing = new Set();
+  const found = new Set(); const missing = new Set(); const seen = new Set();
+  const key = (t) => String(t).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+  const context = new Set((contextOnly || []).map(key));
   const declared = S.declaredNew(change.dir, '');
   for (const f of S.artifactFiles(change.dir).filter((x) => !/revisions\.md$/.test(x))) {
     let text = ''; try { text = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
-    for (const l of text.split(/\r?\n/)) for (const t of S.pathTokens(l)) { if (S.pathExists(t, roots)) found.add(t); else if (!S.NEW_FILE.test(l) && !declared(t)) missing.add(t); }
+    for (const l of text.split(/\r?\n/)) for (const t of S.pathTokens(l)) { if (S.pathExists(t, roots)) { if (context.has(key(t))) seen.add(key(t)); else found.add(t); } else if (!S.NEW_FILE.test(l) && !declared(t)) missing.add(t); }
   }
-  return { found: [...found].slice(0, 40), missing: [...missing].slice(0, 40) };
+  return { found: [...found].slice(0, 40), missing: [...missing].slice(0, 40), context: seen.size };
 }
 /** 子代理显示的名字（第 66 条）：说清审的是什么。点名审单份、某一组的写它的名字；复审的角度本来就叫"复审" */
 function reviewerName(job, lens) {
@@ -366,7 +371,7 @@ function prepare(opts) {
     const currents = {}; for (const [f, cur] of material.currents) currents[f] = { text: cur.text, source: cur.source };
     fs.mkdirSync(job.dir, { recursive: true });
     if (!store.atomicWrite(path.join(job.dir, 'plan.json'), { scoped: job.scoped, why: plan.why, noChange, open: plan.open, closed: plan.closed, carried: plan.carried, kept: plan.kept, changed: plan.changed, itemFiles: plan.scoped ? [...new Set(plan.items.map((x) => x.file))] : [], currents, skipped: material.skipped, uncovered: material.uncovered, excluded: material.excluded, contextOnly: material.contextOnly, materialInputs: material.inputs, deferred: Sc.deferredOf(prevRound), born, fingerprintNote: before.truncated ? '这个目录不是 git 仓库，文件太多，只核对了前面的文件：后面的文件改了认不出来，"审查后输入没变"对它们不作数' : undefined })) throw new Error('审查材料写不进 ' + job.dir);
-    const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : !plan.scoped && opts.point === 'tasks' ? Sc.carryover(folder, ['proposal', 'specs', 'design']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '', paths: !plan.scoped && opts.mode === 'proposal' && change ? pathFacts(change) : null };
+    const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : !plan.scoped && opts.point === 'tasks' ? Sc.carryover(folder, ['proposal', 'specs', 'design']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '', paths: !plan.scoped && opts.mode === 'proposal' && change ? pathFacts(change, material.contextOnly) : null };
     for (const l of list) fs.writeFileSync(path.join(job.dir, safeName(l.name) + '.md'), scopeText(job, l, plan, round, material));
     S.updateState('review-jobs', (o) => { o[key] = job; });
     if (noChange) return finish(id);

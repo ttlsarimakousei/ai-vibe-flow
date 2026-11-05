@@ -443,6 +443,14 @@ function archived(p, name, file) {
     const area = R.prepare({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
     const areaScope = H.read(/范围文件：(.+)/.exec(area.agents[0].prompt)[1].trim());
     H.ok('第 70 条：涉及的目录是点名文件的目录', /## 这次涉及的目录\s+src\/order/.test(areaScope), areaScope.slice(0, 600));
+    // design 现状里列的探索路径不算涉及的目录，不逐个列（全量回归 test-feedback1013-context 抓到的）
+    R.cancel({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
+    H.write(path.join(p3, 'lib/framework/Auth.java'), 'class Auth {}\n');
+    H.write(path.join(d3, 'design.md'), '## Context\n\n- 读过 lib/framework/Auth.java：框架的鉴权\n\n## Decisions\n\n- 只改 src/order/Order.java：只有这里\n');
+    H.git(p3, ['add', '-A']); H.git(p3, ['commit', '-qm', 'ctx']);
+    const ctx = R.prepare({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
+    const ctxScope = H.read(/范围文件：(.+)/.exec(ctx.agents[0].prompt)[1].trim());
+    H.ok('第 70 条：探索时读过的框架文件不算涉及的目录、不逐个列', /src\/order/.test(ctxScope) && !/lib\/framework/.test(ctxScope.split('## 要审的文件')[0]) && /探索路径 1 个也都在/.test(ctxScope), ctxScope.slice(0, 900));
     H.ok('别处写过新建的不报不在', !/不在[^\n]*Fresh\.java/.test(areaScope), areaScope.slice(0, 700));
     H.ok('revisions.md 记的旧路径不报不在', !/不在[^\n]*Old\.java/.test(areaScope), areaScope.slice(0, 700));
     R.cancel({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
