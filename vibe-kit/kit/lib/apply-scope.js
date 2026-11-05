@@ -54,7 +54,13 @@ function grant(j, text, context, opts) {
     if (!task && targets.length === 1) { s.current = targets[0].name; delete s.task; } else if (s.current && (named.length === 1 ? s.current !== named[0].name : task && !task.changes.some((c) => c.name === s.current))) delete s.current;
     s.waiting = ''; s.lastApplyAt = scope.at; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: scope.at }; if (voice) { s.applyVoice = S.voiceKey(voice); s.applyVoiceSchema = 2; } });
   if (!saved) return { ok: false, reason: '开工范围暂时不能保存，请重试' };
-  try { require('./review-runner').baseline(j, targets.map((c) => c.dir)); } catch (e) { /* 审查缺基线时明确降级 */ }
+  // 基线记真正开工的那一刻（复审 20261105 第 1、2 条）：大任务只记现在要做的这个 change，点名的优先。后面的 change 轮到它时会再走到这里，
+  // 那时前面 change 没提交的改动才记成"开工前就有"，审查不把它们当成这个 change 的
+  try {
+    let now = targets;
+    if (task) { let current = ''; try { current = require('./big-task').phaseFor(j, task).change; } catch (e) { current = ''; } const picked = targets.filter((c) => named.includes(c) || c.name === current); if (picked.length) now = picked; }
+    require('./review-runner').baseline(j, now.map((c) => c.dir));
+  } catch (e) { /* 审查缺基线时明确降级 */ }
   return { ok: true, targets: targets.map((c) => c.name) };
 }
 /** 开工没认下来：原因记进流程状态（绑定是哪一次开口），拦"还没开工"的地方照着说，不再只说"用户还没说开工" */
