@@ -45,7 +45,7 @@ function protectedKitPaths() {
   for (const base of bases) {
     const list = [path.join(base, 'vibe-kit'), path.join(base, 'settings.json'), path.join(base, 'CLAUDE.md')];
     for (const n of (skills.length ? skills : ['vk-onboard', 'vk-see-page', 'vk-cross-review', 'vk-handover', 'vk-db-crud', 'vk-redis'])) list.push(path.join(base, 'skills', n));
-    for (const n of (agents.length ? agents : ['vk-reviewer.md'])) list.push(path.join(base, 'agents', n));
+    for (const n of agents) list.push(path.join(base, 'agents', n));
     for (const p of list) { out.add(normKey(p)); out.add(normKey(realish(p))); }
   }
   out.add(normKey(KIT));

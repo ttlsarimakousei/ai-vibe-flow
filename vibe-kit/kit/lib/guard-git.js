@@ -336,7 +336,7 @@ function consentIssue(g, st, cfg, docs) {
   const root = repoRoot(g.dir) || g.dir; const baselines = readState('work-baselines');
   const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
   if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
-  // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、子代理连续没交结论停了的不算，以前它们一直挡着，自动提交就永远提交不了
+  // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、连续没拿到结论停了的不算，以前它们一直挡着，自动提交就永远提交不了
   const open = current.some(c => P.reviewable(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg)));
   if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
   if (current.some((c) => require('./review-runner').inFlight(c.dir))) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';

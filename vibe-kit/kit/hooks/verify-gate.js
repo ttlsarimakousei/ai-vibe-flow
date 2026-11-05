@@ -801,9 +801,9 @@ async function handle(j) {
       if (got.stored) hookLog('verify-gate 自动收了 ' + got.stored + ' 条审查报的问题' + (got.promoted.length ? '，升成规则 ' + got.promoted.map((x) => x.id).join('、') : '') + (got.category.length ? '，按类别出的规则 ' + got.category.map((x) => x.id).join('、') : ''));
     }
   } catch (e) { hookLog('verify-gate 自动收审查问题出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（自动收审查问题）', j, e); }
-  // 子代理结束了没交结论的角度记下来（Esc 打断、Claude Code 退出过）；还在跑的别催（催了它会再开一个）
+  // 后台审查进程没了、没交结论的角度记下来（Claude Code 退出过）；还在跑的别催
   const Rr = require('../lib/review-runner');
-  try { Rr.sweep(entries, cwd); } catch (e) { hookLog('verify-gate 查审查子代理出错（不拦）：' + ((e && e.message) || e)); }
+  try { Rr.sweep(cwd); } catch (e) { hookLog('verify-gate 查审查进程出错（不拦）：' + ((e && e.message) || e)); }
   const busy = (dir, mode) => Rr.inFlight(dir, mode);
   const proposalBusy = () => allChanges(cwd).some((c) => Rr.inFlight(c.dir, 'proposal'));
 

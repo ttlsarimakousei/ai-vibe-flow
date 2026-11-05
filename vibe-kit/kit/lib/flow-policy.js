@@ -164,7 +164,7 @@ function settled(dir, point) {
 }
 const modeOfPoint = (p) => (DOCS.includes(p) ? 'proposal' : 'code');
 /**
- * 子代理连续 3 次拿不到结论（用户 2026-11-03 定的）：不再催，不算通过，也不挡提交、不挡往下一组走；收工报告里写着没审成。用户自己说审，照样能审，审成了清零。
+ * 连续 3 次拿不到结论（用户 2026-11-03 定的）：不再催，不算通过，也不挡提交、不挡往下一组走；收工报告里写着没审成。用户自己说审，照样能审，审成了清零。
  * 审出问题不算：P1、P2 审修不设上限，出口只有没有 P1、P2、逐条处理完（resolve，驳回要写依据）、用户说提交。
  */
 function halted(dir, point) { const r = record(dir, point); return (r.failStreak || 0) >= 3 && !settled(dir, point); }
@@ -183,7 +183,7 @@ function fixPending(dir, point, cfg) {
   return open && !settled(dir, point) && !halted(dir, point);
 }
 function allPassed(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p)); }
-/** 每个点都有结果了：过了，或者子代理连续没交结论停了（自动模式靠它往下走，没过的写进报告） */
+/** 每个点都有结果了：过了，或者连续没拿到结论停了（自动模式靠它往下走，没过的写进报告） */
 function allDone(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p) || halted(dir, p)); }
 // rounds 只记录，不限次数（用户 2026-11-03 定的）：轮数只数"审出问题、修了再审"这一串，上一轮零问题通过了，这次重审从头数。
 function concluded(r) { return r.status === 'completed' && blockingOf(r) === 0; }
@@ -201,7 +201,7 @@ function noteResult(dir, point, result, inputHash) {
     o[k] = { rounds, status: result.status, issues: result.issues.length, blocking: block, failStreak, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, born: S.changeBorn(dir), at: Date.now() };
   });
 }
-/** 子代理没交结论：一轮记一次（roundId 同一个的不重复记）。一轮 3 个角度都被打断也只算一次（复审 20261104 R2） */
+/** 没拿到结论：一轮记一次（roundId 同一个的不重复记）。一轮 3 个角度都被打断也只算一次（复审 20261104 R2） */
 function noteFail(dir, point, roundId) { S.updateState('review-points', o => { const k = key(dir, point); if (!o[k]) return; if (roundId && o[k].failRound === roundId) return; o[k].failRound = roundId || ''; o[k].failStreak = (o[k].failStreak || 0) + 1; }); }
 /**
  * 开着自动、需求文档审修完：直接开工（第 41 条：以前有一个条件不满足就落到"问能不能开工"）。
@@ -351,9 +351,9 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
     // 自动下每个 change 按自己走到哪算（回改前面的 change、接下一个时，几个 change 不在同一段）
     const mode = cfg.autoMode ? (S.changeStarted(dir) || applyingNow(j, dir) ? 'code' : 'proposal') : S.flowStage(j) === 'apply' ? 'code' : 'proposal';
     if (oldDone(j, dir)) continue;
-    // 子代理连续没交结论的点：说一次不再催、写进报告，接着往下
+    // 连续没拿到结论的点：说一次不再催、写进报告，接着往下
     if (cfg.autoMode) for (const p of points(dir, mode).filter((x) => halted(dir, x))) { const m = once(j, key(dir, p) + '|limit', fingerprint(dir, p) + ':' + (record(dir, p).failStreak || 0), instruction(dir, p) + '接着往下做。'); if (m) out.push(m); }
-    // 有角度正在跑（2.1.259 起子代理在后台）：不催，也别再开一个
+    // 有角度正在跑：不催，也别再开一个
     if (require('./review-runner').inFlight(dir, mode)) continue;
     // 开着自动、这一段没生效（探索记录没写完、用户说了停）：不当人工那样让用户看一看（第 67 条）
     if (!cfg.autoMode && cfg.autoSession === true && mode === 'proposal') { const why = autoBlocked(j); const m = why ? once(j, key(dir, 'auto-blocked'), why, why) : ''; if (m) out.push(m); continue; }
@@ -440,8 +440,6 @@ function actionIssue(j) {
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
   const test = !review && (shellTest || name === 'Skill' && /see-page/.test(inp.skill || ''));
   if (!review && !test) return '';
-  // 备审查之前先清一遍：前台子代理结束了、没交结论的还记着"在跑"，不清的话 prepare 会让它等一个不会来的通知（复审 20261105-2 第 1 条）
-  if (runsReview) { try { require('./review-runner').sweep(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 看不了：照原来的判 */ } }
   // 审查不开子代理（第 72 条，仓库主人 2026-11-05 定的）：脚本调 claude -p
   if (reviewer) return '审查不开子代理（2026-11-05 起）：跑 review.js run（--change、--mode、--point、--project 照旧），脚本调 claude -p 审完，结论在命令输出里。写法见 /vk-cross-review。';
   // 开着 /vk-auto、在 OpenSpec 流程里：审查不用先问用户（第 68 条）。这一轮算不算自动（插了句话、探索记录还有没定的）不影响；用户说了停、普通改动除外

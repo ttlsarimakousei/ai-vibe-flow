@@ -357,7 +357,6 @@ function check(j) {
  * 检查拦下、要问的照旧（不改写）；自带的用不了（Node 版本不够）、出错，都让原命令照常跑
  */
 function handle(j) {
-  try { if (j.agent_type) require('../lib/review-runner').heartbeat(j); } catch (e) { /* 记不了不影响跑命令 */ }
   const out = check(j);
   if (out || /^mcp__/.test(String(j.tool_name || ''))) return out;
   // review.js run 最多等 9 分钟（第 72 条）：Bash 默认 2 分钟就断了，这里给够。断了也不要紧，后台接着审，再跑一次接着等

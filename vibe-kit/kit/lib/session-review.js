@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 审查记录：登记、代码审过没有、本会话碰过的变更、交接文件读写。审查结论由 review-runner.js 入账（子代理交，SubagentStop），不再认会话记录里的结论行。
+ * 审查记录：登记、代码审过没有、本会话碰过的变更、交接文件读写。审查结论由 review-runner.js 入账（后台 claude -p 的回复），不再认会话记录里的结论行。
  * 2026-11-01 从 session.js 拆出来（K 批）。session.js 照旧导出全部名字，别的文件照旧 require('./session')。
  */
 const fs = require('fs');
@@ -47,7 +47,7 @@ function recordReview(kind, dir, issues, reviewKey, at, counted) {
 /** 提案审过了吗 */
 function proposalReviewed(dir) { const r = reviewRecord('proposal', dir); return !!(r && r.done && (!r.proposalHash || r.proposalHash === require('./apply-scope').planHash(dir)) && require('./review-runner').inputsCurrent(r.materialInputs)); }
 
-/** 流程能否继续：完整审查，或者每个点都有结果了（子代理连续没交结论停了的不再自动审，这里再拦就卡死，没过的写在报告里） */
+/** 流程能否继续：完整审查，或者每个点都有结果了（连续没拿到结论停了的不再自动审，这里再拦就卡死，没过的写在报告里） */
 function reviewAllowed(kind, dir) { return require('./flow-policy').allDone(dir, kind) || (kind === 'proposal' ? proposalReviewed(dir) : codeReviewed(dir)); }
 
 /**

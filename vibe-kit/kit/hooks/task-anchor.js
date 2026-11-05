@@ -22,7 +22,6 @@ const fs = require('fs');
 const path = require('path');
 const intent = require('../lib/intent');
 const { blockOut, atHome, FLOW_SLASH, FLOW_TAG, APPLY_SLASH, APPLY_TAG, applyIntent, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowState, flowDone, flowAdopt, setFlow, flowTouch, mentionsChange, activeChanges, allChanges, tailEntries, textOf, lastUsageTokens, readConfig, contextPercent, readState, writeState, hookLog, snapshotArtifacts, normKey, handoverStale, convUpdateNotice, proposalReviewed, changeRoots, isTaskNotePrompt, sessionChanges, KIT, cli } = require('../lib/session');
-
 // "不要停""别等我，做完再说""不用问我"：开头是"不 / 别"，意思却是接着做
 const KEEP_GOING = /^(不要|不用|别|甭|不必|无需)再?(停|等|问|管我|确认|请示|汇报|担心)/;
 // 让它停的话，只认两种。以前只看开头是不是"不用 / 不要 / 别 / 停"："不要停，把剩下的做完"也被当成停，全自动这一轮就按没开算，提问框不拦，活停在那里等人
@@ -459,8 +458,9 @@ async function handle(j) {
     if (m && m[1].trim()) j = Object.assign({}, j, { prompt: m[1].trim() });
   }
   const cfg = readConfig(j);
-  // 前台子代理被 Esc 打断、用户接着说话：死了的角度当场算没交，再审不会被说"正在跑"（复审 20261104 R13）
-  try { if (j.transcript_path && Object.values(readState('review-jobs')).some((x) => x && x.status === 'running')) require('../lib/review-runner').sweep(tailEntries(j.transcript_path, 3000000), j.cwd || process.cwd()); } catch (e) { /* 收工时还会看一次 */ }
+
+  // 后台审查进程没了的角度当场算没交，再审不会被说"正在跑"
+  try { if (Object.values(readState('review-jobs')).some((x) => x && x.status === 'running')) require('../lib/review-runner').sweep(j.cwd || process.cwd()); } catch (e) { /* 收工时还会看一次 */ }
   // 记下这个会话在哪个目录、会话记录在哪：记问题反馈的工具（tools/feedback.js）拿不到会话号，靠这个找
   try { require('../lib/feedback.js').noteSession(j); } catch (e) { /* 记不了不影响对话 */ }
   // 下面都是项目级的事（探索、进行中的变更、交接记录）：照会话的启动目录来，不照现在所在的目录（模型单独 cd 过就变了）
