@@ -210,9 +210,9 @@ function resumeHint(j) {
 function applyNotice(cfg) {
   const auto = !!(cfg.autoSwitch && cfg.autoMode);
   return {
-    user: '[vibe-kit] 开始 apply：全自动模式' + (auto ? '开着。每整组任务完成后自动审修，全部做完全面自测；做法上的事它自己定、记进报告，需求本身有疑问才问你。' : '关着。审查、自测和复验先 Ask。'),
+    user: '[vibe-kit] 开始 apply：全自动模式' + (auto ? '开着。每个 change 的任务全部做完自动审修一次，所有 change 做完全面自测；做法上的事它自己定、记进报告，需求本身有疑问才问你。' : '关着。审查、自测和复验先 Ask。'),
     // 用户 2026-10-30 定的（问题表第 22 条）：自动模式下做法上的取舍自己定，不停下来问；改 design、tasks 不退出自动
-    model: '现在开始 apply（做任务）：全自动模式' + (auto ? '开着，按当前范围逐整组任务审修，一个 change 做完按 plan.md 接下一个，全部做完全面自测。做法上的取舍（怎么写、用哪种实现）自己定，记进 revisions.md（起因：自动模式决定），收工报告会列出来，不停下来问；只有需求本身矛盾或缺关键信息才 Ask。补 design、改 tasks 措辞不退出自动；改 proposal.md、specs 里的要求会退回人工，等用户重新说开工。交付验收用例与实际结果，归档仍等用户决定。' : '关着，审查、自测、复验先 Ask，放弃后直接继续，不记录未审查或未测试。')
+    model: '现在开始 apply（做任务）：全自动模式' + (auto ? '开着，按当前范围做，组之间不审，这个 change 的任务全部做完审修一次，然后按 plan.md 接下一个，全部做完全面自测。做法上的取舍（怎么写、用哪种实现）自己定，记进 revisions.md（起因：自动模式决定），收工报告会列出来，不停下来问；只有需求本身矛盾或缺关键信息才 Ask。补 design、改 tasks 措辞不退出自动；改 proposal.md、specs 里的要求会退回人工，等用户重新说开工。交付验收用例与实际结果，归档仍等用户决定。' : '关着，审查、自测、复验先 Ask，放弃后直接继续，不记录未审查或未测试。')
       + '提案提交许可和 apply 开工许可分别判断；没有明确提交许可时不在开工节点补提案提交。',
   };
 }
@@ -386,8 +386,8 @@ function anchorLines(j, cfg, note) {
         const c = mine[0];
         let s = '进行中的 OpenSpec 变更：' + c.name + '，任务 ' + c.done + '/' + c.total + (c.next ? '，下一项：' + c.next : '');
         if (mine.length > 1) s += '（另有 ' + (mine.length - 1) + ' 个没做完：' + mine.slice(1, 4).map((x) => x.name).join('、') + '）';
-        // 还没开工的变更，提案没审过：每条消息带一句，直到审了
-        if (cfg.autoMode && cfg.specGate !== false && c.done === 0 && !require('../lib/session').reviewAllowed('proposal', c.dir)) s += '。这个提案还没审过：apply 之前先按 /vk-cross-review 的提案模式审一遍（审查提示第一行写"模式：提案"，写上变更名）';
+        // 还没开工的变更，四份写完了还没审：每条消息带一句，直到审了。没写完的不说，写到 tasks 才审（第 57 条）
+        if (cfg.autoMode && cfg.specGate !== false && c.done === 0 && require('../lib/flow-policy').written(c.dir).includes('tasks') && !require('../lib/session').reviewAllowed('proposal', c.dir)) s += '。这个提案还没审过：apply 之前先审一次整套文档（review.js prepare --change ' + c.name + ' --mode proposal --point tasks，写法见 /vk-cross-review）';
         lines.push(s);
       }
     }
@@ -428,7 +428,7 @@ function anchorLines(j, cfg, note) {
 
 /** 会话自动模式开了：送一次怎么做（问题表第 28 条，用户 2026-10-31 定的）。不写进每个请求都带的全局约定（硬规矩 8） */
 const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。这只是个开关：回一句开了就行，不要提问，等用户说要做什么。进了流程之后：探索记录（openspec/explore/<大任务>.md）的"还没定的"清空才开始自动；'
-  + '之后自动逐份写需求文档、审修、定稿、开工，每整组任务做完审查，一个 change 做完按 plan.md 接下一个，全部做完全面自测、修改、复验，按提交方式提交，收工交报告。'
+  + '之后自动写完四份需求文档再审修一次整套、定稿、开工，一个 change 的任务全部做完审修一次，按 plan.md 接下一个，全部做完全面自测、修改、复验，按提交方式提交，收工交报告。'
   + '只做探索记录和用户材料里有的，不自己加需求（"这里加个按钮更好"这种不加）；做法上的取舍自己定，记进 revisions.md（起因：自动模式决定），不停下来问；'
   + '用户中途报的问题、改的需求照改，记进 revisions.md，接着自动做。只有用户的描述或材料让你完全走不下去时，先自己探索，还不行再问。归档、push 照旧要用户点头；改库、写 redis 照技能里全自动的规矩（留得下备份的工具会说不用等人，别的留给用户）。';
 const AUTO_OFF_TEXT = '这个会话的自动模式关了（用户刚说的）：照人工来，审查、自测、复验先问用户。';

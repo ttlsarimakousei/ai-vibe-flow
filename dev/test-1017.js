@@ -53,7 +53,8 @@ const DESIGN_OK = ['## Context', '', '- 读过 src/A.java：现在只有查询',
     H.write(path.join(chg, 'design.md'), DESIGN_OK);
     // 设计刚写完、用户还没说话：一份一份来，先停下给用户看
     const early = write('openspec/changes/add-x/tasks.md', '- [ ] 1.1 改 src/A.java：加导出接口\n');
-    H.ok('人工模式：design 写完用户还没看就写 tasks，拦下让它停下问"审一下 / 直接写下一份 / 我要改"', blocked(early) && /design 写完还没给我看过/.test(H.reasonOf(early)) && /审一下/.test(H.reasonOf(early)) && /openspec instructions tasks --change "add-x"/.test(H.reasonOf(early)), H.reasonOf(early));
+    // 2026-11-05 起中间不问审查（第 57 条）：只提醒看一看、引导下一步
+    H.ok('人工模式：design 写完用户还没看就写 tasks，拦下让它提醒看一看、问"写下一份 / 我要改"', blocked(early) && /design 写完还没给我看过/.test(H.reasonOf(early)) && /写下一份（tasks）/.test(H.reasonOf(early)) && !/审一下/.test(H.reasonOf(early)) && /openspec instructions tasks --change "add-x"/.test(H.reasonOf(early)), H.reasonOf(early));
     ago(path.join(chg, 'design.md'), 2 * 3600000);
     const plain = write('openspec/changes/add-x/tasks.md', '- [ ] 1.1 改 src/A.java：加导出接口\n- [ ] 1.2 新建 src/ATest.java：写导出的单元测试\n');
     H.ok('用户看过 design 之后写 tasks；任务不写"验："、交付的测试代码也能列：放行', !blocked(plain), H.reasonOf(plain));

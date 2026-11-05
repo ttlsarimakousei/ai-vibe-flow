@@ -38,7 +38,7 @@ const proj = H.makeRepo(path.join(root, 'w', 'proj'), {
 const JAVA = path.join(proj, 'src', 'main', 'java', 'com', 'x', 'OrderService.java');
 const TASKS = path.join(proj, 'openspec', 'changes', 'a1', 'tasks.md');
 const FEEDBACK = path.join(kit, 'tools', 'feedback.js').replace(/\\/g, '/');
-const REVIEW = 'node "' + path.join(kit, 'tools', 'review.js').replace(/\\/g, '/') + '" prepare --change a1 --mode code --point group-1';
+const REVIEW = 'node "' + path.join(kit, 'tools', 'review.js').replace(/\\/g, '/') + '" prepare --change a1 --mode code --point change';
 const FINAL = '## 做了什么\na1 的 1.1 做完了，代码审过一轮、改了。\n## 留给你做的\n没有。\n## 库里改过的\n没有。\n## 自己定的事\n导出的文件名按带日期的做。\n## 没验证的\n1.1 的对照场景没跑：要先改库。\n## 放行的检查\n起服务检查一次。\n## 套件问题\n没有。';
 
 // ---------- 假模型 ----------
@@ -99,7 +99,7 @@ function answer(body, res) {
   }
   // ---------- 第二个会话：复审（用的是和上一个会话那次审查一样的 id），然后归档 ----------
   if (/接着做，复审/.test(everything)) {
-    if (!reviewed) return tool(body, res, 'Bash', { command: REVIEW, description: '复审 a1 的 group-1' }, DUP);
+    if (!reviewed) return tool(body, res, 'Bash', { command: REVIEW, description: '复审 a1 的 change' }, DUP);
     if (!ran(/git mv openspec\/changes\/a1 /)) return tool(body, res, 'Bash', { command: 'mkdir -p openspec/changes/archive && git mv openspec/changes/a1 openspec/changes/archive/2026-09-29-a1', description: '归档 a1' });
     return finish();
   }
@@ -118,7 +118,7 @@ function answer(body, res) {
   if (!read(TASKS)) return tool(body, res, 'Read', { file_path: TASKS });
   if (!edits(TASKS).length) return tool(body, res, 'Edit', { file_path: TASKS, old_string: '- [ ] 1.1 审核接口角色', new_string: '- [x] 1.1 审核接口角色' });
   // 3. 整组 1.x 做完，逐点审查（报 1 条）→ 改 → 验
-  if (!reviewed) return tool(body, res, 'Bash', { command: REVIEW, description: '审查 a1 的 group-1' }, DUP);
+  if (!reviewed) return tool(body, res, 'Bash', { command: REVIEW, description: '审查 a1 的 change' }, DUP);
   if (edits(JAVA).length < 2) return tool(body, res, 'Edit', { file_path: JAVA, old_string: '  // 角色改成 aqbmy', new_string: '  // 角色改成 aqbmy，名字从配置里读' });
   if (!ran(/console\.log\('verify again'\)/)) return tool(body, res, 'Bash', { command: 'node -e "console.log(\'verify again\')"', description: '快检' });
   return finish();
@@ -179,7 +179,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   const n0 = fbCount();
 
   const P = require(path.join(kit, 'lib', 'flow-policy.js'));
-  const point = () => (readJson(path.join(kit, 'state', 'review-points.json'))[keyA + '|group-1'] || {});
+  const point = () => (readJson(path.join(kit, 'state', 'review-points.json'))[keyA + '|change'] || {});
   const reports = () => { const d = path.join(proj, '.vibe', 'reports'); return fs.existsSync(d) ? fs.readdirSync(d).filter((n) => /^全自动报告-\d{8}-\d{6}\.md$/.test(n)).sort().map((n) => path.join(d, n)) : []; };
   const cmdsOf = (r) => (mains(r).length ? uses(mains(r)[mains(r).length - 1].body).filter((u) => u.name === 'Bash').map((u) => String(u.input.command)) : []);
   const show = (r) => console.log('    退出码 ' + r.code + (r.killed ? '（超时被结束）' : '') + '，' + r.ms + ' ms，主会话 ' + mains(r).length + ' 个请求；跑过的命令：' + cmdsOf(r).map((c) => c.slice(0, 50)).join(' ｜ '));
@@ -203,15 +203,15 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
 
   H.section('整组做完，逐点审查报了 1 条，改了');
   const p1 = point();
-  H.ok('备了审查', cmds.some((c) => /review\.js" prepare --change a1 --mode code --point group-1/.test(c)), cmds);
-  H.ok('审查点 group-1 记成第 1 轮，1 条问题，还没收尾', p1.rounds === 1 && p1.issues === 1 && p1.status === 'completed' && !P.settled(a1, 'group-1'), p1);
+  H.ok('备了审查', cmds.some((c) => /review\.js" prepare --change a1 --mode code --point change/.test(c)), cmds);
+  H.ok('审查点 change 记成第 1 轮，1 条问题，还没收尾', p1.rounds === 1 && p1.issues === 1 && p1.status === 'completed' && !P.settled(a1, 'change'), p1);
 
   H.section('收工：交报告');
   H.ok('收工时套件交了报告', seen(r, /\[vibe-kit 全自动报告\] 这一轮的情况套件记下来了/));
   const body = reports().length ? fs.readFileSync(reports()[reports().length - 1], 'utf8') : '';
   H.ok('报告文件在项目的 .vibe/reports 里', reports().length === 1, reports());
   H.ok('报告里有放行的那一次和理由', /## 放行的检查\n\n- \d\d:\d\d 起服务要经过 devserver\.js：/.test(body) && /联调网关只认 8080 端口/.test(body), body);
-  H.ok('报告里说了 a1 做到哪：审了一轮、还没复审', /- a1：任务 2\/2，审查点 group-1 审了 1 轮，上一轮报了 1 条，还没复审/.test(body), body);
+  H.ok('报告里说了 a1 做到哪：审了一轮、还没复审', /- a1：任务 2\/2，审查点 change 审了 1 轮，上一轮报了 1 条，还没复审/.test(body), body);
   H.ok('以前打的勾（验法是人工看的）不重复列进"没验证的"', !/要你看一眼（a1）：1\.0/.test(body), body);
   H.ok('它最后的交代接在报告后面', body.includes('## AI 最后的交代\n\n## 做了什么\na1 的 1.1 做完了'), body.slice(-500));
   let result = null;
@@ -225,7 +225,7 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   show(r2); dump(r2);
   H.ok('第二个会话跑完了', r2.code === 0 && !r2.killed, r2.err.slice(-600));
   const p2 = point();
-  H.ok('复审计成了第 2 轮（两次调用 id 相同），0 条，审完了', p2.rounds === 2 && p2.issues === 0 && p2.status === 'completed' && P.passed(a1, 'group-1') && cmdsOf(r2).some((c) => /review\.js" prepare/.test(c)), p2);
+  H.ok('复审计成了第 2 轮（两次调用 id 相同），0 条，审完了', p2.rounds === 2 && p2.issues === 0 && p2.status === 'completed' && P.passed(a1, 'change') && cmdsOf(r2).some((c) => /review\.js" prepare/.test(c)), p2);
   const archA = path.join(proj, 'openspec', 'changes', 'archive', '2026-09-29-a1');
   H.ok('复审通过但未自测确认不能归档', !fs.existsSync(archA) && fs.existsSync(a1) && seen(r2, /归档.{0,40}(确认|自测|许可)|用户.{0,30}归档/), cmdsOf(r2));
   const session2 = JSON.parse(r2.out.trim()).session_id;

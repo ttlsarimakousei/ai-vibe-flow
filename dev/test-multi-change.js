@@ -96,7 +96,7 @@ H.section('每组只审查，不自测');
   const d = docs(proj, 'c1', 1, 0);
   H.ok('审查点的指令不再说自测', !/自测/.test(P.instruction(d, 'group-1', S.readConfig())), P.instruction(d, 'group-1', S.readConfig()));
   const rules = H.read(path.join(FROM, 'claude', 'rules', '10-openspec.md'));
-  H.ok('规范：每整组只审修，最后全面自测', /每整组做完只审修/.test(rules) && /全面自测/.test(rules));
+  H.ok('规范：一个 change 做完只审修，最后全面自测', /一个 change 做完只审修/.test(rules) && /全面自测/.test(rules));
   H.ok('规范：不再写不自行启动下一个', !/不自行启动下一个变更/.test(rules));
   H.ok('规范：不自己加这条人工也有', /不加探索记录里没有的东西/.test(rules));
 }

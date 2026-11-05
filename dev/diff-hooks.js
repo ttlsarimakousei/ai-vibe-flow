@@ -467,6 +467,10 @@ for (const c of cases) {
   if (c.name === '1013：跳过审查需要真人决定') { c.expect = /放行，没有输出/; c.since = V1104; }
   // 每组只审查，全面自测放到大任务最后
   if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /一个 change 做完按 plan\.md 接下一个，全部做完全面自测[\s\S]*checkpoint\.js/; c.since = V1104; }
+  // 第 57、58 条（2026-11-05）：四份文档写完审一次整套，一个 change 的任务全部做完审一次，提示语跟着改
+  if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：让它停'].includes(c.name)) c.since = NEXT;
+  if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*任务全部做完了。用一个提问框问，一件事一个问题：要不要审查/; c.since = NEXT; }
+  if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /这个 change 的任务全部做完审修一次，然后按 plan\.md 接下一个，全部做完全面自测[\s\S]*checkpoint\.js/; c.since = NEXT; }
 }
 for (const c of cases) after1104(c);
 

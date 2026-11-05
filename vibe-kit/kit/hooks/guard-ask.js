@@ -5,7 +5,7 @@
  *   Skill / SlashCommand：模型调 OpenSpec 的技能，不在流程里时要有用户的话（话里明确有 openspec，或者提问框选了探索，用户 2026-11-03 定的），不然拦下让它先问；
  *     调 propose / explore / new 回到提案阶段；archive / verify 不授予 apply。交接技能需要当前用户明确要求。
  *     调 /opsx:apply 的技能：用户还没说开工（不在流程里，或者还在写提案那一段）就拦下——提案、任务清单要他看过、他说了开工才做
- *     双自动满足探索、逐点审修、定稿提交条件时允许衔接，其余情况需要真人开工许可。
+ *     双自动满足探索、整套文档审修、定稿提交条件时允许衔接，其余情况需要真人开工许可。
  */
 const { readConfigFor, flowState, setFlow, FLOW_SKILL, blockOut, hookLog, cli, confirmApply, entryVoice } = require('../lib/session');
 let report = null;

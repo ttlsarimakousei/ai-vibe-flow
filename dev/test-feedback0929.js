@@ -198,7 +198,7 @@ const ranBypass = (id, out) => H.tr.ran('Bash', { command: 'node "$HOME/.claude/
   const r = tickOf('3.2', sid);
   const id = blockId(r);
   // 2026-10-17 起打勾不查验法，这里拦的是"先完成上一整组"（1.3 还没做），照样能申请放行
-  H.ok('打勾被拦，带拦截编号', r && r.decision === 'block' && !!id && /先完成上一整组/.test(H.reasonOf(r)), H.reasonOf(r));
+  H.ok('打勾被拦，带拦截编号', r && r.decision === 'block' && !!id && /先做完上一组/.test(H.reasonOf(r)), H.reasonOf(r));
   H.ok('全自动模式的提示：不要停下等，怎么申请放行写在提示里', /全自动模式/.test(H.reasonOf(r)) && /不要停下等我/.test(H.reasonOf(r)) && new RegExp('feedback\\.js" bypass ' + id).test(H.reasonOf(r)), H.reasonOf(r));
   const why = '对照场景要先执行 01c 脚本备号，改库不可逆要用户确认；javac 快检 UserController.java 已通过';
   const b = bypass(id, why);
@@ -430,7 +430,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
   R.note({ session_id: sid, cwd: proj }, { kind: 'ask', title: '导出的文件名用哪种格式？', detail: '带日期 / 不带日期' });
   R.note({ session_id: sid, cwd: proj }, { kind: 'bypass', title: 'OpenSpec 产物的门槛：Edit：' + tasks, detail: '对照场景要先改库，留给用户' });
   const r2 = stop(talk.concat([H.tr.say('3.2 做完了')]), '3.2 做完了');
-  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /审查点 group-3/.test(H.reasonOf(r2)) && /review.js prepare/.test(H.reasonOf(r2)) && !/下一项 3\.3/.test(H.reasonOf(r2)));
+  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /审查点 change/.test(H.reasonOf(r2)) && /review.js prepare/.test(H.reasonOf(r2)) && !/下一项 3\.3/.test(H.reasonOf(r2)));
   // 审完了
   H.reviewPoints(h, chg);
   const rv = review('toolu_rep1', '代码', 'miping', 0);

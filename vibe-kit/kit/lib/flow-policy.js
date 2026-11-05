@@ -1,5 +1,11 @@
 'use strict';
-/* 两阶段工作流：自动条件、逐产物/任务组审查点、人工 Ask 与提示去重。只保存套件本机状态，不把执行安排写进团队任务。 */
+/*
+ * 两阶段工作流：自动条件、审查点、人工 Ask 与提示去重。只保存套件本机状态，不把执行安排写进团队任务。
+ * 审查时机（问题表第 57、58 条，用户 2026-11-05 定的，替代 2026-10-14 的"每个产物、每整组 1.x 各审一次"）：
+ *   需求文档：四份写完审一次整套（审查点 tasks：它的输入本来就是四份文档，旧版审过的记录接着认）。
+ *   代码：这个 change 的任务全部做完，审一次整个 change 的改动（审查点 change）。
+ *   单份文档（proposal、specs、design）、做完的某一组（group-N）只有用户点名才审，不算必审的点。
+ */
 const fs = require('fs');
 const path = require('path');
 const S = require('./session');
@@ -17,9 +23,9 @@ function groups(dir) {
   }
   return [...out].map(([id, tasks]) => ({ id: 'group-' + id, tasks, done: tasks.every(t => t.done) }));
 }
-// 各组只审任务里点了名的文件。开工以来改了、没被任何一组点名的文件，所有组做完后并成一个审查点 group-rest：
-// 不审就记成"代码审过了"是 2026-10-17 审核问题 6。有哪一组一个文件都没点名的，那一组本来就审全部改动，不再另设
-const REST = 'group-rest';
+// 用户点名审某一组时只审任务里点了名的文件；整个 change 的审查点审开工基线以来的全部改动
+const CHANGE = 'change';
+const DOCS = ['proposal', 'specs', 'design', 'tasks'];
 function namedFiles(dir, group) {
   const roots = S.projectRootsOf(dir); const code = new Set();
   for (const t of group.tasks) for (const token of S.pathTokens(t.text.split(/(?:验|验证|验收)\s*[:：]/)[0])) {
@@ -38,10 +44,18 @@ function changedCode(dir) {
   }
   return out;
 }
-function restFiles(dir) {
-  const all = groups(dir); if (!all.length || !all.every(g => g.done)) return [];
-  const named = new Set(); for (const g of all) { const files = namedFiles(dir, g); if (!files.length) return []; files.forEach(f => named.add(S.normKey(f))); }
-  return changedCode(dir).filter(f => !named.has(S.normKey(f)));
+// 指纹不看的目录和文件，和 workspace.js 的 fingerprintOne 一样：构建输出变了不让审过的结论失效（复审 20261105 第 6 条）
+const NOT_INPUT = /(^|[\\/])(\.vibe|router-data|node_modules|target|build|dist|out)([\\/]|$)|(^|[\\/])(secrets\.json|\.env(?:\.[^\\/]*)?)$/i;
+/** 整个 change 的代码范围：任务点了名的文件，加开工基线以来改过的文件 */
+function changeFiles(dir) {
+  const out = new Map();
+  for (const g of groups(dir)) for (const f of namedFiles(dir, g)) out.set(S.normKey(f), f);
+  for (const f of changedCode(dir)) if (!NOT_INPUT.test(f)) out.set(S.normKey(f), f);
+  return [...out.keys()].sort().map((k) => out.get(k));
+}
+/** 一个文件的指纹：太大的不读内容，看大小和修改时间 */
+function fileRow(f) {
+  try { const st = fs.statSync(f); return st.size > 8 * 1024 * 1024 ? [S.normKey(f), st.size, st.mtimeMs] : [S.normKey(f), W.hash(fs.readFileSync(f))]; } catch (e) { return [S.normKey(f), '缺失']; }
 }
 /**
  * 跨 change 的修改点（用户 2026-11-03 定的）：别的 change 的 revisions.md "影响 change"列到这个 change 的，算这个 change 的一个审查点，
@@ -65,22 +79,41 @@ function crossPoints(dir) {
 }
 const isCross = (point) => /^cross-/.test(String(point || ''));
 function crossText(dir, point) { const c = crossPoints(dir).find((x) => x.id === point); return c ? c.from + ' 的修改：\n' + c.text : ''; }
-function points(dir, mode) {
-  if (mode === 'code') { const done = groups(dir).filter(g => g.done).map(g => g.id); const all = restFiles(dir).length ? done.concat(REST) : done; return all.length ? all.concat(crossPoints(dir).map((c) => c.id)) : all; }
+/** 写好了哪几份需求文档（按顺序）。写好不等于要审：要审的点看 points */
+function written(dir) {
   const files = S.artifactFiles(dir);
-  return ['proposal', 'specs', 'design', 'tasks'].filter(p => files.some(f => p === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === p + '.md'));
+  return DOCS.filter(p => files.some(f => p === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === p + '.md'));
+}
+/** 必审的点。需求文档：tasks 写了才有，审整套。代码：任务全部做完才有 */
+function points(dir, mode) {
+  if (mode === 'code') { const all = groups(dir); return all.length && all.every(g => g.done) ? [CHANGE].concat(crossPoints(dir).map((c) => c.id)) : []; }
+  return written(dir).includes('tasks') ? ['tasks'] : [];
+}
+/** 能审的点：必审的，加上用户点名才审的单份文档、做完的组 */
+function reviewable(dir, mode) {
+  if (mode === 'code') return groups(dir).filter(g => g.done).map(g => g.id).concat(points(dir, 'code'));
+  return written(dir);
 }
 function pointFiles(dir, point) {
   const files = S.artifactFiles(dir).filter(f => !/revisions\.md$/.test(f));
-  const order = ['proposal', 'specs', 'design', 'tasks']; const rank = order.indexOf(point);
-  if (rank >= 0) return files.filter(f => { const p = /[\\/]specs[\\/]/.test(f) ? 'specs' : path.basename(f, '.md'); return order.indexOf(p) >= 0 && order.indexOf(p) <= rank; });
-  if (point === REST) return restFiles(dir);
-  if (isCross(point)) return [];
+  const rank = DOCS.indexOf(point);
+  if (rank >= 0) return files.filter(f => { const p = /[\\/]specs[\\/]/.test(f) ? 'specs' : path.basename(f, '.md'); return DOCS.indexOf(p) >= 0 && DOCS.indexOf(p) <= rank; });
+  // 整个 change：材料取开工基线以来的全部改动，不按文件筛
+  if (point === CHANGE || isCross(point)) return [];
   const group = groups(dir).find(g => g.id === point); if (!group) return files;
   return namedFiles(dir, group);
 }
 function fingerprint(dir, point) {
   if (isCross(point)) return W.hash(JSON.stringify([point, crossText(dir, point)]));
+  // 整个 change：文档和任务一段、代码一段，sameInput 要分开比
+  if (point === CHANGE) {
+    // 一次钩子调用里只算一次：要跑 git、读文件，settled、instruction 会反复问
+    return require('./invocation').memo('change-fingerprint|' + S.normKey(dir), () => {
+      const plan = W.hash(JSON.stringify([groups(dir).map(g => g.tasks.map(t => t.text)), pointFiles(dir, 'design').map(f => [S.normKey(f), W.hash(read(f))])]));
+      const files = changeFiles(dir);
+      return plan + ':' + (files.length ? W.hash(JSON.stringify(files.map(fileRow))) : W.fingerprint(dir, 'code').hash);
+    });
+  }
   const group = groups(dir).find(g => g.id === point); const files = pointFiles(dir, point);
   const rows = files.map(f => [S.normKey(f), W.hash(path.basename(f) === 'tasks.md' ? W.progressText(read(f)) : read(f))]);
   if (group) {
@@ -95,9 +128,41 @@ function live(dir, r) { return r && (!r.born || r.born === S.changeBorn(dir)) ? 
 function record(dir, point) { return live(dir, S.readState('review-points')[key(dir, point)]); }
 // 没有 P1、P2 就算过（问题表第 37 条，用户 2026-11-02 定的）：P3 记在审查记录里，不为它再审一轮。升级前的记录没有 blocking，按总数算
 const blockingOf = (r) => (r.blocking === undefined ? Number(r.issues) || 0 : Number(r.blocking) || 0);
-function passed(dir, point) { const r = record(dir, point); return r.status === 'completed' && blockingOf(r) === 0 && r.fingerprint === fingerprint(dir, point) && require('./review-runner').inputsCurrent(r.materialInputs); }
-function settled(dir, point) { const r = record(dir, point); return passed(dir, point) || r.status === 'resolved' && r.resolvedFingerprint === fingerprint(dir, point) && require('./review-runner').inputsCurrent(r.materialInputs); }
-const modeOfPoint = (p) => (['proposal', 'specs', 'design', 'tasks'].includes(p) ? 'proposal' : 'code');
+/**
+ * 这个变更开工之后，同一个项目里又有别的变更开工了。工作区的改动从这时起算后面那个变更的：
+ * 前面的 change 审过之后不因为它重开，跨 change 的影响走 revisions.md 的"影响 change"和全面自测（用户 2026-11-03 定的）
+ */
+function laterStarted(dir) {
+  const all = S.readState('work-baselines'); const k = S.normKey(dir); const me = all[k];
+  if (!me) return false;
+  const roots = new Set((me.repos || []).map(r => S.normKey(r.root)));
+  // 目录不在的（归档了、删了）不算：做完归档了的热修不该让这个 change 的改动从此不再复审（复审 20261105 第 4 条）
+  return Object.keys(all).some(o => o !== k && all[o] && (Number(all[o].at) || 0) > (Number(me.at) || 0) && (all[o].repos || []).some(r => roots.has(S.normKey(r.root))) && fs.existsSync(o));
+}
+/** 旧版按组审完的 change：每组都过了；没点名的文件有改动的，还要 group-rest 审过（2026-10-17 审核问题 6：不能把没审的记成审过） */
+function reviewedByGroups(dir) {
+  const all = groups(dir);
+  if (!all.length || !all.every(g => settled(dir, g.id))) return false;
+  const named = new Set();
+  for (const g of all) { const files = namedFiles(dir, g); if (!files.length) return true; files.forEach(f => named.add(S.normKey(f))); } // 有一组一个文件都没点名：那一组审的就是全部改动
+  if (!changedCode(dir).some(f => !NOT_INPUT.test(f) && !named.has(S.normKey(f)))) return true;
+  const rest = record(dir, 'group-rest');
+  return rest.status === 'resolved' || rest.status === 'completed' && blockingOf(rest) === 0;
+}
+/** 审过的输入和现在一样吗。整个 change 的点：后面的变更开工了只比文档和任务，代码那一段不比 */
+function sameInput(dir, point, saved) {
+  const now = fingerprint(dir, point);
+  if (saved === now) return true;
+  return point === CHANGE && !!saved && String(saved).split(':')[0] === now.split(':')[0] && laterStarted(dir);
+}
+function passed(dir, point) { const r = record(dir, point); return r.status === 'completed' && blockingOf(r) === 0 && sameInput(dir, point, r.fingerprint) && require('./review-runner').inputsCurrent(r.materialInputs); }
+function settled(dir, point) {
+  const r = record(dir, point);
+  if (passed(dir, point) || r.status === 'resolved' && sameInput(dir, point, r.resolvedFingerprint) && require('./review-runner').inputsCurrent(r.materialInputs)) return true;
+  // 旧版按组审完的 change（或者用户点名把每组都审了）不再整个重审一遍
+  return point === CHANGE && !r.status && reviewedByGroups(dir);
+}
+const modeOfPoint = (p) => (DOCS.includes(p) ? 'proposal' : 'code');
 /**
  * 子代理连续 3 次拿不到结论（用户 2026-11-03 定的）：不再催，不算通过，也不挡提交、不挡往下一组走；收工报告里写着没审成。用户自己说审，照样能审，审成了清零。
  * 审出问题不算：P1、P2 审修不设上限，出口只有没有 P1、P2、逐条处理完（resolve，驳回要写依据）、用户说提交。
@@ -113,6 +178,8 @@ function pending(dir, mode) { return points(dir, mode).find(p => !settled(dir, p
 function fixPending(dir, point, cfg) {
   const r = record(dir, point);
   const open = r.status === 'completed' && blockingOf(r) > 0 || r.status === 'needs_review' && !!(cfg && cfg.autoMode);
+  // 用户点名审的组：整个 change 审过了就不算没收尾（自动模式不会再回去复审那一组）
+  if (open && /^group-/.test(String(point)) && settled(dir, CHANGE)) return false;
   return open && !settled(dir, point) && !halted(dir, point);
 }
 function allPassed(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p)); }
@@ -155,7 +222,7 @@ function automaticApply(j) {
     const changes = S.allChanges(j.cwd).filter((x) => S.flowChanges(j).includes(S.normKey(x.dir)));
     if (changes.length === 1) c = changes[0];
   }
-  if (!c || points(c.dir, 'proposal').length !== 4 || !allDone(c.dir, 'proposal')) return false;
+  if (!c || written(c.dir).length !== 4 || !allDone(c.dir, 'proposal')) return false;
   const root = path.resolve(c.dir, '../../..'); const rel = path.relative(root, c.dir).replace(/\\/g, '/');
   if (inGit(root) && S.commitModeOf(cfg) === 'auto' && j.session_id && S.readState(j.session_id + '-workflow-prompts')['plan-commit|' + c.dir] !== fingerprint(c.dir, 'tasks')) {
     try { if (!W.checkedGit(root, ['ls-files', '--', rel + '/tasks.md']).trim() || W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim()) return false; } catch (e) { /* 查不了就不等 */ }
@@ -207,7 +274,8 @@ function planNext(j, c) {
 function instruction(dir, point) {
   const mode = modeOfPoint(point); const rec = record(dir, point);
   if (halted(dir, point)) return '审查点 ' + point + ' 的子代理连续 ' + rec.failStreak + ' 次没交结论，不再催：这个点算没审过，收工报告里写明"' + point + ' 没审成"；用户说审再审。';
-  return '审查点 ' + point + '：执行 review.js prepare --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，照输出开 vk-reviewer 子代理。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。需求变化先沟通并同步相关产物和用例。';
+  const what = point === 'tasks' ? '四份需求文档写完了，审一次整套。' : point === CHANGE ? '这个 change 的任务全部做完了，审一次整个 change 的改动。' : '';
+  return what + '审查点 ' + point + '：执行 review.js prepare --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，照输出开 vk-reviewer 子代理。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。需求变化先沟通并同步相关产物和用例。';
 }
 function entriesOf(j) { return j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : []; }
 function explicit(j, action) { return S.userSaid(entriesOf(j), action).ok; }
@@ -261,7 +329,17 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
     if (cfg.autoMode) for (const p of points(dir, mode).filter((x) => halted(dir, x))) { const m = once(j, key(dir, p) + '|limit', fingerprint(dir, p) + ':' + (record(dir, p).failStreak || 0), instruction(dir, p) + '接着往下做。'); if (m) out.push(m); }
     // 有角度正在跑（2.1.259 起子代理在后台）：不催，也别再开一个
     if (require('./review-runner').inFlight(dir, mode)) continue;
-    const point = cfg.autoMode ? pending(dir, mode) : points(dir, mode).slice().reverse().find(p => !settled(dir, p));
+    // 自动写需求：tasks 写完才审，中间不审、不停（问题表第 57 条）。模型停下了就催它接着写，同一份内容只催一次
+    const docs = mode === 'proposal' ? written(dir) : [];
+    if (cfg.autoMode && mode === 'proposal' && docs.length && !docs.includes('tasks')) {
+      const nextDoc = DOCS.find(p => !docs.includes(p));
+      const msg = once(j, key(dir, 'next-doc'), docs.join() + ':' + fingerprint(dir, docs[docs.length - 1]), '自动模式：接着写下一份 ' + nextDoc + '（openspec instructions ' + nextDoc + ' --change "' + path.basename(dir) + '"），写到 tasks 再审一次整套，中间不审、不停。');
+      if (msg) out.push(msg);
+      continue;
+    }
+    // 人工写需求：tasks 没写的看最新写的那一份（提醒看一看），写了的看整套（问要不要审）
+    const manualPoint = () => (mode === 'code' ? points(dir, mode).slice().reverse().find(p => !settled(dir, p)) : docs.includes('tasks') ? (settled(dir, 'tasks') ? '' : 'tasks') : docs[docs.length - 1]);
+    const point = cfg.autoMode ? pending(dir, mode) : manualPoint();
     if (!point) continue;
     if (!cfg.autoMode && (mode === 'proposal' ? stillDeclined(noReview, writtenAt(dir, point)) : stillDeclined(noReview, lastEditAt) && stillDeclined(noTest, lastEditAt))) {
       // 记成问过了：同一份内容以后也不再问
@@ -273,12 +351,16 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
     if (!cfg.autoMode) {
       // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
       const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).replace(/\\/g, '/');
-      const where = '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '') + ' 的 ' + point;
+      const name = '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '');
+      const where = name + ' 的 ' + point;
       const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再用一个提问框逐条选（一条一个问题，一框最多 4 条，多了分几框）：改（推荐）/不改/自行输入；用户选了"改"的，改完直接复验，不再问；没选"改"的复验，这一轮用户已经要求过的直接做，没要求过的先问。';
-      // 需求文档一份一份来（用户 2026-10-17 定的）：写完一份停下给用户看，用户选了才写下一份
+      // 需求文档一份一份来（用户 2026-10-17 定的）：写完一份停下提醒用户看一看，引导下一步，用户选了才写下一份；中间不问审查，tasks 写完才问（用户 2026-11-05 定的）
+      const nextDoc = DOCS[DOCS.indexOf(point) + 1];
       const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => mode === 'code'
-        ? where + ' 已完成。用一个提问框问，一件事一个问题：要不要' + quick() + '审查、要不要按验收用例自测；用户已明确要求的直接执行。' + after
-        : where + ' 写完了。一份一份来：停下给用户看，交代写了什么，用 Ask 问（选项写"审一下""' + (point === 'tasks' ? '定稿并开工""只定稿' : '直接写下一份') + '""我要改"' + (point === 'tasks' ? '；定稿和开工在这一问里一起定，不再另问开工' : '') + '），用户已明确要求审查的直接审。' + after);
+        ? (point === CHANGE ? name + ' 的任务全部做完了' : where + ' 已完成') + '。用一个提问框问，一件事一个问题：要不要' + quick() + '审查、要不要按验收用例自测；用户已明确要求的直接执行。' + after
+        : point === 'tasks'
+          ? name + ' 的四份需求文档写完了（proposal、specs、design、tasks）。交代写了什么，用 Ask 问要不要审整套（选项写"审一下""定稿并开工""只定稿""我要改"；定稿和开工在这一问里一起定，不再另问开工），用户已明确要求审查的直接审。' + after
+          : where + ' 写完了。停下提醒用户看一看：交代写了什么、哪里要留意，用 Ask 引导下一步（选项写"写下一份（' + nextDoc + '）""我要改"）。这里不问审查，四份写完再问；用户自己说审的照做。');
       if (msg) out.push(msg);
     } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0) + ':' + (record(dir, point).failStreak || 0), instruction(dir, point)); if (msg) out.push(msg); }
   }
@@ -347,7 +429,9 @@ function actionIssue(j) {
       const m = cmd.match(/--change\s+["']?([^\s"']+)/); const p = cmd.match(/--point\s+([\w-]+)/);
       const change = m && S.allChanges(j.cwd).find(c => c.name === m[1]);
       const mode = /--mode\s+proposal/.test(cmd) ? 'proposal' : 'code';
-      if (change && !p) return '自动审查必须指定当前审查点 --point ' + (pending(change.dir, mode) || (mode === 'proposal' ? 'tasks' : 'group-1'));
+      if (change && !p) return '自动审查必须指定当前审查点 --point ' + (pending(change.dir, mode) || (mode === 'proposal' ? 'tasks' : CHANGE));
+      // 单份文档、某一组不单独审：用户点名的除外
+      if (change && !points(change.dir, mode).includes(p[1]) && !explicit(j, 'review')) return '自动模式不单独审 ' + p[1] + '：需求文档 tasks 写完审一次整套（--point tasks），代码等这个 change 的任务全部做完审一次（--point change）。现在接着做，到时候钩子会提醒。';
     }
     return sent();
   }
@@ -468,4 +552,4 @@ function selfTestWords(words) {
   }
   return false;
 }
-module.exports = { oncePrompt, groups, isCross, crossText, points, pointFiles, fingerprint, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };
+module.exports = { oncePrompt, groups, isCross, crossText, CHANGE, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };

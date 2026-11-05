@@ -1,6 +1,6 @@
 'use strict';
 /* Stop：检查交付材料、当前验证证据、逐点审修、提交和报告。
- * 自动阶段按整组推进；人工阶段审查、自测先 Ask。提示去重，放弃不产生待办。
+ * 自动阶段文档写完审整套、任务全部做完审整个 change；人工阶段审查、自测先 Ask。提示去重，放弃不产生待办。
  * 本机脚本只核对实际事实，失败、未覆盖和达到次数上限不记通过。
  */
 const fs = require('fs');
@@ -96,7 +96,7 @@ function reviewOpenFor(sid, entries, changes) {
   try {
     const policy = require('../lib/flow-policy');
     // 和 guard-commit 的提交检查同一口径：逐点审查审过、之后输入又变了还没复审完，也算没收尾
-    return sessionChanges(sid, entries, changes()).some((c) => policy.points(c.dir, 'code').some((p) => policy.fixPending(c.dir, p)));
+    return sessionChanges(sid, entries, changes()).some((c) => policy.reviewable(c.dir, 'code').some((p) => policy.fixPending(c.dir, p)));
   } catch (e) { return false; }
 }
 // 它最后那句已经在问要不要提交
@@ -370,7 +370,7 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices) 
  * 大任务走到哪、下一步干什么（用户 2026-11-03 定的）：一个 change 做完先记落地偏差，开着自动接下一个，没开用提问框问；
  * 全部做完全面自测（改过代码退回重跑）；自测过了等人工核验，自动也停。每句话只说一次。
  */
-function nextStepTodo(j, cfg, turnId, policy) {
+function nextStepTodo(j, cfg, turnId, policy, reviewAsked) {
   const st = flowState(j);
   if (!st.on || st.paused) return [];
   const B = require('../lib/big-task');
@@ -387,8 +387,9 @@ function nextStepTodo(j, cfg, turnId, policy) {
   const fresh = B.named(root, task.name) || task;
   const ph = B.phaseFor(j, fresh);
   const open = fresh.changes.filter((c) => c.exists && !c.archived);
-  // 代码审查还没收尾的不往下走：stop() 在催
-  if (open.some((c) => c.total && !c.todo && policy.pending(c.dir, 'code'))) return [];
+  // 代码审查还没收尾的不往下走：stop() 在催。人工模式用户选了不审的（这次收工没在问、这一轮没要求审、也没开过审查）接着往下，放弃不留待办（第 57、58 条）
+  const reviewOpen = (c) => policy.points(c.dir, 'code').some((p) => !policy.settled(c.dir, p) && !policy.halted(c.dir, p) && (cfg.autoMode || reviewAsked || policy.explicit(j, 'review') || !!policy.record(c.dir, p).status));
+  if (open.some((c) => c.total && !c.todo && reviewOpen(c))) return [];
   if (ph.phase === 'plan' && st.stage === 'apply') {
     // 开工了、第一项还没勾的（phaseOf 也算 plan）不是接下一个（复审 20261104 R1）：这个 change 还没写任务，或者前一个是这次开工之后才做完的，才接
     const i = fresh.changes.findIndex((c) => c.name === ph.change);
@@ -585,7 +586,7 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
       const g = groups.find((x) => x.tasks.some((t) => t.text === remaining[0].text));
       if (g && !g.tasks.some((t) => t.done)) ckpt = require('../lib/checkpoint').hintOnce(j, groups.some((x) => x.tasks.some((t) => t.done)) ? 'group:' + normKey(c.dir) + '|' + g.id : 'apply');
     } catch (e) { ckpt = ''; }
-    return ['Apply 自动模式：继续当前范围的下一项 ' + remaining[0].text + '。整组 1.x 做完先审修再进入下一组；做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask；服务起停、测试执行和诊断只记本机。' + (ckpt ? '\n' + ckpt : '')];
+    return ['Apply 自动模式：继续当前范围的下一项 ' + remaining[0].text + '。组之间不审，这个 change 的任务全部做完审一次；做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask；服务起停、测试执行和诊断只记本机。' + (ckpt ? '\n' + ckpt : '')];
   }
   return [];
 }
@@ -840,19 +841,20 @@ async function handle(j) {
   // 页面文件（.vue、.html、.css 等）也是代码：人工模式同样问一次是否审查、自测
   // 这一轮最后一次改代码、页面的时间：用户说了不审不测之后又改了，才再问（#220）
   const lastEditAt = Math.max(0, ...calls.filter((c) => isSource(c, CODE) || isSource(c, PAGE)).map((c) => c.at || 0));
-  todo.push(...policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId, quickPending, lastEditAt));
+  const stopAsks = policy.stop(j, touchedDirs, codeEdits.length > 0 || calls.some((c) => isSource(c, PAGE)), turnId, quickPending, lastEditAt);
+  todo.push(...stopAsks);
   try { if (j.session_id) writeState(String(j.session_id) + '-last-stop', { at: Date.now() }); } catch (e) { /* 记不了：探索记录的边界按用户的话算 */ }
-  try { todo.push(...nextStepTodo(j, cfg, turnId, policy)); Object.assign(cfg, readConfigFor(j)); } catch (e) { hookLog('verify-gate 算大任务下一步出错（不拦）：' + ((e && e.message) || e)); }
+  try { todo.push(...nextStepTodo(j, cfg, turnId, policy, stopAsks.length > 0)); Object.assign(cfg, readConfigFor(j)); } catch (e) { hookLog('verify-gate 算大任务下一步出错（不拦）：' + ((e && e.message) || e)); }
   if (policy.automaticApply(j)) {
     Object.assign(cfg, readConfigFor(j));
     // 自动开工：大改之前先存检查点（K3 M07，只送一次）
     let ckpt = '';
     try { ckpt = require('../lib/checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; }
-    todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；完成整组任务后先审修，再进入下一组。' + (ckpt ? '\n' + ckpt : ''));
+    todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；组之间不审，这个 change 的任务全部做完审一次。' + (ckpt ? '\n' + ckpt : ''));
   }
   if (cfg.autoMode && flowState(j).stage === 'plan') {
     for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {
-      if (policy.points(c.dir, 'proposal').length === 4 && policy.allDone(c.dir, 'proposal')) { const msg = policy.planNext(j, c); if (msg) todo.push(msg); }
+      if (policy.written(c.dir).length === 4 && policy.allDone(c.dir, 'proposal')) { const msg = policy.planNext(j, c); if (msg) todo.push(msg); }
     }
   }
   // 提交：这一轮自己改成功的文件（.vibe、.claude 里的不算）在 git 里还是没提交的状态。每一轮只提一次。
@@ -860,7 +862,7 @@ async function handle(j) {
   const mode = commitMode(cfg);
   if (j.session_id !== undefined && mode !== 'off') {
     // 需求文档：四份都写完了才算定稿，才提交（一份一份写的时候，中间不催）
-    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && require('../lib/flow-policy').points(a.dir, 'proposal').length === 4 && (!cfg.autoMode || require('../lib/session').reviewAllowed('proposal', a.dir)); });
+    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && require('../lib/flow-policy').written(a.dir).length === 4 && (!cfg.autoMode || require('../lib/session').reviewAllowed('proposal', a.dir)); });
     const pkey = sid + '-plancommit';
     const planOnce = turnId ? readState(pkey).turnId !== turnId : !j.stop_hook_active;
     if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !proposalBusy() && !userSaid(entries, 'commit').ok && !require('../lib/session').commitDeclined(j, entries) && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
@@ -932,7 +934,7 @@ async function handle(j) {
       todo.push(...capabilityTodo(touched));
       const snapFiles = (readState(sid + '-artifacts').files) || {};
       todo.push(...designGroundingTodo(calls, isEdit, fileOf, snapFiles, toolCalls(entries, 0)));
-      // 逐产物审查在统一策略中调度，不再等整套文档齐全。
+      // 审查在统一策略中调度：文档写完审整套，任务全部做完审整个 change
       if (todo.length > before) specChecked = true;
     }
     if (touched.size) planTouched = touched;
@@ -951,7 +953,7 @@ async function handle(j) {
   // 记下这个会话碰过的变更：开口时的进度行、全自动推进只认这些（会话记录很长时，早先碰过的不在末尾那一段里）
   if (calls.some((c) => /openspec/i.test(fileOf(c) + ' ' + String(c.input.command || '')))) { try { sessionChanges(j.session_id, entries, changes()); } catch (e) { /* 记不了不影响收工 */ } }
   // 多轮审查
-  // 逐点审查循环由 flow-policy 计数。
+  // 审查轮数由 flow-policy 计数。
   // 全自动模式：别的事都了了，看流程走到哪一步，催它往下走
   if (!todo.length) if (cfg.autoMode && flowState(j).stage === 'apply' && !allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir))).some(c => require('../lib/flow-policy').pending(c.dir, 'code'))) todo.push(...autoModeTodo(j, cfg, entries, lastSaid, turnId, changes(), busy));
   // 全自动模式过了交接线：还有活要干，先写一份交接记录

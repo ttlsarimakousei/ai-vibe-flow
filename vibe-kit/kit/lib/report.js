@@ -103,7 +103,7 @@ function changeView(c, since, revs) {
   const issue = c.todo === 0 ? codeReviewIssue(c.dir) : '';
   const state = [];
   state.push('任务 ' + c.done + '/' + c.total);
-  // 逐点审查（2026-10-14 起）：某一整组审过、还没收尾的，照实说审到第几轮、上一轮报了几条
+  // 审过、还没收尾的审查点，照实说审到第几轮、上一轮报了几条
   let point = null;
   try { const P = require('./flow-policy'); const id = P.points(c.dir, 'code').find((p) => P.record(c.dir, p).rounds && !P.settled(c.dir, p)); if (id) point = Object.assign({ id }, P.record(c.dir, id)); } catch (e) { point = null; }
   if (c.done === 0 && c.todo > 0) state.push(require('./flow-policy').allPassed(c.dir, 'proposal') || proposalReviewed(c.dir) ? '提案审过，还没开工' : reviewAllowed('proposal', c.dir) ? '提案审查没通过就停了，还没开工' : '提案还没审');

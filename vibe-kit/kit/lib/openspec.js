@@ -169,8 +169,8 @@ function ensureRoot(cwd) {
  * OpenSpec 自己的全局配置写成 custom + 我们要的几个命令。返回装了哪些文件（相对 claudeDir），卸载时按它收回
  */
 const PROPOSE_FILE = /(?:^|\/)(?:openspec-propose\/SKILL\.md|opsx\/propose\.md)$/i;
-const KIT_PROPOSE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：需求文档一份一份写。这个命令只建变更、写 proposal.md，写完停下给用户看；'
-  + '用户说了再用 /opsx:continue 写下一份（specs、design、tasks），每份写完都停。下面原文里"一步生成全部"的部分不照做（用户 2026-10-17 定的"一份一份来"）。\n\n';
+const KIT_PROPOSE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：需求文档一份一份写。这个命令只建变更、写 proposal.md，写完停下提醒用户看一看；'
+  + '用户说了再用 /opsx:continue 写下一份（specs、design、tasks），每份写完都停，四份写完才问要不要审。会话开着自动的不停，接着写到 tasks 再审。下面原文里"一步生成全部"的部分不照做（用户 2026-10-17 定的"一份一份来"）。\n\n';
 const EXPLORE_FILE = /(?:^|\/)(?:openspec-explore\/SKILL\.md|opsx\/explore\.md)$/i;
 // 自带模板要求决定留在对话里、写文件前单独确认，死机探索结果就没了（用户 2026-11-03 定的：探索结果要全记）
 const KIT_EXPLORE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：探索结果边谈边写进文件，不留在对话里，死机了也能接回。第一次有结论时跑 `node "$HOME/.claude/vibe-kit/tools/plan.js" new --task <大任务名> --changes <变更名，逗号分隔>`，建 `openspec/plan.md` 的一节和 `openspec/explore/<大任务名>.md`，之后定一件写一件。'

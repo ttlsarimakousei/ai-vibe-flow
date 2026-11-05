@@ -8,7 +8,7 @@
  *             用户自己敲 /opsx:propose、全自动模式、交接之后的新会话（这个会话读过一天内的交接记录）不要求分轮
  *   tasks.md：只写实现任务（用户 2026-10-17 定的），每项写清改哪个文件（路径，而且找得到，新建的写明"新建"）；不写"验：…"；
  *             不许"联调、完善、收尾"这种任务；新写的测试、审查、验收任务拦下，让它写进 design.md 的"验收用例"
- *             打勾不检查验法；自动模式下这个变更的第一次打勾（apply 开工）要提案审过，后面的组要等前面的组做完、审修过
+ *             打勾不检查验法；自动模式下这个变更的第一次打勾（apply 开工）要提案审过，后面的组要等前面的组做完
  *   specs：每条 Requirement 至少一个四井号的 Scenario，场景里有 WHEN 和 THEN
  *   design.md：提到的路径要找得到（新建的在同一行写明"新建"）；新写的设计 Context（现状）一节不能空，要有"验收用例"一节
  * 只判这次新加、改过的行：老变更里以前写的不追究，打勾不算改。revisions.md（修订记录）不检查。
@@ -87,7 +87,7 @@ function crossChangeIssues(art, text, isAdded) {
 /**
  * 打勾前的检查：这次编辑把哪些任务打了勾。不查验法（用户 2026-10-17 定的：任务里不写"验："，两种模式打勾都不查）。
  * 自动模式下：这个变更的第一次打勾（apply 开工）要提案审过，状态里没有记录就去会话记录里找一次成功的审提案调用兜底；
- * 后面的组要等前面的组做完、审修过。老变更里的审查、验收任务按 task-types 的规矩查。
+ * 后面的组要等前面的组做完（只看勾没勾；审查等整个 change 做完，用户 2026-11-05 定的）。老变更里的审查、验收任务按 task-types 的规矩查。
  * 返回 { issues, ticked, skipped }：skipped 现在总是空的（以前是验法里明说"不做"的部分）
  */
 function tickCheck(j, file, oldText, newText, art, cfg, roots) {
@@ -105,12 +105,11 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
     const ok = require('../lib/session').reviewAllowed('proposal', art.dir);
     const waiting = !ok && require('../lib/review-runner').inFlight(art.dir, 'proposal');
     if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没送回来。等子代理做完的通知到了（到了会自动接着一轮），跑 review.js status 看结论，改完再开工打勾；不要再开一个审查。']);
-    if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先按 /vk-cross-review 的提案模式审一遍：审查提示第一行写"模式：提案"，第二行写"变更：' + art.name + '"。成立的问题改掉并在 revisions.md 记录，再开工。']);
+    if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先审一次整套文档：review.js prepare --change ' + art.name + ' --mode proposal --point tasks，照输出开 vk-reviewer 子代理（/vk-cross-review 有写法）。成立的问题改掉，再开工。']);
   }
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);
-  // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一整组并审修过。
-  // 子代理连续没交结论停了的组不挡（flow-policy.js 的 halted）：那一组不会再自动审了，这里再拦就卡死，没过的写在报告里
+  // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一组。审查不在这里挡：整个 change 做完审一次（第 58 条）
   // 按表的顺序（用户 2026-11-03 定的）：回改前面的 change 补了任务，先做它，再回来
   try {
     const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.name);
@@ -121,8 +120,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const policy = require('../lib/flow-policy');
   for (const t of ticked) {
     const m = t.match(/^(\d+)\./); if (!m) continue;
-    const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done || (!policy.settled(art.dir, g.id) && !policy.halted(art.dir, g.id)));
-    if (prior) return done(['先完成上一整组任务及审修：' + prior.id + '。' + (prior.done ? policy.instruction(art.dir, prior.id, cfg) : '当前组尚未完成。')]);
+    const prior = policy.groups(art.dir).filter(g => Number(g.id.slice(6)) < Number(m[1])).find(g => !g.done);
+    if (prior) return done(['先做完上一组任务再勾这一项：' + prior.id + ' 还有没勾的。']);
   }
   return done([]);
 }
@@ -178,22 +177,17 @@ function handle(j, opts) {
   format.push(...require('../lib/proposal-files').issuesIn(newText, art, isAdded));
   const flow = [];     // 流程上的问题（没验证、没审、没探索）：只说这件事
   let notStarted = false; // 写需求那一段就打勾
-  // 需求文档一份一份来（用户 2026-10-17 定的）：proposal → specs → design → tasks，新建下一份之前上一份要过了这一关
-  if (!existed && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
+  // 需求文档一份一份来（用户 2026-10-17 定的）：proposal → specs → design → tasks。审查不在这里挡，tasks 写完审一次整套（第 57 条，用户 2026-11-05 定的）；自动模式不停
+  if (!existed && !cfg.autoMode && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
     const policy = require('../lib/flow-policy'); const point = art.kind === 'spec' ? 'specs' : art.kind; const order = ['proposal', 'specs', 'design', 'tasks'];
-    const earlier = policy.points(art.dir, 'proposal').filter(p => order.indexOf(p) < order.indexOf(point));
-    if (cfg.autoMode) {
-      // 自动：上一份审修过再写下一份
-      // 到上限、不收敛停了的点不再挡：报告里写着没过，接着往下（第 26 条、第 37 条）
-      const prior = earlier.find(p => !policy.settled(art.dir, p) && !policy.halted(art.dir, p));
-      if (prior) flow.push(policy.instruction(art.dir, prior, cfg) + '，完成后再生成下一产物。');
-    } else if (earlier.length) {
-      // 人工：上一份写完要停下给用户看。上一份最后一次写入之后用户说过话（"写下一份""审一下"之后的回复）才写下一份
+    const earlier = policy.written(art.dir).filter(p => order.indexOf(p) < order.indexOf(point));
+    if (earlier.length) {
+      // 人工：上一份写完要停下提醒用户看一看。上一份最后一次写入之后用户说过话（"写下一份"这类回复）才写下一份
       const prev = earlier[earlier.length - 1];
       const own = policy.pointFiles(art.dir, prev).filter(f => prev === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === prev + '.md');
       const wroteAt = Math.max(0, ...own.map(f => { try { return fs.statSync(f).mtimeMs; } catch (e) { return 0; } }));
       let saidAt = 0; try { const v = j.transcript_path ? lastUserVoice(tailEntries(j.transcript_path, 3000000)) : null; saidAt = (v && v.at) || 0; } catch (e) { saidAt = Date.now(); }
-      if (wroteAt && saidAt < wroteAt) flow.push(prev + ' 写完还没给我看过。一份一份来：先停下，交代 ' + prev + ' 写了什么，用提问框问我（选项写"审一下""直接写下一份""我要改"）；我说写下一份再写 ' + point + '，拿模板：openspec instructions ' + point + ' --change "' + art.name + '"');
+      if (wroteAt && saidAt < wroteAt) flow.push(prev + ' 写完还没给我看过。一份一份来：先停下，交代 ' + prev + ' 写了什么，提醒我看一看，用提问框引导下一步（选项写"写下一份（' + point + '）""我要改"，这里不问审查，四份写完再问）；我说写下一份再写 ' + point + '，拿模板：openspec instructions ' + point + ' --change "' + art.name + '"');
     }
   }
   const hedges = findHedges(newText, isAdded);

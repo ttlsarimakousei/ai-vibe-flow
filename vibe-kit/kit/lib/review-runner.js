@@ -22,9 +22,10 @@ function baseline(j, dirs) {
   const cwd = j.cwd || process.cwd();
   S.updateState('work-baselines', (o) => {
     for (const dir of dirs) {
-      const key = S.normKey(dir); if (o[key]) continue;
+      // 同名变更归档后重建：旧基线不认（没有 born 的旧记录照认）
+      const key = S.normKey(dir); const born = S.changeBorn(dir); if (o[key] && (!o[key].born || o[key].born === born)) continue;
       const roots = S.projectRootsOf(dir);
-      o[key] = { at: Date.now(), session: j.session_id, repos: roots.map((root) => ({ root, ref: W.git(root, ['rev-parse', 'HEAD']).trim(), dirtyFiles: W.git(root, ['status', '--porcelain', '-z']).split('\0').filter(Boolean).map((l) => l.slice(3)) })).filter((r) => r.ref) };
+      o[key] = { at: Date.now(), born, session: j.session_id, repos: roots.map((root) => ({ root, ref: W.git(root, ['rev-parse', 'HEAD']).trim(), dirtyFiles: W.git(root, ['status', '--porcelain', '-z']).split('\0').filter(Boolean).map((l) => l.slice(3)) })).filter((r) => r.ref) };
     }
   });
 }
@@ -91,8 +92,8 @@ function materials(opts, change) {
   if (opts.mode === 'proposal') {
     if (!change) throw new Error('提案审查需要有效变更名');
     const rows = artifacts().filter(r => !opts.point || require('./flow-policy').pointFiles(change.dir, opts.point).some(f => S.normKey(f) === S.normKey(path.resolve(change.dir, r.file))));
-    // 后面的点只审新写的文档，前面的只用来核对是否对齐（问题表第 37 条）
-    const upstream = (f) => ['proposal', 'specs', 'design', 'tasks'].includes(opts.point) && !(opts.point === 'specs' ? /^specs[\\/]/.test(f) : f === opts.point + '.md');
+    // 用户点名审单份：只审那一份，前面的只用来核对是否对齐（问题表第 37 条）。审查点 tasks 审整套，四份都要审（第 57 条）
+    const upstream = (f) => ['proposal', 'specs', 'design'].includes(opts.point) && !(opts.point === 'specs' ? /^specs[\\/]/.test(f) : f === opts.point + '.md');
     for (const row of rows) add(row.file, row.text, change.dir, undefined, upstream(row.file) ? '上游文档' : undefined);
     const art = { dir: change.dir, name: change.name, root: W.rootOf(change.dir) };
     const issues = rows.flatMap((r) => r.file === 'revisions.md' ? [] : require('./proposal-files').issuesIn(r.text, art));
@@ -154,8 +155,11 @@ function materials(opts, change) {
       });
       if (old) excluded.push({ root, untracked: old, reason: '基线之前就在、之后没改过的未跟踪文件，不算这次的改动' });
       const files = [...new Set(tracked.concat(fresh))];
+      let inherited = 0;
       for (const file of files) {
         if (/^(?:\.vibe|openspec)\//.test(file)) continue;
+        // 整个 change 的审查：开工前就有改动、开工后没再动的文件不是这个 change 的（前面 change 没提交的改动就是这样，复审 20261105 第 2 条）
+        if (opts.point === 'change' && saved && preexisting(file) && mtime(file) <= (saved.at || 0)) { inherited++; continue; }
         const f = path.join(root, file);
         if (opts.point && change) { const selected = require('./flow-policy').pointFiles(change.dir, opts.point); if (selected.length && !selected.some(p => S.normKey(p) === S.normKey(f))) continue; }
         const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const current = load(f, root, label, true);
@@ -166,6 +170,7 @@ function materials(opts, change) {
         if (oldDirty && (oldDirty.dirtyFiles || []).includes(file)) text = '说明：该文件在开工前已有改动，不能全部认作本次助手改动。\n' + text;
         add(label, text, root, f, undefined, current.missing ? '' : current.text, current.missing ? '已删除' : oldDirty && (oldDirty.dirtyFiles || []).includes(file) ? '开工前已有改动，不能全部认作本次改动' : '');
       }
+      if (inherited) excluded.push({ root, dirty: inherited, reason: '开工前就有改动、开工后没动过的文件，不算这个 change 的改动' });
     }
     // 不带等号的 --base 一个仓库都不认得：是写错了，不当成缺基线
     for (const b of bare) if (!used.has(b)) throw new Error('审查基线 ' + b + ' 不是本地提交（这几个仓库里都没有）；几个仓库各写各的：' + hint);
@@ -241,7 +246,7 @@ function nextStep(result) {
   if (result.noChange) return '文件和上一轮审过的一样，这次不用开子代理' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
   if (!result.issues.length) return '没有问题，这个点过了。';
   if (!result.blocking) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
-  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；实现细节归后面文档的标 deferred，不要现在写进这份文档。写好处理明细跑 review.js resolve，再跑一次 review.js prepare：下一轮只审改过的地方。';
+  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细跑 review.js resolve，再跑一次 review.js prepare：下一轮只审改过的地方。';
 }
 const MODE_NAME = { proposal: '提案', code: '代码' };
 const QUIET_MS = 30 * 60000;
@@ -296,7 +301,7 @@ function prepare(opts) {
   const change = changeOf(opts.cwd, opts.change); if (opts.change && !change) throw new Error('没找到当前变更 ' + opts.change + '（' + opts.cwd + ' 的 openspec/changes 里没有这个变更）。不走 OpenSpec 的改动不带 --change，按改之前的提交审：review.js prepare --mode code --project ' + opts.cwd.replace(/\\/g, '/') + ' --base <改之前的提交>');
   const key = jobKey(opts.cwd, opts.change, opts.mode, opts.point, opts.base); const cfg = S.readConfig();
   const policy = require('./flow-policy');
-  if (opts.point && (!change || !policy.points(change.dir, opts.mode).includes(opts.point))) throw new Error('审查点不存在或该任务组尚未完成');
+  if (opts.point && (!change || !policy.reviewable(change.dir, opts.mode).includes(opts.point))) throw new Error('审查点 ' + opts.point + ' 现在还不能审：需求文档用 tasks（四份写完审整套），代码用 change（这个 change 的任务全部做完审整个 change）；用户点名审单份文档、某一组的，那一份要写好、那一组要做完');
   const pointHash = opts.point ? policy.fingerprint(change.dir, opts.point) : '';
   const before = W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all');
   const input = pointHash || before.hash;
@@ -328,7 +333,7 @@ function prepare(opts) {
     const currents = {}; for (const [f, cur] of material.currents) currents[f] = { text: cur.text, source: cur.source };
     fs.mkdirSync(job.dir, { recursive: true });
     if (!store.atomicWrite(path.join(job.dir, 'plan.json'), { scoped: job.scoped, why: plan.why, noChange, open: plan.open, closed: plan.closed, carried: plan.carried, kept: plan.kept, changed: plan.changed, itemFiles: plan.scoped ? [...new Set(plan.items.map((x) => x.file))] : [], currents, skipped: material.skipped, uncovered: material.uncovered, excluded: material.excluded, contextOnly: material.contextOnly, materialInputs: material.inputs, deferred: Sc.deferredOf(prevRound), born, fingerprintNote: before.truncated ? '这个目录不是 git 仓库，文件太多，只核对了前面的文件：后面的文件改了认不出来，"审查后输入没变"对它们不作数' : undefined })) throw new Error('审查材料写不进 ' + job.dir);
-    const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '' };
+    const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : !plan.scoped && opts.point === 'tasks' ? Sc.carryover(folder, ['proposal', 'specs', 'design']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '' };
     for (const l of list) fs.writeFileSync(path.join(job.dir, safeName(l.name) + '.md'), scopeText(job, l, plan, round, material));
     S.updateState('review-jobs', (o) => { o[key] = job; });
     if (noChange) return finish(id);
@@ -521,6 +526,8 @@ function resolve(opts) {
   const report = JSON.parse(fs.readFileSync(r.reportFile, 'utf8')); const decisions = JSON.parse(fs.readFileSync(opts.decisions, 'utf8'));
   if (!Array.isArray(decisions.findings)) throw new Error('处理记录需要 findings 数组');
   // deferred：实现细节留给后面的文档，只有需求文档能用（问题表第 37 条）
+  // 审查点 tasks 审的是整套，没有后面的文档可留（第 57 条）：标 deferred 等于这条再没人看
+  if (opts.point === 'tasks' && decisions.findings.some((x) => x.action === 'deferred')) throw new Error('审查点 tasks 审的是整套文档，没有后面的文档可留：实现细节写进 design 后标 fixed，不成立的标 rejected 写依据');
   const actions = kind === 'proposal' ? ['fixed', 'rejected', 'accepted', 'deferred'] : ['fixed', 'rejected', 'accepted'];
   for (const issue of report.issues) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !actions.includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
   if (report.id !== r.key || !Array.isArray(report.issues)) throw new Error('审查报告不属于当前完整记录');
@@ -535,7 +542,7 @@ function resolve(opts) {
   const fingerprint = W.fingerprint(opts.cwd || process.cwd(), opts.mode === 'proposal' ? 'all' : 'code').hash;
   if (!opts.point && !decisions.findings.some((x) => x.action === 'fixed') && fingerprint !== report.fingerprint) throw new Error('输入在审查后变化；仅驳回或零问题记录不能批准新版，需要补审');
   if (opts.point) {
-    const changed = pointRec.fingerprint !== policy.fingerprint(change.dir, opts.point);
+    const changed = !policy.sameInput(change.dir, opts.point, pointRec.fingerprint);
     const fixed = decisions.findings.some(x => x.action === 'fixed');
     if (!fixed && changed) throw new Error('当前审查点输入已变化，先重新审查');
     remember();

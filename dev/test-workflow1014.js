@@ -44,7 +44,8 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.write(path.join(d, 'tasks.md'), beforeTasks.replace('1.1 修改', '1.1 修改').replace('- [ ] 1.1', '- [x] 1.1'));
     H.ok('半组任务不能进入代码审查点', P.points(d, 'code').length === 0);
     H.write(path.join(d, 'tasks.md'), H.read(path.join(d, 'tasks.md')).replace('- [ ] 1.2', '- [x] 1.2'));
-    H.ok('整组 1.x 完成只产生一个审查点', P.points(d, 'code').join() === 'group-1');
+    // 2026-11-05 起组之间不审（第 58 条）：整组做完不是必审的点，用户点名能审
+    H.ok('整组 1.x 完成：不是必审的点，用户点名能审', P.points(d, 'code').length === 0 && (!P.reviewable || P.reviewable(d, 'code').join() === 'group-1'), P.points(d, 'code'));
     cfg({ autoApply: true, autoRequirements: true });
     S.setFlow(j, true, '需求', 'plan'); S.flowTouch(j, d);
     H.ok('需求开关开启但未探索不自动', !S.readConfigFor(j).autoMode);
@@ -87,6 +88,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
       H.ok('Apply 阶段只看 Apply 开关：' + req + '/' + apply, S.readConfigFor(j).autoMode === apply);
     }
     cfg({ autoApply: false, autoRequirements: false });
+    H.write(path.join(d, 'tasks.md'), H.read(path.join(d, 'tasks.md')).replace('- [ ] 2.1', '- [x] 2.1')); // 任务全部做完才问（第 58 条）
     const first = P.stop(j, [d], true), second = P.stop(j, [d], true);
     H.ok('人工只提示一次，放弃不被同输入反复催', first.some(x => /Ask|提问框/.test(x)) && second.length === 0);
     // 2026-10-16：每个用户要求最多问一次；新要求只有内容又变了才再问
@@ -166,8 +168,8 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const c5 = path.join(p5, 'openspec/changes/c'); const sid = 'limit';
     H.inFlow(h5, sid, [c5]);
     const P5 = require(path.join(h5.kit, 'lib/flow-policy'));
-    for (const id of ['r1', 'r2']) P5.noteResult(c5, 'group-1', { id, status: 'completed', issues: [{ id: 'r1' }] }, P5.fingerprint(c5, 'group-1'));
-    const run = (said, id) => H.hook(h5, 'guard-commit', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command: 'node "' + path.join(h5.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change c --mode code --point group-1' }, transcript_path: H.transcript(path.join(h5.root, 'l.jsonl'), [H.tr.user(said)]) });
+    for (const id of ['r1', 'r2']) P5.noteResult(c5, 'change', { id, status: 'completed', issues: [{ id: 'r1' }] }, P5.fingerprint(c5, 'change'));
+    const run = (said, id) => H.hook(h5, 'guard-commit', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command: 'node "' + path.join(h5.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change c --mode code --point change' }, transcript_path: H.transcript(path.join(h5.root, 'l.jsonl'), [H.tr.user(said)]) });
     const again = run('继续', 'toolu_limit_1');
     H.ok('审了几轮都不拦', again === null, H.reasonOf(again));
     // 2026-10-14 起自动模式可以用提问框问业务疑问，不再拦下记进报告（端到端用 -p 跑没人回答，放在这里测）

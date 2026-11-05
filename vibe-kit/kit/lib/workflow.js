@@ -13,8 +13,9 @@ function services(root) { const out = []; for (const r of [root].concat(S.isShel
 function reviewStatus(dir) {
   const P = require('./flow-policy'); const points = P.points(dir, 'code');
   if (require('./review-runner').inFlight(dir, 'code')) return 'running';
-  if (!points.some((p) => P.record(dir, p).status)) return 'none';
-  return points.every((p) => P.settled(dir, p)) ? 'completed' : 'open';
+  // 先看过没过：旧版按组审完的 change 没有整个 change 的记录，也算审过
+  if (points.length && points.every((p) => P.settled(dir, p))) return 'completed';
+  return points.some((p) => P.record(dir, p).status) ? 'open' : 'none';
 }
 function facts(root, j) {
   root = path.resolve(root); const changes = S.allChanges(root).map((c) => { const tasks = T.tasks(c.dir); return { name: c.name, done: tasks.filter((t) => t.done).length, total: tasks.length, next: T.automatedLeft(c.dir).slice(0, 1).map((t) => t.text), review: reviewStatus(c.dir), userPending: tasks.some((t) => t.kind === 'user' && !t.done) }; });

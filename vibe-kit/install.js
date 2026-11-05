@@ -551,7 +551,7 @@ const COMMIT_MODE_TEXT = {
 const SEE_PAGE_TEXT = { on: '，页面按已准备的验收场景验证', off: '；页面只在用户要求时验证' };
 const SEE_PAGE_SPEC_TEXT = { on: '自动阶段按验收用例验证接口和页面；人工阶段先 Ask，用户放弃后继续，不记待办。', off: '页面由用户决定是否验证；人工阶段的接口自测也先 Ask。' };
 const PAGE_VERIFY_TEXT = { on: '<命令或验收场景及预期>', off: '<命令或人工验收步骤及预期>' };
-const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例逐份完善，定稿后按提交方式一起提交一次 docs: 提案 <名字>（全自动下关、询问都不提交也不问）。开着自动且用户没限定只写需求时，定稿后直接 apply；其他情况用 Ask 给出 apply 选项。';
+const PROPOSAL_COMMIT = '同一套 proposal、specs、design、tasks 和用例写完审过，定稿后按提交方式一起提交一次 docs: 提案 <名字>（全自动下关、询问都不提交也不问）。开着自动且用户没限定只写需求时，定稿后直接 apply；其他情况用 Ask 给出 apply 选项。';
 const COMMIT_RHYTHM_TEXT = PROPOSAL_COMMIT + ' 实施按提交方式提交；归档、验收节点单独保留，用户说了推送才 push。';
 function kitConfig() {
   try { let t = fs.readFileSync(path.join(KIT, 'config.json'), 'utf8'); if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1); return JSON.parse(t) || {}; } catch (e) { return {}; }
@@ -560,9 +560,9 @@ function commitMode() { const m = kitConfig().commitMode; return COMMIT_MODE_TEX
 function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'; }
 // 审查不设次数上限（用户 2026-11-03 定的）
 function reviewModeText() {
-  return '每个产物、每整组 1.x 分别审，子代理 vk-reviewer 审，第一轮 2～3 个角度，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；子代理连续 3 次没交结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
+  return '子代理 vk-reviewer 审，第一轮 2～3 个角度，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；子代理连续 3 次没交结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
 }
-const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动逐产物审修；Apply 按已授权范围逐整组任务审修、自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
+const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动写，四份写完审修一次整套；Apply 按已授权范围做，这个 change 的任务全部做完审修一次，所有 change 做完全面自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
 const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
 /** 约定和规范里的占位符换成按开关生成的文字 */
 function fill(text) {

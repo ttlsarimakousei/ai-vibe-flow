@@ -311,10 +311,10 @@ function consentIssue(g, st, cfg, docs) {
   const proposalCommit = files.some(f => PROPOSAL_FILE.test(f));
   const S = require('../lib/session'); const P = require('../lib/flow-policy');
   const mode = S.commitModeOf(cfg);
-  // 需求文档定稿：提交方式是"自动"才直接提交（需求自动生效时要四份都审过；人工时四份都写完，每份用户都看过）。范围按大任务算，plan.md、探索记录算同一笔
+  // 需求文档定稿：提交方式是"自动"才直接提交（需求自动生效时要整套审过；人工时四份都写完，每份用户都看过）。范围按大任务算，plan.md、探索记录算同一笔
   let task = null; try { task = require('../lib/big-task').forSession(j); } catch (e) { task = null; }
   const mine = (c) => (task ? task.changes.some((x) => normKey(x.dir) === normKey(c.dir)) : flowChanges(j).includes(normKey(c.dir)));
-  const planRoots = allChanges(st.cwd0).filter(c => mine(c) && P.points(c.dir, 'proposal').length === 4 && (!cfg.autoMode || P.allDone(c.dir, 'proposal'))).map(c => normKey(c.dir) + '/');
+  const planRoots = allChanges(st.cwd0).filter(c => mine(c) && P.written(c.dir).length === 4 && (!cfg.autoMode || P.allDone(c.dir, 'proposal'))).map(c => normKey(c.dir) + '/');
   const planFiles = task ? [normKey(task.planFile)].concat(task.explore ? [normKey(task.explore)] : []) : [];
   const automaticPlan = mode === 'auto' && fl.stage === 'plan' && files.length && files.every(f => { const k = normKey(path.resolve(repoRoot(g.dir) || g.dir, f)); return planFiles.includes(k) || planRoots.some(d => k.startsWith(d)); });
   if (automaticPlan) return '';
@@ -337,11 +337,11 @@ function consentIssue(g, st, cfg, docs) {
   const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
   if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
   // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、子代理连续没交结论停了的不算，以前它们一直挡着，自动提交就永远提交不了
-  const open = current.some(c => P.points(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg)));
+  const open = current.some(c => P.reviewable(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg)));
   if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
   if (current.some((c) => require('./review-runner').inFlight(c.dir))) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
   const since = require('../hooks/verify-gate').lastCommitAt(root);
-  const reviewReady = current.every((c) => { try { return require('../lib/task-types').tasks(c.dir).length > 0; } catch (e) { return false; } }) && current.some((c) => P.points(c.dir, 'code').some((p) => P.settled(c.dir, p) && (P.record(c.dir, p).at || 0) > since));
+  const reviewReady = current.every((c) => { try { return require('../lib/task-types').tasks(c.dir).length > 0; } catch (e) { return false; } }) && current.some((c) => P.reviewable(c.dir, 'code').some((p) => P.settled(c.dir, p) && (P.record(c.dir, p).at || 0) > since));
   // 任务都勾完了（等用户验收、用户报了问题在改）：改完一处就算做完一件事（问题表第 25 条，2026-10-31）。
   // 以前只认"上次提交之后有新勾的任务或刚收尾的审查"，任务全勾完以后改 bug 永远凑不出来，提交方式选了自动也一直攒着
   // 每个当前变更都有任务、而且都勾完了才算（复审 V9：以前还没写 tasks 的变更也算勾完，几个变更里一个勾完就放行别的半成品）

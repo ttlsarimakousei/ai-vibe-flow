@@ -40,7 +40,7 @@ H.section('#219 只读过的旧变更不算这个会话在做的');
   const docs = change('smart-dist');
   for (const [rel, text] of Object.entries(docs)) { H.write(path.join(p, rel), text); es.push(...H.tr.ran('Write', { file_path: path.join(p, rel), content: text }, 'ok')); }
   const r = H.hook(h, 'verify-gate', { session_id: sid, cwd: p, hook_event_name: 'Stop', stop_hook_active: false, transcript_path: tf(es) });
-  H.ok('收工：问的是新写的 smart-dist', /smart-dist 的 tasks 写完了/.test(H.reasonOf(r)), H.reasonOf(r));
+  H.ok('收工：问的是新写的 smart-dist', /smart-dist 的四份需求文档写完了/.test(H.reasonOf(r)), H.reasonOf(r));
   H.ok('收工：只 cat、grep 过的 old-ref 不提', !/old-ref/.test(H.reasonOf(r)), H.reasonOf(r));
   H.ok('流程记录里没有 old-ref', !S.flowChanges({ session_id: sid }).some((d) => /old-ref/.test(d)), S.flowChanges({ session_id: sid }));
   // 真的 openspec 命令里点了名的照样算
@@ -64,17 +64,17 @@ H.section('#220 选了"就这样定稿"不再问同一份');
   for (const rel of Object.keys(change('smart-dist'))) fs.utimesSync(path.join(p, rel), old, old);
   const stop = (entries) => H.hook(h, 'verify-gate', { session_id: sid, cwd: p, hook_event_name: 'Stop', stop_hook_active: false, transcript_path: tf(entries) });
   const r1 = stop(es);
-  H.ok('第一次收工：问 tasks 审不审', /smart-dist 的 tasks 写完了/.test(H.reasonOf(r1)), H.reasonOf(r1));
+  H.ok('第一次收工：问 tasks 审不审', /smart-dist 的四份需求文档写完了/.test(H.reasonOf(r1)), H.reasonOf(r1));
   // 用户在对话里回一句"就这样定稿"（新一轮），模型之后又动了一下设计
   const e2 = es.concat([H.tr.say('要审一下吗？'), H.tr.user('就这样定稿')]);
   H.write(path.join(p, 'openspec/changes/smart-dist/design.md'), DESIGN + '\n补一句。\n');
   fs.utimesSync(path.join(p, 'openspec/changes/smart-dist/design.md'), old, old);
   const r2 = stop(e2);
-  H.ok('用户说了"就这样定稿"：收工不再问 tasks', !/smart-dist 的 tasks 写完了/.test(H.reasonOf(r2)), H.reasonOf(r2));
+  H.ok('用户说了"就这样定稿"：收工不再问 tasks', !/smart-dist 的四份需求文档写完了/.test(H.reasonOf(r2)), H.reasonOf(r2));
   // 提问框里选"就这样定稿"也一样
   const e3 = es.concat([...ask('tasks 写完了，审一下还是就这样定稿？', '就这样定稿')]);
   const r3 = stop(e3);
-  H.ok('提问框选了"就这样定稿"：收工不再问 tasks', !/smart-dist 的 tasks 写完了/.test(H.reasonOf(r3)), H.reasonOf(r3));
+  H.ok('提问框选了"就这样定稿"：收工不再问 tasks', !/smart-dist 的四份需求文档写完了/.test(H.reasonOf(r3)), H.reasonOf(r3));
 }
 {
   // "直接写下一份"只管上一份：之后新写的 specs 照样要问

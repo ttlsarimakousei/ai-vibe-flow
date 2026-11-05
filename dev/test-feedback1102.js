@@ -561,7 +561,7 @@ const reason = (o) => H.reasonOf(o);
       H.ok('提示写清 P1、P2、P3 的标准', /P3 说法、写法/.test(bodies[0].scope));
       H.ok('同一件事合成一条，留最严重的；ID 重排', r.issues.length === 2 && r.issues.find((x) => /核对/.test(x.problem)).severity === 'P1' && r.issues.map((x) => x.id).join() === 'r1,r2', r.issues);
       H.ok('P1、P2 算挡通过的：这个点没过', r.blocking === 1 && !P.settled(dirFor('c1'), 'proposal'), { blocking: r.blocking });
-      H.ok('结果里写清下一步', /逐条核实/.test(r.next) && /deferred/.test(r.next), r.next);
+      H.ok('结果里写清下一步', /逐条核实/.test(r.next) && /写进 design/.test(r.next), r.next);
       const log = path.join(p, '.vibe', 'reviews', 'c1', '审查记录.md');
       H.ok('过程记进审查记录：第 1 轮、每条问题', /## 第 1 轮 · proposal/.test(H.read(log) || '') && /r1 P1 proposal\.md/.test(H.read(log) || '') && /3 个角度同时审/.test(H.read(log) || ''), H.read(log));
 
@@ -732,7 +732,8 @@ const reason = (o) => H.reasonOf(o);
     H.ok('没在审查时改了提案：照旧要写 revisions', /revisions\.md/.test(ask('rev-a', false)));
     H.ok('审查期间按意见改提案：不再要求写 revisions', !/revisions\.md 末尾追加/.test(ask('rev-b', true)), ask('rev-c', true));
     const G = fs.readFileSync(path.join(from, 'kit', 'hooks', 'guard-spec.js'), 'utf8');
-    H.ok('子代理连续没交结论停了的点不再挡写下一份文档', /!policy\.halted\(art\.dir, p\)/.test(G));
+    // 2026-11-05 起写下一份文档不看审查（第 57 条），自动模式这一段不再有审查的检查
+    H.ok('写下一份文档不看审查有没有过', !/policy\.settled\(art\.dir, p\)/.test(G));
 
     // 停了的点不卡死：全自动模式下接着打勾
     {
@@ -750,9 +751,8 @@ const reason = (o) => H.reasonOf(o);
       H.ok('需求文档都停了（子代理连续没交）：第一次打勾不再拦"提案还没审过"', !/提案还没审过/.test(tick('1.1')), tick('1.1'));
       H.ok('这时候流程能继续，但不算提案审过', S.reviewAllowed('proposal', dir) && !P.allPassed(dir, 'proposal'));
       H.write(tasks, H.read(tasks).replace('- [ ] 1.1', '- [x] 1.1'));
-      H.ok('上一组还没审：打下一组的勾照旧拦', /先完成上一整组/.test(tick('2.1')), tick('2.1'));
-      stall('group-1');
-      H.ok('上一组停了：接着打下一组的勾，不卡死', !/先完成上一整组/.test(tick('2.1')), tick('2.1'));
+      // 2026-11-05 起组之间不审（第 58 条）
+      H.ok('上一组做完、没审：能打下一组的勾', !/先做完上一组/.test(tick('2.1')), tick('2.1'));
       H.setConfig(h, { autoMode: false, autoApply: false });
     }
   }

@@ -145,6 +145,7 @@ node dev/pack.js
 | `test-router-retire.js [旧套件目录]` | 收回模型路由（第 39 条）：每种现场一个假用户目录，自检过了才动，key 一起删，别的安装的路由不停 |
 | `test-config-page.js [旧套件目录]` | 配置页用时才起：只收本机、别的网站的页面拒绝、没心跳退出、不留进程、端口被占换一个、`/vk-config` 钩子不发模型请求 |
 | `test-guard-mcp.js [旧套件目录]` | MCP 工具的令牌保护：四层，别的不查 |
+| `test-review-timing.js [旧套件目录]` | 审查时机（第 57、58 条）：四份文档写完审一次整套，一个 change 的任务全部做完审一次 |
 | `test-statusline-bar.js [旧套件目录]` | 状态栏（第 46、47 条）：没进流程一行，流程里步骤条和下一项，折叠、截断、缓存 |
 | `test-no-leftovers.js [旧套件目录]` | 删干净了没有：扫已删的名字（留着的进白名单，写理由和能删的条件）、session.js 没人用的导出、假用户目录真装一遍。`dev/pack.js` 打包前也跑 |
 | `prune-deps.js [--check]` | 删随包依赖里运行时用不到的文件（类型声明、TS 源码、source map、包根目录的 README 和更新记录、`playwright-core/lib/vite`）。升级依赖后跑；`pack.js` 打包前查 |
@@ -291,6 +292,10 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 六套 `test-feedback1013-workflow/review/push/diagnostics/feedback/decisions.js [旧套件目录]` 分别检查多变更和复合答案、分片及模拟回包、空远端和单笔推送、钩子预算和只读诊断、重现信息与额度、真人跳过和接受问题。旧版用 `dev/baseline/20261013.0058/vibe-kit`，应检出反例；正常测试全部使用假用户、模拟回复与临时裸仓库。本批不连接真实模型、数据库或 GitLab。完整回归仍按既有三版 CLI、运行环境和窗口监视器执行。
 
 下午清单新增 `test-feedback1013-states.js` 和 `test-feedback1013-context.js`：状态名与未定事项逐词区分；探索清单、显式材料、补充材料变化、实际请求和空材料不发请求。`test-feedback1013-review.js` 增加 JSON 凭据字段与转义引号。三套均可传 `dev/baseline/20261013.1453/vibe-kit` 检查旧版反例，新测试仍在假用户、临时仓库和回环假路由运行。
+
+## 审查时机（2026-11-05，第 57、58 条）
+
+`test-review-timing.js [旧套件目录]` 检查：必审的点只有整套文档（`tasks`）和整个 change（`change`）；单份文档、某一组用户点名才审；整个 change 审全部改动，没点名的文件也在；后面的 change 开工后不把前面审过的重新打开；旧版按组审完的不重审；自动模式写到 tasks 才审、中间催接着写、单独审被拦、组之间不挡；人工模式写完一份提醒看一看、tasks 写完才问；审整套四份都审、不能标 deferred；状态栏。拿 20261104.2337 跑 62 项不过。
 
 ## 20261014 两阶段工作流与反馈专项
 

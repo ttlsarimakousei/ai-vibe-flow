@@ -149,8 +149,8 @@ function answerSays(x, topic, g) {
     if (asked && (ANSWER_NO.test(a) || (ANSWER_DECLINE[topic] && ANSWER_DECLINE[topic].test(a)))) return 'no';
     // 问题问的是别的事、答案里明说了不要这件事（"先别提交""不推"）：也算否定（20261030 起提交、推送、归档往回看本轮，靠它收回前面的许可）
     if (intent.mentions(a, topic) && intent.denied(a, topic)) return 'no';
-    // 写需求文档时套件给的固定选项（"就这样定稿""定稿并开工""只定稿""直接写下一份"）：问题里没写"审查"也算不审
-    if (topic === 'review' && /^(?:就这样定稿|定稿并开工|只定稿|直接写下一份)/.test(a.trim())) return 'no';
+    // 写需求文档时套件给的固定选项（"就这样定稿""定稿并开工""只定稿""写下一份"，老提示是"直接写下一份"）：问题里没写"审查"也算不审
+    if (topic === 'review' && /^(?:就这样定稿|定稿并开工|只定稿|直接写下一份|写下一份)/.test(a.trim())) return 'no';
     return '';
   }
   // 其它几类照旧：问题里说了是哪件事、答案是"好""可以"

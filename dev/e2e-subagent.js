@@ -62,9 +62,9 @@ const textOfResult = (b) => (typeof b.content === 'string' ? b.content : (b.cont
   const dir = path.join(proj, 'openspec', 'changes', 'c1');
   const tool = path.join(h.kit, 'tools', 'review.js').replace(/\\/g, '/');
   const pj = proj.replace(/\\/g, '/');
-  const ARGS = ' --change c1 --mode code --point group-1 --project "' + pj + '" --base ' + H.git(proj, ['rev-parse', 'HEAD']).out.trim();
+  const ARGS = ' --change c1 --mode code --point change --project "' + pj + '" --base ' + H.git(proj, ['rev-parse', 'HEAD']).out.trim();
   const decisions = path.join(proj, '.vibe', 'decisions.json').replace(/\\/g, '/');
-  const result = path.join(proj, '.vibe', 'reviews', 'c1', 'code-group-1.json');
+  const result = path.join(proj, '.vibe', 'reviews', 'c1', 'code-change.json');
 
   const t0 = Date.now(); const ms = () => ((Date.now() - t0) / 1000).toFixed(1) + 's';
   const events = []; const note = (s) => events.push(ms() + ' ' + s);
@@ -135,7 +135,7 @@ const textOfResult = (b) => (typeof b.content === 'string' ? b.content : (b.cont
   H.ok('子代理的 model 和主会话一样', reviewerModels.size === 1 && [...reviewerModels][0] === [...mainModels][0], [[...reviewerModels], [...mainModels]]);
   const r = done();
   H.ok('复审只审修改点，交 0 条', r && r.scope === 'changes' && r.status === 'completed' && r.issues.length === 0, r);
-  H.ok('这个点过了', P.settled(dir, 'group-1'), P.record(dir, 'group-1'));
+  H.ok('这个点过了', P.settled(dir, 'change'), P.record(dir, 'change'));
   const log = H.read(path.join(proj, '.vibe', 'reviews', 'c1', '审查记录.md')) || '';
   H.ok('审查记录有两轮和处理结果', /## 第 1 轮/.test(log) && /## 第 2 轮/.test(log) && /处理结果/.test(log) && /r1 修了/.test(log), log);
   H.ok('任务目录清掉了', !fs.readdirSync(path.dirname(result)).some((f) => /^job-/.test(f)), fs.readdirSync(path.dirname(result)));

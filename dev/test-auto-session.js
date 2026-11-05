@@ -137,17 +137,17 @@ H.section('第 26 条：问题处理完再审，轮数接着数；不设上限�
   const P = require(path.join(h.kit, 'lib', 'flow-policy.js'));
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE(true)));
   const dir = path.join(p, 'openspec', 'changes', 'feat-028');
-  const k = S.normKey(dir) + '|group-1';
+  const k = S.normKey(dir) + '|change';
   // 审出问题 → 处理完（resolved）→ 改了代码再审：三遍
   for (let i = 1; i <= 3; i++) {
     H.write(path.join(p, 'src', 'A.java'), 'class A { int v' + i + '; }\n');
-    P.begin(dir, 'group-1', 'r' + i, P.fingerprint(dir, 'group-1'));
-    P.noteResult(dir, 'group-1', { id: 'r' + i, status: 'completed', issues: [{ id: 'x' }], file: '', materialInputs: [] }, P.fingerprint(dir, 'group-1'));
+    P.begin(dir, 'change', 'r' + i, P.fingerprint(dir, 'change'));
+    P.noteResult(dir, 'change', { id: 'r' + i, status: 'completed', issues: [{ id: 'x' }], file: '', materialInputs: [] }, P.fingerprint(dir, 'change'));
     S.updateState('review-points', (o) => { o[k].status = 'resolved'; o[k].resolvedFingerprint = 'old'; });
   }
   H.write(path.join(p, 'src', 'A.java'), 'class A { int v9; }\n');
-  H.ok('处理完问题后再审，轮数接着数（以前每次清零，一天能审 23 轮）', P.record(dir, 'group-1').rounds === 3, P.record(dir, 'group-1'));
-  H.ok('不设上限：3 轮之后还算待审（用户 2026-11-03 定的）', !P.halted(dir, 'group-1') && P.pending(dir, 'code') === 'group-1', { pending: P.pending(dir, 'code') });
+  H.ok('处理完问题后再审，轮数接着数（以前每次清零，一天能审 23 轮）', P.record(dir, 'change').rounds === 3, P.record(dir, 'change'));
+  H.ok('不设上限：3 轮之后还算待审（用户 2026-11-03 定的）', !P.halted(dir, 'change') && P.pending(dir, 'code') === 'change', { pending: P.pending(dir, 'code') });
   H.inFlow(h, 's26', [dir], true, 'apply');
   const r = H.hook(h, 'guard-commit', { session_id: 's26', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git add src/A.java && git commit -m "fix: 处理审查意见"' }, transcript_path: H.transcript(path.join(h.root, 't26.jsonl'), [H.tr.user('接着做'), H.tr.say('改好了')]) });
   H.ok('处理完、文件又变了的点不挡提交（以前一直"审查还没收尾"）', !blocked(r), H.reasonOf(r));
@@ -160,11 +160,11 @@ H.section('复审 V6—V9：自动开着时修了没复审不提交；连着没�
   const P = require(path.join(h.kit, 'lib', 'flow-policy.js'));
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE(true)));
   const dir = path.join(p, 'openspec', 'changes', 'feat-028');
-  const k = S.normKey(dir) + '|group-1';
+  const k = S.normKey(dir) + '|change';
   const commit = (sid, n) => H.hook(h, 'guard-commit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git add src/A.java && git commit -m "fix: 处理审查意见"' }, transcript_path: H.transcript(path.join(h.root, 'v6-' + n + '.jsonl'), [H.tr.user('接着做'), H.tr.say('改好了')]) });
   // V6：审出问题、登记"修了"（needs_review），还没复审
-  P.begin(dir, 'group-1', 'r1', P.fingerprint(dir, 'group-1'));
-  P.noteResult(dir, 'group-1', { id: 'r1', status: 'completed', issues: [{ id: 'x' }], file: '', materialInputs: [] }, P.fingerprint(dir, 'group-1'));
+  P.begin(dir, 'change', 'r1', P.fingerprint(dir, 'change'));
+  P.noteResult(dir, 'change', { id: 'r1', status: 'completed', issues: [{ id: 'x' }], file: '', materialInputs: [] }, P.fingerprint(dir, 'change'));
   S.updateState('review-points', (o) => { o[k].status = 'needs_review'; });
   H.write(path.join(p, 'src', 'A.java'), 'class A { int fixed; }\n');
   H.inFlow(h, 'v6', [dir], true, 'apply');
@@ -172,10 +172,10 @@ H.section('复审 V6—V9：自动开着时修了没复审不提交；连着没�
   H.ok('V6 自动开着、修了还没复审：先不提交，等复审', blocked(r6) && /审查还没收尾/.test(H.reasonOf(r6)), H.reasonOf(r6));
   // V7：子代理连着三次没交结论
   S.updateState('review-points', (o) => { o[k].status = 'failed'; o[k].failStreak = 3; });
-  H.ok('V7 连着没审成：照实说"没审成"，不说成"没通过"', /没审成/.test(P.instruction(dir, 'group-1')), P.instruction(dir, 'group-1'));
+  H.ok('V7 连着没审成：照实说"没审成"，不说成"没通过"', /没审成/.test(P.instruction(dir, 'change')), P.instruction(dir, 'change'));
   // V8：唯一的审查点停了：归档的审查检查不再挡
   S.updateState('review-points', (o) => { o[k].status = 'completed'; o[k].issues = 2; });
-  H.ok('V8 审查点停了：归档的审查检查不挡（没解决的写进报告）', P.halted(dir, 'group-1') && S.codeReviewIssue(dir) === '', S.codeReviewIssue(dir));
+  H.ok('V8 审查点停了：归档的审查检查不挡（没解决的写进报告）', P.halted(dir, 'change') && S.codeReviewIssue(dir) === '', S.codeReviewIssue(dir));
   // V9：另一个变更还没写 tasks：不算都勾完
   const dir2 = path.join(p, 'openspec', 'changes', 'feat-029');
   H.write(path.join(dir2, 'proposal.md'), '## Why\n\n要打印。\n\n## What Changes\n\n- 改 src/A.java\n');

@@ -10,8 +10,8 @@ const HELP = [
   '用法：node review.js <prepare|status|cancel|resolve> [参数]',
   '',
   'prepare：备一轮审查（run 是它的别名）。不发请求，输出每个子代理的提示；照它开 vk-reviewer',
-  '  OpenSpec 变更的需求文档：prepare --change <变更名> --mode proposal --point proposal|specs|design|tasks --project <项目>',
-  '  OpenSpec 变更的代码：    prepare --change <变更名> --mode code --point group-1 --project <项目> [--base <改之前的提交>]',
+  '  OpenSpec 变更的需求文档：prepare --change <变更名> --mode proposal --point tasks --project <项目>（四份写完审一次整套；用户点名审单份的，--point 写 proposal、specs 或 design）',
+  '  OpenSpec 变更的代码：    prepare --change <变更名> --mode code --point change --project <项目> [--base <改之前的提交>]（任务全部做完审一次整个 change；用户点名审某一组的，--point 写 group-1 这样的组号）',
   '  不走 OpenSpec 的改动：   prepare --mode code --project <项目> --base <改之前的提交>（不带 --change；--change 只认 openspec/changes 下已有的变更）',
   '  壳子里几个仓库：         --base 写几次，每个仓库一个：--base <仓库相对路径>=<提交>，例 --base gwjh=11325fd --base .=32171c4',
   '                           只写一个不带等号的 --base：只用在认得这个提交的仓库上，其余仓库用开工时登记的基线',
@@ -19,7 +19,7 @@ const HELP = [
   '  其它：--budget <秒> 这一次的预期用时（不截断，超了自动记问题反馈）',
   'status / cancel：和 prepare 一样的 --change、--mode、--point（不带变更名的再加同样的 --base），看结果或取消',
   'resolve：--change <变更名> --mode proposal|code --point <审查点> --decisions <处理明细 JSON>',
-  '  action：fixed 修了（P1、P2 修了要再审一轮，P3 不用）、rejected 不成立、accepted 用户定了不改、deferred 实现细节留给后面的文档（只有需求文档能用）',
+  '  action：fixed 修了（P1、P2 修了要再审一轮，P3 不用）、rejected 不成立、accepted 用户定了不改、deferred 实现细节留给后面的文档（只有用户点名审单份文档时能用；审整套的 --point tasks 没有后面的文档，不能用）',
   '  不走 OpenSpec 的审查（prepare 时没带 --change）：resolve --mode code --project <项目> --decisions <处理明细 JSON>，决定记进 .vibe/reviews/plain/code.json',
 ].join('\n');
 (async () => {
