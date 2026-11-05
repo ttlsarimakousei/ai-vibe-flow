@@ -192,7 +192,7 @@ const waitFor = async (fn, ms) => { const end = Date.now() + ms; while (Date.now
   if (process.env.E2E_DUMP === '1') { for (const m of whole.match(/[^\\"]{0,80}vk-[a-z-]+[^\\"]{0,80}/g) || []) console.log('      ' + m.replace(/\s+/g, ' ').slice(0, 200)); }
   for (const n of ['vk-onboard', 'vk-see-page', 'vk-cross-review', 'vk-handover', 'vk-db-crud', 'vk-redis']) H.ok('技能清单里有 ' + n, new RegExp('(^|[^\\w-])' + n + '\\b').test(whole), '');
   H.ok('技能清单里没有旧名字', !/urai-db-crud/.test(whole) && !/(\\n|^)- (onboard|see-page|cross-review|handover|db-crud|redis):/.test(whole), (whole.match(/(\\n|^)- (onboard|see-page|cross-review|handover|db-crud|redis):[^\\]{0,80}/g) || []).join(' ｜ '));
-  H.ok('审查代理是 vk-reviewer，没有 vibe-reviewer', /vk-reviewer/.test(whole) && !/vibe-reviewer/.test(whole));
+  H.ok('审查代理没了：vk-reviewer、vibe-reviewer 都没有', !/vk-reviewer/.test(whole) && !/vibe-reviewer/.test(whole));
 
   H.section('没探索过的项目：后台探索，第一条消息就带上');
   H.ok('探索好了', await waitFor(() => fs.existsSync(path.join(back, '.vibe', 'onboard.json')) && !fs.existsSync(path.join(back, '.vibe', 'onboard.lock')), 30000), H.read(path.join(kit, 'state', 'onboard.log')));

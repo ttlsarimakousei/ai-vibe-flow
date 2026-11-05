@@ -137,7 +137,7 @@ const reason = (o) => H.reasonOf(o);
     H.ok('"审查报的问题自动收"关着：不收', list().length === n, JSON.stringify(list()));
     H.setConfig(h, { lessonAuto: true });
     const R = require(path.join(h.kit, 'lib', 'review-runner'));
-    const text = H.read(path.join(h.cfg, 'agents', 'vk-reviewer.md')) || '';
+    const text = H.read(path.join(h.kit, 'review-prompt.md')) || '';
     H.ok('审查提示要求报类别和以后怎么避免', /\*\*kind\*\*：想当然/.test(text) && /\*\*avoid\*\*/.test(text) && typeof R.runsForLessons === 'function');
   }
 

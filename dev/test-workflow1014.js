@@ -171,7 +171,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     for (const id of ['r1', 'r2']) P5.noteResult(c5, 'change', { id, status: 'completed', issues: [{ id: 'r1' }] }, P5.fingerprint(c5, 'change'));
     const run = (said, id) => H.hook(h5, 'guard-commit', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command: 'node "' + path.join(h5.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change c --mode code --point change' }, transcript_path: H.transcript(path.join(h5.root, 'l.jsonl'), [H.tr.user(said)]) });
     const again = run('继续', 'toolu_limit_1');
-    H.ok('审了几轮都不拦', again === null, H.reasonOf(again));
+    H.ok('审了几轮都不拦', !H.reasonOf(again), H.reasonOf(again));
     // 2026-10-14 起自动模式可以用提问框问业务疑问，不再拦下记进报告（端到端用 -p 跑没人回答，放在这里测）
     const ask = H.hook(h5, 'guard-ask', { session_id: sid, cwd: p5, hook_event_name: 'PreToolUse', tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '导出的文件名用哪种格式？', header: '文件名', multiSelect: false, options: [{ label: '带日期', description: '文件名带日期' }, { label: '不带日期', description: '固定文件名' }] }] }, transcript_path: H.transcript(path.join(h5.root, 'ask.jsonl'), [H.tr.user('继续')]) });
     H.ok('自动模式生效时提问框照常可用', !(ask && (ask.decision === 'block' || ask.hookSpecificOutput && ask.hookSpecificOutput.permissionDecision === 'deny')), ask);

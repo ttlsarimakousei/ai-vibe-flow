@@ -94,11 +94,11 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     const reviewCmd = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --mode code --project "' + p.replace(/\\/g, '/') + '" --base HEAD~2';
     const rs = [H.tr.user('审查一下')];
     const r1 = run(reviewCmd, rs);
-    H.ok('说了"审查"：第一次审查放行', r1 === null, r1);
+    H.ok('说了"审查"：第一次审查放行', !H.reasonOf(r1), r1);
     done(reviewCmd, rs);
     H.write(path.join(p, 'b.js'), 'const b=3;\n');
     const r2 = run(reviewCmd, rs);
-    H.ok('同一句"审查"：改完再复审也放行，不再问', r2 === null, r2);
+    H.ok('同一句"审查"：改完再复审也放行，不再问', !H.reasonOf(r2), r2);
     const r3 = run(reviewCmd, [H.tr.user('审查一下'), H.tr.say('审完了'), H.tr.user('看看日志')]);
     H.ok('换了一句话（不是要审查）：照旧先问', !!r3 && /用户这一轮没说要审查/.test(H.reasonOf(r3)), H.reasonOf(r3));
   }

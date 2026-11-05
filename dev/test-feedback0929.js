@@ -430,7 +430,7 @@ H.section('全自动模式：留给用户的任务不卡住整条链；收工时
   R.note({ session_id: sid, cwd: proj }, { kind: 'ask', title: '导出的文件名用哪种格式？', detail: '带日期 / 不带日期' });
   R.note({ session_id: sid, cwd: proj }, { kind: 'bypass', title: 'OpenSpec 产物的门槛：Edit：' + tasks, detail: '对照场景要先改库，留给用户' });
   const r2 = stop(talk.concat([H.tr.say('3.2 做完了')]), '3.2 做完了');
-  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /审查点 change/.test(H.reasonOf(r2)) && /review.js prepare/.test(H.reasonOf(r2)) && !/下一项 3\.3/.test(H.reasonOf(r2)));
+  H.ok('只剩留给用户的任务：有限审查，不催做 3.3', /审查点 change/.test(H.reasonOf(r2)) && /review.js run/.test(H.reasonOf(r2)) && !/下一项 3\.3/.test(H.reasonOf(r2)));
   // 审完了
   H.reviewPoints(h, chg);
   const rv = review('toolu_rep1', '代码', 'miping', 0);

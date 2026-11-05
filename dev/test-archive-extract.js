@@ -173,6 +173,6 @@ H.setConfig(h, { vibeTidy: false });
 bad('旧开关 vibeTidy 关着也照拦', 'jar xf app.jar');
 H.ok('检查过程没有真的解包到项目', !fs.existsSync(path.join(repo, 'META-INF')));
 H.ok('全局约定明确解包样本位置', /过程文件和解包样本一律放/.test(H.read(path.join(h.kit, 'CLAUDE.md')) || ''));
-H.ok('审查代理只读查看归档', /不解包、不重定向写文件/.test(H.read(path.join(h.cfg, 'agents/vk-reviewer.md')) || ''));
+H.ok('审查者没有工具，不会解包', /没有工具可用/.test(H.read(path.join(h.kit, 'review-prompt.md')) || ''));
 H.ok('审查技能要求主会话准备安全归档材料', /归档内部实现不能靠解包到项目根/.test(H.read(path.join(h.cfg, 'skills/vk-cross-review/SKILL.md')) || ''));
 H.done('归档解包的临时目录');
