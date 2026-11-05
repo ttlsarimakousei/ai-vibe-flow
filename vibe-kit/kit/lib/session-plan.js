@@ -188,7 +188,8 @@ function planUnlisted(openspecDir) {
 /**
  * 进行中、却不在表里的变更：补成表里普通的一行（| | 名字 | 状态 | |），和别的行一样（仓库主人 2026-11-04 定的，第 55 条：
  * 以前只提醒"用户说它属于这个大需求再加一行"，旧版本建的 change 就一直不在表里，/vk-resume 认不出、按表的顺序挑了别的）。
- * 补进哪个大任务：表里只有一个大任务的补进它；有几个的补进 opts.prefer（这个会话在做的那个），没有就补进最后一个。
+ * 补进哪个大任务：表里只有一个大任务的补进它；有几个的补进 opts.prefer（这个会话在做的那个）。
+ * 第 62 条（仓库主人 2026-11-05 定的）：要补进的大任务已经全部归档，或者有几个大任务又说不清在做哪个：不补，问用户归哪个（lib/plan-link.js），以前并进最后一个，会归错。
  * opts.single：只在表里只有一个大任务时补（会话开始时还不知道这个会话做哪个）。opts.names：只补这几个。
  * 返回 { added: [名字], task: 大任务名 }。写不了、没有 plan.md 返回 { added: [] }
  */
@@ -202,7 +203,43 @@ function planAddUnlisted(openspecDir, opts) {
     if (!want.length) return none;
     const tasks = [...new Set(p.rows.map((r) => r.task).concat(p.sections.map((s) => s.name)))];
     if (o.single && tasks.length > 1) return none;
-    const pick = tasks.length <= 1 ? (tasks[0] || '') : (o.prefer && tasks.includes(o.prefer) ? o.prefer : p.sections[p.sections.length - 1].name);
+    const pick = tasks.length <= 1 ? (tasks[0] || '') : (o.prefer && tasks.includes(o.prefer) ? o.prefer : null);
+    if (pick === null) return none;
+    const changesDir = path.join(openspecDir, 'changes');
+    const own = p.rows.filter((r) => r.task === pick);
+    if (own.length && own.every((r) => /^已归档/.test(planStatusOf(r.name, changesDir)))) return none;
+    return insertRows(openspecDir, p, pick, want, '') ? { added: want, task: pick } : none;
+  } catch (e) { return none; }
+}
+/**
+ * 把已有的 change（进行中或已归档）归到一个大任务（tools/plan.js link 调，第 61、62 条）：没有这个大任务就建一节，不带探索记录，算老任务。
+ * 已经在别的大任务里的不动，目录不在、也没归档的不加。note 写进表的"说明"列。返回 { added, skipped: [{ name, why }], task }
+ */
+function planLink(openspecDir, task, names, note) {
+  const file = path.join(openspecDir, 'plan.md');
+  if (!fs.existsSync(file)) { fs.mkdirSync(openspecDir, { recursive: true }); fs.writeFileSync(file, '# 计划\n'); }
+  let p = readPlan(openspecDir);
+  const changesDir = path.join(openspecDir, 'changes');
+  const skipped = []; const add = [];
+  for (const n of names) {
+    const row = p.rows.find((r) => r.name === n);
+    if (row) { skipped.push({ name: n, why: row.task === task ? '已经在这个大任务里' : '已经在大任务 ' + row.task + ' 里' }); continue; }
+    if (planStatusOf(n, changesDir) === '未开始') { skipped.push({ name: n, why: '没有这个 change' }); continue; }
+    add.push(n);
+  }
+  if (!add.length) return { added: [], skipped, task };
+  if (!p.sections.some((s) => s.name === task)) {
+    const text = fs.readFileSync(file, 'utf8');
+    fs.writeFileSync(file, text.replace(/\s*$/, p.eol) + p.eol + '## ' + task + p.eol);
+    p = readPlan(openspecDir);
+  }
+  if (!insertRows(openspecDir, p, task, add, String(note || '').replace(/\|/g, '/').replace(/\s*[\r\n]+\s*/g, ' ').trim())) throw new Error('写不进 ' + file);
+  return { added: add, skipped, task };
+}
+/** 在这个大任务的表末尾插几行，没有表就建一张。只在那一处插入，别的行原样不动 */
+function insertRows(openspecDir, p, pick, want, note) {
+  const none = false;
+  try {
     const changesDir = path.join(openspecDir, 'changes');
     const own = p.rows.filter((r) => r.task === pick);
     const text = fs.readFileSync(p.file, 'utf8');
@@ -213,18 +250,21 @@ function planAddUnlisted(openspecDir, opts) {
     let at; let add;
     if (own.length) {
       const last = own[own.length - 1];
-      const row = (n) => { const cells = last.cells.map(() => ''); cells[last.cols.change] = n; cells[last.cols.status] = planStatusOf(n, changesDir); return '| ' + cells.join(' | ') + ' |'; };
+      // 说明写进表头叫"说明"的那一列，表头是 |---| 分隔行的上一行。老表没有这一列就不写，不往别的列塞
+      const header = (() => { for (let i = last.line - 1; i > 0; i--) { if (/^\s*\|[\s:|-]+\|\s*$/.test(p.lines[i])) return p.lines[i - 1].replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((s) => s.trim()); } return []; })();
+      const noteCol = header.findIndex((x) => /说明|备注|note/i.test(x));
+      const row = (n) => { const cells = last.cells.map(() => ''); cells[last.cols.change] = n; cells[last.cols.status] = planStatusOf(n, changesDir); if (note && noteCol >= 0) cells[noteCol] = note; return '| ' + cells.join(' | ') + ' |'; };
       at = endOf(last.line); add = want.map((n) => p.eol + row(n)).join('');
     } else {
       // 这个大任务还没有表：在它那一节的末尾（或者文件末尾）建一张
       const sec = p.sections.find((s) => s.name === pick);
       let li = p.lines.length - 1;
       if (sec) { li = sec.line; while (li + 1 < p.lines.length && !/^##\s/.test(p.lines[li + 1])) li++; while (li > sec.line && !p.lines[li].trim()) li--; }
-      at = endOf(li); add = [p.eol, '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(want.map((n) => '| | ' + n + ' | ' + planStatusOf(n, changesDir) + ' | |')).join(p.eol);
+      at = endOf(li); add = [p.eol, '| 模块 | 变更名 | 状态 | 说明 |', '|---|---|---|---|'].concat(want.map((n) => '| | ' + n + ' | ' + planStatusOf(n, changesDir) + ' | ' + (note || '') + ' |')).join(p.eol);
     }
     if (fs.readFileSync(p.file, 'utf8') !== text) return none;
     fs.writeFileSync(p.file, text.slice(0, at) + add + text.slice(at));
-    return { added: want, task: pick };
+    return true;
   } catch (e) { return none; }
 }
 
@@ -260,4 +300,4 @@ function snapshotArtifacts(dir) {
   return files;
 }
 
-module.exports = { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, planAddUnlisted, artifactHash, snapshotArtifacts };
+module.exports = { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, planAddUnlisted, planLink, artifactHash, snapshotArtifacts };

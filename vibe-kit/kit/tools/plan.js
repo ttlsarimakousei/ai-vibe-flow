@@ -6,12 +6,34 @@
  * 骨架里已归档的按日期排在前面、进行中的在后面，状态填好；大需求的名字、每行的模块和说明、还没开始的模块留给模型补。
  *   node plan.js new --task <大任务名> --changes c1,c2 [项目目录]
  *     探索时建大任务：plan.md 加一节，建 openspec/explore/<大任务名>.md。已经有的不动，表里缺的 change 补上。
+ *   node plan.js link --task <大任务名> --changes c1,c2 [--note <说明>] [--project <项目目录>]
+ *     把已有的 change（进行中或已归档）归到一个大任务（第 61、62 条）：没有这个大任务就建一节，不建探索记录，算老任务。已经在别的大任务里的不动。
+ *   node plan.js related [--project <项目目录>]
+ *     列出没归到大任务、可能是一件事的 change 和线索。只读。
  */
 const fs = require('fs');
 const path = require('path');
-const { changeRoots, planInit, planAddTask, refreshPlan } = require('../lib/session');
+const { changeRoots, planInit, planAddTask, planLink, refreshPlan } = require('../lib/session');
 
 const args = process.argv.slice(2);
+if (args[0] === 'link' || args[0] === 'related') {
+  const flag = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] || '' : ''; };
+  const dir0 = path.resolve(flag('--project') || process.cwd());
+  const oses = path.basename(dir0).toLowerCase() === 'openspec' ? [dir0] : changeRoots(dir0).map((c) => path.dirname(c));
+  if (args[0] === 'related') {
+    const Link = require('../lib/plan-link');
+    let n = 0;
+    for (const os of oses) for (const g of Link.orphanGroups(os)) { n++; console.log(g.changes.join('、') + '：' + g.why.join('；')); }
+    if (!n) console.log('没有找到可能是一件事的 change。');
+    process.exit(0);
+  }
+  const task = flag('--task').trim(); const names = flag('--changes').split(/[,，\s]+/).filter(Boolean);
+  if (!task || !names.length) { console.log('用法：node plan.js link --task <大任务名> --changes c1,c2 [--note <说明>] [--project <项目目录>]'); process.exit(1); }
+  const os = oses.find((o) => names.some((c) => fs.existsSync(path.join(o, 'changes', c)))) || oses[0] || path.join(dir0, 'openspec');
+  const r = planLink(os, task, names, flag('--note'));
+  console.log((r.added.length ? '大任务 ' + task + ' 加了：' + r.added.join('、') + '。计划 ' + path.join(os, 'plan.md') : '没有加') + (r.skipped.length ? '。没动：' + r.skipped.map((s) => s.name + '（' + s.why + '）').join('、') : '') + '。');
+  process.exit(r.added.length || r.skipped.length ? 0 : 1);
+}
 if (args[0] === 'new') {
   const flag = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] || '' : ''; };
   const name = flag('--task').trim();

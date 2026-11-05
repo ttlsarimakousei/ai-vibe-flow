@@ -19,7 +19,7 @@ const { subdirs, looksLikeProject, nestedRepos, isShell, changeRoots, isDeferred
 const { uniquifyToolIds, tailEntries, textOf, lastUsageTokens, contextPercent, isUserTurn, turnStart, toolResults, isTaskNote, isTaskNotePrompt, toolCalls, projectReads } = require('./session-transcript');
 const { findHedges, artifactOf, STAGE, pathTokens, pathExists, sectionOf, normTicks, addedLines, checkTasks, checkSpec, NEW_FILE, declaredNew, missingPathIssue, checkDesign, leftoverPlaceholders, proposalCapabilities, artifactFiles, VERIFY_CMD, TASK_LINE, taskKey, tickedLines, verifyPartOf, resolveVerify, verifyPlan, verifyRan, mentionsChange, handoverStale, readTextFileRaw } = require('./session-proposal');
 const { reviewRecord, recordReview, proposalReviewed, reviewAllowed, syncTicks, projectRootsOf, codeReviewed, codeReviewIssue, handoverReadIn, handoverWrittenIn } = require('./session-review');
-const { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, planAddUnlisted, artifactHash, snapshotArtifacts } = require('./session-plan');
+const { readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, planAddUnlisted, planLink, artifactHash, snapshotArtifacts } = require('./session-plan');
 const { CFG_DIR, realish, expandHome, isKitPath, isKitSkillScript, sessionStartMs, recordConvBaseline, convUpdateNotice } = require('./session-kitfiles');
 
 module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, sessionAuto, setSessionAuto, touchSessionAuto, autoSwitchSaid, FLOW_SLASH, FLOW_TAG, FLOW_SKILL, APPLY_SLASH, APPLY_TAG, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, flowAdopt, applyIntent, changeStarted, lastUserVoice, turnVoices, saidBefore, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, confirmApply, entryVoice, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, readConfigFor, sessionHome, noteSessionHome, atHome, blockOut, askOut, pushFailOut, cli, sleepMs, ensureVibeIgnored, hookLog, looksLikeProject, isShell, KIT, readConfig, sealConfig, kitCodeHashes, kitCodeDrift, subdirs, nestedRepos, changeRoots, listChanges, activeChanges, tailEntries, textOf, lastUsageTokens, contextPercent, readState, writeState, updateState, cleanState, GLOBAL_STATE, DISPOSABLE_STATE,
@@ -30,5 +30,5 @@ module.exports = { ANSWERED, commitModeOf, DEFAULT_CONFIG, sessionAuto, setSessi
   underDir, sessionChanges, handoverReadIn, handoverWrittenIn, normTicks,
   isTaskNote, isTaskNotePrompt,
   CFG_DIR, realish, expandHome, isKitPath, isKitSkillScript,
-  mentionsChange, handoverStale, readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, planAddUnlisted,
+  mentionsChange, handoverStale, readPlan, planStatusOf, refreshPlan, planSummary, planMissingInfo, planInit, planAddTask, planUnlisted, planAddUnlisted, planLink,
   sessionStartMs, recordConvBaseline, convUpdateNotice, flowView, stateKindOf };

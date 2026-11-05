@@ -388,7 +388,7 @@ function nextStepTodo(j, cfg, turnId, policy, reviewAsked) {
   const ph = B.phaseFor(j, fresh);
   const open = fresh.changes.filter((c) => c.exists && !c.archived);
   // 代码审查还没收尾的不往下走：stop() 在催。人工模式用户选了不审的（这次收工没在问、这一轮没要求审、也没开过审查）接着往下，放弃不留待办（第 57、58 条）
-  const reviewOpen = (c) => policy.points(c.dir, 'code').some((p) => !policy.settled(c.dir, p) && !policy.halted(c.dir, p) && (cfg.autoMode || reviewAsked || policy.explicit(j, 'review') || !!policy.record(c.dir, p).status));
+  const reviewOpen = (c) => !policy.oldDone(j, c.dir) && policy.points(c.dir, 'code').some((p) => !policy.settled(c.dir, p) && !policy.halted(c.dir, p) && (cfg.autoMode || reviewAsked || policy.explicit(j, 'review') || !!policy.record(c.dir, p).status));
   if (open.some((c) => c.total && !c.todo && reviewOpen(c))) return [];
   if (ph.phase === 'plan' && st.stage === 'apply') {
     // 开工了、第一项还没勾的（phaseOf 也算 plan）不是接下一个（复审 20261104 R1）：这个 change 还没写任务，或者前一个是这次开工之后才做完的，才接
@@ -431,6 +431,19 @@ function planUnlistedTodo(touched, j) {
     if (!unlisted || !unlisted.includes(a.name)) continue;
     const add = require('../lib/session').planAddUnlisted(osDir, { prefer, names: [a.name] });
     if (add.added.length) out.push('变更 ' + a.name + ' 不在计划表里，补进了 ' + path.join(osDir, 'plan.md') + (add.task ? '（大任务 ' + add.task + '）' : '') + '。');
+  }
+  return out;
+}
+/** 第 62 条：没有在做的大任务时开的新 change，和旧大任务有关：让模型问用户归到哪。自动模式不问（用户不在），等关了自动再说 */
+function planRelatedTodo(touched, cfg) {
+  if (cfg.autoMode) return [];
+  const out = [];
+  for (const [, a] of touched) {
+    const osDir = path.join(a.root, 'openspec');
+    const unlisted = planUnlisted(osDir);
+    if (!unlisted || !unlisted.includes(a.name)) continue;
+    const hint = require('../lib/plan-link').taskHint(osDir, a.name);
+    if (hint) out.push(hint);
   }
   return out;
 }
@@ -751,7 +764,7 @@ async function handle(j) {
       const named = [];
       for (const c of calls) {
         if (failed(c)) continue;
-        if (/^(Edit|Write|MultiEdit)$/.test(c.name)) { const a = artifactOf(String(c.input.file_path || '')); if (a) flowTouch(j, a.dir); continue; }
+        if (/^(Edit|Write|MultiEdit)$/.test(c.name)) { const a = artifactOf(String(c.input.file_path || '')); if (a) flowTouch(j, a.dir, c.at); continue; }
         // 只认真的 openspec 命令（status、instructions……）里点了名的：cat、grep 读它的文件不算在做它（#219）
         if (/^(Bash|PowerShell)$/.test(c.name) && /\bopenspec\b/i.test(String(c.input.command || ''))) named.push(...openspecWork(String(c.input.command || ''), c.name === 'PowerShell'));
         else if (/^(Skill|SlashCommand)$/.test(c.name)) named.push(JSON.stringify(c.input || {}));
@@ -955,9 +968,17 @@ async function handle(j) {
   // 多轮审查
   // 审查轮数由 flow-policy 计数。
   // 全自动模式：别的事都了了，看流程走到哪一步，催它往下走
-  if (!todo.length) if (cfg.autoMode && flowState(j).stage === 'apply' && !allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir))).some(c => require('../lib/flow-policy').pending(c.dir, 'code'))) todo.push(...autoModeTodo(j, cfg, entries, lastSaid, turnId, changes(), busy));
+  if (!todo.length) if (cfg.autoMode && flowState(j).stage === 'apply' && !allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir))).some(c => require('../lib/flow-policy').pending(c.dir, 'code') && !require('../lib/flow-policy').oldDone(j, c.dir))) todo.push(...autoModeTodo(j, cfg, entries, lastSaid, turnId, changes(), busy));
   // 全自动模式过了交接线：还有活要干，先写一份交接记录
   if (todo.length && ah.line) { todo.push(ah.line); ah.mark(); }
+  // 表外的 change：能自动补的（在做的大任务里开的）先补，补不了的问归到哪（第 62 条）。别的事都了了再问，不和审查、提交挤在一起
+  // 补了的那句提醒跟着这一次的输出走，后面还要拦的也带上（补过就不在表外了，不带就再也说不上）
+  let planNoted = false;
+  const withPlanNotes = (o) => { if (planNoted && notices.length && o) o.systemMessage = '[vibe-kit 提醒] ' + notices.join('\n'); return o; };
+  if (!todo.length && planTouched) {
+    planNoted = true;
+    try { notices.push(...planUnlistedTodo(planTouched, j)); todo.push(...planRelatedTodo(planTouched, cfg)); } catch (e) { hookLog('verify-gate 问 change 归到哪出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（change 归到哪）', j, e); }
+  }
 
   if (todo.length) {
     writeState(gkey, { turnId, codeEditsAtBlock: codeNeedingCheck.length, specChecked, at: Date.now() });
@@ -965,17 +986,15 @@ async function handle(j) {
     try { if (feedback && feedback.countBlock) feedback.countBlock('verify-gate', todo[0], String(j.session_id || '')); } catch (e) { /* 数不了不影响收工 */ }
     // 几件事一起时分开列、编号，提交排最后（审核第三节第 15 条：拼成一句时，问审查、自测和问提交一起出现，弱模型先问提交、后跑测试）
     const commitLast = todo.filter((t) => !isCommitTodo(t)).concat(todo.filter(isCommitTodo));
-    return blockOut('Stop', '[vibe-kit 收工检查] ' + (commitLast.length > 1 ? '有 ' + commitLast.length + ' 件事，按顺序做（提交放最后）：\n' + commitLast.map((t, i) => (i + 1) + '. ' + t).join('\n') : commitLast.join('\n')));
+    return withPlanNotes(blockOut('Stop', '[vibe-kit 收工检查] ' + (commitLast.length > 1 ? '有 ' + commitLast.length + ' 件事，按顺序做（提交放最后）：\n' + commitLast.map((t, i) => (i + 1) + '. ' + t).join('\n') : commitLast.join('\n'))));
   }
   // 这个会话动过的变更都归档了：流程走完了，记成不在流程里（状态栏不再写"在做任务"，下一句"继续"也不接回去）。报告照交，它认的是上面算好的 cfg
   try { if (flowState(j).on && flowDone(j)) { setFlow(j, false, '变更归档了'); hookLog('全自动模式 这个会话动过的变更都归档了，流程走完，记成不在流程里'); } } catch (e) { /* 记不了不影响收工 */ }
   // 全自动模式收工：把这一轮的报告交给它，照着交代
-  try { const rp = autoReport(j, cfg, entries, lastSaid, changes()); if (rp) return blockOut('Stop', rp); } catch (e) { hookLog('verify-gate 全自动报告出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（全自动报告）', j, e); }
+  try { const rp = autoReport(j, cfg, entries, lastSaid, changes()); if (rp) return withPlanNotes(blockOut('Stop', rp)); } catch (e) { hookLog('verify-gate 全自动报告出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（全自动报告）', j, e); }
   // 验证的事都没落下，再看要不要问一句交接（两件事不挤在一起说）
   const ask = handoverQuestion(j, cfg, entries, wroteHo);
-  if (ask) return blockOut('Stop', ask);
-  // 计划表的提醒放到真正收工这一刻：前面还有事要拦时提示送不到用户，又记成提醒过了
-  if (planTouched) notices.push(...planUnlistedTodo(planTouched, j));
+  if (ask) return withPlanNotes(blockOut('Stop', ask));
   return notices.length ? { systemMessage: '[vibe-kit 提醒] ' + notices.join('\n') } : null;
 }
 
