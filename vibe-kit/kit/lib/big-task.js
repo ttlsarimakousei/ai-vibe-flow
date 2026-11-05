@@ -225,7 +225,7 @@ function reviewMark(P, dir, point) {
 }
 function changeSteps(dir) {
   const P = require('./flow-policy');
-  const have = P.points(dir, 'proposal');
+  const have = P.written(dir);
   const parts = []; let open = false;
   for (const [id, label] of DOC_STEPS) {
     if (have.includes(id)) { parts.push(label + '✓' + reviewMark(P, dir, id)); continue; }
@@ -238,13 +238,18 @@ function changeSteps(dir) {
     const k = cur < 0 ? groups.length : cur + 1; const g = groups[k - 1];
     parts.push('组 ' + k + '/' + groups.length + (cur < 0 ? '✓' : '●') + reviewMark(P, dir, g.id));
   } else groups.forEach((g, i) => parts.push(g.id.slice(6) + '组' + (g.done ? '✓' : i === cur ? '●' : '○') + reviewMark(P, dir, g.id)));
+  // 整个 change 的审查（第 58 条）：任务全部做完才开始。旧版按组审完的算审过
+  if (groups.length) {
+    const mark = reviewMark(P, dir, P.CHANGE) || (groups.every((g) => reviewMark(P, dir, g.id) === '◆') ? '◆' : '');
+    parts.push('审查' + (mark || (cur < 0 ? '●' : '○')));
+  }
   return parts.join(' ');
 }
 const shortName = (s) => { const n = String(s); return n.length > 16 ? n.slice(0, 15) + '…' : n; };
 /**
  * 这个会话在流程里：{ steps: 步骤条, next: 下一项或等什么 }；不在流程里 null（目录里有没勾完的 change 也不显示，第 46 条）。
  * change 名后面不带它在 plan.md 里排第几、一共几个（仓库主人 2026-11-04 定的）。
- * 探索✓ │ c2-api 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○
+ * 探索✓ │ c2-api 提案✓ 规格✓ 设计✓ 任务✓◆ 1组✓ 2组● 3组○ 审查○ │ 自测○ 核验○ 归档○（任务后面的 ◆ 是整套文档审过）
  */
 function bar(j) {
   const S = require('./session');
@@ -252,11 +257,16 @@ function bar(j) {
   const task = forSession(j);
   const T = require('./task-types');
   const P = require('./flow-policy');
-  let ph; let list; let dir = '';
+  let ph; let list; let dir = ''; let shownName = '';
   if (task) {
     ph = phaseFor(j, task); list = task.changes;
     const c = ph.change ? list.find((x) => x.name === ph.change) : null;
     if (c && c.exists) dir = c.dir;
+    // 任务勾完阶段就往后走了，审查这时才开始（第 58 条）：在审、有问题待修的 change 显示它；全做完了显示最后一个，看得到审查走到哪
+    const reviewing = list.find((x) => x.exists && !x.archived && x.total && !x.todo && /^[◇✗]/.test(reviewMark(P, x.dir, P.CHANGE)));
+    const last = !dir ? list.slice().reverse().find((x) => x.exists && !x.archived) : null;
+    const shown = reviewing || last;
+    if (shown) { dir = shown.dir; shownName = shown.name; }
   } else {
     const dirs = flowChanges(j);
     const hit = S.allChanges(j.cwd || process.cwd()).filter((c) => dirs.includes(normKey(c.dir)));
@@ -266,14 +276,14 @@ function bar(j) {
     const tasks = T.tasks(dir); const done = tasks.filter((x) => x.done).length;
     ph = { phase: !tasks.length || !done ? 'plan' : done < tasks.length ? 'apply' : 'verify', change: pick.name };
   }
-  const name = ph.change || (list.length ? list[list.length - 1].name : '');
+  const name = shownName || ph.change || (list.length ? list[list.length - 1].name : '');
   const after = { explore: 0, plan: 1, apply: 1, selftest: 2, verify: 3, archive: 4, done: 5 }[ph.phase];
   const mark = (n) => (after > n ? '✓' : after === n ? '●' : '○');
   const mid = name ? shortName(name) + (dir ? ' ' + changeSteps(dir) : '') : '';
   const steps = [task ? '探索' + mark(0) : '', mid, '自测' + mark(2) + ' 核验' + mark(3) + ' 归档' + mark(4)].filter(Boolean).join(' │ ');
   let next = '';
   if (ph.phase === 'explore') next = '探索中';
-  else if (ph.phase === 'plan' && dir) { const miss = DOC_STEPS.find(([id]) => !P.points(dir, 'proposal').includes(id)); next = miss ? '下一份 ' + miss[1] : ''; }
+  else if (ph.phase === 'plan' && dir) { const miss = DOC_STEPS.find(([id]) => !P.written(dir).includes(id)); next = miss ? '下一份 ' + miss[1] : ''; }
   else if (ph.phase === 'plan' || ph.phase === 'apply') { const left = dir ? T.automatedLeft(dir) : []; next = left.length ? '下一项 ' + left[0].text : ''; }
   else if (ph.phase === 'selftest') next = '下一步 全面自测';
   else if (ph.phase === 'verify') next = '等你核验：看完说归档或 /vk-archive';
