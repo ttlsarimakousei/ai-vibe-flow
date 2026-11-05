@@ -27,7 +27,6 @@ const GONE = [
 ];
 // [相对仓库的文件, 名字, 理由, 什么时候能删]
 const KEEP = [
-  ['vibe-kit/kit/lib/session-kitfiles.js', 'ttls-reviewer', '会话中途升级时提示：这个会话里调不到新代理就用旧名字', OLD_RENAME],
   ['dev/README.md', 'ttls-lessons-', '说明 test-vk-names.js 测什么', OLD_RENAME],
   ['dev/diff-hooks.js', 'ttls-handover', '对比用例：那一版的技能名', OLD_RENAME],
   ['dev/diff-hooks.js', 'ttls-lessons-', '对比用例：那一版的规则文件名', OLD_RENAME],

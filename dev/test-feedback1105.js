@@ -409,8 +409,8 @@ function archived(p, name, file) {
     const code = R.prepare({ cwd: p2, change: 'c1', mode: 'code', point: 'change' });
     H.ok('第 66 条：代码的名字', code.agents.every((a) => /^审查代码 /.test(a.description)), code.agents.map((a) => a.description));
     const SRC = FROM || path.join(__dirname, '..', 'vibe-kit');
-    const agentText = H.read(path.join(SRC, 'claude/agents/vk-reviewer.md')) || '';
-    H.ok('第 64 条：审查代理不限调用次数，只核对点名的', !/40 次/.test(agentText) && /核对文档点名的东西/.test(agentText), agentText.slice(0, 300));
+    const agentText = H.read(path.join(SRC, 'kit/review-prompt.md')) || '';
+    H.ok('第 64 条：审查代理不限调用次数，只核对点名的', !/40 次/.test(agentText) && /脚本查的/.test(agentText), agentText.slice(0, 300));
     H.ok('第 70 条：代理说明不再要它别缩小范围，框架不读实现', !/不自己缩小范围/.test(agentText) && /只审这次需求/.test(agentText) && /sa-token/.test(agentText) && /没改的老代码/.test(agentText), agentText.slice(0, 400));
     const Sc = require(path.join(h.kit, 'lib/review-scope'));
     const cfgS = { reviewSmallChars: 40000, reviewLenses: 3 };
@@ -511,10 +511,9 @@ function archived(p, name, file) {
   H.section('第 63 条：审查子代理默认用 Sonnet，不设 effort');
   {
     const SRC = FROM || path.join(__dirname, '..', 'vibe-kit');
-    const agent = H.read(path.join(SRC, 'claude/agents/vk-reviewer.md')) || '';
-    const head = (agent.split(/^---\s*$/m)[1] || '');
-    H.ok('代理文件写 model: sonnet', /^model:\s*sonnet\s*$/m.test(head), head);
-    H.ok('不写 effort', !/^effort/mi.test(head), head);
+    const runner = H.read(path.join(SRC, 'kit/lib/review-runner.js')) || '';
+    H.ok('claude -p 用模型名 sonnet', /'--model', 'sonnet'/.test(runner));
+    H.ok('不写 effort', !/--effort/.test(runner));
     const skill = H.read(path.join(SRC, 'claude/skills/vk-cross-review/SKILL.md')) || '';
     H.ok('审查技能不让模型自己选模型', !/subagent_type[^\n]*model/.test(skill));
     const manual = H.read(path.join(SRC, '手册/审查和自测.md')) || '';

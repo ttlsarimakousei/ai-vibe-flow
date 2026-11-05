@@ -93,68 +93,6 @@ H.section('结论入账走 SubagentStop');
   H.ok('交齐入账，清零', P.settled(p.dir, 'change') && !P.record(p.dir, 'change').failStreak, P.record(p.dir, 'change'));
 }
 
-H.section('放行：裸开子代理拦下，带任务的放行并记发出去了');
-{
-  const p = project();
-  const j = { session_id: 's-agent', cwd: p.proj, transcript_path: H.transcript(path.join(H.tempDir('rs-t'), 't.jsonl'), [H.tr.user('开工')]), hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_use_id: 'tu1' };
-  S.setFlow(j, true, '测试', 'apply');
-  S.setSessionAuto(j, true, '测试');
-  H.setConfig(h, { autoRequirements: true, autoApply: true });
-  const call = (prompt) => H.hook(h, 'guard-ask', Object.assign({}, j, { tool_input: { subagent_type: 'vk-reviewer', prompt } }));
-  H.ok('裸开：拦下，说先 prepare', /review\.js prepare/.test(H.reasonOf(call('模式：代码\n变更：c1'))), call('模式：代码\n变更：c1'));
-  const r = R.prepare(opts(p));
-  H.ok('带任务：放行', !H.reasonOf(call(r.agents[0].prompt)), call(r.agents[0].prompt));
-  H.ok('记了发出去了', R.status(opts(p)).state[r.agents[0].lens].status === 'sent', R.status(opts(p)).state);
-  const again = R.prepare(opts(p));
-  H.ok('正在跑的不重开', !again.agents.some((a) => a.lens === r.agents[0].lens) && again.running.includes(r.agents[0].lens), again);
-  H.ok('在跑：inFlight', R.inFlight(p.dir, 'code'));
-  H.setConfig(h, { autoRequirements: false, autoApply: false });
-  // Esc 打断：前台子代理的结果回来了还没交
-  const turn = (id, text) => [H.tr.user('开工'), { type: 'assistant', uuid: id + 'c', timestamp: new Date().toISOString(), message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Agent', input: {} }] } }, { type: 'user', uuid: id + 'r', timestamp: new Date().toISOString(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: text }] } }];
-  const es = turn('tu1', '[Request interrupted by user for tool use]');
-  R.sweep(es, p.proj);
-  H.ok('Esc 打断、没交：算没交，下次重开', R.status(opts(p)).state[r.agents[0].lens].status === 'failed', R.status(opts(p)).state);
-  // 2.1.259 起在后台：工具结果只说已启动，不算结束
-  const r2 = R.prepare(opts(p));
-  const lens2 = r2.agents[0].lens;
-  R.dispatch(r2.id, lens2, 'bg-1');
-  const bg = turn('bg-1', 'Async agent launched successfully. agentId: x');
-  R.sweep(bg, p.proj);
-  H.ok('后台在跑：不算没交', R.status(opts(p)).state[lens2].status === 'sent', R.status(opts(p)).state);
-}
-
-H.section('同时在跑的审查子代理最多 3 个（第 52 条，2026-11-04）');
-{
-  // 同一个项目里两个 change 各 prepare 一次：以前一条回复里能开 6 个
-  const p = project();
-  const c2 = path.join(p.proj, 'openspec', 'changes', 'c2');
-  for (const f of ['proposal.md', 'design.md', 'tasks.md', path.join('specs', 'order', 'spec.md')]) H.write(path.join(c2, f), H.read(path.join(p.dir, f)));
-  const j = { session_id: 's-cap', cwd: p.proj, transcript_path: H.transcript(path.join(H.tempDir('rs-cap'), 't.jsonl'), [H.tr.user('开工')]), hook_event_name: 'PreToolUse', tool_name: 'Agent' };
-  S.setFlow(j, true, '测试', 'apply');
-  S.setSessionAuto(j, true, '测试');
-  H.setConfig(h, { autoRequirements: true, autoApply: true });
-  let n = 0;
-  const call = (prompt) => H.hook(h, 'guard-ask', Object.assign({}, j, { tool_use_id: 'cap' + (++n), tool_input: { subagent_type: 'vk-reviewer', prompt } }));
-  const a = R.prepare(opts(p));
-  const b = R.prepare(opts(p, { change: 'c2' }));
-  H.ok('（两个任务各 3 个角度）', a.agents.length === 3 && b.agents.length === 3, [a.agents.length, b.agents.length]);
-  const first = a.agents.map((x) => call(x.prompt));
-  H.ok('前 3 个放行', first.every((o) => !H.reasonOf(o)), first.map(H.reasonOf));
-  const fourth = call(b.agents[0].prompt);
-  H.ok('第 4 个拦下：说已经有 3 个在跑、等前面的交了再开', /已经有 3 个审查子代理在跑/.test(H.reasonOf(fourth)) && /同时最多 3 个/.test(H.reasonOf(fourth)), H.reasonOf(fourth));
-  H.ok('拦下的没记成发出去了', R.status(opts(p, { change: 'c2' })).state[b.agents[0].lens].status !== 'sent', R.status(opts(p, { change: 'c2' })).state);
-  H.ok('已经发出去的那个再开一次（重试）：不算多一个', !H.reasonOf(call(a.agents[0].prompt)));
-  R.submit(a.id, a.agents[0].lens, tell(a, a.agents[0].lens));
-  H.ok('交了一个：第 4 个能开了', !H.reasonOf(call(b.agents[0].prompt)));
-  H.ok('又满了：第 5 个照拦', /同时最多 3 个/.test(H.reasonOf(call(b.agents[1].prompt))));
-  // 前台子代理的结果已经回来、没交结论（崩了、被打断）：满了的时候先清掉它们，让出位子（复审第 6 条）
-  const done = [H.tr.user('开工')];
-  for (let i = 1; i <= n; i++) done.push({ type: 'assistant', uuid: 'c' + i, timestamp: new Date().toISOString(), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'cap' + i, name: 'Agent', input: {} }] } }, { type: 'user', uuid: 'r' + i, timestamp: new Date().toISOString(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'cap' + i, content: '子代理出错退出了' }] } });
-  H.transcript(j.transcript_path, done);
-  H.ok('前面的都已经结束（没交）：第 5 个能开了', !H.reasonOf(call(b.agents[1].prompt)), H.reasonOf(call(b.agents[1].prompt)));
-  H.setConfig(h, { autoRequirements: false, autoApply: false });
-}
-
 (async () => {
   H.section('复审只送修改点');
   {
@@ -168,7 +106,7 @@ H.section('同时在跑的审查子代理最多 3 个（第 52 条，2026-11-04�
     const r2 = await H.fakeReview(R, opts(p), (lens, scope) => { second = scope; return { issues: [] }; });
     H.ok('第二轮：一个子代理，只审改过的地方', r2.lenses === 1 && /这是复审/.test(second) && /const a = 3/.test(second) && /上一轮的问题/.test(second), second.slice(0, 500));
     const r3 = R.prepare(opts(p));
-    H.ok('文件没变再审：不开子代理', r3.noChange === true && /不用开子代理/.test(r3.next), r3);
+    H.ok('文件没变再审：不发请求', r3.noChange === true && /这次不用审/.test(r3.next), r3);
   }
 
   H.section('范围外建议不算问题');

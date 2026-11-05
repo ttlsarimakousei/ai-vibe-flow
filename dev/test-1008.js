@@ -298,10 +298,10 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.hook(h, 'task-anchor', { session_id: sid, cwd: proj, hook_event_name: 'UserPromptSubmit', prompt: '/opsx:propose add-z', transcript_path: tf });
     H.ok('敲 /opsx:propose 照样进流程（写提案那一段）', flow().on === true && flow().stage === 'plan', flow());
     // 审查者的说法
-    const agent = H.read(path.join(h.cfg, 'agents', 'vk-reviewer.md')) || '';
-    H.ok('审查者：不编译、不跑测试，不限文件数', /不编译、不跑测试、不起服务/.test(agent) && !/最多读 20 个文件/.test(agent) && !/能跑的就跑/.test(agent), agent.slice(0, 200));
+    const agent = H.read(path.join(h.kit, 'review-prompt.md')) || '';
+    H.ok('审查者：没有工具，不限文件数', /没有工具可用/.test(agent) && !/最多读 20 个文件/.test(agent) && !/能跑的就跑/.test(agent), agent.slice(0, 200));
     const skill = H.read(path.join(h.cfg, 'skills', 'vk-cross-review', 'SKILL.md')) || '';
-    H.ok('技能走 prepare 和子代理，没有兼容方式', /review\.js" prepare/.test(skill) && /vk-reviewer/.test(skill) && !/兼容/.test(skill), skill.slice(0, 200));
+    H.ok('技能走 review.js run，不开子代理，没有兼容方式', /review\.js" run/.test(skill) && !/vk-reviewer/.test(skill) && !/兼容/.test(skill), skill.slice(0, 200));
   }
 
   // ---------------------------------------------------------------------------------------------

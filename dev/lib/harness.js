@@ -82,7 +82,7 @@ function makeHome(name, from, config, opts) {
   copyDir(path.join(src, 'claude', 'rules'), path.join(kit, 'rules'));
   copyDir(path.join(src, 'claude'), path.join(kit, 'pristine'));
   copyDir(path.join(src, 'claude', 'skills'), path.join(cfg, 'skills'));
-  copyDir(path.join(src, 'claude', 'agents'), path.join(cfg, 'agents'));
+  if (fs.existsSync(path.join(src, 'claude', 'agents'))) copyDir(path.join(src, 'claude', 'agents'), path.join(cfg, 'agents')); // 20261105.1915 之后不装审查代理
   // 技能、约定的修改时间统一拨到两天前：钩子会拿它和会话开始的时间比（"会话开始之后技能变了就提醒"），
   // 刚改过的源文件拷过来带着刚才的时间，会被当成会话中途变了
   const old = new Date(Date.now() - 2 * 86400000);
@@ -120,7 +120,8 @@ function envFor(h, extra) {
   for (const d of [roaming, localApp, startup]) { try { fs.mkdirSync(d, { recursive: true }); } catch (e) { /* 建不了就算了 */ } }
   // VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS：安装器不去读真的注册表（这台电脑设没设 JAVA_TOOL_OPTIONS 不影响结果），当系统里没设；测这一项的套自己给
   // VIBE_KIT_NO_BROWSER：敲 /vk-config 的钩子不开真的浏览器
-  const out = Object.assign(env, { VIBE_KIT_NO_BROWSER: '1', HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1', VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '' }, extra || {});
+  // VIBE_KIT_REVIEW_NO_RUN：review.js run 只备材料、不起 claude -p。测审查本身的那几套自己去掉
+  const out = Object.assign(env, { VIBE_KIT_REVIEW_NO_RUN: '1', VIBE_KIT_NO_BROWSER: '1', HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1', VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '' }, extra || {});
   for (const k of Object.keys(out)) if (out[k] === undefined || out[k] === null) delete out[k];
   return out;
 }

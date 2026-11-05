@@ -25,7 +25,7 @@ const newPkg = asPackage('vkn-new', H.SRC);
 
 H.section('包里的东西：都是 vk- 开头，没有 ttls- 了');
 {
-  H.ok('技能是 vk- 开头的六个，审查代理是 vk-reviewer', JSON.stringify(lsdir(path.join(newPkg, 'claude', 'skills'))) === JSON.stringify(NAMES.map((n) => 'vk-' + n)) && JSON.stringify(lsdir(path.join(newPkg, 'claude', 'agents'))) === '["vk-reviewer.md"]', [lsdir(path.join(newPkg, 'claude', 'skills')), lsdir(path.join(newPkg, 'claude', 'agents'))]);
+  H.ok('技能是 vk- 开头的六个，不带审查代理', JSON.stringify(lsdir(path.join(newPkg, 'claude', 'skills'))) === JSON.stringify(NAMES.map((n) => 'vk-' + n)) && !fs.existsSync(path.join(newPkg, 'claude', 'agents', 'vk-reviewer.md')), [lsdir(path.join(newPkg, 'claude', 'skills')), lsdir(path.join(newPkg, 'claude', 'agents'))]);
   for (const n of NAMES) H.ok('vk-' + n + '：SKILL.md 里的名字是 vk-' + n, new RegExp('^name: vk-' + n + '$', 'm').test(H.read(path.join(newPkg, 'claude', 'skills', 'vk-' + n, 'SKILL.md')) || ''));
   // 给模型看的东西里没有 ttls- 的名字（认旧名字的正则、讲改名的说明、技能自己的变更记录除外）
   const files = fs.readdirSync(path.join(newPkg, 'claude'), { recursive: true }).map((x) => path.join(newPkg, 'claude', String(x))).filter((f) => /\.(md|py|js)$/.test(f) && !/CHANGELOG/.test(f));
@@ -43,9 +43,9 @@ const h = H.freshHome('vkn-up');
   H.write(path.join(h.cfg, 'rules', 'ttls-lessons-java.md'), '---\npaths:\n  - "**/*.java"\n---\n\n# 写Java时注意（几个项目的审查里都出现过）\n\n<!-- L0a1b2c 次数=3 最近=2026-11-01 类别=边界 出处=projA；projB -->\n- 分页参数为空时按第一页查，不要直接拼进 SQL\n');
   const i2 = install(h, newPkg);
   H.ok('这一版装上了', i2.code === 0, i2.out.slice(-600) + i2.err);
-  H.ok('vk- 开头的六个技能和 vk-reviewer 都在', NAMES.every((n) => fs.existsSync(path.join(h.cfg, 'skills', 'vk-' + n, 'SKILL.md'))) && fs.existsSync(path.join(h.cfg, 'agents', 'vk-reviewer.md')), lsdir(path.join(h.cfg, 'skills')));
+  H.ok('vk- 开头的六个技能都在，审查代理没了', NAMES.every((n) => fs.existsSync(path.join(h.cfg, 'skills', 'vk-' + n, 'SKILL.md'))) && !fs.existsSync(path.join(h.cfg, 'agents', 'vk-reviewer.md')), lsdir(path.join(h.cfg, 'skills')));
   H.ok('ttls- 开头的技能和代理都删了', !lsdir(path.join(h.cfg, 'skills')).some((n) => /^ttls-/.test(n)) && !fs.existsSync(path.join(h.cfg, 'agents', 'ttls-reviewer.md')), [lsdir(path.join(h.cfg, 'skills')), lsdir(path.join(h.cfg, 'agents'))]);
-  H.ok('安装器说了改名：/ttls-handover → /vk-handover，ttls-reviewer → vk-reviewer', /技能和代理改名了/.test(i2.out) && /\/ttls-handover → \/vk-handover/.test(i2.out) && /\/ttls-db-crud → \/vk-db-crud/.test(i2.out) && /ttls-reviewer → vk-reviewer/.test(i2.out), i2.out);
+  H.ok('安装器说了改名：/ttls-handover → /vk-handover，ttls-reviewer 不再用', /技能和代理改名了/.test(i2.out) && /\/ttls-handover → \/vk-handover/.test(i2.out) && /\/ttls-db-crud → \/vk-db-crud/.test(i2.out) && /ttls-reviewer → 不再用/.test(i2.out), i2.out);
   const bk = (i2.out.match(/旧技能 ttls-see-page 被改过，删除前备份在 (\S+)/) || [])[1] || '';
   H.ok('改过的 ttls-see-page 先备份了', !!bk && /我自己加的一句/.test(H.read(path.join(bk, 'SKILL.md')) || ''), i2.out);
   H.ok('没改过的不备份、不提', !/旧技能 ttls-(handover|onboard|cross-review|db-crud|redis) 被改过/.test(i2.out), i2.out);

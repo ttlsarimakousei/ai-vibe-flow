@@ -61,9 +61,9 @@ const HAS_REAL = fs.existsSync(path.join(REAL_DBCRUD, 'drivers')) && lsdir(path.
 
   const i2 = install(h, newPkg);
   H.ok('这一版装上了', i2.code === 0, i2.out + i2.err);
-  H.ok('新名字的六个技能和代理都在', ['vk-cross-review', 'vk-db-crud', 'vk-handover', 'vk-onboard', 'vk-redis', 'vk-see-page'].every((n) => fs.existsSync(path.join(h.cfg, 'skills', n, 'SKILL.md'))) && fs.existsSync(path.join(h.cfg, 'agents', 'vk-reviewer.md')), lsdir(path.join(h.cfg, 'skills')));
+  H.ok('新名字的六个技能和代理都在', ['vk-cross-review', 'vk-db-crud', 'vk-handover', 'vk-onboard', 'vk-redis', 'vk-see-page'].every((n) => fs.existsSync(path.join(h.cfg, 'skills', n, 'SKILL.md'))) && !fs.existsSync(path.join(h.cfg, 'agents', 'vk-reviewer.md')), lsdir(path.join(h.cfg, 'skills')));
   H.ok('旧名字的技能和代理删掉了', !['cross-review', 'handover', 'onboard', 'see-page'].some((n) => fs.existsSync(path.join(h.cfg, 'skills', n))) && !fs.existsSync(path.join(h.cfg, 'agents', 'vibe-reviewer.md')), [lsdir(path.join(h.cfg, 'skills')), lsdir(path.join(h.cfg, 'agents'))]);
-  H.ok('安装器说了改名的事', /技能和代理改名了/.test(i2.out) && /\/handover → \/vk-handover/.test(i2.out) && /vibe-reviewer → vk-reviewer/.test(i2.out), i2.out);
+  H.ok('安装器说了改名的事', /技能和代理改名了/.test(i2.out) && /\/handover → \/vk-handover/.test(i2.out) && /vibe-reviewer → 不再用/.test(i2.out), i2.out);
   const bk = (i2.out.match(/旧技能 see-page 被改过，删除前备份在 (\S+)/) || [])[1] || '';
   H.ok('改过的那个先备份了', !!bk && /我自己加的一句/.test(H.read(path.join(bk, 'SKILL.md')) || ''), i2.out);
   H.ok('没改过的不备份、不提', !/旧技能 (handover|onboard|cross-review) 被改过/.test(i2.out), i2.out);
