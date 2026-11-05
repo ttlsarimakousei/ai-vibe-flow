@@ -224,3 +224,17 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 - 代理文件 frontmatter 里的 `hooks`（PreToolUse）只在这个子代理里触发，主会话的 Bash 不触发；Read 拦得到；`permissionDecision: deny` 的理由、`additionalContext` 都送得到模型。
 
 环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 改 `output_config.effort`，`CLAUDE_CODE_DISABLE_THINKING=1` 时请求里没有 `thinking`（2.1.259、2.1.289，`dev/probes/review-effort.js` 假网关核对）。这些只说明 Claude Code 发什么，网关和后面的模型照不照做要看 `review-effort.js` 在内网的结果。
+
+请求里怎么才算关思考（同一天，假网关，`claude -p --model sonnet`）：
+
+| 设置 | 2.1.259 | 2.1.289 |
+|---|---|---|
+| 什么都不设 | `{"type":"adaptive","display":"omitted"}` | 同左 |
+| `CLAUDE_CODE_DISABLE_THINKING=1` | 不带 `thinking` | 同左 |
+| `MAX_THINKING_TOKENS=0` | `{"type":"disabled"}` | 不带 `thinking` |
+| `alwaysThinkingEnabled: false`（settings） | `{"type":"disabled"}` | 不带 `thinking` |
+| `MAX_THINKING_TOKENS=1024` | 和不设一样 | 同左 |
+
+都是整个进程生效，分不开主会话和子代理。
+
+内网网关（2026-11-05，两台电脑，`dev/probes/review-timing.js`、`review-effort.js`）：输出 118—160 token/秒，和上下文大小、同时跑几个无关；第一个 token 约 2 秒。effort 高低对输出没有一致的影响（每种 2 次），不带 `thinking` 字段模型照样想。明确发 `disabled` 没测。

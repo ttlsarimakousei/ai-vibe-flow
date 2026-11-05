@@ -34,7 +34,8 @@ const SCOPE_FILE = /[\\/]\.vibe[\\/]reviews[\\/].*job-[0-9a-f]+[\\/][^\\/]+\.md$
 // Read 没给内容、只说文件没变：子代理没读过这个文件却拿到它，就会换着行号再读
 const STUB = /unchanged since last read|unchanged since your last read/i;
 const TOO_BIG = /exceeds maximum allowed|maximum allowed tokens/i;
-const BLOCKED = /vibe-kit|拦截编号|hook error|blocked by hook|denied by hook/i;
+// 不能只认"vibe-kit"：命令失败的输出里路径带它（Exit code 127 … vibe-kit/…）不是被拦
+const BLOCKED = /\[vibe-kit|拦截编号|hook error|blocked by hook|denied by hook/i;
 const MAX_BYTES = 400 * 1024 * 1024;
 
 const median = (a) => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
@@ -97,7 +98,7 @@ function parseFile(file, kind) {
         if (!c) continue;
         if (c.type === 'thinking') cur.think += String(c.thinking || '').length;
         else if (c.type === 'text') cur.text += String(c.text || '').length;
-        else if (c.type === 'tool_use') { const call = { id: c.id, name: c.name, input: c.input || {}, chars: 0, isError: false, stub: false, tooBig: false, blocked: '', at: t, ms: -1 }; cur.tools.push(call); calls.set(c.id, call); }
+        else if (c.type === 'tool_use') { const call = { id: c.id, name: c.name, input: c.input || {}, chars: 0, isError: false, stub: false, tooBig: false, blocked: '', at: t, ms: -1, ver: e.version || '' }; cur.tools.push(call); calls.set(c.id, call); }
       }
       continue;
     }
@@ -360,6 +361,24 @@ function report(all, root, opts) {
   }
   out.push('', '## 工具本身花多久', '', '从模型发出工具调用到结果记下来。Read 没挂套件的钩子，Bash 挂了两个。', '');
   out.push(...table(['谁', '工具', '次数', '中位秒', 'P90 秒', '合计'], toolRows));
+  // 同一台电脑上几个版本一比，看得出慢是版本带来的还是电脑的（第 71 条：一台 Read 中位 6.4 秒，另一台 0.0 秒）
+  const byVer = new Map();
+  for (const q of subReq.concat(mainReq)) for (const c of q.tools) if (c.ms >= 0 && /^(Read|Edit|Write|Bash|Grep)$/.test(c.name)) { const v = byVer.get(c.ver || '未知') || {}; (v[c.name] = v[c.name] || []).push(c.ms); byVer.set(c.ver || '未知', v); }
+  const cell = (a) => (a ? a.length + ' 次 ' + (median(a) / 1000).toFixed(1) + ' 秒' : '-');
+  out.push('', '### 按 Claude Code 版本（次数和中位秒）', '');
+  out.push(...table(['版本', 'Read', 'Edit', 'Write', 'Grep', 'Bash'], [...byVer.entries()].sort().map(([v, o]) => [v, cell(o.Read), cell(o.Edit), cell(o.Write), cell(o.Grep), cell(o.Bash)])));
+  // 配置里挂了哪些钩子：只列时机、匹配和脚本文件名，不带参数
+  const hookRows = [];
+  for (const name of ['settings.json', 'settings.local.json']) {
+    let s = null; try { s = JSON.parse(fs.readFileSync(path.join(opts.cfg, name), 'utf8')); } catch (e) { continue; }
+    for (const [ev, list] of Object.entries(s.hooks || {})) for (const g of [].concat(list || [])) for (const x of [].concat((g && g.hooks) || [])) {
+      const words = String((x && x.command) || (x && x.url) || (x && x.type) || '').match(/"[^"]*"|\S+/g) || [];
+      const script = words.map((w) => w.replace(/^"|"$/g, '')).filter((w) => /\.(js|mjs|cjs|py|sh|ps1|cmd|bat|exe)$/i.test(w)).pop() || words[0] || '';
+      hookRows.push([name, ev, (g && g.matcher) || '（全部）', ANON ? hash(script) : path.basename(slash(script))]);
+    }
+  }
+  out.push('', '### 配置里挂的钩子（用户级）', '');
+  out.push(...table(['文件', '时机', '匹配', '脚本'], hookRows));
 
   if (slow.length) { out.push('', '## 时间线（最慢的 ' + Math.min(opts.timeline, slow.length) + ' 个子代理）'); for (const a of slow.slice(0, opts.timeline)) timeline(a, out); }
 
@@ -399,7 +418,7 @@ function main() {
   if (has('--help') || has('-h')) { console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]); return; }
   const cfg = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const root = val('--dir', path.join(cfg, 'projects'));
-  const opts = { days: Number(val('--days', 14)) || 14, timeline: Number(val('--timeline', 2)) || 0 };
+  const opts = { days: Number(val('--days', 14)) || 14, timeline: Number(val('--timeline', 2)) || 0, cfg };
   const list = findFiles(root, opts.days, val('--project', ''), val('--session', ''));
   if (!list.length) { console.log('没找到会话记录：' + root + '（最近 ' + opts.days + ' 天）。--dir 指定目录，或者 --days 放大。'); return; }
   const all = []; let bad = 0;
