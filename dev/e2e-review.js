@@ -1,6 +1,6 @@
 'use strict';
 /*
- * 端到端：真的 Claude Code + 假模型，审查走完一轮（第 72 条，2026-11-05 起审查不用子代理，文件名没改，run-all 和合同还认它）。
+ * 端到端：真的 Claude Code + 假模型，审查走完一轮（第 72 条，2026-11-05 起审查不用子代理）。
  *   主会话跑 review.js run → 真的 claude -p（不带工具、关掉钩子）→ 第一次回不是 JSON，重试 → 拿到 1 条 P2 → 结论在主会话的工具结果里
  * 钩子把这条命令的 timeout 改成 10 分钟。套件用真的 install.js 装进假的用户目录。
  * 用法：node dev/e2e-subagent.js <版本号 | claude.exe>
@@ -49,6 +49,7 @@ const REPLY = '```json\n{"issues":[{"severity":"P2","file":"src/A.java","line":3
   H.ok('主会话开了一次命令', mainStep === 1, mainStep);
   H.ok('claude -p 发了两次（第一次没结论，重试）', reviewCalls === 2, reviewCalls);
   H.ok('审查的请求不带工具', reviewTools === 0, reviewTools);
+  H.ok('审查的请求不带全局约定', !/vibe-kit:begin|# 工作约定/.test(reviewPrompt));
   H.ok('审查的提示带差异', reviewPrompt.includes('if (ids == null) return;'));
   H.ok('审查的提示带脚本查的调用方', reviewPrompt.includes('src/Caller.java'));
   let result = null; try { result = JSON.parse(toolResult.trim().split('\n').pop()); } catch (e) { /* 下面报 */ }

@@ -26,7 +26,7 @@ const H = require('./lib/harness');
   j.tool_use_id = 'test-2'; E.recordTool(j, false); H.ok('失败不能成为通过证据', E.commands(p).length === 0);
   {
     const opts = { cwd: p, change: 'add-x', mode: 'code', base: 'HEAD' };
-    const good = (x) => '审查任务：' + x.id + '/' + x.agents[0].lens + '\n```json\n{"issues":[],"summary":"本批审完"}\n```';
+    const good = (x) => '审查任务：' + x.id + '/' + x.pending[0].lens + '\n```json\n{"issues":[],"summary":"本批审完"}\n```';
     const r = await H.fakeReview(R, opts); H.ok('子代理交齐完成审查', r.status === 'completed' && r.covered.includes('a.js'), r.status);
     H.ok('完整结果可勾审查和零意见处理', T.tickIssue('[代码审查] 审查', d, { cwd: p }) === '' && T.tickIssue('[审查意见处理] 处理', d, { cwd: p }) === '');
     H.ok('模型测试不能代替用户验收', !!T.tickIssue('[用户验收] 自测', d, { cwd: p }));
@@ -34,13 +34,13 @@ const H = require('./lib/harness');
     H.ok('勾审查任务不让已审代码失效', before && S.codeReviewed(d));
     const stale = await H.fakeReview(R, opts, () => { H.write(path.join(p, 'a.js'), 'const a=4;\n'); return { issues: [] }; }); H.ok('审查期间输入变化不批准新版', stale.status === 'stale');
     H.ok('旧审查结果不能给新版打勾', !!T.tickIssue('[代码审查] 审查', d, { cwd: p }));
-    const bp = R.prepare(opts); const bad = R.submit(bp.id, bp.agents[0].lens, '不是 JSON'); H.ok('不认识的回复不能算审完', bad.ok === false && R.status(opts).status === 'running', bad);
-    R.cancel(opts); const late = R.submit(bp.id, bp.agents[0].lens, good(bp));
+    const bp = R.prepare(opts); const bad = R.submit(bp.id, bp.pending[0].lens, '不是 JSON'); H.ok('不认识的回复不能算审完', bad.ok === false && R.status(opts).status === 'running', bad);
+    R.cancel(opts); const late = R.submit(bp.id, bp.pending[0].lens, good(bp));
     H.ok('取消后迟到结果不记审查', late.late === true && R.status(opts).status === 'cancelled', late);
     // 2026-10-28 起不截断（用户定的，问题反馈表第 6 条）：慢过预期用时也等它审完，审完记一条问题反馈
     const sp = R.prepare(Object.assign({}, opts, { budgetSeconds: 10 }));
     S.updateState('review-jobs', (o) => { for (const k of Object.keys(o)) if (o[k].id === sp.id) o[k].started = Date.now() - 60000; });
-    const slow = R.submit(sp.id, sp.agents[0].lens, good(sp));
+    const slow = R.submit(sp.id, sp.pending[0].lens, good(sp));
     H.ok('不截断：慢过预期用时也等它审完', slow.status === 'completed', slow.status + ' ' + slow.reason);
     H.ok('超出预期用时：自动记了一条问题反馈', !!slow.reported, slow);
         H.write(path.join(d, 'proposal.md'), '需求'.repeat(30000));

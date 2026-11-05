@@ -27,82 +27,6 @@ function archived(p, name, file) {
 (async () => {
   const watch = await H.watchWindows('fb1105-win');
 
-  H.section('第 59 条：审查子代理没跑完不重开');
-  {
-    const h = H.makeHome('fb1105-59', FROM, QUIET);
-    const S = require(path.join(h.kit, 'lib/session')); const R = require(path.join(h.kit, 'lib/review-runner'));
-    const p = H.makeRepo(path.join(h.work, 'p'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n' });
-    const d = change(p, 'c1', 0, 1);
-    H.git(p, ['add', '-A']); H.git(p, ['commit', '-qm', 'docs: 提案']);
-    const sid = 's59'; const opts = { cwd: p, change: 'c1', mode: 'proposal', point: 'proposal' };
-    const r1 = R.prepare(opts);
-    H.ok('第一轮开 3 个', r1.status === 'prepared' && r1.agents.length === 3, r1);
-    const jobOf = () => Object.values(S.readState('review-jobs')).find((x) => x && x.change === 'c1');
-    for (const a of r1.agents) H.ok('占位：' + a.lens, R.claim(r1.id, a.lens, 'tool-' + a.lens, sid) === '');
-    // 第 59 条的根因（仓库主人的记录）：这个环境 Agent 的结果不写"Async agent launched"，子代理刚开就被判成结束了
-    const launched = r1.agents.flatMap((a) => [H.tr.call('Agent', { subagent_type: 'vk-reviewer', prompt: a.prompt }, 'tool-' + a.lens), H.tr.result('tool-' + a.lens, 'Spawned successfully. (This tool result is internal metadata.)\nagent_id: areviewer-facts-a3462d88\nname: reviewer-facts\nThe agent is now running and will receive instructions via mailbox.')]);
-    R.sweep(launched, p);
-    H.ok('工具结果写"Spawned successfully"：还算在跑，不判成没交', Object.values(jobOf().state).every((s) => s.status === 'sent'), jobOf().state);
-    const longReply = '审查结论：' + '这段话讲的是 the agent launched in the background 这类词。'.repeat(40);
-    {
-      // 单独一个假目录：上面的 3 个还占着位子
-      const h2 = H.makeHome('fb1105-fg', FROM, QUIET);
-      const S2 = require(path.join(h2.kit, 'lib/session')); const R2 = require(path.join(h2.kit, 'lib/review-runner'));
-      const q = H.makeRepo(path.join(h2.work, 'q'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n' });
-      change(q, 'c1', 0, 1);
-      H.git(q, ['add', '-A']); H.git(q, ['commit', '-qm', 'x']);
-      const fg = R2.prepare({ cwd: q, change: 'c1', mode: 'proposal', point: 'proposal' });
-      const lens = (fg.agents || [{}])[0].lens;
-      if (lens) { R2.claim(fg.id, lens, 'fg-long', 's-fg'); R2.sweep([H.tr.call('Agent', { subagent_type: 'vk-reviewer' }, 'fg-long'), H.tr.result('fg-long', longReply)], q); }
-      const row = Object.values(S2.readState('review-jobs')).find((x) => x && x.id === fg.id);
-      H.ok('前台子代理的长回复碰巧带这些词：算结束了', !!lens && row.state[lens].status === 'failed', row && row.state);
-    }
-    H.write(path.join(d, 'proposal.md'), '## Why\n\n改过了\n');
-    const r2 = R.prepare(opts);
-    H.ok('文档改过、上一轮的子代理还活着：不开新的一轮', r2.status === 'running' && !(r2.agents || []).length && /不开新的一轮/.test(r2.next || ''), r2);
-    H.ok('上一轮没被盖掉', jobOf().id === r1.id);
-    const r3 = R.prepare(Object.assign({}, opts, { point: 'proposal', full: true }));
-    H.ok('--full 也不开', r3.status === 'running', r3);
-    // 跑了一个小时：发出去早就过了半小时，最后一次跑命令是刚才
-    const old = Date.now() - 3600000;
-    S.updateState('review-jobs', (o) => { for (const k of Object.keys(o)) if (o[k].id === r1.id) for (const l of Object.keys(o[k].state)) o[k].state[l].sentAt = old; });
-    H.hook(h, 'guard-commit', { session_id: sid, cwd: p, agent_type: 'vk-reviewer', agent_id: 'a1', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git status' }, transcript_path: tf(h, [H.tr.user('审一下')]) });
-    R.sweep([], p);
-    H.ok('跑了一小时、刚才还在跑命令：不算没交', Object.values(jobOf().state).every((s) => s.status === 'sent'), jobOf().state);
-    H.ok('这时候还是不开新的一轮', R.prepare(opts).status === 'running');
-    const r4 = R.prepare(Object.assign({}, opts, { point: 'proposal', mode: 'proposal' }));
-    H.ok('同样的请求再问一次：说清楚在跑', /在跑/.test(r4.next || ''), r4);
-    // 同一个项目里别的审查点也算：最多 3 个
-    const d2 = change(p, 'c2', 0, 1);
-    H.git(p, ['add', '-A']); H.git(p, ['commit', '-qm', 'docs: 提案 2']);
-    const r5 = R.prepare({ cwd: p, change: 'c2', mode: 'proposal', point: 'proposal' });
-    H.ok('跑了一小时的也数：第 4 个不让开', /已经有 3 个审查子代理在跑/.test(r5.agents ? R.claim(r5.id, r5.agents[0].lens, 't5', sid) : ''), r5.agents);
-    void d2;
-    // 真死了：半小时没动静
-    S.writeState(sid + '-review-alive', { at: old });
-    R.sweep([], p);
-    H.ok('半小时没动静：算没交', Object.values(jobOf().state).every((s) => s.status === 'failed'), jobOf().state);
-    const r6 = R.prepare(opts);
-    H.ok('都没了才开新的一轮', r6.status === 'prepared' && r6.id !== r1.id && r6.agents.length === 3, r6);
-    // 主会话的钩子不算子代理的动静
-    S.writeState(sid + '-review-alive', {});
-    H.hook(h, 'guard-commit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git status' }, transcript_path: tf(h, [H.tr.user('审一下')]) });
-    H.ok('主会话跑命令不算子代理活着', !S.readState(sid + '-review-alive').at);
-    H.hook(h, 'guard-read', { session_id: sid, cwd: p, agent_type: 'vk-reviewer', hook_event_name: 'PreToolUse', tool_name: 'Grep', tool_input: { pattern: 'x' }, transcript_path: tf(h, [H.tr.user('审一下')]) });
-    H.ok('子代理搜文件算动静', !!S.readState(sid + '-review-alive').at);
-    // 前台子代理结束了、没交结论，还记着在跑：备审查的钩子先清掉，不让它等一个不会来的通知（复审 20261105-2 第 1 条）
-    const r7 = R.prepare({ cwd: p, change: 'c1', mode: 'proposal', point: 'proposal', full: true });
-    const lens7 = (r7.agents || [{}])[0].lens;
-    if (lens7) for (const a of r7.agents) R.claim(r7.id, a.lens, 'fg-' + a.lens, sid);
-    H.write(path.join(d, 'proposal.md'), '## Why\n\n又改了\n');
-    H.ok('前提：这时候说在跑', R.prepare(opts).status === 'running');
-    const fg = (r7.agents || []).flatMap((a) => [H.tr.call('Agent', { subagent_type: 'vk-reviewer', prompt: a.prompt }, 'fg-' + a.lens), H.tr.result('fg-' + a.lens, '子代理回来了，没交结论')]);
-    H.hook(h, 'guard-commit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'p7', tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change c1 --mode proposal --point proposal --project "' + p.replace(/\\/g, '/') + '"' }, transcript_path: tf(h, [H.tr.user('审一下')].concat(fg)) });
-    H.ok('子代理其实结束了：备审查之前清掉，开得了新的一轮', R.prepare(opts).status === 'prepared', R.prepare(opts));
-    const auto = H.read(path.join(h.kit, 'hooks/task-anchor.js'));
-    H.ok('开关自动的提示说不重开', /不要重开/.test(auto));
-  }
-
   H.section('第 60 条：/vk-resume 只要没归档都能切');
   {
     const h = H.makeHome('fb1105-60', FROM, QUIET);
@@ -390,16 +314,13 @@ function archived(p, name, file) {
     const opts = { cwd: p, change: 'c1', mode: 'proposal', point: 'tasks' };
     const send = (id, lens, out) => R.submit(id, lens, '审查任务：' + id + '/' + lens + '\n```json\n' + JSON.stringify(Object.assign({ issues: [], summary: '' }, out)) + '\n```');
     const r = R.prepare(opts);
-    H.ok('第 66 条：整套文档的名字', r.agents.every((a) => /^审查整套文档 /.test(a.description)), r.agents.map((a) => a.description));
-    H.ok('第 65 条：提示说回来之前不要改文件', /回来之前不要改文件/.test(r.next), r.next);
-    send(r.id, r.agents[0].lens, { issues: [{ severity: 'P2', file: 'proposal.md', line: 1, problem: '范围没写', evidence: '没写不做什么', fix: '补上' }] });
+    send(r.id, r.pending[0].lens, { issues: [{ severity: 'P2', file: 'proposal.md', line: 1, problem: '范围没写', evidence: '没写不做什么', fix: '补上' }] });
     H.write(path.join(d, 'proposal.md'), H.read(path.join(d, 'proposal.md')) + '第一个回来就改了\n');
-    let last; for (const a of r.agents.slice(1)) last = send(r.id, a.lens, {});
+    let last; for (const a of r.pending.slice(1)) last = send(r.id, a.lens, {});
     H.ok('第一个回来就改：这一轮作废，提示说只审改过的', last.status === 'stale' && /只审改过的地方/.test(last.next || ''), last);
     const r2 = R.prepare(opts);
-    H.ok('第 65 条：第二轮只开 1 个，不是 3 个', r2.status === 'prepared' && r2.agents.length === 1 && r2.scope === 'changes', r2);
-    H.ok('第 66 条：复审的名字', /^复审整套文档$/.test((r2.agents[0] || {}).description || ''), r2.agents);
-    const scope = H.read(/范围文件：(.+)/.exec(r2.agents[0].prompt)[1].trim());
+    H.ok('第 65 条：第二轮只开 1 个，不是 3 个', r2.status === 'prepared' && r2.pending.length === 1 && r2.scope === 'changes', r2);
+    const scope = H.read(r2.pending[0].scope);
     H.ok('第二轮带着上一轮的问题', /范围没写/.test(scope), scope.slice(0, 400));
     const p2 = H.makeRepo(path.join(h.work, 'p2'), { '.gitignore': '.vibe/\n', 'a.js': 'let a=1;\n' });
     const d2 = change(p2, 'c1', 1, 0, { file: 'a.js' });
@@ -407,7 +328,6 @@ function archived(p, name, file) {
     R.baseline({ cwd: p2, session_id: 's65' }, [d2]);
     H.write(path.join(p2, 'a.js'), 'let a=2;\n');
     const code = R.prepare({ cwd: p2, change: 'c1', mode: 'code', point: 'change' });
-    H.ok('第 66 条：代码的名字', code.agents.every((a) => /^审查代码 /.test(a.description)), code.agents.map((a) => a.description));
     const SRC = FROM || path.join(__dirname, '..', 'vibe-kit');
     const agentText = H.read(path.join(SRC, 'kit/review-prompt.md')) || '';
     H.ok('第 64 条：审查代理不限调用次数，只核对点名的', !/40 次/.test(agentText) && /脚本查的/.test(agentText), agentText.slice(0, 300));
@@ -427,9 +347,8 @@ function archived(p, name, file) {
     const d3 = change(p3, 'c3', 0, 1, { proposal: '现有逻辑在 a.js 和 no-such/b.js 里' });
     H.git(p3, ['add', '-A']); H.git(p3, ['commit', '-qm', 'x']);
     const small = R.prepare({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
-    H.ok('小材料：第一轮 1 个子代理', small.agents.length === 1 && small.agents[0].lens === '全量', small.agents);
-    H.ok('小材料的名字', small.agents[0].description === '审查整套文档', small.agents[0].description);
-    const smallScope = H.read(/范围文件：(.+)/.exec(small.agents[0].prompt)[1].trim());
+    H.ok('小材料：第一轮 1 个子代理', small.pending.length === 1 && small.pending[0].lens === '全量', small.pending);
+    const smallScope = H.read(small.pending[0].scope);
     H.ok('它一个人看全三个角度', /事实和材料对不对得上/.test(smallScope) && /异常、权限、并发/.test(smallScope) && /前后矛盾/.test(smallScope), smallScope.slice(0, 500));
     H.ok('范围文件写了脚本核过的路径，在和不在', /脚本核过的路径/.test(smallScope) && /在：[^\n]*a\.js/.test(smallScope) && /不在[^\n]*no-such\/b\.js/.test(smallScope), smallScope.slice(0, 700));
     H.ok('第 70 条：范围文件要求框架和基础设施不读实现', /框架和基础设施/.test(smallScope) && /不读实现/.test(smallScope), smallScope.slice(0, 500));
@@ -441,7 +360,7 @@ function archived(p, name, file) {
     H.write(path.join(d3, 'revisions.md'), '## x\n- 改了：删了 src/gone/Old.java\n');
     H.git(p3, ['add', '-A']); H.git(p3, ['commit', '-qm', 'y']);
     const area = R.prepare({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
-    const areaScope = H.read(/范围文件：(.+)/.exec(area.agents[0].prompt)[1].trim());
+    const areaScope = H.read(area.pending[0].scope);
     H.ok('第 70 条：涉及的目录是点名文件的目录', /## 这次涉及的目录\s+src\/order/.test(areaScope), areaScope.slice(0, 600));
     // design 现状里列的探索路径不算涉及的目录，不逐个列（全量回归 test-feedback1013-context 抓到的）
     R.cancel({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
@@ -449,14 +368,14 @@ function archived(p, name, file) {
     H.write(path.join(d3, 'design.md'), '## Context\n\n- 读过 lib/framework/Auth.java：框架的鉴权\n\n## Decisions\n\n- 只改 src/order/Order.java：只有这里\n');
     H.git(p3, ['add', '-A']); H.git(p3, ['commit', '-qm', 'ctx']);
     const ctx = R.prepare({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
-    const ctxScope = H.read(/范围文件：(.+)/.exec(ctx.agents[0].prompt)[1].trim());
+    const ctxScope = H.read(ctx.pending[0].scope);
     H.ok('第 70 条：探索时读过的框架文件不算涉及的目录、不逐个列', /src\/order/.test(ctxScope) && !/lib\/framework/.test(ctxScope.split('## 要审的文件')[0]) && /探索路径 1 个也都在/.test(ctxScope), ctxScope.slice(0, 900));
     H.ok('别处写过新建的不报不在', !/不在[^\n]*Fresh\.java/.test(areaScope), areaScope.slice(0, 700));
     H.ok('revisions.md 记的旧路径不报不在', !/不在[^\n]*Old\.java/.test(areaScope), areaScope.slice(0, 700));
     R.cancel({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
     H.write(path.join(d3, 'design.md'), '## Context\n\n' + '这是一段很长的设计说明。\n'.repeat(5000));
     const big = R.prepare({ cwd: p3, change: 'c3', mode: 'proposal', point: 'tasks' });
-    H.ok('大材料：照旧分开开', big.agents.length >= 2 && big.agents.every((a) => a.lens !== '全量'), big.agents.map((a) => a.lens));
+    H.ok('大材料：照旧分开开', big.pending.length >= 2 && big.pending.every((a) => a.lens !== '全量'), big.pending.map((a) => a.lens));
   }
 
   H.section('第 69 条：只改过规格的旧 change 不催审代码');

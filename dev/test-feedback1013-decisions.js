@@ -10,7 +10,7 @@ const guard = (cmd, text) => H.hook(h, 'guard-commit', { cwd: p, session_id: 'de
 H.ok('waive 没了', H.node(h, cli, ['waive', '--project', p, '--change', 'add-a', '--mode', 'code']).code !== 0);
 H.write(path.join(p, 'a.js'), 'let a=2;\n');
 const rp = R.prepare({ cwd: p, change: 'add-a', mode: 'code', base: 'HEAD' });
-R.submit(rp.id, rp.agents[0].lens, '审查任务：' + rp.id + '/' + rp.agents[0].lens + '\n{"issues":[{"severity":"P2","file":"a.js","line":1,"problem":"值不对","evidence":"a=2"}],"summary":"看完了"}');
+R.submit(rp.id, rp.pending[0].lens, '审查任务：' + rp.id + '/' + rp.pending[0].lens + '\n{"issues":[{"severity":"P2","file":"a.js","line":1,"problem":"值不对","evidence":"a=2"}],"summary":"看完了"}');
 const file = path.join(h.root, 'decisions.json'); H.write(file, JSON.stringify({ findings: [{ id: 'r1', action: 'accepted', reason: '用户在当前输入明确决定保留这条已核实的问题' }] }));
 const resolve = 'node ' + q(cli) + ' resolve --project ' + q(p) + ' --change add-a --decisions ' + q(file);
 H.ok('接受问题也要真人决定', guard(resolve, '继续') !== null);

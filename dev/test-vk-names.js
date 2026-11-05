@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const H = require('./lib/harness');
 
-const OLD = path.resolve(process.argv[2] || path.join(__dirname, 'baseline', '20261104.1301', 'vibe-kit'));
+const OLD = path.resolve(process.argv[2] || H.baselineDir('20261104.1301'));
 const NAMES = ['cross-review', 'db-crud', 'handover', 'onboard', 'redis', 'see-page'];
 function asPackage(name, from) {
   const dir = path.join(H.tempDir(name), 'vibe-kit');
@@ -89,8 +89,6 @@ H.section('会话记录里、升级那一刻开着的会话里的旧名字照样
   H.ok('Skill 调 ttls-handover、vk-handover 都算写过交接记录', S.handoverWrittenIn(calls('ttls-handover'), '') && S.handoverWrittenIn(calls('vk-handover'), '') && !S.handoverWrittenIn(calls('vk-onboard'), ''));
   H.ok('用户敲的 /ttls-handover、/vk-handover 都认', S.handoverWrittenIn([], '<command-name>/ttls-handover</command-name>') && S.handoverWrittenIn([], '<command-name>/vk-handover</command-name>'));
   const stop = (agent) => H.hook(h, 'review-stop', { session_id: 's-vkn', cwd: proj, hook_event_name: 'SubagentStop', agent_type: agent, agent_id: 'a' + agent, last_assistant_message: '审完了，没问题' });
-  H.ok('审查代理叫 vk-reviewer：管（没写审查任务，拦下）', /没认出/.test(H.reasonOf(stop('vk-reviewer'))));
-  H.ok('升级那一刻开着的会话还叫 ttls-reviewer：也管', /没认出/.test(H.reasonOf(stop('ttls-reviewer'))));
   H.ok('别的子代理不管', stop('general-purpose') === null);
   // 技能也是 vk- 开头了：模型调技能照常，调给用户敲的 /vk-* 命令照拦
   const tf = H.transcript(path.join(h.work, 't-skill.jsonl'), [H.tr.user('看看页面')]);

@@ -62,7 +62,7 @@ function reply(body, res, block, stop) {
 const say = (body, res, text) => reply(body, res, { type: 'text', text }, 'end_turn');
 let toolSeq = 0;
 const tool = (body, res, name, input) => reply(body, res, { type: 'tool_use', id: 'toolu_e2e_' + (++toolSeq), name, input }, 'tool_use');
-// prepare 的输出里有 agents：假模型当场替子代理交结论（真的子代理由 e2e-subagent.js 测）
+// prepare 的输出里有 agents：假模型当场替子代理交结论（真的子代理由 e2e-review.js 测）
 const fed = new Set();
 function feedReview(body) {
   const R = require(path.join(h.kit, 'lib', 'review-runner.js'));
@@ -70,9 +70,9 @@ function feedReview(body) {
     if (c.type !== 'tool_result') continue;
     const text = typeof c.content === 'string' ? c.content : (c.content || []).map((x) => x.text || '').join('');
     let j = null; try { j = JSON.parse(text.trim().split('\n').pop()); } catch (e) { continue; }
-    if (!j || !Array.isArray(j.agents) || fed.has(j.id)) continue;
+    if (!j || !Array.isArray(j.pending) || fed.has(j.id)) continue;
     fed.add(j.id);
-    for (const a of j.agents) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '调 selectByIds 之前没有判空', evidence: '传空列表，拼出 in ()，SQL 报错', fix: '先判空', kind: '边界', avoid: RULE_TEXT }], summary: '看完了' }));
+    for (const a of j.pending) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '调 selectByIds 之前没有判空', evidence: '传空列表，拼出 in ()，SQL 报错', fix: '先判空', kind: '边界', avoid: RULE_TEXT }], summary: '看完了' }));
   }
 }
 function answer(body, res) {

@@ -39,22 +39,22 @@ H.section('第一轮几个角度，交齐才入账');
 {
   const p = project();
   const r = R.prepare(opts(p));
-  H.ok('prepare 不发请求，给 3 个角度的提示', r.status === 'prepared' && r.agents.length === 3, r);
-  H.ok('提示第三行是审查任务，第四行是范围文件', /^模式：代码\n变更：c1\n审查任务：[0-9a-f]{24}\/.+\n范围文件：/.test(r.agents[0].prompt), r.agents[0].prompt);
-  const scope = H.read(/范围文件：(.+)/.exec(r.agents[0].prompt)[1].trim());
-  H.ok('范围文件写了要审的文件、基线、怎么交', /src\/a\.js/.test(scope) && /基线/.test(scope) && /审查任务：/.test(scope), scope);
+  H.ok('prepare 不发请求，给 3 个角度的提示', r.status === 'prepared' && r.pending.length === 3, r);
+  H.ok('每个角度一份范围文件', fs.existsSync(r.pending[0].scope), r.pending[0]);
+  const scope = H.read(r.pending[0].scope);
+  H.ok('范围文件写了要审的文件、基线', /src\/a\.js/.test(scope) && /基线/.test(scope), scope);
   H.ok('要求里写了不自己加', /scope 写 out/.test(scope));
   const again = R.prepare(opts(p));
   H.ok('输入没变再 prepare：同一个任务，不加轮数', again.id === r.id && P.record(p.dir, 'change').rounds === 1, again);
   H.ok('还没交：这个点没过', !P.settled(p.dir, 'change'));
-  R.submit(r.id, r.agents[0].lens, tell(r, r.agents[0].lens));
-  R.submit(r.id, r.agents[1].lens, tell(r, r.agents[1].lens));
+  R.submit(r.id, r.pending[0].lens, tell(r, r.pending[0].lens));
+  R.submit(r.id, r.pending[1].lens, tell(r, r.pending[1].lens));
   H.ok('少一个角度：不算', !P.settled(p.dir, 'change') && R.status(opts(p)).status === 'running');
-  const re = R.submit(r.id, r.agents[0].lens, tell(r, r.agents[0].lens));
+  const re = R.submit(r.id, r.pending[0].lens, tell(r, r.pending[0].lens));
   H.ok('同一角度交两次只算一次', re.repeat === true && !P.settled(p.dir, 'change'), re);
   const third = R.prepare(opts(p));
-  H.ok('再 prepare：已交的不重开，只给没交的', third.id === r.id && third.agents.length === 1 && third.agents[0].lens === r.agents[2].lens, third);
-  const done = R.submit(r.id, r.agents[2].lens, tell(r, r.agents[2].lens));
+  H.ok('再 prepare：已交的不重开，只给没交的', third.id === r.id && third.pending.length === 1 && third.pending[0].lens === r.pending[2].lens, third);
+  const done = R.submit(r.id, r.pending[2].lens, tell(r, r.pending[2].lens));
   H.ok('交齐：completed，这个点过了', done.status === 'completed' && P.settled(p.dir, 'change'), done);
   H.ok('写了结果文件和审查记录，任务目录清掉', fs.existsSync(done.file) && /第 1 轮/.test(H.read(path.join(p.proj, '.vibe/reviews/c1/审查记录.md'))) && !fs.existsSync(path.join(p.proj, '.vibe/reviews/c1/job-' + r.id)));
 }
@@ -65,32 +65,10 @@ H.section('文件多不截断，二进制不卡');
   for (let i = 0; i < 50; i++) H.write(path.join(p.proj, 'src', 'f' + i + '.js'), 'const x = ' + i + ';\n');
   fs.writeFileSync(path.join(p.proj, 'src', 'bin.dat'), Buffer.from([0, 1, 2, 3]));
   const r = R.prepare(opts(p, { point: undefined, change: undefined }));
-  const scope = H.read(/范围文件：(.+)/.exec(r.agents[0].prompt)[1].trim());
+  const scope = H.read(r.pending[0].scope);
   H.ok('50 个文件都在范围文件里', [...Array(50).keys()].every((i) => scope.includes('src/f' + i + '.js')), scope.slice(0, 300));
-  let last; for (const a of r.agents) last = R.submit(r.id, a.lens, tell(r, a.lens));
+  let last; for (const a of r.pending) last = R.submit(r.id, a.lens, tell(r, a.lens));
   H.ok('二进制记 uncovered，状态仍 completed', last.status === 'completed' && (last.uncovered || []).some((x) => /bin\.dat/.test(x.file)), last);
-}
-
-H.section('结论入账走 SubagentStop');
-{
-  const p = project();
-  const r = R.prepare(opts(p));
-  const stop = (lens, text, agent) => H.hook(h, 'review-stop', { session_id: 's-stop', cwd: p.proj, hook_event_name: 'SubagentStop', agent_type: 'vk-reviewer', agent_id: agent || 'a1', last_assistant_message: text });
-  H.ok('别的子代理不管', H.hook(h, 'review-stop', { session_id: 's-stop', cwd: p.proj, hook_event_name: 'SubagentStop', agent_type: 'general-purpose', agent_id: 'x', last_assistant_message: '做完了' }) === null);
-  const lens = r.agents[0].lens;
-  const bad = stop(lens, '审查任务：' + r.id + '/' + lens + '\n没有 JSON');
-  H.ok('坏 JSON：拦下，说怎么写', /"?block/.test(JSON.stringify(bad)) && /JSON/.test(H.reasonOf(bad)), bad);
-  const bad2 = stop(lens, '审查任务：' + r.id + '/' + lens + '\n{"issues":[{"file":"a"}]}');
-  H.ok('字段不全：拦第二次', /file、problem、evidence/.test(H.reasonOf(bad2)), bad2);
-  const bad3 = stop(lens, '审查任务：' + r.id + '/' + lens + '\n还是没有');
-  H.ok('拦了 2 次还不对：放行，算没交', bad3 === null && R.status(opts(p)).state[lens].status === 'failed', R.status(opts(p)).state);
-  H.ok('记了一次没交', P.record(p.dir, 'change').failStreak === 1, P.record(p.dir, 'change'));
-  const b1 = stop('', '审完了，没问题', 'a2'); const b2 = stop('', '审完了，没问题', 'a2'); const b3 = stop('', '审完了，没问题', 'a2');
-  H.ok('没写审查任务：拦 2 次后放行', /没认出/.test(H.reasonOf(b1)) && /没认出/.test(H.reasonOf(b2)) && b3 === null);
-  const next = R.prepare(opts(p));
-  H.ok('下一次 prepare 只重开没交的', next.agents.some((a) => a.lens === lens));
-  for (const a of next.agents) H.ok('好的回复放行：' + a.lens, stop(a.lens, tell(next, a.lens), a.lens) === null);
-  H.ok('交齐入账，清零', P.settled(p.dir, 'change') && !P.record(p.dir, 'change').failStreak, P.record(p.dir, 'change'));
 }
 
 (async () => {
@@ -135,14 +113,14 @@ H.section('结论入账走 SubagentStop');
     void last;
 
     const q = project();
-    for (let i = 0; i < 3; i++) { const r = R.prepare(opts(q)); R.failLens(r.id, r.agents[0].lens, '子代理结束了，没交结论'); }
+    for (let i = 0; i < 3; i++) { const r = R.prepare(opts(q)); R.failLens(r.id, r.pending[0].lens, '子代理结束了，没交结论'); }
     H.ok('连续 3 次没交：不再催，不算通过', P.halted(q.dir, 'change') && !P.settled(q.dir, 'change') && P.pending(q.dir, 'code') === '', P.record(q.dir, 'change'));
     H.ok('不挡往下走', P.allDone(q.dir, 'code') && !P.fixPending(q.dir, 'change', {}));
     H.ok('说法：不再催', /不再催/.test(P.instruction(q.dir, 'change')), P.instruction(q.dir, 'change'));
     const w = project();
     const r0 = R.prepare(opts(w));
-    for (const a of r0.agents) R.failLens(r0.id, a.lens, '子代理结束了，没交结论');
-    H.ok('一轮 3 个角度都被打断：只算一次，不断路（复审 R2）', r0.agents.length >= 2 && P.record(w.dir, 'change').failStreak === 1 && !P.halted(w.dir, 'change'), P.record(w.dir, 'change'));
+    for (const a of r0.pending) R.failLens(r0.id, a.lens, '子代理结束了，没交结论');
+    H.ok('一轮 3 个角度都被打断：只算一次，不断路（复审 R2）', r0.pending.length >= 2 && P.record(w.dir, 'change').failStreak === 1 && !P.halted(w.dir, 'change'), P.record(w.dir, 'change'));
     const r = await H.fakeReview(R, opts(q), () => ({ issues: [] }));
     H.ok('用户说审，审成了清零、过了', r.status === 'completed' && !P.record(q.dir, 'change').failStreak && P.settled(q.dir, 'change'), P.record(q.dir, 'change'));
   }
@@ -152,7 +130,7 @@ H.section('结论入账走 SubagentStop');
     const p = project();
     const r = R.prepare(opts(p, { budgetSeconds: 10 }));
     S.updateState('review-jobs', (o) => { for (const k of Object.keys(o)) if (o[k].id === r.id) o[k].started = Date.now() - 60000; });
-    let last; for (const a of r.agents) last = R.submit(r.id, a.lens, '审查任务：' + r.id + '/' + a.lens + '\n```json\n' + JSON.stringify({ issues: [issue({ problem: '机密内容XYZ' })] }) + '\n```');
+    let last; for (const a of r.pending) last = R.submit(r.id, a.lens, '审查任务：' + r.id + '/' + a.lens + '\n```json\n' + JSON.stringify({ issues: [issue({ problem: '机密内容XYZ' })] }) + '\n```');
     H.ok('超了：记了一条', !!last.reported, last);
     const fbDir = path.join(h.kit, 'feedback');
     const body = fs.existsSync(fbDir) ? fs.readdirSync(fbDir).map((f) => H.read(path.join(fbDir, f)) || '').join('\n') : '';
@@ -176,7 +154,7 @@ H.section('结论入账走 SubagentStop');
     H.ok('来源自己不算', !P.points(d1, 'code').some((x) => /^cross-/.test(x)), P.points(d1, 'code'));
     H.ok('待审', P.pending(d2, 'code') !== '' && P.instruction(d2, pt).includes('--mode code --point ' + pt), P.instruction(d2, pt));
     const r = R.prepare({ cwd: proj, change: 'c2', mode: 'code', point: pt, base });
-    H.ok('一个子代理，范围文件写了来源的修改点', r.agents.length === 1 && r.agents[0].lens === '修改点' && /来源的修改点[\s\S]*字段改名/.test(H.read(/范围文件：(.+)/.exec(r.agents[0].prompt)[1].trim())), r);
+    H.ok('一个子代理，范围文件写了来源的修改点', r.pending.length === 1 && r.pending[0].lens === '修改点' && /来源的修改点[\s\S]*字段改名/.test(H.read(r.pending[0].scope)), r);
     const done = R.submit(r.id, '修改点', '审查任务：' + r.id + '/修改点\n{"issues":[],"summary":"看完了"}');
     H.ok('审完这个点过了', done.status === 'completed' && P.settled(d2, pt), done);
     H.write(path.join(proj, 'src', 'c2.js'), 'const x = 3;\n');
@@ -187,12 +165,12 @@ H.section('结论入账走 SubagentStop');
   {
     const p = project();
     const r = R.prepare(opts(p));
-    for (const a of r.agents) R.submit(r.id, a.lens, tell(r, a.lens));
+    for (const a of r.pending) R.submit(r.id, a.lens, tell(r, a.lens));
     H.ok('正常入账', R.status(opts(p)).status === 'completed');
     H.write(path.join(p.proj, 'src', 'a.js'), 'const a = 5;\n');
     const r2 = R.prepare(opts(p));
-    fs.writeFileSync(path.join(r2.agents[0].prompt.match(/范围文件：(.+)/)[1].trim(), '..', 'result-' + r2.agents[0].lens + '.json'), JSON.stringify({ issues: [], summary: '' }));
-    S.updateState('review-jobs', (o) => { for (const k of Object.keys(o)) if (o[k].id === r2.id) { o[k].state[r2.agents[0].lens] = { status: 'submitted', doneAt: Date.now() }; o[k].finishing = true; } });
+    fs.writeFileSync(path.join(r2.pending[0].scope, '..', 'result-' + r2.pending[0].lens + '.json'), JSON.stringify({ issues: [], summary: '' }));
+    S.updateState('review-jobs', (o) => { for (const k of Object.keys(o)) if (o[k].id === r2.id) { o[k].state[r2.pending[0].lens] = { status: 'submitted', doneAt: Date.now() }; o[k].finishing = true; } });
     const st = R.status(opts(p));
     H.ok('status 补上了入账', st.status === 'completed' && P.settled(p.dir, 'change'), st);
   }
@@ -202,12 +180,12 @@ H.section('结论入账走 SubagentStop');
     const p = project();
     const run = (...a) => spawnSync(process.execPath, [path.join(h.kit, 'tools', 'review.js')].concat(a), { cwd: p.proj, env: H.envFor(h), encoding: 'utf8', windowsHide: true, timeout: 60000 });
     const r = run('prepare', '--change', 'c1', '--mode', 'code', '--point', 'change', '--project', p.proj, '--base', p.base);
-    H.ok('prepare 输出 agents', r.status === 0 && Array.isArray(JSON.parse(r.stdout).agents), r.stdout + r.stderr);
+    H.ok('prepare 输出还要跑的角度', r.status === 0 && Array.isArray(JSON.parse(r.stdout).pending), r.stdout + r.stderr);
     const old = run('run', '--change', 'c1', '--mode', 'code', '--point', 'change', '--project', p.proj, '--base', p.base);
     H.ok('run 是别名，拿到同一个任务', JSON.parse(old.stdout).id === JSON.parse(r.stdout).id, old.stdout);
     H.ok('waive、sync 没了', run('waive', '--change', 'c1').status !== 0 && run('sync').status !== 0);
     H.ok('帮助里没有路由', !/路由/.test(run('--help').stdout));
   }
 
-  H.done('审查全部用子代理');
+  H.done('审查流程');
 })();

@@ -42,7 +42,7 @@ const H = require('./lib/harness');
     H.write(path.join(d, 'assets/example.json'), '{"example":false}');
     H.ok('补充材料修改后旧结论失效', !S.proposalReviewed(d));
     const noMaterial = R.prepare({ cwd: p, mode: 'code' });
-    H.ok('确无材料时不开子代理', !noMaterial.agents && noMaterial.status !== 'completed', noMaterial);
+    H.ok('确无材料时不开子代理', !noMaterial.pending && noMaterial.status !== 'completed', noMaterial);
   }
   H.done('1013 提案探索材料范围');
 })().catch(e => { console.error(e); H.cleanup(); process.exitCode = 1; });

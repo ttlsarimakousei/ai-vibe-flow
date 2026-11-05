@@ -473,9 +473,8 @@ async function fakeReview(R, opts, reply) {
   const p = await R.prepare(opts);
   if (p.status !== 'prepared') return p;
   let last = p;
-  for (const a of p.agents) {
-    const scope = /范围文件：(.+)/.exec(a.prompt);
-    const out = reply ? await reply(a.lens, scope ? read(scope[1].trim()) : '', p) : { issues: [] };
+  for (const a of p.pending) {
+    const out = reply ? await reply(a.lens, read(a.scope) || '', p) : { issues: [] };
     const text = typeof out === 'string' ? out : '审查任务：' + p.id + '/' + a.lens + '\n```json\n' + JSON.stringify(Object.assign({ issues: [], summary: '' }, out)) + '\n```';
     last = R.submit(p.id, a.lens, text);
   }

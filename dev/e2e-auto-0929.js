@@ -5,7 +5,7 @@
  *   整组 1.x 做完用 review.js prepare 逐点审查，报了问题、改了；下一个会话里复审，工具调用的 id 和上一个会话那次一样（内网的网关就是这样）→ 照样计成第 2 轮
  *   收工 → 套件交报告 → 它照着交代 → 它的交代接在报告后面；复审通过但用户没说归档，不归档
  * 2026-10-14 起：自动模式可以用提问框问业务疑问，不再拦下记进报告；-p 跑时没人回答，这一步不在端到端里测（放行由 test-workflow1014 测）。
- * 审查的结论：假模型照 prepare 的输出直接交（真的子代理由 e2e-subagent.js 测）。
+ * 审查的结论：假模型照 prepare 的输出直接交（真的子代理由 e2e-review.js 测）。
  * 同一个对话里 Claude Code 自己不认重复的 id（第二次调用会被它换成"Tool use interrupted"），所以重复只会出现在两个会话之间。
  * 套件用真的 install.js 装进假的用户目录（--no-router，钩子走命令方式）。
  * 用法：node dev/e2e-auto-0929.js <claude.exe 的路径> [标签]
@@ -63,7 +63,7 @@ let toolSeq = 0;
 const tool = (body, res, name, input, id) => reply(body, res, { type: 'tool_use', id: id || 'toolu_e2e_' + (++toolSeq), name, input }, 'tool_use');
 // 内网的网关给的就是这种 id，两个会话里会重复
 const DUP = 'chatcmpl-tool-b9a8989979ffa5ac';
-// prepare 的输出里有 agents：假模型当场替子代理交结论（真的子代理由 e2e-subagent.js 测）
+// prepare 的输出里有 agents：假模型当场替子代理交结论（真的子代理由 e2e-review.js 测）
 const fed = new Set();
 function feedReview(body) {
   const R = require(path.join(kit, 'lib', 'review-runner.js'));
@@ -71,9 +71,9 @@ function feedReview(body) {
     if (c.type !== 'tool_result') continue;
     const text = typeof c.content === 'string' ? c.content : (c.content || []).map((x) => x.text || '').join('');
     let j = null; try { j = JSON.parse(text.trim().split('\n').pop()); } catch (e) { continue; }
-    if (!j || !Array.isArray(j.agents) || fed.has(j.id)) continue;
+    if (!j || !Array.isArray(j.pending) || fed.has(j.id)) continue;
     fed.add(j.id);
-    for (const a of j.agents) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: fed.size === 1 ? [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '角色写死了', evidence: '角色改成 aqbmy', fix: '角色从配置读' }] : [], summary: '看完了' }));
+    for (const a of j.pending) R.submit(j.id, a.lens, '审查任务：' + j.id + '/' + a.lens + '\n' + JSON.stringify({ issues: fed.size === 1 ? [{ severity: 'P1', file: 'src/main/java/com/x/OrderService.java', line: 3, problem: '角色写死了', evidence: '角色改成 aqbmy', fix: '角色从配置读' }] : [], summary: '看完了' }));
   }
 }
 function answer(body, res) {
