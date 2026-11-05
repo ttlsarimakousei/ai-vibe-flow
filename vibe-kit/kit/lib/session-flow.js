@@ -22,7 +22,7 @@ const { allChanges } = require('./session-projects');
  *   问句、插话、别的斜杠命令、"继续"       → 不动
  *   "停""等等"                             → 不动，记 paused：这一轮收工不催，下一句话接着做
  *   "先别开工""只写需求"                   → 回到写需求那一段，清开工范围，不自动开工
- *   让它出一份代码之外的东西               → 不动，记 aside：这一轮放哪照常问用户，全自动不作数
+ *   让它出一份代码之外的东西               → 不动，记 aside：这一轮放哪照常问用户，全自动不作数（会话开着 /vk-auto 的照样算自动，第 68 条：需求里带"导出""表格"就被判成插话，整轮退回人工）
  *   变更都归档了、"退出流程"               → 退出
  * 流程又分两段（stage，见下面"流程分两段"）：写提案那一段 plan，做任务那一段 apply。全自动只在 apply 那一段算开着。
  * 不在流程里时，钩子拿到的 cfg.autoMode 是 false：照有人在的样子来（能问、不催着往下做、不出全自动报告）。cfg.autoSwitch 是开关本身。
@@ -50,14 +50,14 @@ function setFlow(j, on, why, stage) {
 }
 
 /** 这个会话在流程里动手做了这个变更 */
-function flowTouch(j, dir) {
+function flowTouch(j, dir, at) {
   const k = flowKey(j);
   if (!k || !dir) return;
   try {
     const d = normKey(dir);
     const cur = flowState(j).changes;
     if (Array.isArray(cur) && cur.includes(d)) return;
-    updateState(k, (st) => { const list = Array.isArray(st.changes) ? st.changes : []; if (!list.includes(d)) st.changes = list.concat(d).slice(-50); return st; });
+    updateState(k, (st) => { const list = Array.isArray(st.changes) ? st.changes : []; if (!list.includes(d)) { st.changes = list.concat(d).slice(-50); if (at !== false) st.touchedAt = Object.assign({}, st.touchedAt, { [d]: Number(at) || Date.now() }); } return st; });
   } catch (e) { /* 记不了：收工时不催这个变更，不影响干活 */ }
 }
 
@@ -179,9 +179,10 @@ function flowView(j) {
   if (st.on && st.stage === 'apply') { try { const B = require('./big-task'); const t = B.forSession(j); verifying = !!t && !t.legacy && B.phaseOf(t).phase === 'verify'; } catch (e) { verifying = false; } }
   const waiting = st.waiting || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : verifying ? '等你核验' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
   // 写需求那一段的自动：探索记录写完了才算（"还没定的"清空、范围写了）。老会话 planReady 还认
-  const planOk = () => { if (st.planReady) return true; try { const B = require('./big-task'); const t = B.forSession(j); return !!t && !t.legacy && B.exploreIssues(t).length === 0; } catch (e) { return false; } };
+  // 第 67、68 条：会话开着自动、已经在写这个 change 的文档：只有探索记录里真有没定的才不算生效（表外的 change、老任务没有记录可查，范围没写也不退回人工）。以前退回人工，写完 proposal 被拦下让用户看一看，写完四份还问要不要审
+  const planOk = () => { if (st.planReady) return true; try { const B = require('./big-task'); const t = B.forSession(j); if (cfg.autoSession === true && dirs.length > 0) return !B.exploreOpen(t); return !!t && !t.legacy && B.exploreIssues(t).length === 0; } catch (e) { return false; } };
   // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。配置开关开着时自动不再生效，但收工还要交这一轮的报告；会话开关开着时照样自动
-  return { session: cfg.autoSession === true, switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!(st.on === true && !over && !waiting && !st.aside && (st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && planOk())), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
+  return { session: cfg.autoSession === true, switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!(st.on === true && !over && !waiting && !(st.aside && cfg.autoSession !== true) && (st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && planOk())), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
 }
 
 /**

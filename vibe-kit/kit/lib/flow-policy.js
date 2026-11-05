@@ -215,10 +215,10 @@ function automaticApply(j) {
   const task = B.forSession(j);
   let c = null;
   if (task) {
-    if (B.exploreIssues(task).length) return false;
+    if (cfg.autoSession === true ? B.exploreOpen(task) : B.exploreIssues(task).length) return false;
     const name = B.phaseFor(j, task).change;
     c = name ? S.allChanges(j.cwd).find((x) => x.name === name) : null;
-  } else if (st.planReady) {
+  } else if (st.planReady || cfg.autoSession === true) {
     const changes = S.allChanges(j.cwd).filter((x) => S.flowChanges(j).includes(S.normKey(x.dir)));
     if (changes.length === 1) c = changes[0];
   }
@@ -229,6 +229,31 @@ function automaticApply(j) {
   }
   if (!require('./apply-scope').grant(j, c.name, '').ok) return false;
   S.setFlow(j, true, '自动：文档审修完开工', 'apply'); return true;
+}
+/**
+ * 这个 change 的任务是这个会话碰它之前就勾完的（早做完的旧 change，这一轮只改了它的规格、revisions）：没有代码要审，不催（第 69 条）。
+ * 已经开始审的接着审；跨 change 的影响走 revisions.md 的"影响 change"。记录里没有碰它的时间的（升级前开着的会话）照旧
+ */
+function oldDone(j, dir) {
+  const st = S.flowState(j);
+  const at = (st.touchedAt || {})[S.normKey(dir)];
+  if (!at || record(dir, CHANGE).status || st.current === path.basename(dir)) return false;
+  const all = T.tasks(dir);
+  if (!all.length || T.automatedLeft(dir).length) return false;
+  try {
+    if (fs.statSync(path.join(dir, 'tasks.md')).mtimeMs >= at) return false;
+    // 碰过之后又改了代码的不算旧（修用户报的问题）。后面的 change 开工了，工作区的改动算它的
+    if (!laterStarted(dir) && changedCode(dir).some((f) => { try { return fs.statSync(f).mtimeMs >= at; } catch (e) { return true; } })) return false;
+    return true;
+  } catch (e) { return false; }
+}
+/** 开着自动、写需求这一段还没生效的原因：探索记录没写完。说清缺什么，不让用户"看一看"（第 67 条）。不是这个原因的返回 '' */
+function autoBlocked(j) {
+  try {
+    const B = require('./big-task'); const t = B.forSession(j);
+    const left = t && B.exploreOpen(t) ? B.exploreIssues(t) : [];
+    return left.length ? '这个会话开着自动，但探索还没完：' + left.join('；') + '。写进探索记录，自动才生效，然后接着写到 tasks；有疑问用提问框问。不用停下来等用户看文档。' : '';
+  } catch (e) { return ''; }
 }
 /** 往上找得到 .git（目录或 worktree 的文件）才算在 git 仓库里；不调 git，出错不会被当成"不是仓库" */
 function inGit(dir) {
@@ -325,10 +350,13 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   for (const dir of dirs) {
     // 自动下每个 change 按自己走到哪算（回改前面的 change、接下一个时，几个 change 不在同一段）
     const mode = cfg.autoMode ? (S.changeStarted(dir) || applyingNow(j, dir) ? 'code' : 'proposal') : S.flowStage(j) === 'apply' ? 'code' : 'proposal';
+    if (oldDone(j, dir)) continue;
     // 子代理连续没交结论的点：说一次不再催、写进报告，接着往下
     if (cfg.autoMode) for (const p of points(dir, mode).filter((x) => halted(dir, x))) { const m = once(j, key(dir, p) + '|limit', fingerprint(dir, p) + ':' + (record(dir, p).failStreak || 0), instruction(dir, p) + '接着往下做。'); if (m) out.push(m); }
     // 有角度正在跑（2.1.259 起子代理在后台）：不催，也别再开一个
     if (require('./review-runner').inFlight(dir, mode)) continue;
+    // 开着自动、这一段没生效（探索记录没写完、用户说了停）：不当人工那样让用户看一看（第 67 条）
+    if (!cfg.autoMode && cfg.autoSession === true && mode === 'proposal') { const why = autoBlocked(j); const m = why ? once(j, key(dir, 'auto-blocked'), why, why) : ''; if (m) out.push(m); continue; }
     // 自动写需求：tasks 写完才审，中间不审、不停（问题表第 57 条）。模型停下了就催它接着写，同一份内容只催一次
     const docs = mode === 'proposal' ? written(dir) : [];
     if (cfg.autoMode && mode === 'proposal' && docs.length && !docs.includes('tasks')) {
@@ -413,6 +441,8 @@ function actionIssue(j) {
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
   const test = !review && (shellTest || name === 'Skill' && /see-page/.test(inp.skill || ''));
   if (!review && !test) return '';
+  // 备审查之前先清一遍：前台子代理结束了、没交结论的还记着"在跑"，不清的话 prepare 会让它等一个不会来的通知（复审 20261105-2 第 1 条）
+  if (runsReview) { try { require('./review-runner').sweep(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 看不了：照原来的判 */ } }
   // 裸开审查子代理拦下：结论对不上任务，入不了账（手工模式也一样）
   if (reviewer && !reviewTask) return '审查子代理要用 review.js prepare 输出的提示（第三行"审查任务：…"）：先跑 review.js prepare，再照它的 agents 开。任务已经交齐或作废的不用再开。';
   // 开审查子代理：同时在跑的最多 3 个（第 52 条），满了拦下、说等前面的交了再开
@@ -420,11 +450,14 @@ function actionIssue(j) {
   const sent = () => {
     if (!reviewTask) return '';
     const RR = require('./review-runner');
-    let why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id);
-    if (why) { try { RR.sweep(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 看不了：照原来的判 */ } why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id); }
+    let why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id, j.session_id);
+    if (why) { try { RR.sweep(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 看不了：照原来的判 */ } why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id, j.session_id); }
     return why;
   };
-  if (cfg.autoMode) {
+  // 开着 /vk-auto、在 OpenSpec 流程里：审查不用先问用户（第 68 条）。这一轮算不算自动（插了句话、探索记录还有没定的）不影响；用户说了停、普通改动除外
+  const flowNow = S.flowState(j);
+  const sessionAuto = review && cfg.autoSession === true && flowNow.on === true && !flowNow.paused;
+  if (cfg.autoMode || sessionAuto) {
     if (runsReview) {
       const m = cmd.match(/--change\s+["']?([^\s"']+)/); const p = cmd.match(/--point\s+([\w-]+)/);
       const change = m && S.allChanges(j.cwd).find(c => c.name === m[1]);
@@ -450,7 +483,7 @@ function actionIssue(j) {
     try {
       const v = S.flowView(j);
       why = '（' + (cfg.autoSession ? '这个会话开着自动' : '配置开了' + [cfg.autoRequirements ? '需求自动' : '', cfg.autoApply ? 'Apply 自动' : ''].filter(Boolean).join('、')) + '，但这一轮不算自动：'
-        + (v.waiting ? v.waiting : v.phase === '需求与提案' ? (cfg.autoApply && !cfg.autoRequirements ? '这个会话还在需求与提案阶段，Apply 自动要用户说"开工"（或"开始实施"、敲 /vk-go、/opsx:apply）之后才算' : '探索还没做完、范围还没确认（workflow.js qualify 还没过），或者需求文档还没写到能自动审修的那一步') : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
+        + (v.waiting ? v.waiting : v.phase === '需求与提案' ? (cfg.autoApply && !cfg.autoRequirements ? '这个会话还在需求与提案阶段，Apply 自动要用户说"开工"（或"开始实施"、敲 /vk-go、/opsx:apply）之后才算' : '探索记录还没写完（"还没定的"清空、"范围"写好才算），或者需求文档还没写到能自动审修的那一步') : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
     } catch (e) { why = ''; }
   }
   // 这段话用户也看得到（问题表第 32 条：只说了"启动OA"，看到"人工模式：先用 Ask 询问是否自测或复验及范围"摸不着头脑）：直说用户这一轮没要求什么。
@@ -552,4 +585,4 @@ function selfTestWords(words) {
   }
   return false;
 }
-module.exports = { oncePrompt, groups, isCross, crossText, CHANGE, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };
+module.exports = { oncePrompt, groups, isCross, crossText, CHANGE, autoBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };

@@ -187,7 +187,9 @@ function handle(j, opts) {
       const own = policy.pointFiles(art.dir, prev).filter(f => prev === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === prev + '.md');
       const wroteAt = Math.max(0, ...own.map(f => { try { return fs.statSync(f).mtimeMs; } catch (e) { return 0; } }));
       let saidAt = 0; try { const v = j.transcript_path ? lastUserVoice(tailEntries(j.transcript_path, 3000000)) : null; saidAt = (v && v.at) || 0; } catch (e) { saidAt = Date.now(); }
-      if (wroteAt && saidAt < wroteAt) flow.push(prev + ' 写完还没给我看过。一份一份来：先停下，交代 ' + prev + ' 写了什么，提醒我看一看，用提问框引导下一步（选项写"写下一份（' + point + '）""我要改"，这里不问审查，四份写完再问）；我说写下一份再写 ' + point + '，拿模板：openspec instructions ' + point + ' --change "' + art.name + '"');
+      // 开着自动不让用户看一看（第 67 条）：探索记录没写完的说缺什么，别的放行
+      if (wroteAt && saidAt < wroteAt && cfg.autoSession === true) { const why = policy.autoBlocked(j); if (why) flow.push(why); }
+      else if (wroteAt && saidAt < wroteAt) flow.push(prev + ' 写完还没给我看过。一份一份来：先停下，交代 ' + prev + ' 写了什么，提醒我看一看，用提问框引导下一步（选项写"写下一份（' + point + '）""我要改"，这里不问审查，四份写完再问）；我说写下一份再写 ' + point + '，拿模板：openspec instructions ' + point + ' --change "' + art.name + '"');
     }
   }
   const hedges = findHedges(newText, isAdded);
