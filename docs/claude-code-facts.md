@@ -238,3 +238,5 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 都是整个进程生效，分不开主会话和子代理。
 
 内网网关（2026-11-05，两台电脑，`dev/probes/review-timing.js`、`review-effort.js`）：输出 118—160 token/秒，和上下文大小、同时跑几个无关；第一个 token 约 2 秒。effort 高低对输出没有一致的影响（每种 2 次），不带 `thinking` 字段模型照样想。明确发 `disabled` 没测。
+
+`claude -p` 里关东西（2026-11-06，假网关，2.1.259、2.1.289；2.1.120 只跑了 `dev/e2e-review.js`）：`--tools ""` 不管 MCP，用户配的服务照样启动、工具照样带进请求，要 `--strict-mcp-config`。`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` 在 2.1.259 少一个起标题的请求（2.1.289 本来就没有）。`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` 不带全局和项目的 CLAUDE.md。

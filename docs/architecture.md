@@ -74,7 +74,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - `rules/`：规范。启用的并进全局约定（`20-git-commit.md`）；开头标着 `<!-- vibe-kit:钩子送 -->` 的（`10-openspec.md`，2026-11-01，J4）不进全局约定，安装器和 `--sync` 填好占位符写成 `~/.claude/vibe-kit/hook-rules.md`，由 `lib/stage-rules.js` 在进 OpenSpec 流程时送：开口（task-anchor）、模型自己跑 openspec 或改 openspec/ 下的文件（after-tool）；压缩后还在流程里的马上重送（session-start）。记录在 `<会话>-stage-rules.json`。文件名前加下划线就停用。
 - 用户自己的约定和规范不在这里：装好后的 `~/.claude/vibe-kit/user/*.md` 接在套件的规范后面生成进全局约定，`user/remove.txt` 一行一句从套件的约定、规范里去掉（模板里的原句、换完占位符的句子都认）；安装器不拷进、不覆盖这个目录，打包时它出现在源目录里就报错（F8，2026-11-01）。
 - `skills/`：六个技能，都是 `vk-` 开头（2026-11-04 从 `ttls-` 改过来）：`vk-onboard`、`vk-see-page`、`vk-cross-review`、`vk-handover`、`vk-db-crud`、`vk-redis`。
-- 审查不开子代理（2026-11-05 起）：`kit/review-prompt.md` 是审查的规矩，`review.js run` 把它、范围、材料、脚本查好的事实（`lib/review-facts.js`）拼成提示，每个角度一个后台进程调 `claude -p`（`--tools ""`，`disableAllHooks`，模型名 sonnet），结论写进输出。`review-stop.js`、`claim`、`heartbeat` 这些子代理时期的代码还在，没人走了，以后可以清（`hooks/` 下的文件不能删）。
+- 审查不开子代理（2026-11-05 起）：`kit/review-prompt.md` 是审查的规矩，`review.js run` 把它、范围、材料、脚本查好的事实（`lib/review-facts.js`）拼成提示，每个角度一个后台进程调 `claude -p`（`--tools ""`，`disableAllHooks`，模型名 sonnet），结论写进输出。`review-stop.js` 是空壳（`hooks/` 下的文件不能删）。
 
 ## 配置页（vibe-kit/kit/ui）
 
