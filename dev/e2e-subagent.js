@@ -48,7 +48,7 @@ const textOfResult = (b) => (typeof b.content === 'string' ? b.content : (b.cont
   });
   const inst = H.node(h, path.join(H.SRC, 'install.js'), ['--no-router', '--no-open'], { cwd: h.root, timeout: 180000 });
   H.ok('套件装进了假的用户目录', inst.code === 0, inst.out + inst.err);
-  H.setConfig(h, { commitMode: 'off', lessons: 'off', vibeTidy: false, autoUpdate: 'off', issueUpload: 'off', reviewLenses: 3 });
+  H.setConfig(h, { reviewSmallChars: 0, commitMode: 'off', lessons: 'off', vibeTidy: false, autoUpdate: 'off', issueUpload: 'off', reviewLenses: 3 });
   const seed = { hasCompletedOnboarding: true, theme: 'dark', numStartups: 5, projects: { [proj.split(path.sep).join('/')]: { hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true, allowedTools: [] } } };
   for (const f of [path.join(h.cfg, '.claude.json'), path.join(h.home, '.claude.json')]) fs.writeFileSync(f, JSON.stringify(seed, null, 2));
   const setFile = path.join(h.cfg, 'settings.json');
@@ -123,7 +123,7 @@ const textOfResult = (b) => (typeof b.content === 'string' ? b.content : (b.cont
     return send(body, res, [{ type: 'text', text: 'E2E-END' }], 'end_turn');
   });
 
-  child = spawn(WINPTY, ['-Xallow-non-tty', '-Xplain', EXE, '审查 c1 的代码，用 vk-reviewer'], { cwd: proj, env: claudeEnv(h, gw.port, { TERM: 'xterm-256color', ANTHROPIC_MODEL: 'vk-e2e' }), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  child = spawn(WINPTY, ['-Xallow-non-tty', '-Xplain', EXE, '审查 c1 的代码，用 vk-reviewer'], { cwd: proj, env: claudeEnv(h, gw.port, { TERM: 'xterm-256color', ANTHROPIC_MODEL: 'vk-e2e', ...(process.env.VK_E2E_NO_SONNET_ENV ? {} : { ANTHROPIC_DEFAULT_SONNET_MODEL: 'vk-e2e-sonnet' }) }), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   child.stdout.on('data', () => {}); child.stderr.on('data', () => {}); child.stdin.on('error', () => {});
   const timer = setTimeout(() => { note('到时间，结束'); killTree(child.pid); }, SECONDS * 1000);
   await new Promise((r) => child.on('close', r));
@@ -132,7 +132,7 @@ const textOfResult = (b) => (typeof b.content === 'string' ? b.content : (b.cont
 
   H.ok('第一轮开了 3 个、第二轮 1 个', round === 2 && opened === 1, { round, opened });
   H.ok('坏 JSON：SubagentStop 拦下，子代理看到 reason 重写了', sawBlock);
-  H.ok('子代理的 model 和主会话一样', reviewerModels.size === 1 && [...reviewerModels][0] === [...mainModels][0], [[...reviewerModels], [...mainModels]]);
+  H.ok('审查子代理用 Sonnet（代理文件 model: sonnet，走 ANTHROPIC_DEFAULT_SONNET_MODEL），主会话不受影响（第 63 条）', reviewerModels.size === 1 && [...reviewerModels][0] === 'vk-e2e-sonnet' && [...mainModels].every((m) => m === 'vk-e2e'), [[...reviewerModels], [...mainModels]]);
   const r = done();
   H.ok('复审只审修改点，交 0 条', r && r.scope === 'changes' && r.status === 'completed' && r.issues.length === 0, r);
   H.ok('这个点过了', P.settled(dir, 'change'), P.record(dir, 'change'));

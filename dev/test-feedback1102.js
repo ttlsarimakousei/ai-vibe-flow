@@ -780,12 +780,12 @@ const reason = (o) => H.reasonOf(o);
     H.write(path.join(h.work, 'b', 'openspec', 'changes', 'archive', '2026-10-01-done-one', 'proposal.md'), '# x\n');
     const p2 = mk('b', { 'openspec/plan.md': planOf([row('done-one', '已归档 2026-10-01')]) });
     stop(p2, 's-plan-3'); stop(p2, 's-plan-3');
-    H.ok('计划里的变更都做完了：照样补进表（第 55 条）', /\|\s*\|\s*new-one\s*\|/.test(H.read(path.join(p2, 'openspec', 'plan.md'))), H.read(path.join(p2, 'openspec', 'plan.md')));
+    H.ok('计划里的变更都做完了：不并进去（第 62 条，2026-11-05 起；以前第 55 条是照样补）', !/\|\s*\|\s*new-one\s*\|/.test(H.read(path.join(p2, 'openspec', 'plan.md'))), H.read(path.join(p2, 'openspec', 'plan.md')));
     const p3 = mk('c', {});
     stop(p3, 's-plan-5');
     H.ok('没有 plan.md：不提', !/计划表|plan\.md/.test(textOf(stop(p3, 's-plan-5'))));
     const start = H.hook(h, 'session-start', { session_id: 's-plan-6', hook_event_name: 'SessionStart', source: 'startup', cwd: p1 });
-    H.ok('会话开头说实话：文件里的状态列跑 plan.js 才更新；表外的 change 套件会补进表', /跑 plan\.js 才更新/.test(textOf(start)) && /表外的 change 套件会补进表/.test(textOf(start)) && !/由钩子按实际情况维护/.test(textOf(start)), textOf(start).slice(0, 600));
+    H.ok('会话开头说实话：文件里的状态列跑 plan.js 才更新；在做的大任务里开的新 change 套件会补进表', /跑 plan\.js 才更新/.test(textOf(start)) && /在做的大任务里开的新 change 套件会补进表/.test(textOf(start)) && !/由钩子按实际情况维护/.test(textOf(start)), textOf(start).slice(0, 600));
   }
 
   const wins = await watch.stop();

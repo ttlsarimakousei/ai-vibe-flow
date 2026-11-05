@@ -145,6 +145,7 @@ node dev/pack.js
 | `test-router-retire.js [旧套件目录]` | 收回模型路由（第 39 条）：每种现场一个假用户目录，自检过了才动，key 一起删，别的安装的路由不停 |
 | `test-config-page.js [旧套件目录]` | 配置页用时才起：只收本机、别的网站的页面拒绝、没心跳退出、不留进程、端口被占换一个、`/vk-config` 钩子不发模型请求 |
 | `test-guard-mcp.js [旧套件目录]` | MCP 工具的令牌保护：四层，别的不查 |
+| `test-feedback1105.js [旧套件目录]` | 第 59—69 条：审查不重开、子代理名字和用量上限、/vk-resume 都能切、change 的补录和归属、开着 vk-auto 不拦不问、旧 change 不催审 |
 | `test-review-timing.js [旧套件目录]` | 审查时机（第 57、58 条）：四份文档写完审一次整套，一个 change 的任务全部做完审一次 |
 | `test-statusline-bar.js [旧套件目录]` | 状态栏（第 46、47 条）：没进流程一行，流程里步骤条和下一项，折叠、截断、缓存 |
 | `test-no-leftovers.js [旧套件目录]` | 删干净了没有：扫已删的名字（留着的进白名单，写理由和能删的条件）、session.js 没人用的导出、假用户目录真装一遍。`dev/pack.js` 打包前也跑 |

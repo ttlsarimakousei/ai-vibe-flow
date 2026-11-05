@@ -89,7 +89,7 @@ function makeHome(name, from, config, opts) {
   const age = (p) => { let st; try { st = fs.statSync(p); } catch (e) { return; } if (st.isDirectory()) { for (const n of fs.readdirSync(p)) age(path.join(p, n)); } else { try { fs.utimesSync(p, old, old); } catch (e) { /* 拨不了就算了 */ } } };
   for (const p of [path.join(cfg, 'skills'), path.join(cfg, 'agents'), path.join(kit, 'CLAUDE.md'), path.join(kit, 'rules')]) age(p);
   fs.mkdirSync(path.join(kit, 'state'), { recursive: true });
-  fs.writeFileSync(path.join(kit, 'config.json'), JSON.stringify(Object.assign({ autoUpdate: 'off', issueUpload: 'off', autoHandover: true, reviewLenses: 1 }, config || {}), null, 2));
+  fs.writeFileSync(path.join(kit, 'config.json'), JSON.stringify(Object.assign({ reviewSmallChars: 0, autoUpdate: 'off', issueUpload: 'off', autoHandover: true, reviewLenses: 1 }, config || {}), null, 2));
   // 封条：测试里要关禁改、开自动放行时才认
   fs.writeFileSync(path.join(kit, 'state', 'config-seal.json'), JSON.stringify({ kitLock: !(config && config.kitLock === false), kitBypass: (config && config.kitBypass) || 'ask', autoMode: !!(config && (config.autoApply === true || config.autoMode === true)), autoApply: !!(config && (config.autoApply === true || config.autoMode === true)), autoRequirements: !!(config && config.autoRequirements === true), at: Date.now() }));
   return { root, home, cfg, kit, work: path.join(root, 'work') };

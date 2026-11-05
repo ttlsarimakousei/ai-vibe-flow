@@ -137,7 +137,8 @@ H.section('/vk-resume <变更名> 切当前 change');
   clearBar();
   H.ok('/vk-resume <大任务名>：回到表的顺序（不写名字改成提问框问了，第 54 条）', !S.flowState(j).current && /first-c/.test(bar(p, j.session_id)), [S.flowState(j).current, bar(p, j.session_id)]);
   const f = resume(session(p, '/vk-resume'), 'third-c');
-  H.ok('任务都勾完的：没切，说清楚', /third-c 的任务都勾完了，没切/.test(said(f)), said(f));
+  // 2026-11-05 起只要没归档都能切（第 60 条）
+  H.ok('任务都勾完的：切得过去，等用户说下一步', /切到 third-c/.test(said(f)) && /等用户说要做什么/.test(said(f)), said(f));
 }
 {
   const n = project(null);
