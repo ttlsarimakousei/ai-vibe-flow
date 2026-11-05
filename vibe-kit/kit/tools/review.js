@@ -15,7 +15,7 @@ const HELP = [
   '  不走 OpenSpec 的改动：   prepare --mode code --project <项目> --base <改之前的提交>（不带 --change；--change 只认 openspec/changes 下已有的变更）',
   '  壳子里几个仓库：         --base 写几次，每个仓库一个：--base <仓库相对路径>=<提交>，例 --base gwjh=11325fd --base .=32171c4',
   '                           只写一个不带等号的 --base：只用在认得这个提交的仓库上，其余仓库用开工时登记的基线',
-  '  第一轮 2～3 个角度同时审，后面的轮只审改过的地方；--full 整份再审一遍（用户要求全量再审时才用）',
+  '  第一轮按材料大小开 1～3 个子代理，后面的轮只审改过的地方；--full 整份再审一遍（用户要求全量再审时才用）',
   '  其它：--budget <秒> 这一次的预期用时（不截断，超了自动记问题反馈）',
   'status / cancel：和 prepare 一样的 --change、--mode、--point（不带变更名的再加同样的 --base），看结果或取消',
   'resolve：--change <变更名> --mode proposal|code --point <审查点> --decisions <处理明细 JSON>',

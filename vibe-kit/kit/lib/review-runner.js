@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 审查脚本（用户 2026-11-03 定的：审查全部用子代理 vk-reviewer，和主会话同模型）。脚本不发请求，只备材料、算修改点、记账：
- *   prepare：算这一轮审什么（第一轮 2～3 个角度，后面只审修改点），每个角度写一份范围文件，输出每个子代理的提示。输入没变就复用同一个任务，已交的角度不重开。
+ *   prepare：算这一轮审什么（第一轮材料小的 1 个看全、大的 2～3 个角度，后面只审修改点），每个角度写一份范围文件，输出每个子代理的提示。输入没变就复用同一个任务，已交的角度不重开。
  *   submit：子代理最后一条回复由 hooks/review-stop.js（SubagentStop）交到这里，角度交齐才合并入账；JSON 不对回 block 让子代理重写，同一角度最多 2 次。
  * 没有次数上限、文件上限，不收敛也不停。只有子代理连续 3 次拿不到结论才不再催，也不算通过（flow-policy.js 的 halted）。
  * 二进制、超 4MB、敏感文件记 uncovered，状态仍是 completed：不然这个点永远过不了。诊断不写材料原文和审查意见。
@@ -241,6 +241,7 @@ function reportReview(result, job) {
 }
 /** 审完下一步怎么办，写在结果里（模型照着做，不用翻规范） */
 function nextStep(result) {
+  if (result.status === 'stale') return '审查期间文件改过了，这一轮不算审完，但报的问题还要看。逐条核实、改完，再跑一次 review.js prepare：只审改过的地方，不用从头审。';
   if (!['completed', 'partial'].includes(result.status)) return '';
   if (result.status === 'partial') return '有材料没审到，不算审完：看 skipped 里的原因，处理完再跑一次 review.js prepare。';
   if (result.noChange) return '文件和上一轮审过的一样，这次不用开子代理' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
@@ -273,6 +274,9 @@ function scopeText(job, lens, plan, round, material) {
     for (const it of plan.items) out.push('', '### ' + it.file + (it.role ? '（' + it.role + '）' : '') + (it.note ? ' — ' + it.note : ''), '', '路径：' + (it.source || it.file), '', '```', it.text, '```');
   } else {
     if ((round.carry || []).length) out.push('', '## 上游审查留给这一步的要点', '', '这一步要覆盖到，没覆盖到的报 P2：', '', '```json', JSON.stringify(round.carry, null, 1), '```');
+    const areas = areasOf(job, material, round);
+    if (areas.length) out.push('', '## 这次涉及的目录', '', areas.join('、'), '', '这些目录之外不主动看：要审的内容直接调用到的地方，只读调用的那几行。框架和基础设施（登录鉴权、网关、ORM、基类）不读实现。');
+    if (round.paths && (round.paths.found.length || round.paths.missing.length)) out.push('', '## 脚本核过的路径', '', '这些不用再开文件确认在不在。要核对的是文档说它里面是什么样：只开点名的文件，读相关的那一段，不顺着往外找。', '', '- 在：' + (round.paths.found.join('、') || '无'), '- 不在（文档提到了，又没写新建）：' + (round.paths.missing.join('、') || '无'));
     out.push('', '## 要审的文件', '');
     for (const [file, cur] of material.currents) out.push('- ' + file + (cur.role ? '（' + cur.role + '，只用来核对）' : '') + (cur.note ? '（' + cur.note + '）' : '') + (cur.source && cur.source !== file ? '：' + cur.source : ''));
     if ((material.bases || []).length) out.push('', '基线：' + material.bases.map((b) => b.root + ' 的 ' + b.ref).join('；') + '。改动用 `git -C <仓库> diff <基线> -- <文件>` 看，新文件整个读。');
@@ -285,13 +289,36 @@ function scopeText(job, lens, plan, round, material) {
 function promptOf(job, lens) {
   return ['模式：' + (job.scoped ? '复审' : '') + MODE_NAME[job.mode], '变更：' + (job.change || '（不走 OpenSpec）'), '审查任务：' + job.id + '/' + lens, '范围文件：' + path.join(job.dir, safeName(lens) + '.md')].join('\n');
 }
+/** 这次涉及的目录（第 70 条）：要审的代码文件、文档点名的文件所在的目录，给子代理划边界。不含 openspec、.vibe */
+function areasOf(job, material, round) {
+  const files = round.paths ? round.paths.found : [...material.currents.entries()].filter(([, cur]) => !cur.role).map(([f]) => f);
+  const dirs = new Set();
+  for (const f of files) { const d = path.dirname(String(f).replace(/\\/g, '/')); if (d && d !== '.' && !/(^|\/)(openspec|\.vibe)(\/|$)/.test(d)) dirs.add(d); }
+  return [...dirs].sort().slice(0, 15);
+}
+/** 文档点名的路径，脚本先核一遍（第 64 条）：在不在是能确定判断的，不用子代理一个个开文件。这个变更里任一处写明新建的不算不在；revisions.md 记的是历史，不算 */
+function pathFacts(change) {
+  const roots = S.projectRootsOf(change.dir).concat(change.dir);
+  const found = new Set(); const missing = new Set();
+  const declared = S.declaredNew(change.dir, '');
+  for (const f of S.artifactFiles(change.dir).filter((x) => !/revisions\.md$/.test(x))) {
+    let text = ''; try { text = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+    for (const l of text.split(/\r?\n/)) for (const t of S.pathTokens(l)) { if (S.pathExists(t, roots)) found.add(t); else if (!S.NEW_FILE.test(l) && !declared(t)) missing.add(t); }
+  }
+  return { found: [...found].slice(0, 40), missing: [...missing].slice(0, 40) };
+}
+/** 子代理显示的名字（第 66 条）：说清审的是什么。点名审单份、某一组的写它的名字；复审的角度本来就叫"复审" */
+function reviewerName(job, lens) {
+  const what = job.point === 'tasks' ? '整套文档' : job.point === 'change' || (!job.point && job.mode === 'code') ? '代码' : job.point || (job.mode === 'proposal' ? '文档' : '代码');
+  return (lens === '复审' ? '复审' : '审查') + what + (lens === '复审' || lens === '全量' ? '' : ' ' + lens);
+}
 /** 还要开的子代理：没发出去的、没交结论的（已交的角度不重开，正在跑的不重开） */
 function agentsOf(job) {
   const open = job.lenses.filter((l) => !['submitted', 'sent'].includes(job.state[l].status));
   const sent = job.lenses.filter((l) => job.state[l].status === 'sent');
   const status = 'review.js status' + (job.change ? ' --change ' + job.change : '') + ' --mode ' + job.mode + (job.point ? ' --point ' + job.point : '') + ' --project ' + job.root.replace(/\\/g, '/');
-  return { status: 'prepared', id: job.id, round: job.round, scope: job.scoped ? 'changes' : 'full', lenses: job.lenses, running: sent, agents: open.map((l) => ({ lens: l, subagent_type: 'vk-reviewer', description: '审查 ' + (job.point || job.mode) + ' ' + l, prompt: promptOf(job, l) })),
-    next: open.length ? '一条回复里同时开这 ' + open.length + ' 个子代理：Agent 工具，subagent_type 写 vk-reviewer，prompt 原样用 agents 里的。都回来之后（2.1.259 起在后台，做完会来通知，这期间不用等也不要再开）跑 ' + status + ' 看汇总。' : '这几个角度正在跑，不要再开。都回来之后跑 ' + status + ' 看汇总。' };
+  return { status: 'prepared', id: job.id, round: job.round, scope: job.scoped ? 'changes' : 'full', lenses: job.lenses, running: sent, agents: open.map((l) => ({ lens: l, subagent_type: 'vk-reviewer', description: reviewerName(job, l), prompt: promptOf(job, l) })),
+    next: open.length ? '一条回复里同时开这 ' + open.length + ' 个子代理：Agent 工具，subagent_type 写 vk-reviewer，prompt 原样用 agents 里的。都回来之后（2.1.259 起在后台，做完会来通知，这期间不用等也不要再开）跑 ' + status + ' 看汇总。所有角度回来之前不要改文件：先回来的结论只是一部分。' : '这几个角度正在跑，不要再开，回来之前也不要改文件。都回来之后跑 ' + status + ' 看汇总。' };
 }
 /** 备一轮审查：不发请求。输入没变就复用同一个任务、不加轮数 */
 function prepare(opts) {
@@ -307,6 +334,12 @@ function prepare(opts) {
   const input = pointHash || before.hash;
   const old = S.readState('review-jobs')[key];
   if (old && old.status === 'running' && old.lenses && !opts.full && old.input === input && Date.now() < old.deadline && fs.existsSync(old.dir)) if (leftOf(old).length) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === old.id) o[key].tries = (o[key].tries || 0) + 1; }); old.tries = (old.tries || 0) + 1; return agentsOf(old); } else return finish(old.id);
+  // 这个变更（这个模式）上一轮还有子代理活着（第 59 条）：不开新的一轮。开了旧的没人管，白占额度，结论回来也作废
+  const liveJobs = Object.values(S.readState('review-jobs')).filter((x) => x && x.status === 'running' && x.state && x.mode === opts.mode && (x.change || '') === (opts.change || '') && S.normKey(x.root) === S.normKey(opts.cwd) && Object.values(x.state).some(alive));
+  if (liveJobs.length) {
+    const names = liveJobs.flatMap((x) => Object.entries(x.state).filter(([, s]) => alive(s)).map(([l]) => (x.point || x.mode) + ' ' + l));
+    return { status: 'running', running: names, next: '上一轮还有 ' + names.length + ' 个审查子代理在跑（' + names.join('、') + '），这次不开新的一轮，也不要自己开。等它们做完的通知，跑 review.js status 看结论；这期间文档或代码改过的，那一轮结论会作废（stale），到时候再跑一次 prepare。半小时没有动静的算没交，到时候这里就能开了。' };
+  }
   if (old && old.dir) fs.rmSync(old.dir, { recursive: true, force: true });
   const id = crypto.randomBytes(12).toString('hex'); const started = Date.now();
   // 配置页的"审查预期用时"：不到点截断（用户 2026-10-28 定的），审完超了就记问题反馈。--budget 给了就按它算这一次的预期
@@ -325,7 +358,7 @@ function prepare(opts) {
     job.round = change && opts.point ? policy.record(change.dir, opts.point).rounds || 1 : (prevRound ? prevRound.round + 1 : 1);
     job.scoped = !!plan.scoped;
     const noChange = plan.scoped && !plan.items.length;
-    const lenses = noChange ? [] : plan.scoped ? [{ name: '复审', text: '' }] : policy.isCross(opts.point) ? [{ name: '修改点', text: '' }] : Sc.lensesFor(opts.mode, material.batches.length, cfg);
+    const lenses = noChange ? [] : plan.scoped ? [{ name: '复审', text: '' }] : policy.isCross(opts.point) ? [{ name: '修改点', text: '' }] : Sc.lensesFor(opts.mode, material.batches.length, cfg, material.items.reduce((n, x) => n + x.text.length, 0));
     const list = lenses.length || noChange ? lenses : [{ name: '全量', text: '' }];
     job.lenses = list.map((l) => l.name);
     for (const l of job.lenses) job.state[l] = { status: 'open' };
@@ -333,7 +366,7 @@ function prepare(opts) {
     const currents = {}; for (const [f, cur] of material.currents) currents[f] = { text: cur.text, source: cur.source };
     fs.mkdirSync(job.dir, { recursive: true });
     if (!store.atomicWrite(path.join(job.dir, 'plan.json'), { scoped: job.scoped, why: plan.why, noChange, open: plan.open, closed: plan.closed, carried: plan.carried, kept: plan.kept, changed: plan.changed, itemFiles: plan.scoped ? [...new Set(plan.items.map((x) => x.file))] : [], currents, skipped: material.skipped, uncovered: material.uncovered, excluded: material.excluded, contextOnly: material.contextOnly, materialInputs: material.inputs, deferred: Sc.deferredOf(prevRound), born, fingerprintNote: before.truncated ? '这个目录不是 git 仓库，文件太多，只核对了前面的文件：后面的文件改了认不出来，"审查后输入没变"对它们不作数' : undefined })) throw new Error('审查材料写不进 ' + job.dir);
-    const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : !plan.scoped && opts.point === 'tasks' ? Sc.carryover(folder, ['proposal', 'specs', 'design']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '' };
+    const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : !plan.scoped && opts.point === 'tasks' ? Sc.carryover(folder, ['proposal', 'specs', 'design']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '', paths: !plan.scoped && opts.mode === 'proposal' && change ? pathFacts(change) : null };
     for (const l of list) fs.writeFileSync(path.join(job.dir, safeName(l.name) + '.md'), scopeText(job, l, plan, round, material));
     S.updateState('review-jobs', (o) => { o[key] = job; });
     if (noChange) return finish(id);
@@ -356,7 +389,20 @@ function dispatch(id, lens, toolId) {
  * 数和记在同一把锁里：一条回复里开几个子代理时，几个钩子可能同时跑
  */
 const MAX_RUNNING = 3;
-function claim(id, lens, toolId) {
+/**
+ * 子代理还活着吗（第 59 条，仓库主人 2026-11-05 让修）：后台子代理能跑一个多小时，以前发出去 30 分钟就当死了，
+ * 一轮收工检查记成没交、不再算在跑，模型接着重开，"最多 3 个"也不数它们，结果 5 个同时跑。
+ * 子代理里的钩子带 agent_type（docs/claude-code-facts.md，三版一样），它跑 Bash、Grep 时记一下，一分钟最多写一次。最后动静过了 30 分钟才算死。
+ */
+const aliveKey = (sid) => String(sid) + '-review-alive';
+function heartbeat(j) {
+  if (!j || !j.session_id || !/(^|:)(?:vk|ttls)-reviewer$/.test(String(j.agent_type || ''))) return;
+  if (Date.now() - (Number(S.readState(aliveKey(j.session_id)).at) || 0) < 60000) return;
+  S.writeState(aliveKey(j.session_id), { at: Date.now() });
+}
+function lastSeen(s) { return Math.max(Number(s.sentAt) || 0, s.session ? Number(S.readState(aliveKey(s.session)).at) || 0 : 0); }
+const alive = (s) => !!s && s.status === 'sent' && Date.now() - lastSeen(s) < QUIET_MS;
+function claim(id, lens, toolId, session) {
   let why = '';
   S.updateState('review-jobs', (o) => {
     const mine = Object.values(o).find((job) => job && job.id === id && job.status === 'running' && job.state && job.state[lens]);
@@ -365,10 +411,10 @@ function claim(id, lens, toolId) {
     const busy = [];
     for (const job of Object.values(o)) {
       if (!job || job.status !== 'running' || !job.state || !near(job.root, mine.root)) continue;
-      for (const [l, s] of Object.entries(job.state)) if (s && s.status === 'sent' && Date.now() - (s.sentAt || 0) < QUIET_MS && !(job.id === id && l === lens)) busy.push((job.change ? job.change + ' ' : '') + (job.point || job.mode) + ' ' + l);
+      for (const [l, s] of Object.entries(job.state)) if (alive(s) && !(job.id === id && l === lens)) busy.push((job.change ? job.change + ' ' : '') + (job.point || job.mode) + ' ' + l);
     }
     if (busy.length >= MAX_RUNNING) { why = '已经有 ' + busy.length + ' 个审查子代理在跑（' + busy.join('、') + '），同时最多 ' + MAX_RUNNING + ' 个。先不开这一个：等前面的交了结论，再跑一次 review.js prepare，照它给的还没开的角度开。'; return; }
-    mine.state[lens] = Object.assign(mine.state[lens], { status: 'sent', sentAt: Date.now(), tool: toolId || '' });
+    mine.state[lens] = Object.assign(mine.state[lens], { status: 'sent', sentAt: Date.now(), tool: toolId || '', session: session || '' });
   });
   return why;
 }
@@ -412,7 +458,11 @@ function failLens(id, lens, why) {
   try { require('./usage').bump('review.lost'); } catch (e) { /* 数不了就算了 */ }
   reportReview({ spentMs: Date.now() - job.started, status: 'running' }, Object.assign({}, job, { state: Object.assign({}, job.state, { [lens]: { status: 'failed' } }) }));
 }
-/** 收工时看还在跑的任务：前台子代理的结果回来了还没交（被 Esc 打断）、发出去半小时没回（Claude Code 退出过）的算没交 */
+// 后台子代理的工具结果只说开起来了，各版本说法不一样："Async agent launched"、"Spawned successfully … The agent is now running and will receive instructions via mailbox"（第 59 条：只认前一种时，子代理刚开就判成结束了，模型照着重开一轮）。
+// 说法变了认不出来时宁可当还在跑（半小时没动静会算没交；当成结束了就是多开一轮）：短文本里说到 agent 开起来了也算。子代理的最终回复一般很长，里面碰巧有这些词不算
+const LAUNCHED = /Async agent launched|working in the background|Spawned successfully|agent is now running|instructions via mailbox/i;
+const launchedText = (t) => LAUNCHED.test(t) || (t.length < 800 && /\bagent\b/i.test(t) && /\b(running|started|launched|spawned|background)\b/i.test(t));
+/** 收工时看还在跑的任务：前台子代理的结果回来了还没交（被 Esc 打断）、半小时没有动静（Claude Code 退出过）的算没交 */
 function sweep(entries, cwd) {
   const results = S.toolResults(entries); const root = S.normKey(path.resolve(cwd));
   const jobs = S.readState('review-jobs');
@@ -423,9 +473,9 @@ function sweep(entries, cwd) {
       const st = job.state[l];
       if (st.status !== 'sent') continue;
       const r = st.tool ? results.get(st.tool) : null;
-      const over = r && !/Async agent launched|working in the background/i.test(String(r.text || ''));
+      const over = r && !launchedText(String(r.text || ''));
       if (over) failLens(job.id, l, '子代理结束了，没交结论');
-      else if (Date.now() - (st.sentAt || 0) > QUIET_MS) failLens(job.id, l, '发出去半小时没回结论');
+      else if (!alive(st)) failLens(job.id, l, '半小时没有动静，没交结论');
     }
   }
 }
@@ -485,8 +535,9 @@ function finish(id) {
     U.bump('review.' + (job.mode === 'proposal' ? 'proposal' : 'code')); if (result.status === 'completed' && !result.issues.length) U.bump('review.clean');
   } catch (e) { /* 计数失败不改变结论 */ }
   if (change && job.point) policy.noteResult(change.dir, job.point, result, job.pointHash);
-  // 这一轮审成了才留作下一轮的比较对象；审查期间文件变了不动上一轮
-  if (['completed', 'partial'].includes(result.status)) {
+  // 这一轮审成了才留作下一轮的比较对象。审查期间文件变了（stale）也留（第 65 条）：子代理审的是发出去时的内容，问题还在，下一轮比这份、只审改过的地方。
+  // 以前不留，第一个角度回来模型就动手改的话，下一轮没有基准，又开 2～3 个从头审
+  if (['completed', 'partial'].includes(result.status) || (result.status === 'stale' && nowInput !== (job.pointHash || job.fingerprint))) {
     const covered = new Set(result.covered); const files = {};
     for (const n of labels) if (covered.has(n)) files[n] = plan.currents[n].text;
     try { Sc.writeSnapshot(store, job.file, { born: plan.born, base: job.base, round: job.round, files, issues: result.issues, closed: plan.scoped ? plan.closed : plan.deferred, covered: result.covered }); } catch (e) { /* 存不了，下一轮按第一轮审 */ }
@@ -635,4 +686,4 @@ function runsForLessons(calls, results, cwd) {
 }
 // 老会话还可能敲 run
 const run = prepare;
-module.exports = { claim, MAX_RUNNING, runsForLessons, prepare, run, submit, noteReject, failLens, dispatch, taskOf, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };
+module.exports = { claim, heartbeat, MAX_RUNNING, runsForLessons, prepare, run, submit, noteReject, failLens, dispatch, taskOf, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };

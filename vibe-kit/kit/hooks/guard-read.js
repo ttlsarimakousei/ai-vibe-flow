@@ -27,6 +27,7 @@ const SECRETS = ['secrets.json', 'router-data'];
 
 function protectedRange(base) { const kit = norm(KIT); base = norm(base); return SECRETS.some((s) => { const f = kit + '/' + s; return f === base || f.startsWith(base + '/') || base.startsWith(f + '/'); }); }
 function handle(j) {
+  try { if (j && j.agent_type) require('../lib/review-runner').heartbeat(j); } catch (e) { /* 记不了不影响查 */ }
   if (!j || j.tool_name !== 'Grep') return null;
   const input = j.tool_input || {};
   if (String(input.output_mode || 'files_with_matches') !== 'content') return null;

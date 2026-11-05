@@ -560,7 +560,7 @@ function commitMode() { const m = kitConfig().commitMode; return COMMIT_MODE_TEX
 function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'; }
 // 审查不设次数上限（用户 2026-11-03 定的）
 function reviewModeText() {
-  return '子代理 vk-reviewer 审，第一轮 2～3 个角度，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；子代理连续 3 次没交结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
+  return '子代理 vk-reviewer 审，第一轮按材料大小 1～3 个，只看这次需求碰到的地方，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；子代理连续 3 次没交结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
 }
 const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动写，四份写完审修一次整套；Apply 按已授权范围做，这个 change 的任务全部做完审修一次，所有 change 做完全面自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
 const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';

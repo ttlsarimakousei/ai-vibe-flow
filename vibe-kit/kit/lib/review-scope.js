@@ -4,6 +4,7 @@
  *   每轮都从头全量审、不带上一轮的结论，0 条问题才算过，提示不分阶段，模型把实现细节全往提案里塞，越改越长、问题越多，过程也没留下来。
  * 现在：
  *   第一轮：2～3 个角度同时审（一条回复里开几个子代理，2026-11-03 起），一次看全。材料超过 3 批的用 2 个角度。
+ *     材料小的（reviewSmallChars，默认 4 万字）1 个子代理看全（第 64 条，仓库主人 2026-11-05 选的：三个角度各读一遍同样的文件是最大的重复，审一个文件也要等很久）。
  *   后面的轮：只审修改点。送上一轮的问题和这次的改动（和上一轮审过的内容比），只问"改对了没有""改出新问题没有"。
  *     改动超过六成（整个重写）按第一轮算；上一轮没审到的文件整份送。
  *     没处理、文件也没改过的问题不问模型，照旧算没解决：不会因为再审一次就消失。登记修了、改的是别的文件的，连这个文件一起送去核对。
@@ -31,19 +32,19 @@ const ROLE_NOTE = '材料里带 role 的（上游文档、需求文档、参考�
 const LENSES = {
   doc: [
     { name: '事实和范围', text: '这一次你只看一个角度：事实和范围。写的事实和材料对不对得上，做什么、不做什么划清了没有，有没有超出或漏掉需求。' },
-    { name: '场景和风险', text: '这一次你只看一个角度：场景和风险。需求和探索记录里说了的异常、权限、并发场景写清了没有，验收能不能核对，有没有绕过或回归的风险。' },
+    { name: '场景和风险', text: '这一次你只看一个角度：场景和风险。需求和探索记录里说了的异常、权限、并发场景写清了没有，验收能不能核对，这次改动会不会绕开同模块已有的校验、弄坏这次碰到的功能。' },
     { name: '自洽和对齐', text: '这一次你只看一个角度：自洽和对齐。文档自己前后矛盾没有，和上游文档对不对得上，别人拿到能不能照着做。' },
   ],
   code: [
     { name: '需求和连带影响', text: '这一次你只看一个角度：需求和连带影响。规格的每条场景做到了没有；改了这里，依赖它的地方有没有跟着改；有没有和项目约定冲突。' },
     { name: '边界和异常', text: '这一次你只看一个角度：边界和异常。空值、空列表、重复提交、并发、异常分支、事务、超长输入、时区和日期。' },
-    { name: '安全和假验证', text: '这一次你只看一个角度：安全和假验证。权限、注入、路径穿越、敏感信息；测试是不是真的覆盖到了改动。' },
+    { name: '安全和假验证', text: '这一次你只看一个角度：安全和假验证，只看这次改的代码。新加的接口有没有和同模块一样走权限，有没有注入、路径穿越、把敏感信息写出去；测试是不是真的覆盖到了改动。框架怎么实现鉴权不看。' },
   ],
 };
 const RECHECK = '这是复审，不是重新审一遍。只做两件事：1. "上一轮的问题"逐条看现在改对了没有：改对了不报；没改对、只改了一部分的照旧报，severity 不变。2. 材料里这次的改动有没有改出新问题（改错了、改漏了、和上下文对不上）。没改过的内容不要审，看着有问题也不报。"已处理"里的问题已经定过了，不要再报。新问题只报 P1、P2。材料里带 note 的照 note 说的做。';
 
 // 不自己加（用户 2026-11-03 定的，第 43 条）
-const SCOPE_NOTE = '只报这次需求和探索记录里有的事：要做的没做到、写出来的代码或文档错了，照报。需求和探索记录里没有、你觉得还可以加的，scope 写 out，不算问题，人工核验时列给用户；别因为"更完善"要求加东西。';
+const SCOPE_NOTE = '只看这次需求碰到的地方：框架和基础设施（登录鉴权框架、网关、ORM、基类、系统架构）默认是好的，不读实现、不提建议，只看这次的代码怎么用它们。只报这次需求和探索记录里有的事：要做的没做到、写出来的代码或文档错了，照报。需求和探索记录里没有、你觉得还可以加的，scope 写 out，不算问题，人工核验时列给用户；别因为"更完善"要求加东西。';
 const P3 = /^P3$/i;
 /** 挡通过的问题有几条：除了 P3、范围外建议都算（模型没写 severity 的当 P2） */
 function blocking(issues) { return (issues || []).filter((x) => !P3.test(String((x && x.severity) || '')) && !/^out$/i.test(String((x && x.scope) || ''))).length; }
@@ -61,11 +62,20 @@ function stageText(mode, point) {
   if (mode === 'proposal') return STAGE[point] || '这是需求文档：' + STAGE.proposal;
   return STAGE.code;
 }
-/** 第一轮几个角度：配置 reviewLenses（不做开关，手写的值给测试和排查用，默认 3）；材料超过 3 批的最多 2 个 */
-function lensesFor(mode, batchCount, cfg) {
+/** 第一轮几个角度：按材料大小（reviewSmallChars）；配置 reviewLenses 是上限（不做开关，手写的值给测试和排查用，默认 3）。reviewSmallChars 是 0 时不分大小，材料超过 3 批的 2 个 */
+function lensesFor(mode, batchCount, cfg, chars) {
+  const all = mode === 'proposal' ? LENSES.doc : LENSES.code;
+  const plain = (l) => l.text.replace(/^这一次你只看一个角度：/, '');
+  const small = Number(cfg && cfg.reviewSmallChars); const size = Number(chars);
+  const bySize = small > 0 && size > 0;
+  // 第 64、70 条：不超过 reviewSmallChars 1 个，3 倍以内 2 个，6 倍以内 3 个；再大也 2 个，每个都读这么多太慢
+  const fit = bySize ? (size <= small ? 1 : size <= small * 3 ? 2 : size <= small * 6 ? 3 : 2) : (batchCount > 3 ? 2 : 3);
   const want = Number(cfg && cfg.reviewLenses);
-  const n = Math.min(Number.isFinite(want) && want >= 1 ? Math.floor(want) : 3, batchCount > 3 ? 2 : 3);
-  return n <= 1 ? [] : (mode === 'proposal' ? LENSES.doc : LENSES.code).slice(0, n);
+  const n = Math.min(Number.isFinite(want) && want >= 1 ? Math.floor(want) : 3, fit);
+  if (n <= 1) return bySize ? [{ name: '全量', text: '这一次你一个人看全这几个角度，同一件事只报一条：' + all.map(plain).join(' ') }] : [];
+  // 开 2 个时第三个角度并进第二个，不丢
+  if (n === 2) return [all[0], { name: all[1].name, text: all[1].text + ' 顺带看：' + plain(all[2]) }];
+  return all.slice(0, n);
 }
 
 // ---------- 比两份文本 ----------
