@@ -283,7 +283,7 @@ function logRound(folder, o) {
   const c = countBySeverity(o.issues);
   const out = ['', '## 第 ' + o.round + ' 轮 · ' + (o.point || o.mode) + ' · ' + stamp(o.at), ''];
   out.push('- 怎么审的：' + (o.scoped ? '只审修改点（改过 ' + (o.changed || []).length + ' 个文件：' + (o.changed || []).join('、') + '）' : '全量' + (o.lenses > 1 ? '，' + o.lenses + ' 个角度同时审' : '')) + (o.why ? '（' + o.why + '）' : ''));
-  out.push('- 结果：' + o.status + (o.reason ? '（' + oneLine(o.reason) + '）' : '') + '；P1 ' + c.P1 + ' 条、P2 ' + c.P2 + ' 条、P3 ' + c.P3 + ' 条；用时 ' + Math.round((o.spentMs || 0) / 1000) + ' 秒' + (o.model ? '；模型 ' + o.model : ''));
+  out.push('- 结果：' + o.status + (o.reason ? '（' + oneLine(o.reason) + '）' : '') + '；P1 ' + c.P1 + ' 条、P2 ' + c.P2 + ' 条、P3 ' + c.P3 + ' 条；用时 ' + Math.round((o.spentMs || 0) / 1000) + ' 秒' + (o.tokens ? '；输出 ' + o.tokens.out + ' token、输入 ' + o.tokens.input + ' token' : '') + (o.model ? '；模型 ' + o.model : ''));
   if ((o.lost || []).length) out.push('- 没审成的角度：' + o.lost.join('、'));
   if (o.repeated) out.push('- 又报了已经定过的问题 ' + o.repeated + ' 条，不算');
   for (const x of o.issues || []) out.push('- ' + x.id + ' ' + (x.severity || 'P2') + ' ' + x.file + (x.line ? ':' + x.line : '') + '：' + oneLine(x.problem));

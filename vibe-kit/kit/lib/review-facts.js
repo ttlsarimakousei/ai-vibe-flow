@@ -37,15 +37,28 @@ function symbolsOf(text) {
   for (const m of String(text).matchAll(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g)) bump(m[0]);
   return [...c.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s);
 }
+/** 一个仓库里一次 git grep 查完这批名字（一个名字一条命令，大仓库在 Windows 上要等很久）。返回 名字 → 命中的行 */
+function grepAll(root, names, excludes) {
+  const map = new Map(names.map((n) => [n, []]));
+  if (!names.length) return map;
+  const out = git(root, ['grep', '-n', '-w', '-F', '-I'].concat(names.flatMap((n) => ['-e', n]), ['--', '.'], (excludes || []).map((x) => ':(exclude)' + x)));
+  for (const line of out.split('\n')) {
+    if (!line || SECRET.test(line.split(':')[0])) continue;
+    const words = new Set((line.slice(line.indexOf(':') + 1).match(/[A-Za-z0-9_]+/g) || []));
+    for (const n of names) if (words.has(n) && map.get(n).length < 200) map.get(n).push(line);
+  }
+  return map;
+}
 function symbolFacts(docs, repos) {
   const blocks = []; const absent = []; let size = 0;
-  for (const name of symbolsOf(docs).slice(0, 40)) {
+  const names = symbolsOf(docs).slice(0, 40);
+  const found = repos.map((root) => ({ root, map: grepAll(root, names, ['openspec', '.vibe']) }));
+  for (const name of names) {
     if (size > FACT_CHARS) break;
     let total = 0; const shown = [];
-    for (const root of repos) {
-      const out = git(root, ['grep', '-n', '-w', '-F', '-I', '-e', name, '--', '.', ':(exclude)openspec', ':(exclude).vibe']);
-      if (!out) continue;
-      const hits = out.split('\n').filter(Boolean).filter((h) => !SECRET.test(h.split(':')[0]));
+    for (const { root, map } of found) {
+      const hits = map.get(name);
+      if (!hits.length) continue;
       total += hits.length;
       hits.slice(0, 2).forEach((h, i) => {
         const m = /^(.+?):(\d+):/.exec(h);
@@ -94,11 +107,11 @@ function enclosingNames(diff, text) {
 function callers(names, repos, own) {
   const out = [];
   const ownKeys = own.map((f) => String(f).replace(/\\/g, '/').toLowerCase());
-  for (const n of [...names].slice(0, 40)) {
-    for (const root of repos) {
-      const text = git(root, ['grep', '-n', '-w', '-F', '-I', '-e', n]);
-      if (!text) continue;
-      const hits = text.split('\n').filter(Boolean).filter((l) => { const f = path.resolve(root, l.split(':')[0]).replace(/\\/g, '/').toLowerCase(); return !ownKeys.includes(f) && !SECRET.test(f); }).map((l) => l.slice(0, 200));
+  const list = [...names].slice(0, 40);
+  for (const root of repos) {
+    const map = grepAll(root, list);
+    for (const n of list) {
+      const hits = map.get(n).filter((l) => !ownKeys.includes(path.resolve(root, l.split(':')[0]).replace(/\\/g, '/').toLowerCase())).map((l) => l.slice(0, 200));
       if (hits.length) out.push('# ' + n + '（' + hits.length + ' 处）\n' + hits.slice(0, 12).join('\n'));
     }
   }
@@ -142,6 +155,12 @@ function packsOf(items, limit) {
   return packs.length ? packs.map((p) => p.concat(roles)) : [roles];
 }
 const renderEntry = (e) => '=== ' + e.file + (e.role ? '（' + e.role + '，只用来核对，不审它本身）' : '') + (e.part ? '（第 ' + e.part + ' 段）' : '') + ' ===\n' + e.text;
+/** 定角度数用的大小：只算要审的。代码按差异算（整个文件不算），只用来核对的文档不算：大文件改几行不用开 3 个角度（第 73 条） */
+function reviewChars(items) {
+  let n = 0;
+  for (const e of entriesOf(items)) { if (e.role) continue; const c = splitCode(e.text); n += c.diff ? c.diff.length : c.current.length; }
+  return n;
+}
 /** 第一轮要带的事实：文档点名的、改到的方法哪里用到 */
 function factsOf(mode, items, project, roots) {
   const repos = reposOf(project, roots);
@@ -161,4 +180,4 @@ function factsOf(mode, items, project, roots) {
   return parts.join('\n\n');
 }
 
-module.exports = { REQUEST_CHARS, reposOf, symbolsOf, symbolFacts, changedNames, declOf, enclosingNames, callers, splitCode, entriesOf, packsOf, renderEntry, factsOf };
+module.exports = { reviewChars, grepAll, REQUEST_CHARS, reposOf, symbolsOf, symbolFacts, changedNames, declOf, enclosingNames, callers, splitCode, entriesOf, packsOf, renderEntry, factsOf };
