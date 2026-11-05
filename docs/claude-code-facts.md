@@ -206,3 +206,21 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 - 敲 `/vk-config`（`disable-model-invocation` 的命令），UserPromptSubmit 回 `decision: "block"` 加 `reason`：不发主会话的模型请求，屏幕上显示 `UserPromptSubmit operation blocked by hook:` 和 reason 那一行。配置页靠这个打开，不花 token。
 - winpty 跑在 Git Bash 下，参数 `/vk-config` 会被改写成 `C:/Program Files/Git/vk-config`，`MSYS2_ARG_CONV_EXCL`、`MSYS_NO_PATHCONV` 都不管用，要写 `//vk-config`。
 
+
+## 子代理的 effort、启动注入、代理文件里的钩子（2026-11-05 实测）
+
+`dev/probes/cc-reviewer-opts.js`，`-p`，假用户目录加假网关：
+
+| | 2.1.120 | 2.1.259 | 2.1.289 |
+|---|---|---|---|
+| 代理文件写 `effort: low` | 子代理 `output_config.effort` 是 low，主会话不变 | 同左 | 同左 |
+| 不写 effort | high | high | sonnet、opus 这类名字 medium；环境变量指定的模型名 high |
+| 子代理的 `thinking` | 不发 | `{"type":"adaptive","display":"omitted"}` | 同左 |
+| 子代理的 `max_tokens` | 32000 | sonnet 64000，环境变量指定的模型名 32000 | sonnet 128000，环境变量指定的模型名 32000 |
+
+三个版本一样的：
+
+- SubagentStart 钩子的 `additionalContext` 进子代理的第一个请求。
+- 代理文件 frontmatter 里的 `hooks`（PreToolUse）只在这个子代理里触发，主会话的 Bash 不触发；Read 拦得到；`permissionDecision: deny` 的理由、`additionalContext` 都送得到模型。
+
+环境变量 `CLAUDE_CODE_EFFORT_LEVEL` 改 `output_config.effort`，`CLAUDE_CODE_DISABLE_THINKING=1` 时请求里没有 `thinking`（2.1.259、2.1.289，`dev/probes/review-effort.js` 假网关核对）。这些只说明 Claude Code 发什么，网关和后面的模型照不照做要看 `review-effort.js` 在内网的结果。

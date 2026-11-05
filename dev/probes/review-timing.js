@@ -97,7 +97,7 @@ function parseFile(file, kind) {
         if (!c) continue;
         if (c.type === 'thinking') cur.think += String(c.thinking || '').length;
         else if (c.type === 'text') cur.text += String(c.text || '').length;
-        else if (c.type === 'tool_use') { const call = { id: c.id, name: c.name, input: c.input || {}, chars: 0, isError: false, stub: false, tooBig: false, blocked: '' }; cur.tools.push(call); calls.set(c.id, call); }
+        else if (c.type === 'tool_use') { const call = { id: c.id, name: c.name, input: c.input || {}, chars: 0, isError: false, stub: false, tooBig: false, blocked: '', at: t, ms: -1 }; cur.tools.push(call); calls.set(c.id, call); }
       }
       continue;
     }
@@ -112,7 +112,7 @@ function parseFile(file, kind) {
         if (c.type !== 'tool_result') continue;
         const call = calls.get(c.tool_use_id); if (!call) continue;
         const body = textOf(c.content);
-        call.chars = body.length; call.isError = !!c.is_error;
+        call.chars = body.length; call.isError = !!c.is_error; if (t && call.at) call.ms = t - call.at;
         if (call.name === 'Read') { call.stub = STUB.test(body.slice(0, 400)); call.tooBig = TOO_BIG.test(body.slice(0, 400)); if (SCOPE_FILE.test(String(call.input.file_path || ''))) call.text = body; }
         if (c.is_error && BLOCKED.test(body)) call.blocked = body.replace(/[\w.:-]*[\\/][^\s，。]*/g, '<路径>').slice(0, 46).replace(/\s+/g, ' ');
       }
@@ -351,12 +351,21 @@ function report(all, root, opts) {
   out.push(...table(['文件', '读了几次', '读入 K 字'], [...files.entries()].sort((a, b) => b[1].chars - a[1].chars).slice(0, 15).map(([n, o]) => [n, o.n, k(o.chars)])));
   if (outDirs.size) { out.push('', '## 读到范围外的目录', ''); out.push(...table(['目录', '次数'], top(outDirs, 12))); }
   if (heads.size) { out.push('', '## 子代理跑的命令', ''); out.push(...table(['命令', '次数'], top(heads, 12))); }
+  // 工具本身多久：Read 没挂套件的钩子，Bash 挂了两个，两边一比看得出钩子占多少
+  const toolRows = [];
+  for (const [who, list] of [['子代理', subReq], ['主会话', mainReq]]) {
+    const by = new Map();
+    for (const q of list) for (const c of q.tools) if (c.ms >= 0) { const a = by.get(c.name) || []; a.push(c.ms); by.set(c.name, a); }
+    for (const [n, a] of [...by.entries()].sort((x, y) => y[1].length - x[1].length).slice(0, 6)) toolRows.push([who, n, a.length, (median(a) / 1000).toFixed(1), (pct(a, 0.9) / 1000).toFixed(1), dur(sum(a))]);
+  }
+  out.push('', '## 工具本身花多久', '', '从模型发出工具调用到结果记下来。Read 没挂套件的钩子，Bash 挂了两个。', '');
+  out.push(...table(['谁', '工具', '次数', '中位秒', 'P90 秒', '合计'], toolRows));
 
   if (slow.length) { out.push('', '## 时间线（最慢的 ' + Math.min(opts.timeline, slow.length) + ' 个子代理）'); for (const a of slow.slice(0, opts.timeline)) timeline(a, out); }
 
   // 第一点：主会话的模型请求花在哪
   const cls = new Map(); const wasted = new Map(); let plain = 0; let plainIn = 0; let blocked = 0; let stops = 0; let compacts = 0;
-  const hooks = new Map();
+  const hooks = new Map(); const shellHeads = new Map(); const otherHeads = new Map();
   for (const m of mains) {
     stops += m.stopBlocks; compacts += m.compactions;
     for (const [key, o] of m.hooks) { const h = hooks.get(key) || { n: 0, chars: 0 }; h.n += o.n; h.chars += o.chars; hooks.set(key, h); }
@@ -365,7 +374,11 @@ function report(all, root, opts) {
       if (!q.tools.length) { plain++; plainIn += input; continue; }
       const name = classOfTool(q.tools[0]);
       const o = cls.get(name) || { req: 0, tools: 0, input: 0, ms: 0 }; o.req++; o.input += input; o.ms += q.end - q.start; cls.set(name, o);
-      for (const c of q.tools) { const n = classOfTool(c); const x = cls.get(n) || { req: 0, tools: 0, input: 0, ms: 0 }; x.tools++; cls.set(n, x); if (c.blocked) { blocked++; wasted.set(c.blocked, (wasted.get(c.blocked) || 0) + 1); } }
+      for (const c of q.tools) {
+        const n = classOfTool(c); const x = cls.get(n) || { req: 0, tools: 0, input: 0, ms: 0 }; x.tools++; cls.set(n, x);
+        if (c.blocked) { blocked++; wasted.set(c.blocked, (wasted.get(c.blocked) || 0) + 1); }
+        if (n === 'shell 读文件' || n === '其它命令') { const m = n === '其它命令' ? otherHeads : shellHeads; const h = cmdHead(c.input.command); m.set(h, (m.get(h) || 0) + 1); }
+      }
     }
   }
   const reqTotal = mainReq.length; const inTotal = sum(mainReq.map((q) => q.input + q.cacheRead + q.cacheNew));
@@ -373,6 +386,8 @@ function report(all, root, opts) {
   const rows = [...cls.entries()].sort((a, b) => b[1].req - a[1].req).map(([n, o]) => [n, o.req, share(o.req, reqTotal), o.tools, share(o.input, inTotal), dur(o.ms)]);
   rows.push(['纯回复（没发工具）', plain, share(plain, reqTotal), 0, share(plainIn, inTotal), '-']);
   out.push(...table(['做什么', '请求', '占请求', '工具次数', '占累计输入', '等模型合计'], rows));
+  if (shellHeads.size) out.push('', '"shell 读文件"里：' + top(shellHeads, 10).map(([n, c]) => n + ' ' + c).join('，') + '。');
+  if (otherHeads.size) out.push('', '"其它命令"里：' + top(otherHeads, 12).map(([n, c]) => n + ' ' + c).join('，') + '。');
   out.push('', '- 合计 ' + reqTotal + ' 个请求，累计输入 ' + k(inTotal) + 'K token，提示缓存占 ' + share(sum(mainReq.map((q) => q.cacheRead)), inTotal) + '；压缩 ' + compacts + ' 次。');
   out.push('- 被钩子拦下的工具调用 ' + blocked + ' 次（每次多一个请求）；收工钩子让模型接着干 ' + stops + ' 次（每次多一个请求）。');
   if (wasted.size && !ANON) { out.push('', '### 拦得最多的（提示开头）', ''); out.push(...table(['提示开头', '次数'], top(wasted, 10))); }
