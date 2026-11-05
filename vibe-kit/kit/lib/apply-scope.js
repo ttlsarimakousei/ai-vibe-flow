@@ -52,6 +52,7 @@ function grant(j, text, context, opts) {
   const saved = S.updateState(j.session_id + '-flow', (s) => { delete s.applyRefused; s.applyScope = scope;
     // 表外的 change 开工：状态栏跟着它（第 50 条）。点名了别的 change：之前切的不算了
     if (!task && targets.length === 1) { s.current = targets[0].name; delete s.task; } else if (s.current && (named.length === 1 ? s.current !== named[0].name : task && !task.changes.some((c) => c.name === s.current))) delete s.current;
+    if (s.keepCurrent && s.keepCurrent !== s.current) delete s.keepCurrent;
     s.waiting = ''; s.lastApplyAt = scope.at; s.applySource = { text: String(text).slice(0, 500), targets: targets.map((c) => c.name), at: scope.at }; if (voice) { s.applyVoice = S.voiceKey(voice); s.applyVoiceSchema = 2; } });
   if (!saved) return { ok: false, reason: '开工范围暂时不能保存，请重试' };
   // 基线记真正开工的那一刻（复审 20261105 第 1、2 条）：大任务只记现在要做的这个 change，点名的优先。后面的 change 轮到它时会再走到这里，

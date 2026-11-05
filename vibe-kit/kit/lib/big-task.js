@@ -88,7 +88,14 @@ function exploreSections(file) {
   for (const k of Object.keys(out)) out[k] = out[k].trim();
   return out;
 }
-const NOTHING = /^(无|没有|暂无|none|n\/a|-|—)?[。.]?$/i;
+// 写成"（无）""无（都定了）""已全部确认"都算空（第 68 条：以前只认一个"无"，模型写成这样就一直算没定完，开着自动也退回人工）。"无法确定分页"这种不算
+const NOTHING = /^(?:[（(]?(?:无|没有|暂无|none|n\/a|-|—|都定了|全定了|全部定了|全部确认|已全部确认|已全部定|已清空)[）)]?[。.，,]?\s*(?:[（(][^）)\n]{0,30}[）)])?)?[。.]?$/i;
+/** 探索记录里还有真的没定的事。大任务写了探索记录、文件却不在的也算（还没探索）；不是大任务、老任务算没有 */
+function exploreOpen(task) {
+  if (!task || task.legacy) return false;
+  const s = exploreSections(task.explore);
+  return !s || !NOTHING.test(s['还没定的'] || '');
+}
 
 /** 探索记录缺什么：离开探索、开工之前要都解决。老任务不查。change 给了就查这个 change 有没有一节 */
 function exploreIssues(task, change) {
@@ -144,19 +151,30 @@ function currentAlive(j) {
   const name = flowState(j).current;
   if (!name) return false;
   const cwd = (j && j.cwd) || process.cwd();
-  for (const t of tasks(cwd)) { const c = t.changes.find((x) => x.name === name); if (c) return !c.archived && (!c.total || c.todo > 0); }
-  for (const d of changeRoots(cwd)) { const c = changeInfo(name, d); if (c.exists) return !c.total || c.todo > 0; }
+  // 用户切到一个任务都勾完的 change（第 60 条）：一直算当前，直到归档、切走
+  const keep = flowState(j).keepCurrent === name;
+  for (const t of tasks(cwd)) { const c = t.changes.find((x) => x.name === name); if (c) return !c.archived && (keep || !c.total || c.todo > 0); }
+  for (const d of changeRoots(cwd)) { const c = changeInfo(name, d); if (c.exists) return keep || !c.total || c.todo > 0; }
   return false;
 }
 /** 收工时：切到的 change 做完了、归档了、没了，指针清掉。不清的话它之后回改加了任务又抢回来，打勾顺序也一直豁免（复审 R4） */
 function dropDeadCurrent(j) {
-  if (flowState(j).current && !currentAlive(j)) updateState(String(j.session_id) + '-flow', (s) => { delete s.current; });
+  const st = flowState(j);
+  if (st.current && !currentAlive(j)) { updateState(String(j.session_id) + '-flow', (s) => { delete s.current; delete s.keepCurrent; }); return; }
+  // 切到任务都勾完的 change 之后又补了任务：按普通的算，做完回到表的顺序
+  if (st.keepCurrent && st.keepCurrent === st.current) {
+    const cwd = (j && j.cwd) || process.cwd();
+    const c = tasks(cwd).flatMap((t) => t.changes).find((x) => x.name === st.current) || changeRoots(cwd).map((d) => changeInfo(st.current, d)).find((x) => x.exists);
+    if (c && c.todo > 0) updateState(String(j.session_id) + '-flow', (s) => { delete s.keepCurrent; });
+  }
 }
 /** 这个会话当前的 change：用户用 /vk-resume <变更名> 切过、还没做完的就是它；做完了回到表的顺序（问题表第 49、50 条） */
 function phaseFor(j, task) {
   const name = flowState(j).current;
   const c = name ? task.changes.find((x) => x.name === name) : null;
   if (c && !c.archived && (!c.total || c.todo)) return { phase: !c.total || !c.done ? 'plan' : 'apply', change: name };
+  // 用户切到一个任务都勾完的 change（第 60 条）：算在做它，等用户说下一步，不接下一个、不催全面自测
+  if (c && !c.archived && flowState(j).keepCurrent === name) return { phase: 'apply', change: name };
   return phaseOf(task);
 }
 /**
@@ -263,7 +281,7 @@ function bar(j) {
     const c = ph.change ? list.find((x) => x.name === ph.change) : null;
     if (c && c.exists) dir = c.dir;
     // 任务勾完阶段就往后走了，审查这时才开始（第 58 条）：在审、有问题待修的 change 显示它；全做完了显示最后一个，看得到审查走到哪
-    const reviewing = list.find((x) => x.exists && !x.archived && x.total && !x.todo && /^[◇✗]/.test(reviewMark(P, x.dir, P.CHANGE)));
+    const reviewing = flowState(j).current ? null : list.find((x) => x.exists && !x.archived && x.total && !x.todo && /^[◇✗]/.test(reviewMark(P, x.dir, P.CHANGE)));
     const last = !dir ? list.slice().reverse().find((x) => x.exists && !x.archived) : null;
     const shown = reviewing || last;
     if (shown) { dir = shown.dir; shownName = shown.name; }
@@ -289,7 +307,8 @@ function bar(j) {
   else if (ph.phase === 'verify') next = '等你核验：看完说归档或 /vk-archive';
   else if (ph.phase === 'archive') next = '下一步 按 plan.md 的顺序归档 ' + ph.change;
   if (!next && dir) { const left = T.automatedLeft(dir); if (left.length) next = '下一项 ' + left[0].text; }
+  if (!next && name && flowState(j).keepCurrent === name) next = '任务都勾完了，等你说下一步';
   return { steps, next };
 }
 
-module.exports = { phaseFor, goneRow, currentAlive, dropDeadCurrent, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, taskState, setTaskState, phaseOf, progressText };
+module.exports = { phaseFor, goneRow, currentAlive, dropDeadCurrent, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, exploreOpen, taskState, setTaskState, phaseOf, progressText };

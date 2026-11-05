@@ -69,7 +69,7 @@ function decideFlow(j, cfg, note, resumed) {
   }
   setFlow(j, on, why, on ? stage : undefined);
   // 命令里点了名的变更：算这个会话在做的（收工时只催它）
-  if (flowCmd) { try { for (const c of allChanges(j.cwd || process.cwd())) if (mentionsChange(p, c.name)) flowTouch(j, c.dir); } catch (e) { /* 记不了：写它的产物时还会记 */ } }
+  if (flowCmd) { try { for (const c of allChanges(j.cwd || process.cwd())) if (mentionsChange(p, c.name)) flowTouch(j, c.dir, false); } catch (e) { /* 记不了：写它的产物时还会记 */ } }
   const hold = drop || (on && ONLY_PLAN.test(p));
   require('../lib/session').updateState(String(j.session_id) + '-flow', (s) => {
     s.paused = paused; s.aside = aside;
@@ -94,15 +94,21 @@ function decideFlow(j, cfg, note, resumed) {
 function resumeOutside(j, c, S) {
   const list = require('../lib/task-types').tasks(c.dir);
   const done = list.filter((x) => x.done).length;
-  if (list.length && done === list.length) return { user: '[vibe-kit] ' + c.name + ' 的任务都勾完了，没切。', model: '用户敲了 /vk-resume ' + c.name + '，这个变更的任务都勾完了，没切。告诉用户，不用做别的。' };
+  // 只要没归档都能切（第 60 条，仓库主人 2026-11-05）：任务都勾完的切过去等用户说要做什么
+  const finished = list.length > 0 && done === list.length;
   // 接回就算开工（第 53 条，仓库主人 2026-11-04 定的）：任务写好了的直接进做任务那一段
   const stage = list.length ? 'apply' : 'plan';
-  S.updateState(String(j.session_id) + '-flow', (s) => { delete s.task; s.current = c.name; s.paused = false; s.aside = false; s.holdApply = false; });
+  S.updateState(String(j.session_id) + '-flow', (s) => { delete s.task; s.current = c.name; if (finished) s.keepCurrent = c.name; else delete s.keepCurrent; s.paused = false; s.aside = false; s.holdApply = false; });
   S.setFlow(j, true, '切到 ' + c.name, stage);
-  S.flowTouch(j, c.dir);
+  S.flowTouch(j, c.dir, false);
   if (stage === 'apply') { try { require('../lib/apply-scope').grant(j, c.name, ''); } catch (e) { /* 开工范围记不了：改代码时会说 */ } }
-  const step = stage === 'apply' ? '接着做任务' : '写需求';
-  return { user: '[vibe-kit] 切到 ' + c.name + '（不在 plan.md 的表里）：做到 ' + done + '/' + list.length + '。下一步：' + step + '。', model: '用户敲了 /vk-resume ' + c.name + '，切到这个变更（不在 plan.md 的表里），做到 ' + done + '/' + list.length + '。先读它的文档，再' + step + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。' };
+  const step = finished ? FINISHED_STEP : stage === 'apply' ? '接着做任务' : '写需求';
+  return { user: '[vibe-kit] 切到 ' + c.name + '（不在 plan.md 的表里）：做到 ' + done + '/' + list.length + '。下一步：' + step + '。', model: '用户敲了 /vk-resume ' + c.name + '，切到这个变更（不在 plan.md 的表里），做到 ' + done + '/' + list.length + '。先读它的文档，再' + step + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。' + linkHints(j, S) };
+}
+const FINISHED_STEP = '任务都勾完了、还没归档，等用户说要做什么（改问题、补任务、核验、归档），不要自己接着做别的';
+/** 切完之后顺带问：没归到大任务、可能是一件事的 change（第 61 条）。不在选 change 的提问框之前问，答案会混 */
+function linkHints(j, S) {
+  try { if (S.readConfigFor(j).autoSession === true) return ''; const out = S.changeRoots(j.cwd || process.cwd()).map((r) => require('../lib/plan-link').groupHint(path.dirname(r))).filter(Boolean); return out.length ? '\n' + out.join('\n') : ''; } catch (e) { return ''; }
 }
 /**
  * /vk-resume：接回没做完的大任务（用户 2026-11-03 定的）。阶段从文件算；死机前开着自动就接着开；提交、推送、归档的许可不恢复。
@@ -130,7 +136,9 @@ function resumeTask(j) {
   const inTask = want && !byName ? all.find((t) => t.changes.some((c) => c.name === want)) : null;
   const pointed = inTask ? inTask.changes.find((c) => c.name === want) : null;
   if (want && !byName && !inTask) { const c = S.allChanges(j.cwd || process.cwd()).find((x) => x.name === want); if (c) return resumeOutside(j, c, S); }
-  if (pointed && (pointed.archived || (pointed.total && !pointed.todo))) return { user: '[vibe-kit] ' + want + (pointed.archived ? ' 已归档' : ' 的任务都勾完了') + '，没切。', model: '用户敲了 /vk-resume ' + want + '，这个变更' + (pointed.archived ? '已归档' : '的任务都勾完了') + '，没切。告诉用户，不用做别的。' };
+  if (pointed && pointed.archived) return { user: '[vibe-kit] ' + want + ' 已归档，没切。', model: '用户敲了 /vk-resume ' + want + '，这个变更已归档，没切。告诉用户，不用做别的。' };
+  // 只要没归档都能切（第 60 条）：任务都勾完的切过去等用户说要做什么，不回表的顺序
+  const finished = !!pointed && pointed.total > 0 && !pointed.todo;
   const open = all.filter((t) => B.phaseOf(t).phase !== 'done');
   if (!open.length) return { user: '[vibe-kit] 没有没做完的大任务。', model: '用户敲了 /vk-resume，但 openspec/plan.md 里没有没做完的大任务。告诉用户，不用做别的。' };
   const task = open.find((t) => t === byName || t === inTask) || null;
@@ -138,22 +146,22 @@ function resumeTask(j) {
     const list = open.map((t) => t.name + '（' + B.progressText(t) + '）').join('；');
     return { user: '[vibe-kit] ' + (want ? '没找到 ' + want + '。' : '') + '没做完的大任务：' + list + '。敲 /vk-resume <大任务名或变更名> 接回。', model: '用户敲了 /vk-resume，' + (want ? '没找到 ' + want + '，' : '') + '有几个没做完的大任务：' + list + '。列给用户，等用户敲 /vk-resume <名字>，不要自己选。' };
   }
-  S.updateState(String(j.session_id) + '-flow', (s) => { s.task = task.name; s.paused = false; s.aside = false; s.holdApply = false; if (pointed) s.current = want; else delete s.current; });
+  S.updateState(String(j.session_id) + '-flow', (s) => { s.task = task.name; s.paused = false; s.aside = false; s.holdApply = false; if (pointed) s.current = want; else delete s.current; if (finished) s.keepCurrent = want; else delete s.keepCurrent; });
   const ph = B.phaseFor(j, task);
   // 接回就算开工（第 53 条，仓库主人 2026-11-04 定的）：要做的 change 任务已经写好了，直接进做任务那一段，不用再说一次开工
   const ready = ph.phase === 'plan' && ((task.changes.find((c) => c.name === ph.change) || {}).total || 0) > 0;
   const stage = ph.phase === 'explore' || (ph.phase === 'plan' && !ready) ? 'plan' : 'apply';
   S.setFlow(j, true, '接回大任务 ' + task.name, stage);
-  for (const c of task.changes) if (c.exists) S.flowTouch(j, c.dir);
+  for (const c of task.changes) if (c.exists) S.flowTouch(j, c.dir, false); // 接回不算碰过：上个会话勾完没审的还要审（oldDone）
   const autoBack = B.taskState(task).auto === true;
   if (autoBack) S.setSessionAuto(j, true, '/vk-resume 接回');
   if (stage === 'apply') { try { require('../lib/apply-scope').grant(j, ph.change || (task.changes.find((c) => c.exists) || {}).name || '', ''); } catch (e) { /* 开工范围记不了：改代码时会说 */ } }
-  const STEP = { explore: '接着探索，把结果写进探索记录', plan: (task.changes.find((c) => c.name === ph.change) || {}).total ? ph.change + ' 的任务写好了，还没开工' + (autoBack || S.readConfigFor(j).autoSession === true ? '，开着自动，接着开工' : '，用户说开工再做') : '写 ' + ph.change + ' 的需求', apply: '接着做 ' + ph.change + ' 的任务', selftest: '任务都做完了：全面自测', verify: '等用户人工核验', archive: '接着按表的顺序归档 ' + ph.change };
+  const STEP = { explore: '接着探索，把结果写进探索记录', plan: (task.changes.find((c) => c.name === ph.change) || {}).total ? ph.change + ' 的任务写好了，还没开工' + (autoBack || S.readConfigFor(j).autoSession === true ? '，开着自动，接着开工' : '，用户说开工再做') : '写 ' + ph.change + ' 的需求', apply: finished ? want + ' 的' + FINISHED_STEP : '接着做 ' + ph.change + ' 的任务', selftest: '任务都做完了：全面自测', verify: '等用户人工核验', archive: '接着按表的顺序归档 ' + ph.change };
   if (ready) STEP.plan = '接着做 ' + ph.change + ' 的任务（任务写好了，接回就算开工）';
   const rel = task.explore ? '探索记录 ' + task.explore + '（公共几节和 ' + (ph.change || '要做的 change') + ' 那一节）、' : '';
   return {
     user: '[vibe-kit] ' + (pointed ? '切到 ' + want + '，大任务 ' : '接回大任务 ') + task.name + '：' + B.progressText(task) + (autoBack ? '；自动已恢复' : '') + '。下一步：' + STEP[ph.phase] + '。',
-    model: '用户敲了 /vk-resume' + (pointed ? ' ' + want + '，切到这个 change（用户定的，不按表的顺序），大任务 ' : '，接回大任务 ') + task.name + '：' + B.progressText(task) + '。先读 ' + task.planFile + '、' + rel + '前面 change 的 design 和 revisions，再' + STEP[ph.phase] + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。',
+    model: '用户敲了 /vk-resume' + (pointed ? ' ' + want + '，切到这个 change（用户定的，不按表的顺序），大任务 ' : '，接回大任务 ') + task.name + '：' + B.progressText(task) + '。先读 ' + task.planFile + '、' + rel + '前面 change 的 design 和 revisions，再' + STEP[ph.phase] + '。提交、推送、归档的许可不恢复，照常按提交方式和用户的话来。' + linkHints(j, S),
   };
 }
 /** /vk-resume 不写名字（第 54 条，仓库主人 2026-11-04 定的）：不替用户挑，列出没归档的 change，让模型用提问框问 */
@@ -427,11 +435,11 @@ function anchorLines(j, cfg, note) {
 }
 
 /** 会话自动模式开了：送一次怎么做（问题表第 28 条，用户 2026-10-31 定的）。不写进每个请求都带的全局约定（硬规矩 8） */
-const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。这只是个开关：回一句开了就行，不要提问，等用户说要做什么。进了流程之后：探索记录（openspec/explore/<大任务>.md）的"还没定的"清空才开始自动；'
+const AUTO_ON_TEXT = '这个会话的自动模式开了（用户刚打开的，只对这个会话）。这只是个开关：回一句开了就行，不要提问，等用户说要做什么。已经在跑的审查子代理不用管，等结论回来，不要重开。进了流程之后：探索记录（openspec/explore/<大任务>.md）的"还没定的"清空才开始自动；'
   + '之后自动写完四份需求文档再审修一次整套、定稿、开工，一个 change 的任务全部做完审修一次，按 plan.md 接下一个，全部做完全面自测、修改、复验，按提交方式提交，收工交报告。'
   + '只做探索记录和用户材料里有的，不自己加需求（"这里加个按钮更好"这种不加）；做法上的取舍自己定，记进 revisions.md（起因：自动模式决定），不停下来问；'
   + '用户中途报的问题、改的需求照改，记进 revisions.md，接着自动做。只有用户的描述或材料让你完全走不下去时，先自己探索，还不行再问。归档、push 照旧要用户点头；改库、写 redis 照技能里全自动的规矩（留得下备份的工具会说不用等人，别的留给用户）。';
-const AUTO_OFF_TEXT = '这个会话的自动模式关了（用户刚说的）：照人工来，审查、自测、复验先问用户。';
+const AUTO_OFF_TEXT = '这个会话的自动模式关了（用户刚说的）：照人工来，审查、自测、复验先问用户。已经在跑的审查子代理不用管，等结论回来，不要重开（第 59 条）。';
 /** /vk-config：钩子拉起配置页、开浏览器，这句话不发给模型（用户 2026-11-03 定的，路由删了之后配置页用时才起） */
 const CONFIG_CMD = /^\s*\/vk-config\s*$|<command-name>\s*\/?vk-config\s*<\/command-name>/i;
 async function openConfigPage() {
@@ -512,7 +520,7 @@ async function handle(j) {
   if (!note && on && stage === 'plan' && cfg.autoRequirements) {
     try {
       const B = require('../lib/big-task'); const task = B.forSession(j);
-      const left = task ? B.exploreIssues(task) : ['还没有探索记录'];
+      const left = task ? B.exploreIssues(task) : require('../lib/session').flowChanges(j).length ? [] : ['还没有探索记录'];
       if (left.length) lines.push('自动模式开着，但探索还没完：' + left.join('；') + '。写进探索记录（没有就跑 node "' + path.join(KIT, 'tools', 'plan.js') + '" new --task <大任务名> --changes <变更名，逗号分隔>）才开始自动。有疑问用提问框问，不猜需求。');
     } catch (e) { /* 算不了不影响开口 */ }
   }
