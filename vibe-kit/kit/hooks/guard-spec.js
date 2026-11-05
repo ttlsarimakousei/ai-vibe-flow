@@ -104,8 +104,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   if (cfg.autoMode && !/^\s*[-*]\s*\[[xX]\]/m.test(oldText)) {
     const ok = require('../lib/session').reviewAllowed('proposal', art.dir);
     const waiting = !ok && require('../lib/review-runner').inFlight(art.dir, 'proposal');
-    if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没送回来。等子代理做完的通知到了（到了会自动接着一轮），跑 review.js status 看结论，改完再开工打勾；不要再开一个审查。']);
-    if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先审一次整套文档：review.js prepare --change ' + art.name + ' --mode proposal --point tasks，照输出开 vk-reviewer 子代理（/vk-cross-review 有写法）。成立的问题改掉，再开工。']);
+    if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没回来。再跑一次一样的 review.js run 接着等，看到结论、改完再开工打勾；不会重开。']);
+    if (!ok) return done(['这是变更 ' + art.name + ' 的第一次打勾（apply 开工），但提案还没审过。先审一次整套文档：review.js run --change ' + art.name + ' --mode proposal --point tasks（/vk-cross-review 有写法）。成立的问题改掉，再开工。']);
   }
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);

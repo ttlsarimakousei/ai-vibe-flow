@@ -31,7 +31,7 @@ const FIELDS = [
   { name: 'autoRequirements', type: 'bool', def: false, internal: true },
   { name: 'autoApply', type: 'bool', def: false, internal: true },
   { name: 'reviewLenses', type: 'int', def: 3, min: 1, max: 3, internal: true },
-  // 第 64 条：材料不超过这么多字，1 个子代理看全三个角度，超过才分开开。不做开关，0 = 不分大小，给测试和排查用
+  // 第 64 条：材料不超过这么多字，1 个请求看全三个角度，超过才分开。不做开关，0 = 不分大小，给测试和排查用
   { name: 'reviewSmallChars', type: 'int', def: 40000, min: 0, max: 1000000, zero: true, internal: true },
   { name: 'autoHandover', type: 'bool', def: false, internal: true },
   { name: 'contextLimitTokens', type: 'int', def: 1000000, min: 50000, max: 10000000, zero: true, page: 'kit', doc: '上下文上限 contextLimitTokens', since: '0921', defText: '100 万 token' },

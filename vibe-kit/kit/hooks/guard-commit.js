@@ -360,6 +360,11 @@ function handle(j) {
   try { if (j.agent_type) require('../lib/review-runner').heartbeat(j); } catch (e) { /* 记不了不影响跑命令 */ }
   const out = check(j);
   if (out || /^mcp__/.test(String(j.tool_name || ''))) return out;
+  // review.js run 最多等 9 分钟（第 72 条）：Bash 默认 2 分钟就断了，这里给够。断了也不要紧，后台接着审，再跑一次接着等
+  try {
+    const input = j.tool_input || {};
+    if (/review\.js["']?\s+(?:run|prepare)\b/.test(String(input.command || '')) && !input.run_in_background && !(Number(input.timeout) >= 600000)) return { hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput: Object.assign({}, input, { timeout: 600000 }) } };
+  } catch (e) { /* 改不了就照原样跑 */ }
   try {
     const O = require('../lib/openspec');
     const next = O.rewrite(String((j.tool_input && j.tool_input.command) || ''), j.tool_name === 'PowerShell');

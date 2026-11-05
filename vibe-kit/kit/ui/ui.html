@@ -422,26 +422,26 @@
     </div>
     <div class="card" id="sec-guide-review" data-sec="审查">
       <h2>审查</h2>
-      <p class="hint">审查全部用子代理 vk-reviewer，默认用 Sonnet，不设 effort。</p>
-      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 236" role="img" aria-label="审查从 /vk-cross-review 进，脚本备材料，第一轮按材料大小开 1 到 3 个子代理，走现有连接，结果交给脚本合并记账。每个审查点修完后只审修改点，没有 P1、P2 才结束，用户可以打断。">
+      <p class="hint">审查由脚本调 claude -p 做（2026-11-05 起，不开子代理），默认用 Sonnet，不带工具，材料和脚本查好的事实一次送完。</p>
+      <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 236" role="img" aria-label="审查从 /vk-cross-review 进，脚本备材料，第一轮按材料大小起 1 到 3 个 claude -p，走现有连接，结果交给脚本合并记账。每个审查点修完后只审修改点，没有 P1、P2 才结束，用户可以打断。">
         <defs><marker id="a8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
         <text class="h" x="20" y="24">一次审查怎么跑</text>
         <rect class="b" x="20" y="36" width="160" height="56" rx="6"/><text class="m" x="100" y="60" text-anchor="middle">/vk-cross-review</text><text class="s" x="100" y="79" text-anchor="middle">入口</text>
         <path class="a" d="M180 64H218" marker-end="url(#a8)"/>
         <rect class="b" x="220" y="36" width="190" height="56" rx="6"/><text class="h" x="315" y="58" text-anchor="middle">review.js</text><text class="s" x="315" y="77" text-anchor="middle">备材料，算修改点，不发请求</text>
         <path class="a" d="M410 64H448" marker-end="url(#a8)"/>
-        <rect class="b" x="450" y="36" width="170" height="56" rx="6"/><text class="h" x="535" y="58" text-anchor="middle">vk-reviewer × 1～3</text><text class="s" x="535" y="77" text-anchor="middle">每个一个角度，同时开</text>
+        <rect class="b" x="450" y="36" width="170" height="56" rx="6"/><text class="h" x="535" y="58" text-anchor="middle">claude -p × 1～3</text><text class="s" x="535" y="77" text-anchor="middle">每个一个角度，同时开</text>
         <path class="a" d="M620 64H658" marker-end="url(#a8)"/>
         <rect class="b" x="660" y="36" width="170" height="56" rx="6"/><text class="h" x="745" y="58" text-anchor="middle">现有连接</text><text class="s" x="745" y="77" text-anchor="middle">不用管地址、key、模型名</text>
         <path class="a" d="M830 64H868" marker-end="url(#a8)"/>
-        <rect class="b" x="870" y="36" width="150" height="56" rx="6"/><text class="h" x="945" y="58" text-anchor="middle">脚本合并、记账</text><text class="s" x="945" y="77" text-anchor="middle">子代理把结果交给它</text>
+        <rect class="b" x="870" y="36" width="150" height="56" rx="6"/><text class="h" x="945" y="58" text-anchor="middle">脚本合并、记账</text><text class="s" x="945" y="77" text-anchor="middle">后台进程把结果交给它</text>
 
         <text class="h" x="20" y="130">每个审查点怎么跑</text>
-        <rect class="b" x="20" y="142" width="230" height="56" rx="6"/><text class="h" x="135" y="164" text-anchor="middle">第一轮：同时审</text><text class="s" x="135" y="183" text-anchor="middle">2~3 个子代理，每个一个角度</text>
+        <rect class="b" x="20" y="142" width="230" height="56" rx="6"/><text class="h" x="135" y="164" text-anchor="middle">第一轮：同时审</text><text class="s" x="135" y="183" text-anchor="middle">1~3 个 claude -p，每个一个角度</text>
         <path class="a" d="M250 170H288" marker-end="url(#a8)"/>
         <rect class="b" x="290" y="142" width="150" height="56" rx="6"/><text class="h" x="365" y="164" text-anchor="middle">修 P1、P2</text><text class="s" x="365" y="183" text-anchor="middle">P3 只记</text>
         <path class="a" d="M440 170H478" marker-end="url(#a8)"/>
-        <rect class="b" x="480" y="142" width="180" height="56" rx="6"/><text class="h" x="570" y="164" text-anchor="middle">再审：只审修改点</text><text class="s" x="570" y="183" text-anchor="middle">1 个子代理</text>
+        <rect class="b" x="480" y="142" width="180" height="56" rx="6"/><text class="h" x="570" y="164" text-anchor="middle">再审：只审修改点</text><text class="s" x="570" y="183" text-anchor="middle">1 个 claude -p</text>
         <path class="a" d="M660 170H690V152H718" marker-end="url(#a8)"/><path class="a" d="M690 170V206H718" marker-end="url(#a8)"/>
         <rect class="b" x="720" y="130" width="300" height="42" rx="6"/><text class="h" x="870" y="156" text-anchor="middle">没有 P1、P2：结束</text>
         <rect class="b" x="720" y="184" width="300" height="42" rx="6"/><text class="h" x="870" y="210" text-anchor="middle">还有 P1、P2：接着修、接着审，可以打断</text>
@@ -456,13 +456,13 @@
         <div class="g-both">进流程只有三种门：你敲 /opsx:explore；话里明确有 openspec；改动较大时模型用提问框问你，选"探索"才进。问句、说"停"都不退出流程</div>
         <div class="g-both">边谈边写 openspec/explore/&lt;大任务&gt;.md，plan.md 只当索引；没初始化 OpenSpec 的项目，第一次用时自动建 openspec/</div>
         <div class="g-phase">需求（每个 change 一遍）</div>
-        <div class="g-step">一份一份写：proposal → specs → design → tasks。写完一份提醒你看一看，你选"写下一份 / 我要改"；写完 tasks 问你"审一下 / 定稿并开工 / 只定稿 / 我要改"</div><div class="g-step g-a">自动接着写到 tasks，中间不审不停；写完用子代理审一次整套、修改、复审，没有 P1、P2 才定稿</div>
+        <div class="g-step">一份一份写：proposal → specs → design → tasks。写完一份提醒你看一看，你选"写下一份 / 我要改"；写完 tasks 问你"审一下 / 定稿并开工 / 只定稿 / 我要改"</div><div class="g-step g-a">自动接着写到 tasks，中间不审不停；写完由脚本调 claude -p 审一次整套、修改、复审，没有 P1、P2 才定稿</div>
         <div class="g-both">design.md 里写"验收用例"：对应场景、前置数据和环境、步骤、预期、谁来测、对应第几组任务。tasks.md 只写要做的实现</div>
         <div class="g-step">四份定稿后按提交方式提交（询问就问你），再问你：开工 / 继续修改 / 暂不执行</div><div class="g-step g-a">提交方式是"自动"才提交，"关""询问"都不提交也不问；接着自动开工</div>
         <div class="g-phase">apply（每个 change 一遍）</div>
         <div class="g-both">按 1.1、1.2 做，做完打勾；流程里没开工改源码要拦（带拦截编号，能放行）</div>
         <div class="g-step">编译、类型检查直接跑；跑测试、起服务、看页面先问你</div><div class="g-step g-a">组之间不审；这个 change 的任务全部做完审修一次，不跑自测，过了才接下一个 change</div>
-        <div class="g-step">这个 change 的任务全部做完，问你要不要审查（同一个要求只问一次）</div><div class="g-step g-a">审修不设次数上限，没有 P1、P2 才算过；子代理连续 3 次没交结论就不再催，写进报告，不算通过</div>
+        <div class="g-step">这个 change 的任务全部做完，问你要不要审查（同一个要求只问一次）</div><div class="g-step g-a">审修不设次数上限，没有 P1、P2 才算过；连续 3 次没拿到结论就不再催，写进报告，不算通过</div>
         <div class="g-step">一个 change 做完，用提问框问你接不接下一个</div><div class="g-step g-a">一个 change 做完，记落地偏差，按 plan.md 直接接下一个</div>
         <div class="g-phase">全面自测和人工核验</div>
         <div class="g-step">全部 change 做完，问你要不要全面自测</div><div class="g-step g-a">全部 change 做完，自动全面自测：所有验收用例和整体用例；改过代码退回重跑</div>
@@ -494,7 +494,7 @@
     <div class="card" id="sec-guide-docs" data-sec="大需求怎么写">
       <h2>大需求怎么写</h2>
       <ul class="g-list">
-        <li>文档写多长都行，套件不限行数；审查子代理自己读文件，不截断。</li>
+        <li>文档写多长都行，套件不限行数；审查材料放不下时分批送，不截断。</li>
         <li>按能力拆规格：一个能力一份 specs/&lt;能力&gt;/spec.md，不要全堆在一份里。</li>
         <li>关系复杂的地方画图：状态流转、调用链、数据流在 design.md 里用 mermaid 图。</li>
         <li>真的太大就拆成几个变更：每个能单独开工、单独验收的部分各建一个。</li>
@@ -606,7 +606,7 @@
     <div class="card" id="sec-spec" data-sec="全局：审查与产物">
       <h2>全局：审查与产物</h2>
       <div class="opt">
-        <div><div class="t">审查预期用时</div><div class="d">不截断审查，子代理都审完；审完超过这个时间，自动记一条问题反馈给维护的人优化审查。</div>
+        <div><div class="t">审查预期用时</div><div class="d">不截断审查，都审完；审完超过这个时间，自动记一条问题反馈给维护的人优化审查。</div>
           <details class="more"><summary>细节</summary><ul><li>超时、有角度没交结论，都记一条：总用时、每个角度的用时、文件数、字数。</li><li>不带材料原文和审查意见。</li></ul></details></div>
         <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
       </div>
@@ -616,7 +616,7 @@
       <h2>自动模式（每个会话自己开）</h2>
       <p class="hint">自动模式不在这里开：在要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），只对那个会话有效，/vk-auto off 关，状态栏第二行看得到。开了以后先探索、和你确认范围和疑问，之后自动写完需求文档审修一次整套、定稿、开工，每个 change 做完审查，全部做完自测、修改，按提交方式提交，收工交报告。不加你没说的需求；你中途报的问题、改的需求照改，接着自动做。归档、push 照旧要你点头；改库照旧按自动模式的规矩（留得下备份的才做，别的留给你，见手册"查库和 redis"）。</p>
       <ul class="g-list">
-        <li><b>审查</b>：四份需求文档写完审一次整套，一个 change 的任务全部做完审一次，都用子代理自动审查、核验、修改和复验，没有 P1、P2 才做下一步，不设次数上限。</li>
+        <li><b>审查</b>：四份需求文档写完审一次整套，一个 change 的任务全部做完审一次，都由脚本调 claude -p 自动审查、核验、修改和复验，没有 P1、P2 才做下一步，不设次数上限。</li>
         <li><b>自测</b>：每个 change 做完只审查，不自测。全部 change 做完全面自测：所有验收用例和整体用例，改过代码退回重跑，验不了的写明没验证和原因；过了停下等你核验。</li>
         <li><b>看页面</b>：改了 .vue、.html、.css 这类文件却没跑过页面场景，全面自测时用 /vk-see-page 看一遍：自己起服务，用无头浏览器，不开窗口。</li>
       </ul>
@@ -629,7 +629,7 @@
 
       <div class="opt">
         <div><div class="t">提交方式</div><div class="d">人工、自动都用。做完一件完整的事时：<b>询问</b>交代改了什么、怎么验的，问你"提交 / 还要改"；<b>自动</b>直接提交；<b>关</b>不问也不提交，你说"提交"才提交。</div>
-          <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾（子代理连续没交结论停了的不挡）；任务都勾完以后，改完你报的一处问题；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>自动模式时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
+          <details class="more"><summary>细节</summary><ul><li>提交时机参照 Claude 桌面版：做完一件完整的事才算。OpenSpec 实施里，上次提交之后又勾完了一项任务；审查修复全部收尾（连续没拿到结论停了的不挡）；任务都勾完以后，改完你报的一处问题；需求文档四份定稿；不走 OpenSpec 的改动做完、跑过快检。做到一半不算。</li><li>只 add 它这一轮改的和新建的文件，你工作区里原来就有的改动不会被带上。</li><li>自动模式时选"询问"：你不在，它先不提交，把要提交的列进全自动报告，等你回来说。</li><li>push 和发内网不归这里管，一律要你亲口说。</li></ul></details></div>
         <div class="ctl"><select id="k_commitMode"><option value="ask">询问：到了时机问我</option><option value="auto">自动：到了时机直接提交</option><option value="off">关：不问也不提交，我说了才提交</option></select></div>
       </div>
       <div class="opt">

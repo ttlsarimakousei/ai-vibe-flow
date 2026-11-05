@@ -26,12 +26,12 @@ const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
 const SKILLS = ['vk-onboard', 'vk-see-page', 'vk-cross-review', 'vk-handover', 'vk-db-crud', 'vk-redis'];
-const AGENTS = ['vk-reviewer.md'];
+const AGENTS = []; // 审查不用子代理了（第 72 条，2026-11-05），套件不再装审查代理
 /** 一个目录里套件的斜杠命令文件（vk-*.md）；目录不在返回空 */
 function kitCommands(dir) { try { return fs.readdirSync(dir).filter((f) => /^vk-[\w-]+\.md$/i.test(f)).sort(); } catch (e) { return []; } }
 // 改名之前套件自己装的：装这一版时删掉。没前缀的（名字太普通，会和别人的套件撞，0929 改的）；ttls- 开头的（2026-11-04 改成 vk-，仓库主人定的）
 const OLD_SKILLS = ['onboard', 'see-page', 'cross-review', 'handover', 'ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis'];
-const OLD_AGENTS = ['vibe-reviewer.md', 'ttls-reviewer.md'];
+const OLD_AGENTS = ['vibe-reviewer.md', 'ttls-reviewer.md', 'vk-reviewer.md'];
 /** 旧名字现在叫什么：去掉旧前缀，加上 vk- */
 const nowName = (n) => 'vk-' + String(n).replace(/^ttls-/, '').replace(/^vibe-/, '').replace(/\.md$/, '');
 // 并进套件之前单独装的技能：认得出是它才收。urai-db-crud 自带的驱动先挪进套件的驱动目录
@@ -390,7 +390,6 @@ function mergeSettings(s, remove, hooksOnly) {
     PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit', hooks: [fast('after-tool')] }],
     PostToolUseFailure: [{ matcher: 'Bash|PowerShell', hooks: [fast('after-tool')] }],
     Stop: [{ hooks: [fast('verify-gate')] }],
-    SubagentStop: [{ hooks: [fast('review-stop')] }],
   };
   // 钩子：先把自己以前加的摘掉（按单个钩子摘，不连累同一组里别人的钩子；命令方式、HTTP 方式的都认），再加新的。重复安装不会越加越多
   s.hooks = s.hooks || {};
@@ -560,7 +559,7 @@ function commitMode() { const m = kitConfig().commitMode; return COMMIT_MODE_TEX
 function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'; }
 // 审查不设次数上限（用户 2026-11-03 定的）
 function reviewModeText() {
-  return '子代理 vk-reviewer 审，第一轮按材料大小 1～3 个，只看这次需求碰到的地方，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；子代理连续 3 次没交结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
+  return '脚本 review.js run 调 claude -p 审，结论在命令输出里，不开子代理；第一轮按材料大小 1～3 个角度，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；连续 3 次没拿到结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
 }
 const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动写，四份写完审修一次整套；Apply 按已授权范围做，这个 change 的任务全部做完审修一次，所有 change 做完全面自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
 const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
@@ -840,10 +839,12 @@ function removeOldNames() {
     const f = path.join(CLAUDE, 'agents', n);
     if (!fs.existsSync(f)) continue;
     const was = path.join(KIT, 'pristine', 'agents', n);
-    if (!fs.existsSync(was)) { console.log('  [!] ' + f + ' 不是套件装的，没有动它。套件的审查代理现在叫 vk-reviewer'); continue; }
-    if (!same(f, was)) console.log('  [!] 旧的审查代理 ' + n + ' 被改过，删除前备份在 ' + backup(f, 'agents/' + n));
+    // vk-reviewer：这一版开始不装了，上一版的原样可能已经换掉，看内容认
+    const ours = n === 'vk-reviewer.md' && /review\.js/.test(fs.readFileSync(f, 'utf8'));
+    if (!fs.existsSync(was) && !ours) { console.log('  [!] ' + f + ' 不是套件装的，没有动它。套件不再用审查代理'); continue; }
+    if (fs.existsSync(was) && !same(f, was)) console.log('  [!] 旧的审查代理 ' + n + ' 被改过，删除前备份在 ' + backup(f, 'agents/' + n));
     fs.unlinkSync(f);
-    gone.push(n.replace(/\.md$/, '') + ' → ' + nowName(n));
+    gone.push(n === 'vk-reviewer.md' ? 'vk-reviewer（审查不用子代理了，脚本调 claude -p）' : n.replace(/\.md$/, '') + ' → 不再用（审查改成脚本调 claude -p）');
   }
   return gone;
 }
@@ -1159,7 +1160,7 @@ if (mode === 'install') {
   // 留一份原样的副本，下次更新和卸载时用来判断你有没有改过
   removeDir(path.join(KIT, 'pristine'));
   copyDir(path.join(SRC, 'claude'), path.join(KIT, 'pristine'));
-  console.log('  [OK] 技能：' + SKILLS.map((n) => '/' + n).join('  ') + '；审查代理：vk-reviewer');
+  console.log('  [OK] 技能：' + SKILLS.map((n) => '/' + n).join('  ') + '');
   if (renamed.length) console.log('  [OK] 技能和代理改名了（统一 vk- 开头）：' + renamed.join('，') + '。旧名字的已经删掉');
   for (const a of absorbed) {
     console.log('  [OK] 以前单独装的 ' + a.name + ' 技能并进套件了，现在叫 ' + a.now + '。旧的挪到了 ' + a.backup + '（不会被自动删）');

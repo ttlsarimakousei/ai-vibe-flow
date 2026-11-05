@@ -1,9 +1,11 @@
 'use strict';
 /*
- * 审查脚本（用户 2026-11-03 定的：审查全部用子代理 vk-reviewer，和主会话同模型）。脚本不发请求，只备材料、算修改点、记账：
- *   prepare：算这一轮审什么（第一轮材料小的 1 个看全、大的 2～3 个角度，后面只审修改点），每个角度写一份范围文件，输出每个子代理的提示。输入没变就复用同一个任务，已交的角度不重开。
- *   submit：子代理最后一条回复由 hooks/review-stop.js（SubagentStop）交到这里，角度交齐才合并入账；JSON 不对回 block 让子代理重写，同一角度最多 2 次。
- * 没有次数上限、文件上限，不收敛也不停。只有子代理连续 3 次拿不到结论才不再催，也不算通过（flow-policy.js 的 halted）。
+ * 审查脚本（第 72 条，仓库主人 2026-11-05 定的：不用子代理，脚本调 claude -p。内网报告看到子代理的时间几乎全花在一步步反复想上，单次请求 1～2 分钟）：
+ *   run：算这一轮审什么（第一轮材料小的 1 个看全、大的 2～3 个角度，放不下分批；后面只审修改点），把材料和脚本查好的事实（review-facts.js）写进提示，
+ *     每个角度起一个后台进程跑 claude -p（不带工具、关掉钩子），等结果。最多等 9 分钟，没审完返回 running，再跑一次接着等，不重开（Bash 工具单条命令最多 10 分钟，guard-commit 把这条命令的 timeout 改成 10 分钟）。
+ *   worker：后台进程，一个角度一个。回复里没有 JSON（只想不答）重试一次，还没有算没交。交齐才合并入账。
+ *   prepare（R.prepare）只备材料不起进程，测试和 VIBE_KIT_REVIEW_NO_RUN 用。
+ * 没有次数上限、文件上限，不收敛也不停。只有连续 3 次拿不到结论才不再催，也不算通过（flow-policy.js 的 halted）。
  * 二进制、超 4MB、敏感文件记 uncovered，状态仍是 completed：不然这个点永远过不了。诊断不写材料原文和审查意见。
  */
 const fs = require('fs');
@@ -14,6 +16,8 @@ const W = require('./workspace');
 const R = require('./redact');
 const store = require('./state-store');
 const Sc = require('./review-scope');
+const Facts = require('./review-facts');
+const { spawn, spawnSync } = require('child_process');
 const secretFile = (f) => /(^|[\\/])(secrets\.json|router-data|\.env(?:\.[^/]*)?|db-crud\.ini|redis\.json|login\.json)([\\/]|$)/i.test(f);
 function changeOf(cwd, name) { return name ? S.allChanges(cwd).find((c) => c.name.toLowerCase() === String(name).toLowerCase()) : null; }
 // 不带变更名的审查按"项目 + 基线"算一次审查（#211：以前只按项目算，前一次不相干的审查把累计预算占掉了，这次一开始就超时）
@@ -199,10 +203,26 @@ function parseResult(text) {
   let result;
   const fences = [...body.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].reverse();
   for (const m of fences) { result = tryParse(m[1]); if (result !== undefined) break; }
-  if (result === undefined) { const i = body.indexOf('{'); const k = body.lastIndexOf('}'); if (i >= 0 && k > i) result = tryParse(body.slice(i, k + 1)); }
+  if (result === undefined) { const i = body.indexOf('{'); const k = body.lastIndexOf('}'); if (i >= 0 && k > i) result = tryParse(body.slice(i, k + 1)) || tryParse(repairJson(body.slice(i, k + 1))); }
   if (result === undefined) throw new Error('最后一条回复里没有能解析的 JSON');
   if (!result || !Array.isArray(result.issues) || result.issues.some((x) => !x || typeof x.file !== 'string' || typeof x.problem !== 'string' || typeof x.evidence !== 'string')) throw new Error('JSON 要有 issues 数组，每条都要有 file、problem、evidence 三个字符串');
-  return { issues: R.tree(result.issues), summary: R.clip(result.summary || '', 1500) };
+  return { issues: R.tree(result.issues), summary: R.clip(result.summary || '', 1500), need: (Array.isArray(result.need) ? result.need : []).filter((x) => typeof x === 'string' && x.trim()).slice(0, 20).map((x) => R.clip(x, 300)) };
+}
+/** 模型写的 JSON 常见两种毛病：字符串里有裸换行、最后多一个逗号 */
+function repairJson(t) {
+  let out = ''; let inStr = false; let esc = false;
+  for (const ch of String(t)) {
+    if (inStr) {
+      if (esc) { esc = false; out += ch; continue; }
+      if (ch === '\\') { esc = true; out += ch; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') continue;
+      if (ch === '\t') { out += '\\t'; continue; }
+      out += ch;
+    } else { if (ch === '"') inStr = true; out += ch; }
+  }
+  return out.replace(/,(\s*[}\]])/g, '$1');
 }
 /** 模型执行接受问题时核对真人决定；手工 CLI 仍由执行者负责。 */
 function decisionIssue(j) {
@@ -241,16 +261,24 @@ function reportReview(result, job) {
 }
 /** 审完下一步怎么办，写在结果里（模型照着做，不用翻规范） */
 function nextStep(result) {
-  if (result.status === 'stale') return '审查期间文件改过了，这一轮不算审完，但报的问题还要看。逐条核实、改完，再跑一次 review.js prepare：只审改过的地方，不用从头审。';
+  const text = nextText(result);
+  return text && (result.need || []).length ? text + ' need 里是审查者想看、材料里没有的：能一两步查清的自己用 Grep、Read 查，查出问题按问题处理，查不清的写进交代，不用为它再审一轮。' : text;
+}
+function nextText(result) {
+  if (result.status === 'stale') return '审查期间文件改过了，这一轮不算审完，但报的问题还要看。逐条核实、改完，再跑一次 review.js run：只审改过的地方，不用从头审。';
   if (!['completed', 'partial'].includes(result.status)) return '';
-  if (result.status === 'partial') return '有材料没审到，不算审完：看 skipped 里的原因，处理完再跑一次 review.js prepare。';
-  if (result.noChange) return '文件和上一轮审过的一样，这次不用开子代理' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
+  if (result.status === 'partial') return '有材料没审到，不算审完：看 skipped 里的原因，处理完再跑一次 review.js run。';
+  if (result.noChange) return '文件和上一轮审过的一样，这次不用审' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
   if (!result.issues.length) return '没有问题，这个点过了。';
   if (!result.blocking) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
-  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细跑 review.js resolve，再跑一次 review.js prepare：下一轮只审改过的地方。';
+  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细跑 review.js resolve，再跑一次 review.js run：下一轮只审改过的地方。';
 }
 const MODE_NAME = { proposal: '提案', code: '代码' };
 const QUIET_MS = 30 * 60000;
+const WORKER_MS = 45 * 60000; // 一个角度最多两次请求，一次最多 20 分钟
+const CALL_MS = 20 * 60000;
+const WAIT_MS = 9 * 60000; // Bash 工具单条命令最多 10 分钟，留点余量
+const MAX_WORKERS = 3;
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } };
 const safeName = (s) => String(s).replace(/[\\/:*?"<>|\s]+/g, '-');
 const jobFolder = (job) => path.join(job.root, '.vibe', 'reviews', job.change || 'plain');
@@ -343,7 +371,7 @@ function prepare(opts) {
   const liveJobs = Object.values(S.readState('review-jobs')).filter((x) => x && x.status === 'running' && x.state && x.mode === opts.mode && (x.change || '') === (opts.change || '') && S.normKey(x.root) === S.normKey(opts.cwd) && Object.values(x.state).some(alive));
   if (liveJobs.length) {
     const names = liveJobs.flatMap((x) => Object.entries(x.state).filter(([, s]) => alive(s)).map(([l]) => (x.point || x.mode) + ' ' + l));
-    return { status: 'running', running: names, next: '上一轮还有 ' + names.length + ' 个审查子代理在跑（' + names.join('、') + '），这次不开新的一轮，也不要自己开。等它们做完的通知，跑 review.js status 看结论；这期间文档或代码改过的，那一轮结论会作废（stale），到时候再跑一次 prepare。半小时没有动静的算没交，到时候这里就能开了。' };
+    return { status: 'running', running: names, next: '上一轮还有 ' + names.length + ' 个审查在跑（' + names.join('、') + '），这次不开新的一轮。等一会儿再跑一次 review.js run；这期间文档或代码改过的，那一轮结论会作废（stale），只审改过的地方。' };
   }
   if (old && old.dir) fs.rmSync(old.dir, { recursive: true, force: true });
   const id = crypto.randomBytes(12).toString('hex'); const started = Date.now();
@@ -364,7 +392,10 @@ function prepare(opts) {
     job.scoped = !!plan.scoped;
     const noChange = plan.scoped && !plan.items.length;
     const lenses = noChange ? [] : plan.scoped ? [{ name: '复审', text: '' }] : policy.isCross(opts.point) ? [{ name: '修改点', text: '' }] : Sc.lensesFor(opts.mode, material.batches.length, cfg, material.items.reduce((n, x) => n + x.text.length, 0));
-    const list = lenses.length || noChange ? lenses : [{ name: '全量', text: '' }];
+    let list = lenses.length || noChange ? lenses : [{ name: '全量', text: '' }];
+    // 一个请求放不下：分批，每批一个请求，一个人看全几个角度。放得下就是一批，每个角度都看全部材料
+    const packs = !plan.scoped && !noChange ? Facts.packsOf(material.items) : [];
+    if (packs.length > 1) list = packs.map((pack, i) => ({ name: '第' + (i + 1) + '批', text: '材料太多分了 ' + packs.length + ' 批，这是第 ' + (i + 1) + ' 批，你一个人看全所有角度，只报这一批里的问题。' }));
     job.lenses = list.map((l) => l.name);
     for (const l of job.lenses) job.state[l] = { status: 'open' };
     job.files = material.currents.size; job.chars = material.items.reduce((n, x) => n + x.text.length, 0);
@@ -372,7 +403,12 @@ function prepare(opts) {
     fs.mkdirSync(job.dir, { recursive: true });
     if (!store.atomicWrite(path.join(job.dir, 'plan.json'), { scoped: job.scoped, why: plan.why, noChange, open: plan.open, closed: plan.closed, carried: plan.carried, kept: plan.kept, changed: plan.changed, itemFiles: plan.scoped ? [...new Set(plan.items.map((x) => x.file))] : [], currents, skipped: material.skipped, uncovered: material.uncovered, excluded: material.excluded, contextOnly: material.contextOnly, materialInputs: material.inputs, deferred: Sc.deferredOf(prevRound), born, fingerprintNote: before.truncated ? '这个目录不是 git 仓库，文件太多，只核对了前面的文件：后面的文件改了认不出来，"审查后输入没变"对它们不作数' : undefined })) throw new Error('审查材料写不进 ' + job.dir);
     const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : !plan.scoped && opts.point === 'tasks' ? Sc.carryover(folder, ['proposal', 'specs', 'design']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '', paths: !plan.scoped && opts.mode === 'proposal' && change ? pathFacts(change, material.contextOnly) : null };
-    for (const l of list) fs.writeFileSync(path.join(job.dir, safeName(l.name) + '.md'), scopeText(job, l, plan, round, material));
+    const facts = !plan.scoped && !noChange ? safeFacts(opts, material) : '';
+    list.forEach((l, i) => {
+      const scope = scopeText(job, l, plan, round, material);
+      fs.writeFileSync(path.join(job.dir, safeName(l.name) + '.md'), scope);
+      fs.writeFileSync(path.join(job.dir, safeName(l.name) + '.prompt.md'), promptText(job, scope, plan.scoped ? null : (packs.length > 1 ? packs[i] : packs[0] || []), facts));
+    });
     S.updateState('review-jobs', (o) => { o[key] = job; });
     if (noChange) return finish(id);
     return agentsOf(job);
@@ -381,6 +417,95 @@ function prepare(opts) {
     S.updateState('review-jobs', (o) => { o[key] = Object.assign(job, result); });
     if (change && opts.point) policy.noteResult(change.dir, opts.point, result, pointHash);
     return result;
+  }
+}
+function safeFacts(opts, material) { try { return Facts.factsOf(opts.mode, material.items, opts.cwd, (material.bases || []).map((b) => b.root)); } catch (e) { return ''; } }
+/** 发给 claude -p 的全文：审查的规矩、范围（要求、上一轮的问题）、材料、脚本查好的事实 */
+function promptText(job, scope, pack, facts) {
+  let rules = ''; try { rules = fs.readFileSync(path.join(S.KIT, 'review-prompt.md'), 'utf8'); } catch (e) { rules = '你是审查者，只读不改，找出会在什么情况下出错。最后只回一个 JSON：{"issues":[{"severity":"P2","file":"路径","line":1,"problem":"一句话","evidence":"具体输入和错误结果","scope":"in"}],"need":[],"summary":""}'; }
+  const parts = [rules.trim(), scope.trim()];
+  if (pack) {
+    parts.push('## 材料\n\n' + pack.map(Facts.renderEntry).join('\n\n'));
+    const explore = exploreOf(job);
+    if (explore) { try { parts.push('## 探索记录全文\n\n' + R.material(fs.readFileSync(explore, 'utf8')).slice(0, 60000)); } catch (e) { /* 读不了 */ } }
+  }
+  if (facts) parts.push(facts);
+  return parts.join('\n\n') + '\n';
+}
+function claudeExe() {
+  if (process.env.VIBE_KIT_CLAUDE_EXE) return process.env.VIBE_KIT_CLAUDE_EXE;
+  const own = process.env.CLAUDE_CODE_EXECPATH; // Claude Code 给子进程的：它自己。npm 装的可能是 node，不算
+  return own && /claude[^\\/]*$/i.test(path.basename(own)) ? own : 'claude';
+}
+/** 跑一次 claude -p：不带工具、关掉钩子（不然套件的流程检查掺进来）、不留会话记录。模型名 sonnet（第 63 条） */
+function askClaude(prompt, cwd, settings) {
+  const exe = claudeExe();
+  const raw = ['-p', '--output-format', 'json', '--model', 'sonnet', '--settings', settings, '--no-session-persistence', '--system-prompt', 'You are a code and requirements reviewer. Read only, change nothing. Write your findings in Chinese.', '--tools', ''];
+  const useShell = process.platform === 'win32' && !/\.exe$/i.test(exe);
+  // shell:true 时 Node 只把参数拼起来：空参数和带空格的自己加引号
+  const a = useShell ? raw.map((x) => (x === '' ? '""' : /[\s"&|<>^]/.test(x) ? '"' + x.replace(/"/g, '\\"') + '"' : x)) : raw;
+  const env = Object.assign({}, process.env); delete env.CLAUDECODE;
+  const r = spawnSync(useShell && /\s/.test(exe) ? '"' + exe + '"' : exe, a, { input: prompt, cwd, env, encoding: 'utf8', windowsHide: true, shell: useShell, timeout: CALL_MS, maxBuffer: 128 * 1024 * 1024 });
+  let j = null; try { j = JSON.parse(String(r.stdout || '').trim().split(/\r?\n/).filter(Boolean).pop()); } catch (e) { /* 下面报 */ }
+  const u = (j && j.usage) || {};
+  return { text: j ? String(j.result || '') : '', out: u.output_tokens || 0, input: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), err: j ? (j.is_error ? R.clip(String(j.result || j.subtype || ''), 200) : '') : R.clip(String(r.stderr || (r.error && r.error.message) || r.stdout || '没有输出'), 200) };
+}
+/** 后台进程：一个角度。回复里没有 JSON（只想不答）重试一次 */
+function work(id, lens) {
+  const job = findJob(id);
+  if (!job || job.status !== 'running' || !job.state[lens]) return;
+  const file = path.join(job.dir, safeName(lens) + '.prompt.md');
+  const settings = path.join(job.dir, 'claude-settings.json');
+  let why = '';
+  try {
+    fs.writeFileSync(settings, JSON.stringify({ disableAllHooks: true }));
+    const prompt = fs.readFileSync(file, 'utf8');
+    for (let i = 0; i < 2; i++) {
+      const r = askClaude(prompt, job.root, settings);
+      S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id && cur.state[lens]) { cur.state[lens].out = (cur.state[lens].out || 0) + r.out; cur.state[lens].input = (cur.state[lens].input || 0) + r.input; } });
+      if (r.err) { why = 'claude -p 出错：' + r.err; if (!r.text) break; }
+      const s = submit(id, lens, r.text);
+      if (s.ok) return;
+      why = s.error + (r.out ? '（输出 ' + r.out + ' token，回复 ' + r.text.length + ' 字）' : '');
+    }
+  } catch (e) { why = (e && e.message) || String(e); }
+  failLens(id, lens, why || '没拿到结论');
+}
+function startWorker(job, lens) {
+  S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === job.id && cur.state[lens]) cur.state[lens] = { status: 'sent', sentAt: Date.now() }; });
+  try {
+    const child = spawn(process.execPath, [path.join(S.KIT, 'tools', 'review.js'), 'worker', job.id, lens], { detached: true, windowsHide: true, stdio: 'ignore', cwd: job.root, env: process.env });
+    child.on('error', () => { /* 下面 pid 是空的，等不到结果算没交 */ });
+    child.unref();
+    if (!child.pid) { failLens(job.id, lens, '审查进程起不来'); return; }
+    S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === job.id && cur.state[lens] && cur.state[lens].status === 'sent') cur.state[lens].pid = child.pid; });
+  } catch (e) { failLens(job.id, lens, '审查进程起不来：' + ((e && e.message) || e)); }
+}
+const pause = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch (e) { /* 等不了就接着 */ } };
+/** 审一轮：备材料、起后台进程、等结果。最多等 waitSeconds，没审完返回 running，再跑一次接着等 */
+function run(opts) {
+  opts = Object.assign({ cwd: process.cwd(), mode: 'code' }, opts); opts.cwd = path.resolve(opts.cwd);
+  const p = prepare(opts);
+  if (p.status !== 'prepared') return p;
+  const key = jobKey(opts.cwd, opts.change, opts.mode, opts.point, opts.base);
+  const queue = (p.agents || []).map((a) => a.lens);
+  const limit = Date.now() + (Number(opts.waitSeconds) > 0 ? Number(opts.waitSeconds) * 1000 : WAIT_MS);
+  for (;;) {
+    const job = S.readState('review-jobs')[key];
+    if (!job || job.id !== p.id) return { status: 'cancelled', reason: '这一轮被取消或者换掉了' };
+    if (job.status !== 'running') { return job; }
+    for (const l of job.lenses) { const s = job.state[l]; if (s.status === 'sent' && s.pid && !alive(s)) failLens(job.id, l, '审查进程没了，没交结论'); }
+    const now = S.readState('review-jobs')[key] || job;
+    const busy = now.lenses.filter((l) => now.state[l].status === 'sent').length;
+    for (let i = busy; i < MAX_WORKERS && queue.length; i++) startWorker(now, queue.shift());
+    const fresh = S.readState('review-jobs')[key] || now;
+    if (fresh.status === 'running' && !queue.length && !fresh.lenses.some((l) => fresh.state[l].status === 'sent')) {
+      if (!leftOf(fresh).length) return finish(fresh.id);
+      const lost = fresh.lenses.filter((l) => fresh.state[l].status === 'failed').map((l) => l + '：' + (fresh.state[l].why || '没交结论'));
+      return { status: 'failed', id: fresh.id, lost, reason: lost.join('；'), next: '有角度没拿到结论，不算审完。再跑一次 review.js run 只补没交的；连续 3 次没拿到就不再催，写进交代。' };
+    }
+    if (Date.now() >= limit) return { status: 'running', id: fresh.id, lenses: fresh.lenses, left: leftOf(fresh), next: '还在审。再跑一次一样的 review.js run 接着等，不会重开；这期间不要改文件。' };
+    pause(1500);
   }
 }
 /** 主会话发出去了（flow-policy 放行 Agent 时记）：收工时才分得清"在跑"和"没开" */
@@ -406,7 +531,9 @@ function heartbeat(j) {
   S.writeState(aliveKey(j.session_id), { at: Date.now() });
 }
 function lastSeen(s) { return Math.max(Number(s.sentAt) || 0, s.session ? Number(S.readState(aliveKey(s.session)).at) || 0 : 0); }
-const alive = (s) => !!s && s.status === 'sent' && Date.now() - lastSeen(s) < QUIET_MS;
+// 后台进程：进程还在就算活着（有个上限，防进程号被复用）。没有进程号的是 2026-11-05 之前的子代理，按动静算
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
+const alive = (s) => !!s && s.status === 'sent' && (s.pid ? pidAlive(s.pid) && Date.now() - (Number(s.sentAt) || 0) < WORKER_MS : Date.now() - lastSeen(s) < QUIET_MS);
 function claim(id, lens, toolId, session) {
   let why = '';
   S.updateState('review-jobs', (o) => {
@@ -498,6 +625,7 @@ function finish(id) {
   const plan = readJson(path.join(job.dir, 'plan.json')) || {};
   const folder = jobFolder(job);
   const groups = job.lenses.map((l) => readJson(path.join(job.dir, 'result-' + safeName(l) + '.json')) || { issues: [] });
+  const need = [...new Set(groups.flatMap((g) => g.need || []))];
   const labels = Object.keys(plan.currents || {});
   const norm = (v) => String(v).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
   const labelOf = (f) => labels.find((n) => norm(n) === norm(f) || norm((plan.currents[n] || {}).source || '') === norm(f)) || f;
@@ -506,6 +634,7 @@ function finish(id) {
   const outside = issues.filter((x) => /^out$/i.test(String(x.scope || '')));
   issues = issues.filter((x) => !/^out$/i.test(String(x.scope || '')));
   const result = { id, mode: job.mode, status: 'failed', issues, covered: [], skipped: plan.skipped || [], uncovered: plan.uncovered || [], excluded: plan.excluded, contextOnly: plan.contextOnly, materialInputs: plan.materialInputs, scope: job.scoped ? 'changes' : 'full', round: job.round, lenses: job.lenses.length || 1, expectSeconds: job.expectMs / 1000, summary: groups.map((g) => g.summary).filter(Boolean).join('\n') };
+  if (need.length) result.need = need;
   if (plan.why) result.scopeWhy = plan.why;
   if (plan.fingerprintNote) result.fingerprintNote = plan.fingerprintNote;
   if (plan.noChange) result.noChange = true;
@@ -555,7 +684,7 @@ function finish(id) {
     S.updateState(job.mode === 'proposal' ? 'reviewed-proposal' : 'reviewed', (o) => { const r = o[S.normKey(change.dir)]; if (r && r.key === id) { if (job.mode === 'code') r.fingerprint = job.fingerprint; else { r.proposalHash = require('./apply-scope').planHash(change.dir); r.materialInputs = result.materialInputs; } r.reportFile = job.file; r.executor = 'agent'; r.covered = result.covered; } });
   }
   S.updateState('review-jobs', (o) => { if (o[job.key] && o[job.key].id === id) o[job.key] = Object.assign(o[job.key], result, { finishing: false }); });
-  fs.rmSync(job.dir, { recursive: true, force: true });
+  try { fs.rmSync(job.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch (e) { /* 占着就算了，审查目录在 .vibe 里 */ }
   return result;
 }
 function status(opts) {
@@ -689,6 +818,4 @@ function runsForLessons(calls, results, cwd) {
   }
   return out;
 }
-// 老会话还可能敲 run
-const run = prepare;
-module.exports = { claim, heartbeat, MAX_RUNNING, runsForLessons, prepare, run, submit, noteReject, failLens, dispatch, taskOf, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };
+module.exports = { claim, heartbeat, MAX_RUNNING, runsForLessons, prepare, run, work, askClaude, claudeExe, repairJson, submit, noteReject, failLens, dispatch, taskOf, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };

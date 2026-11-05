@@ -298,9 +298,9 @@ function planNext(j, c) {
 }
 function instruction(dir, point) {
   const mode = modeOfPoint(point); const rec = record(dir, point);
-  if (halted(dir, point)) return '审查点 ' + point + ' 的子代理连续 ' + rec.failStreak + ' 次没交结论，不再催：这个点算没审过，收工报告里写明"' + point + ' 没审成"；用户说审再审。';
+  if (halted(dir, point)) return '审查点 ' + point + ' 连续 ' + rec.failStreak + ' 次没拿到结论，不再催：这个点算没审过，收工报告里写明"' + point + ' 没审成"；用户说审再审。';
   const what = point === 'tasks' ? '四份需求文档写完了，审一次整套。' : point === CHANGE ? '这个 change 的任务全部做完了，审一次整个 change 的改动。' : '';
-  return what + '审查点 ' + point + '：执行 review.js prepare --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，照输出开 vk-reviewer 子代理。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。需求变化先沟通并同步相关产物和用例。';
+  return what + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，结论在命令输出里，照 next 做。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。需求变化先沟通并同步相关产物和用例。';
 }
 function entriesOf(j) { return j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : []; }
 function explicit(j, action) { return S.userSaid(entriesOf(j), action).ok; }
@@ -435,25 +435,15 @@ function actionIssue(j) {
   const cfg = S.readConfigFor(j); let inp = j.tool_input || {}; let name = String(j.tool_name || '');
   const cmd = String(inp.command || '');
   const runsReview = /^(Bash|PowerShell)$/.test(name) && reviewRun(j, cmd, name === 'PowerShell');
-  const reviewer = /^(Agent|Task)$/.test(name) && /(?:vk|ttls|vibe)-reviewer/.test(inp.subagent_type || '');
-  const reviewTask = reviewer ? require('./review-runner').taskOf(inp.prompt) : null;
+  const reviewer = /^(Agent|Task)$/.test(name) && (/(?:vk|ttls|vibe)-reviewer/.test(inp.subagent_type || '') || /审查任务\s*[:：]/.test(String(inp.prompt || '')));
   const review = reviewer || runsReview || name === 'Skill' && /cross-review/.test(inp.skill || '');
   const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
   const test = !review && (shellTest || name === 'Skill' && /see-page/.test(inp.skill || ''));
   if (!review && !test) return '';
   // 备审查之前先清一遍：前台子代理结束了、没交结论的还记着"在跑"，不清的话 prepare 会让它等一个不会来的通知（复审 20261105-2 第 1 条）
   if (runsReview) { try { require('./review-runner').sweep(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 看不了：照原来的判 */ } }
-  // 裸开审查子代理拦下：结论对不上任务，入不了账（手工模式也一样）
-  if (reviewer && !reviewTask) return '审查子代理要用 review.js prepare 输出的提示（第三行"审查任务：…"）：先跑 review.js prepare，再照它的 agents 开。任务已经交齐或作废的不用再开。';
-  // 开审查子代理：同时在跑的最多 3 个（第 52 条），满了拦下、说等前面的交了再开
-  // 满了的时候先看一眼会话记录：前台子代理的结果已经回来、没交结论的（崩了、被打断），算没交、让出位子（复审第 6 条），再判一次
-  const sent = () => {
-    if (!reviewTask) return '';
-    const RR = require('./review-runner');
-    let why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id, j.session_id);
-    if (why) { try { RR.sweep(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd || process.cwd()); } catch (e) { /* 看不了：照原来的判 */ } why = RR.claim(reviewTask.id, reviewTask.lens, j.tool_use_id, j.session_id); }
-    return why;
-  };
+  // 审查不开子代理（第 72 条，仓库主人 2026-11-05 定的）：脚本调 claude -p
+  if (reviewer) return '审查不开子代理（2026-11-05 起）：跑 review.js run（--change、--mode、--point、--project 照旧），脚本调 claude -p 审完，结论在命令输出里。写法见 /vk-cross-review。';
   // 开着 /vk-auto、在 OpenSpec 流程里：审查不用先问用户（第 68 条）。这一轮算不算自动（插了句话、探索记录还有没定的）不影响；用户说了停、普通改动除外
   const flowNow = S.flowState(j);
   const sessionAuto = review && cfg.autoSession === true && flowNow.on === true && !flowNow.paused;
@@ -466,13 +456,13 @@ function actionIssue(j) {
       // 单份文档、某一组不单独审：用户点名的除外
       if (change && !points(change.dir, mode).includes(p[1]) && !explicit(j, 'review')) return '自动模式不单独审 ' + p[1] + '：需求文档 tasks 写完审一次整套（--point tasks），代码等这个 change 的任务全部做完审一次（--point change）。现在接着做，到时候钩子会提醒。';
     }
-    return sent();
+    return '';
   }
   let used = '';
   if (explicit(j, review ? 'review' : 'test')) {
     if (!review) return '';
     const permit = require('./permissions').allow(j, 'review', j.cwd, j.tool_use_id);
-    if (permit.ok) return sent();
+    if (permit.ok) return '';
     // 上一次审查已经用掉了这次许可：说清楚，免得模型以为是没认出提问框
     // 1028 起同一句"审查"这一轮里能用好几次（问题反馈表第 16 条），走到这里是别的原因（多个变更没点名这类）：原样说
     used = permit.reason ? '（' + permit.reason + '）' : '';
