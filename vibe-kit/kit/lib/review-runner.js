@@ -620,6 +620,13 @@ function inFlight(dir, mode) {
 function finish(id) {
   const job = findJob(id);
   if (!job) return { status: 'cancelled', reason: '迟到结果已忽略' };
+  // 后台进程交完最后一个角度在入账，run 的等待循环、status 同时也可能走到这里：只让一个入账（第 72 条全量回归抓到的：入账两次，第二次报错）
+  let mine = false;
+  S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id && cur.status === 'running' && !(Date.now() - (Number(cur.finalizer) || 0) < 120000)) { cur.finalizer = Date.now(); mine = true; } });
+  if (!mine) {
+    for (let i = 0; i < 240; i++) { const cur = findJob(id); if (!cur || cur.status !== 'running') return cur || { status: 'cancelled', reason: '迟到结果已忽略' }; pause(500); }
+    return { status: 'running', id, next: '还在入账，再跑一次一样的 review.js run。' };
+  }
   const policy = require('./flow-policy');
   const change = job.change ? changeOf(job.root, job.change) : null;
   const plan = readJson(path.join(job.dir, 'plan.json')) || {};
