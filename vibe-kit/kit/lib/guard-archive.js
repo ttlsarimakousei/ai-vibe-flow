@@ -65,7 +65,7 @@ function archiveIssue(t, dir, j) {
   // 大任务：按表的顺序归档，归档前要预演过（用户 2026-11-03 定的）
   try {
     const B = require('../lib/big-task');
-    const task = B.ofChange(path.resolve(chDir, '../../..'), name);
+    const task = B.ofChange(path.resolve(chDir, '../../..'), chDir);
     if (task && !task.legacy) {
       const first = task.changes.find((c) => !c.archived);
       if (first && first.name !== name) return { name, msg: '[vibe-kit] 大任务 ' + task.name + ' 要按 plan.md 表的顺序归档：下一个是 ' + first.name + '，不是 ' + name + '。后面的 change 依赖前面的需求，顺序错了 OpenSpec 会拒绝。' };

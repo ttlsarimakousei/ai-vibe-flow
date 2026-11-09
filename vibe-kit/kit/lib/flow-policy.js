@@ -64,7 +64,7 @@ function fileRow(f) {
 function crossPoints(dir) {
   try {
     const B = require('./big-task'); const name = path.basename(dir);
-    const task = B.ofChange(path.resolve(dir, '../../..'), name); if (!task) return [];
+    const task = B.ofChange(path.resolve(dir, '../../..'), dir); if (!task) return [];
     const out = [];
     for (const c of task.changes) {
       if (c.name === name || !c.exists) continue;

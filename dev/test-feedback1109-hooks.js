@@ -105,6 +105,33 @@ const decision = (o) => o && o.hookSpecificOutput && o.hookSpecificOutput.permis
     const j2 = Object.assign({}, j, { session_id: 's429b', transcript_path: H.transcript(path.join(h.root, 't429b.jsonl'), [H.tr.user('总结一下扫描结果')].concat(es.slice(1))) });
     H.ok('用户没说放哪：照旧拦', /产出位置/.test(H.reasonOf(H.hook(h, 'pre-edit', j2))));
   }
+  H.section('壳子里两个子项目有同名 change（复审 20261104 第 49、50 条）');
+  {
+    const h = H.makeHome('fb1109-same', from, { autoUpdate: 'off', autoOnboard: false });
+    const shell = path.join(h.work, 'shell'); fs.mkdirSync(shell, { recursive: true });
+    H.write(path.join(shell, 'CLAUDE.md'), '# 壳子\n');
+    const sub = (name, task, ticked) => {
+      const p = H.makeRepo(path.join(shell, name), { 'pom.xml': '<project/>\n' });
+      H.write(path.join(p, 'openspec', 'changes', 'add-x', 'proposal.md'), '## Why\n\n要做。\n');
+      H.write(path.join(p, 'openspec', 'changes', 'add-x', 'tasks.md'), '- [' + (ticked ? 'x' : ' ') + '] 1.1 改 A.java\n');
+      H.write(path.join(p, 'openspec', 'plan.md'), '# 计划\n\n## ' + task + '\n\n| 模块 | 变更名 | 状态 | 说明 |\n|---|---|---|---|\n| 后端 | add-x | 进行中 | |\n');
+      return p;
+    };
+    const a = sub('sub-a', '任务A', false); const b = sub('sub-b', '任务B', true);
+    const B = require(path.join(h.kit, 'lib', 'big-task.js'));
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    const dirB = path.join(b, 'openspec', 'changes', 'add-x');
+    const t1 = B.ofChange(shell, dirB);
+    H.ok('给变更目录：认 sub-b 的大任务', !!t1 && t1.name === '任务B', t1 && t1.name);
+    const t2 = B.ofChange(b, 'add-x');
+    H.ok('只给名字、在 sub-b 里：认 sub-b 的', !!t2 && t2.name === '任务B', t2 && t2.name);
+    H.ok('给的目录不在哪个表里：不认成别的子项目里同名的', B.ofChange(shell, path.join(shell, 'sub-c', 'openspec', 'changes', 'add-x')) === null);
+    S.updateState('same1-flow', (s) => { s.on = true; s.current = 'add-x'; s.currentDir = dirB; });
+    H.ok('当前 change 记了目录：sub-b 的任务都勾完了，不算还在做（不是 sub-a 那个）', B.currentAlive({ session_id: 'same1', cwd: shell }) === false);
+    S.updateState('same2-flow', (s) => { s.on = true; s.current = 'add-x'; s.currentDir = path.join(a, 'openspec', 'changes', 'add-x'); });
+    H.ok('记的是 sub-a 的：还在做', B.currentAlive({ session_id: 'same2', cwd: shell }) === true);
+  }
+
   H.section('#421 等：git 的结果跨钩子缓存');
   {
     const cp = require('child_process');

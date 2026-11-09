@@ -97,7 +97,7 @@ function resumeOutside(j, c, S) {
   const finished = list.length > 0 && done === list.length;
   // 接回就算开工（第 53 条，仓库主人 2026-11-04 定的）：任务写好了的直接进做任务那一段
   const stage = list.length ? 'apply' : 'plan';
-  S.updateState(String(j.session_id) + '-flow', (s) => { delete s.task; s.current = c.name; if (finished) s.keepCurrent = c.name; else delete s.keepCurrent; s.paused = false; s.aside = false; s.holdApply = false; });
+  S.updateState(String(j.session_id) + '-flow', (s) => { delete s.task; s.current = c.name; s.currentDir = c.dir; if (finished) s.keepCurrent = c.name; else delete s.keepCurrent; s.paused = false; s.aside = false; s.holdApply = false; });
   S.setFlow(j, true, '切到 ' + c.name, stage);
   S.flowTouch(j, c.dir, false);
   if (stage === 'apply') { try { require('../lib/apply-scope').grant(j, c.name, ''); } catch (e) { /* 开工范围记不了：改代码时会说 */ } }
@@ -145,7 +145,7 @@ function resumeTask(j) {
     const list = open.map((t) => t.name + '（' + B.progressText(t) + '）').join('；');
     return { user: '[vibe-kit] ' + (want ? '没找到 ' + want + '。' : '') + '没做完的大任务：' + list + '。敲 /vk-resume <大任务名或变更名> 接回。', model: '用户敲了 /vk-resume，' + (want ? '没找到 ' + want + '，' : '') + '有几个没做完的大任务：' + list + '。列给用户，等用户敲 /vk-resume <名字>，不要自己选。' };
   }
-  S.updateState(String(j.session_id) + '-flow', (s) => { s.task = task.name; s.paused = false; s.aside = false; s.holdApply = false; if (pointed) s.current = want; else delete s.current; if (finished) s.keepCurrent = want; else delete s.keepCurrent; });
+  S.updateState(String(j.session_id) + '-flow', (s) => { s.task = task.name; s.paused = false; s.aside = false; s.holdApply = false; if (pointed) { s.current = want; if (pointed.dir) s.currentDir = pointed.dir; else delete s.currentDir; } else { delete s.current; delete s.currentDir; } if (finished) s.keepCurrent = want; else delete s.keepCurrent; });
   const ph = B.phaseFor(j, task);
   // 接回就算开工（第 53 条，仓库主人 2026-11-04 定的）：要做的 change 任务已经写好了，直接进做任务那一段，不用再说一次开工
   const ready = ph.phase === 'plan' && ((task.changes.find((c) => c.name === ph.change) || {}).total || 0) > 0;

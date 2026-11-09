@@ -70,8 +70,22 @@ function tasks(cwd) {
 
 /** 这个 change 属于哪个大任务；不在表里返回 null */
 function ofChange(cwd, change) {
-  const name = path.basename(String(change || ''));
-  return tasks(cwd).find((t) => t.changes.some((c) => c.name === name)) || null;
+  const s = String(change || '');
+  const all = tasks(cwd);
+  // 给的是变更目录：按目录认（复审 20261104：壳子里两个子项目有同名 change，以前只按名字比，认成前面那个子项目的）
+  // 目录对不上就是不在哪个表里：不退回按名字找（不然又认到别的子项目里同名的那个）
+  if (/[\\/]/.test(s)) { const k = normKey(path.resolve(s)); return all.find((t) => t.changes.some((c) => normKey(c.dir) === k)) || null; }
+  const name = path.basename(s);
+  const hits = all.filter((t) => t.changes.some((c) => c.name === name));
+  if (hits.length <= 1) return hits[0] || null;
+  // 只给名字、几个子项目都有：认 cwd 所在的那个子项目的
+  const here = normKey(path.resolve(cwd || process.cwd()));
+  return hits.find((t) => { const root = normKey(path.dirname(t.osDir)); return here === root || here.startsWith(root + '/'); }) || hits[0];
+}
+/** 这个会话当前的 change 是不是 c：记了目录的按目录比（同名的 change 在别的子项目里不算），老记录只有名字的按名字 */
+function isCurrent(st, c) {
+  if (!st.current || !c || c.name !== st.current) return false;
+  return !st.currentDir || normKey(c.dir) === normKey(st.currentDir);
 }
 function named(cwd, name) { return tasks(cwd).find((t) => t.name === name) || null; }
 
@@ -152,26 +166,27 @@ function currentAlive(j) {
   if (!name) return false;
   const cwd = (j && j.cwd) || process.cwd();
   // 用户切到一个任务都勾完的 change（第 60 条）：一直算当前，直到归档、切走
-  const keep = flowState(j).keepCurrent === name;
-  for (const t of tasks(cwd)) { const c = t.changes.find((x) => x.name === name); if (c) return !c.archived && (keep || !c.total || c.todo > 0); }
-  for (const d of changeRoots(cwd)) { const c = changeInfo(name, d); if (c.exists) return keep || !c.total || c.todo > 0; }
+  const st = flowState(j);
+  const keep = st.keepCurrent === name;
+  for (const t of tasks(cwd)) { const c = t.changes.find((x) => isCurrent(st, x)); if (c) return !c.archived && (keep || !c.total || c.todo > 0); }
+  for (const d of changeRoots(cwd)) { const c = changeInfo(name, d); if (c.exists && isCurrent(st, c)) return keep || !c.total || c.todo > 0; }
   return false;
 }
 /** 收工时：切到的 change 做完了、归档了、没了，指针清掉。不清的话它之后回改加了任务又抢回来，打勾顺序也一直豁免（复审 R4） */
 function dropDeadCurrent(j) {
   const st = flowState(j);
-  if (st.current && !currentAlive(j)) { updateState(String(j.session_id) + '-flow', (s) => { delete s.current; delete s.keepCurrent; }); return; }
+  if (st.current && !currentAlive(j)) { updateState(String(j.session_id) + '-flow', (s) => { delete s.current; delete s.currentDir; delete s.keepCurrent; }); return; }
   // 切到任务都勾完的 change 之后又补了任务：按普通的算，做完回到表的顺序
   if (st.keepCurrent && st.keepCurrent === st.current) {
     const cwd = (j && j.cwd) || process.cwd();
-    const c = tasks(cwd).flatMap((t) => t.changes).find((x) => x.name === st.current) || changeRoots(cwd).map((d) => changeInfo(st.current, d)).find((x) => x.exists);
+    const c = tasks(cwd).flatMap((t) => t.changes).find((x) => isCurrent(st, x)) || changeRoots(cwd).map((d) => changeInfo(st.current, d)).find((x) => x.exists && isCurrent(st, x));
     if (c && c.todo > 0) updateState(String(j.session_id) + '-flow', (s) => { delete s.keepCurrent; });
   }
 }
 /** 这个会话当前的 change：用户用 /vk-resume <变更名> 切过、还没做完的就是它；做完了回到表的顺序（问题表第 49、50 条） */
 function phaseFor(j, task) {
-  const name = flowState(j).current;
-  const c = name ? task.changes.find((x) => x.name === name) : null;
+  const st = flowState(j); const name = st.current;
+  const c = name ? task.changes.find((x) => isCurrent(st, x)) : null;
   if (c && !c.archived && (!c.total || c.todo)) return { phase: !c.total || !c.done ? 'plan' : 'apply', change: name };
   // 用户切到一个任务都勾完的 change（第 60 条）：算在做它，等用户说下一步，不接下一个、不催全面自测
   if (c && !c.archived && flowState(j).keepCurrent === name) return { phase: 'apply', change: name };

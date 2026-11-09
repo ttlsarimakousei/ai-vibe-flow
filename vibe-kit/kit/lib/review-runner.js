@@ -289,7 +289,7 @@ const jobFolder = (job) => path.join(job.root, '.vibe', 'reviews', job.change ||
 function findJob(id) { const o = S.readState('review-jobs'); for (const k of Object.keys(o)) if (o[k] && o[k].id === id) return o[k]; return null; }
 const leftOf = (job) => job.lenses.filter((l) => job.state[l].status !== 'submitted');
 /** 探索记录：这个变更属于大任务才有 */
-function exploreOf(job) { try { const B = require('./big-task'); const t = job.change ? B.ofChange(job.root, job.change) : null; return t && t.explore && fs.existsSync(t.explore) ? t.explore : ''; } catch (e) { return ''; } }
+function exploreOf(job) { try { const B = require('./big-task'); const t = job.change ? B.ofChange(job.root, (changeOf(job.root, job.change) || {}).dir || job.change) : null; return t && t.explore && fs.existsSync(t.explore) ? t.explore : ''; } catch (e) { return ''; } }
 /** 一个角度的范围：审什么、按什么审。材料在 promptText 里拼上去 */
 function scopeText(job, lens, plan, round, material) {
   const out = ['# 审查任务 ' + job.id + '/' + lens.name, '', '模式：' + (plan.scoped ? '复审' : '') + MODE_NAME[job.mode], '变更：' + (job.change || '（不走 OpenSpec）'), '项目：' + job.root];
@@ -661,7 +661,7 @@ function finish(id) {
   } else result.covered = labels;
   if (outside.length) {
     result.suggestions = outside.map((x) => ({ file: x.file, problem: x.problem }));
-    try { const B = require('./big-task'); const task = job.change ? B.ofChange(job.root, job.change) : null; if (task) for (const x of outside) B.addSuggestion(task, x.file + '：' + x.problem, '审查 ' + (job.point || job.mode)); } catch (e) { /* 记不了：结果里还有 */ }
+    try { const B = require('./big-task'); const task = job.change ? B.ofChange(job.root, (changeOf(job.root, job.change) || {}).dir || job.change) : null; if (task) for (const x of outside) B.addSuggestion(task, x.file + '：' + x.problem, '审查 ' + (job.point || job.mode)); } catch (e) { /* 记不了：结果里还有 */ }
   }
   const nowInput = job.point && change ? policy.fingerprint(change.dir, job.point) : W.fingerprint(job.root, job.mode === 'code' ? 'code' : 'all').hash;
   if (nowInput !== (job.pointHash || job.fingerprint) || !inputsCurrent(result.materialInputs)) { result.status = 'stale'; result.reason = '审查期间输入变更，本轮结果不能批准新版'; }

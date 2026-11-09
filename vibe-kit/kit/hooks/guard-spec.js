@@ -49,7 +49,7 @@ function exploreFirstIssue(j, art, cfg) {
   const fl = flowState(j);
   if (!fl.on && !require('../lib/session').entryVoice(j)) return '用户没说要走 OpenSpec，不写提案。改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"；选探索再写。';
   const B = require('../lib/big-task');
-  const task = B.ofChange(art.root, art.name);
+  const task = B.ofChange(art.root, art.dir);
   const tool = 'node "' + path.join(__dirname, '..', 'tools', 'plan.js') + '" new --task <大任务名> --changes ' + art.name;
   if (!task) return '变更 ' + art.name + ' 不在 openspec/plan.md 的大任务里，也就没有探索记录。先跑 ' + tool + '，把探索结果写进 openspec/explore/<大任务名>.md（短的也行），再写提案。';
   const left = B.exploreIssues(task, art.name);
@@ -66,7 +66,7 @@ function exploreFirstIssue(j, art, cfg) {
 function crossChangeIssues(art, text, isAdded) {
   const out = [];
   try {
-    const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.name);
+    const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.dir);
     if (!task) return out;
     const before = task.changes.slice(0, task.changes.findIndex((c) => c.name === art.name)).filter((c) => c.exists);
     const lines = text.split('\n'); let inModified = false;
@@ -112,7 +112,7 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一组。审查不在这里挡：整个 change 做完审一次（第 58 条）
   // 按表的顺序（用户 2026-11-03 定的）：回改前面的 change 补了任务，先做它，再回来
   try {
-    const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.name);
+    const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.dir);
     // 老任务的表不是按这个规矩写的（第 50 条）；用户用 /vk-resume 切过去的是他定的，不挡
     if (task && !task.legacy && flowState(j).current !== art.name) { const at = task.changes.findIndex((c) => c.name === art.name); const before = task.changes.slice(0, at).find((c) => !c.archived && c.todo > 0 && c.done > 0); if (before) return done(['按 openspec/plan.md 表的顺序做：' + before.name + ' 还有没勾的任务（' + before.done + '/' + before.total + '），先做完它，再回 ' + art.name + '。']); }
   } catch (e) { /* 算不了不挡打勾 */ }
