@@ -427,16 +427,16 @@ function archived(p, name, file) {
     H.ok('用户切到它：不算旧', P.oldDone ? !P.oldDone(je, e) : false);
   }
 
-  H.section('第 63 条：审查子代理默认用 Sonnet，不设 effort');
+  H.section('第 63 条：审查不设 effort；模型 2026-11-09 改成不指定（#427）');
   {
     const SRC = FROM || path.join(__dirname, '..', 'vibe-kit');
     const runner = H.read(path.join(SRC, 'kit/lib/review-runner.js')) || '';
-    H.ok('claude -p 用模型名 sonnet', /'--model', 'sonnet'/.test(runner));
+    H.ok('claude -p 不指定模型（20261109 起，替代 sonnet）', !/'--model'/.test(runner));
     H.ok('不写 effort', !/--effort/.test(runner));
     const skill = H.read(path.join(SRC, 'claude/skills/vk-cross-review/SKILL.md')) || '';
     H.ok('审查技能不让模型自己选模型', !/subagent_type[^\n]*model/.test(skill));
     const manual = H.read(path.join(SRC, '手册/审查和自测.md')) || '';
-    H.ok('手册写明 Sonnet 和改名字的环境变量', /默认用 Sonnet/.test(manual) && /ANTHROPIC_DEFAULT_SONNET_MODEL/.test(manual));
+    H.ok('手册写明用默认的模型、不再指定 Sonnet（20261109 起）', /用你默认的模型/.test(manual) && !/默认用 Sonnet/.test(manual));
   }
 
   const wins = await watch.stop();

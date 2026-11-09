@@ -67,7 +67,7 @@ function setup(name, config) {
       const a = c[0].args.join(' ');
       H.ok('不带工具（--tools 空）', /--tools (""|$| )/.test(a) || c[0].args.includes(''), a);
       H.ok('关掉钩子（--settings）', c[0].args.includes('--settings'), a);
-      H.ok('模型 sonnet', /--model sonnet/.test(a), a);
+      H.ok('不指定模型（20261109 起，#427）', !c[0].args.includes('--model'), a);
       H.ok('不留会话记录', a.includes('--no-session-persistence'), a);
       H.ok('提示带规矩', c[0].prompt.includes('你是审查者') && c[0].prompt.includes('没有工具可用'));
       H.ok('提示带差异', c[0].prompt.includes('+    if (ids == null) return;'));

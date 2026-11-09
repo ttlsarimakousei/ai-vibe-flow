@@ -464,10 +464,13 @@ function claudeExe() {
   const own = process.env.CLAUDE_CODE_EXECPATH; // Claude Code 给子进程的：它自己。npm 装的可能是 node，不算
   return own && /claude[^\\/]*$/i.test(path.basename(own)) ? own : 'claude';
 }
-/** 跑一次 claude -p：不带工具、关掉钩子（不然套件的流程检查掺进来）、不留会话记录。模型名 sonnet（第 63 条） */
+/**
+ * 跑一次 claude -p：不带工具、关掉钩子（不然套件的流程检查掺进来）、不留会话记录。
+ * 不指定模型，用用户默认的（仓库主人 2026-11-09 定的，替代第 63 条的 sonnet：#427 那台的网关把 sonnet 映射成它不认的名字）
+ */
 function askClaude(prompt, cwd, settings) {
   const exe = claudeExe();
-  const raw = ['-p', '--output-format', 'json', '--model', 'sonnet', '--settings', settings, '--no-session-persistence', '--system-prompt', 'You are a code and requirements reviewer. Read only, change nothing. Write your findings in Chinese.', '--tools', '', '--strict-mcp-config'];
+  const raw = ['-p', '--output-format', 'json', '--settings', settings, '--no-session-persistence', '--system-prompt', 'You are a code and requirements reviewer. Read only, change nothing. Write your findings in Chinese.', '--tools', '', '--strict-mcp-config'];
   const useShell = process.platform === 'win32' && !/\.exe$/i.test(exe);
   // shell:true 时 Node 只把参数拼起来：空参数和带空格的自己加引号
   const a = useShell ? raw.map((x) => (x === '' ? '""' : /[\s"&|<>^]/.test(x) ? '"' + x.replace(/"/g, '\\"') + '"' : x)) : raw;
