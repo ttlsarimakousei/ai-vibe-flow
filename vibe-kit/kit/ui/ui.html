@@ -641,17 +641,6 @@
 
     <div class="card" id="sec-guard" data-sec="保护">
       <h2>保护</h2>
-      <div class="opt">
-        <div><div class="t">Claude Code 自带的自动模式</div><div class="d">新版 Claude Code 没配权限模式时默认进它：有风险的命令先发给一个分类模型审。内网的模型当不了这个分类器，默认关掉。</div>
-          <details class="more"><summary>细节</summary><ul>
-            <li>它是 Claude Code 的 auto mode，和套件的自动模式（/vk-auto）是两回事。2.1.284 起默认进，2.1.259 和更早的版本没有这回事。</li>
-            <li>实测（2.1.289，经网关）：node -e、curl 这类命令每条多发一次请求给审查用的那个模型，系统提示有 14 万字符；它答得不合格式就重试，最多十次，然后把命令拦下。</li>
-            <li><b>关掉</b>：套件在 settings.json 里写 <span class="mono">permissions.disableAutoMode</span>，会话照以前的普通模式起（底下显示 manual mode），放行的还是套件装的那几条权限。</li>
-            <li><b>不管它</b>：套件把自己写的那一项去掉，照 Claude Code 的默认。</li>
-            <li>你启动时带 <span class="mono">--dangerously-skip-permissions</span>，或者自己在 settings.json 里配了 <span class="mono">defaultMode</span>，不受这一项影响。改了要重新打开 Claude Code 才生效。</li>
-          </ul></details></div>
-        <div class="ctl"><select id="k_ccAutoMode"><option value="off">关掉</option><option value="on">不管它，照 Claude Code 的默认</option></select></div>
-      </div>
       <h3>最近的开关改动</h3>
       <ul class="log" id="auditList"><li class="dim">还没有。</li></ul>
     </div>
@@ -952,7 +941,7 @@
   fBool('commitCheck', '提交检查');
   fNum('tmpKeepDays', '临时目录留几天', 0, 90);
   fNum('contextPercent', '到百分之多少', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true);
-  fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']); fSel('ccAutoMode', 'Claude Code 自带的自动模式', ['off', 'on']);
+  fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']);
   fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']);
   fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
@@ -1000,7 +989,7 @@
       }
       const names = dirty.map((k) => F[k].label).join('、');
       const tail = adjusted.length ? '。其中 ' + adjusted.map((k) => F[k].label).join('、') + ' 存下来的和你填的不一样，以页面上现在显示的为准' : '';
-      const restart = [dirty.includes('autoMemory') ? '"自动记忆"' : '', dirty.includes('ccAutoMode') ? '"Claude Code 自带的自动模式"' : ''].filter(Boolean);
+      const restart = [dirty.includes('autoMemory') ? '"自动记忆"' : ''].filter(Boolean);
       const note = restart.length ? '。' + restart.join('、') + '那一项要重新打开 Claude Code 才生效' : '';
       say(msgEl, r.synced === false && r.output ? '已保存 ' + dirty.length + ' 项（' + names + '）' + tail + '。' + r.output : (okText || '已保存') + '：' + names + tail + note, r.synced !== false && !adjusted.length);
       return { saved: dirty, adjusted, r };

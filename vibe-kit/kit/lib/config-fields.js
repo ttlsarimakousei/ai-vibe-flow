@@ -59,7 +59,6 @@ const FIELDS = [
   { name: 'dbcrudDaemonIdleMinutes', type: 'int', def: 5, min: 1, max: 60, page: 'data', sameRow: 'dbcrudDaemon' },
   { name: 'usageReport', type: 'enum', def: 'on', values: ['on', 'off'], page: 'remote', doc: '使用情况上报（开 / 关）', since: '1001', defText: '开' },
   { name: 'perfReport', type: 'enum', def: 'on', values: ['on', 'local', 'off'], page: 'remote', doc: '耗时异常上报 perfReport（上报 / 只记本机 / 关）', since: '2026-10-31 那一版', defText: '上报' },
-  { name: 'ccAutoMode', type: 'enum', def: 'off', values: ['off', 'on'], page: 'kit', doc: 'Claude Code 自带的"自动模式"（关掉 / 不管它）', since: '1005', defText: '关掉' },
   { name: 'reviewBudgetSeconds', type: 'int', def: 300, min: 10, max: 1800, page: 'kit', doc: '审查预期用时 reviewBudgetSeconds（1028 这一版起不截断，超了自动记问题反馈；以前叫"审查总预算"）', since: '1017', defText: '300 秒' },
 ];
 // 配置页上有、文件里不存的两项（J2）：说明写在手册里，取值在这里
