@@ -90,6 +90,7 @@ const NEXT = '99999999.0000'; // 这一版（还没打包，没有版本号）�
 const V1104 = '20261104.0435'; // 新流程、删路由、审查子代理、状态栏这一版
 const V2337 = '20261104.2337'; // 套件可以改、拦了直接放行；第 52—56 条；ttls- 改成 vk-
 const V1257 = '20261105.1257'; // 第 57、58 条：四份文档写完审一次整套，一个 change 的任务全部做完审一次
+const V1612 = '20261109.1612'; // 0234 议题这一批：cd 到当前目录、cd 之后只跑 git 的钩子直接改写
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
 // 旧版在 from 之前（还没有这个毛病）、在 to 或者之后（已经改过）的应该一样，在两者之间的应该不一样
@@ -215,11 +216,11 @@ add('命令：目录写在变量里的整仓 add', 'guard-commit', cmd('git -C "
 add('命令：循环里对老仓库整仓 add', 'guard-commit', cmd('for r in . ; do git -C "$r" add -A .; done'), /会把你工作区里原来就有的改动/, V2248);
 // 20260930.1505 有意改的：cd 和别的命令串在一条里，Claude Code 会停下来要人确认（跳过权限模式也问），拦下并给出不用 cd 的写法；起服务的提示里写了 --dir
 // 20261109 起改写成 git -C "src" push 再查，没说推送的由推送那一道拦下（以前拦的是 cd）
-add('命令：cd src && git push', 'guard-commit', cmd('cd src && git push'), /用户没说推送/, NEXT);
+add('命令：cd src && git push', 'guard-commit', cmd('cd src && git push'), /用户没说推送/, V1612);
 add('命令：cd 到子目录再编译', 'guard-commit', cmd('cd src && mvn -q -o compile'), /mvn -f \\"src\/pom\.xml\\" -q -o compile/, V1505);
 // 20261109 有意改的（第 71 条第 1 点）：cd 到当前目录的去掉 cd、cd 到别的目录后面只有 git 的改成 git -C，钩子直接改写，不拦下
-add('命令：cd 当前目录再跑 git（改写，不拦）', 'guard-commit', cmd('cd "<项目>" && git status --short'), /"updatedInput": \{\s*"command": "git status --short"/, NEXT);
-add('命令：cd 子目录再跑 git log（改成 git -C）', 'guard-commit', cmd('cd src && git log --oneline -3 | head -3'), /"command": "git -C \\"src\\" log --oneline -3 \| head -3"/, NEXT);
+add('命令：cd 当前目录再跑 git（改写，不拦）', 'guard-commit', cmd('cd "<项目>" && git status --short'), /"updatedInput": \{\s*"command": "git status --short"/, V1612);
+add('命令：cd 子目录再跑 git log（改成 git -C）', 'guard-commit', cmd('cd src && git log --oneline -3 | head -3'), /"command": "git -C \\"src\\" log --oneline -3 \| head -3"/, V1612);
 // 1007：端口改成 --port auto --avoid <配置里的端口>，提示里的命令和说法跟着改
 add('命令：mvn spring-boot:run', 'guard-commit', cmd('mvn spring-boot:run'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1007);
 add('命令：npm run dev', 'guard-commit', cmd('npm run dev'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1007);
