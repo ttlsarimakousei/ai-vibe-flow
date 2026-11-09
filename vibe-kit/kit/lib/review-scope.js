@@ -125,8 +125,24 @@ function lineDiff(oldText, newText, context) {
   return { text: '@@ 改后第 ' + (s + 1) + ' 行附近 @@\n' + out.join('\n'), changed: Math.max(adds, dels) };
 }
 
+// ---------- 审查者报的文件名对到材料的哪一份 ----------
+/**
+ * 材料的名字（label）是相对变更目录或项目的路径，source 是绝对路径。审查者常写成相对项目的（openspec/changes/<名>/tasks.md）、
+ * 带行号的（tasks.md:12），以前对不上就留原样，下一轮这条意见当成"文件没改"原样带回（#420）。
+ * 先比全名，再按路径结尾比，只认得出一个才算；认不出返回原样。currents：Map 或对象，label → { source }
+ */
+function matchLabel(file, currents) {
+  const norm = (v) => String(v || '').replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+  const entries = currents instanceof Map ? [...currents.entries()] : Object.entries(currents || {});
+  const k = norm(file).replace(/:\d+(?:[-:]\d+)?$/, '');
+  if (!k) return file;
+  const exact = entries.find(([n, c]) => norm(n) === k || norm((c || {}).source) === k);
+  if (exact) return exact[0];
+  const hits = entries.filter(([n, c]) => { const a = norm(n); const s = norm((c || {}).source); return k.endsWith('/' + a) || (!!s && s.endsWith('/' + k)); });
+  return hits.length === 1 ? hits[0][0] : file;
+}
 // ---------- 上一轮 ----------
-const snapshotFile = (reportFile) => String(reportFile).replace(/\.json$/i, '') + '.snapshot.json';
+const snapshotFile =(reportFile) => String(reportFile).replace(/\.json$/i, '') + '.snapshot.json';
 const baseKey = (base) => JSON.stringify([].concat(base || []).filter(Boolean));
 function readJson(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } }
 /** 上一轮：{ files, issues, decisions, closed: 更早的轮里定过的, covered, round }。没有、不是同一个变更（归档后重建）、基线换了，返回 null */
@@ -158,9 +174,10 @@ function chunkItems(file, text, root, source, role) {
   if (chunk || !parts.length) parts.push(chunk);
   return parts.map((t, i) => Object.assign({ file, root, source, text: t, startLine: 1, part: i + 1, parts: parts.length }, role ? { role } : {}));
 }
-function batchesOf(items) {
+function batchesOf(items, max) {
+  const limit = max || 80000;
   const out = []; let batch = []; let size = 0;
-  for (const item of items) { if (size + item.text.length > 80000 && batch.length) { out.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
+  for (const item of items) { if (size + item.text.length > limit && batch.length) { out.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
   if (batch.length) out.push(batch);
   return out;
 }
@@ -203,13 +220,18 @@ function planRound(material, prior) {
   if (totalLines && changedLines / totalLines > 0.6) return { scoped: false, why: '改动超过六成，按第一轮全量审' };
   const decided = new Map(prior.decisions.map((d) => [d.id, d]));
   const open = []; const closed = prior.closed.slice(-50); const carried = []; const also = new Set();
-  for (const x of prior.issues) {
+  for (const x0 of prior.issues) {
+    // 上一版存下的文件名可能对不上材料（#420）：这里再认一次
+    const file = matchLabel(x0.file, material.currents);
+    const x = file === x0.file ? x0 : Object.assign({}, x0, { file });
     const d = decided.get(x.id);
     if (d && CLOSED.has(d.action)) { closed.push(Object.assign(brief(x), { action: d.action, reason: d.reason })); continue; }
     // 修了的要核对；没登记的也要：文件改过的送去问，没改过的不用问
     if (changed.includes(x.file)) open.push(brief(x));
     // 登记修了、改的是别的文件（问题在 design.md，改在 specs 里）：连这个文件一起送去核对。不然这个文件不变，问题永远关不掉
     else if (d && d.action === 'fixed' && changed.length && material.currents.has(x.file)) { open.push(brief(x)); also.add(x.file); }
+    // 登记修了、文件名怎么也对不上材料的：送去核对（"上一轮的问题"里照样列），不当成没改原样带回（#420）
+    else if (d && d.action === 'fixed' && changed.length) open.push(brief(x));
     else { const c = Object.assign({}, x); delete c.id; carried.push(c); }
   }
   for (const file of also) { const cur = material.currents.get(file); items.push(...noted(chunkItems(file, cur.text, cur.root, cur.source, cur.role), '这个文件这次没改，只核对"上一轮的问题"里写它的那几条，别的不审')); }
@@ -297,4 +319,4 @@ function logDecisions(folder, point, findings) {
   return appendLog(folder, out.join('\n') + '\n');
 }
 
-module.exports = { SEVERITY_NOTE, ROLE_NOTE, RECHECK, SCOPE_NOTE, requirements, blocking, countBySeverity, stageText, lensesFor, lineDiff, snapshotFile, readPrior, writeSnapshot, noteDecisions, planRound, batchesOf, mergeIssues, dropClosed, deferredOf, carryover, appendLog, logRound, logDecisions, LOG_NAME };
+module.exports = { SEVERITY_NOTE, ROLE_NOTE, RECHECK, SCOPE_NOTE, requirements, blocking, countBySeverity, stageText, lensesFor, lineDiff, matchLabel, snapshotFile, readPrior, writeSnapshot, noteDecisions, planRound, batchesOf, mergeIssues, dropClosed, deferredOf, carryover, appendLog, logRound, logDecisions, LOG_NAME };

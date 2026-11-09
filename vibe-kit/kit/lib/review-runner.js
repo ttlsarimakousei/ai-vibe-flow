@@ -296,11 +296,16 @@ function scopeText(job, lens, plan, round, material) {
   const explore = exploreOf(job);
   if (explore) out.push('', '## 探索记录', '', explore + '（读公共几节' + (job.change ? '和 ' + job.change + ' 那一节' : '') + '：范围、定了的都在里面）');
   if (plan.scoped) {
-    const names = new Set(plan.items.map((x) => String(x.file)));
-    out.push('', '## 上一轮的问题', '', '```json', JSON.stringify((plan.open || []).filter((x) => names.has(String(x.file))), null, 1), '```');
+    // 复审也可能很大（#425：57 个文件 147 万字进了一个请求）：分批时每批只带自己的那些文件
+    const items = lens.items || plan.items;
+    const names = new Set(items.map((x) => String(x.file)));
+    // 文件名对不上材料的"修了"（#420）：放在第一批里核对
+    const loose = (x) => !material.currents.has(String(x.file)) && (!lens.items || lens.first);
+    out.push('', '## 上一轮的问题', '', '```json', JSON.stringify((plan.open || []).filter((x) => names.has(String(x.file)) || loose(x)), null, 1), '```');
     if ((plan.closed || []).length) out.push('', '## 已处理', '', '```json', JSON.stringify(plan.closed, null, 1), '```');
+    if (lens.text) out.push('', lens.text);
     out.push('', '## 这次改过的地方');
-    for (const it of plan.items) out.push('', '### ' + it.file + (it.role ? '（' + it.role + '）' : '') + (it.note ? ' — ' + it.note : ''), '', '路径：' + (it.source || it.file), '', '```', it.text, '```');
+    for (const it of items) out.push('', '### ' + it.file + (it.role ? '（' + it.role + '）' : '') + (it.note ? ' — ' + it.note : ''), '', '路径：' + (it.source || it.file), '', '```', it.text, '```');
   } else {
     if ((round.carry || []).length) out.push('', '## 上游审查留给这一步的要点', '', '这一步要覆盖到，没覆盖到的报 P2：', '', '```json', JSON.stringify(round.carry, null, 1), '```');
     const areas = areasOf(job, material, round);
@@ -388,6 +393,9 @@ function prepare(opts) {
     // 一个请求放不下：分批，每批一个请求，一个人看全几个角度。放得下就是一批，每个角度都看全部材料
     const packs = !plan.scoped && !noChange ? Facts.packsOf(material.items) : [];
     if (packs.length > 1) list = packs.map((pack, i) => ({ name: '第' + (i + 1) + '批', text: '材料太多分了 ' + packs.length + ' 批，这是第 ' + (i + 1) + ' 批，你一个人看全所有角度，只报这一批里的问题。' }));
+    // 复审放不下也分批（#425：以前复审不分，147 万字一个请求，想到 128000 token 上限也没交结论）
+    const scopedPacks = plan.scoped && !noChange ? Sc.batchesOf(plan.items, Facts.REQUEST_CHARS) : [];
+    if (scopedPacks.length > 1) list = scopedPacks.map((items, i) => ({ name: '复审第' + (i + 1) + '批', items, first: i === 0, text: '改动太多分了 ' + scopedPacks.length + ' 批，这是第 ' + (i + 1) + ' 批：只核对这一批里的文件和写它们的"上一轮的问题"，只报这一批里的问题。' }));
     job.lenses = list.map((l) => l.name);
     for (const l of job.lenses) job.state[l] = { status: 'open' };
     job.files = material.currents.size; job.chars = material.items.reduce((n, x) => n + x.text.length, 0);
@@ -589,8 +597,8 @@ function finish(id) {
   const groups = job.lenses.map((l) => readJson(path.join(job.dir, 'result-' + safeName(l) + '.json')) || { issues: [] });
   const need = [...new Set(groups.flatMap((g) => g.need || []))];
   const labels = Object.keys(plan.currents || {});
-  const norm = (v) => String(v).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
-  const labelOf = (f) => labels.find((n) => norm(n) === norm(f) || norm((plan.currents[n] || {}).source || '') === norm(f)) || f;
+  // 审查者写的文件名对到材料的名字：相对项目的、带行号的也认（#420）
+  const labelOf = (f) => Sc.matchLabel(f, plan.currents || {});
   let issues = Sc.mergeIssues(groups.map((g) => g.issues.map((x) => Object.assign({}, x, { file: labelOf(x.file) }))));
   // 需求和探索记录里没有的（scope: out）不算问题：不挡通过、不触发复审，人工核验时列给用户（第 43 条）
   const outside = issues.filter((x) => /^out$/i.test(String(x.scope || '')));
