@@ -364,10 +364,12 @@ function prepare(opts) {
   const promptsThere = (j) => j.lenses.every((l) => j.state[l].status === 'submitted' || fs.existsSync(path.join(j.dir, safeName(l) + '.prompt.md')));
   if (old && old.status === 'running' && old.lenses && !opts.full && old.input === input && Date.now() < old.deadline && fs.existsSync(old.dir) && promptsThere(old)) if (leftOf(old).length) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === old.id) o[key].tries = (o[key].tries || 0) + 1; }); old.tries = (old.tries || 0) + 1; return pendingOf(old); } else return finish(old.id);
   // 这个变更（这个模式）上一轮还有审查在跑（第 59 条）：不开新的一轮。开了旧的没人管，白占额度，结论回来也作废
-  const liveJobs = Object.values(S.readState('review-jobs')).filter((x) => x && x.status === 'running' && x.state && x.mode === opts.mode && (x.change || '') === (opts.change || '') && S.normKey(x.root) === S.normKey(opts.cwd) && Object.values(x.state).some(alive));
+  // 只看同一个审查点（#426、#428：以前别的审查点的进程活着也算"上一轮在跑"，看这个点的 status 却是失败，取消了才解开）
+  const liveJobs = Object.values(S.readState('review-jobs')).filter((x) => x && x.status === 'running' && x.state && x.mode === opts.mode && (x.change || '') === (opts.change || '') && (x.point || '') === (opts.point || '') && S.normKey(x.root) === S.normKey(opts.cwd) && Object.values(x.state).some(alive));
   if (liveJobs.length) {
-    const names = liveJobs.flatMap((x) => Object.entries(x.state).filter(([, s]) => alive(s)).map(([l]) => (x.point || x.mode) + ' ' + l));
-    return { status: 'running', running: names, next: '上一轮还有 ' + names.length + ' 个审查在跑（' + names.join('、') + '），这次不开新的一轮。等一会儿再跑一次 review.js run；这期间文档或代码改过的，那一轮结论会作废（stale），只审改过的地方。' };
+    const names = liveJobs.flatMap((x) => Object.entries(x.state).filter(([, s]) => alive(s)).map(([l, s]) => (x.point || x.mode) + ' ' + l + '（进程 ' + (s.pid || '刚起') + '，已跑 ' + Math.round((Date.now() - (Number(s.sentAt) || Date.now())) / 60000) + ' 分钟）'));
+    const cancel = 'review.js cancel' + (opts.change ? ' --change ' + opts.change : '') + ' --mode ' + opts.mode + (opts.point ? ' --point ' + opts.point : '') + ' --project ' + String(opts.cwd).replace(/\\/g, '/');
+    return { status: 'running', running: names, next: '上一轮还有 ' + names.length + ' 个审查在跑（' + names.join('、') + '），这次不开新的一轮。等一会儿再跑一次 review.js run；这期间文档或代码改过的，那一轮结论会作废（stale），只审改过的地方。用户要现在重开：' + cancel + '，再 run。' };
   }
   if (old && old.dir) { try { fs.rmSync(old.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch (e) { /* 占着就算了 */ } }
   pruneJobDirs(path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'));
@@ -577,7 +579,8 @@ function sweep(cwd) {
 /** 这个变更（这个模式）有角度正在跑：别催、别再开 */
 function inFlight(dir, mode) {
   const name = path.basename(dir); const jobs = S.readState('review-jobs');
-  return Object.values(jobs).some((job) => job && job.status === 'running' && job.state && job.change.toLowerCase() === name.toLowerCase() && (!mode || job.mode === mode) && S.normKey(path.join(job.root, 'openspec', 'changes', job.change)) === S.normKey(dir) && Object.values(job.state).some((s) => s.status === 'sent'));
+  // 进程还活着才算在跑：进程没了还记着"发出去了"的（Claude Code 结束命令时连后台进程一起结束了），不挡提交、不让收工钩子干等
+  return Object.values(jobs).some((job) => job && job.status === 'running' && job.state && job.change.toLowerCase() === name.toLowerCase() && (!mode || job.mode === mode) && S.normKey(path.join(job.root, 'openspec', 'changes', job.change)) === S.normKey(dir) && Object.values(job.state).some(alive));
 }
 /** 角度交齐：合并、入账、写快照和审查记录 */
 function finish(id) {
@@ -664,7 +667,16 @@ function status(opts) {
   if (r && r.status === 'running' && Date.now() >= r.deadline) { S.updateState('review-jobs', (o) => { if (o[key] && o[key].id === r.id) { o[key].spentMs = Date.now() - Number(o[key].started || Date.now()); o[key].status = 'interrupted'; o[key].reason = '角度没交齐，没有完整结果'; } }); return S.readState('review-jobs')[key]; }
   // 都交了但入账没走完（钩子的预算用完了）：这里补上
   if (r && r.status === 'running' && r.lenses && r.lenses.length && !leftOf(r).length) return finish(r.id);
-  if (r && r.status === 'running') return Object.assign({}, r, { left: r.lenses ? leftOf(r) : [] });
+  if (r && r.status === 'running' && r.lenses) {
+    // 进程没了的角度记成没交，顶层按各角度汇总（#426、#428：以前角度失败了顶层还是 running，看着像还在审）
+    for (const l of r.lenses) { const s = r.state[l]; if (s && s.status === 'sent' && !alive(s)) failLens(r.id, l, '审查进程没了，没交结论'); }
+    const now = S.readState('review-jobs')[key] || r;
+    const left = leftOf(now);
+    const busy = now.lenses.filter((l) => alive(now.state[l]));
+    const lost = now.lenses.filter((l) => now.state[l].status === 'failed');
+    if (!busy.length && lost.length) return Object.assign({}, now, { status: 'failed', left, lost: lost.map((l) => l + '：' + (now.state[l].why || '没交结论')), next: '有角度没拿到结论，没有在跑的了。再跑一次 review.js run 只补没交的；连续 3 次没拿到就不再催，写进交代。' });
+    return Object.assign({}, now, { left, running: busy });
+  }
   return r || { status: 'none' };
 }
 function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point, opts.base); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = Date.now() - Number(o[key].started || Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
