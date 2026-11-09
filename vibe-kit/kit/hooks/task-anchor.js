@@ -17,6 +17,7 @@
  *   不在流程里、或者还在写提案那一段，这一轮照有人在的样子来（全自动只管 apply 之后，用户 2026-10-07 定的）。
  *   这句话开工了（敲了 /opsx:apply、说了"开工""把 1.1 做了"）：告诉用户这次全自动开没开（systemMessage，不进模型的上下文，不打断干活）。
  *   开工前不自动拉代码（2026-10-17 起，用户自己拉）。
+ *   用户给了登录账号（"账号 admin 密码 …""用 admin/… 登录"）、说到了怎么启动：提醒记进 .vibe/login.json、项目说明，下次不用再问（第 75 条，lib/login.js promptHint）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -560,6 +561,14 @@ async function handle(j) {
   }
   const oh = note || anchored.overLine ? '' : outputHint(j, cfg);
   if (oh) lines.push(oh);
+  // 用户给了登录账号、说到了怎么启动：提醒记下来，下次不用再问（问题表第 75 条，lib/login.js）
+  if (!note) {
+    try {
+      const lastAsk = () => { const es = j.transcript_path ? tailEntries(j.transcript_path, 300000) : []; for (let i = es.length - 1; i >= 0; i--) if (es[i] && es[i].type === 'assistant' && !es[i].isSidechain) { const t = textOf(es[i]); if (t.trim()) return t.slice(-2000); } return ''; };
+      const lh = require('../lib/login.js').promptHint(j.prompt, j.cwd || process.cwd(), lastAsk);
+      if (lh) lines.push(lh);
+    } catch (e) { /* 提醒不了不影响开口 */ }
+  }
   // 开工了：告诉用户这次全自动开没开（systemMessage 给人看，additionalContext 给模型）
   let notice = applyStart ? applyNotice(cfg) : resumed2;
   if (!notice && !note && !on) { try { const rh = resumeHint(j); if (rh) notice = { user: rh, model: '' }; } catch (e) { /* 提示不了不影响开口 */ } }

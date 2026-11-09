@@ -1,7 +1,8 @@
 'use strict';
 /*
  * SessionStart 钩子：会话一开始（新开、/clear、压缩之后、恢复）就把这几样东西确定性地交给模型，不指望它自己想起来去读：
- *   1. 项目说明 .vibe/project.md —— /vk-onboard 查到的"怎么编译、怎么快检、怎么启动、什么编码"。只在本机，不进仓库
+ *   1. 项目说明 .vibe/project.md —— /vk-onboard 查到的"怎么编译、怎么快检、怎么启动、什么编码"，devserver 跑通过的启动命令。只在本机，不进仓库；
+ *      测试账号表 .vibe/login.json 有哪些账号（不带口令，lib/login.js）。壳子里的子项目列路径时带上跑通的启动、账号的名字（问题表第 75 条）
  *   2. 压缩和恢复后核对本机事实；旧交接只由用户明确点名后提示读取，不自动带入
  *   3. 这个目录是不是一层"壳子"（下面套着各个子项目，各是独立的 git 仓库）—— 是的话列出子项目，告诉它在这一层对子项目跑命令怎么写（不 cd：git -C、mvn -f、npm --prefix）；不是壳子也提一句 Bash 里别把 cd 和别的命令串在一条里
  * 本机环境（JDK、Maven 在哪）不在这里：它写在全局约定里，每个会话本来就能看到。
@@ -122,14 +123,24 @@ async function handle(j) {
       try { note = OB ? OB.startNote(cwd, exploring) : ''; } catch (e) { note = ''; }
       if (note) out.push(note);
     }
+    // 测试账号表（问题表第 75 条）：有就带上有哪些账号（不带口令），模型不用再问用户
+    let LG = null;
+    try { LG = require('../lib/login.js'); const lf = LG.findFrom(cwd, 4); if (lf) out.push(LG.summary(lf, { max: 10 })); } catch (e) { /* 读不了不影响会话开始 */ }
     // 各个子项目有各自的项目说明：只列路径，用到哪个读哪个。团队共享的那份写在子项目的 CLAUDE.md 里（"项目说明（团队共享）"一节），
-    // 当前目录的 CLAUDE.md Claude Code 自己会带，子项目的要读到那个目录里的文件才带，所以也列上
+    // 当前目录的 CLAUDE.md Claude Code 自己会带，子项目的要读到那个目录里的文件才带，所以也列上。
+    // 项目说明里有 devserver 跑通过的启动命令、有测试账号表的，路径后面带上名字（第 75 条：在壳子里也知道哪个子项目能直接起、有账号）
     const nested = [];
     const teamNotes = (dir) => { const f = path.join(dir, 'CLAUDE.md'); try { return /^#{1,3}\s*项目说明（团队共享）/m.test(fs.readFileSync(f, 'utf8')) ? f + '（"项目说明（团队共享）"一节）' : ''; } catch (e) { return ''; } };
+    const withFacts = (dir, pm) => {
+      const bits = [];
+      try { const runs = (fs.readFileSync(pm, 'utf8').match(/^-\s*跑通的启动（[^，）]+/gm) || []).map((l) => l.replace(/^-\s*跑通的启动（/, '')); if (runs.length) bits.push('跑通的启动：' + runs.join('、')); } catch (e) { /* 读不了不带 */ }
+      try { const lf = path.join(dir, '.vibe', 'login.json'); if (LG && fs.existsSync(lf)) { const ns = LG.names(lf); bits.push('测试账号（' + lf + '）：' + (ns.length ? ns.slice(0, 6).join('、') + (ns.length > 6 ? ' 等 ' + ns.length + ' 个' : '') : '读不出来，先读它')); } } catch (e) { /* 读不了不带 */ }
+      return pm + (bits.length ? '（' + bits.join('；') + '）' : '');
+    };
     for (const a of subdirs(cwd)) {
-      const pa = path.join(a, '.vibe', 'project.md'); if (fs.existsSync(pa)) nested.push(pa);
+      const pa = path.join(a, '.vibe', 'project.md'); if (fs.existsSync(pa)) nested.push(withFacts(a, pa));
       const ta = teamNotes(a); if (ta) nested.push(ta);
-      if (deep) for (const b of subdirs(a)) { const pb = path.join(b, '.vibe', 'project.md'); if (fs.existsSync(pb)) nested.push(pb); const tb = teamNotes(b); if (tb) nested.push(tb); }
+      if (deep) for (const b of subdirs(a)) { const pb = path.join(b, '.vibe', 'project.md'); if (fs.existsSync(pb)) nested.push(withFacts(b, pb)); const tb = teamNotes(b); if (tb) nested.push(tb); }
       if (nested.length >= 30) break;
     }
     if (nested.length) out.push('下面这些目录各有项目说明，改它里面的代码之前先读对应的那份：\n' + nested.map((p) => '- ' + p).join('\n'));
