@@ -1,40 +1,31 @@
 # 交接：现在的状态
 
-更新于 2026-11-06 凌晨。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)。
+更新于 2026-11-09。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)（这批之后是空的）。
 
 ## 在做
 
-第 71 条的第 1 点（能用脚本的不请求模型）这版没做，仓库主人说先不看。方案和数字在 [feedback-20261105-3.md](feedback-20261105-3.md)：读代码占主会话请求 40—43%，压缩窗口是最大的 token 杠杆。内网报告带内网路径，不进仓库。
+20261109 这批改完、提交推送了，在发版：全量回归 → 打包 → 从最近两版验收升级 → `release` 提交和标签。核对、改法、每条的提交号见 [feedback-20261109.md](feedback-20261109.md)。
 
-## 最近一次发版
-
-20261106.0234，已推到 GitHub（main 和标签 v20261106.0234），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。和 0052 比（第 73 条，[feedback-20261105-3.md](feedback-20261105-3.md)）：`claude -p` 不连 MCP、不带全局约定、少一个请求，角度数按差异算；子代理代码删了；升级时清残留。上一版 0052（第 72 条）审查改成 `claude -p`。**这两版都没做别的模型复审，代码审查的质量对比没做完，真网关没跑过**，仓库主人定的先发。
-
-全量回归（`--since v20261106.0052`）121 套 6987 项全过。从 1915、0052 验收升级各 33 项过。
+这批改了：0234 上报的 #420、#421（连 #339、#349、#358）、#422、#425—#429、#413；去掉 `ccAutoMode`（第 74 条，套件不再管 Claude Code 自带的自动模式）；第 71 条第 1 点做了三样（`run --decisions`、cd 改写、钩子跑 validate）；未结清单修 6 行、关 11 行。审查不再指定 Sonnet，用用户默认的模型（替代第 63 条）。
 
 ## 待仓库主人做的
 
-- 内网 GitLab 发布 20261106.0234：解压包，在包目录里跑 `node publish.js --now`（要马上装；不加等 24 小时）。
-- 发布后实际审一次，看用时、问题数，审查记录里每轮写了 token；`claude` 在同事电脑上找不找得到（先用 `CLAUDE_CODE_EXECPATH`，没有就找命令行的 `claude`）。
-- 内网网关认 `claude-sonnet-5`、`claude-sonnet-5-5`（2.1.263、2.1.316 跑过）；2.1.120 的 `claude-sonnet-4-6` 还没确认。
+- 发版后内网 GitLab 发布：解压包，在包目录里跑 `node publish.js --now`。
+- #426/#428"一直说上一轮在跑"的确切路径没复现，修的是两种可能的原因；内网再碰到，看 `review.js status` 的 `running` 里是哪个审查点、哪个进程。
+- #427 那台网关的模型映射没核实（套件这边已不指定模型）。
 
 ## 要注意的
 
-- 审查点：`flow-policy.js` 的 `points` 只有必审的（`tasks`、`change`、`cross-*`），`written` 是写好了哪几份，`reviewable` 加上用户点名才审的单份文档和组。`change` 的指纹分"文档和任务 : 代码"两段，后面的变更开工了只比前一段（`sameInput`）。
-- 基线记真正开工那一刻，大任务只记现在要做的 change（`apply-scope.grant`）；`change` 审查不送"开工前就有改动、开工后没动过"的文件。
-- 审查（第 72、73 条）：`review.js run` → `review-runner.run`：`prepare` 备材料和提示（`<角度>.prompt.md`），每个角度一个后台进程 `review.js worker` 跑 `claude -p`（`--tools ""`、`--strict-mcp-config`、`disableAllHooks`、`CLAUDE_CODE_DISABLE_CLAUDE_MDS`），交齐 `finish` 入账（只让一个进程做）。最多等 9 分钟，返回 `running` 再跑一次。`guard-commit` 把 timeout 改成 10 分钟。测试支架默认 `VIBE_KIT_REVIEW_NO_RUN=1`（只备材料），`VIBE_KIT_CLAUDE_EXE` 指定 claude。
-- `review-stop.js` 是空壳。两次代码审查的范围文件没列代码文件的疑点还没查（`materials` 基线之后没改动时只剩文档，也不报错），见未结清单。升级残留用 `dev/probes/upgrade-residue.js` 查。
-- 审查的边界（第 64、70 条）：`review-scope.js` 的 `lensesFor`（按 `reviewSmallChars` 定 1～3 个）、`SCOPE_NOTE`，`review-runner.js` 的 `areasOf`、`pathFacts`，`kit/review-prompt.md`，`review-facts.js`。测试支架默认 `reviewSmallChars: 0`（不分大小）。
-- 开着 `/vk-auto`：开始写文档以后只有探索记录里真有没定的才不生效（`session-flow.flowView`、`big-task.exploreOpen`），插话不取消；在流程里审查不用先问（`flow-policy.actionIssue`）。
-- `keepCurrent`：`/vk-resume` 切到全勾完的 change，算在做它，等用户说下一步。`oldDone`：这个会话碰它之前就勾完的 change，只改文档不催审；接回不算碰过。
-- 补录和归属：`lib/plan-link.js` 只给线索，`plan.js link` 才写；问过的记在 `state/plan-link.json`。`planAddUnlisted` 不再并进全部归档的大任务。
-- 新测试文件要跑 `node dev/contracts.js --write`，加进 `dev/run-all.js` 的 suites。新测试里别写旧名字 `ttls-`，残留扫描会报。
-- 补丁脚本里带反斜杠的不要用 heredoc 或 `node -e`，用 Write 写成文件再跑；Bash 里不要 `cd`。`.bat` 按字节改。"桌面没冒窗口"那项偶尔不过（今天在两套端到端上各一次，重跑都过），原因没查，重跑确认。
-- 钩子出错放行会藏住"名字没定义"：改了钩子入口要跑真 CLI（`dev/probes/cc-vk-config.js`、`cc-vk-resume.js`，Git Bash 下参数写 `//vk-…`）。
-- OpenSpec 1.16.0 要 Node 22.12，仓库主人定了先不升。
-- 测试里拿旧版比：`dev/baseline/20261106.0234/vibe-kit`（最新）。`hooks/` 下的文件不能删。这台电脑没装 vibe-kit。系统临时目录里有 11-04 留下的 `vkt-*` 目录，要清的话仓库主人自己删。
+- git 跨钩子缓存（`workspace.crossCall`）：只在钩子里；`state/git-cache.json`、`state/git-epoch.json`；PostToolUse（不改文件的工具除外）、用户开口、会话开始换代。测试默认 `VIBE_KIT_NO_GIT_CACHE=1`，`dev/lib/harness.js` 加载时也给测试进程设上。
+- cd 改写在 `guard-commit.handle` 里先做（`guard-process.cdRewrite`），改写后的命令整条再过 `handleOne`。只改两种：cd 到当前目录；cd 之后只有 git（可带 echo、管道给 head/tail/wc/sort/uniq）。
+- 钩子跑 validate：`lib/spec-validate.js`，after-tool 调，按内容去重记在 `<会话>-spec-validate.json`。要自带的 OpenSpec 能用，测试家目录要 `makeHome(..., { openspec: true })`。
+- 审查：`review-scope.matchLabel`；复审轮分批；`status` 按角度汇总；"上一轮在跑"只看同一审查点、进程活着；`run --decisions` 在任务上记 `decided`，重跑同一条命令不重复登记；代码审查没有代码改动报错，`--docs-only` 放过。
+- 同名 change：`big-task.ofChange` 给目录只按目录认；流程状态 `current` 旁边有 `currentDir`。
+- `db-crud.ini` 的锁：Node 用 `state-store.acquire(<ini>.lock)`，Python 的 `dbconf._ini_lock` 同格式，60 秒以前的算没人管。
+- 探针：`dev/probes/cc-cd-rewrite.js`、`hook-git-count.js`。
+- 老规矩照旧：补丁带反斜杠的用 Write 写成文件再跑；Bash 不 `cd`；`.bat` 按字节改；新测试要 `node dev/contracts.js --write`、加进 `run-all.js`；`hooks/` 下的文件不能删；拿旧版比用 `dev/baseline/20261106.0234/vibe-kit`。
 
 ## 环境
 
-- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289（exe 在 `node_modules/@anthropic-ai/claude-code-win32-x64/claude.exe`）。2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI。
+- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。2.1.312 离线安装文件在 C:\WorkSpace\内网安装ClaudeCLI。
 - Python 3.12、JDK 17（%LOCALAPPDATA%\Programs\…）、H2 在 ~/.m2。8 GB 内存，端到端用 `--e2e-lanes 2`。
