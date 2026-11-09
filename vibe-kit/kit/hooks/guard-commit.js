@@ -55,7 +55,7 @@ const { stripComments, preprocess, OPEN, CLOSE, splitCommand, scanRedirects, wor
 const { pushAnywhere, publishAnywhere, parseGit, messageOf, commitAll, gitIssue, tempIndexOf, newFilesIssue, consentIssue, plainPush, commitToolRun, noteCommitTools } = require('../lib/guard-git');
 const { archiveTarget, archiveIssue } = require('../lib/guard-archive');
 const { easyListing, keyFileIssue, hasReaderIn } = require('../lib/guard-kit');
-const { serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText } = require('../lib/guard-process');
+const { serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText, cdRewrite } = require('../lib/guard-process');
 
 /** 某一道检查自己出错了：照常放行（硬规矩 2），但记一条问题反馈（审核 P13：以前这几处静默跳过，读令牌、提交许可这几道检查没跑也没人知道） */
 function checkFailed(what, j, e) { try { if (feedback && feedback.recordHookError) feedback.recordHookError('guard-commit（' + what + '）', j || {}, e); } catch (err) { /* 记不了就算了 */ } }
@@ -357,6 +357,23 @@ function check(j) {
  * 检查拦下、要问的照旧（不改写）；自带的用不了（Node 版本不够）、出错，都让原命令照常跑
  */
 function handle(j) {
+  // cd 串着 git、cd 到当前目录的：改成不用 cd 的写法再查一遍，过了就照改写后的跑，不拦下让模型重发（第 71 条第 1 点，lib/guard-process.js 的 cdRewrite）
+  if (j && j.tool_name === 'Bash') {
+    let next = '';
+    try { next = cdRewrite(String((j.tool_input && j.tool_input.command) || ''), j.cwd); } catch (e) { next = ''; }
+    if (next) {
+      const j2 = Object.assign({}, j, { tool_input: Object.assign({}, j.tool_input, { command: next }) });
+      const o = handleOne(j2);
+      const hs = (o && o.hookSpecificOutput) || {};
+      if (o && (o.decision === 'block' || hs.permissionDecision === 'deny' || hs.permissionDecision === 'ask')) return o;
+      hookLog('guard-commit 改写了串着 cd 的命令：' + String(j.tool_input.command).replace(/\s+/g, ' ').slice(0, 100) + ' → ' + next.replace(/\s+/g, ' ').slice(0, 100));
+      try { require('../lib/usage').bump('rewrite.cd'); } catch (e) { /* 数不了不影响 */ }
+      return Object.assign({}, o || {}, { hookSpecificOutput: Object.assign({ hookEventName: 'PreToolUse' }, hs, { updatedInput: hs.updatedInput || j2.tool_input }) });
+    }
+  }
+  return handleOne(j);
+}
+function handleOne(j) {
   const out = check(j);
   if (out || /^mcp__/.test(String(j.tool_name || ''))) return out;
   // review.js run 最多等 9 分钟（第 72 条）：Bash 默认 2 分钟就断了，这里给够。断了也不要紧，后台接着审，再跑一次接着等

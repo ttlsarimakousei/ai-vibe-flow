@@ -214,8 +214,12 @@ add('命令：删别的事由的过程文件', 'guard-commit', cmd('rm -rf .vibe
 add('命令：目录写在变量里的整仓 add', 'guard-commit', cmd('git -C "$r" add -A .'), /目录写在变量里（[^）]*\$r[^）]*），算不出是哪个仓库/, V2248);
 add('命令：循环里对老仓库整仓 add', 'guard-commit', cmd('for r in . ; do git -C "$r" add -A .; done'), /会把你工作区里原来就有的改动/, V2248);
 // 20260930.1505 有意改的：cd 和别的命令串在一条里，Claude Code 会停下来要人确认（跳过权限模式也问），拦下并给出不用 cd 的写法；起服务的提示里写了 --dir
-add('命令：cd src && git push', 'guard-commit', cmd('cd src && git push'), /这条命令先 cd 到 src，再跑 git[\s\S]*git -C \\"src\\" push/, V1505);
+// 20261109 起改写成 git -C "src" push 再查，没说推送的由推送那一道拦下（以前拦的是 cd）
+add('命令：cd src && git push', 'guard-commit', cmd('cd src && git push'), /用户没说推送/, NEXT);
 add('命令：cd 到子目录再编译', 'guard-commit', cmd('cd src && mvn -q -o compile'), /mvn -f \\"src\/pom\.xml\\" -q -o compile/, V1505);
+// 20261109 有意改的（第 71 条第 1 点）：cd 到当前目录的去掉 cd、cd 到别的目录后面只有 git 的改成 git -C，钩子直接改写，不拦下
+add('命令：cd 当前目录再跑 git（改写，不拦）', 'guard-commit', cmd('cd "<项目>" && git status --short'), /"updatedInput": \{\s*"command": "git status --short"/, NEXT);
+add('命令：cd 子目录再跑 git log（改成 git -C）', 'guard-commit', cmd('cd src && git log --oneline -3 | head -3'), /"command": "git -C \\"src\\" log --oneline -3 \| head -3"/, NEXT);
 // 1007：端口改成 --port auto --avoid <配置里的端口>，提示里的命令和说法跟着改
 add('命令：mvn spring-boot:run', 'guard-commit', cmd('mvn spring-boot:run'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1007);
 add('命令：npm run dev', 'guard-commit', cmd('npm run dev'), /起服务自测用 devserver\.js[\s\S]*--port auto --avoid[\s\S]*start 后面加 --cwd <子目录>，不要先 cd/, V1007);

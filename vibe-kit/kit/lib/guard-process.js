@@ -294,4 +294,67 @@ function cdCompoundText(hit, cwd) {
       : '这个命令要在那个目录里才能跑的话，cd "' + d + '" 单独跑一条、后面不串别的，下一条再跑它，跑完再单独一条 cd 回 "' + slash(base) + '"。');
 }
 
-module.exports = { serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText };
+/*
+ * 能确定改对的，钩子直接改写，不拦下让模型重发（第 71 条第 1 点，仓库主人 2026-11-09 选的：一周拦下 cd 322 次，每次多一个请求）：
+ *   cd 到的就是现在所在的目录：去掉 cd，后面原样（2.1.120、2.1.259、2.1.289 实测 cd 到当前目录本来就不弹确认）；
+ *   cd 到别的目录，后面只有 git（可以带 echo、管道给 head、tail、wc、sort、uniq）：git 改成 git -C <目录>，实测改写后不弹确认（dev/probes/cc-cd-rewrite.js）。
+ * 别的（cd 之后跑 mvn、npm、脚本、读写相对路径的文件、子 shell、重定向到文件、开头不是 cd）不改，照旧拦下给写法。返回改写后的命令，改不了返回 ''
+ */
+const FILTERS = new Set(['head', 'tail', 'wc', 'sort', 'uniq']);
+const NULL_REDIRECT = /^(?:\d?>&\d|&?\d?>\s*\/dev\/null)$/;
+function splitTop(s) {
+  // 按没被引号括着的 && || ; | 切开；碰到 ` $( ( ) < 换行、单独的 & 就不认
+  const parts = []; const ops = []; let cur = ''; let q = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (q) { cur += ch; if (ch === q) q = ''; else if (ch === '\\' && q === '"' && i + 1 < s.length) { cur += s[++i]; } continue; }
+    if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+    if (ch === '`' || ch === '(' || ch === ')' || ch === '<' || ch === '\n' || ch === '\r' || (ch === '$' && s[i + 1] === '(')) return null;
+    if (ch === '\\') return null;
+    const two = s.slice(i, i + 2);
+    if (two === '&&' || two === '||') { parts.push(cur); ops.push(two); cur = ''; i++; continue; }
+    if (ch === ';' || ch === '|') { parts.push(cur); ops.push(ch); cur = ''; continue; }
+    if (ch === '&') { if (s[i - 1] === '>' || s[i + 1] === '>') { cur += ch; continue; } return null; }
+    cur += ch;
+  }
+  if (q) return null;
+  parts.push(cur);
+  return { parts, ops };
+}
+function cdRewrite(cmd, cwd) {
+  const s = String(cmd || '');
+  const m = /^\s*cd\s+("([^"]*)"|'([^']*)'|([^\s"'`;&|<>()$\\]+))((?:\s+(?:\d?>&\d|&?\d?>\s*\/dev\/null))*)\s*(&&|;)\s*([\s\S]+)$/.exec(s);
+  if (!m) return '';
+  const target = m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4];
+  if (!target || /[$~`*?]/.test(target) || target === '-') return '';
+  const base = path.resolve(cwd || process.cwd());
+  const dir = path.resolve(base, target.replace(/^\/([A-Za-z])\//, '$1:/'));
+  try { if (!require('fs').statSync(dir).isDirectory()) return ''; } catch (e) { return ''; }
+  const rest = m[7].trim();
+  const split = splitTop(rest);
+  if (!split || split.parts.some((p) => !p.trim())) return '';
+  const heads = split.parts.map((p) => (p.trim().match(/^\S+/) || [''])[0]);
+  if (heads.some((h) => CD_BASH.test(h) || /^popd$/.test(h))) return '';
+  if (normKey(dir) === normKey(base)) return rest;
+  const slash = (p) => String(p).replace(/\\/g, '/');
+  const inside = path.relative(base, dir);
+  const d = inside && !inside.startsWith('..') && !path.isAbsolute(inside) ? slash(inside) : slash(dir);
+  const out = [];
+  for (let k = 0; k < split.parts.length; k++) {
+    const p = split.parts[k].trim(); const head = heads[k];
+    const ws = p.split(/\s+/).slice(1);
+    // 重定向只认丢掉输出的（2>&1、>/dev/null）：写到文件的相对路径 cd 前后意思不一样
+    if (/>/.test(p.replace(/(?:^|\s)(?:\d?>&\d|&?\d?>\s*\/dev\/null)(?=\s|$)/g, ' '))) return '';
+    // 原来就带 -C 的照样加在前面：git -C a -C b 的 b 相对 a 算，和 cd a 之后一样
+    if (head === 'git') out.push('git -C "' + d + '"' + p.slice(3));
+    else if (head === 'echo' || head === 'printf' || head === 'true') out.push(p);
+    else if (FILTERS.has(head) && k > 0 && split.ops[k - 1] === '|' && ws.every((w) => /^-/.test(w) || /^\d+$/.test(w) || NULL_REDIRECT.test(w) || /^\d?>/.test(w))) out.push(p);
+    else return '';
+  }
+  if (!heads.includes('git')) return '';
+  let text = out[0];
+  for (let k = 1; k < out.length; k++) text += (split.ops[k - 1] === '|' ? ' | ' : ' ' + split.ops[k - 1] + ' ') + out[k];
+  return text;
+}
+
+module.exports = { serverStart, serverMsg, WRITE_TO, processTarget, keepIssue, cdCompoundIssue, cdCompoundText, cdRewrite };
