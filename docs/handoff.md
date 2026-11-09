@@ -1,31 +1,28 @@
 # 交接：现在的状态
 
-更新于 2026-11-09。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)（这批之后是空的）。
+更新于 2026-11-09 晚。规矩见 AGENTS.md"交接"；没结的问题看 [backlog.md](backlog.md)（现在是空的）。
 
 ## 在做
 
-没有在做的。最近一次发版 20261109.1612，已推到 GitHub（main 和标签 v20261109.1612），包在仓库根目录和 C:\WorkSpace\vibe-tools\packages。全量回归（`--since v20261106.0234`）123 套 7103 项全过；从 0052、0234 验收升级各 33 项过。核对、改法、每条的提交号见 [feedback-20261109.md](feedback-20261109.md)。
+没有在做的。最近一次发版 20261109.1612（main 和标签 v20261109.1612 在 GitHub）。之后做完了问题表第 75 条（换个需求就忘了怎么启动、用哪个账号），已提交推送，**还没打包发版**：核对、改法、提交号、复审见 [feedback-20261109-2.md](feedback-20261109-2.md)。
 
-第一次全量回归 2.1.289 的端到端挂了 6 套：当时按仓库主人先选的"整个删除"不写 `disableAutoMode`，2.1.289 进了 Claude Code 自带的自动模式，`git commit`、查库被分类模型拦。讲清楚以后改成"开关去掉、固定关着"，第二次全过。
-
-这批改了：0234 上报的 #420、#421（连 #339、#349、#358）、#422、#425—#429、#413；去掉 `ccAutoMode`（第 74 条，开关去掉，Claude Code 自带的自动模式固定关着）；第 71 条第 1 点做了三样（`run --decisions`、cd 改写、钩子跑 validate）；未结清单修 6 行、关 11 行。审查不再指定 Sonnet，用用户默认的模型（替代第 63 条）。
+这批：devserver 起来后把命令写进项目说明的"跑通的启动"一行（stop 不删）；测试账号表 `.vibe/login.json` 定格式（`lib/login.js`、`tools/login.js`）；会话开始带账号汇总、开口提醒记账号；场景引用 `{{login.名字.字段}}`；tmp 里的账号、登录场景拦一次。只跑了相关测试（第 75 条 72 项、相关老测试 19 套、钩子比对 297 项），没跑全量回归。
 
 ## 待仓库主人做的
 
+- 定要不要打包发版（发版前按 docs/release.md 跑全量回归，`--since v20261109.1612`）。
 - 发版后内网 GitLab 发布：解压包，在包目录里跑 `node publish.js --now`。
-- #426/#428"一直说上一轮在跑"的确切路径没复现，修的是两种可能的原因；内网再碰到，看 `review.js status` 的 `running` 里是哪个审查点、哪个进程。
+- #426/#428"一直说上一轮在跑"的确切路径没复现；内网再碰到，看 `review.js status` 的 `running`。
 - #427 那台网关的模型映射没核实（套件这边已不指定模型）。
 
 ## 要注意的
 
-- git 跨钩子缓存（`workspace.crossCall`）：只在钩子里；`state/git-cache.json`、`state/git-epoch.json`；PostToolUse（不改文件的工具除外）、用户开口、会话开始换代。测试默认 `VIBE_KIT_NO_GIT_CACHE=1`，`dev/lib/harness.js` 加载时也给测试进程设上。
-- cd 改写在 `guard-commit.handle` 里先做（`guard-process.cdRewrite`），改写后的命令整条再过 `handleOne`。只改两种：cd 到当前目录；cd 之后只有 git（可带 echo、管道给 head/tail/wc/sort/uniq）。
-- 钩子跑 validate：`lib/spec-validate.js`，after-tool 调，按内容去重记在 `<会话>-spec-validate.json`。要自带的 OpenSpec 能用，测试家目录要 `makeHome(..., { openspec: true })`。
-- 审查：`review-scope.matchLabel`；复审轮分批；`status` 按角度汇总；"上一轮在跑"只看同一审查点、进程活着；`run --decisions` 在任务上记 `decided`，重跑同一条命令不重复登记；代码审查没有代码改动报错，`--docs-only` 放过。
-- 同名 change：`big-task.ofChange` 给目录只按目录认；流程状态 `current` 旁边有 `currentDir`。
-- `db-crud.ini` 的锁：Node 用 `state-store.acquire(<ini>.lock)`，Python 的 `dbconf._ini_lock` 同格式，60 秒以前的算没人管。
-- 探针：`dev/probes/cc-cd-rewrite.js`、`hook-git-count.js`。
-- 老规矩照旧：补丁带反斜杠的用 Write 写成文件再跑；Bash 不 `cd`；`.bat` 按字节改；新测试要 `node dev/contracts.js --write`、加进 `run-all.js`；`hooks/` 下的文件不能删；拿旧版比用 `dev/baseline/20261106.0234/vibe-kit`。
+- 跑通的启动：`devserver.noteStartLine`，键"跑通的启动（名字，日期）"比 `onboard` 的 12 字键长，探索不碰它。不在 git/svn 里又不像项目的目录不写；GBK 的项目说明不动；BOM、CRLF 照原样。**不要在 devserver 里改 `.gitignore`**：下次 start 会当成代码改过而重启（第一轮 `test-feedback1028.js` 就挂在这）。
+- 账号表的口令不进任何汇总、提示、场景输出；坏 JSON 的报错不带原文（Node 的报错会引出口令）。
+- 开口的账号识别（`login.promptHint`）误报漏报的例子都在 `test-feedback1109-login.js`"用户给了账号"一节，改正则先跑它。
+- git 跨钩子缓存、cd 改写、钩子跑 validate、审查分批这些见 [feedback-20261109.md](feedback-20261109.md)。
+- 老规矩照旧：补丁带反斜杠的用 Write 写成文件再跑（heredoc 会吃掉反斜杠，这批又踩了一次）；Edit 写 `\uFEFF` 这类转义会变成字符本身，用 `String.fromCharCode`；Bash 不 `cd`；`.bat` 按字节改；新测试要 `node dev/contracts.js --write`、加进 `run-all.js`；`hooks/` 下的文件不能删；拿旧版比用 `dev/baseline/20261109.1612/vibe-kit`。
+- 临时目录里有 11-04、11-05 留下的 vkt-pkg-*、vkt-t1017-* 等测试目录，`run-all` 结尾会因此报退出码 1，不是这批留的。
 
 ## 环境
 
