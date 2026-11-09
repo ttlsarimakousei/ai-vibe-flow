@@ -180,6 +180,8 @@ function materials(opts, change) {
     }
     // 不带等号的 --base 一个仓库都不认得：是写错了，不当成缺基线
     for (const b of bare) if (!used.has(b)) throw new Error('审查基线 ' + b + ' 不是本地提交（这几个仓库里都没有）；几个仓库各写各的：' + hint);
+    // 一个代码文件都没有：以前照样审，只审了需求文档也不说（第 71 条内网报告看到的：基线记晚了，改动在基线之前）
+    if (change && !skipped.length && !items.length && !opts.docsOnly) throw new Error('没有代码改动可审：开工基线之后 ' + roots.map((r) => path.basename(r)).join('、') + ' 里没有改过的代码文件（openspec、.vibe 不算）。代码在开工基线之前就改了或提交了的，用 --base 指定改之前的提交：' + hint + '；这个 change 本来就不改代码的，加 --docs-only 再跑一次');
     if (change) for (const row of artifacts().filter((r) => !/revisions\.md$/.test(r.file))) add(row.file, row.text, change.dir, undefined, '需求文档');
   }
   const batches = []; let batch = [], size = 0;
