@@ -48,7 +48,8 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | `maven-offline.js` | devserver 起后端先离线、缺依赖只拉缺的（问题表第 35 条）：加 `-o`、从 Maven 报错里取缺的依赖、拼 `dependency:get` |
 | `outputs.js` | 代码之外的产出位置。用户说过的位置先看最后 600 KB，再看整份记录里用户说的话（#429） |
 | `spec-validate.js` | 需求文档写齐了钩子自己跑 `openspec validate --strict`（after-tool 调，2026-11-09）：内容没变不再跑，结果记在 `state/<会话>-spec-validate.json` |
-| `tidy.js` | `.vibe` 的整理和过程文件的清理 |
+| `tidy.js` | `.vibe` 的整理和过程文件的清理；往 `.vibe/tmp/` 写账号文件、登录场景拦一次（`keepCheck`，第 75 条） |
+| `login.js` | 测试账号表 `.vibe/login.json`（2026-11-09，第 75 条）：格式和别名、读、汇总（不带口令）、场景引用 `{{login.<名字>.<字段>}}`、记 `lastOk`、照项目文件找候选、用户开口给了账号的提醒（`promptHint`）。会话开始、开口、devserver、场景执行器、`tools/login.js` 用它 |
 | `archive-extract.js` | 直接归档解包与查看结果落盘的目标检查，复用 guard-commit 的拆词和工作目录；只读查看放行，项目内临时条目放 `.vibe/tmp/<事由>/`，目录联接核对真实位置 |
 | `onboard.js`、`discover.js` | 后台自动探索：认工程、推命令和端口、找开发环境的数据库和 redis 连接 |
 | `idea-config.js` | 读 IDEA 里配的 Maven、settings.xml、本地仓库、JDK（`.idea` 和 IDE 的配置目录）。探索写命令、配置页"自动探测"用，只读文件，不连 IDEA |
@@ -93,7 +94,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 钩子流水账 | `state/hooks.log`（出问题先看它） |
 | 问题反馈 | `~/.claude/vibe-kit/feedback/`（装新版、卸载都不删），对应的议题记在 `feedback/issues.json` |
 | 安装清单 | `~/.claude/vibe-kit/installed.json`：套件往 settings.json 里加了什么，卸载时只收回这些 |
-| 项目里的 | 子项目的 `.vibe/`（项目说明、交接记录、过程文件、报告），自动加进那个仓库的 `.gitignore`；经验规则 `.claude/rules/vk-lessons-*.md` 跟着仓库提交 |
+| 项目里的 | 子项目的 `.vibe/`（项目说明、交接记录、过程文件、报告），自动加进那个仓库的 `.gitignore`；经验规则 `.claude/rules/vk-lessons-*.md` 跟着仓库提交。不会被清的：`project.md`（含 devserver 写的"跑通的启动"行）、`login.json`（测试账号）、`scenarios/`；会被清的：`tmp/`、`out/` 下归档了的、七天没动的目录，`run/` 下的记录 stop 时删 |
 
 ## 安装、更新、上报
 
@@ -202,3 +203,11 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - **同名 change**：`big-task.ofChange` 给目录就只按目录认；流程状态的 `current` 旁边记 `currentDir`，`isCurrent` 先比目录。
 - **连接配置的锁**：`onboard.mergeDb` 用 `state-store.acquire(<ini>.lock)`；vk-db-crud 的 `dbconf.record_driver` 用同一个锁文件、同样的格式，Python 那头不探进程，60 秒以前的锁算没人管。
 - 去掉开关 `ccAutoMode`：安装器的 `applyCcAutoMode` 固定写 `disableAutoMode`（没有就加、记进 `installed.json`；用户自己写的、`defaultMode` 是 `auto` 的不动；卸载收回自己写的）。
+
+## 20261109 晚这批（第 75 条：启动方式和测试账号）
+
+核对和改法见 [feedback-20261109-2.md](feedback-20261109-2.md)。结构上的变化：
+
+- **跑通的启动写回项目说明**（`tools/devserver.js` 的 `noteStartLine`、`afterUp`）：起来了（`waitUp` 的 `done`）、已经在跑的两处调。项目说明在哪：从运行目录往上找有 `.vibe/project.md` 的目录，到 git 仓库根为止；没有就建在仓库根（用 `onboard.renderProject([])` 的表头，带自动探索的标记，探索按"这里生成的"并进去）。一行的键是"跑通的启动（名字，日期）"，超过 `onboard` 的 12 字键长，探索不会当成它的行。读改写拿 `<project.md>.lock`。
+- **测试账号表**（`lib/login.js`）：会话开始（`session-start`）带汇总、壳子里子项目带名字；开口（`task-anchor`）认出用户给了账号、说到启动，提醒记下来（只有整句是 `x/y` 时才读上一条回复）；场景执行器 `page/scenario-run.js` 的 `subst` 先换 `{{login.…}}`（不进 `result.values`），整个场景跑通了 `markOk` 写 `lastOk`（拿 `<login.json>.lock`）。
+- **tmp 里的账号、登录场景**：`tidy.keepCheck`，`guard-vibe` 在 `vibeCheck` 之后调；同一个文件只拦一次（`blockOnce`，和过程文件共用 `<会话>-process.json`）。
