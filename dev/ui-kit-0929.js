@@ -99,7 +99,8 @@ const call = (method, url, body) => new Promise((resolve) => {
     H.ok('保存条一开始不出来', !(await page.locator('#savebar').getAttribute('class')).includes(' on'));
     // 每一项开关：一个名字、一句话
     const opts = await page.locator('#tab-kit .opt').evaluateAll((els) => els.map((e) => ({ t: (e.querySelector('.t') || {}).textContent || '', d: (e.querySelector(':scope > div > .d') || {}).textContent || '', ctl: !!e.querySelector('.ctl input, .ctl select') })));
-    H.ok('每一项都有名字、一句话说明和控件', opts.length >= 8 && opts.every((o) => o.t.trim() && o.d.trim() && o.ctl), opts.filter((o) => !(o.t.trim() && o.d.trim() && o.ctl)));
+    // 20261109 去掉了"Claude Code 自带的自动模式"那一项，剩 7 项
+    H.ok('每一项都有名字、一句话说明和控件', opts.length >= 7 && opts.every((o) => o.t.trim() && o.d.trim() && o.ctl), opts.filter((o) => !(o.t.trim() && o.d.trim() && o.ctl)));
     const longest = opts.reduce((a, o) => Math.max(a, o.d.trim().length), 0);
     H.ok('一句话说明都不超过 90 个字（以前最长的六百多字）', longest <= 90, opts.filter((o) => o.d.trim().length > 90).map((o) => o.t + ' ' + o.d.trim().length));
     H.ok('细节默认折着', (await page.locator('#tab-kit details.more[open]').count()) === 0 && (await page.locator('#tab-kit details.more').count()) >= 4);

@@ -215,7 +215,7 @@ H.section('cd 和别的命令串在一条里：拦下，给出不用 cd 的写�
   for (const [cmd, want, label] of [
     ['cd frontend && npm run build', /npm --prefix "frontend" run build/, 'npm：用 --prefix'],
     ['cd frontend && mvn -q compile 2>&1 | tail -20', /mvn -f "frontend\/pom\.xml" -q compile/, 'Maven：用 -f'],
-    ['cd frontend && git log --oneline -- src/main.js', /git -C "frontend" log --oneline -- src\/main\.js/, 'git：用 -C'],
+    ['cd frontend && git log --oneline -- src/main.js > log.txt', /git -C "frontend" log --oneline -- src\/main\.js/, 'git 输出写到文件（改写不了）：用 -C'],
     ['cd frontend && pnpm install', /pnpm -C "frontend" install/, 'pnpm：用 -C'],
     ['cd frontend && yarn build', /yarn --cwd "frontend" build/, 'yarn：用 --cwd'],
     ['cd frontend && ./gradlew build', /gradlew" -p "frontend" build/, 'Gradle：用 -p'],
@@ -228,11 +228,17 @@ H.section('cd 和别的命令串在一条里：拦下，给出不用 cd 的写�
     ['cd frontend && node scripts/gen.js --x', /"frontend\/scripts\/gen\.js"/, '跑脚本：脚本写完整路径'],
     ['cd frontend && node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name web --port 5173 --hot -- npm run dev', /start 后面加 --cwd "frontend"/, '起服务的工具：start 用 --cwd'],
     ['cd frontend && node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --all', /stop、status 后面加 --dir "frontend"/, '起服务的工具：stop 用 --dir（以前 cd 进去起的，记录在那个目录里）'],
-    ['cd "' + P + '" && cat pom.xml', /cd 到的就是现在所在的目录[\s\S]*去掉 cd/, 'cd 到的就是会话目录：去掉 cd'],
+    ['cd "' + P + '" && cat pom.xml; cd frontend && ls', /cd/, 'cd 到会话目录、后面又 cd 别处：照拦'],
     ['(cd frontend && npm test) && cat pom.xml', /npm --prefix "frontend" test/, '括号里的 cd 也算'],
     ['cd frontend && npx eslint src/a.vue', /cd "frontend" 单独跑一条/, '没有指目录的参数的命令：cd 单独跑一条'],
     ['cd "$(git rev-parse --show-toplevel)" && cat pom.xml', /git 用 git -C <目录>/, 'cd 到哪算不出来：说通用的办法'],
   ]) { const o = run('Bash', cmd); H.ok('拦：' + label, cdOnly(o) && want.test(why(o)), why(o)); }
+  // 20261109 起（第 71 条第 1 点）：cd 到会话目录的去掉 cd、cd 之后只跑 git 的改成 git -C，钩子直接改写，不拦
+  const upd = (o) => o && o.hookSpecificOutput && o.hookSpecificOutput.updatedInput;
+  for (const [cmd, want, label] of [
+    ['cd frontend && git log --oneline -- src/main.js', 'git -C "frontend" log --oneline -- src/main.js', 'git：改成 -C'],
+    ['cd "' + P + '" && cat pom.xml', 'cat pom.xml', 'cd 到的就是会话目录：去掉 cd'],
+  ]) { const o = run('Bash', cmd); H.ok('改写不拦：' + label, !blocked(o) && upd(o) && upd(o).command === want, o); }
   for (const [tool, cmd, label] of [
     ['Bash', 'cd frontend', '单独一条 cd'],
     ['Bash', 'grep -rn EC_TYPE frontend/src', '没 cd'],
@@ -243,8 +249,10 @@ H.section('cd 和别的命令串在一条里：拦下，给出不用 cd 的写�
     ['PowerShell', 'Set-Location frontend; Get-Content package.json', 'PowerShell 不管'],
   ]) { const o = run(tool, cmd); H.ok('不拦：' + label, o === null, why(o)); }
   // 别的检查先拦下的：末尾顺带提一句 cd，免得改完一处、再跑又被拦一次
-  const both = run('Bash', 'cd frontend && git add -A');
+  const both = run('Bash', 'cd frontend && npm run build && git add -A');
   H.ok('整仓 add 串着 cd：先说 add，末尾带一句 cd', blocked(both) && /git add -A/.test(why(both)) && /另外，这条命令里 cd 和别的命令串在一起/.test(why(both)), why(both));
+  const gitAdd = run('Bash', 'cd frontend && git add -A');
+  H.ok('cd 之后只有整仓 add：改成 git -C 再查，照样拦整仓 add', blocked(gitAdd) && /git add -A/.test(why(gitAdd)), why(gitAdd));
   const srv = run('Bash', 'cd frontend && npm run dev');
   H.ok('直接起服务串着 cd：说用 devserver.js，并且说了 --cwd', blocked(srv) && /devserver\.js/.test(why(srv)) && /start 后面加 --cwd <子目录>/.test(why(srv)), why(srv));
 }
