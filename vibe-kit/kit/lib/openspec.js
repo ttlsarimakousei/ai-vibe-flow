@@ -214,4 +214,4 @@ function installClaudeFiles(claudeDir, beforeOverwrite) {
   finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { /* 临时目录删不掉不影响 */ } }
 }
 
-module.exports = { BIN, WORKFLOWS, info, nodeOk, usable, rewrite, rootOf, ensureRoot, installClaudeFiles };
+module.exports = { BIN, WORKFLOWS, info, nodeOk, usable, run, rewrite, rootOf, ensureRoot, installClaudeFiles };

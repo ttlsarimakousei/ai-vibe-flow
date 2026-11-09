@@ -47,6 +47,8 @@ function handle(j) {
     if (/^(Bash|PowerShell)$/.test(String(j.tool_name || '')) && !successful(j)) { try { const s = require('../lib/fail-summary').summarize(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 失败摘要', j, e); } }
     // 改了 .sql、Mapper XML：拿查库技能存的表结构缓存核对表名、列名，对不上提醒一句，不拦（K3 M10，lib/sql-check.js）
     if (/^(Edit|Write|MultiEdit)$/.test(String(j.tool_name || '')) && successful(j)) { try { const s = require('../lib/sql-check').hintFor(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 表结构核对', j, e); } }
+    // 需求文档写齐了：钩子自己跑 openspec validate --strict，没过把报错送给模型，过了说一句不用再跑（第 71 条第 1 点，lib/spec-validate.js）
+    if (/^(Edit|Write|MultiEdit)$/.test(String(j.tool_name || '')) && successful(j)) { try { const s = require('../lib/spec-validate').check(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' && e.code !== 'VIBE_HOOK_BUDGET') require('../lib/feedback').recordHookError('after-tool openspec validate', j, e); } }
     // 模型没经过提需求、/opsx 这些入口就开始走 OpenSpec：规范这时候送（J4，lib/stage-rules.js，一个会话一次）
     try { const SR = require('../lib/stage-rules'); if (SR.touchesOpenspec(j)) { const s = SR.openspecOnce(j); if (s) notes.push('[vibe-kit 提醒] ' + s); } } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool OpenSpec 规范', j, e); }
     if (notes.length) return { hookSpecificOutput: { hookEventName: j.hook_event_name || 'PostToolUse', additionalContext: notes.join('\n\n') } };
