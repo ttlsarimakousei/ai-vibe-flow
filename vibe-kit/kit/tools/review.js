@@ -4,7 +4,7 @@ const R = require('../lib/review-runner');
 const args = process.argv.slice(2); const val = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 // --base 可以写几次（几个仓库各写一个：--base <仓库相对路径>=<提交>，#189）
 const bases = args.flatMap((a, i) => (a === '--base' && args[i + 1] ? [args[i + 1]] : []));
-const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), mode: val('--mode') || 'code', point: val('--point'), base: bases.length > 1 ? bases : bases[0], budgetSeconds: val('--budget'), waitSeconds: val('--wait'), full: args.includes('--full'), decisions: val('--decisions'), reason: val('--reason') };
+const opts = { cwd: val('--project') || process.cwd(), change: val('--change'), mode: val('--mode') || 'code', point: val('--point'), base: bases.length > 1 ? bases : bases[0], budgetSeconds: val('--budget'), waitSeconds: val('--wait'), full: args.includes('--full'), docsOnly: args.includes('--docs-only'), decisions: val('--decisions'), reason: val('--reason') };
 // #197：以前 --help 只有一行，没说 --change 必须是 openspec/changes 下已有的变更，也没写不走 OpenSpec 的改动怎么审
 const HELP = [
   '用法：node review.js <prepare|status|cancel|resolve> [参数]',
@@ -16,6 +16,8 @@ const HELP = [
   '  壳子里几个仓库：         --base 写几次，每个仓库一个：--base <仓库相对路径>=<提交>，例 --base gwjh=11325fd --base .=32171c4',
   '                           只写一个不带等号的 --base：只用在认得这个提交的仓库上，其余仓库用开工时登记的基线',
   '  第一轮按材料大小 1～3 个角度，后面的轮只审改过的地方；--full 整份再审一遍（用户要求全量再审时才用）',
+  '  处理完上一轮的意见：run 加 --decisions <处理明细 JSON>（格式同 resolve），先登记再复审，一条命令；没有要复审的只登记',
+  '  代码审查找不到代码改动会报错；这个 change 本来就不改代码的，加 --docs-only',
   '  其它：--budget <秒> 这一次的预期用时（不截断，超了自动记问题反馈）',
   'status / cancel：和 run 一样的 --change、--mode、--point（不带变更名的再加同样的 --base），看结果或取消',
   'resolve：--change <变更名> --mode proposal|code --point <审查点> --decisions <处理明细 JSON>',

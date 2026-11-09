@@ -236,7 +236,8 @@ function decisionIssue(j) {
     if (ws.length < 3 || !/^node(?:\.exe)?$/i.test(path.basename(ws[0].replace(/\\/g, '/'))) || S.normKey(path.resolve(j.cwd, S.expandHome(ws[1]))) !== S.normKey(path.join(S.KIT, 'tools/review.js'))) continue;
     const val = (k) => { const i = ws.indexOf(k); return i < 0 ? '' : S.expandHome(ws[i + 1] || ''); }; const cwd = path.resolve(j.cwd, val('--project') || '.'); const change = changeOf(cwd, val('--change'));
     let action = '';
-    if (ws[2] === 'resolve') { try { const d = JSON.parse(fs.readFileSync(path.resolve(j.cwd, val('--decisions')), 'utf8')); if ((d.findings || []).some((x) => x.action === 'accepted')) action = 'reviewAccept'; } catch (e) { return '意见处理文件无法核对，先检查 --decisions 文件'; } }
+    // run 带 --decisions 也是登记（20261109 起）：一样要核对"接受不改"有没有用户的决定
+    if (ws[2] === 'resolve' || (['run', 'prepare'].includes(ws[2]) && ws.includes('--decisions'))) { try { const d = JSON.parse(fs.readFileSync(path.resolve(j.cwd, val('--decisions')), 'utf8')); if ((d.findings || []).some((x) => x.action === 'accepted')) action = 'reviewAccept'; } catch (e) { return '意见处理文件无法核对，先检查 --decisions 文件'; } }
     if (!action) continue;
     // 不走 OpenSpec 的审查（不带 --change）：按项目目录核对用户的决定（#234）
     const allowed = require('./permissions').allow(j, action, change ? change.dir : W.rootOf(cwd), j.tool_use_id);
@@ -275,7 +276,7 @@ function nextText(result) {
   if (result.noChange) return '文件和上一轮审过的一样，这次不用审' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
   if (!result.issues.length) return '没有问题，这个点过了。';
   if (!result.blocking) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
-  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细跑 review.js resolve，再跑一次 review.js run：下一轮只审改过的地方。';
+  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细，跑 review.js run 加 --decisions <处理明细>（和这次一样的 --change、--mode、--point、--project）：先登记再复审，一条命令，下一轮只审改过的地方。';
 }
 const MODE_NAME = { proposal: '提案', code: '代码' };
 const WORKER_MS = 45 * 60000; // 一个角度最多两次请求，一次最多 20 分钟
@@ -381,7 +382,7 @@ function prepare(opts) {
   const folder = path.join(opts.cwd, '.vibe', 'reviews', opts.change || 'plain'); const file = path.join(folder, opts.mode + (opts.point ? '-' + opts.point : '') + '.json');
   const born = change ? S.changeBorn(change.dir) : 0;
   if (change && opts.point) policy.begin(change.dir, opts.point, id, pointHash);
-  const job = { id, key, mode: opts.mode, change: opts.change || '', point: opts.point || '', root: opts.cwd, base: opts.base, status: 'running', started, deadline: started + 6 * 3600000, expectMs, fingerprint: before.hash, pointHash, input, dir: path.join(folder, 'job-' + id), file, lenses: [], state: {} };
+  const job = { id, key, mode: opts.mode, change: opts.change || '', point: opts.point || '', root: opts.cwd, base: opts.base, status: 'running', started, deadline: started + 6 * 3600000, expectMs, fingerprint: before.hash, pointHash, input, dir: path.join(folder, 'job-' + id), file, lenses: [], state: {}, decided: opts.decided || '' };
   try {
     const material = materials(opts, change);
     if (!material.batches.length) throw new Error('没有可审查材料或开工基线缺失');
@@ -518,6 +519,34 @@ const pause = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(
 /** 审一轮：备材料、起后台进程、等结果。最多等 waitSeconds，没审完返回 running，再跑一次接着等 */
 function run(opts) {
   opts = Object.assign({ cwd: process.cwd(), mode: 'code' }, opts); opts.cwd = path.resolve(opts.cwd);
+  // 带 --decisions：先登记处理结果，有要复审的接着审，一条命令（第 71 条第 1 点，仓库主人 2026-11-09 选的：以前 resolve、run 各一次请求）
+  let resolved = null;
+  // 同一份处理明细已经登记过（返回 running 后再跑一次一样的命令）：不再登记，接着等
+  if (opts.decisions && !decisionsDone(opts)) {
+    const r = resolve(opts);
+    let fixed = false; try { fixed = (JSON.parse(fs.readFileSync(opts.decisions, 'utf8')).findings || []).some((x) => x.action === 'fixed'); } catch (e) { fixed = false; }
+    resolved = { status: r.status, count: r.count };
+    if (!(r.status === 'needs_review' || (!opts.change && fixed))) return Object.assign({}, r, { resolved, next: '登记好了，没有要复审的，这个点处理完了。' });
+    opts.decided = decisionsSig(opts.decisions);
+  }
+  const out = waitRound(opts);
+  if (resolved && out && typeof out === 'object') out.resolved = resolved;
+  return out;
+}
+function decisionsSig(file) { try { return W.hash(fs.readFileSync(file, 'utf8')).slice(0, 16); } catch (e) { return ''; } }
+/** 这份处理明细登记过了：这一轮就是拿它开的（记在任务上），或者和审查点上记着的决定一样 */
+function decisionsDone(opts) {
+  try {
+    const job = S.readState('review-jobs')[jobKey(opts.cwd, opts.change, opts.mode, opts.point, opts.base)];
+    if (job && job.decided && job.decided === decisionsSig(opts.decisions)) return true;
+    const sig = (arr) => JSON.stringify((arr || []).map((x) => [x.id, x.action]).sort());
+    const mine = JSON.parse(fs.readFileSync(opts.decisions, 'utf8')).findings || [];
+    const change = changeOf(opts.cwd, opts.change);
+    const rec = change && opts.point ? require('./flow-policy').record(change.dir, opts.point) : change ? S.reviewRecord(opts.mode === 'proposal' ? 'proposal' : 'code', change.dir) : readJson(path.join(opts.cwd, '.vibe', 'reviews', 'plain', 'code.json'));
+    return !!rec && Array.isArray(rec.decisions) && rec.decisions.length > 0 && sig(rec.decisions) === sig(mine);
+  } catch (e) { return false; }
+}
+function waitRound(opts) {
   const p = prepare(opts);
   if (p.status !== 'prepared') return p;
   const key = jobKey(opts.cwd, opts.change, opts.mode, opts.point, opts.base);

@@ -48,7 +48,7 @@ node "$HOME/.claude/vibe-kit/tools/review.js" run --mode code --project <项目>
 
 先展示本次完整问题清单。人工用一个提问框逐条让用户选"改（按推荐）/不改/自行输入"（一条一个问题，一框最多 4 条，多了分几框），不能把一个同意套在全部问题上；用户选了"改"的，改完直接复验，不再问；别的复验：用户这一轮已经要求过的直接做，没要求过的先问。自动逐条核验，成立的修改并复验，不成立的写事实依据；业务疑问用 Ask 沟通。
 
-处理明细写本机 JSON：{"findings":[{"id":"r1","action":"fixed、rejected、accepted 或 deferred","reason":"具体依据"}]}。调用 review.js resolve --project <项目> --change <名字> --mode proposal|code --point <当前点> --decisions <文件>。代码的 fixed 需要当前输入的复验证据（文档不用）。P1、P2 修了要再审一轮，P3 修了不用。accepted 只能使用用户明确的不改决定。deferred 只有用户点名审单份文档时能用：实现细节留给后面的文档，审 design、审整套的第一轮会带上这些要点；审整套（--point tasks）不能标 deferred。
+处理明细写本机 JSON：{"findings":[{"id":"r1","action":"fixed、rejected、accepted 或 deferred","reason":"具体依据"}]}。复审跑 review.js run 加 --decisions <文件>（和上一轮一样的 --project、--change、--mode、--point）：先登记再复审，一条命令；只登记用 review.js resolve，参数一样。代码的 fixed 需要当前输入的复验证据（文档不用）。P1、P2 修了要再审一轮，P3 修了不用。accepted 只能使用用户明确的不改决定。deferred 只有用户点名审单份文档时能用：实现细节留给后面的文档，审 design、审整套的第一轮会带上这些要点；审整套（--point tasks）不能标 deferred。
 
 业务修订（定稿后改需求、用户加了要求）同步相关文档并在改动处批注，revisions.md 只写业务原因和影响。定稿前按审查意见改文档不写批注、不记 revisions，过程在审查记录里。不要生成每轮纯审查提交。
 
