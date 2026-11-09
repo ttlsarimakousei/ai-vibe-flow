@@ -201,4 +201,4 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - **审查**：`review-scope.matchLabel` 按路径结尾认文件名；复审轮按 24 万字分批（`batchesOf(items, REQUEST_CHARS)`，每批 `lens.items`）；`status` 按角度汇总；"上一轮在跑"只看同一个审查点、进程活着；`inFlight` 也要进程活着；`run --decisions` 先 `resolve` 再 `waitRound`，任务上记 `decided` 防重跑时重复登记；`claude -p` 不带 `--model`。
 - **同名 change**：`big-task.ofChange` 给目录就只按目录认；流程状态的 `current` 旁边记 `currentDir`，`isCurrent` 先比目录。
 - **连接配置的锁**：`onboard.mergeDb` 用 `state-store.acquire(<ini>.lock)`；vk-db-crud 的 `dbconf.record_driver` 用同一个锁文件、同样的格式，Python 那头不探进程，60 秒以前的锁算没人管。
-- 去掉开关 `ccAutoMode`：安装器的 `retireCcAutoMode` 只收回 `installed.json` 记着是自己写的 `disableAutoMode`。
+- 去掉开关 `ccAutoMode`：安装器的 `applyCcAutoMode` 固定写 `disableAutoMode`（没有就加、记进 `installed.json`；用户自己写的、`defaultMode` 是 `auto` 的不动；卸载收回自己写的）。
