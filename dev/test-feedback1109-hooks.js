@@ -68,5 +68,28 @@ const decision = (o) => o && o.hookSpecificOutput && o.hookSpecificOutput.permis
     o = post(path.join(proj, 'a.txt'));
     H.ok('改的不是需求文档：不跑', !/openspec validate/.test(H.reasonOf(o)), o);
   }
+  H.section('#413 "你直接执行代码吧"算开工');
+  {
+    const h = H.makeHome('fb1109-413', from, { specGate: true, autoVerify: false, autoSeePage: false, lessons: 'off', autoOnboard: false, autoMode: false, autoApply: false, autoRequirements: false, autoUpdate: 'off' });
+    const S = require(path.join(h.kit, 'lib/session'));
+    const p = H.makeRepo(path.join(h.work, 'one'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n',
+      'openspec/changes/feat-1/proposal.md': '## Why\n\n要做。\n\n## What Changes\n\n- 改 src/A.java\n',
+      'openspec/changes/feat-1/specs/x/spec.md': '## ADDED Requirements\n\n### Requirement: 做\n\n系统 SHALL 做。\n\n#### Scenario: 正常\n\n- **WHEN** 调用\n- **THEN** 成功\n',
+      'openspec/changes/feat-1/design.md': '## Context\n\n- 读过 src/A.java\n\n## Decisions\n\n- 放在 A.java\n\n## 验收用例\n\n| 编号 | 场景 | 前置 | 步骤 | 预期 | 谁来测 | 任务 |\n|---|---|---|---|---|---|---|\n| AC-1 | 导出 | 有数据 | 调接口 | 返回 200 | 人工 | 1 |\n',
+      'openspec/changes/feat-1/tasks.md': '- [ ] 1.1 改 src/A.java：加功能\n' });
+    let seq = 0;
+    const tf = (es) => H.transcript(path.join(h.root, 'a' + (++seq) + '.jsonl'), es);
+    const prompt = (sid, text, es) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt: text, transcript_path: tf(es) });
+    for (const said of ['不发了，你直接执行代码吧', '直接写代码吧', '直接改代码吧']) {
+      const sid = 's413-' + (++seq);
+      let es = [H.tr.user('/opsx:explore 做一个导出功能，写需求')];
+      prompt(sid, '/opsx:explore 做一个导出功能，写需求', es);
+      es = es.concat([H.tr.say('feat-1 的提案、规格、设计、任务都写完了，要先发给同事看看再开工吗？')], [H.tr.user(said)]);
+      prompt(sid, said, es);
+      H.ok('说"' + said + '"：进了实施阶段', S.flowState({ session_id: sid }).stage === 'apply', S.flowState({ session_id: sid }));
+      const o = H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src/A.java'), old_string: 'class A {}', new_string: 'class A { int x; }' }, transcript_path: tf(es) });
+      H.ok('说"' + said + '"：改源码不再拦"没开工"', !/没开工|还没开工|说开工/.test(H.reasonOf(o)), H.reasonOf(o));
+    }
+  }
   H.done('20261109 钩子');
 })().catch((e) => { H.ok('异常', false, e.stack); H.done('20261109 钩子'); });
