@@ -91,6 +91,7 @@ const V1104 = '20261104.0435'; // 新流程、删路由、审查子代理、状�
 const V2337 = '20261104.2337'; // 套件可以改、拦了直接放行；第 52—56 条；ttls- 改成 vk-
 const V1257 = '20261105.1257'; // 第 57、58 条：四份文档写完审一次整套，一个 change 的任务全部做完审一次
 const V1612 = '20261109.1612'; // 0234 议题这一批：cd 到当前目录、cd 之后只跑 git 的钩子直接改写
+const V0152 = '20261110.0152'; // 第 75 条：启动方式写回项目说明、测试账号表 login.json、tmp 里的账号和登录场景拦一次
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
 // 旧版在 from 之前（还没有这个毛病）、在 to 或者之后（已经改过）的应该一样，在两者之间的应该不一样
@@ -154,12 +155,12 @@ add('反馈1007：env -C 下的相对发布脚本仍确认', 'guard-commit', (ki
 }, /发布要你确认/, V1010);
 add('改普通代码', 'pre-edit', edit('src/main/java/com/x/A.java', 'Edit', { old_string: 'class A {}', new_string: 'class A { int x; }' }));
 // 第 75 条（这一版）：拦下的话里多说启动方式写项目说明、账号写 login.json
-add('往 .vibe 根下新建脚本', 'pre-edit', edit('.vibe/Tq.java', 'Write', { content: 'class Tq {}' }), /事由是变更名的留着别删，变更归档之后套件自己清；别的事由，那件事做完就把整个目录删掉，七天没动的也会自动清掉[\s\S]*启动方式：写进项目说明[\s\S]*登录账号：写进 \.vibe\/login\.json/, NEXT);
-add('往 .vibe/tmp 根下新建', 'pre-edit', edit('.vibe/tmp/commitmsg.txt', 'Write', { content: 'x' }), /事由是变更名的留着别删，变更归档之后套件自己清；别的事由，那件事做完就把整个目录删掉，七天没动的也会自动清掉[\s\S]*启动方式：写进项目说明[\s\S]*登录账号：写进 \.vibe\/login\.json/, NEXT);
+add('往 .vibe 根下新建脚本', 'pre-edit', edit('.vibe/Tq.java', 'Write', { content: 'class Tq {}' }), /事由是变更名的留着别删，变更归档之后套件自己清；别的事由，那件事做完就把整个目录删掉，七天没动的也会自动清掉[\s\S]*启动方式：写进项目说明[\s\S]*登录账号：写进 \.vibe\/login\.json/, V0152);
+add('往 .vibe/tmp 根下新建', 'pre-edit', edit('.vibe/tmp/commitmsg.txt', 'Write', { content: 'x' }), /事由是变更名的留着别删，变更归档之后套件自己清；别的事由，那件事做完就把整个目录删掉，七天没动的也会自动清掉[\s\S]*启动方式：写进项目说明[\s\S]*登录账号：写进 \.vibe\/login\.json/, V0152);
 add('往 .vibe/tmp/<事由>/ 新建', 'pre-edit', edit('.vibe/tmp/0928-排查/q.js', 'Write', { content: 'console.log(1)' }));
 // 第 75 条（这一版）：账号、登录场景写进 tmp 会被清，拦一次指到 login.json、scenarios/
-add('往 .vibe/tmp/<事由>/ 新建账号文件', 'pre-edit', edit('.vibe/tmp/0928-排查/accounts.json', 'Write', { content: '{"admin": {"password": "x"}}' }), /看起来是测试账号，放在 \.vibe\/tmp\/ 下会被清[\s\S]*login\.json/, NEXT);
-add('往 .vibe/tmp/<事由>/ 新建登录场景', 'pre-edit', edit('.vibe/tmp/0928-排查/flow.json', 'Write', { content: JSON.stringify({ steps: [{ goto: '/login' }, { fill: '#password', value: 'x' }] }) }), /是登录要用的场景[\s\S]*scenarios[\s\S]*\{\{login\./, NEXT);
+add('往 .vibe/tmp/<事由>/ 新建账号文件', 'pre-edit', edit('.vibe/tmp/0928-排查/accounts.json', 'Write', { content: '{"admin": {"password": "x"}}' }), /看起来是测试账号，放在 \.vibe\/tmp\/ 下会被清[\s\S]*login\.json/, V0152);
+add('往 .vibe/tmp/<事由>/ 新建登录场景', 'pre-edit', edit('.vibe/tmp/0928-排查/flow.json', 'Write', { content: JSON.stringify({ steps: [{ goto: '/login' }, { fill: '#password', value: 'x' }] }) }), /是登录要用的场景[\s\S]*scenarios[\s\S]*\{\{login\./, V0152);
 add('往 .vibe/tmp/<事由>/ 新建不登录的场景', 'pre-edit', edit('.vibe/tmp/0928-排查/list.json', 'Write', { content: JSON.stringify({ steps: [{ goto: '/list' }] }) }));
 add('新建备份文件', 'pre-edit', edit('src/main/java/com/x/A.java.bak', 'Write', { content: 'x' }), /一件事一个目录；事由是变更名的留到变更归档，别的做完就删/, V2248);
 add('新建报告（产出位置没定）', 'pre-edit', edit('报告/分析.md', 'Write', { content: '# 分析\n' }));
@@ -296,8 +297,8 @@ add('开口：开头是"不用"的需求', 'task-anchor', prompt('不用写提�
 add('开口：开头是"好"字的需求', 'task-anchor', prompt('好友列表页面加一个搜索功能'), /这像一条需求/, V1005);
 add('开口：应一声', 'task-anchor', prompt('好的，谢谢'));
 // 第 75 条（这一版）：用户给了账号、说到启动，提醒记下来
-add('开口：给了登录账号', 'task-anchor', prompt('测试账号 admin 密码 Abc12345'), /\[vibe-kit 账号\] 用户这句话里给了登录账号：先记进 [^\n]*login\.json/, NEXT);
-add('开口：说了启动方式', 'task-anchor', prompt('启动方式是先起 redis 再起后端'), /\[vibe-kit 启动\] 说到了怎么启动/, NEXT);
+add('开口：给了登录账号', 'task-anchor', prompt('测试账号 admin 密码 Abc12345'), /\[vibe-kit 账号\] 用户这句话里给了登录账号：先记进 [^\n]*login\.json/, V0152);
+add('开口：说了启动方式', 'task-anchor', prompt('启动方式是先起 redis 再起后端'), /\[vibe-kit 启动\] 说到了怎么启动/, V0152);
 add('开口：让它停', 'task-anchor', prompt('等等，先别提交'));
 add('提交：提案要单独确认', 'guard-commit', cmd('git commit -m "docs: 提案 add-export"'), /提案提交要单独确认/, V1010B);
 add('开口：合并push也等预览后的真人确认', 'task-anchor', prompt('合并push'), /推送预览[\s\S]*merge-push\.js[\s\S]*另一条真人确认/, V1011);
@@ -311,7 +312,7 @@ add('提交：整目录不能遗漏临时输入', 'guard-commit', cmd('git add o
 add('会话开始：普通项目', 'session-start', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'SessionStart', source: 'startup' }) }; }, /项目说明[\s\S]*环境就绪[\s\S]*不代表构建或测试通过/, V1011);
 // 压缩之后按会话的启动目录算（这一版起）：这一项用自己的会话编号，免得拿上一项记下的启动目录当成它的
 // 第 75 条（这一版）：会话开始带测试账号汇总，不带口令
-add('会话开始：有测试账号表', 'session-start', (kit) => { const proj = project(kit, { '.vibe/login.json': JSON.stringify({ accounts: [{ name: 'admin', user: 'admin', password: 'Abc12345', role: '管理员', from: '用户给的' }] }) }); return { proj, j: base(proj, kit, { hook_event_name: 'SessionStart', source: 'startup' }) }; }, /^(?![\s\S]*Abc12345)[\s\S]*测试账号（[^）]*login\.json）：admin（管理员）[\s\S]*不要再问用户/, NEXT);
+add('会话开始：有测试账号表', 'session-start', (kit) => { const proj = project(kit, { '.vibe/login.json': JSON.stringify({ accounts: [{ name: 'admin', user: 'admin', password: 'Abc12345', role: '管理员', from: '用户给的' }] }) }); return { proj, j: base(proj, kit, { hook_event_name: 'SessionStart', source: 'startup' }) }; }, /^(?![\s\S]*Abc12345)[\s\S]*测试账号（[^）]*login\.json）：admin（管理员）[\s\S]*不要再问用户/, V0152);
 add('会话开始：压缩之后', 'session-start', (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { session_id: 'sess-diff-compact', hook_event_name: 'SessionStart', source: 'compact' }) }; }, /本机事实[\s\S]*add-export 1\/2[\s\S]*不授予[\s\S]*许可/, V1011);
 // 新名字的审查代理、新名字的规则文件：这一版认，上一版不认
 add('改经验规则文件（新名字）', 'pre-edit', edit('.claude/rules/ttls-lessons-java.md', 'Write', { content: '- x\n' }), /这是经验规则的文件，不要直接改/, V0930);
