@@ -157,8 +157,20 @@ const maskRects = {};
 const result = { name: scenario.name || path.basename(scenarioPath), scenario: scenarioPath, base: BASE, out: OUT, via: null, ok: true, steps: [], values: {}, warnings: [], consoleErrors: [], ignoredConsoleErrors: [], pageErrors: [], failedRequests: [], artifacts: [] };
 
 function resolveUrl(u) { return /^(https?|file):\/\//i.test(u) ? u : BASE + (u.startsWith('/') ? '' : '/') + u; }
+// 测试账号表（问题表第 75 条）：{{login.<名字>.user}}、{{login.<名字>.password}} 从项目的 .vibe/login.json 取，口令不抄进场景、不进结果。
+// 账号表从场景文件所在的地方往上找，再从当前目录往上找；用到的账号在整个场景跑通时记上"上次登录成功"（lib/login.js）
+let LOGIN = null;
+const usedLogins = new Set();
+function loginTable() {
+  if (LOGIN) return LOGIN;
+  const L = require('../lib/login');
+  const f = L.findFrom(path.dirname(scenarioPath), 6) || L.findFrom(process.cwd(), 4);
+  LOGIN = f ? L.read(f) : { ok: false, file: '', accounts: [], error: '' };
+  return LOGIN;
+}
 /** 前面读到的值：字符串里的 {{名字}} 换成 values 里的值；整个字符串就是一个 {{名字}} 的，换成原值（数字还是数字） */
 function subst(v) {
+  if (typeof v === 'string' && v.includes('{{login.')) v = require('../lib/login').resolve(v, loginTable(), usedLogins);
   if (typeof v === 'string') {
     const whole = v.match(/^\{\{\s*([\w.-]+)\s*\}\}$/);
     if (whole && result.values[whole[1]] !== undefined) return result.values[whole[1]];
@@ -534,6 +546,8 @@ function collect(ctx) {
 }
 
 function finish() {
+  // 整个场景跑通了：用到的测试账号记上"上次登录成功"。记不了不影响结果
+  if (result.ok && !result.fatal && usedLogins.size && LOGIN && LOGIN.file) { try { const n = require('../lib/login').markOk(LOGIN.file, usedLogins); if (n) result.logins = '测试账号 ' + [...usedLogins].join('、') + ' 用上了、场景跑通了，记进了 ' + LOGIN.file + '（lastOk）'; } catch (e) { /* 记不了就算了 */ } }
   fs.writeFileSync(path.join(OUT, 'result.json'), JSON.stringify(result, null, 1));
   fs.writeFileSync(path.join(OUT, 'result.md'), renderMd(result));
   // RESULT 这一行进模型的上下文：读到的值太长的截断（全文在 result.json）
@@ -544,6 +558,7 @@ function finish() {
     fatal: result.fatal,
     failed: result.steps.filter((s) => !s.ok && !s.skipped).map((s) => s.i + '. ' + s.step + ' → ' + s.error),
     warnings: result.warnings.length ? result.warnings : undefined,
+    logins: result.logins,
     values,
     consoleErrors: result.consoleErrors.slice(0, 5),
     pageErrors: result.pageErrors.slice(0, 5),

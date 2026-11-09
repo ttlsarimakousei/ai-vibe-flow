@@ -11,7 +11,7 @@ description: 改了前端页面或后端接口之后、还原原型或设计图�
 
 ## 步骤
 
-1. **确认服务在跑**：用 `node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name <名字> --port auto --avoid <项目说明里的端口> -- <项目说明里的启动命令>`（vite 这类会热更新的它自己认得，改了代码不重启；Vite 不认环境变量 PORT，命令写 `npm run dev -- --port {port}`）。端口是它在 30000 到 39999 里挑的，离项目配置的远，和用户在 IDE 里起的不撞；起来之后最后一行说用的是哪个端口，后面 `--base` 就用那个。它记着以前起过的：已经在跑、跑的是现在的代码就直接用；改过代码就重启。起好（答了 HTTP）才返回。不是你起的、本来就在跑的服务（用户自己开的）不要动。
+1. **确认服务在跑**：项目说明里有"跑通的启动"那一行，照它原样起；没有就用 `node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name <名字> --port auto --avoid <项目说明里的端口> -- <项目说明里的启动命令>`（vite 这类会热更新的它自己认得，改了代码不重启；Vite 不认环境变量 PORT，命令写 `npm run dev -- --port {port}`），起来之后它自己把这条命令记进项目说明。端口是它在 30000 到 39999 里挑的，离项目配置的远，和用户在 IDE 里起的不撞；起来之后最后一行说用的是哪个端口，后面 `--base` 就用那个。它记着以前起过的：已经在跑、跑的是现在的代码就直接用；改过代码就重启。起好（答了 HTTP）才返回。不是你起的、本来就在跑的服务（用户自己开的）不要动。
 2. **写场景**到 `.vibe/scenarios/<名字>.json`。在壳子目录里干活的，这里的 `.vibe/` 指那个前端子项目里的，不是壳子根目录下的，场景跟着子项目走。格式见同目录 `scenario-format.md`，先读它。`.vibe/` 不用你管忽略的事：往里写文件时，钩子会自动把 `.vibe/` 加进那个仓库的 `.gitignore`。
 3. **执行**：
    ```
@@ -23,7 +23,7 @@ description: 改了前端页面或后端接口之后、还原原型或设计图�
 
 ## 写场景的要点
 
-- 需要登录的系统，场景第一段就是登录。账号先看 `.vibe/login.json`，没有再问用户一次，问到就记进去；不要猜。**登录那一步要查返回的内容**（见 `scenario-format.md` 的"接口"一节）：很多系统登录失败也返回 200，只等它返回的话，没登录上场景照样往下走，后面全是 401。
+- 需要登录的系统，场景第一段就是登录。账号先看 `.vibe/login.json`（会话开始时套件会说有哪些），没有合适的跑 `node "$HOME/.claude/vibe-kit/tools/login.js" find` 照项目文件找，还没有再问用户一次，问到就记进去；不要猜。场景里写 `{{login.<名字>.user}}`、`{{login.<名字>.password}}` 引用，不把口令抄进场景（格式见 `scenario-format.md` 的"测试账号"一节）。登录场景要复用，放 `.vibe/scenarios/`，不放 `.vibe/tmp/`（tmp 会被清）。**登录那一步要查返回的内容**（见 `scenario-format.md` 的"接口"一节）：很多系统登录失败也返回 200，只等它返回的话，没登录上场景照样往下走，后面全是 401。
 - 场景文件做不了的操作：写探针到 `.vibe/tmp/<事由>/probe.js`，在被测项目目录运行 `node "$HOME/.claude/vibe-kit/page/probe-run.js" .vibe/tmp/<事由>/probe.js`。探针导出 `module.exports = async ({ page, context, assert }) => { /* 操作、读取并 assert 核对 */ return { 实际读到的值 }; };`。执行器提供系统浏览器，默认执行上限 120 秒，结束自动关闭。成功输出 `PAGE_PROBE {"ok":true,…}` 才算验过；断言失败、超时、后台未结束都不算。事由是变更名的留到归档，别的验完删掉。
 - 探针例子：`module.exports = async ({ page, assert }) => { await page.goto('http://127.0.0.1:实际端口/页面'); const text = await page.locator('h1').innerText(); assert.equal(text, '订单'); return { 标题: text }; };`。原有独立脚本改为这个导出函数，复用传入的 page/context，不自行起浏览器。
 - 自测前核对前端代理如何指向自测后端，包含项目上下文路径；统一认证回调和服务端 CORS 若限制固定端口，记录到项目说明。不能通过关闭浏览器安全检查解决服务端拒绝。菜单驱动的标签页要按真实菜单进入，不能假设改 hash 就能打开。

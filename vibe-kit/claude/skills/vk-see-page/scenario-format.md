@@ -105,6 +105,27 @@
 - 截图可加遮罩：`{"screenshot": "report", "mask": [{"text": "更新时间"}]}`，动态区域涂成品红不参与比对。遮罩由执行器自己画，不用 Playwright 的 mask 选项，因为后者在 Chromium 92 这类老浏览器上会报错
 - `{"waitIdle": true}` 等网络空闲；`{"type": sel, "value": "…"}` 逐字输入（触发按键事件）；`{"readAttr": sel, "name": "href", "as": "x"}` 读属性
 
+## 测试账号
+
+账号记在项目的 `.vibe/login.json`（不会被清，会话开始时套件会说有哪些账号）。场景里不写口令，写引用：
+
+- `{{login.<名字>.user}}`、`{{login.<名字>.password}}`，也能取 `role`、`system`
+- 执行器从场景文件所在的地方往上找 `.vibe/login.json`，再从当前目录往上找。没这个账号、没这个文件，那一步失败并说清缺什么
+- 整个场景跑通了，用到的账号记上 `lastOk`（上次登录成功的时间），结果里 `logins` 一行会说
+
+`login.json` 的格式（`name` 是场景里引用的名字，`from` 写清谁给的、从哪查到的）：
+
+```json
+{
+  "accounts": [
+    { "name": "admin", "user": "admin", "password": "…", "role": "超级管理员", "modules": ["系统管理", "审批"], "from": "用户给的" },
+    { "name": "审批员", "user": "zhangsan", "password": "…", "role": "审批员", "modules": ["审批"], "from": "sys_user 表查到，初始密码见 application.yml" }
+  ]
+}
+```
+
+账号表里没有合适的：`node "$HOME/.claude/vibe-kit/tools/login.js" find` 按顺序列出初始化 SQL、配置里的初始密码、说明文档里提到的账号，再说怎么查库；都没有才问用户，问到记进去。`login.js list` 列账号（不打印口令），`login.js check` 查格式。
+
 ## 组件归因
 
 布局树里每个节点带一列"组件"：Vue 3 开发版页面会自动标出组件链，如 `UsersView>UserTable>StatusTag[ElTag]`；生产构建没有这个引用，约定组件根元素加 `data-comp="组件名"` 属性即可。像素比对的结果里会带上它：差异落在哪个节点、哪个组件上，就去改哪个组件。
@@ -116,8 +137,8 @@
   "name": "登录并检查用户列表",
   "steps": [
     { "goto": "/login.html" },
-    { "fill": "#username", "value": "<账号>" },
-    { "fill": "#password", "value": "<密码>" },
+    { "fill": "#username", "value": "{{login.admin.user}}" },
+    { "fill": "#password", "value": "{{login.admin.password}}" },
     { "waitResponse": "/api/login", "click": "text=登录", "expectStatus": 200, "expectJson": "code", "equals": 0 },
     { "waitUrl": "**/dashboard.html*" },
     { "expectText": "当前用户：admin" },
