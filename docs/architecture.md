@@ -46,7 +46,8 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | `review-facts.js` | 审查材料里脚本先查好的（第 72 条）：文档点名的类、方法、表在代码里的位置，改到的方法哪里用到；一个请求放不下时分批 |
 | `review-scope.js` | 审查怎么分轮（2026-11-02，问题表第 37 条）：第一轮几个角度、后面只审修改点（和上一轮的内容比）、按阶段的提示、合并问题（只合不同角度之间的）、定过的问题历轮累计（`closed`）、审查记录。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json` |
 | `maven-offline.js` | devserver 起后端先离线、缺依赖只拉缺的（问题表第 35 条）：加 `-o`、从 Maven 报错里取缺的依赖、拼 `dependency:get` |
-| `outputs.js` | 代码之外的产出位置 |
+| `outputs.js` | 代码之外的产出位置。用户说过的位置先看最后 600 KB，再看整份记录里用户说的话（#429） |
+| `spec-validate.js` | 需求文档写齐了钩子自己跑 `openspec validate --strict`（after-tool 调，2026-11-09）：内容没变不再跑，结果记在 `state/<会话>-spec-validate.json` |
 | `tidy.js` | `.vibe` 的整理和过程文件的清理 |
 | `archive-extract.js` | 直接归档解包与查看结果落盘的目标检查，复用 guard-commit 的拆词和工作目录；只读查看放行，项目内临时条目放 `.vibe/tmp/<事由>/`，目录联接核对真实位置 |
 | `onboard.js`、`discover.js` | 后台自动探索：认工程、推命令和端口、找开发环境的数据库和 redis 连接 |
@@ -190,3 +191,14 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - **收工检查**：只认 openspec 命令（status、instructions、new、archive……）里点名的变更算"在做"；人工提示按每一份文档最后写入时间和用户表态时间比，不审之后没再改的不再问。
 - **审查材料**：`--base` 可写几次（`仓库=提交`），未跟踪文件只送基线之后改过的（结果的 `excluded` 记跳过了几个），不带变更名的审查按基线分开记。
 - **指纹**：没改过的已跟踪文件直接用 `ls-files -s` 的哈希，链接（120000）和子模块（160000）照旧逐个核对；阶段名带仓库名。载入钩子模块放到预算外。
+
+## 20261109 这批（0234 的议题、第 71 条第 1 点）
+
+核对和改法见 [feedback-20261109.md](feedback-20261109.md)。结构上的变化：
+
+- **git 跨钩子缓存**（`workspace.js` 的 `crossCall`）：只在钩子里（`invocation.inHook`）。`rev-parse --show-toplevel`、`config --get` 记 10 分钟（仓库的 `.git` 没了、不是仓库的目录里有了 `.git` 就作废）；`diff`、`ls-files`、`status` 这些记 20 秒，还要"代"相同。`session-out.js` 的 `cli` 入口在改文件、跑命令的工具做完（PostToolUse）、用户开口、会话开始时换一代（`state/git-epoch.json`，同一件事 3 秒内只换一次）。结果在 `state/git-cache.json`（可清，超过 256 KB 的不记）。测试默认 `VIBE_KIT_NO_GIT_CACHE=1` 关掉。
+- **cd 改写**（`guard-process.js` 的 `cdRewrite`，`guard-commit` 的 `handle` 先调）：改写后的命令整条再过一遍 `handleOne` 的检查，拦下、要问的照原样返回，过了的把 `updatedInput` 和后面的 OpenSpec 改写、审查 timeout 合在一起。
+- **审查**：`review-scope.matchLabel` 按路径结尾认文件名；复审轮按 24 万字分批（`batchesOf(items, REQUEST_CHARS)`，每批 `lens.items`）；`status` 按角度汇总；"上一轮在跑"只看同一个审查点、进程活着；`inFlight` 也要进程活着；`run --decisions` 先 `resolve` 再 `waitRound`，任务上记 `decided` 防重跑时重复登记；`claude -p` 不带 `--model`。
+- **同名 change**：`big-task.ofChange` 给目录就只按目录认；流程状态的 `current` 旁边记 `currentDir`，`isCurrent` 先比目录。
+- **连接配置的锁**：`onboard.mergeDb` 用 `state-store.acquire(<ini>.lock)`；vk-db-crud 的 `dbconf.record_driver` 用同一个锁文件、同样的格式，Python 那头不探进程，60 秒以前的锁算没人管。
+- 去掉开关 `ccAutoMode`：安装器的 `retireCcAutoMode` 只收回 `installed.json` 记着是自己写的 `disableAutoMode`。

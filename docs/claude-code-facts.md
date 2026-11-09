@@ -240,3 +240,18 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 内网网关（2026-11-05，两台电脑，`dev/probes/review-timing.js`、`review-effort.js`）：输出 118—160 token/秒，和上下文大小、同时跑几个无关；第一个 token 约 2 秒。effort 高低对输出没有一致的影响（每种 2 次），不带 `thinking` 字段模型照样想。明确发 `disabled` 没测。
 
 `claude -p` 里关东西（2026-11-06，假网关，2.1.259、2.1.289；2.1.120 只跑了 `dev/e2e-review.js`）：`--tools ""` 不管 MCP，用户配的服务照样启动、工具照样带进请求，要 `--strict-mcp-config`。`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` 在 2.1.259 少一个起标题的请求（2.1.289 本来就没有）。`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` 不带全局和项目的 CLAUDE.md。
+
+## cd 改写和模型名（2026-11-09 实测）
+
+`dev/probes/cc-cd-rewrite.js`，假网关，2.1.120、2.1.259、2.1.289 三版结果一样：
+
+| 命令 | 跳过权限 | 只允许 `Bash(git:*)` |
+|---|---|---|
+| `cd 别的仓库 && git status`，不改写 | 执行 | 不执行（要人确认） |
+| 钩子 `updatedInput` 改成 `git -C 别的仓库 status` | 执行 | 执行 |
+| `cd 当前目录 && git status`，不改写 | 执行 | 执行（cd 到当前目录不算） |
+| 钩子去掉 cd | 执行 | 执行 |
+
+权限按改写后的命令查。`-p` 模式下要确认的命令直接不执行；交互模式下跳过权限模式里 cd 串着别的命令照样问（2026-09-30 用户实测），这个探针测不到。
+
+模型名（探针在 scratchpad，没留在仓库；假网关，三版一样）：`--model sonnet` 加 `ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-flash[1m]` 发的是 `deepseek-flash`（`[1m]` 去掉，加 `context-1m` 的 beta 头）；只设 `ANTHROPIC_MODEL=deepseek-flash[1m]`、`--model sonnet` 发的是 Claude 的 sonnet 名字（2.1.120 `claude-sonnet-4-6`、2.1.259 `claude-sonnet-5`、2.1.289 `claude-sonnet-5-5`）；不给 `--model` 发 `ANTHROPIC_MODEL` 去掉 `[1m]` 的名字。所以 #427 的 `unrecognized_model`（模型写着 `deepseek-flash[1m]`）不是 CLI 报的，多半是网关把 sonnet 映射成了带 `[1m]` 的名字。

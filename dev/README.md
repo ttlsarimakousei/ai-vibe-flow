@@ -155,6 +155,8 @@ node dev/pack.js
 | `probes/review-effort.js [--model 名字] [--times N]` | 内网对比（第 71 条）：同一段代码按默认、low、medium、high、关掉思考各审几次，看网关认不认 effort。单个文件，会发真请求，不读项目、不留会话记录、关掉钩子 |
 | `test-review-cli.js [旧套件目录]` | 审查（第 72 条）：`review.js run` 调假的 claude：提示里有什么、重试、没结论、等不完、几个角度、钩子改 timeout、拦子代理、安装删 vk-reviewer |
 | `probes/upgrade-residue.js [--with-router] <旧版 zip>…` | 升级残留（第 73 条）：旧版装好、升到现在、开一次会话，和全新安装比多了什么：文件、settings.json、状态目录 |
+| `probes/cc-cd-rewrite.js <版本>` | 探测（第 71 条第 1 点）：cd 串着 git 的命令，钩子改成 `git -C`、去掉 cd 以后，只允许 git 的权限下还停不停 |
+| `probes/hook-git-count.js [子仓库数] [旧套件目录]` | 量一下（#421）：壳子带几个子仓库时，每个钩子起几次 git、哪几条重复；跑两遍看跨钩子缓存省了多少，`VIBE_KIT_NO_GIT_CACHE=1` 比较不缓存的 |
 | `probes/review-oneshot.js --list` / `--job <编号> [--turns N]` | 内网对比（第 71 条）：拿一次审过的审查，把审查开始那一刻的材料（从会话记录还原，不是现在修过的）一次发给 `claude -p`，和子代理当时的结果比用时、输出、问题。单个文件，会发真请求 |
 | `probes/cc-reviewer-opts.js <版本号>` | 探测：代理文件写 effort 时请求里发什么；SubagentStart 的 additionalContext 进不进子代理第一个请求；代理文件里的 hooks 只对子代理生效吗、Read 拦不拦得到、deny 和 additionalContext 送不送得到模型 |
 | `probes/up-no-router.js [旧版本号] [端口]` | 探测：真装着旧路由的电脑升到这一版（自动更新、手动安装两条路）：自检不过要用的东西留到新代码跑起来才收 |
@@ -262,6 +264,7 @@ node dev/run-all.js --claude "%LOCALAPPDATA%\Programs\claude-code-versions\2.1.2
 - 手工试一条命令也要指假的用户目录。2026-09-29 手工跑了一次查库的自检，在真实的用户目录下建出了 `~/.db-crud`。用 `lib/harness.js` 的 `H.run`，或者自己把 `HOME`、`USERPROFILE`、`CLAUDE_CONFIG_DIR` 指到临时目录。
 - 钩子默认不甩后台的更新进程（`VIBE_KIT_NO_UPDATE=1`）。测更新的那几套自己把它去掉。
 - 钩子默认不甩后台的自动探索（`VIBE_KIT_NO_ONBOARD=1`）：它会往测试的项目里写 `.vibe/project.md`，别的测试的输出就跟着变了。测探索的那几套自己把它去掉。
+- 钩子默认不跨调用缓存 git 的结果（`VIBE_KIT_NO_GIT_CACHE=1`，支架加载时也给测试进程自己设上）：测试直接改文件、不经过工具，不会换代，缓存会让后面的钩子看到旧结果。测缓存的那一套（`test-feedback1109-hooks.js`）自己临时去掉。
 - 安装包里不能有 jar。数据库的驱动是厂商的，只限内部使用；打包脚本会查。
 - 在假用户目录里伪造了套件的文件（比如假的钩子文件），连带变了的状态（`installed.json`）也要改回去。
 - 不在桌面留窗口。子进程一律隐藏窗口，不用 detached。
