@@ -12,4 +12,6 @@ function memo(key, fn) { const s = scope.getStore(); if (!s) return fn(); if (!s
 function object(input, key, fn) { const s = scope.getStore(); if (!s || !input || typeof input !== 'object') return fn(); let m = s.objects.get(input); if (!m) { m = new Map(); s.objects.set(input, m); } if (!m.has(key)) m.set(key, fn()); return m.get(key); }
 /** 作废这次调用里以 prefix 开头的缓存（写了状态文件、改了开关之后） */
 function forget(prefix) { const s = scope.getStore(); if (!s) return; for (const k of [...s.values.keys()]) if (String(k).startsWith(prefix)) s.values.delete(k); }
-module.exports = { run, memo, object, remaining, budgetError, phase, forget };
+/** 在钩子里（有预算）：命令行工具（review.js 这些）里返回 false */
+function inHook() { const s = scope.getStore(); return !!(s && s.deadline); }
+module.exports = { run, memo, object, remaining, budgetError, phase, forget, inHook };

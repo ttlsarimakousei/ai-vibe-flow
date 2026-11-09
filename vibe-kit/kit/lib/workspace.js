@@ -20,7 +20,44 @@ function readGit(root, args) {
     catch (e) { if (e && e.code === 'ETIMEDOUT') { const over = I.budgetError(); if (over) throw over; } throw e; }
   };
   const readonly = /^(rev-parse|status|ls-files|diff)$/.test(args[0]) || args[0] === 'branch' && args[1] === '--show-current' || args[0] === 'config' && args[1] === '--get';
-  return readonly ? require('./invocation').memo('workspace-git|' + path.resolve(root) + '|' + JSON.stringify(args), run) : run();
+  return readonly ? require('./invocation').memo('workspace-git|' + path.resolve(root) + '|' + JSON.stringify(args), () => crossCall(root, args, run)) : run();
+}
+/*
+ * 跨钩子的缓存（#421、#339、#349、#358：内网那台一条 git 要一两秒，壳子里几个子仓库，钩子 12 秒预算用完，一周钩子出错 909 次）。只在钩子里用，命令行工具照样现查。
+ *   不怎么变的（rev-parse --show-toplevel、config --get）：记 10 分钟；仓库的 .git 没了、不是仓库的目录里有了 .git 就作废
+ *   跟着文件变的（diff、ls-files、status、rev-parse HEAD 这些）：记 20 秒，还要"代"相同。改文件、跑命令的工具做完（PostToolUse）、
+ *   用户开口、会话开始都换一代（session-out.js 的 cli 入口），所以只在两次改动之间、20 秒以内复用。超过 256 KB 的不记
+ */
+const STABLE_MS = 10 * 60000; const VOLATILE_MS = 20000; const CACHE_MAX = 256 * 1024;
+const stableArgs = (args) => (args[0] === 'rev-parse' && args.length === 2 && args[1] === '--show-toplevel') || (args[0] === 'config' && args[1] === '--get');
+function gitEpoch() { try { return Number(require('./session').readState('git-epoch').n) || 0; } catch (e) { return 0; } }
+/** 换一代：改过文件、用户开过口之后，跟着文件变的那些不能再用 */
+function bumpGitEpoch() { try { require('./session').updateState('git-epoch', (o) => { o.n = (Number(o.n) || 0) + 1; o.at = Date.now(); }); } catch (e) { /* 记不了：缓存按 20 秒自己过期 */ } }
+function crossCall(root, args, run) {
+  let I; try { I = require('./invocation'); } catch (e) { return run(); }
+  if (!I.inHook || !I.inHook() || process.env.VIBE_KIT_NO_GIT_CACHE) return run();
+  const S = require('./session');
+  const stable = stableArgs(args);
+  const abs = path.resolve(root);
+  const epoch = stable ? 0 : gitEpoch();
+  const key = hash(abs.toLowerCase() + '|' + JSON.stringify(args)).slice(0, 24);
+  const now = Date.now();
+  const c = (S.readState('git-cache') || {})[key];
+  const fresh = c && (stable ? now - c.at < STABLE_MS && (c.err ? !fs.existsSync(path.join(abs, '.git')) : !c.top || fs.existsSync(path.join(c.top, '.git'))) : c.epoch === epoch && now - c.at < VOLATILE_MS);
+  if (fresh) { if (c.err) { const e = new Error('git 失败（缓存）'); e.cached = true; throw e; } return c.out; }
+  let out = ''; let failed = null;
+  try { out = run(); } catch (e) { if (e && e.code === 'VIBE_HOOK_BUDGET') throw e; failed = e; }
+  if (String(out).length <= CACHE_MAX) {
+    try {
+      S.updateState('git-cache', (o) => {
+        for (const k of Object.keys(o)) if (!(now - (Number(o[k] && o[k].at) || 0) < STABLE_MS)) delete o[k];
+        const keys = Object.keys(o); if (keys.length > 400) for (const k of keys.sort((a, b) => o[a].at - o[b].at).slice(0, keys.length - 400)) delete o[k];
+        o[key] = { at: now, epoch, out: failed ? '' : out, err: !!failed, top: stable && args[1] === '--show-toplevel' && !failed ? String(out).trim() : '' };
+      });
+    } catch (e) { /* 记不了就不缓存 */ }
+  }
+  if (failed) throw failed;
+  return out;
 }
 // 预算用完不吞：吞了会当成"不是仓库"接着往下走，最后报"Git 状态暂时无法读取"（#275）
 function git(root, args) { try { return readGit(root, args); } catch (e) { if (e && e.code === 'VIBE_HOOK_BUDGET') throw e; return ''; } }
@@ -94,4 +131,4 @@ function fingerprintRaw(dir, kind) {
   if (!parts.length) return first;
   return { root: first.root, hash: hash(JSON.stringify([first].concat(parts).map((p) => [path.relative(first.root, p.root).replace(/\\/g, '/'), p.hash]))), files: first.files.concat(...parts.map((p) => p.files.map((f) => path.relative(first.root, p.root).replace(/\\/g, '/') + '/' + f))) };
 }
-module.exports = { hash, git, checkedGit, rootOf, fingerprint, progressText, pathStatus };
+module.exports = { hash, git, checkedGit, rootOf, fingerprint, progressText, pathStatus, bumpGitEpoch };

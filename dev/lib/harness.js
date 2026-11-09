@@ -15,6 +15,8 @@ const { spawnSync } = require('child_process');
 const REPO = path.join(__dirname, '..', '..');
 const SRC = path.join(REPO, 'vibe-kit');
 const REAL_HOME = os.homedir();
+// 测试进程里直接调套件的库时也不跨调用缓存 git（见 envFor 里的 VIBE_KIT_NO_GIT_CACHE）；测缓存的那一套临时去掉
+if (process.env.VIBE_KIT_NO_GIT_CACHE === undefined) process.env.VIBE_KIT_NO_GIT_CACHE = '1';
 // 真实的"启动"文件夹里路由的自启动脚本：测试里装了路由的话会写到这里（2026-09-28 出过事），所以一并盯着
 const REAL_STARTUP_VBS = process.env.APPDATA ? path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'vibe-kit-router.vbs') : path.join(REAL_HOME, '.no-startup');
 // 用户自己装的旧技能（urai-db-crud、redis）：安装器会删改名之前的技能，测试里绝不能删到真的
@@ -121,7 +123,8 @@ function envFor(h, extra) {
   // VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS：安装器不去读真的注册表（这台电脑设没设 JAVA_TOOL_OPTIONS 不影响结果），当系统里没设；测这一项的套自己给
   // VIBE_KIT_NO_BROWSER：敲 /vk-config 的钩子不开真的浏览器
   // VIBE_KIT_REVIEW_NO_RUN：review.js run 只备材料、不起 claude -p。测审查本身的那几套自己去掉
-  const out = Object.assign(env, { VIBE_KIT_REVIEW_NO_RUN: '1', VIBE_KIT_NO_BROWSER: '1', HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1', VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '' }, extra || {});
+  // VIBE_KIT_NO_GIT_CACHE：钩子不跨调用缓存 git 的结果（测试直接改文件、不经过工具，不会换代）。测缓存的那一套自己去掉
+  const out = Object.assign(env, { VIBE_KIT_NO_GIT_CACHE: '1', VIBE_KIT_REVIEW_NO_RUN: '1', VIBE_KIT_NO_BROWSER: '1', HOME: h.home, USERPROFILE: h.home, CLAUDE_CONFIG_DIR: h.cfg, APPDATA: roaming, LOCALAPPDATA: localApp, VIBE_KIT_STARTUP_DIR: startup, VIBE_KIT_NO_UPDATE: '1', VIBE_KIT_NO_ONBOARD: '1', VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS: '' }, extra || {});
   for (const k of Object.keys(out)) if (out[k] === undefined || out[k] === null) delete out[k];
   return out;
 }

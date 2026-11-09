@@ -78,7 +78,7 @@ const GLOBAL_STATE = /^(big-task|plan-link|auto-session-migration|fixed-switch-m
  * 新加一个固定名字的状态文件，要么进上面的 GLOBAL_STATE，要么进这里（dev/test-auto-mode-kept.js 会扫代码查）。
  * 20261030 以前迁移标记 defaults-1017-migration 两边都不在，3 天后被当成会话文件删掉，之后每次更新都把用户的开关改回默认（审核 P01）
  */
-const DISPOSABLE_STATE = ['bypass', 'blocks', 'active-sessions', 'tool-flow', 'onboard-kick', 'onboard.log', 'tool-usage.jsonl', 'lessons.lock', 'voice-pos', 'config-page'];
+const DISPOSABLE_STATE = ['git-cache', 'git-epoch', 'bypass', 'blocks', 'active-sessions', 'tool-flow', 'onboard-kick', 'onboard.log', 'tool-usage.jsonl', 'lessons.lock', 'voice-pos', 'config-page'];
 
 /** 全局记录里的一条是什么时候记的：数字就是时间，对象看 at */
 const entryAt = (v) => (typeof v === 'number' ? v : (v && typeof v === 'object' && Number(v.at)) || 0);

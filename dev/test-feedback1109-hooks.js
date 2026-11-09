@@ -105,5 +105,46 @@ const decision = (o) => o && o.hookSpecificOutput && o.hookSpecificOutput.permis
     const j2 = Object.assign({}, j, { session_id: 's429b', transcript_path: H.transcript(path.join(h.root, 't429b.jsonl'), [H.tr.user('总结一下扫描结果')].concat(es.slice(1))) });
     H.ok('用户没说放哪：照旧拦', /产出位置/.test(H.reasonOf(H.hook(h, 'pre-edit', j2))));
   }
+  H.section('#421 等：git 的结果跨钩子缓存');
+  {
+    const cp = require('child_process');
+    const h = H.makeHome('fb1109-gitc', from, { autoUpdate: 'off' });
+    const repo = H.makeRepo(path.join(h.work, 'r'), { 'a.txt': 'a\n' });
+    const plain = path.join(h.work, 'plain'); fs.mkdirSync(plain, { recursive: true });
+    // 数这个进程里起了几次 git（workspace.js 载入之前换掉）
+    const keep = process.env.VIBE_KIT_NO_GIT_CACHE; delete process.env.VIBE_KIT_NO_GIT_CACHE;
+    let n = 0; const orig = cp.execFileSync;
+    cp.execFileSync = function (file, args, ...rest) { if (file === 'git') n++; return orig.call(cp, file, args, ...rest); };
+    const W = require(path.join(h.kit, 'lib', 'workspace.js'));
+    const I = require(path.join(h.kit, 'lib', 'invocation.js'));
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    const inHook = (fn) => I.run(fn, { budgetMs: 12000 });
+    const count = (fn) => { const before = n; fn(); return n - before; };
+    if (!W.bumpGitEpoch) H.ok('有跨钩子的缓存', false);
+    else {
+      H.ok('第一次：现查', count(() => inHook(() => W.git(repo, ['diff', '--name-only', 'HEAD']))) === 1);
+      H.ok('另一个钩子、没改过文件：用缓存', count(() => inHook(() => W.git(repo, ['diff', '--name-only', 'HEAD']))) === 0);
+      W.bumpGitEpoch();
+      H.ok('换了一代（改过文件）：现查', count(() => inHook(() => W.git(repo, ['diff', '--name-only', 'HEAD']))) === 1);
+      S.updateState('git-cache', (o) => { for (const k of Object.keys(o)) o[k].at -= 21000; });
+      H.ok('过了 20 秒：现查', count(() => inHook(() => W.git(repo, ['diff', '--name-only', 'HEAD']))) === 1);
+      H.ok('顶层目录：换代也用缓存', count(() => inHook(() => W.rootOf(repo))) === 1 && (W.bumpGitEpoch(), count(() => inHook(() => W.rootOf(repo)))) === 0);
+      H.ok('不是仓库的目录：失败也记着', count(() => inHook(() => W.rootOf(plain))) === 1 && count(() => inHook(() => W.rootOf(plain))) === 0);
+      H.git(plain, ['init', '-q']);
+      H.ok('后来 git init 了：不再用"不是仓库"的缓存', count(() => inHook(() => W.rootOf(plain))) === 1 && S.normKey(inHook(() => W.rootOf(plain))) === S.normKey(plain));
+      H.ok('不在钩子里（review.js 这些工具）：每次现查', count(() => W.git(repo, ['diff', '--name-only', 'HEAD'])) === 1 && count(() => W.git(repo, ['diff', '--name-only', 'HEAD'])) === 1);
+    }
+    cp.execFileSync = orig;
+    if (keep !== undefined) process.env.VIBE_KIT_NO_GIT_CACHE = keep;
+    // 钩子入口换代：改文件、跑命令的工具做完换，读文件的不换；同一个工具调用的几个钩子只换一次
+    const epoch = () => Number(S.readState('git-epoch').n) || 0;
+    const post = (tool, id) => H.node(h, path.join(h.kit, 'hooks', 'after-tool.js'), [], { input: JSON.stringify({ session_id: 'ge', cwd: repo, hook_event_name: 'PostToolUse', tool_name: tool, tool_use_id: id, tool_input: { file_path: path.join(repo, 'a.txt') }, tool_response: { success: true } }), cwd: repo, env: { VIBE_KIT_NO_GIT_CACHE: undefined } });
+    const e0 = epoch(); post('Read', 'r1');
+    H.ok('Read 做完：不换代', epoch() === e0, [e0, epoch()]);
+    post('Edit', 'e1'); const e1 = epoch();
+    H.ok('Edit 做完：换代', e1 === e0 + 1, [e0, e1]);
+    post('Edit', 'e1');
+    H.ok('同一个工具调用的另一个钩子：不再换', epoch() === e1, [e1, epoch()]);
+  }
   H.done('20261109 钩子');
 })().catch((e) => { H.ok('异常', false, e.stack); H.done('20261109 钩子'); });

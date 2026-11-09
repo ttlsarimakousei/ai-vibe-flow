@@ -67,6 +67,19 @@ function pushFailOut(j, why) {
   return askOut(reason + '，推到远端要你确认。');
 }
 
+// 不改文件的工具：做完不用换代
+const READ_ONLY_TOOLS = /^(Read|Grep|Glob|LS|NotebookRead|WebFetch|WebSearch|TodoWrite|TodoRead|AskUserQuestion|ToolSearch|TaskList|TaskGet|TaskOutput|ExitPlanMode|EnterPlanMode|Skill)$/;
+function epochFor(j) {
+  const ev = String((j && j.hook_event_name) || '');
+  const after = /^PostToolUse(Failure)?$/.test(ev) && !READ_ONLY_TOOLS.test(String(j.tool_name || ''));
+  if (!after && ev !== 'UserPromptSubmit' && ev !== 'SessionStart') return;
+  // 同一件事的几个钩子（3 秒内、同一个工具调用或同一次开口）只换一次
+  const mark = ev + ':' + (j.session_id || '') + ':' + (after ? j.tool_use_id || '' : '');
+  const S = require('./session');
+  const same = (o) => o.last === mark && Date.now() - (Number(o.at) || 0) < 3000;
+  if (same(S.readState('git-epoch'))) return;
+  S.updateState('git-epoch', (o) => { if (same(o)) return; o.n = (Number(o.n) || 0) + 1; o.at = Date.now(); o.last = mark; });
+}
 /**
  * 作为命令运行：读标准输入 → handle → 打印结果 → 退出码 0。任何异常都放行，但记进问题反馈（放行了用户看不到，只有那里有）。
  * opts.onError(j, e)：出错、超出预算时要回的话（跑命令的检查用它：像推送的不放行，见 pushFailOut）
@@ -83,6 +96,8 @@ function cli(handle, opts) {
       const text = typeof out === 'string' ? out : JSON.stringify(out);
       try { fs.writeSync(1, text); } catch (e) { process.stdout.write(text); }
     };
+    // 改过文件、跑过命令、用户开过口：git 的跨钩子缓存换一代（lib/workspace.js 的 crossCall）。同一次工具调用的几个钩子只换一次
+    try { epochFor(j); } catch (e) { /* 换不了：缓存按 20 秒自己过期 */ }
     Promise.resolve().then(() => require('./invocation').run(() => handle(j), { budgetMs: 12000 })).then(print).catch((e) => {
       // 判断不了就放行
       try { require('./feedback').recordHookError(path.basename(process.argv[1] || 'hook', '.js'), j, e); } catch (err) { /* 记不了就算了 */ }
