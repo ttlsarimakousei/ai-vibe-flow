@@ -12,6 +12,7 @@
  *   .vibe/tmp/<事由>/                               临时脚本、草稿、一次性数据：一件事一个目录
  *
  * 写文件时（pre-edit 调 vibeCheck）：往 .vibe 里新建上面以外的文件就拦下，告诉它放哪。
+ *   往 .vibe/tmp/ 里新建账号文件、登录场景（keepCheck，第 75 条）：拦一次，告诉它放 login.json、scenarios/（tmp 会被清）。
  * 会话开始、收工时（session-start、verify-gate 调 cleanTmp）：.vibe/tmp/、.vibe/out/ 下的目录，是某个已归档变更的（那件事做完了；
  *   归档之后又动过的不算），或者 .vibe/tmp/ 下 tmpKeepDays 天（默认 7，0 = 不自动删；只在会话开始时看）里一个文件都没动过的，删掉。
  *   还没归档的变更的目录不清。
@@ -69,7 +70,49 @@ function vibeCheck(j) {
   return '[vibe-kit .vibe 整理] ' + show(f) + (why === 'tmp-root' ? ' 直接放在 .vibe/tmp 下了，要按事由分目录' : ' 不是套件用的文件，不要直接放在 .vibe 里') + '（.vibe 只放项目说明、交接记录、账号、快检的中间文件、看页面的场景和结果）。\n'
     + '- 临时的脚本、草稿、一次性数据：放 ' + tmpEx + '，一件事一个目录（做 OpenSpec 变更时事由就写变更名，否则写日期加一两个词，比如 .vibe/tmp/0924-导出排查/）。事由是变更名的留着别删，变更归档之后套件自己清；别的事由，那件事做完就把整个目录删掉，七天没动的也会自动清掉。\n'
     + '- 快检要长期用的中间文件：先在项目说明（.vibe/project.md）里写明它的路径和用途，再建。\n'
+    + '- 启动方式：写进项目说明（.vibe/project.md）的"启动"那一行；devserver 跑通的启动命令它自己会记。\n'
+    + '- 登录账号：写进 .vibe/login.json（格式 ' + LOGIN_FORMAT + '）。要复用的场景放 .vibe/scenarios/。这几处都不会被清。\n'
     + '- 要交给人的产出（报告、DDL、说明）不放 .vibe，放项目说明"产出位置"里定好的地方。';
+}
+
+/*
+ * 往 .vibe/tmp/ 里写账号、登录场景（问题表第 75 条："现在这些是不是写在 tmp 文件夹里面的，是不是会被清除掉"）：
+ *   tmp 下的目录事由是变更名的归档后清、别的 7 天没动清，账号写在这里，下个需求就没了。新建这两类文件拦一次，告诉它放哪：
+ *   - 名字像账号（login、accounts、credential、password、账号、密码、口令……）、内容里写着密码的数据、文档文件（.json/.md/.txt/.yml/.ini/.properties/.csv）→ .vibe/login.json
+ *     （复审第 75 条-10：只看名字的话 用户故事.md、login-bug-notes.md、accounting.csv 也会被拦）
+ *   - 登录场景（JSON 的 steps 里往密码框填值、用了 {{login.…}}、请求体里带 password）→ .vibe/scenarios/，口令进 login.json
+ *   拦错了（一次性的探针）原样再写一次就放行（同一个文件只拦一次，blockOnce）；没有会话号的不拦（记不下"拦过"，放不了行）。
+ */
+const LOGIN_FORMAT = '{"accounts": [{"name": "admin", "user": "admin", "password": "…", "role": "…", "modules": ["…"], "from": "用户给的"}]}';
+const KEEP_NAME = /(login|accounts?(?![a-z])|credential|passw|账号|帐号|账户|密码|口令)/i;
+const KEEP_EXT = /\.(json|md|txt|ya?ml|ini|properties|csv)$/i;
+const PWD_HINT = /passw|pwd|密码|口令/i;
+function loginScenario(content) {
+  let o = null;
+  try { o = JSON.parse(String(content || '').replace(/^\uFEFF/, '')); } catch (e) { return false; }
+  const steps = o && Array.isArray(o.steps) ? o.steps : null;
+  if (!steps) return false;
+  return steps.some((s) => s && typeof s === 'object' && (
+    ((s.fill !== undefined || s.type !== undefined) && (PWD_HINT.test(JSON.stringify(s.fill !== undefined ? s.fill : s.type)) || /\{\{\s*login\./.test(String(s.value))))
+    || (s.request !== undefined && PWD_HINT.test(Object.keys(Object.assign({}, s.json, s.form)).join(' ')))));
+}
+function keepCheck(j) {
+  if (!j || j.tool_name !== 'Write' || !j.session_id) return null;
+  const cwd = path.resolve(j.cwd || process.cwd());
+  let f = String((j.tool_input && j.tool_input.file_path) || '');
+  if (!f) return null;
+  if (!path.isAbsolute(f)) f = path.resolve(cwd, f);
+  const v = vibePart(f);
+  if (!v || v.rel.split('/')[0].toLowerCase() !== 'tmp' || fs.existsSync(f)) return null;
+  const name = path.basename(f);
+  const content = String(j.tool_input.content || '');
+  const kind = /\.json$/i.test(name) && loginScenario(content) ? 'scenario' : KEEP_EXT.test(name) && KEEP_NAME.test(name) && PWD_HINT.test(content) ? 'account' : '';
+  if (!kind || !blockOnce(j.session_id, f)) return null;
+  const show = (p) => { const r = path.relative(cwd, p); return r && !r.startsWith('..') && !path.isAbsolute(r) ? r : p; };
+  const login = show(path.join(v.vibeDir, 'login.json'));
+  const tail = '（.vibe/tmp/ 下的目录：事由是变更名的归档后清，别的七天没动清）。确实只用这一次，原样再写一次就行。';
+  if (kind === 'scenario') return '[vibe-kit .vibe 整理] ' + show(f) + ' 是登录要用的场景，放在 .vibe/tmp/ 下会被清' + tail.replace(/^（/, '，下个需求就没了（') + '\n- 要复用的放 ' + show(path.join(v.vibeDir, 'scenarios', name)) + '（不会被清）。\n- 口令别写在场景里：账号写进 ' + login + '（格式 ' + LOGIN_FORMAT + '），场景里写 {{login.<名字>.user}}、{{login.<名字>.password}} 引用。';
+  return '[vibe-kit .vibe 整理] ' + show(f) + ' 看起来是测试账号，放在 .vibe/tmp/ 下会被清' + tail.replace(/^（/, '，下个需求就没了（') + '\n- 账号写进 ' + login + '（格式 ' + LOGIN_FORMAT + '；已有的就往里加），会话开始时套件会把有哪些账号告诉你，不用再问用户。';
 }
 
 // ---------- 项目里的过程文件（备份、日志、临时文件） ----------
@@ -303,4 +346,4 @@ function clutter(root) {
   return out;
 }
 
-module.exports = { vibePart, misplaced, vibeCheck, cleanTmp, changeOwner, clutter, scanNewest, PROCESS_NAME, isProcessName, isProcessFile, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };
+module.exports = { vibePart, misplaced, vibeCheck, keepCheck, loginScenario, cleanTmp, changeOwner, clutter, scanNewest, PROCESS_NAME, isProcessName, isProcessFile, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };
