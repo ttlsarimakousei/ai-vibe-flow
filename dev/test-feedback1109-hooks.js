@@ -132,6 +132,35 @@ const decision = (o) => o && o.hookSpecificOutput && o.hookSpecificOutput.permis
     H.ok('记的是 sub-a 的：还在做', B.currentAlive({ session_id: 'same2', cwd: shell }) === true);
   }
 
+  H.section('壳子里 mvn -f 子项目 的证据，登记修了时认得（复审 20261031 D-R6）');
+  {
+    const h = H.makeHome('fb1109-ev', from, { autoUpdate: 'off', autoOnboard: false, reviewSmallChars: 0 });
+    // 壳子本身也是仓库（内网的就是：报错里有 Git diff（sjytoa-ai-workflow））
+    const shell = H.makeRepo(path.join(h.work, 'shell'), { 'CLAUDE.md': '# 壳子\n', '.gitignore': 'api/\n.vibe/\n' });
+    const api = H.makeRepo(path.join(shell, 'api'), { 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n' });
+    const dir = path.join(shell, 'openspec', 'changes', 'c1');
+    H.write(path.join(dir, 'proposal.md'), '## Why\n\n要做。\n\n## What Changes\n\n- 改 api/src/A.java\n');
+    H.write(path.join(dir, 'tasks.md'), '- [x] 1.1 改 api/src/A.java（验：mvn test）\n');
+    const S = require(path.join(h.kit, 'lib', 'session.js'));
+    const R = require(path.join(h.kit, 'lib', 'review-runner.js'));
+    const E = require(path.join(h.kit, 'lib', 'evidence.js'));
+    S.updateState('work-baselines', (o) => { o[S.normKey(dir)] = { at: Date.now() - 60000, born: S.changeBorn(dir), session: 'ev1', repos: [shell, api].map((root) => ({ root, ref: H.git(root, ['rev-parse', 'HEAD']).out.trim(), dirtyFiles: [] })) }; });
+    fs.writeFileSync(path.join(api, 'src/A.java'), 'class A { int x; }\n');
+    const issue = { issues: [{ severity: 'P2', file: 'api/src/A.java', line: 1, problem: '没判空', evidence: '传空报错', scope: 'in' }], summary: '看了' };
+    const r1 = await H.fakeReview(R, { cwd: shell, change: 'c1', mode: 'code' }, () => issue);
+    H.ok('（代码审查报了一条）', r1 && r1.status === 'completed' && (r1.issues || []).length === 1, r1 && [r1.status, r1.reason]);
+    fs.writeFileSync(path.join(api, 'src/A.java'), 'class A { int x; void f(Object o) { if (o == null) return; } }\n');
+    // 在壳子里跑 mvn -f api/pom.xml test 成功：证据记在 api 名下
+    const rec = E.recordTool({ session_id: 'ev1', tool_use_id: 'ev-1', tool_name: 'Bash', cwd: shell, tool_input: { command: 'mvn -f api/pom.xml -q test' }, tool_response: { stdout: 'BUILD SUCCESS' } }, true);
+    H.ok('（证据记在 api 名下）', rec && S.normKey(rec.root) === S.normKey(api), rec && rec.root);
+    const rec2 = E.actual({ tool_name: 'Bash', cwd: shell, tool_input: { command: 'mvn -q -f api/pom.xml test' }, tool_response: { stdout: 'BUILD SUCCESS' } });
+    H.ok('-q 写在 -f 前面也认得 -f 指的子项目', rec2 && S.normKey(rec2.root) === S.normKey(api), rec2 && rec2.root);
+    const dec = path.join(h.root, 'dec.json'); H.write(dec, JSON.stringify({ findings: [{ id: 'r1', action: 'fixed', reason: '加了判空，mvn test 过了' }] }));
+    let res = null; let err = '';
+    try { res = R.resolve({ cwd: shell, change: 'c1', mode: 'code', decisions: dec }); } catch (e) { err = e.message; }
+    H.ok('在壳子里登记修了：认得子项目的证据', !!res && !err, err || res);
+  }
+
   H.section('#421 等：git 的结果跨钩子缓存');
   {
     const cp = require('child_process');

@@ -72,7 +72,8 @@ function actual(j) {
   const targets = [];
   for (const m of command.matchAll(/\b(mvnw?|gradlew?|npm|pnpm|yarn)(?:\.cmd|\.bat)?\b([^\n;&|]*)/gi)) {
     const opts = DIR_OPTS[m[1].toLowerCase().replace(/w$/, '')] || [];
-    for (const o of m[2].matchAll(/\s(-{1,2}[\w-]+)\s+("[^"]+"|'[^']+'|[^\s;&|]+)/g)) if (opts.includes(o[1])) targets.push(path.resolve(root, o[2].replace(/^["']|["']$/g, '')));
+    // 选项的值不能以 - 开头：mvn -q -f api/pom.xml 以前把 -f 当成 -q 的值，-f 指的目录认不到，证据记到了壳子名下
+    for (const o of m[2].matchAll(/\s(-{1,2}[\w-]+)\s+("[^"]+"|'[^']+'|(?!-)[^\s;&|]+)/g)) if (opts.includes(o[1])) targets.push(path.resolve(root, o[2].replace(/^["']|["']$/g, '')));
   }
   const uniq = [...new Set(targets)];
   if (uniq.length > 1) return null;

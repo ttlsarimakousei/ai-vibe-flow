@@ -715,6 +715,15 @@ function status(opts) {
   return r || { status: 'none' };
 }
 function cancel(opts) { const key = jobKey(opts.cwd || process.cwd(), opts.change, opts.mode || 'code', opts.point, opts.base); S.updateState('review-jobs', (o) => { if (o[key] && o[key].status === 'running') { o[key].spentMs = Date.now() - Number(o[key].started || Date.now()); o[key].status = 'cancelled'; o[key].reason = '用户或当前会话取消'; } }); return status(opts); }
+/**
+ * 有没有当前输入的成功复验证据：按代码审查取材料的那几个仓库查（变更的各子项目；不带变更的，项目和它下面的子仓库）。
+ * 复审 20261031 D-R6：壳子里 mvn -f 子项目 的证据记在子仓库名下，以前按壳子查对不上，修了登记不进去
+ */
+function provedIn(cwd, change) {
+  const E = require('./evidence');
+  const roots = change ? S.projectRootsOf(change.dir) : [W.rootOf(cwd)].concat(S.nestedRepos ? S.nestedRepos(cwd) : []);
+  return [path.resolve(cwd)].concat(roots).some((r) => { try { return E.commands(r).length > 0; } catch (e) { return false; } });
+}
 const NO_EVIDENCE = '成立问题修复后还没有当前输入的成功复验证据：先跑一次能证明修好了的编译或测试（mvn、gradle、npm 的脚本、npx、pytest、go、dotnet、make，或者 .vibe 下的脚本），成功了再登记';
 function resolve(opts) {
   const change = changeOf(opts.cwd || process.cwd(), opts.change);
@@ -737,7 +746,7 @@ function resolve(opts) {
   if (report.id !== r.key || !Array.isArray(report.issues)) throw new Error('审查报告不属于当前完整记录');
   if (decisions.findings.length !== report.issues.length || new Set(decisions.findings.map((x) => x.id)).size !== report.issues.length || decisions.findings.some((x) => !report.issues.some((i) => i.id === x.id))) throw new Error('处理记录必须恰好对应报告中的意见');
   // 改文档不用跑编译（窗口里见过：为了登记提案的修改先跑基线编译）；代码照旧要有复验证据
-  if (kind === 'code' && decisions.findings.some((x) => x.action === 'fixed') && !require('./evidence').commands(opts.cwd || process.cwd()).length) throw new Error(NO_EVIDENCE);
+  if (kind === 'code' && decisions.findings.some((x) => x.action === 'fixed') && !provedIn(opts.cwd || process.cwd(), change)) throw new Error(NO_EVIDENCE);
   // 只有 P1、P2 修了才要复审；P3 顺手改了不再审（问题表第 37 条）
   const refix = decisions.findings.some((x) => x.action === 'fixed' && !/^P3$/i.test(String((report.issues.find((i) => i.id === x.id) || {}).severity || '')));
   const noted = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) }));
@@ -774,7 +783,7 @@ function resolvePlain(opts) {
   for (const issue of report.issues || []) { const d = decisions.findings.find((x) => x.id === issue.id); if (!d || !['fixed', 'rejected', 'accepted'].includes(d.action) || typeof d.reason !== 'string' || d.reason.trim().length < 10) throw new Error('每条意见都要对应处理动作和可核对依据：' + issue.id); }
   if (decisions.findings.length !== (report.issues || []).length || new Set(decisions.findings.map((x) => x.id)).size !== decisions.findings.length || decisions.findings.some((x) => !(report.issues || []).some((i) => i.id === x.id))) throw new Error('处理记录必须恰好对应报告中的意见');
   const fixed = decisions.findings.some((x) => x.action === 'fixed');
-  if (fixed && !require('./evidence').commands(cwd).length) throw new Error(NO_EVIDENCE);
+  if (fixed && !provedIn(cwd, null)) throw new Error(NO_EVIDENCE);
   if (!fixed && W.fingerprint(cwd, 'code').hash !== report.fingerprint) throw new Error('输入在审查后变化；仅驳回或接受的记录不能批准新版，需要补审');
   report.decisions = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) }));
   try { Sc.noteDecisions(store, file, report.decisions); Sc.logDecisions(path.dirname(file), 'code', report.decisions); } catch (e) { /* 记不了不影响登记 */ }
