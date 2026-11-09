@@ -272,6 +272,25 @@ function userTexts(entries) {
   return out;
 }
 /**
+ * 整份会话记录里用户说的话（#429：以前只看最后 600 KB，读了几份大报告之后，用户点名目录的那句话已经不在里面，照样拦）。
+ * 只解析带 "type":"user" 的行，工具结果那几行跳过；文件超过 64 MB 只看最后 64 MB
+ */
+function allUserTexts(file) {
+  const out = [];
+  try {
+    const size = fs.statSync(file).size; const max = 64 * 1024 * 1024;
+    let text;
+    if (size > max) { const fd = fs.openSync(file, 'r'); try { const buf = Buffer.alloc(max); fs.readSync(fd, buf, 0, max, size - max); text = buf.toString('utf8'); } finally { fs.closeSync(fd); } }
+    else text = fs.readFileSync(file, 'utf8');
+    for (const line of text.split('\n')) {
+      if (!line.includes('"type":"user"') || line.includes('"tool_result"')) continue;
+      let e; try { e = JSON.parse(line); } catch (x) { continue; }
+      if (isUserTurn(e) && !isTaskNote(e)) out.push(textOf(e));
+    }
+  } catch (e) { /* 读不了就只看最后那一段 */ }
+  return out;
+}
+/**
  * 提问框里问的是放哪（问题里有"放哪""位置""目录"这类）、用户答了的：[{ q, a }]。答"不要""取消""未定"的不算（#225）
  */
 const LOC_Q = /放(?:在|到)?哪|放哪里|位置|目录|存放|保存到|输出到|放到/;
@@ -345,6 +364,8 @@ function outputCheck(j, cfg) {
   const pm = nearestProjectMd(path.dirname(f)) || nearestProjectMd(home) || nearestProjectMd(cwd);
   const roots = [root, cwd, home, pm ? path.dirname(path.dirname(pm)) : ''];
   if (mentioned(userTexts(entries), f, roots)) return null;
+  // 最后 600 KB 里没有：再看整份记录里用户说过的（#429）
+  if (j.transcript_path && mentioned(allUserTexts(j.transcript_path), f, roots)) return null;
   // #225：提问框问了放哪、用户答"项目根目录"，文件就在根目录下的，算定过
   const answers = locationAnswers(entries);
   const dirKey = normKey(path.dirname(f));

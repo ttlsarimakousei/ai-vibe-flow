@@ -91,5 +91,19 @@ const decision = (o) => o && o.hookSpecificOutput && o.hookSpecificOutput.permis
       H.ok('说"' + said + '"：改源码不再拦"没开工"', !/没开工|还没开工|说开工/.test(H.reasonOf(o)), H.reasonOf(o));
     }
   }
+  H.section('#429 用户点名的目录说在很久以前');
+  {
+    const h = H.makeHome('fb1109-429', from, { autoUpdate: 'off', autoOnboard: false });
+    const p = H.makeRepo(path.join(h.work, 'shell'), { 'a.txt': 'a\n', 'docs/2026年11月9日漏洞扫描/扫描结果.html': '<html>原始报告</html>\n' });
+    const target = path.join(p, 'docs', '2026年11月9日漏洞扫描', '漏洞汇总.md');
+    const big = 'x'.repeat(200000);
+    const es = [H.tr.user('@docs/2026年11月9日漏洞扫描/ 把里面的扫描结果总结成md文档落到这个文件夹中')];
+    for (let i = 0; i < 5; i++) es.push(H.tr.ran('Read', { file_path: path.join(p, 'docs/2026年11月9日漏洞扫描/扫描结果.html') }, big));
+    const j = { session_id: 's429', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: target, content: '# 漏洞汇总\n' }, transcript_path: H.transcript(path.join(h.root, 't429.jsonl'), es) };
+    const o = H.hook(h, 'pre-edit', j);
+    H.ok('用户那句话在 600 KB 之前：照样认，不拦产出位置', !/产出位置/.test(H.reasonOf(o)), H.reasonOf(o));
+    const j2 = Object.assign({}, j, { session_id: 's429b', transcript_path: H.transcript(path.join(h.root, 't429b.jsonl'), [H.tr.user('总结一下扫描结果')].concat(es.slice(1))) });
+    H.ok('用户没说放哪：照旧拦', /产出位置/.test(H.reasonOf(H.hook(h, 'pre-edit', j2))));
+  }
   H.done('20261109 钩子');
 })().catch((e) => { H.ok('异常', false, e.stack); H.done('20261109 钩子'); });
