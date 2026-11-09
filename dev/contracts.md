@@ -553,6 +553,13 @@ K3 M08（2026-11-01，docs/feedback-20261101.md）：编译、测试失败时只
 - 第 69 条：只改过规格的旧 change 不催审代码
 - 第 63 条：审查不设 effort；模型 2026-11-09 改成不指定（#427）
 
+### test-feedback1109-hooks.js
+
+20261109 这批的钩子改动（docs/feedback-20261109.md）：
+
+- cd 自动改写
+- 钩子自己跑 openspec validate
+
 ### test-feedback1109-review.js
 
 20261109 这批的审查改动（docs/feedback-20261109.md）：
