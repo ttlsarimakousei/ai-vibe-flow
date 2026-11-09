@@ -573,8 +573,17 @@ function dbConfigFile(owner) {
  * 配置文件在、却读不出来：这次不写，返回 skipped。
  * 返回 { file, names: [连接名…], added, updated, gone, changed, skipped }
  */
+/**
+ * 读、改、写连接配置的整段加锁（复审 20261031 D-R9：查库的工具换驱动时记 driver_jar，和这里同时写会丢一边）。
+ * 锁文件是 <配置>.lock，格式和 state-store 的一样，vk-db-crud 的 dbconf.py 的 record_driver 认同一把。拿不到就这次不写
+ */
 function mergeDb(owner, found, memo) {
   const file = dbConfigFile(owner);
+  const lock = require('./state-store').acquire(file + '.lock', { waitMs: 3000, leaseMs: 60000 });
+  if (!lock) { log('连接配置正被别的进程写，这次不动它：' + file); return { file, names: [], added: [], updated: [], gone: [], changed: false, skipped: true }; }
+  try { return mergeDbLocked(owner, found, memo, file); } finally { lock.release(); }
+}
+function mergeDbLocked(owner, found, memo, file) {
   const had = exists(file);
   const out = { file, names: [], added: [], updated: [], gone: [] };
   const before = had ? readStrict(file) : '; vk-db-crud 的连接配置。带 source 的连接是 vibe-kit 后台自动探索从项目的配置文件里找到的（只找开发环境的），\n; 来源文件改了会跟着更新；你手改过、不想被更新的，把那一段的 source 那一行删掉。\n; ★ 这里面有账号口令，确认项目的 .gitignore 排除了 .vibe/。\n';

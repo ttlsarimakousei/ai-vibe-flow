@@ -161,6 +161,38 @@ const decision = (o) => o && o.hookSpecificOutput && o.hookSpecificOutput.permis
     H.ok('在壳子里登记修了：认得子项目的证据', !!res && !err, err || res);
   }
 
+  H.section('db-crud.ini 读改写加锁（复审 20261031 D-R9）');
+  {
+    const RT = H.runtime('auto');
+    const h = H.makeHome('fb1109-lock', from, { autoUpdate: 'off' });
+    const p = H.makeRepo(path.join(h.work, 'backend'), { 'pom.xml': '<project/>', '.gitignore': '.vibe/\n', 'application-dev.yml': 'spring.profiles: dev\n' });
+    const O = require(path.join(h.kit, 'lib', 'onboard.js'));
+    const SS = require(path.join(h.kit, 'lib', 'state-store.js'));
+    const f = { dialect: 'mysql', url: 'jdbc:mysql://127.0.0.1:1/dev', user: 'fake', password: 'FAKE_ONLY_A', source: 'application-dev.yml', line: 1, nameHint: 'dev' };
+    O.mergeDb(p, [f], {});
+    const ini = path.join(p, '.vibe', 'db-crud.ini');
+    const lock = SS.acquire(ini + '.lock');
+    const r = O.mergeDb(p, [Object.assign({}, f, { password: 'FAKE_ONLY_B' })], {});
+    H.ok('别的进程正写着：后台探索这次不写', !!lock && r.skipped === true && !/FAKE_ONLY_B/.test(H.read(ini)), r);
+    const py = (jar) => H.run(h, RT.python, ['-B', '-c', 'import sys; sys.path.insert(0, sys.argv[1]); import dbconf; print(dbconf.record_driver({"_config_path": sys.argv[2], "name": "dev"}, sys.argv[3]))', path.join(h.cfg, 'skills', 'vk-db-crud', 'scripts'), ini, jar], { cwd: h.root, timeout: 30000 });
+    if (!RT.python) console.log('  （没找到 Python，跳过记驱动那几项）');
+    else {
+      const busy = py('C:/drivers/busy.jar');
+      H.ok('查库工具记驱动：锁被占着不写', /False/.test(busy.out) && !/busy\.jar/.test(H.read(ini)), busy.out + busy.err);
+    }
+    lock.release();
+    if (RT.python) {
+      const ok = py('C:/drivers/ok.jar');
+      H.ok('锁放了：记上驱动，锁文件也删了', /True/.test(ok.out) && /driver_jar = C:\/drivers\/ok\.jar/.test(H.read(ini)) && !fs.existsSync(ini + '.lock'), ok.out + ok.err);
+    }
+    // 查库工具写的锁（Python 的格式）后台探索认：新的等着，60 秒以前的算没人管
+    H.write(ini + '.lock', JSON.stringify({ pid: process.pid, thread: 0, token: 'py', at: Date.now() }));
+    H.ok('Python 拿着锁：后台探索不写', O.mergeDb(p, [Object.assign({}, f, { password: 'FAKE_ONLY_C' })], {}).skipped === true);
+    H.write(ini + '.lock', JSON.stringify({ pid: process.pid, thread: 0, token: 'py', at: Date.now() - 120000 }));
+    const r2 = O.mergeDb(p, [Object.assign({}, f, { password: 'FAKE_ONLY_C' })], {});
+    H.ok('两分钟前的锁：算没人管，照写', !r2.skipped && /FAKE_ONLY_C/.test(H.read(ini)), r2);
+  }
+
   H.section('#421 等：git 的结果跨钩子缓存');
   {
     const cp = require('child_process');

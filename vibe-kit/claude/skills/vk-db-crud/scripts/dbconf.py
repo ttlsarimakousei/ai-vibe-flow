@@ -729,14 +729,72 @@ def driver_alternatives(conn, project_root, tried):
     return out[:3]
 
 
+def _ini_lock(path, wait=3.0):
+    """
+    连接配置的锁（复审 20261031 D-R9）：和 vibe-kit 后台自动探索（kit/lib/onboard.js 的 mergeDb）认同一把，<配置>.lock，
+    内容是 {"pid","thread","token","at"}，和 kit/lib/state-store.js 的一样。拿到返回 token，拿不到返回 None。
+    不用 os.kill 探进程在不在（Windows 上信号 0 是 Ctrl+C）：锁超过 60 秒算没人管了（写配置只要几毫秒）
+    """
+    import time
+    import secrets
+    lock = str(path) + ".lock"
+    token = secrets.token_hex(12)
+    end = time.time() + wait
+    while True:
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"pid": os.getpid(), "thread": 0, "token": token, "at": int(time.time() * 1000)}))
+            return token
+        except FileExistsError:
+            try:
+                with open(lock, "r", encoding="utf-8") as f:
+                    at = float(json.load(f).get("at") or 0) / 1000
+            except (OSError, ValueError):
+                at = 0
+            if at and time.time() - at > 60:
+                try:
+                    os.unlink(lock)
+                except OSError:
+                    pass
+                continue
+        except OSError:
+            return None
+        if time.time() >= end:
+            return None
+        time.sleep(0.02)
+
+
+def _ini_unlock(path, token):
+    lock = str(path) + ".lock"
+    try:
+        with open(lock, "r", encoding="utf-8") as f:
+            if json.load(f).get("token") != token:
+                return
+        os.unlink(lock)
+    except (OSError, ValueError):
+        pass
+
+
 def record_driver(conn, jar):
     """
     换成功的驱动记进这条连接（driver_jar、driver_auto），下次直接用。只改这一段里这两行和说明，别的原样留着
     （口令、注释、后台自动探索写的 source）；文件原来是 GBK 的照旧按 GBK 写。写不了返回 False，不影响这次的结果。
+    读、改、写整段加锁，和后台自动探索不同时写（复审 20261031 D-R9）；拿不到锁这次不记。
     """
     path, name = conn.get("_config_path"), conn.get("name")
     if not path or not name:
         return False
+    token = _ini_lock(path)
+    if not token:
+        return False
+    try:
+        return _record_driver_locked(conn, jar, path, name)
+    finally:
+        _ini_unlock(path, token)
+
+
+def _record_driver_locked(conn, jar, path, name):
     p = pathlib.Path(path)
     try:
         raw = p.read_bytes()
