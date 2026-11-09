@@ -526,6 +526,7 @@ function run(opts) {
     const r = resolve(opts);
     let fixed = false; try { fixed = (JSON.parse(fs.readFileSync(opts.decisions, 'utf8')).findings || []).some((x) => x.action === 'fixed'); } catch (e) { fixed = false; }
     resolved = { status: r.status, count: r.count };
+    try { require('./usage').bump('review.decisions'); } catch (e) { /* 数不了不影响 */ }
     if (!(r.status === 'needs_review' || (!opts.change && fixed))) return Object.assign({}, r, { resolved, next: '登记好了，没有要复审的，这个点处理完了。' });
     opts.decided = decisionsSig(opts.decisions);
   }

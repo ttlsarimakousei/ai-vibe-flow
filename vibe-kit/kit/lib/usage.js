@@ -151,6 +151,8 @@ function rowsOf(n) {
     ['审查', '提案 ' + g('review.proposal') + ' 轮，代码 ' + g('review.code') + ' 轮，其中报"问题 0 条"的 ' + g('review.clean') + ' 轮；没交结论 ' + g('review.lost') + ' 次；超时 ' + g('review.timeout') + ' 次；部分覆盖 ' + g('review.partial') + ' 次；取消 ' + g('review.cancelled') + ' 次'],
     ['拦下', blockSum ? '共 ' + blockSum + ' 次：' + blocks.slice(0, 12).map((x) => x[0] + ' ' + x[1]).join('，') : '0 次'],
     ['放行', (g('bypass.auto') + g('bypass.ask')) + ' 次'],
+    // 钩子直接改写、不拦下的（第 71 条第 1 点）：看省了多少次重发
+    ['改写', '串着 cd 的命令 ' + g('rewrite.cd') + ' 次，审查登记加复审一条命令 ' + g('review.decisions') + ' 次，钩子跑 openspec validate ' + g('validate.auto') + ' 次'],
     ['拉代码', '拉到了新代码 ' + g('pull.updated') + ' 次，本来就是最新 ' + g('pull.latest') + ' 次，没拉成 ' + g('pull.fail') + ' 次'],
     ['钩子出错', g('hook.error') + ' 次'],
   ];
