@@ -36,6 +36,9 @@
  *   端口上的进程往上找得到 devserver 的看管进程的，就是 Claude 起的，不当成用户的。status、stop 也看这份登记。
  * 会热更新的不重启（同一天定的：vite 这类改了代码不用重启）：命令里、或者 npm/pnpm/yarn 跑的那个脚本里认得出 vite、webpack dev server、
  *   vue-cli-service serve、next dev 这类开发服务器，就和写了 --hot 一样，改了代码直接用。
+ * 记住怎么起（用户 2026-11-09 定的，问题表第 75 条："做需求B它又忘了怎么启动项目"）：.vibe/run 的记录 stop 时就删了，
+ *   所以起来之后把这一次的 devserver 命令写进项目说明（.vibe/project.md）的"跑通的启动（名字，日期）"一行，会话开始时整份带给模型，stop 不动它；
+ *   再提一句测试账号表（.vibe/login.json）里有哪些账号，没有的话怎么找（tools/login.js find）。见下面 noteStartLine、afterUp。
  * 不用 IDEA 起服务（用户 2026-10-28 定的，删掉 2026-10-17 加的 IDEA 运行配置那条线）：只照 -- 后面的命令起；用户在 IDEA 里起的服务不动（端口被占说清是谁）。
  *   老版本留下的 --idea、--no-idea 参数不认也不报错；以前用 IDEA 起、记成 mode: idea 的记录，stop、status 时说清到 IDEA 里停，记录清掉，不动进程。
  */
@@ -681,6 +684,7 @@ async function waitUp(rec, waitSec) {
     const who = whoListens(rec.port);
     // 耗时异常自动发现、上报（问题表第 20 条，C7）：这次调用起的才算；接着等上一次没起完的不算
     if (rec.startedAt >= T0 && !rec.retriedOnline && !(rec.fetched && rec.fetched.length)) { try { const line = require('../lib/perf').noteStart({ kind: RESTART ? 'restart' : 'first', root: rec.cwd, command: rec.cmd, prepMs: rec.startedAt - T0, startMs: Date.now() - rec.startedAt, log: (() => { try { const b = fs.readFileSync(rec.log); return b.slice(Math.max(0, b.length - 2000000)).toString('utf8'); } catch (e) { return ''; } })() }); if (line) console.log(line); } catch (e) { /* 记不了不影响起服务 */ } }
+    for (const l of afterUp(rec, up === 'http')) console.log(l);
     // 这一行放在最后：输出的最后一行就是结果
     console.log('测完停掉用：node "' + __filename + '" stop --name ' + rec.name + (opt('dir') ? ' --dir "' + dir + '"' : ''));
     console.log('起来了：' + rec.name + '，端口 ' + rec.port + (rec.auto ? '（自动挑的' + (rec.avoid && rec.avoid.length ? '，避开了项目配置的 ' + rec.avoid.join('、') : '') + '，看页面、调接口都用它）' : '') + '，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒' + (up === 'port' ? NO_HTTP_NOTE : '') + (how ? '，' + how : '') + (rec.hot ? '。会热更新：改了代码不用重启，再 start 直接用' : '') + (who ? '。听这个端口的是 ' + who : '') + '。日志 ' + path.relative(process.cwd(), rec.log));
@@ -756,6 +760,123 @@ async function waitUp(rec, waitSec) {
   return 1;
 }
 
+// ---------- 跑通的启动命令写回项目说明、提一句测试账号（问题表第 75 条，用户 2026-11-09 定的） ----------
+// 以前启动命令只在 .vibe/run/<名字>.json，stop 时连记录一起删；换个需求、新开会话，模型又不知道怎么起。
+// 现在起来了（答了 HTTP，或者端口通了够久），把这一次的 devserver 命令原样写进项目说明（.vibe/project.md）的"跑通的启动（名字，日期）"一行：
+//   会话开始时钩子整份带给模型，stop 不动它。同一个名字的换掉；名字不同、别的都一样的（换了个名字起同一个服务）也换掉，不越记越多。
+//   项目说明在哪：从运行目录往上找有 .vibe/project.md 的目录，到 git 仓库根为止；都没有就建在仓库根（建的时候带后台自动探索的标记，探索照常往里补）。
+//   不在 git、svn 仓库里、也没有项目说明的目录，运行目录或 --dir 像个项目（有构建文件）才写；用户目录、盘符根目录、~/.claude 里的不写。
+//   口令不写进去：--env 里口令一类的键、命令里的 password=…、--token … 这类，值换成"<口令照原来的给>"（复审第 75 条-5）。
+//   写的命令要原样能跑（Claude 的 Bash 是 Git Bash，也可能贴进 PowerShell）：只含安全字符的不加引号，别的加单引号（两边都不展开 $、反斜杠），
+//   本身带单引号的才用双引号（复审第 75 条-6）。
+const SECRET_KEY = /pass|pwd|secret|token|key|credential/i;
+const HIDE = '<口令照原来的给>';
+const SECRET_FLAG = /^--?(?:pass(?:word|wd)?|pwd|secret|token|credential)[\w-]*$/i;
+const hideSecrets = (s) => String(s)
+  .replace(/((?:pass(?:word|wd)?|pwd|secret|token|credential)[\w.-]*\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"']+)/gi, '$1' + HIDE)
+  .replace(/(--?(?:pass(?:word|wd)?|pwd|secret|token|credential)[\w-]*\s+)("[^"]*"|'[^']*'|[^\s"'-][^\s"']*)/gi, '$1' + HIDE);
+const SAFE_ARG = /^[\w.\-/:=@%+,]+$/;
+const shq = (a) => { const s = String(a); return SAFE_ARG.test(s) ? s : !s.includes("'") ? "'" + s + "'" : '"' + s.replace(/"/g, '\\"') + '"'; };
+const fwdPath = (p) => String(p).split(path.sep).join('/');
+const START_LINE = /^-\s*跑通的启动（([^，）]+)(?:，[^）]*)?）[：:]\s*(.*)$/;
+function notesRoot(from) {
+  let d = path.resolve(from);
+  for (let i = 0; i < 12; i++) {
+    if (fs.existsSync(path.join(d, '.vibe', 'project.md'))) return d;
+    if (fs.existsSync(path.join(d, '.git')) || fs.existsSync(path.join(d, '.svn'))) return d;
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  }
+  // 不在仓库里、往上也没有项目说明（复审第 75 条-9：以前落到 --dir，在桌面、下载目录里跑也会建 .vibe）
+  try { const looks = require('../lib/session').looksLikeProject; for (const c of [path.resolve(from), dir]) if (looks(c)) return c; } catch (e) { /* 判断不了就不写 */ }
+  return '';
+}
+function startInvocation(port) {
+  const name = opt('name') || 'app';
+  const auto = String(opt('port') || '').trim().toLowerCase() === 'auto';
+  const parts = ['node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name ' + shq(name), '--port ' + (auto ? 'auto' : shq(String(opt('port')).trim()))];
+  if (auto && opt('avoid')) parts.push('--avoid ' + shq(opt('avoid')));
+  if (flag('hot')) parts.push('--hot');
+  if (opt('backend')) parts.push('--backend ' + shq(opt('backend')));
+  parts.push('--dir ' + shq(fwdPath(dir)));
+  if (opt('cwd')) parts.push('--cwd ' + shq(fwdPath(opt('cwd'))));
+  for (const kv of envs) { const i = kv.indexOf('='); const k = i > 0 ? kv.slice(0, i) : kv; parts.push('--env ' + shq(SECRET_KEY.test(k) ? k + '=' + HIDE : kv)); }
+  if (opt('wait')) parts.push('--wait ' + shq(opt('wait')));
+  const args = cmdArgs.map((a, i) => (i > 0 && SECRET_FLAG.test(cmdArgs[i - 1]) ? HIDE : hideSecrets(a)));
+  parts.push('--', args.length === 1 ? shq(args[0]) : args.map(shq).join(' '));
+  return parts.join(' ') + '（上次用的端口 ' + port + '）';
+}
+/** 写回项目说明。返回写进去的项目说明路径；没变、不该写、写不了返回 '' */
+function noteStartLine(rec) {
+  if (!cmdArgs.length) return '';
+  const runCwd = path.resolve(dir, opt('cwd') || '.');
+  const root = notesRoot(runCwd);
+  if (!root) return '';
+  const home = path.dirname(path.dirname(KIT));
+  const cc = normPath(path.join(home, '.claude'));
+  if (normPath(root) === normPath(path.parse(root).root) || normPath(root) === normPath(home) || normPath(root) === cc || normPath(root).startsWith(cc + '/')) return '';
+  const pm = path.join(root, '.vibe', 'project.md');
+  const name = opt('name') || 'app';
+  const value = startInvocation(rec.port);
+  const d = new Date();
+  const line = '- 跑通的启动（' + name + '，' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '）：' + value;
+  const bare = (v) => v.replace(/--name ('[^']*'|"[^"]*"|\S+)/, '').replace(/（上次用的端口 \d+）$/, '').trim();
+  const S2 = require('../lib/state-store');
+  const lock = S2.acquire(pm + '.lock', { waitMs: 3000, leaseMs: 30000 });
+  try {
+    let text = '';
+    try { text = fs.readFileSync(pm, 'utf8'); } catch (e) { text = ''; }
+    // \u5E26 BOM \u7684\uFF08\u8BB0\u4E8B\u672C\u5B58\u7684\uFF09\u5199\u56DE\u53BB\u7167\u6837\u5E26\u4E0A\uFF08\u590D\u5BA1\u7B2C 75 \u6761-8\uFF09
+    const BOM = String.fromCharCode(0xFEFF);
+    const bom = text.startsWith(BOM);
+    if (bom) text = text.slice(1);
+    if (!text.trim()) {
+      let head = '# 项目说明\n';
+      try { head = require('../lib/onboard').renderProject([]); } catch (e) { /* 老版本没有 */ }
+      fs.mkdirSync(path.dirname(pm), { recursive: true });
+      // 不在这里把 .vibe 加进 .gitignore：改了 .gitignore，下次 start 会当成代码改过、重启服务。会话开始的钩子会加
+      S2.atomicText(pm, head.replace(/\n*$/, '\n') + line + '\n');
+      return pm;
+    }
+    // 不是 UTF-8 的项目说明（记事本存成了 GBK）：读出来是乱码，整份重写会把中文写坏，不动它
+    if (text.includes('\uFFFD')) return '';
+    const crlf = /\r\n/.test(text);
+    const L = text.replace(/\r\n/g, '\n').split('\n');
+    let at = -1;
+    for (let i = 0; i < L.length; i++) {
+      const m = START_LINE.exec(L[i]);
+      if (!m) continue;
+      if (m[1] === name) { if (m[2].trim() === value) return ''; if (at < 0) { at = i; L[i] = line; } else L[i] = null; }
+      else if (bare(m[2]) === bare(value)) { if (at < 0) { at = i; L[i] = line; } else L[i] = null; }
+    }
+    if (at < 0) {
+      // 放在已有的"跑通的启动"后面；没有就放在"启动"那一行（连同它下面缩进的几行）后面；都没有放最后
+      let after = -1;
+      for (let i = 0; i < L.length; i++) if (START_LINE.test(L[i])) after = i;
+      if (after < 0) for (let i = 0; i < L.length; i++) if (/^-\s*[^：:\n]{0,10}启动[^：:\n]{0,8}[：:]/.test(L[i])) { after = i; while (after + 1 < L.length && /^\s+\S/.test(L[after + 1])) after++; break; }
+      if (after < 0) { while (L.length && !L[L.length - 1].trim()) L.pop(); L.push(line); } else L.splice(after + 1, 0, line);
+    }
+    let out = L.filter((l) => l !== null).join('\n');
+    if (!out.endsWith('\n')) out += '\n';
+    S2.atomicText(pm, (bom ? BOM : '') + (crlf ? out.replace(/\n/g, '\r\n') : out));
+    return pm;
+  } finally { if (lock) lock.release(); }
+}
+/** 起来了之后多说的几行：启动命令记进了项目说明；测试账号在哪、有哪些（没有的话怎么找）。出错不说 */
+function afterUp(rec, web) {
+  const out = [];
+  try { const pm = noteStartLine(rec); if (pm) out.push('这次的启动命令记进了项目说明 ' + pm + '（"跑通的启动（' + (opt('name') || 'app') + '）"那一行），以后照它起，不用再问。'); } catch (e) { /* 记不了不影响起服务 */ }
+  try {
+    const L = require('../lib/login');
+    const runCwd = path.resolve(dir, opt('cwd') || '.');
+    const f = L.findFrom(runCwd, 4) || L.findFrom(dir, 4);
+    if (f) out.push(L.summary(f, { max: 8 }));
+    else if (web) out.push('要登录的话：账号先跑 node "' + path.join(__dirname, 'login.js') + '" find --dir "' + L.homeOf(runCwd) + '" 找，找不到问用户一次，记进 ' + path.join(L.homeOf(runCwd), L.REL) + '（格式 ' + L.FORMAT + '）。');
+  } catch (e) { /* 提示不了不影响起服务 */ }
+  return out;
+}
+
 async function start() {
   // 不再用 IDEA 起（用户 2026-10-28 定的）：老习惯写了 --idea 的照 -- 后面的命令起
   if (opt('idea')) console.log('不再用 IDEA 的运行配置起服务（--idea 不认了），照 -- 后面的命令起。');
@@ -799,6 +920,7 @@ async function start() {
     const hot = hotRec(rec);
     const changed = flag('restart') ? ['（要求重启）'] : hot ? [] : changedSince(rec.startedAt, rec.cwd, rec.snap);
     if (!changed.length && same(rec)) {
+      for (const l of afterUp(rec, true)) console.log(l);
       const who = whoListens(rec.port);
       console.log('已经在跑：' + name + '（端口 ' + rec.port + '，' + ago(rec.startedAt) + '起的' + (who ? '，听这个端口的是 ' + who : '') + '）' + (hot ? '，会热更新，改了代码不用重启' : '，启动之后代码没改过') + '。直接用，不用再起。要强制重启加 --restart。');
       return 0;

@@ -738,13 +738,16 @@ function mergeRedis(owner, found, memo) {
 }
 
 // ---------- 项目说明 ----------
+// 键最长 12 个字。devserver 写的"- 跑通的启动（名字，日期）：…"（tools/devserver.js 的 noteStartLine）键更长，这里认不成键、不会去动它；
+// 要放宽键长，先把"跑通的启动"排除掉（复审第 75 条-12）
 const LINE = /^-\s*([^：:]{1,12})[：:]\s*(.*)$/;
 /** 生成的项目说明（第一次）。lines: [[键, 值]] */
 function renderProject(lines) {
   return ['# 项目说明（vibe-kit 后台自动探索于 ' + today() + ' 查得）', MARK, '',
     '> 脚本照工程结构查的，没用模型。标着"没跑过"的命令第一次用的时候跑一遍：通了把"（没跑过）"去掉，不通就查清原因、改成对的。',
     '> 这个文件你和 AI 都可以改、可以加行。依据的文件（pom.xml、application-dev.yml 这些）变了，脚本只更新它自己生成的、你们没改过的那几行。',
-    '> 脚本查不了的：登录账号（记到 .vibe/login.json）、代码之外的产出放哪。用到的时候问我。', '',
+    '> 脚本查不了的：登录账号（tools/login.js find 照项目文件找，找不到问我，记到 .vibe/login.json）、代码之外的产出放哪（用到的时候问我）。',
+    '> devserver 跑通的启动命令它自己记在"跑通的启动"那几行，下次照着起。', '',
   ].concat(lines.map(([k, v]) => '- ' + k + '：' + v)).join('\n') + '\n';
 }
 const ALT = '（自动探索）';
