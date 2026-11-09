@@ -1,7 +1,8 @@
 'use strict';
 /*
  * 2026-10-05 这一批：
- *   Claude Code 自带的自动模式   1005 起安装器默认关掉，2026-11-09 起套件不再管（问题表第 74 条）：不加、升级时收回套件以前写的，你自己写的不动
+ *   Claude Code 自带的自动模式   安装器固定关掉（settings.json 的 permissions.disableAutoMode，2026-11-09 起没有开关了，问题表第 74 条）；
+ *                               你自己写的、自己把 defaultMode 设成 auto 的不动；卸载只收回自己加的；以前开关改成"不管它"的升上来也加上
  *   全局约定                     带上了官方那句 "Please remove all mannered prose."
  *   开关                         ccAutoMode 去掉了（2026-11-09）
  *   路由                         配置页的接口不收别的网站的页面发来的请求（<img> 这类不带 Origin 的也挡）
@@ -31,47 +32,62 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
   const watch = await H.watchWindows('t1005-win');
 
   // ---------------------------------------------------------------------------------------------
-  H.section('安装器：Claude Code 自带的自动模式不再管（2026-11-09，问题表第 74 条）');
+  H.section('安装器：固定关掉 Claude Code 自带的自动模式（2026-11-09 起没有开关）');
   {
     const h = H.freshHome('t1005-a');
     const r = install(h, H.SRC);
-    H.ok('装的时候不写 permissions.disableAutoMode', r.code === 0 && perm(h).disableAutoMode === undefined && man(h).disableAutoMode === undefined, [r.out.slice(-800), perm(h), man(h).disableAutoMode]);
+    H.ok('装的时候写了 permissions.disableAutoMode，记成自己加的', r.code === 0 && perm(h).disableAutoMode === 'disable' && man(h).disableAutoMode === 'disable', [r.out.slice(-800), perm(h), man(h).disableAutoMode]);
     H.ok('没有替用户定 defaultMode', perm(h).defaultMode === undefined, perm(h));
-    H.ok('不提 Claude Code 自带的自动模式', !/自带的"?自动模式|disableAutoMode/.test(r.out), r.out.slice(-1200));
+    H.ok('说了关掉的是什么、想用怎么办', /Claude Code 自带的"自动模式"已关掉/.test(r.out) && /defaultMode 设成 auto/.test(r.out), r.out.slice(-1200));
     // 20261030 起 push 只留钩子这一道确认（用户定的），套件不再装 Bash(git push:*) 的确认规则
     H.ok('套件装的那几条权限还在（push 的确认规则 20261030 起不装了）', (perm(h).allow || []).includes('Bash') && !(perm(h).ask || []).some((x) => /git push/.test(x)), perm(h));
-  }
-  {
-    // 上一版（1005—0234）写过、记成自己加的：更新、同步时收回
-    const h = H.freshHome('t1005-old');
-    install(h, H.SRC);
-    const s = settings(h); s.permissions = Object.assign({}, s.permissions, { disableAutoMode: 'disable' }); H.write(path.join(h.cfg, 'settings.json'), JSON.stringify(s, null, 2));
-    const m = man(h); m.disableAutoMode = 'disable'; H.write(path.join(h.kit, 'installed.json'), JSON.stringify(m, null, 2));
+    const again = install(h, H.SRC);
+    H.ok('再装一次：不重复说，设置不变', again.code === 0 && !/自动模式"已关掉/.test(again.out) && perm(h).disableAutoMode === 'disable', again.out.slice(-600));
+    // 以前在配置页改成"不管它"的（config.json 里 ccAutoMode: on）：开关没了，同步时照样加上
+    H.setConfig(h, { ccAutoMode: 'on' });
+    const s0 = settings(h); delete s0.permissions.disableAutoMode; H.write(path.join(h.cfg, 'settings.json'), JSON.stringify(s0, null, 2));
+    const m0 = man(h); delete m0.disableAutoMode; H.write(path.join(h.kit, 'installed.json'), JSON.stringify(m0, null, 2));
     const s1 = sync(h);
-    H.ok('套件以前写的：同步时收回，说清楚', s1.code === 0 && perm(h).disableAutoMode === undefined && man(h).disableAutoMode === undefined && /以前在 settings\.json 里写的 permissions\.disableAutoMode 收回了/.test(s1.out), [s1.out, perm(h)]);
+    H.ok('以前选了"不管它"的：开关没了，同步时照样关掉', s1.code === 0 && perm(h).disableAutoMode === 'disable' && man(h).disableAutoMode === 'disable' && /自动模式"已关掉/.test(s1.out), [s1.out, perm(h)]);
     const s2 = sync(h);
-    H.ok('再同步一次：不再说', s2.code === 0 && !/disableAutoMode/.test(s2.out), s2.out);
+    H.ok('再同步一次：settings.json 不变', s2.code === 0 && !/settings\.json 里的/.test(s2.out), s2.out);
+    const un = H.node(h, path.join(h.kit, 'install.js'), ['--uninstall'], { cwd: h.root, timeout: 120000 });
+    H.ok('卸载：收回自己加的', un.code === 0 && (settings(h).permissions || {}).disableAutoMode === undefined, [un.out.slice(-400), settings(h)]);
   }
   {
     // 你自己写的不动
     const u = H.freshHome('t1005-b');
     H.write(path.join(u.cfg, 'settings.json'), JSON.stringify({ permissions: { disableAutoMode: 'disable', allow: ['Read'] } }, null, 2));
     const r = install(u, H.SRC);
-    H.ok('自己写过这一项：不动，不记成套件加的', r.code === 0 && perm(u).disableAutoMode === 'disable' && man(u).disableAutoMode === undefined, [perm(u), man(u).disableAutoMode]);
-    sync(u);
-    H.ok('同步之后你自己写的还在', perm(u).disableAutoMode === 'disable', perm(u));
+    H.ok('自己写过这一项：不记成套件加的，也不重复说', r.code === 0 && perm(u).disableAutoMode === 'disable' && man(u).disableAutoMode === undefined && !/自动模式"已关掉/.test(r.out), [perm(u), man(u).disableAutoMode]);
     const un = H.node(u, path.join(u.kit, 'install.js'), ['--uninstall'], { cwd: u.root, timeout: 120000 });
     H.ok('卸载后你自己写的还在', un.code === 0 && (settings(u).permissions || {}).disableAutoMode === 'disable' && (settings(u).permissions.allow || []).includes('Read'), settings(u));
+  }
+  {
+    // 你自己选了自动模式：不加，提醒一句
+    const a = H.freshHome('t1005-c');
+    H.write(path.join(a.cfg, 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'auto' } }, null, 2));
+    const r = install(a, H.SRC);
+    H.ok('自己把 defaultMode 设成 auto 的：不加，提醒经网关用的代价', r.code === 0 && perm(a).disableAutoMode === undefined && perm(a).defaultMode === 'auto' && /你自己把 permissions\.defaultMode 设成了 auto，没动它/.test(r.out), [r.out.slice(-900), perm(a)]);
+    // 别的 defaultMode（跳过权限、接受编辑）不碍事：照样关掉自动模式，defaultMode 不动
+    const b = H.freshHome('t1005-d');
+    H.write(path.join(b.cfg, 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'bypassPermissions' } }, null, 2));
+    const r2 = install(b, H.SRC);
+    H.ok('自己配了别的 defaultMode：不动它，自动模式照样关', r2.code === 0 && perm(b).defaultMode === 'bypassPermissions' && perm(b).disableAutoMode === 'disable', perm(b));
+    // 装好之后才把 defaultMode 改成 auto：下次同步把自己加的那一项收回
+    const s = settings(b); s.permissions.defaultMode = 'auto'; H.write(path.join(b.cfg, 'settings.json'), JSON.stringify(s, null, 2));
+    sync(b);
+    H.ok('装好之后你把 defaultMode 改成了 auto：同步时把套件加的那一项收回', perm(b).disableAutoMode === undefined && perm(b).defaultMode === 'auto' && man(b).disableAutoMode === undefined, [perm(b), man(b).disableAutoMode]);
   }
   if (OLD) {
     const g = H.freshHome('t1005-up');
     const oldPkg = path.join(g.root, 'old-pkg');
     H.copyDir(OLD, oldPkg);
-    for (const d of ['pixelmatch', 'pngjs', 'playwright', 'playwright-core']) fs.mkdirSync(path.join(oldPkg, 'kit', 'page', 'node_modules', d), { recursive: true });
+    H.stubDeps(oldPkg);
     const r0 = install(g, oldPkg);
-    const had = perm(g).disableAutoMode === 'disable';
+    H.ok('上一版装上了', r0.code === 0, r0.out.slice(-300));
     const r = install(g, H.SRC);
-    H.ok('从上一版升上来：上一版写了的收回', r.code === 0 && perm(g).disableAutoMode === undefined && man(g).disableAutoMode === undefined && (!had || /收回了/.test(r.out)), [had, r0.code, r.out.slice(-500), perm(g)]);
+    H.ok('从上一版升上来：关着', r.code === 0 && perm(g).disableAutoMode === 'disable' && man(g).disableAutoMode === 'disable', [r.out.slice(-500), perm(g)]);
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -306,23 +306,32 @@ function autoCompactNote(r, s) {
   if (env !== undefined && (r === 'set' || r === 'kept')) console.log('  [!] settings.json 的 env 里你自己设了 CLAUDE_CODE_AUTO_COMPACT_WINDOW=' + env + '，Claude Code 以它为准，配置页的"自动压缩线"不起作用');
 }
 /**
- * Claude Code 自带的"自动模式"（auto mode，和套件的 /vk-auto 是两回事）：套件不再管它（仓库主人 2026-11-09 定的，问题表第 74 条）。
- * 1005—0234 默认关掉它，在 settings.json 写 permissions.disableAutoMode = "disable"、记在 installed.json 的 disableAutoMode，配置页有个开关 ccAutoMode。
- * 现在开关去掉了：装、升级、同步、卸载时都把套件以前写的那一项收回（记着是自己写的、值也没被改过才收），你自己写的不动。
- * 2.1.284 起没配权限模式的会话会进 Claude Code 自带的自动模式（实测见 docs/claude-code-facts.md）。返回 removed / user / none
+ * Claude Code 自带的"自动模式"（auto mode，和套件的 /vk-auto 是两回事）。2.1.284 起，没配权限模式的会话默认进它：
+ * 有风险的命令（node -e、curl、git commit、查库这类）先发给一个分类模型审，系统提示有 14 万字符；经网关用的话每条这样的命令多一次请求、算用量，
+ * 分类模型答得不合格式就重试，最多十次，然后把命令拦下（2026-10-05 在 2.1.289 上用假网关实测：套件的端到端测试因此挂了 31 项；
+ * 2026-11-09 去掉这一项试了一次，2.1.289 的端到端 6 套不过，git commit、查库被拦）。
+ * 内网的模型当不了这个分类器，所以套件固定把它关掉：在 settings.json 里写 permissions.disableAutoMode = "disable"
+ * （2.1.289 实测：会话照以前的普通模式起，也不再弹"要不要把自动模式设成默认"；2.1.120、2.1.259 不认识这一项，照常用，设置文件不受影响）。
+ * 配置页的开关 ccAutoMode 2026-11-09 去掉了（仓库主人定的，问题表第 74 条：开关去掉、固定关着），config.json 里以前存的值不再认：
+ *   没有就加上，记成自己加的（installed.json 的 disableAutoMode，卸载时收回）；你自己写了别的值就不动；
+ *   你自己把 defaultMode 设成了 auto 的，是你选的，不加，提醒一句。remove（卸载）：是自己加的就去掉
+ * 命令行带 --dangerously-skip-permissions、自己配了 defaultMode 的不受影响。返回 added / removed / kept / user / user-auto / none
  */
-function retireCcAutoMode(s, man) {
+function applyCcAutoMode(s, man, remove) {
   const perms = isObj(s.permissions) ? s.permissions : {};
   const cur = perms.disableAutoMode;
   const ours = cur !== undefined && man.disableAutoMode !== undefined && cur === man.disableAutoMode;
+  const drop = () => { delete perms.disableAutoMode; if (Object.keys(perms).length) s.permissions = perms; else delete s.permissions; delete man.disableAutoMode; };
+  if (remove) { if (ours) { drop(); return 'removed'; } delete man.disableAutoMode; return cur === undefined ? 'none' : 'user'; }
+  if (perms.defaultMode === 'auto') { if (ours) drop(); else delete man.disableAutoMode; return 'user-auto'; }
+  if (cur === undefined) { perms.disableAutoMode = 'disable'; s.permissions = perms; man.disableAutoMode = 'disable'; return 'added'; }
+  if (ours) return 'kept';
   delete man.disableAutoMode;
-  if (!ours) return cur === undefined ? 'none' : 'user';
-  delete perms.disableAutoMode;
-  if (Object.keys(perms).length) s.permissions = perms; else delete s.permissions;
-  return 'removed';
+  return 'user';
 }
 function ccAutoModeNote(r) {
-  if (r === 'removed') console.log('  [OK] 配置页去掉了"Claude Code 自带的自动模式"这一项，套件以前在 settings.json 里写的 permissions.disableAutoMode 收回了，照 Claude Code 自己的默认（2.1.284 起没配权限模式的会话会进它自带的自动模式）。重新打开 Claude Code 后生效');
+  if (r === 'added') console.log('  [OK] Claude Code 自带的"自动模式"已关掉（2.1.284 起没配权限模式时默认进它：有风险的命令先发给分类模型审，经网关每条多一次大请求，内网的模型当不了这个分类器，答不出格式命令会被拦）。会话照以前的普通模式起；想用它，自己在 settings.json 的 permissions 里把 defaultMode 设成 auto（套件看到就不再写这一项）。重新打开 Claude Code 后生效');
+  else if (r === 'user-auto') console.log('  [!] settings.json 里你自己把 permissions.defaultMode 设成了 auto，没动它。提醒：经网关用自动模式，有风险的命令每条多一次带 14 万字符系统提示的请求；分类模型答得不合格式，命令会被拦下');
 }
 /**
  * 系统里（Windows 的用户级、机器级环境变量，注册表里存着的那份）设的值，没设返回 ''。不看 process.env：自动更新可能是 Claude Code
@@ -396,12 +405,12 @@ function mergeSettings(s, remove, hooksOnly) {
     const am = applyAutoMemory(s, man0);
     const ac = applyAutoCompact(s, man0, false);
     const manBefore = JSON.stringify(man0.disableAutoMode);
-    const cm = retireCcAutoMode(s, man0);
-    if (JSON.stringify(s) !== before) { backup(SETTINGS, 'settings.json'); writeAtomic(SETTINGS, JSON.stringify(s, null, 2) + '\n'); console.log('  [OK] settings.json 里的钩子' + (am === 'added' || am === 'removed' ? '、自动记忆的设置' : '') + (ac === 'set' || ac === 'removed' ? '、自动压缩的窗口' : '') + (cm === 'removed' ? '、Claude Code 自带的自动模式' : '') + '已更新'); }
+    const cm = applyCcAutoMode(s, man0, false);
+    if (JSON.stringify(s) !== before) { backup(SETTINGS, 'settings.json'); writeAtomic(SETTINGS, JSON.stringify(s, null, 2) + '\n'); console.log('  [OK] settings.json 里的钩子' + (am === 'added' || am === 'removed' ? '、自动记忆的设置' : '') + (ac === 'set' || ac === 'removed' ? '、自动压缩的窗口' : '') + (cm === 'added' || cm === 'removed' ? '、Claude Code 自带的自动模式' : '') + '已更新'); }
     if (am === 'added' || am === 'removed' || ac !== 'kept' || manBefore !== JSON.stringify(man0.disableAutoMode)) { try { saveManifest(man0); } catch (e) { /* 记不了：卸载时这一项就留着 */ } }
     if (am === 'added' || am === 'removed') autoMemoryNote(am);
     autoCompactNote(ac, s);
-    ccAutoModeNote(cm);
+    if (cm === 'added') ccAutoModeNote(cm);
     return null;
   }
 
@@ -472,7 +481,7 @@ function mergeSettings(s, remove, hooksOnly) {
     man.known.env = union(man.known.env, Object.keys(fragEnv));
     mergeSettings.autoMemory = applyAutoMemory(s, man);
     mergeSettings.autoCompact = applyAutoCompact(s, man, false);
-    mergeSettings.ccAutoMode = retireCcAutoMode(s, man);
+    mergeSettings.ccAutoMode = applyCcAutoMode(s, man, false);
   } else {
     // 只收回清单里记着是自己加的；env 只在值没被你改过时才删。
     // 令牌（secrets.json）和模型的 key（router-data）卸载时留着不删：那两条"不许读"的规则也留着，不然卸完之后 Read、Grep 就能读到它们
@@ -485,7 +494,7 @@ function mergeSettings(s, remove, hooksOnly) {
       }
     }
     mergeSettings.keptDeny = keepDeny.filter((x) => s.permissions && Array.isArray(s.permissions.deny) && s.permissions.deny.includes(x));
-    retireCcAutoMode(s, man);
+    applyCcAutoMode(s, man, true);
     if (s.permissions && !Object.keys(s.permissions).length) delete s.permissions;
     for (const k of Object.keys(man.env)) if (s.env && s.env[k] === man.env[k]) delete s.env[k];
     if (s.env && !Object.keys(s.env).length) delete s.env;
