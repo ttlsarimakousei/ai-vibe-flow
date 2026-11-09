@@ -13,8 +13,10 @@ function text(value, secrets) {
     .replace(/(\b(?:JSESSIONID|SESSION|SESSIONID|sid)=)[^;\s&]+/gi, '$1***');
 }
 // 审查材料只遮字面值；支持 JSON 字段与字符串内的转义引号，保留 token = validate(input) 等待审逻辑。
+// 占位符不是口令（#422：YEAR_TOKEN = "${YEAR}" 遮成 "***"，审查者据此报"替换不了"）：${…}、#{…}、{{…}}、%s、空串照原样
+const PLACEHOLDER_VALUE = /^(?:\$\{[^{}]*\}|#\{[^{}]*\}|\{\{[^{}]*\}\}|%[sd]|)$/;
 function material(value) {
-  return String(value).replace(/((?:password|passwd|pwd|secret|token|api[-_]?key|authorization)\b["']?\s*[:=]\s*)(["'])((?:\\[^\r\n]|(?!\2)[^\\\r\n])*)\2/gi, '$1$2***$2')
+  return String(value).replace(/((?:password|passwd|pwd|secret|token|api[-_]?key|authorization)\b["']?\s*[:=]\s*)(["'])((?:\\[^\r\n]|(?!\2)[^\\\r\n])*)\2/gi, (all, head, q, v) => (PLACEHOLDER_VALUE.test(v) ? all : head + q + '***' + q))
     .replace(/\b(sk|ak|ghp|glpat)([-_])[A-Za-z0-9]{12,}\b/g, '$1$2***')
     .replace(/(\/\/[^:/\s@]+:)[^@\s/]+@/g, '$1***@');
 }
