@@ -290,19 +290,26 @@ function bar(j) {
   const task = forSession(j);
   const T = require('./task-types');
   const P = require('./flow-policy');
-  let ph; let list; let dir = ''; let shownName = '';
+  let ph; let list; let dir = ''; let shownName = ''; let freshDir = '';
   if (task) {
     ph = phaseFor(j, task); list = task.changes;
     const c = ph.change ? list.find((x) => x.name === ph.change) : null;
     if (c && c.exists) dir = c.dir;
     // 任务勾完阶段就往后走了，审查这时才开始（第 58 条）：在审、有问题待修的 change 显示它；全做完了显示最后一个，看得到审查走到哪
     const reviewing = flowState(j).current ? null : list.find((x) => x.exists && !x.archived && x.total && !x.todo && /^[◇✗]/.test(reviewMark(P, x.dir, P.CHANGE)));
-    const last = !dir ? list.slice().reverse().find((x) => x.exists && !x.archived) : null;
+    // 要写的 change 还没建目录（第 76 条）：就显示它（提案● 规格○…），不退回显示上一个 change，不然看不出会话在写哪个
+    // 只在会话在写需求那一段时这么显示：前一个 change 刚勾完、还在问审不审的时候，照旧显示前一个（复审 P3-15）
+    const fresh = !dir && !reviewing && c && !c.exists && !c.archived && ph.phase === 'plan' && flowState(j).stage === 'plan' ? c : null;
+    if (fresh) freshDir = fresh.dir;
+    const last = !dir && !fresh ? list.slice().reverse().find((x) => x.exists && !x.archived) : null;
     const shown = reviewing || last;
     if (shown) { dir = shown.dir; shownName = shown.name; }
   } else {
     const dirs = flowChanges(j);
-    const hit = S.allChanges(j.cwd || process.cwd()).filter((c) => dirs.includes(normKey(c.dir)));
+    const every = S.allChanges(j.cwd || process.cwd());
+    let hit = every.filter((c) => dirs.includes(normKey(c.dir)));
+    // 人工模式不记"这个会话动手做过的变更"（只在自动开着时记）：开工、/vk-resume 切到的也算（第 76 条：表外的 change 步骤条整行是空的）
+    if (!hit.length) { const st0 = flowState(j); const scoped = Object.keys((st0.applyScope || {}).dirs || {}); hit = every.filter((c) => (st0.currentDir && normKey(c.dir) === normKey(st0.currentDir)) || scoped.includes(normKey(c.dir))); }
     if (!hit.length) return { steps: '', next: '' };
     const pick = hit.find((c) => c.name === flowState(j).current) || hit[0];
     dir = pick.dir; list = hit.map((c) => ({ name: c.name }));
@@ -312,7 +319,11 @@ function bar(j) {
   const name = shownName || ph.change || (list.length ? list[list.length - 1].name : '');
   const after = { explore: 0, plan: 1, apply: 1, selftest: 2, verify: 3, archive: 4, done: 5 }[ph.phase];
   const mark = (n) => (after > n ? '✓' : after === n ? '●' : '○');
-  const mid = name ? shortName(name) + (dir ? ' ' + changeSteps(dir) : '') : '';
+  // 做任务时需求改过、之后还没审过的：名字后面标出来（第 76 条：改了需求步骤条照旧全是 ✓）
+  let edited = '';
+  try { const at = dir ? Number((flowState(j).reqEdited || {})[normKey(dir)]) || 0 : 0; if (at && !['tasks', P.CHANGE].some((p) => (Number(P.record(dir, p).at) || 0) > at)) edited = '（需求改过）'; } catch (e) { edited = ''; }
+  let stepsOf = ''; try { stepsOf = dir || freshDir ? ' ' + changeSteps(dir || freshDir) : ''; } catch (e) { stepsOf = ''; }
+  const mid = name ? shortName(name) + edited + stepsOf : '';
   const steps = [task ? '探索' + mark(0) : '', mid, '自测' + mark(2) + ' 核验' + mark(3) + ' 归档' + mark(4)].filter(Boolean).join(' │ ');
   let next = '';
   if (ph.phase === 'explore') next = '探索中';
@@ -327,3 +338,7 @@ function bar(j) {
 }
 
 module.exports = { phaseFor, goneRow, currentAlive, dropDeadCurrent, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, exploreOpen, taskState, setTaskState, phaseOf, progressText };
+  else if (ph.phase === 'plan' && !dir && freshDir) next = '下一步 写 ' + ph.change + ' 的需求（还没建）';
+  // 同一个大任务里还有别的 change 做到一半（回改前面的补了任务、切到了别的）：带在后面，不然只看得到一个（第 76 条）
+  // 老任务不带：老表里做到一半的行可能早就不用了（第 50 条）
+  if (task && !task.legacy) { const others = list.filter((x) => x.exists && !x.archived && x.name !== name && x.total && x.todo > 0 && x.done > 0).map((x) => x.name + ' 做到 ' + x.done + '/' + x.total); if (others.length) next = (next ? next + ' │ ' : '') + '另有 ' + others.join('、'); }
