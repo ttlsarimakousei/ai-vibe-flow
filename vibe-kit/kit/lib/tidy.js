@@ -215,6 +215,11 @@ function processPath(file, cwd, asDir) {
   const r = path.relative(cwd || root, abs);
   return { show: (r && !r.startsWith('..') && !path.isAbsolute(r) ? r : abs).split(path.sep).join('/'), key: dir || abs };
 }
+/** 这个文件 git 里已经跟踪着（项目原来就有的，#438：index-old.jsp 是在用的登录页，旁边有 index.jsp 就被当成备份）。查不了算没有 */
+function isTracked(file) {
+  const abs = path.resolve(String(file || ''));
+  try { execFileSync('git', ['--no-optional-locks', '-C', path.dirname(abs), 'ls-files', '--error-unmatch', '--', path.basename(abs)], { timeout: 5000, windowsHide: true, stdio: 'ignore' }); return true; } catch (e) { return false; }
+}
 /** 目录里还没进 git（也没被忽略）的过程文件：git add 这个目录会把它们一起带上。返回要显示的路径（最多 8 个） */
 function untrackedProcessIn(dir, cwd) {
   let out = '';
@@ -346,4 +351,4 @@ function clutter(root) {
   return out;
 }
 
-module.exports = { vibePart, misplaced, vibeCheck, keepCheck, loginScenario, cleanTmp, changeOwner, clutter, scanNewest, PROCESS_NAME, isProcessName, isProcessFile, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };
+module.exports = { vibePart, misplaced, vibeCheck, keepCheck, loginScenario, cleanTmp, changeOwner, clutter, scanNewest, PROCESS_NAME, isProcessName, isProcessFile, isTracked, inVibe, projectRootOf, inBuildDir, processDirOf, processPath, untrackedProcessIn, blockOnce, processMsg, processCheck };

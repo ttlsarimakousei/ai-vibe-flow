@@ -167,7 +167,9 @@ function analyze(cmd, ps, st, cfg, depth) {
           if (!tidy || st.block || !fs.existsSync(abs) || /^(\.|\.\/|:\/?)$/.test(a.text)) continue;
           let isDir = /[\\/]$/.test(a.text);
           try { isDir = isDir || fs.statSync(abs).isDirectory(); } catch (e) { /* 不存在 */ }
-          const p = tidy.processPath(abs, st.dir, isDir);
+          let p = tidy.processPath(abs, st.dir, isDir);
+          // 已经在 git 里跟踪着的文件是项目原来就有的，改了它再 add 不算提交过程文件（#438）
+          if (p && !isDir && normKey(p.key) === normKey(abs) && tidy.isTracked && tidy.isTracked(abs)) p = null;
           if (p) { if (tidy.blockOnce(st.j.session_id, p.key)) setBlock(st, 'process', '[vibe-kit 过程文件] ' + p.show + ' 是过程文件（备份、日志、临时文件），不要提交：从这次 git add 里去掉，删掉或者挪进 .vibe/tmp/<事由>/。确实是项目要用的，原样再执行一次就行。'); continue; }
           if (!isDir) continue;
           const inside = tidy.untrackedProcessIn(abs, st.dir);

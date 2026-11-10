@@ -107,7 +107,7 @@ function commitPlan(o) {
     const r = rel(root, x.abs);
     if (S.isKitPath(x.abs)) { out.skipped.push({ rel: r, why: '套件自己的文件' }); continue; }
     if (/(^|\/)\.vibe\//i.test(r)) { out.skipped.push({ rel: r, why: '.vibe 里的过程文件' }); continue; }
-    if (tidy && (tidy.isProcessFile(x.abs) || tidy.processDirOf(x.abs, root, false))) { out.skipped.push({ rel: r, why: '过程文件（备份、日志、临时文件）' }); continue; }
+    if (tidy && (tidy.isProcessFile(x.abs) || tidy.processDirOf(x.abs, root, false)) && !(tidy.isTracked && tidy.isTracked(x.abs))) { out.skipped.push({ rel: r, why: '过程文件（备份、日志、临时文件）' }); continue; }
     cands.push({ abs: x.abs, rel: r });
   }
   const ignored = ignoredSet(root, cands.map((c) => c.rel));
