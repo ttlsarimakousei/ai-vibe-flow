@@ -211,3 +211,15 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - **跑通的启动写回项目说明**（`tools/devserver.js` 的 `noteStartLine`、`afterUp`）：起来了（`waitUp` 的 `done`）、已经在跑的两处调。项目说明在哪：从运行目录往上找有 `.vibe/project.md` 的目录，到 git 仓库根为止；没有就建在仓库根（用 `onboard.renderProject([])` 的表头，带自动探索的标记，探索按"这里生成的"并进去）。一行的键是"跑通的启动（名字，日期）"，超过 `onboard` 的 12 字键长，探索不会当成它的行。读改写拿 `<project.md>.lock`。
 - **测试账号表**（`lib/login.js`）：会话开始（`session-start`）带汇总、壳子里子项目带名字；开口（`task-anchor`）认出用户给了账号、说到启动，提醒记下来（只有整句是 `x/y` 时才读上一条回复）；场景执行器 `page/scenario-run.js` 的 `subst` 先换 `{{login.…}}`（不进 `result.values`），整个场景跑通了 `markOk` 写 `lastOk`（拿 `<login.json>.lock`）。
 - **tmp 里的账号、登录场景**：`tidy.keepCheck`，`guard-vibe` 在 `vibeCheck` 之后调；同一个文件只拦一次（`blockOnce`，和过程文件共用 `<会话>-process.json`）。
+
+## 20261110 这批（第 76 条：做到一半改需求；#435、#436、#438）
+
+核对和改法见 [feedback-20261110.md](feedback-20261110.md)。结构上的变化：
+
+- **开工范围**（`lib/apply-scope.js`）：`valid` 发现 proposal、specs 的指纹变了，会话开着自动或者是用户开口的那一轮（`userTurn`：用户最后一次说话晚于 `<会话>-last-stop`，没有会话记录的调用算不是）、而且需求文档的修改时间不早于这一轮用户开口的时间（`requirementMtime`、`turnStartedAt`：收工之后模型自己改的，用户之后随口说一句不算认下）就按改后的内容重定范围，记 `reqEdited[变更目录] = 时间`；别的情况不通过。`after-tool` 在改了 `openspec/changes` 下的文件、跑了带 openspec 的命令之后调 `settle`：该重定的重定，不该认的当场退回写需求（`waiting = 'scope'`）。大任务里开工之后才并进范围的 change 记 `joined`，没开过工时指纹跟着走，不算改需求。`prepareEdit`、`check` 对范围外的 change：文档随便写、不动范围，打勾拦。
+- **写需求时不改代码**（`notStarted`，`pre-edit` 的 `startedCheck`）：拦截带 `noBypass`。`startedInScope` 是例外：开工范围按大任务登记（`applyScope.task`）、没失效、没说"只写需求"（`holdApply`），范围里有开过工的 change。`guard-spec` 打勾的"我还没说开工"用同一个判断。
+- **一份一份来**（`guard-spec`）：只管还没开工的 change（没勾过任务、也不在做任务那一段的开工范围里）。
+- **状态栏**（`big-task.bar`、`session-flow.flowView`）：`flowView.waiting` 把内部值 `scope` 换成给人看的话；变更名后面的"（需求改过）"看 `reqEdited`，`tasks`、`change` 两个审查点有更晚的记录就不标；要写的 change 还没建目录时用它的目录算步骤条；新任务里别的做到一半的 change 带在下一步后面（老任务不带）；没有大任务、`changes` 是空的时候退到 `currentDir` 和开工范围里的 change。
+- **提交方式"自动"**（`guard-git.consentIssue`）：`askedNow`（用户开口的这一轮、上次提交在这句话之前、不是问句、斜杠命令、开工和"继续"这类）算做完一件事；基线里的 `dirtyFiles` 减掉基线之后提交过的（`git diff --name-only <基线提交> HEAD`）。`apply-scope.dirtyNote` 读这个会话刚记的基线（五分钟内），有没提交的改动（`openspec/`、`.vibe/`、`.claude/` 下的不算，和 `consentIssue` 用同一个 `NOT_USER_DIRTY`）就让模型先问用户，`dirtyTold` 记着说过；开口钩子（说开工、/vk-resume）和 `after-tool`（提问框选开工、自动开工之后第一个工具做完）都从它拿。`askedNow` 还要求这句话像是让改东西、要提交的文件都是这句话之后才用 Edit、Write 改的。
+- **流程状态**（`session-flow.setFlow`）：不在流程里、动过的变更都没了，这时重新进流程：清掉 `changes`、`touchedAt`、`applyScope`、`reqEdited`，`<会话>-changes` 里不在了的目录也清掉（#436）。
+- `big-task.nothingLeft`：探索记录"还没定的"只有一行、开头是"无 / 没有 / 暂无"加标点的算空（#435）。`tidy.isTracked`：`git add` 的过程文件检查、`edited-files.commitPlan`（`tools/commit.js`）都不把已经跟踪着的文件当过程文件（#438）。
