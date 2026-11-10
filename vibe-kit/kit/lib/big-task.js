@@ -104,11 +104,22 @@ function exploreSections(file) {
 }
 // 写成"（无）""无（都定了）""已全部确认"都算空（第 68 条：以前只认一个"无"，模型写成这样就一直算没定完，开着自动也退回人工）。"无法确定分页"这种不算
 const NOTHING = /^(?:[（(]?(?:无|没有|暂无|none|n\/a|-|—|都定了|全定了|全部定了|全部确认|已全部确认|已全部定|已清空)[）)]?[。.，,]?\s*(?:[（(][^）)\n]{0,30}[）)])?)?[。.]?$/i;
+/**
+ * "还没定的"这一节算不算空。#435：写成"（无。12/13 已明确本次不做，不算阻塞项。）"被判成有内容。
+ * 只有一行、开头是"无 / 没有 / 暂无"再跟标点的也算空（后面是补的说明）；"无法确定分页"后面不是标点，不算；分了几行、带列表的不算
+ */
+function nothingLeft(text) {
+  const t = String(text || '').trim();
+  if (NOTHING.test(t)) return true;
+  const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  // 后面的说明里有"但、除了、待、还要、未、要问"这类的不算空（"没有，但分页方式还要问用户"，复审 P3-11）
+  return lines.length === 1 && /^[（(]?\s*(?:无|没有|暂无|none)\s*[。.，,；;：:]/i.test(lines[0]) && !/但|除了|待|还要|还需|还没|未|要问|需确认|要确认/.test(lines[0]);
+}
 /** 探索记录里还有真的没定的事。大任务写了探索记录、文件却不在的也算（还没探索）；不是大任务、老任务算没有 */
 function exploreOpen(task) {
   if (!task || task.legacy) return false;
   const s = exploreSections(task.explore);
-  return !s || !NOTHING.test(s['还没定的'] || '');
+  return !s || !nothingLeft(s['还没定的']);
 }
 
 /** 探索记录缺什么：离开探索、开工之前要都解决。老任务不查。change 给了就查这个 change 有没有一节 */
@@ -118,7 +129,7 @@ function exploreIssues(task, change) {
   const s = exploreSections(task.explore);
   if (!s) return ['探索记录 ' + rel + ' 还没有'];
   const out = [];
-  if (!NOTHING.test(s['还没定的'] || '')) out.push('探索记录"还没定的"还有内容：' + s['还没定的'].split('\n')[0].slice(0, 80));
+  if (!nothingLeft(s['还没定的'])) out.push('探索记录"还没定的"还有内容：' + s['还没定的'].split('\n')[0].slice(0, 80));
   if (!s['范围']) out.push('探索记录"范围"还没写（做什么、不做什么）');
   if (change && !s['change: ' + change]) out.push('探索记录 change ' + change + ' 这一节没有或是空的（## change: ' + change + '）');
   return out;
@@ -327,6 +338,7 @@ function bar(j) {
   const steps = [task ? '探索' + mark(0) : '', mid, '自测' + mark(2) + ' 核验' + mark(3) + ' 归档' + mark(4)].filter(Boolean).join(' │ ');
   let next = '';
   if (ph.phase === 'explore') next = '探索中';
+  else if (ph.phase === 'plan' && !dir && freshDir) next = '下一步 写 ' + ph.change + ' 的需求（还没建）';
   else if (ph.phase === 'plan' && dir) { const miss = DOC_STEPS.find(([id]) => !P.written(dir).includes(id)); next = miss ? '下一份 ' + miss[1] : ''; }
   else if (ph.phase === 'plan' || ph.phase === 'apply') { const left = dir ? T.automatedLeft(dir) : []; next = left.length ? '下一项 ' + left[0].text : ''; }
   else if (ph.phase === 'selftest') next = '下一步 全面自测';
@@ -334,11 +346,10 @@ function bar(j) {
   else if (ph.phase === 'archive') next = '下一步 按 plan.md 的顺序归档 ' + ph.change;
   if (!next && dir) { const left = T.automatedLeft(dir); if (left.length) next = '下一项 ' + left[0].text; }
   if (!next && name && flowState(j).keepCurrent === name) next = '任务都勾完了，等你说下一步';
+  // 同一个大任务里还有别的 change 做到一半（回改前面的补了任务、切到了别的）：带在后面，不然只看得到一个（第 76 条）
+  // 老任务不带：老表里做到一半的行可能早就不用了（第 50 条）
+  if (task && !task.legacy) { const others = list.filter((x) => x.exists && !x.archived && x.name !== name && x.total && x.todo > 0 && x.done > 0).map((x) => x.name + ' 做到 ' + x.done + '/' + x.total); if (others.length) next = (next ? next + ' │ ' : '') + '另有 ' + others.join('、'); }
   return { steps, next };
 }
 
 module.exports = { phaseFor, goneRow, currentAlive, dropDeadCurrent, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, exploreOpen, taskState, setTaskState, phaseOf, progressText };
-  else if (ph.phase === 'plan' && !dir && freshDir) next = '下一步 写 ' + ph.change + ' 的需求（还没建）';
-  // 同一个大任务里还有别的 change 做到一半（回改前面的补了任务、切到了别的）：带在后面，不然只看得到一个（第 76 条）
-  // 老任务不带：老表里做到一半的行可能早就不用了（第 50 条）
-  if (task && !task.legacy) { const others = list.filter((x) => x.exists && !x.archived && x.name !== name && x.total && x.todo > 0 && x.done > 0).map((x) => x.name + ' 做到 ' + x.done + '/' + x.total); if (others.length) next = (next ? next + ' │ ' : '') + '另有 ' + others.join('、'); }
