@@ -92,6 +92,7 @@ const V2337 = '20261104.2337'; // 套件可以改、拦了直接放行；第 52�
 const V1257 = '20261105.1257'; // 第 57、58 条：四份文档写完审一次整套，一个 change 的任务全部做完审一次
 const V1612 = '20261109.1612'; // 0234 议题这一批：cd 到当前目录、cd 之后只跑 git 的钩子直接改写
 const V0152 = '20261110.0152'; // 第 75 条：启动方式写回项目说明、测试账号表 login.json、tmp 里的账号和登录场景拦一次
+const V1852 = '20261110.1852'; // 第 76 条：做任务时用户让改需求接着做、写需求时不改代码不能放行；#438 已跟踪的文件不当过程文件
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
 // 旧版在 from 之前（还没有这个毛病）、在 to 或者之后（已经改过）的应该一样，在两者之间的应该不一样
@@ -489,12 +490,12 @@ for (const c of cases) {
   if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*任务全部做完了。用一个提问框问，一件事一个问题：要不要审查/; c.since = V1257; }
   if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /这个 change 的任务全部做完审修一次，然后按 plan\.md 接下一个，全部做完全面自测[\s\S]*checkpoint\.js/; c.since = V1257; }
   // 第 76 条（2026-11-10）：开工那句话里"改需求会退回人工、等重新说开工"换成"用户让改的照改、接着做"
-  if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') { c.expect = /用户中途让改需求的：这一轮里照改[\s\S]*不用让用户再说开工/; c.since = NEXT; }
-  if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /用户让改需求的，照改 proposal\.md、specs[\s\S]*checkpoint\.js/; c.since = NEXT; }
+  if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') { c.expect = /用户中途让改需求的：这一轮里照改[\s\S]*不用让用户再说开工/; c.since = V1852; }
+  if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /用户让改需求的，照改 proposal\.md、specs[\s\S]*checkpoint\.js/; c.since = V1852; }
 }
 for (const c of cases) after1104(c);
 // #438（2026-11-10）：git 里原来就有的 index-old.jsp（旁边有 index.jsp）改了再 add，以前当成备份拦一次
-add('git add 已经跟踪着的 index-old.jsp', 'guard-commit', cmd('git add web/index-old.jsp', 'Bash', { 'web/index.jsp': '<a/>\n', 'web/index-old.jsp': '<b/>\n' }), /放行，没有输出/, NEXT);
+add('git add 已经跟踪着的 index-old.jsp', 'guard-commit', cmd('git add web/index-old.jsp', 'Bash', { 'web/index.jsp': '<a/>\n', 'web/index-old.jsp': '<b/>\n' }), /放行，没有输出/, V1852);
 
 let same = 0;
 let changed = 0;
