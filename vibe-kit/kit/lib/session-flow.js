@@ -45,7 +45,12 @@ function flowState(j) { const k = flowKey(j); return k ? readState(k) : {}; }
 function setFlow(j, on, why, stage) {
   const k = flowKey(j);
   if (!k) return false;
-  updateState(k, (st) => { st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; else delete st.current; if (stage === 'plan' || stage === 'apply') st.stage = stage; return st; });
+  // 上一件事的变更都归档了、现在重新进流程（#436）：旧的变更名单清掉。不清的话新变更的目录还没建，下一句话又按旧名单判成"流程走完了"，
+  // 建变更被拦"用户没说要走 OpenSpec"
+  let stale = false;
+  try { stale = !!on && !flowState(j).on && flowDone(j); } catch (e) { stale = false; }
+  updateState(k, (st) => { if (stale) { st.changes = []; for (const k of ['touchedAt', 'applyScope', 'reqEdited', 'planReady', 'applySource', 'lastApplyAt', 'applyVoice', 'applyVoiceSchema', 'applyRefused', 'dirtyTold', 'waiting']) delete st[k]; } st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; else delete st.current; if (stage === 'plan' || stage === 'apply') st.stage = stage; return st; });
+  if (stale) { try { const ck = String(j.session_id) + '-changes'; const left = (readState(ck).dirs || []).filter((d) => fs.existsSync(d)); writeState(ck, { dirs: left, at: Date.now() }); } catch (e) { /* 清不了：下一句话可能又判成走完，照旧 */ } }
   return !!on;
 }
 
