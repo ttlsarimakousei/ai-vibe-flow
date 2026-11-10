@@ -488,8 +488,13 @@ for (const c of cases) {
   if (['开口：敲 /opsx:apply（开工时说全自动开没开）', '开口：让它停'].includes(c.name)) c.since = V1257;
   if (c.name === '收工：最后一项打了勾、没审') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*任务全部做完了。用一个提问框问，一件事一个问题：要不要审查/; c.since = V1257; }
   if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /这个 change 的任务全部做完审修一次，然后按 plan\.md 接下一个，全部做完全面自测[\s\S]*checkpoint\.js/; c.since = V1257; }
+  // 第 76 条（2026-11-10）：开工那句话里"改需求会退回人工、等重新说开工"换成"用户让改的照改、接着做"
+  if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') { c.expect = /用户中途让改需求的：这一轮里照改[\s\S]*不用让用户再说开工/; c.since = NEXT; }
+  if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /用户让改需求的，照改 proposal\.md、specs[\s\S]*checkpoint\.js/; c.since = NEXT; }
 }
 for (const c of cases) after1104(c);
+// #438（2026-11-10）：git 里原来就有的 index-old.jsp（旁边有 index.jsp）改了再 add，以前当成备份拦一次
+add('git add 已经跟踪着的 index-old.jsp', 'guard-commit', cmd('git add web/index-old.jsp', 'Bash', { 'web/index.jsp': '<a/>\n', 'web/index-old.jsp': '<b/>\n' }), /放行，没有输出/, NEXT);
 
 let same = 0;
 let changed = 0;

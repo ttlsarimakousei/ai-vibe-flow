@@ -222,7 +222,8 @@ H.section('流程里没开工不改源码（要定的第 6 条）');
   S.setFlow(j, true, '测试', 'plan');
   const r = editFile(j, src, 'class A {}', 'class A { }');
   H.ok('写需求那一段改源码：拦下', /还没说开工/.test(H.reasonOf(r)), r);
-  H.ok('带拦截编号，能放行', /拦截编号/.test(H.reasonOf(r)), H.reasonOf(r));
+  // 2026-11-10 用户定的："写需求的任何情况下都不能动代码"，不给拦截编号
+  H.ok('不带拦截编号，不能申请放行', !/拦截编号/.test(H.reasonOf(r)) && /不能申请放行/.test(H.reasonOf(r)), H.reasonOf(r));
   const ok = H.reasonOf(editFile(j, path.join(d, 'design.md'), '- 放在 src/A.java', '- 放在 src/A.java，带日期'));
   H.ok('改需求文档不拦', !/还没说开工/.test(ok), ok);
   const other = H.reasonOf(write(j, path.join(proj, 'openspec', 'explore', '导出.md'), H.read(path.join(proj, 'openspec', 'explore', '导出.md'))));

@@ -81,19 +81,22 @@ H.section('旧第 2 类：提案修订后提问框选开工，改业务代码放
   const S2 = S; const A = require(path.join(h.kit, 'lib/apply-scope'));
   const j = { cwd: p, session_id: sid, transcript_path: tf([H.tr.user('开工 feat-019')]) };
   S2.setFlow(j, true, '开工', 'apply'); A.grant(j, '开工 feat-019');
-  // 修订提案（内容改了），之后再改一次产物：范围回到提案阶段
+  // 修订提案（内容改了），之后再改一次产物：范围回到提案阶段。
+  // 2026-11-10 起（第 76 条）只有不是用户开口的那一轮才退回：这里记一次收工，下面几句话的时间都在它之前
+  S2.writeState(sid + '-last-stop', { at: Date.now() });
   H.write(path.join(p, 'openspec/changes/feat-019/proposal.md'), '## Why\n\n要做。\n\n## What Changes\n\n- 改 src/A.java 和导出\n');
   const rev = { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'openspec/changes/feat-019/proposal.md'), old_string: '- 改 src/A.java 和导出', new_string: '- 改 src/A.java 和导出、打印' }, transcript_path: tf([H.tr.user('提案里加上导出')]) };
   H.hook(h, 'pre-edit', rev);
   H.ok('修订后回到提案阶段、等重新开工', S2.flowState(j).stage === 'plan' && S2.flowState(j).waiting === 'scope', S2.flowState(j));
   const code = (entries) => H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src/A.java'), old_string: 'class A {}', new_string: 'class A { int x; }' }, transcript_path: tf(entries) });
   const before = code([H.tr.user('提案里加上导出'), H.tr.say('改好了')]);
-  H.ok('还没重新开工：改业务代码拦下', blocked(before) && /提案已修订/.test(H.reasonOf(before)), H.reasonOf(before));
+  H.ok('还没重新开工：改业务代码拦下', blocked(before) && /重新说开工/.test(H.reasonOf(before)), H.reasonOf(before));
   const after = code([H.tr.user('提案里加上导出'), H.tr.say('改好了'), ...ask('feat-019 修订完了，能开工吗？', '开工')]);
   H.ok('提问框选了开工：改业务代码放行（改代码前补读开工答案）', !blocked(after), H.reasonOf(after));
   // 还在做任务那一段、需求改了以后直接改代码（没再改产物，阶段没退回）：新的开工答案也能重新开工
   const u0 = H.tr.user('开工 feat-019');
   const sid2 = 's-revise-2'; const j2 = { cwd: p, session_id: sid2, transcript_path: tf([u0]) };
+  S2.writeState(sid2 + '-last-stop', { at: Date.now() }); // 同上：不是用户开口的那一轮
   S2.setFlow(j2, true, '开工', 'apply'); A.grant(j2, '开工 feat-019');
   H.write(path.join(p, 'openspec/changes/feat-019/design.md'), DESIGN + '\n- 导出放在 B.java\n');
   const code2 = (entries) => H.hook(h, 'pre-edit', { session_id: sid2, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src/A.java'), old_string: 'class A {}', new_string: 'class A { int y; }' }, transcript_path: tf(entries) });

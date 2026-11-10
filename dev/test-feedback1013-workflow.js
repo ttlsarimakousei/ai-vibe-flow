@@ -53,6 +53,8 @@ H.ok('其它问题单字推不能授权', !S.userSaid([H.tr.user('继续'), ...a
 H.ok('取消归档优先', !S.userSaid([...composite.flat(), H.tr.user('先别归档')], 'archive').ok);
 H.ok('否定复合答案不授权', !S.userSaid([H.tr.user('继续'), ...ask('是否归档？', '开工，但不要归档')], 'archive').ok);
 j.session_id = 'scope'; S.setFlow(j, true, '开工', 'apply'); A.grant(j, '开工 add-a');
+// 2026-11-10 起（第 76 条）用户开口的那一轮里改需求不退回；下面测的是收工之后模型自己改的：先记一次收工
+S.writeState('scope-last-stop', { at: Date.now() });
 H.write(path.join(d, 'proposal.md'), '新的需求范围\n');
 H.ok('失效范围仍禁止业务代码', !!A.check(j, path.join(p, 'a.js')));
 const revision = { ...j, tool_name: 'Edit', tool_input: { file_path: path.join(d, 'revisions.md'), old_string: '', new_string: '修订依据' } };

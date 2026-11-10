@@ -73,7 +73,17 @@ H.section('做 c3 时回头改 c1（全局页图 6）');
   r = H.reasonOf(edit(c.j, path.join(c.d1, 'design.md'), '- 放在 src/A.java', '- 放在 src/A.java，带日期'));
   H.ok('人工：改 c1 的文档放行', !r, r);
   r = H.reasonOf(edit(c.j, path.join(c.proj, 'src', 'A.java'), 'class A {}', 'class A { }'));
-  H.ok('人工：改代码要重新说开工', /开工/.test(r), r);
+  // 2026-11-10（第 76 条，用户定的）：用户开口的那一轮里改了需求，接着做，不用再说开工
+  H.ok('人工、用户开口的这一轮改了 c1 的需求：接着改代码放行', !r, r);
+  H.ok('人工：开工范围还是整个大任务、还在做任务', fl(c.j).stage === 'apply' && Object.keys((fl(c.j).applyScope || {}).dirs || {}).length === 3, fl(c.j));
+  // 不是用户开口的那一轮（收过工之后模型自己改的）：照旧退回、等用户说开工
+  c = start(false);
+  S.writeState(c.j.session_id + '-last-stop', { at: Date.now() });
+  H.write(path.join(c.d1, 'proposal.md'), H.read(path.join(c.d1, 'proposal.md')).replace('要导出。', '要导出，带日期。'));
+  r = H.reasonOf(edit(c.j, path.join(c.d1, 'design.md'), '- 放在 src/A.java', '- 放在 src/A.java，带日期'));
+  H.ok('人工、收工之后模型自己改需求：改文档放行', !r, r);
+  r = H.reasonOf(edit(c.j, path.join(c.proj, 'src', 'A.java'), 'class A {}', 'class A { }'));
+  H.ok('人工、收工之后模型自己改需求：改代码要重新说开工', /开工/.test(r), r);
   H.transcript(c.j.transcript_path, [H.tr.user('开工')]);
   H.ok('说开工之后范围还是整个大任务', A.grant(c.j, '开工', '', {}).ok && Object.keys(fl(c.j).applyScope.dirs).length === 3, fl(c.j).applyScope);
 }

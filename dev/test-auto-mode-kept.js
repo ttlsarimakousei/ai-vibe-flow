@@ -98,6 +98,8 @@ H.section('做任务时改需求文档：只有 proposal、specs 变了才退回
   const rep = S.readState('s-scope-report');
   H.ok('改过的 design、tasks 记进了收工报告', (rep.items || []).filter((x) => x.kind === 'docEdit').length === 2, rep.items);
   const proposal = path.join(dir, 'proposal.md');
+  // 2026-11-10 起（第 76 条）用户开口的那一轮里改需求不作废；这里测的是收工之后模型自己改的：先记一次收工
+  S.writeState('s-scope-last-stop', { at: Date.now() });
   H.write(proposal, H.read(proposal) + '\n还要能按日期筛选。\n');
   const v = A.valid(j);
   H.ok('改了 proposal 里的要求：范围作废，说清楚是需求本身变了', !v.ok && /需求本身/.test(v.reason || ''), v);
