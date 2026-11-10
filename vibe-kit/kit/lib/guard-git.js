@@ -334,8 +334,14 @@ function consentIssue(g, st, cfg, docs) {
   if (!(cfg.autoMode || fl.on && fl.stage === 'apply')) return '';
   if (!current.length) return cfg.autoMode ? '[vibe-kit] 这次提交没有对应的当前 OpenSpec 变更，不能借用全自动许可；交代改动后问用户是否提交。' : '';
   const root = repoRoot(g.dir) || g.dir; const baselines = readState('work-baselines');
-  const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => r.dirtyFiles || [])));
-  if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
+  // 开工时没提交的改动一律算用户的（用户 2026-11-10 定的：开工时提示他要不要先提交，不提交就算）。开工之后提交过的（他说了先提交）不再算
+  const original = new Set(current.flatMap((c) => ((baselines[normKey(c.dir)] || {}).repos || []).filter((r) => normKey(r.root) === normKey(root)).flatMap((r) => {
+    const dirty = r.dirtyFiles || []; if (!dirty.length) return [];
+    let committed = new Set();
+    try { committed = new Set(execFileSync('git', ['--no-optional-locks', '-C', root, 'diff', '--name-only', '-z', r.ref, 'HEAD', '--'], { encoding: 'utf8', windowsHide: true, timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter(Boolean)); } catch (e) { committed = new Set(); }
+    return dirty.filter((f) => !committed.has(f) && !require('./apply-scope').NOT_USER_DIRTY.test(f));
+  })));
+  if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '（开工时没提交的都算）。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
   // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、连续没拿到结论停了的不算，以前它们一直挡着，自动提交就永远提交不了
   const open = current.some(c => P.reviewable(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg)));
   if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
@@ -346,7 +352,25 @@ function consentIssue(g, st, cfg, docs) {
   // 以前只认"上次提交之后有新勾的任务或刚收尾的审查"，任务全勾完以后改 bug 永远凑不出来，提交方式选了自动也一直攒着
   // 每个当前变更都有任务、而且都勾完了才算（复审 V9：以前还没写 tasks 的变更也算勾完，几个变更里一个勾完就放行别的半成品）
   const allTicked = current.length > 0 && current.every((c) => { try { const T = require('../lib/task-types'); return T.tasks(c.dir).length > 0 && T.automatedLeft(c.dir).length === 0; } catch (e) { return false; } });
-  const ready = reviewReady || allTicked || current.some((c) => Object.values(S.syncTicks(c.dir)).some((tick) => tick > since));
+  // 用户这一轮让改的、没对应任务的小改动也算做完一件事（第 76 条，用户 2026-11-10 定的"算，要提交"）：
+  // 用户开口的这一轮、上次提交在这句话之前、这句话不是问句、斜杠命令、"继续""开工"这类
+  let askedNow = false;
+  try {
+    const v = S.lastUserVoice(es); const said = v && v.kind === 'prompt' ? String(v.text || '').trim() : '';
+    // 复审 P1-2 收紧：这句话得像是让改东西（有"改、加、去掉、换、修……"或者在报问题）；要提交的文件都是这句话之后才用 Edit、Write 改的
+    // （这句话之前就改过的是做到一半的任务，不算）。"好的，你继续"这类没有改动的词，不算
+    const asks = /改|加上|加个|加一|增加|新增|去掉|删|换|修|调整|调一下|补|挪|移到|重命名|fix|bug/i.test(said) || S.BUG_REPORT.test(said);
+    if (said && asks && !S.applyIntent(said) && require('./apply-scope').userTurn(j) && (Number(v.at) || 0) > since && !/^\//.test(said) && !/(?:[？?]|吗|么|呢)[\s。.!！~～]*$/.test(said)) {
+      const before = new Set(); const afterSaid = new Set(); const res = S.toolResults(es);
+      for (const c of S.toolCalls(es, 0)) {
+        if (!/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(String(c.name || '')) || !res.has(c.id) || res.get(c.id).error) continue;
+        const f = String((c.input && (c.input.file_path || c.input.notebook_path)) || ''); if (!f) continue;
+        (c.i > v.pos ? afterSaid : before).add(normKey(path.resolve(j.cwd || st.cwd0 || root, f)));
+      }
+      askedNow = files.length > 0 && files.every((f) => { const k = normKey(path.resolve(root, f)); return afterSaid.has(k); });
+    }
+  } catch (e) { if (e && e.code === 'VIBE_HOOK_BUDGET') throw e; askedNow = false; }
+  const ready = reviewReady || allTicked || askedNow || current.some((c) => Object.values(S.syncTicks(c.dir)).some((tick) => tick > since));
   if (!ready) return '[vibe-kit] 提交方式是"自动"，但还没做完一件事：上次提交之后还没有新勾完的任务，也没有刚收尾的审查修复。做完、勾上再提交。';
   return '';
 }
