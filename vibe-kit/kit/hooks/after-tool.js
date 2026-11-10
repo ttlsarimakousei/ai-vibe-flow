@@ -32,6 +32,19 @@ function handle(j) {
     require('../lib/permissions').consume(j, successful(j));
     // 验证证据；模块升级不同步时保持原工具结果。
     try { require('../lib/invocation').phase('登记验证证据'); require('../lib/evidence').recordTool(j, successful(j)); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 验证证据', j, e); }
+    // 做任务时需求文档改了：落盘之后马上比指纹、按规矩重定范围（第 76 条：以前要到下一次改文档才发现，中间状态栏和拦截对不上）
+    // 只在这次可能动到需求文档时比（复审 P3-13）：改的文件在 openspec/changes 下，或者命令里提到 openspec；失败的不比
+    let scopeNote = '';
+    try {
+      const st = S.flowState(j);
+      if (st.on && st.applyScope && successful(j)) {
+        const A = require('../lib/apply-scope');
+        const touched = /^(Edit|Write|MultiEdit)$/.test(String(j.tool_name || '')) ? /[\\/]openspec[\\/]changes[\\/]/i.test(String(j.tool_input && j.tool_input.file_path || '')) : /^(Bash|PowerShell)$/.test(String(j.tool_name || '')) && /openspec/i.test(String(j.tool_input && j.tool_input.command || ''));
+        if (touched) A.settle(j);
+        // 开工不是用户打字说的（提问框选开工、自动开工）：没经过开口钩子，这里补说一次
+        const d = A.dirtyNote(j); if (d) scopeNote = '[vibe-kit 提醒] ' + d.model;
+      }
+    } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' && e.code !== 'VIBE_HOOK_BUDGET') require('../lib/feedback').recordHookError('after-tool 开工范围', j, e); }
     const cmd = String(j.tool_input && j.tool_input.command || '');
     // 失败的命令走 PostToolUseFailure，顶层是 error、没有 tool_response（docs/claude-code-facts.md 三版实测；2026-10-17 审核问题 11）
     const output = String(j.tool_response && (j.tool_response.stderr || j.tool_response.stdout || j.tool_response.error) || j.error || '');
@@ -44,6 +57,7 @@ function handle(j) {
     } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 经验候选', j, e); }
     // 编译、测试命令失败：第一个错误、文件:行、前后 5 行源码作为摘要送给模型（K3 M08，lib/fail-summary.js）。成功的什么都不加
     const notes = [];
+    if (scopeNote) notes.push(scopeNote);
     if (/^(Bash|PowerShell)$/.test(String(j.tool_name || '')) && !successful(j)) { try { const s = require('../lib/fail-summary').summarize(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 失败摘要', j, e); } }
     // 改了 .sql、Mapper XML：拿查库技能存的表结构缓存核对表名、列名，对不上提醒一句，不拦（K3 M10，lib/sql-check.js）
     if (/^(Edit|Write|MultiEdit)$/.test(String(j.tool_name || '')) && successful(j)) { try { const s = require('../lib/sql-check').hintFor(j); if (s) notes.push(s); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') require('../lib/feedback').recordHookError('after-tool 表结构核对', j, e); } }

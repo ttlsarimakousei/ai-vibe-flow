@@ -220,7 +220,7 @@ function applyNotice(cfg) {
   return {
     user: '[vibe-kit] 开始 apply：全自动模式' + (auto ? '开着。每个 change 的任务全部做完自动审修一次，所有 change 做完全面自测；做法上的事它自己定、记进报告，需求本身有疑问才问你。' : '关着。审查、自测和复验先 Ask。'),
     // 用户 2026-10-30 定的（问题表第 22 条）：自动模式下做法上的取舍自己定，不停下来问；改 design、tasks 不退出自动
-    model: '现在开始 apply（做任务）：全自动模式' + (auto ? '开着，按当前范围做，组之间不审，这个 change 的任务全部做完审修一次，然后按 plan.md 接下一个，全部做完全面自测。做法上的取舍（怎么写、用哪种实现）自己定，记进 revisions.md（起因：自动模式决定），收工报告会列出来，不停下来问；只有需求本身矛盾或缺关键信息才 Ask。补 design、改 tasks 措辞不退出自动；改 proposal.md、specs 里的要求会退回人工，等用户重新说开工。交付验收用例与实际结果，归档仍等用户决定。' : '关着，审查、自测、复验先 Ask，放弃后直接继续，不记录未审查或未测试。')
+    model: '现在开始 apply（做任务）：全自动模式' + (auto ? '开着，按当前范围做，组之间不审，这个 change 的任务全部做完审修一次，然后按 plan.md 接下一个，全部做完全面自测。做法上的取舍（怎么写、用哪种实现）自己定，记进 revisions.md（起因：自动模式决定），收工报告会列出来，不停下来问；只有需求本身矛盾或缺关键信息才 Ask。补 design、改 tasks 措辞不退出自动；用户让改需求的，照改 proposal.md、specs，revisions.md 记一条，接着做；用户没让改的不要自己改需求。交付验收用例与实际结果，归档仍等用户决定。' : '关着，审查、自测、复验先 Ask，放弃后直接继续，不记录未审查或未测试。用户中途让改需求的：这一轮里照改 proposal.md、specs、tasks，revisions.md 记一条，改完接着做，不用让用户再说开工；用户没让改的不要自己改需求。')
       + '提案提交许可和 apply 开工许可分别判断；没有明确提交许可时不在开工节点补提案提交。',
   };
 }
@@ -571,6 +571,11 @@ async function handle(j) {
   }
   // 开工了：告诉用户这次全自动开没开（systemMessage 给人看，additionalContext 给模型）
   let notice = applyStart ? applyNotice(cfg) : resumed2;
+  // 开工时工作区有没提交的改动：先问用户要不要先提交（第 76 条）。说开工、/vk-resume 接回都在这里说；提问框选开工、自动开工的由 after-tool 补说
+  if (notice && !note) {
+    let d = null; try { d = require('../lib/apply-scope').dirtyNote(j); } catch (e) { d = null; }
+    if (d) notice = { user: notice.user + ' ' + d.user, model: (notice.model || '') + d.model };
+  }
   if (!notice && !note && !on) { try { const rh = resumeHint(j); if (rh) notice = { user: rh, model: '' }; } catch (e) { /* 提示不了不影响开口 */ } }
   // 规矩提前说（lib/stage-rules.js，第一次进流程时带上 OpenSpec 规范）：开工时送做任务这一段的；提需求、敲 /opsx:propose、explore、new、continue 时送写需求这一段的；
   // 这个会话已经在流程里的（换了个说法接着做、压缩后的下一句）按它现在在哪一段送

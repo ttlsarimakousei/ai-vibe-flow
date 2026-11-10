@@ -16,7 +16,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const { ensureVibeIgnored, readConfig, readConfigFor, normKey, cli } = require('../lib/session');
-// 流程里没开工不改源码（第 44 条）：流程类的检查，有拦截编号
+// 流程里没开工不改源码（第 44 条）。2026-11-10 起不能申请放行；同一个大任务里前面的 change 开过工的放行（lib/apply-scope.js 的 startedInScope）
 const startedCheck = { handle(j) {
   let f = String((j.tool_input || {}).file_path || '');
   if (f && !path.isAbsolute(f) && j.cwd) f = path.resolve(j.cwd, f);
@@ -24,7 +24,10 @@ const startedCheck = { handle(j) {
   const S = require('../lib/session'); const A = require('../lib/apply-scope');
   const no = A.notStarted(j, f);
   if (!no || S.confirmApply(j, { hint: f }) || require('../lib/flow-policy').automaticApply(j)) return null;
-  return S.blockOut('PreToolUse', '[vibe-kit 范围] ' + no);
+  const out = S.blockOut('PreToolUse', '[vibe-kit 范围] ' + no);
+  // 用户 2026-11-10 定的："写需求的任何情况下都不能动代码"：不给拦截编号、不认通行证
+  Object.defineProperty(out, 'noBypass', { value: true });
+  return out;
 } };
 // 探索完之后范围和计划表只有用户开口那一轮能改（第 43 条）
 const exploreCheck = { handle(j) {

@@ -177,7 +177,8 @@ function flowView(j) {
   // 用户改了需求（范围变化）在 apply-scope.valid 里按用户的话重定范围，不退回人工
   let verifying = false;
   if (st.on && st.stage === 'apply') { try { const B = require('./big-task'); const t = B.forSession(j); verifying = !!t && !t.legacy && B.phaseOf(t).phase === 'verify'; } catch (e) { verifying = false; } }
-  const waiting = st.waiting || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : verifying ? '等你核验' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
+  // st.waiting 里的 scope 是内部值（模型自己改了需求、等用户重新说开工），不能原样给人看（第 76 条：状态栏写着"等你：scope"）
+  const waiting = (st.waiting === 'scope' ? '需求文档被改过，说"开工"或 /vk-go 接着做' : st.waiting) || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : verifying ? '等你核验' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
   // 写需求那一段的自动：探索记录写完了才算（"还没定的"清空、范围写了）。老会话 planReady 还认
   // 第 67、68 条：会话开着自动、已经在写这个 change 的文档：只有探索记录里真有没定的才不算生效（表外的 change、老任务没有记录可查，范围没写也不退回人工）。以前退回人工，写完 proposal 被拦下让用户看一看，写完四份还问要不要审
   const planOk = () => { if (st.planReady) return true; try { const B = require('./big-task'); const t = B.forSession(j); if (cfg.autoSession === true && dirs.length > 0) return !B.exploreOpen(t); return !!t && !t.legacy && B.exploreIssues(t).length === 0; } catch (e) { return false; } };

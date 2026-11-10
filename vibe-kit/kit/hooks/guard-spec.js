@@ -178,7 +178,11 @@ function handle(j, opts) {
   const flow = [];     // 流程上的问题（没验证、没审、没探索）：只说这件事
   let notStarted = false; // 写需求那一段就打勾
   // 需求文档一份一份来（用户 2026-10-17 定的）：proposal → specs → design → tasks。审查不在这里挡，tasks 写完审一次整套（第 57 条，用户 2026-11-05 定的）；自动模式不停
-  if (!existed && !cfg.autoMode && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
+  // 只管还没开工的 change（第 76 条）：做任务时改需求要加一份规格，不是第一次写需求，不拦
+  const flNow = flowState(j);
+  // 开过工：勾过任务；或者在做任务那一段的开工范围里、任务清单已经写了（大任务里自动并进来的、还在第一次写需求的 change 不算，复审 P2-5）
+  const begun = require('../lib/session').changeStarted(art.dir) || !!(flNow.stage === 'apply' && flNow.applyScope && (flNow.applyScope.dirs || {})[normKey(art.dir)] && fs.existsSync(path.join(art.dir, 'tasks.md')));
+  if (!existed && !cfg.autoMode && !begun && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
     const policy = require('../lib/flow-policy'); const point = art.kind === 'spec' ? 'specs' : art.kind; const order = ['proposal', 'specs', 'design', 'tasks'];
     const earlier = policy.written(art.dir).filter(p => order.indexOf(p) < order.indexOf(point));
     if (earlier.length) {
@@ -213,7 +217,7 @@ function handle(j, opts) {
     if (tk) flow.push(...tk.issues);
     // 还在写提案那一段（用户没说开工）就打勾：拦下。用户 2026-10-07 定的：任务清单要他看过、他说了开工才开始做（规矩见 lib/session.js"流程分两段"）
     if (tk && tk.ticked.length) {
-      const fl = flowState(j); if (fl.on && fl.stage === 'plan' && !(cfg.autoSwitch && require('../lib/flow-policy').automaticApply(j))) notStarted = true;
+      const fl = flowState(j); if (fl.on && fl.stage === 'plan' && !(cfg.autoSwitch && require('../lib/flow-policy').automaticApply(j)) && !require('../lib/apply-scope').startedInScope(j, art.dir)) notStarted = true;
       // 用户说了开工、却没认下来（#214）：说出原因，不再说"我还没说开工"
       let why = ''; try { why = notStarted ? require('../lib/apply-scope').refusal(j) : ''; } catch (e) { why = ''; }
       if (notStarted) flow.unshift(why ? '我说了开工，但' + why + '。认下来之前先不打勾' : '我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工""还要改""先不做"）；我说开工、或者我自己敲 /vk-go（或 /opsx:apply）之后再做');
