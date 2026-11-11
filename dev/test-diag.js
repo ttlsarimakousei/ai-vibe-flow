@@ -86,8 +86,11 @@ const lib = (h, n) => JSON.stringify(path.join(h.kit, 'lib', n));
     js(h, 'const D = require(' + lib(h, 'diag.js') + "); D.note('钩子预算', '读会话记录', 12000);");
     const warn = item();
     H.ok('预算用完：注意，说停在哪', warn.level === '注意' && /钩子预算用完 1 次/.test(warn.text) && /读会话记录/.test(warn.text) && !!warn.fix, warn);
-    const leak = ['usage.js', 'issues.js', 'report.js', 'feedback.js', 'gitlab.js'].filter((n) => /diag\.js|\.\/diag|diag\.json/.test(H.read(path.join(SRCV, 'kit', 'lib', n)) || ''));
-    H.ok('使用情况、议题、问题反馈的代码都不读它', leak.length === 0, leak);
+    // 2026-11-11 起问题反馈记钩子超时时带上最近 7 天停在哪（第 83 条，仓库主人定的：要收集的信息自动跟着议题上报），feedback.js 可以读；使用情况、议题、全自动报告、GitLab 照旧不读
+    const leak = ['usage.js', 'issues.js', 'report.js', 'gitlab.js'].filter((n) => /diag\.js|\.\/diag|diag\.json/.test(H.read(path.join(SRCV, 'kit', 'lib', n)) || ''));
+    H.ok('使用情况、议题、全自动报告的代码都不读它', leak.length === 0, leak);
+    const fb = H.read(path.join(SRCV, 'kit', 'lib', 'feedback.js')) || '';
+    H.ok('问题反馈只在钩子超时那一条里读它', (fb.match(/require\('\.\/diag'\)/g) || []).length <= 1 && (!/require\('\.\/diag'\)/.test(fb) || /if \(slow\)[\s\S]{0,400}require\('\.\/diag'\)/.test(fb)), '');
     const S = require(path.join(SRCV, 'kit', 'lib', 'session.js'));
     H.ok('跨会话的状态：不按文件时间清', S.GLOBAL_STATE.test('diag.json'));
   }

@@ -94,7 +94,8 @@ function answer(body, res) {
     return say(body, res, '读完了。');
   }
   // 审查、修复和经验照常；故意未经确认尝试提交，必须拦截，后续真人确认再提交。
-  if (!ran(/review\.js" prepare/)) return tool(body, res, shell, { command: 'node "' + path.join(h.kit, 'tools', 'review.js').replace(/\\/g, '/') + '" prepare --change ' + s.change + ' --mode code --project "' + proj.replace(/\\/g, '/') + '" --base HEAD', description: '备审查' });
+  // --all：这里先审再改，审的时候改过的只有钩子加的 .gitignore（不算这个 change 的）；20261111 起只收这个 change 的文件（第 77 条），不加就报"都不算这个 change 的"
+  if (!ran(/review\.js" prepare/)) return tool(body, res, shell, { command: 'node "' + path.join(h.kit, 'tools', 'review.js').replace(/\\/g, '/') + '" prepare --change ' + s.change + ' --mode code --project "' + proj.replace(/\\/g, '/') + '" --base HEAD --all', description: '备审查' });
   if (!done.some((u) => u.name === 'Edit')) {
     if (!done.some((u) => u.name === 'Read')) return tool(body, res, 'Read', { file_path: JAVA });
     return tool(body, res, 'Edit', { file_path: JAVA, old_string: '  // FILE-ORDER-SERVICE', new_string: '  // FILE-ORDER-SERVICE\n  // 判空：' + s.change });
