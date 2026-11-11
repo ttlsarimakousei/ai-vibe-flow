@@ -334,7 +334,7 @@
     </div>
     <div class="card" id="sec-guide-resume" data-sec="接回和插话">
       <h2>接回和插话</h2>
-      <p class="hint">敲 /vk-resume 列出没归档的 change，用提问框问你切哪个；敲 /vk-resume &lt;变更名&gt; 直接切到这个 change，状态栏跟着它，做完了回到表的顺序；只要没归档都能切，任务都勾完的切过去等你说下一步。任务已经写好的，接回就算开工。在做的大任务里开的新 change 套件自己补进表；流程改版前留下的、全部归档后开的，找出线索用提问框问你，确认了才写。死机前开着自动就接着开。任何时候插话都不退出流程。</p>
+      <p class="hint">敲 /vk-resume 列出没归档的 change，用提问框问你切哪个；敲 /vk-resume &lt;变更名&gt; 直接切到这个 change，状态栏跟着它，做完了回到表的顺序（当前 change 只往后走：做到后面回头改前面的 change、给它补任务，当前不变，状态栏写"回改"，两边的任务都能勾）；只要没归档都能切，任务都勾完的切过去等你说下一步。任务已经写好的，接回就算开工。在做的大任务里开的新 change 套件自己补进表；流程改版前留下的、全部归档后开的，找出线索用提问框问你，确认了才写。死机前开着自动就接着开。任何时候插话都不退出流程。</p>
       <figure class="g-fig"><div class="g-svg"><svg viewBox="0 0 1040 330" role="img" aria-label="死机后敲 /vk-resume，脚本读文件算进度并显示给用户，再回到需求、apply 或下一个 change。工作中插话时回答后回到原来那一步，流程不退出。">
         <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M1 1L9 5L1 9z"/></marker></defs>
         <rect class="b" x="20" y="24" width="160" height="56" rx="6"/><text class="h" x="100" y="48" text-anchor="middle">死机或关窗</text><text class="s" x="100" y="67" text-anchor="middle">进度都在文件里</text>
@@ -592,7 +592,7 @@
 
     <div class="card" id="sec-status" data-sec="状态栏">
       <h2>状态栏</h2>
-      <p class="hint">第一行：警告、目录和分支、上下文、自动开没开。进了流程多两行，第二行是步骤条：探索、当前 change 的每份文档、每组任务和审查、自测、核验、归档；✓ 做完，● 正在做，○ 没开始；◆ 审过，◇ 在审，✗N 有 N 条 P1、P2 待修。做任务时需求改过、之后还没审过的，变更名后面带"（需求改过）"；要写的 change 还没建目录时显示它。第三行是下一项，或者在等你什么；同一个大任务里还有别的 change 做到一半时后面带"另有 c3 做到 1/3"。放松了的保护、经验待确认、更新有才单独一行。没进流程不显示变更。没有新消息时每 10 秒刷新一次。</p>
+      <p class="hint">第一行：警告、目录和分支、上下文、自动开没开。进了流程多两行，第二行是步骤条：前面是大任务的名字，然后是探索、当前 change 的每份文档、每组任务和审查、自测、核验、归档；✓ 做完，● 正在做，○ 没开始；◆ 审过，◇ 在审，✗N 有 N 条 P1、P2 待修。做任务时需求改过、之后还没审过的，变更名后面带"（需求改过）"；要写的 change 还没建目录时显示它。第三行是下一项，或者在等你什么；同一个大任务里排在当前前面、回头改过的 change 后面带"回改 c2 还有 2 项、审查✗1"，别的做到一半的带"另有 c3 做到 1/3"。当前 change 只往后走：做到 c3 时回头改 c2，当前还是 c3。放松了的保护、经验待确认、更新有才单独一行。没进流程不显示变更。没有新消息时每 10 秒刷新一次。</p>
     </div>
 
     <div class="card" id="sec-stop" data-sec="全局：过程文件">
@@ -607,7 +607,7 @@
     <div class="card" id="sec-spec" data-sec="全局：审查与产物">
       <h2>全局：审查与产物</h2>
       <div class="opt">
-        <div><div class="t">审查预期用时</div><div class="d">不截断审查，都审完；审完超过这个时间，自动记一条问题反馈给维护的人优化审查。</div>
+        <div><div class="t">审查预期用时</div><div class="d">不截断审查，都审完；审完超过这个时间，自动记一条问题反馈给维护的人优化审查，带上每个角度每次请求用了多久、是不是到上限被结束、模型那头用了多久，不用到这台电脑上跑脚本。</div>
           <details class="more"><summary>细节</summary><ul><li>超时、有角度没交结论，都记一条：总用时、每个角度的用时、文件数、字数。</li><li>不带材料原文和审查意见。</li></ul></details></div>
         <div class="ctl"><input type="number" id="k_reviewBudgetSeconds" min="10" max="1800" step="10"><span class="dim">秒</span></div>
       </div>
