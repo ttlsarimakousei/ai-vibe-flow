@@ -30,7 +30,7 @@
  * 兜底放行（lib/feedback.js）：起服务、过程文件、归档门槛、提交信息格式、新文件没 add 这几类拦下时带〔拦截编号〕，
  *   申请过放行的跳过这一类（按"同一件事"认：归档认变更名，别的认这一类检查）；结束进程、读令牌、整仓 add / commit -a / gitlink 不放行。
  * 全自动模式（用户不在）：push、发布不弹确认框（没人点，会一直挂着），直接拦下、记进全自动报告，让它接着做别的。
- * 提交时不再查"像密码的内容"（用户 2026-10-17 定的）；套件自己的令牌文件（secrets.json、router-data）不许提交，那道保护在别处，照留。
+ * 提交时不查"像密码的内容"（用户 2026-10-17 定的；2026-11-11 起提交规范、审查也不再提明文口令，问题表第 78 条：内网私有仓库）；套件自己的令牌文件（secrets.json、router-data）不许提交，那道保护在别处，照留。
  * 命令先按 Bash 或 PowerShell 各自的引号和转义规则拆开：heredoc、here-string 的正文是数据，不当命令拆；注释（# 到行尾）去掉；续行先合并；
  * 按没加引号的 && || ; 换行 分成几组，每组再按 | 分段；cd、Push-Location 会跟着算当前目录。
  * 读不出来的（提交信息在变量里、路径藏在变量里）放行：误拦比漏拦更糟。
@@ -209,7 +209,6 @@ function analyze(cmd, ps, st, cfg, depth) {
       // 下面两道要去那个仓库里看：目录算不出来的不查
       if (g.dyn) continue;
       if (g.sub === 'commit' && cfg.commitCheck && !st.block && !commitAll(g.args)) { const n = newFilesIssue(g, st); if (n) setBlock(st, 'new-files', n); }
-      // 提交前看有没有把密码、key 带进去：要用户确认，不拦
       }
     }
   }
@@ -317,7 +316,7 @@ function check(j) {
   if (cb) return cb;
   const actionIssue = require('../lib/flow-policy').actionIssue(j);
   if (actionIssue) return counted('manual-action', '[vibe-kit] ' + actionIssue);
-  // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告；提交里像有密码的放行，记进报告
+  // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告
   // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
   // 普通 git push（用户 2026-10-25 定的，问题反馈表第 5 条）：用户说了"推送""push"就直接推，几笔提交都一样，不出推送计划；
   // 壳子里几个仓库各推一次。强推、删远端分支、推到别的分支在确认框里问
