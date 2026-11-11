@@ -287,6 +287,12 @@ function nextText(result) {
   if (result.status === 'stale') return '审查期间文件改过了，这一轮不算审完，但报的问题还要看。逐条核实、改完，再跑一次 review.js run：只审改过的地方，不用从头审。';
   if (!['completed', 'partial'].includes(result.status)) return '';
   if (result.status === 'partial') return '有材料没审到，不算审完：看 skipped 里的原因，处理完再跑一次 review.js run。';
+  const others = (result.excluded || []).flatMap((x) => x.files || []); const otherN = (result.excluded || []).reduce((n, x) => n + (Number(x.others) || 0), 0);
+  // 复审 R2：没算这个 change 的文件不能只躺在 excluded 里，说出来让它认一遍
+  const skippedNote = otherN ? '另有 ' + otherN + ' 个改过的文件不算这个 change 的，没审（' + others.slice(0, 5).join('、') + (otherN > 5 ? ' 等' : '') + '）：里面有这个 change 的（用 Bash、IDE、格式化工具改的），在 tasks.md 里点名再审，或者加 --all。' : '';
+  return nextBody(result) + skippedNote;
+}
+function nextBody(result) {
   if (result.noChange) return '文件和上一轮审过的一样，这次不用审' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
   if (!result.issues.length) return '没有问题，这个点过了。';
   if (!result.blocking) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
@@ -509,6 +515,16 @@ function askClaude(prompt, cwd, settings) {
   const u = (j && j.usage) || {};
   return { ms, killed, apiMs: (j && Number(j.duration_api_ms)) || 0, turns: (j && Number(j.num_turns)) || 0, chars: String(prompt).length, text: j ? String(j.result || '') : '', out: u.output_tokens || 0, input: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), err: j ? (j.is_error ? R.clip(String(j.result || j.subtype || ''), 200) : '') : R.clip(String(r.stderr || (r.error && r.error.message) || r.stdout || '没有输出'), 200) };
 }
+/** 上报用的出错类别：不带 claude 输出的原文（复审 R11：原文里可能有路径） */
+function errKind(err) {
+  const s = String(err || ''); if (!s) return '';
+  if (/timeout|timed out|ETIMEDOUT|超时/i.test(s)) return '超时';
+  if (/429|rate.?limit|usage limit|overloaded|限流|额度/i.test(s)) return '限流或额度';
+  if (/401|403|auth|unauthori[sz]ed|forbidden|认证|登录/i.test(s)) return '认证';
+  if (/ENOENT|not found|不是内部或外部命令|找不到/i.test(s)) return '找不到 claude';
+  if (/ECONN|network|socket|fetch failed|网络/i.test(s)) return '网络';
+  return '其他';
+}
 /** 后台进程：一个角度。回复里没有 JSON（只想不答）重试一次 */
 function work(id, lens) {
   const job = findJob(id);
@@ -522,7 +538,7 @@ function work(id, lens) {
     for (let i = 0; i < 2; i++) {
       // 第二次：上一次只想没答，提示它直接交
       const r = askClaude(i ? prompt + '\n上一次你只想没有回结论。这次不要再分析，直接按上面的格式回 JSON。\n' : prompt, job.root, settings);
-      S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id && cur.state[lens]) { cur.state[lens].out = (cur.state[lens].out || 0) + r.out; cur.state[lens].input = (cur.state[lens].input || 0) + r.input; cur.state[lens].calls = (cur.state[lens].calls || []).concat({ ms: r.ms, killed: r.killed, apiMs: r.apiMs, turns: r.turns, out: r.out, chars: r.chars, err: r.err ? R.clip(r.err, 80) : '' }).slice(-4); } });
+      S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id && cur.state[lens]) { cur.state[lens].out = (cur.state[lens].out || 0) + r.out; cur.state[lens].input = (cur.state[lens].input || 0) + r.input; cur.state[lens].calls = (cur.state[lens].calls || []).concat({ ms: r.ms, killed: r.killed, apiMs: r.apiMs, turns: r.turns, out: r.out, chars: r.chars, err: errKind(r.err) }).slice(-4); } });
       if (r.err) { why = 'claude -p 出错：' + r.err; if (!r.text) break; }
       const s = submit(id, lens, r.text);
       if (s.ok) return;

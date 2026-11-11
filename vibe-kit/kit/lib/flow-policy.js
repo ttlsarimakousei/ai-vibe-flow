@@ -77,7 +77,9 @@ function changeScope(dir) {
       }
     }
     const rec = S.readState('change-files')[S.normKey(dir)];
-    const edited = new Set(rec && (!rec.born || rec.born === S.changeBorn(dir)) ? rec.files || [] : []);
+    // 只算这个 change 的仓库里的文件（复审 R2：记过一个仓库外的编辑，known 就成了真，仓库里没点名的代码全被排除）
+    const rootKeys = roots.map((r) => S.normKey(r));
+    const edited = new Set((rec && (!rec.born || rec.born === S.changeBorn(dir)) ? rec.files || [] : []).filter((f) => rootKeys.some((r) => f === r || f.startsWith(r + '/'))));
     const has = (abs) => { const k = S.normKey(abs); if (files.has(k) || edited.has(k) || names.has(k.split('/').pop())) return true; for (const d of dirs) if (k.startsWith(d + '/')) return true; return false; };
     return { known: files.size + dirs.size + edited.size > 0, has, named: files.size + dirs.size, edited: edited.size };
   });
@@ -111,13 +113,25 @@ function currentChangeDir(j) {
   const touched = S.flowChanges(j).filter((d) => fs.existsSync(d));
   return touched.length === 1 ? touched[0] : '';
 }
-/** 编辑工具改成功了一个文件（after-tool 调）：在流程里的，算到现在在做的 change 上 */
+/**
+ * 编辑工具改成功了一个文件（after-tool 调）：在流程里的，算到现在在做的 change 上。
+ * 大任务里当前 change 还一项都没勾过的（文档写好了、还没开工）：同时记到前面开过工、没归档的最后一个 change 上（复审 R1：
+ * c2 勾完在审、在改审出的问题，c3 的文档已经写好，改的文件只记到 c3，c2 复审时看不到）
+ */
 function noteEdit(j, file) {
   if (!file) return false;
   const abs = path.resolve((j && j.cwd) || process.cwd(), String(file));
   if (NOT_OWN.test(S.normKey(abs))) return false;
   const dir = currentChangeDir(j);
-  return dir ? learnEdits(dir, [abs]) : false;
+  if (!dir) return false;
+  let also = '';
+  try {
+    const B = require('./big-task'); const task = B.forSession(j);
+    const at = task ? task.changes.findIndex((c) => S.normKey(c.dir) === S.normKey(dir)) : -1;
+    if (at > 0 && !task.changes[at].done) { const prev = task.changes.slice(0, at).reverse().find((c) => c.exists && !c.archived && c.done > 0); if (prev) also = prev.dir; }
+  } catch (e) { also = ''; }
+  const a = learnEdits(dir, [abs]); const b = also ? learnEdits(also, [abs]) : false;
+  return a || b;
 }
 /** 开工基线以来改过的代码里算这个 change 的：范围认得出就只留范围里的，认不出照旧全算 */
 function ownChanged(dir) {
@@ -505,7 +519,8 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
       const rec = record(dir, point); const sig = fingerprint(dir, point) + ':' + (rec.rounds || 0) + ':' + (rec.failStreak || 0);
       // 有没处理的问题、等复审：模型不动就接着催，同一个状态最多催 3 次（以前只催一次，它收工了就没人管）；催够了记进全自动报告
       const unsettled = (rec.status === 'completed' && blockingOf(rec) > 0) || rec.status === 'needs_review';
-      const msg = unsettled ? upTo(j, key(dir, point) + '|unsettled', sig + ':' + rec.status, 3, instruction(dir, point), () => { try { require('./report').note(j, { kind: 'hand', title: path.basename(dir) + ' 的审查点 ' + point + (rec.status === 'needs_review' ? ' 修了还没复审' : ' 有 ' + blockingOf(rec) + ' 条 P1、P2 没处理'), detail: '收工时催了 3 次没有动' }); } catch (e) { /* 记不了不影响 */ } }) : once(j, key(dir, point), sig, instruction(dir, point));
+      // 计数只看状态（复审 R6：带指纹的话模型一改文件就从 1 数起，没有上限）
+      const msg = unsettled ? upTo(j, key(dir, point) + '|unsettled', [rec.status, blockingOf(rec), rec.rounds || 0, rec.key || ''].join(':'), 3, instruction(dir, point), () => { try { require('./report').note(j, { kind: 'hand', title: path.basename(dir) + ' 的审查点 ' + point + (rec.status === 'needs_review' ? ' 修了还没复审' : ' 有 ' + blockingOf(rec) + ' 条 P1、P2 没处理'), detail: '收工时催了 3 次没有动' }); } catch (e) { /* 记不了不影响 */ } }) : once(j, key(dir, point), sig, instruction(dir, point));
       if (msg) out.push(msg);
     }
   }

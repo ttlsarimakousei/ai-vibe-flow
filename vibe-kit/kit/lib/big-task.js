@@ -217,7 +217,11 @@ function finishedMap(task) {
   let seen = {};
   try { seen = Object.assign({}, taskState(task).finished || {}); } catch (e) { seen = {}; }
   const add = task.changes.filter((c) => c.exists && c.total > 0 && !c.todo && !seen[c.name]).map((c) => c.name);
-  if (add.length) { for (const n of add) seen[n] = Date.now(); try { setTaskState(task, { finished: seen }); } catch (e) { /* 记不了：照旧按表的顺序 */ } }
+  if (add.length) {
+    const now = Date.now();
+    // 在锁里读出现有的再合并（复审 R7：锁外算好整个写回，两个进程同时记会互相冲掉）
+    try { updateState('big-task', (o) => { const k = keyOf(task); const cur = Object.assign({}, (o[k] || {}).finished); for (const n of add) if (!cur[n]) cur[n] = now; o[k] = Object.assign({}, o[k], { finished: cur, at: now }); seen = cur; }); } catch (e) { for (const n of add) seen[n] = now; /* 记不了：这一次照算 */ }
+  }
   return seen;
 }
 /** 做完过（全勾完过、或者归档了）的最后一个 change 的位置；一个都没有是 -1 */

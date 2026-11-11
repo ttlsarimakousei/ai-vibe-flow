@@ -46,13 +46,21 @@ const exploreCheck = { handle(j) {
  */
 const KIT_WORDS = [
   // 英文词前面不能紧挨着字母（preview r2、prefix r1 不算）
-  [/(?:审查|审核|复审|评审|(?<![A-Za-z])code\s*review|(?<![A-Za-z])review)\s*(?:意见|问题|结论|发现)?\s*[（(#＃:：]?\s*r\d{1,3}(?![\w.])/i, '审查的问题编号'],
-  [/(?:修复|修正|解决|(?<![A-Za-z])fix(?:es|ed)?)\s*(?:了)?\s*[（(]?\s*r\d{1,3}(?![\w.(])\s*[）)]?\s*(?:[:：，,。]|$)/im, '审查的问题编号'],
-  [/第\s*[一二三四五六七八九十\d]+\s*轮\s*(?:审查|审核|复审)/, '第几轮审查'],
+  // 空白都限了长度（复审 R3：不限的话 review 后面跟上千个空白要回溯几十秒）
+  [/(?:审查|审核|复审|评审|(?<![A-Za-z])code[ \t]{0,3}review|(?<![A-Za-z])review)[ \t]{0,3}(?:意见|问题|结论|发现)?[ \t]{0,3}[（(#＃:：]?[ \t]{0,3}r\d{1,3}(?![\w.])/i, '审查的问题编号'],
+  [/(?:修复|修正|解决|(?<![A-Za-z])fix(?:es|ed)?)[ \t]{0,3}(?:了)?[ \t]{0,3}[（(]?[ \t]{0,3}r\d{1,3}(?![\w.(])[ \t]{0,3}[）)]?[ \t]{0,3}(?:[:：，,。]|$)/im, '审查的问题编号'],
+  // 只认说的是审查过程的（复审 R4：审批类业务代码里"第二轮审核"是业务词）
+  [/第[ \t]{0,3}[一二三四五六七八九十\d]{1,3}[ \t]{0,3}轮[ \t]{0,3}(?:审查|复审|code review)[ \t]{0,3}(?:发现|提出|指出|报|要求|意见|问题|结论|的问题)/i, '第几轮审查'],
   [/vibe-kit|\bvk-(?:cross-review|see-page|db-crud|redis|onboard|handover)\b|〔拦截编号/i, '套件的名字'],
 ];
 const CODE_FILE = /\.(java|kt|groovy|js|mjs|cjs|ts|py|go|cs|xml|sql|vue|jsx|tsx|html?|css|scss|sass|less|styl|jsp|jspx|tag|ftl|vm|properties|ya?ml)$/i;
 const NOT_CODE = /(^|[\\/])(\.vibe|openspec|\.claude|node_modules)[\\/]/;
+/** 这个文件在套件自己的源码仓库里（往上有 vibe-kit/kit/hooks/pre-edit.js）：维护套件的人写套件的名字是正常的 */
+function kitSource(f) {
+  let d = path.dirname(path.resolve(f));
+  for (let i = 0; i < 12; i++) { try { if (require('fs').existsSync(path.join(d, 'vibe-kit', 'kit', 'hooks', 'pre-edit.js')) || require('fs').existsSync(path.join(d, 'kit', 'hooks', 'pre-edit.js'))) return true; } catch (e) { return false; } const up = path.dirname(d); if (up === d) break; d = up; }
+  return false;
+}
 /** 这次要写进去的新文字（[新, 旧] 成对）：Edit 是 new_string 对 old_string，MultiEdit 逐条，Write 是整份对文件现在的内容 */
 function writtenParts(j, f) {
   const inp = j.tool_input || {};
@@ -66,7 +74,10 @@ const wordsCheck = { handle(j) {
   if (!f || !CODE_FILE.test(f) || NOT_CODE.test(f)) return null;
   const S = require('../lib/session');
   if (S.isKitPath && S.isKitPath(f, j.cwd)) return null;
-  for (const [next, old] of writtenParts(j, f)) {
+  // 没有会话号："原样再写一次放行"做不到，不查（复审 R4：以前一直拦）。套件自己的源码仓库不查
+  if (!j.session_id || j.session_id === 'unknown' || kitSource(f)) return null;
+  for (const [next0, old] of writtenParts(j, f)) {
+    const next = next0.slice(0, 200000);
     for (const [re, what] of KIT_WORDS) {
       const m = re.exec(next);
       if (!m) continue;
@@ -74,7 +85,7 @@ const wordsCheck = { handle(j) {
       // 改之前这一处就有的（原样带过来的）不管
       if (old.includes(m[0])) continue;
       let first = true;
-      try { first = require('../lib/tidy.js').blockOnce(j.session_id, f + '#words#' + hit); } catch (e) { first = true; }
+      try { first = require('../lib/tidy.js').blockOnce(j.session_id, f + '#words#' + hit); } catch (e) { first = false; /* 记不了"拦过这一处"：放行（出错放行） */ }
       if (!first) continue;
       const out = S.blockOut('PreToolUse', '[vibe-kit 注释] 要写进 ' + path.basename(f) + ' 的文字里有「' + hit + '」（' + what + '）：这是这套工具里的叫法，同事看代码时看不懂。注释、日志、提示语只写业务上的原因，不写审查编号、第几轮审查、工具的名字。例：把"// 修复审核 r3：空列表"写成"// 列表为空时直接返回，不然会拼出 in ()"。改掉再写；确实要这么写的，原样再执行一次就行。');
       Object.defineProperty(out, 'noBypass', { value: true });

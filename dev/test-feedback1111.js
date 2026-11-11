@@ -72,6 +72,7 @@ let stuck = null;
   const result = p.status === 'prepared' ? null : p;
   // 文件都没变：这一轮不用发请求，直接出结果
   H.ok('别人的文件不算这个 change 的：记在它上面的那条不带了', !!result && result.status === 'completed' && result.blocking === 1 && result.issues.every((x) => x.file !== 'src/other/B.java') && result.droppedOthers === 1, result || [p.status, got, plan.excluded]);
+  H.ok('下一步里说出有几个文件没审、怎么认回来', !!result && /另有 2 个改过的文件不算这个 change 的，没审/.test(String(result.next)) && /--all/.test(String(result.next)), result && result.next);
   H.ok('结果里列出没算进来的文件和原因', !!result && (result.excluded || []).some((x) => x.others === 2 && /不是这个 change 改的/.test(x.reason) && x.files.includes('src/other/B.java')), result && result.excluded);
   H.ok('审查点记的也是 1 条', P.record(d, 'change').blocking === 1, P.record(d, 'change'));
   // 别人的文件再变：这个 change 的指纹不动
@@ -86,9 +87,9 @@ H.section('第 79 条：自动模式审出问题没处理，收工时催处理�
 {
   const { d, j } = stuck;
   S.setSessionAuto(j, true, '测试');
-  const said = [1, 2, 3, 4].map(() => P.stop(j, [d], false, 'turn-79').join('\n'));
+  const said = [1, 2, 3, 4].map((n) => { H.write(path.join(stuck.proj, 'src', 'duty', 'A.java'), 'class A { int x; int w; int t' + n + '; }\n'); return P.stop(j, [d], false, 'turn-79').join('\n'); });
   H.ok('催的是处理上一轮的问题，写了条数、清单在哪、下一步的命令', /c1）上一轮审出的 1 条 P1、P2 还没处理，不用重新审/.test(said[0]) && /code-change\.json/.test(said[0]) && /review\.js run --change c1 --mode code --point change --decisions/.test(said[0]), said[0]);
-  H.ok('模型不动就接着催，同一个状态一共催 3 次', !!said[1] && !!said[2] && !said[3], said.map((x) => x.length));
+  H.ok('模型不处理就接着催，同一个状态一共催 3 次（中间改了文件也不从头数）', !!said[1] && !!said[2] && !said[3], said.map((x) => x.length));
   let noted = [];
   try { noted = require(path.join(h.kit, 'lib', 'report.js')).stateOf(j).items || []; } catch (e) { noted = []; }
   H.ok('催够 3 次记进全自动报告', noted.some((x) => /c1 的审查点 change 有 1 条 P1、P2 没处理/.test(String(x.title))), noted);
@@ -181,6 +182,10 @@ H.section('#457：把没推的提交合并成一条');
   H.git(proj, ['reset', '-q', '--soft', 'HEAD~2']);
   let r = bash(j, 'git commit -m "feat: 调整值班"');
   H.ok('reset --soft 之后重新提交、内容没变：不被审查状态拦', !r, r);
+  r = bash(j, 'git commit -p -m "feat: 调整值班"');
+  H.ok('带 -p（提交工作区里挑的内容）不算重新提交：照旧拦', /审查还没收尾/.test(r), r);
+  r = bash(j, 'git commit --pathspec-from-file=list.txt -m "feat: 调整值班"');
+  H.ok('带 --pathspec-from-file 不算重新提交：照旧拦', /审查还没收尾/.test(r), r);
   // 暂存区里多了新改动：不算重新提交
   H.write(path.join(proj, 'src', 'duty', 'A.java'), 'class A { int x; int w; int v; int more; }\n');
   H.git(proj, ['add', 'src/duty/A.java']);
@@ -223,6 +228,13 @@ H.section('第 82 条：写进代码的文字里不带套件专属的字眼');
   H.ok('套件的名字：拦下', /\[vibe-kit 注释\]/.test(r), r);
   r = edit(java, 'class A {}', '// 列表为空时直接返回，不然会拼出 in ()\nclass A {}');
   H.ok('只写业务原因的注释放行', !r, r);
+  r = edit(java, 'class A {}', '// 进入第二轮审核，审核人改成处长\nclass A {}');
+  H.ok('审批业务里的"第二轮审核"不算', !r, r);
+  r = H.reasonOf(H.hook(h, 'pre-edit', { cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: java, old_string: 'class A {}', new_string: '// 修复审核 r9：空列表\nclass A {}' } }));
+  H.ok('没有会话号（原样再写放不了行）：不查', !/\[vibe-kit 注释\]/.test(r), r);
+  const t0 = Date.now();
+  r = edit(java, 'class A {}', '// review' + ' '.repeat(6000) + 'x\nclass A {}');
+  H.ok('review 后面跟几千个空白：不卡（复审 R3）', Date.now() - t0 < 5000, Date.now() - t0);
   r = edit(java, 'class A {}', '// 解决 r2 和 r3 的冲突：以 r3 为准\nclass A { int r1; }');
   H.ok('变量名 r2、r3 不算', !r, r);
   r = edit(java, 'class A {}', '// preview r2: layout\n// prefix r1: name\nclass A {}');
@@ -256,10 +268,11 @@ H.section('第 80 条：死机、断电之后');
   // 不要紧的状态照旧：坏了从空的记
   const plain = path.join(h.kit, 'state', 'tidy-hint.json');
   fs.writeFileSync(plain, Buffer.alloc(50));
+  H.ok('升级前旧位置的会话流程文件（<会话号>-flow.json）也算要紧的', St.DURABLE && St.DURABLE.test('0f8fad5b-d9cb-469f-a165-70867728950e-flow.json') && St.DURABLE.test('flow.json') && !St.DURABLE.test('tidy-hint.json'), '');
   H.ok('别的状态文件不留上一份、不落盘', !fs.existsSync(plain + '.prev') && JSON.stringify(St.read(plain)) === '{}', '');
   // 锁：进程号还活着（这个测试自己），但记的时间比这次开机早
   const lockFile = path.join(h.root, 'old.lock');
-  fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, token: 'x', at: boot - 60000 }));
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, token: 'x', at: boot - 300000 }));
   const lock = St.acquire(lockFile, { waitMs: 300 });
   H.ok('重启之前留下的锁：进程号被占着也马上拿得到', !!lock, '');
   if (lock) lock.release();
@@ -271,12 +284,12 @@ H.section('第 80 条：死机、断电之后');
   const proj = project(); const d = docs(proj, 'c1', 2, 0);
   const key = R.jobKey(proj, 'c1', 'code', 'change');
   S.updateState('review-points', (o) => { o[S.normKey(d) + '|change'] = { status: 'running', rounds: 1, failStreak: 1, born: S.changeBorn(d), at: Date.now() }; });
-  S.updateState('review-jobs', (o) => { o[key] = { id: 'job80', key, mode: 'code', change: 'c1', point: 'change', root: proj, status: 'running', started: boot - 120000, deadline: Date.now() + 3600000, expectMs: 300000, lenses: ['全量'], state: { '全量': { status: 'sent', sentAt: boot - 60000, pid: process.pid } }, dir: path.join(proj, '.vibe', 'reviews', 'c1', 'job-job80'), file: path.join(proj, '.vibe', 'reviews', 'c1', 'code-change.json') }; });
+  S.updateState('review-jobs', (o) => { o[key] = { id: 'job80', key, mode: 'code', change: 'c1', point: 'change', root: proj, status: 'running', started: boot - 400000, deadline: Date.now() + 3600000, expectMs: 300000, lenses: ['全量'], state: { '全量': { status: 'sent', sentAt: boot - 300000, pid: process.pid } }, dir: path.join(proj, '.vibe', 'reviews', 'c1', 'job-job80'), file: path.join(proj, '.vibe', 'reviews', 'c1', 'code-change.json') }; });
   H.ok('重启之前起的审查进程不算在跑', R.inFlight(d, 'code') === false, '');
   const j0 = { session_id: 'k80', cwd: proj, source: 'startup', hook_event_name: 'SessionStart' };
   fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
   const gl = path.join(proj, '.git', 'index.lock'); fs.writeFileSync(gl, '');
-  fs.utimesSync(gl, new Date(boot - 120000), new Date(boot - 120000));
+  fs.utimesSync(gl, new Date(boot - 300000), new Date(boot - 300000));
   const ctx = H.reasonOf(H.hook(h, 'session-start', j0));
   H.ok('会话开始：说出重启之前留下的 .git/index.lock 和怎么办', /index\.lock/.test(ctx) && /先删掉/.test(ctx), ctx.slice(0, 300));
   H.ok('会话开始：说出被打断的审查，再跑一次只补没交的', /被打断了/.test(ctx) && /c1 的 change/.test(ctx), ctx.slice(0, 300));
@@ -289,7 +302,7 @@ H.section('第 80 条：死机、断电之后');
   H.ok('没有锁文件就不说', !/index\.lock/.test(ctx2), '');
   const U = require(path.join(h.kit, 'lib', 'updater.js'));
   fs.mkdirSync(path.join(h.kit, 'update'), { recursive: true });
-  fs.writeFileSync(path.join(h.kit, 'update', 'lock.json'), JSON.stringify({ pid: process.pid + 1, token: 'u', at: boot - 60000 }));
+  fs.writeFileSync(path.join(h.kit, 'update', 'lock.json'), JSON.stringify({ pid: process.pid + 1, token: 'u', at: boot - 300000 }));
   H.ok('自动更新：重启之前的锁不算有人在装', U.lockHeld() === false, '');
 }
 
@@ -318,6 +331,16 @@ H.section('第 81、84 条：多 change 做到后面回改前面的，当前 cha
   H.ok('做 c3 时给 c2 补了一项任务：当前还是 c3', B.phaseOf(p.task()).change === 'c3', B.phaseOf(p.task()));
   const rv = B.revisits ? B.revisits(p.task(), 'c3') : [];
   H.ok('c2 算回改', rv.map((x) => x.name).join() === 'c2', rv);
+  {
+    // c1、c2 做完，c3 文档写好、一项没勾：会话改的文件同时记到 c2（c2 的审查、修复正在这一段）
+    const q2 = bigProject(false); const f3b = path.join(q2.d3, 'tasks.md'); H.write(f3b, H.read(f3b).replace(/- \[x\]/g, '- [ ]'));
+    B.phaseOf(q2.task());
+    const jq = session(q2.proj); S.setFlow(jq, true, '测试', 'apply'); A.grant(jq, '开工 c3', '', {});
+    edited(jq, path.join(q2.proj, 'src', 'duty', 'Fix.java'), 'class Fix {}\n');
+    const cf = S.readState('change-files');
+    const has = (d) => ((cf[S.normKey(d)] || {}).files || []).some((x) => /fix\.java$/i.test(x));
+    H.ok('c3 一项没勾：改的文件记到 c3，也记到前面开过工的 c2（复审 R1）', has(q2.d3) && has(q2.d2), cf);
+  }
   const j = session(p.proj);
   S.setFlow(j, true, '测试', 'apply'); S.flowTouch(j, p.d3); A.grant(j, '开工 c3', '', {});
   const b = B.bar(j) || {};

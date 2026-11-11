@@ -18,10 +18,13 @@ const os = require('os');
 /** 这次开机的时间（毫秒）。一次进程里算一次 */
 let boot = 0;
 function bootTime() { if (!boot) { try { boot = Date.now() - os.uptime() * 1000; } catch (e) { boot = 0; } } return boot; }
-/** 这个时间点在这次开机之前（留 5 秒余量）：那时记下的进程号现在不作数 */
-function beforeBoot(at) { const b = bootTime(); return !!b && Number(at) > 0 && Number(at) < b - 5000; }
+/**
+ * 这个时间点在这次开机之前：那时记下的进程号现在不作数。留 2 分钟余量（复审 R9：开机后校时把时钟往前拨，拨之前写的记录
+ * 会显得比"开机"还早；拨得比 2 分钟还多的，退回只看进程号和租期，和以前一样）
+ */
+function beforeBoot(at) { const b = bootTime(); return !!b && Number(at) > 0 && Number(at) < b - 120000; }
 // 写完先落盘、留上一份的几份状态（按文件名认，会话目录里的按后缀名）
-const DURABLE = /^(?:review-points|review-jobs|work-baselines|big-task|change-files|reviewed|reviewed-proposal|flow|changes|auto-switch)\.json$/;
+const DURABLE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-)?(?:review-points|review-jobs|work-baselines|big-task|change-files|reviewed|reviewed-proposal|flow|changes|auto-switch)\.json$/i;
 const durable = (file) => DURABLE.test(path.basename(file));
 function owner(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return null; } }
 function release(file, token) {

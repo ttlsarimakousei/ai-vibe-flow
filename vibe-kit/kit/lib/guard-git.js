@@ -304,18 +304,21 @@ function rewriteOnly(g, st) {
     if (g.dyn || Array.isArray(g.files) || commitAll(g.args)) return false;
     const root = repoRoot(g.dir) || g.dir; const rk = normKey(root);
     if ([...st.added].some((a) => a === rk || a.startsWith(rk + '/'))) return false;
-    // -m、-F 这类带值的开关后面的词不算路径；剩下不带 - 的词就是路径（git commit <文件>），带了不认
-    const args = g.args.map((a) => String(a.text)); const valued = /^(?:-m|-F|-C|-c|--message|--file|--author|--date|--reuse-message|--reedit-message|--fixup|--squash|--cleanup|-t|--template)$/;
-    for (let i = 0; i < args.length; i++) { if (valued.test(args[i])) { i++; continue; } if (!args[i].startsWith('-')) return false; }
-    const opt = { encoding: 'utf8', windowsHide: true, timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] };
-    const orig = execFileSync('git', ['--no-optional-locks', '-C', root, 'rev-parse', '-q', '--verify', 'ORIG_HEAD^{commit}'], opt).trim();
-    const head = execFileSync('git', ['--no-optional-locks', '-C', root, 'rev-parse', '-q', '--verify', 'HEAD^{commit}'], opt).trim();
+    // 只认这几个不改提交内容的开关（复审 R10：-p、-i、-o、--pathspec-from-file 提交的是工作区的内容，不是暂存区）。带值的跳过它的值
+    const args = g.args.map((a) => String(a.text));
+    const valued = /^(?:-m|-F|--message|--file|--author|--date|--cleanup|-C|--reuse-message)$/;
+    const plain = /^(?:-[sSnqv]+|--signoff|--gpg-sign|--no-gpg-sign|--no-verify|--no-edit|--allow-empty|--allow-empty-message|--quiet|--verbose|--no-status)$/;
+    for (let i = 0; i < args.length; i++) { if (valued.test(args[i])) { i++; continue; } if (/^(?:-m.|--message=|--file=|--author=|--date=|--cleanup=|--reuse-message=)/.test(args[i]) || plain.test(args[i])) continue; return false; }
+    // 走 workspace：在钩子的预算里，用时记进"最慢的命令"
+    const W = require('./workspace');
+    const orig = W.git(root, ['rev-parse', '-q', '--verify', 'ORIG_HEAD^{commit}']).trim();
+    const head = W.git(root, ['rev-parse', '-q', '--verify', 'HEAD^{commit}']).trim();
     if (!orig || !head || orig === head) return false;
     // 现在的 HEAD 要是 ORIG_HEAD 的祖先（往回退过）；暂存区和 ORIG_HEAD 一样（退出码 0）。不一样、出错都会抛
-    execFileSync('git', ['--no-optional-locks', '-C', root, 'merge-base', '--is-ancestor', head, orig], opt);
-    execFileSync('git', ['--no-optional-locks', '-C', root, 'diff', '--cached', '--quiet', orig, '--'], opt);
+    W.checkedGit(root, ['merge-base', '--is-ancestor', head, orig]);
+    W.checkedGit(root, ['diff', '--cached', '--quiet', orig, '--']);
     return true;
-  } catch (e) { return false; }
+  } catch (e) { if (e && e.code === 'VIBE_HOOK_BUDGET') throw e; return false; }
 }
 
 function consentIssue(g, st, cfg, docs) {
