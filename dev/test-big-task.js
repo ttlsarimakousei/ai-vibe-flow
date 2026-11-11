@@ -60,7 +60,8 @@ H.ok('c1 做完：接 c2', B.phaseOf(task()).phase === 'plan' && B.phaseOf(task(
 change('c2-api', 2, 3);
 H.ok('进度说得出后面还有 c3', /c1-model 任务全勾完/.test(B.progressText(task())) && /c2-api 做到 2\/5/.test(B.progressText(task())) && /后面还有 c3-page/.test(B.progressText(task())), B.progressText(task()));
 change('c1-model', 3, 1);
-H.ok('回改：c1 补了任务，先做 c1', B.phaseOf(task()).change === 'c1-model' && B.phaseOf(task()).phase === 'apply', B.phaseOf(task()));
+// 2026-11-11 起当前 change 只往后走（第 81、84 条）：c1 做完过，补了任务算回改，当前还是 c2
+H.ok('回改：c1 补了任务，当前还是 c2，c1 算回改', B.phaseOf(task()).change === 'c2-api' && B.phaseOf(task()).phase === 'apply' && (!B.revisits || B.revisits(task(), 'c2-api').map((x) => x.name).join() === 'c1-model'), B.phaseOf(task()));
 change('c1-model', 4, 0); change('c2-api', 5, 0); change('c3-page', 2, 0);
 H.ok('全勾完：全面自测', B.phaseOf(task()).phase === 'selftest', B.phaseOf(task()));
 B.setTaskState(task(), { selfTest: { at: Date.now() } });

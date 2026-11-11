@@ -207,11 +207,12 @@ H.section('大任务里做 c3 时回头改 c1（人工模式）');
   r = edit(j, path.join(proj, 'src', 'A.java'), 'class A {}', 'class A { }');
   H.ok('改代码放行', !r, r);
   const b = bar(j);
-  H.ok('步骤条回到 c1，下一步带上 c3 做到哪', /c1（需求改过）/.test(b.steps) && /另有 c3 做到 1\/3/.test(b.next), b);
+  // 2026-11-11 起当前 change 只往后走（第 81、84 条）：步骤条还是 c3，第三行写回改 c1
+  H.ok('步骤条还是 c3，第三行写回改 c1', /c3/.test(b.steps) && !/ c1/.test(b.steps) && /回改 c1 还有 1 项/.test(b.next), b);
   r = edit(j, path.join(d1, 'tasks.md'), '- [ ] 1.4 加日期', '- [x] 1.4 加日期');
   H.ok('勾 c1 补的任务放行', !r, r);
   r = edit(j, path.join(d3, 'tasks.md'), '- [ ] 1.2 没做', '- [x] 1.2 没做');
-  H.ok('c1 没做完：勾 c3 按表的顺序拦（11-03 定的，没变）', /表的顺序/.test(r), r);
+  H.ok('c1 回改没做完：勾 c3 不按表的顺序拦（2026-11-11 改的）', !/表的顺序/.test(r), r);
 }
 
 H.section('提交方式"自动"');

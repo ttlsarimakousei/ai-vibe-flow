@@ -496,6 +496,11 @@ for (const c of cases) {
 for (const c of cases) after1104(c);
 // #438（2026-11-10）：git 里原来就有的 index-old.jsp（旁边有 index.jsp）改了再 add，以前当成备份拦一次
 add('git add 已经跟踪着的 index-old.jsp', 'guard-commit', cmd('git add web/index-old.jsp', 'Bash', { 'web/index.jsp': '<a/>\n', 'web/index-old.jsp': '<b/>\n' }), /放行，没有输出/, V1852);
+// 第 82 条：写进代码的文字里不带审查编号这类套件字眼（这一版改的）
+// 单独一个会话：前面的用例在 sess-diff 上留下了"需求文档被改过"，会先被范围那一道拦下
+const wordsSession = (build) => (kit) => { const o = build(kit); o.j.session_id = 'sess-words'; return o; };
+add('改代码：注释里写审查编号', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 修复审核 r3：空列表\nclass A {}' }, { 'src/A.java': 'class A {}\n' })), /\[vibe-kit 注释\][\s\S]*审核 r3/, NEXT);
+add('改代码：注释只写业务原因', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 列表为空时直接返回\nclass A {}' }, { 'src/A.java': 'class A {}\n' })));
 
 let same = 0;
 let changed = 0;

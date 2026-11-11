@@ -63,7 +63,8 @@ H.section('做 c3 时回头改 c1（全局页图 6）');
   H.ok('自动：接着改代码放行', !r, r);
   H.write(path.join(c.d1, 'tasks.md'), H.read(path.join(c.d1, 'tasks.md')) + '- [ ] 1.4 加日期：src/A.java\n');
   r = H.reasonOf(edit(c.j, path.join(c.d3, 'tasks.md'), '- [ ] 1.2 没做', '- [x] 1.2 没做'));
-  H.ok('c1 补了任务：先做 c1，勾 c3 被拦', /按 openspec\/plan\.md 表的顺序/.test(r) && /c1/.test(r), r);
+  // 2026-11-11 起当前 change 只往后走（第 81、84 条）：c1 补的任务是回改，c3 照样能勾
+  H.ok('c1 补了任务：勾 c3 不按表的顺序拦', !/表的顺序/.test(r), r);
   r = H.reasonOf(edit(c.j, path.join(c.d1, 'tasks.md'), '- [ ] 1.4 加日期', '- [x] 1.4 加日期'));
   H.ok('勾 c1 补的任务放行', !/还不能|表的顺序/.test(r), r);
   if (hasB) H.ok('进度算回 c1 之后的 c3', B.phaseOf(B.forSession(c.j)).change === 'c1' || B.phaseOf(B.forSession(c.j)).change === 'c3', B.phaseOf(B.forSession(c.j)));

@@ -233,4 +233,140 @@ H.section('第 82 条：写进代码的文字里不带套件专属的字眼');
   H.ok('不是代码文件（README.md）不管', !/\[vibe-kit 注释\]/.test(r), r);
 }
 
+H.section('第 80 条：死机、断电之后');
+{
+  const St = require(path.join(h.kit, 'lib', 'state-store.js'));
+  // 拿旧版跑时没有这几个函数：照旧算开机时间，断言不过，不让脚本崩
+  const boot = St.bootTime ? St.bootTime() : Date.now() - require('os').uptime() * 1000;
+  H.ok('算得出这次开机的时间', boot > 0 && boot < Date.now(), boot);
+  // 要紧的状态：写两次，本体变成一片 0（断电），读出来是上一份
+  S.updateState('review-points', (o) => { o['x|change'] = { status: 'completed', blocking: 0, n: 1 }; });
+  S.updateState('review-points', (o) => { o['x|change'].n = 2; });
+  const file = path.join(h.kit, 'state', 'review-points.json');
+  H.ok('写的时候留了上一份', fs.existsSync(file + '.prev'), '');
+  fs.writeFileSync(file, Buffer.alloc(300));
+  const got = St.read(file);
+  H.ok('本体成了一片 0：读到的是上一份，不是空的', got['x|change'] && got['x|change'].n === 1, got);
+  S.updateState('review-points', (o) => { if (o['x|change']) o['x|change'].n = 3; });
+  H.ok('接着上一份记，没有从空的重新记', (St.read(file)['x|change'] || {}).n === 3, St.read(file));
+  // 不要紧的状态照旧：坏了从空的记
+  const plain = path.join(h.kit, 'state', 'tidy-hint.json');
+  fs.writeFileSync(plain, Buffer.alloc(50));
+  H.ok('别的状态文件不留上一份、不落盘', !fs.existsSync(plain + '.prev') && JSON.stringify(St.read(plain)) === '{}', '');
+  // 锁：进程号还活着（这个测试自己），但记的时间比这次开机早
+  const lockFile = path.join(h.root, 'old.lock');
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, token: 'x', at: boot - 60000 }));
+  const lock = St.acquire(lockFile, { waitMs: 300 });
+  H.ok('重启之前留下的锁：进程号被占着也马上拿得到', !!lock, '');
+  if (lock) lock.release();
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, token: 'y', at: Date.now() }));
+  const busy = St.acquire(lockFile, { waitMs: 200 });
+  H.ok('这次开机之后的锁：进程还活着就照旧等', !busy, '');
+  if (busy) busy.release();
+  // 审查进程：重启之前起的，进程号被别的程序占着（这里用这个测试自己的进程号）
+  const proj = project(); const d = docs(proj, 'c1', 2, 0);
+  const key = R.jobKey(proj, 'c1', 'code', 'change');
+  S.updateState('review-points', (o) => { o[S.normKey(d) + '|change'] = { status: 'running', rounds: 1, failStreak: 1, born: S.changeBorn(d), at: Date.now() }; });
+  S.updateState('review-jobs', (o) => { o[key] = { id: 'job80', key, mode: 'code', change: 'c1', point: 'change', root: proj, status: 'running', started: boot - 120000, deadline: Date.now() + 3600000, expectMs: 300000, lenses: ['全量'], state: { '全量': { status: 'sent', sentAt: boot - 60000, pid: process.pid } }, dir: path.join(proj, '.vibe', 'reviews', 'c1', 'job-job80'), file: path.join(proj, '.vibe', 'reviews', 'c1', 'code-change.json') }; });
+  H.ok('重启之前起的审查进程不算在跑', R.inFlight(d, 'code') === false, '');
+  const j0 = { session_id: 'k80', cwd: proj, source: 'startup', hook_event_name: 'SessionStart' };
+  fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
+  const gl = path.join(proj, '.git', 'index.lock'); fs.writeFileSync(gl, '');
+  fs.utimesSync(gl, new Date(boot - 120000), new Date(boot - 120000));
+  const ctx = H.reasonOf(H.hook(h, 'session-start', j0));
+  H.ok('会话开始：说出重启之前留下的 .git/index.lock 和怎么办', /index\.lock/.test(ctx) && /先删掉/.test(ctx), ctx.slice(0, 300));
+  H.ok('会话开始：说出被打断的审查，再跑一次只补没交的', /被打断了/.test(ctx) && /c1 的 change/.test(ctx), ctx.slice(0, 300));
+  R.sweep(proj);
+  const st = (S.readState('review-jobs')[key] || {}).state || {};
+  H.ok('被打断的角度记成没交，原因写电脑重启过', (st['全量'] || {}).status === 'failed' && /重启/.test((st['全量'] || {}).why), st);
+  H.ok('不算一次没拿到结论（连续 3 次的数不加）', (P.record(d, 'change').failStreak || 0) === 1, P.record(d, 'change'));
+  fs.unlinkSync(gl);
+  const ctx2 = H.reasonOf(H.hook(h, 'session-start', Object.assign({}, j0, { session_id: 'k80b' })));
+  H.ok('没有锁文件就不说', !/index\.lock/.test(ctx2), '');
+  const U = require(path.join(h.kit, 'lib', 'updater.js'));
+  fs.mkdirSync(path.join(h.kit, 'update'), { recursive: true });
+  fs.writeFileSync(path.join(h.kit, 'update', 'lock.json'), JSON.stringify({ pid: process.pid + 1, token: 'u', at: boot - 60000 }));
+  H.ok('自动更新：重启之前的锁不算有人在装', U.lockHeld() === false, '');
+}
+
+H.section('第 81、84 条：多 change 做到后面回改前面的，当前 change 只往后走');
+{
+  const B = require(path.join(h.kit, 'lib', 'big-task.js'));
+  const TASK = '值班';
+  const bigProject = (legacy) => {
+    const proj = project();
+    const names = ['c1', 'c2', 'c3'];
+    H.write(path.join(proj, 'openspec', 'plan.md'), '# 计划\n\n## ' + TASK + '\n\n' + (legacy ? '' : '探索记录：explore/' + TASK + '.md\n\n') + '| 模块 | 变更名 | 状态 | 说明 |\n|---|---|---|---|\n' + names.map((c) => '| | ' + c + ' | | |\n').join(''));
+    if (!legacy) H.write(path.join(proj, 'openspec', 'explore', TASK + '.md'), '# 探索\n\n## 定了的\n\n调整值班\n\n## 还没定的\n\n无\n\n## 范围\n\n只做值班\n\n' + names.map((c) => '## change: ' + c + '\n\n目标\n\n').join('') + '## 落地偏差\n\n');
+    const d1 = docs(proj, 'c1', 2, 0); const d2 = docs(proj, 'c2', 2, 0); const d3 = docs(proj, 'c3', 1, 1);
+    return { proj, d1, d2, d3, task: () => B.tasks(proj).find((x) => x.name === TASK) };
+  };
+  const addTask = (d) => { const f = path.join(d, 'tasks.md'); H.write(f, H.read(f) + '- [ ] 1.9 回改：src/duty/A.java\n'); };
+  const p = bigProject(false);
+  H.ok('c1、c2 做完，c3 做到 1/2：当前是 c3', B.phaseOf(p.task()).change === 'c3', B.phaseOf(p.task()));
+  const fin = () => (B.finishedMap ? B.finishedMap(p.task()) : {});
+  H.ok('做完过的记下来了', !!fin().c1 && !!fin().c2, fin());
+  // c2 审过了
+  const fp2 = P.fingerprint(p.d2, 'change');
+  S.updateState('review-points', (o) => { o[S.normKey(p.d2) + '|change'] = { status: 'completed', blocking: 0, issues: 0, rounds: 1, fingerprint: fp2, born: S.changeBorn(p.d2), at: Date.now() }; });
+  H.ok('c2 审过', P.settled(p.d2, 'change'), P.record(p.d2, 'change'));
+  addTask(p.d2);
+  H.ok('做 c3 时给 c2 补了一项任务：当前还是 c3', B.phaseOf(p.task()).change === 'c3', B.phaseOf(p.task()));
+  const rv = B.revisits ? B.revisits(p.task(), 'c3') : [];
+  H.ok('c2 算回改', rv.map((x) => x.name).join() === 'c2', rv);
+  const j = session(p.proj);
+  S.setFlow(j, true, '测试', 'apply'); S.flowTouch(j, p.d3); A.grant(j, '开工 c3', '', {});
+  const b = B.bar(j) || {};
+  H.ok('状态栏第二行前面是大任务的名字，中间是 c3', /^值班：探索/.test(b.steps) && /c3/.test(b.steps) && !/c2/.test(b.steps), b);
+  H.ok('状态栏第三行写回改 c2 还有 1 项', /回改 c2 还有 1 项/.test(b.next), b);
+  let r = H.reasonOf(hookOut('pre-edit', j, 'Edit', { file_path: path.join(p.d3, 'tasks.md'), old_string: '- [ ] 1.2 没做', new_string: '- [x] 1.2 没做' }));
+  H.ok('c2 有回改没做完：c3 的任务照样能勾，不按表的顺序拦', !/表的顺序/.test(r), r);
+  r = H.reasonOf(hookOut('pre-edit', j, 'Edit', { file_path: path.join(p.d2, 'tasks.md'), old_string: '- [ ] 1.9 回改', new_string: '- [x] 1.9 回改' }));
+  H.ok('c2 回改的任务也能勾', !/表的顺序/.test(r) && !/不在当前 apply 许可/.test(r), r);
+  // c2 回改做完：审过的结论不重开（任务文字、代码都变了）
+  const f2 = path.join(p.d2, 'tasks.md'); H.write(f2, H.read(f2).replace('- [ ] 1.9 回改', '- [x] 1.9 回改'));
+  H.write(path.join(p.proj, 'src', 'duty', 'A.java'), 'class A { int revisit; }\n');
+  H.ok('c2 回改做完：审过的结论不重开', P.settled(p.d2, 'change'), [P.fingerprint(p.d2, 'change'), fp2]);
+  // c3 做完，c2 又补了一项：后面都做完了，回头做 c2
+  const f3 = path.join(p.d3, 'tasks.md'); H.write(f3, H.read(f3).replace(/- \[ \]/g, '- [x]'));
+  addTask(p.d2);
+  H.ok('后面的都做完了：回头做前面剩下的', B.phaseOf(p.task()).change === 'c2', B.phaseOf(p.task()));
+  // 老任务（没有探索记录）照旧从头找
+  const q = bigProject(true);
+  B.phaseOf(q.task()); addTask(q.d2);
+  H.ok('老任务照旧按表的顺序：c2 补了任务就排回前面', B.phaseOf(q.task()).change === 'c2', B.phaseOf(q.task()));
+}
+
+H.section('第 83 条：定原因要的数据跟着问题反馈上报');
+{
+  const Iv = require(path.join(h.kit, 'lib', 'invocation.js'));
+  const W = require(path.join(h.kit, 'lib', 'workspace.js'));
+  const proj = project();
+  let err = null; const started = Date.now();
+  try {
+    Iv.run(() => {
+      Iv.phase('命令：读开关');
+      W.git(proj, ['status', '--porcelain']);
+      if (Iv.note) Iv.note('Git diff（慢仓库）', 6800);
+      const until = started + 2600; while (Date.now() < until) { /* 等预算用完 */ }
+      Iv.phase('命令：串着 cd');
+    }, { budgetMs: 2500 });
+  } catch (e) { err = e; }
+  H.ok('预算用完的错误上带着这一次的用时', !!err && err.code === 'VIBE_HOOK_BUDGET' && /各阶段：开始/.test(err.timeline) && /命令：读开关/.test(err.timeline), err && err.timeline);
+  H.ok('列出最慢的命令和各用了多久', !!err && /最慢的命令：Git diff（慢仓库） 6\.8 秒/.test(err.timeline) && /Git status（p\d+）/.test(err.timeline), err && err.timeline);
+  const Fb = require(path.join(h.kit, 'lib', 'feedback.js'));
+  Fb.recordHookError('verify-gate', { session_id: 'k83', cwd: proj, hook_event_name: 'Stop' }, err);
+  const rec = Fb.listRecords().find((x) => /verify-gate 出错：本机检查超时/.test(x.text));
+  H.ok('问题反馈里带上这一次的用时、最慢的命令、电脑配置', !!rec && /用时（自动带上的）/.test(rec.text) && /最慢的命令/.test(rec.text) && /核，内存/.test(rec.text), rec && rec.text.slice(0, 900));
+  Fb.recordHookError('verify-gate', { session_id: 'k83', cwd: proj, hook_event_name: 'Stop' }, err);
+  const again = Fb.listRecords().find((x) => /verify-gate 出错：本机检查超时/.test(x.text));
+  H.ok('又出现的那一行也带用时', !!again && /## 又出现了[\s\S]*各阶段：/.test(again.text), again && again.text.slice(-600));
+  // 审查：一个角度到 20 分钟上限被结束、没交
+  const key = 'k83-review';
+  S.updateState('review-jobs', (o) => { o[key] = { id: 'job83', key, mode: 'proposal', change: '', point: '', root: proj, status: 'running', started: Date.now() - 1000, deadline: Date.now() + 3600000, expectMs: 300000, files: 23, chars: 289000, lenses: ['事实和范围'], state: { '事实和范围': { status: 'sent', sentAt: Date.now() - 1250000, pid: 0, calls: [{ ms: 1200000, killed: true, apiMs: 0, turns: 0, out: 0, chars: 289000, err: '' }] } } }; });
+  R.failLens('job83', '事实和范围', '审查进程没了，没交结论');
+  const rv = Fb.listRecords().find((x) => /审查有 1 个角度没交结论/.test(x.text));
+  H.ok('审查没交的问题反馈里带每次请求：用时、到上限被结束、提示多少字', !!rv && /每次请求（自动带上的）/.test(rv.text) && /第 1 次 1200 秒（到 20 分钟上限被结束）/.test(rv.text) && /提示 289 千字/.test(rv.text), rv && rv.text.slice(0, 900));
+}
+
 H.done('2026-11-11 这批：第 77—84 条和 #455、#456、#457');

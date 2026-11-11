@@ -95,7 +95,8 @@ H.section('打勾的顺序：老任务不拦，新任务照拦');
   S.setFlow(k, true, '测试', 'apply');
   S.flowTouch(k, path.join(n, 'openspec', 'changes', 'c2'));
   A.grant(k, '开工 c2', '', {});
-  H.ok('新任务：照拦（带拦截编号）', /按 openspec\/plan\.md 表的顺序做/.test(tick(k, 'c2', 1)) && /拦截编号/.test(tick(k, 'c2', 1)), tick(k, 'c2', 1));
+  // 2026-11-11 起打勾一律不按表的顺序拦（第 81、84 条）
+  H.ok('新任务：也不按表的顺序拦', !/表的顺序/.test(tick(k, 'c2', 1)), tick(k, 'c2', 1));
 }
 
 H.section('表外的 change 能开工');
