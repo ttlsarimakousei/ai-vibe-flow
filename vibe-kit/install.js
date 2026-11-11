@@ -14,6 +14,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// 只有直接运行（node install.js …）才动手；被别的脚本 require 进来的什么都不做。2026-11-11 开发时为了查语法 require 了它，
+// 把套件装进了开发电脑真实的用户目录（docs/decisions.md 记着）。查语法用 node --check
+if (require.main !== module) return;
+
 const SRC = __dirname;
 const FROM_PACKAGE = fs.existsSync(path.join(SRC, 'claude')) && fs.existsSync(path.join(SRC, 'kit'));
 // 从安装包运行：装进 CLAUDE_CONFIG_DIR 或 ~/.claude。装进去的那份（~/.claude/vibe-kit/install.js）：用户目录就是它上一层，
@@ -382,7 +386,8 @@ function mergeSettings(s, remove, hooksOnly) {
     SessionStart: [{ hooks: [hook('session-start.js')] }],
     PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit', hooks: [fast('after-tool')] }],
     PostToolUseFailure: [{ matcher: 'Bash|PowerShell', hooks: [fast('after-tool')] }],
-    Stop: [{ hooks: [fast('verify-gate')] }],
+    // 收工检查的本机预算是 40 秒（lib/session-out.js 的 BUDGET_MS）：写明等 120 秒，不靠 Claude Code 的默认值
+    Stop: [{ hooks: [Object.assign(hook('verify-gate.js'), { timeout: 120 })] }],
   };
   // 钩子：先把自己以前加的摘掉（按单个钩子摘，不连累同一组里别人的钩子；命令方式、HTTP 方式的都认），再加新的。重复安装不会越加越多
   s.hooks = s.hooks || {};
