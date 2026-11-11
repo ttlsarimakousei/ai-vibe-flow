@@ -223,3 +223,16 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - **提交方式"自动"**（`guard-git.consentIssue`）：`askedNow`（用户开口的这一轮、上次提交在这句话之前、不是问句、斜杠命令、开工和"继续"这类）算做完一件事；基线里的 `dirtyFiles` 减掉基线之后提交过的（`git diff --name-only <基线提交> HEAD`）。`apply-scope.dirtyNote` 读这个会话刚记的基线（五分钟内），有没提交的改动（`openspec/`、`.vibe/`、`.claude/` 下的不算，和 `consentIssue` 用同一个 `NOT_USER_DIRTY`）就让模型先问用户，`dirtyTold` 记着说过；开口钩子（说开工、/vk-resume）和 `after-tool`（提问框选开工、自动开工之后第一个工具做完）都从它拿。`askedNow` 还要求这句话像是让改东西、要提交的文件都是这句话之后才用 Edit、Write 改的。
 - **流程状态**（`session-flow.setFlow`）：不在流程里、动过的变更都没了，这时重新进流程：清掉 `changes`、`touchedAt`、`applyScope`、`reqEdited`，`<会话>-changes` 里不在了的目录也清掉（#436）。
 - `big-task.nothingLeft`：探索记录"还没定的"只有一行、开头是"无 / 没有 / 暂无"加标点的算空（#435）。`tidy.isTracked`：`git add` 的过程文件检查、`edited-files.commitPlan`（`tools/commit.js`）都不把已经跟踪着的文件当过程文件（#438）。
+
+## 20261111 这批（第 77—84 条；#455、#456、#457）
+
+核对和改法见 [feedback-20261111.md](feedback-20261111.md)。结构上的变化：
+
+- **一个 change 的文件范围**（`lib/flow-policy.js` 的 `changeScope`）：它的产物里点了名的文件（tasks、specs 里点了名的目录下面的都算，只写文件名的按文件名认），加上做它的会话用编辑工具改成功的（`after-tool` 调 `noteEdit`，记到 `currentChangeDir` 算出的当前 change 上，存 `state/change-files.json`，按 `born` 认同名重建）。代码审查取材料（`review-runner.materials`）、审查点 change 的指纹（`changeFiles`）、`oldDone` 都用它；认不出（`known` 为假）照旧全收，`--all` 不筛。范围外的文件进 `material.outside`，`review-scope.planRound` 把上一轮记在它们上面的问题丢掉（`dropped`）。
+- **拦提交的说法**（`guard-git.consentIssue`）：列出每个没收尾的变更、审查点、条数、下一步命令。`rewriteOnly`：暂存区和 `ORIG_HEAD` 一样、HEAD 是它的祖先、这条命令没 `git add`、不带路径和 `-a` 的 `git commit`，算重新提交，不按"做完一件事""审查没收尾"拦（#457）。
+- **代码里的套件字眼**（`pre-edit` 的 `wordsCheck`）：只比这次新写进去的文字（Edit 的 new_string 对 old_string、Write 的整份对文件现在的内容）；同一处只拦一次（`tidy.blockOnce`），`noBypass`。
+- **钩子预算按时机给**（`session-out.budgetFor`）：Stop 40 秒、UserPromptSubmit 30 秒，别的 12 秒；安装器登记 Stop 钩子写 `timeout: 120`。
+- **收工催审查**（`flow-policy.instruction`、`upTo`）：这个点有没处理的 P1、P2 催处理，等复审催复审；同一个状态最多说 3 次，第 3 次记进全自动报告。`stop` 里变更目录按 `normKey` 去重。
+- **当前 change 只往后走**（`big-task`）：`finishedMap` 记做完过的 change（`state/big-task.json` 里大任务那一条的 `finished`，`phaseOf` 和 `after-tool` 改 tasks.md 时记）；`phaseOf` 从做完过的最后一个后面找；`revisits` 列回改。`bar` 前面带大任务名，第三行分"回改""另有"；在审的 change 后面有开过工的就不显示它。`guard-spec` 不再按表的顺序挡打勾。`flow-policy.revisited`：做完过、当前 change 在它后面的，`sameInput` 不重开审过的结论。
+- **死机、断电**（`state-store`）：`DURABLE` 那几份写完 `fsync` 再改名，改名前把上一份拷成 `.prev`；读出来是空的、一片 0、5 秒前写的还读不懂，用 `.prev`。`bootTime`、`beforeBoot`：锁、审查进程（`review-runner.alive`）、活跃会话（`work-sessions`）、自动更新的锁、后台探索的锁、清状态时的锁，时间比这次开机早的按失效。重启打断的审查角度记 `reboot`，不进 `noteFail`、不记超时。`session-start` 说出比开机早的 `.git/index.lock` 和被打断的审查。`cleanState` 删掉本体不在了的 `.prev`。
+- **慢的原因自动上报**（`invocation`）：一次调用里记各阶段开始的时间（`phases`）和每条子进程的用时（`note`，`workspace.readGit` 调）；预算用完的错误带 `timeline`，`feedback.recordHookErrorRaw` 写进正文和"又出现了"那一行，加上 `diag.recent(7)` 的停留统计和电脑配置。审查每次请求记 `ms`、`killed`（到 `CALL_MS` 被结束）、`apiMs`、`turns`、`chars`、`out` 进 `review-jobs` 的 `state[角度].calls`，`reportReview` 带上。这条替代 `diag.js` 开头"只记本机、不上报"（仓库主人 2026-11-11 定的）。
