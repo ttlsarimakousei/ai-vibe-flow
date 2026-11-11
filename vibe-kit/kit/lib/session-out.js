@@ -84,6 +84,15 @@ function epochFor(j) {
  * 作为命令运行：读标准输入 → handle → 打印结果 → 退出码 0。任何异常都放行，但记进问题反馈（放行了用户看不到，只有那里有）。
  * opts.onError(j, e)：出错、超出预算时要回的话（跑命令的检查用它：像推送的不放行，见 pushFailOut）
  */
+/*
+ * 一次钩子调用的本机检查预算（毫秒）。按时机给（问题表第 79 条、#450—#452，2026-11-11）：
+ *   收工、用户开口    一轮只跑一次，是推着流程往下走的那两个；慢电脑上一条 git 要几秒，12 秒不够，超了整道检查放行，
+ *                     自动模式审完没人催它改（那台电脑的流水账里审完紧接着就是"预算用完"）。给 40 秒、30 秒
+ *   别的（每次工具调用都跑）  照旧 12 秒：它们慢了每条命令都慢
+ * Claude Code 等命令钩子默认 60 秒，收工的钩子安装器写明等 120 秒（install.js）
+ */
+const BUDGET_MS = { Stop: 40000, SubagentStop: 40000, UserPromptSubmit: 30000 };
+const budgetFor = (j) => BUDGET_MS[String((j && j.hook_event_name) || '')] || 12000;
 function cli(handle, opts) {
   let raw = '';
   process.stdin.setEncoding('utf8');
@@ -98,7 +107,7 @@ function cli(handle, opts) {
     };
     // 改过文件、跑过命令、用户开过口：git 的跨钩子缓存换一代（lib/workspace.js 的 crossCall）。同一次工具调用的几个钩子只换一次
     try { epochFor(j); } catch (e) { /* 换不了：缓存按 20 秒自己过期 */ }
-    Promise.resolve().then(() => require('./invocation').run(() => handle(j), { budgetMs: 12000 })).then(print).catch((e) => {
+    Promise.resolve().then(() => require('./invocation').run(() => handle(j), { budgetMs: budgetFor(j) })).then(print).catch((e) => {
       // 判断不了就放行
       try { require('./feedback').recordHookError(path.basename(process.argv[1] || 'hook', '.js'), j, e); } catch (err) { /* 记不了就算了 */ }
       try { if (opts && typeof opts.onError === 'function') print(opts.onError(j, e)); } catch (err) { /* 替代输出也出错：放行 */ }
@@ -106,4 +115,4 @@ function cli(handle, opts) {
   });
 }
 
-module.exports = { kitCodeHashes, kitCodeDrift, blockOut, askOut, pushFailOut, cli };
+module.exports = { kitCodeHashes, kitCodeDrift, blockOut, askOut, pushFailOut, cli, budgetFor };

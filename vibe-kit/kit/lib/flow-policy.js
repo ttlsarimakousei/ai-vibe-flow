@@ -379,6 +379,11 @@ function planNext(j, c) {
 function instruction(dir, point) {
   const mode = modeOfPoint(point); const rec = record(dir, point);
   if (halted(dir, point)) return '审查点 ' + point + ' 连续 ' + rec.failStreak + ' 次没拿到结论，不再催：这个点算没审过，收工报告里写明"' + point + ' 没审成"；用户说审再审。';
+  const name = path.basename(dir); const run = 'review.js run --change ' + name + ' --mode ' + mode + ' --point ' + point;
+  // 这个点审过、有没处理的 P1、P2：催处理，不催重审（第 79 条：以前一律催"执行 review.js run"，模型再跑一次得到"文件没变不用审"，问题还是没人改）
+  const left = rec.status === 'completed' ? blockingOf(rec) : 0;
+  if (left > 0) return '审查点 ' + point + '（' + name + '）上一轮审出的 ' + left + ' 条 P1、P2 还没处理，不用重新审：读问题清单 ' + String(rec.report || '.vibe/reviews/' + name + '/' + mode + '-' + point + '.json').split(path.sep).join('/') + '，逐条核实，成立的改掉并验证，不成立的写依据；写好处理明细后执行 ' + run + ' --decisions <处理明细>（先登记再复审，一条命令）。';
+  if (rec.status === 'needs_review') return '审查点 ' + point + '（' + name + '）的意见登记过了、还没复审：执行 ' + run + '，只审改过的地方，结论在命令输出里，照 next 做。';
   const what = point === 'tasks' ? '四份需求文档写完了，审一次整套。' : point === CHANGE ? '这个 change 的任务全部做完了，审一次整个 change 的改动。' : '';
   return what + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，结论在命令输出里，照 next 做。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。需求变化先沟通并同步相关产物和用例。';
 }
@@ -390,6 +395,13 @@ function once(j, id, signature, text) {
   if (!j.session_id) return text;
   let fresh = false; S.updateState(j.session_id + '-workflow-prompts', o => { if (o[id] !== signature) { o[id] = signature; fresh = true; } });
   return fresh ? text : '';
+}
+/** 同一个状态最多说 max 次（once 是一次）。说够了那一次调 onLast */
+function upTo(j, id, signature, max, text, onLast) {
+  if (!j.session_id) return text;
+  let n = 0; S.updateState(j.session_id + '-workflow-prompts', o => { const prev = o[id] && typeof o[id] === 'object' ? o[id] : null; n = prev && prev.sig === signature ? (prev.n || 0) + 1 : 1; o[id] = { sig: signature, n }; });
+  if (n === max && typeof onLast === 'function') onLast();
+  return n <= max ? text : '';
 }
 // 人工模式的提示每个用户要求最多问一次（用户 2026-10-16 定的）：同一个要求里后面又改了也不再问，只把记下的内容跟到最新；
 // 用户提新要求时，内容比上次记下的又变了才再问。turn 是这一轮用户消息的编号，取不到时只按内容判断。
@@ -426,7 +438,8 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
   // 这一轮用户最后的表态是不审、不测（提问框选了"就这样定稿""直接写下一份""不用"，或者原话说了不用）：那一份不再问
   const noReview = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'review');
   const noTest = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'test');
-  const dirs = [...new Set([...touched, ...S.flowChanges(j)].filter(d => fs.existsSync(d)))];
+  // 按 normKey 去重：touched 是原样的路径、flowChanges 是小写正斜杠的，同一个 change 以前会算两遍（第 79 条的"最多催 3 次"一轮就数了两次）
+  const seen = new Set(); const dirs = [...touched, ...S.flowChanges(j)].filter((d) => { const k = S.normKey(d); if (seen.has(k) || !fs.existsSync(d)) return false; seen.add(k); return true; });
   for (const dir of dirs) {
     // 自动下每个 change 按自己走到哪算（回改前面的 change、接下一个时，几个 change 不在同一段）
     const mode = cfg.autoMode ? (S.changeStarted(dir) || applyingNow(j, dir) ? 'code' : 'proposal') : S.flowStage(j) === 'apply' ? 'code' : 'proposal';
@@ -470,7 +483,13 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
           ? name + ' 的四份需求文档写完了（proposal、specs、design、tasks）。交代写了什么，用 Ask 问要不要审整套（选项写"审一下""定稿并开工""只定稿""我要改"；定稿和开工在这一问里一起定，不再另问开工），用户已明确要求审查的直接审。' + after
           : where + ' 写完了。停下提醒用户看一看：交代写了什么、哪里要留意，用 Ask 引导下一步（选项写"写下一份（' + nextDoc + '）""我要改"）。这里不问审查，四份写完再问；用户自己说审的照做。');
       if (msg) out.push(msg);
-    } else { const msg = once(j, key(dir, point), fingerprint(dir, point) + ':' + (record(dir, point).rounds || 0) + ':' + (record(dir, point).failStreak || 0), instruction(dir, point)); if (msg) out.push(msg); }
+    } else {
+      const rec = record(dir, point); const sig = fingerprint(dir, point) + ':' + (rec.rounds || 0) + ':' + (rec.failStreak || 0);
+      // 有没处理的问题、等复审：模型不动就接着催，同一个状态最多催 3 次（以前只催一次，它收工了就没人管）；催够了记进全自动报告
+      const unsettled = (rec.status === 'completed' && blockingOf(rec) > 0) || rec.status === 'needs_review';
+      const msg = unsettled ? upTo(j, key(dir, point) + '|unsettled', sig + ':' + rec.status, 3, instruction(dir, point), () => { try { require('./report').note(j, { kind: 'hand', title: path.basename(dir) + ' 的审查点 ' + point + (rec.status === 'needs_review' ? ' 修了还没复审' : ' 有 ' + blockingOf(rec) + ' 条 P1、P2 没处理'), detail: '收工时催了 3 次没有动' }); } catch (e) { /* 记不了不影响 */ } }) : once(j, key(dir, point), sig, instruction(dir, point));
+      if (msg) out.push(msg);
+    }
   }
   // 人工模式、不在 OpenSpec 任务组里的代码改动：改完问一次审查、自测。用户答了不用，这个会话后面再改代码不再问那一样
   // （用户 2026-10-30 定的，替代 2026-10-16"新要求、内容变了才再问"）。验收用例只写在走 OpenSpec 的 design.md 里，这里只说自测（审核第三节第 7 条）
