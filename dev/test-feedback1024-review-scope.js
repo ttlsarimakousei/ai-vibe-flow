@@ -46,7 +46,8 @@ const H = require('./lib/harness');
   H.section('#189 多仓：--base 写成 仓库=提交，几个仓库各用各的基线');
   const shell = path.join(h.work, 'shell'); H.write(path.join(shell, 'CLAUDE.md'), '# 壳子\n');
   const g1 = H.makeRepo(path.join(shell, 'gwjh'), { 'a.js': 'a\n' }); const g2 = H.makeRepo(path.join(shell, 'gwjhmq'), { 'b.js': 'b\n' });
-  H.makeRepo(shell, { 'openspec/changes/add-page/proposal.md': '## Why\n\n页面。\n\n## What Changes\n\n- 改 gwjh/a.js\n', 'openspec/changes/add-page/tasks.md': '- [x] 1.1 改 gwjh/a.js：加页面\n', '.gitignore': '.vibe/\ngwjh/\ngwjhmq/\n' });
+  H.makeRepo(shell, { 'openspec/changes/add-page/proposal.md': '## Why\n\n页面。\n\n## What Changes\n\n- 改 gwjh/a.js\n', 'openspec/changes/add-page/tasks.md': '- [x] 1.1 改 gwjh/a.js：加页面\n- [x] 1.2 改 gwjhmq/b.js：发消息\n', '.gitignore': '.vibe/\ngwjh/\ngwjhmq/\n' });
+  // 20261111 起代码审查只收这个 change 的文件（第 77 条）：两个仓库里改的文件都在任务里点了名
   const b1 = H.git(g1, ['rev-parse', 'HEAD']).out.trim(); const b2 = H.git(g2, ['rev-parse', 'HEAD']).out.trim();
   H.write(path.join(g1, 'a.js'), 'a2\n'); H.write(path.join(g2, 'b.js'), 'b2\n');
   const change = S.allChanges(shell).find((c) => c.name === 'add-page');
