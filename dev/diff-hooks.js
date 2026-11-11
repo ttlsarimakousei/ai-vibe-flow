@@ -93,6 +93,7 @@ const V1257 = '20261105.1257'; // 第 57、58 条：四份文档写完审一次�
 const V1612 = '20261109.1612'; // 0234 议题这一批：cd 到当前目录、cd 之后只跑 git 的钩子直接改写
 const V0152 = '20261110.0152'; // 第 75 条：启动方式写回项目说明、测试账号表 login.json、tmp 里的账号和登录场景拦一次
 const V1852 = '20261110.1852'; // 第 76 条：做任务时用户让改需求接着做、写需求时不改代码不能放行；#438 已跟踪的文件不当过程文件
+const V0003 = '20261112.0003'; // 第 82 条：写进代码的文字里不带审查编号这类套件字眼
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
 // 旧版在 from 之前（还没有这个毛病）、在 to 或者之后（已经改过）的应该一样，在两者之间的应该不一样
@@ -499,7 +500,7 @@ add('git add 已经跟踪着的 index-old.jsp', 'guard-commit', cmd('git add web
 // 第 82 条：写进代码的文字里不带审查编号这类套件字眼（这一版改的）
 // 单独一个会话：前面的用例在 sess-diff 上留下了"需求文档被改过"，会先被范围那一道拦下
 const wordsSession = (build) => (kit) => { const o = build(kit); o.j.session_id = 'sess-words'; return o; };
-add('改代码：注释里写审查编号', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 修复审核 r3：空列表\nclass A {}' }, { 'src/A.java': 'class A {}\n' })), /\[vibe-kit 注释\][\s\S]*审核 r3/, NEXT);
+add('改代码：注释里写审查编号', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 修复审核 r3：空列表\nclass A {}' }, { 'src/A.java': 'class A {}\n' })), /\[vibe-kit 注释\][\s\S]*审核 r3/, V0003);
 add('改代码：注释只写业务原因', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 列表为空时直接返回\nclass A {}' }, { 'src/A.java': 'class A {}\n' })));
 
 let same = 0;
