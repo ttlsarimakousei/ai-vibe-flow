@@ -294,6 +294,30 @@ function commitFiles(g, st) {
 
 const PROPOSAL_FILE = /(?:^|\/)openspec\/changes\/(?!archive\/)[^/]+\/(?:proposal\.md|design\.md|tasks\.md|specs\/)/;
 
+/**
+ * 这次提交只是把已有的提交重新提交一遍（#457：用户让把没推的合并成一条，reset --soft 之后再 commit）：
+ * 暂存区的内容和 reset 之前的 HEAD（ORIG_HEAD）一模一样，而且现在的 HEAD 不是它。没有新改动。
+ * 只认不带路径、不带 -a 的普通 git commit，这条命令里没有 git add；查不了（没有 ORIG_HEAD、git 出错）算不是
+ */
+function rewriteOnly(g, st) {
+  try {
+    if (g.dyn || Array.isArray(g.files) || commitAll(g.args)) return false;
+    const root = repoRoot(g.dir) || g.dir; const rk = normKey(root);
+    if ([...st.added].some((a) => a === rk || a.startsWith(rk + '/'))) return false;
+    // -m、-F 这类带值的开关后面的词不算路径；剩下不带 - 的词就是路径（git commit <文件>），带了不认
+    const args = g.args.map((a) => String(a.text)); const valued = /^(?:-m|-F|-C|-c|--message|--file|--author|--date|--reuse-message|--reedit-message|--fixup|--squash|--cleanup|-t|--template)$/;
+    for (let i = 0; i < args.length; i++) { if (valued.test(args[i])) { i++; continue; } if (!args[i].startsWith('-')) return false; }
+    const opt = { encoding: 'utf8', windowsHide: true, timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] };
+    const orig = execFileSync('git', ['--no-optional-locks', '-C', root, 'rev-parse', '-q', '--verify', 'ORIG_HEAD^{commit}'], opt).trim();
+    const head = execFileSync('git', ['--no-optional-locks', '-C', root, 'rev-parse', '-q', '--verify', 'HEAD^{commit}'], opt).trim();
+    if (!orig || !head || orig === head) return false;
+    // 现在的 HEAD 要是 ORIG_HEAD 的祖先（往回退过）；暂存区和 ORIG_HEAD 一样（退出码 0）。不一样、出错都会抛
+    execFileSync('git', ['--no-optional-locks', '-C', root, 'merge-base', '--is-ancestor', head, orig], opt);
+    execFileSync('git', ['--no-optional-locks', '-C', root, 'diff', '--cached', '--quiet', orig, '--'], opt);
+    return true;
+  } catch (e) { return false; }
+}
+
 function consentIssue(g, st, cfg, docs) {
   const j = st.j || {};
   const msg = messageOf(g.args, docs);
@@ -332,6 +356,8 @@ function consentIssue(g, st, cfg, docs) {
   // 自动：做完一件完整的事才提交。OpenSpec 实施里，上次提交之后又勾完了任务、或者审查修复刚收尾；做到一半、审查没收尾不提交
   const current = allChanges(st.cwd0).filter((c) => flowChanges(j).some((d) => normKey(d) === normKey(c.dir)));
   if (!(cfg.autoMode || fl.on && fl.stage === 'apply')) return '';
+  // 只是把没推的提交重新提交一遍（reset --soft 之后合成一条，内容和原来的一样，没有新改动）：下面"做完一件事""审查没收尾"管的是新改动，不拦（#457）
+  if (rewriteOnly(g, st)) return '';
   if (!current.length) return cfg.autoMode ? '[vibe-kit] 这次提交没有对应的当前 OpenSpec 变更，不能借用全自动许可；交代改动后问用户是否提交。' : '';
   const root = repoRoot(g.dir) || g.dir; const baselines = readState('work-baselines');
   // 开工时没提交的改动一律算用户的（用户 2026-11-10 定的：开工时提示他要不要先提交，不提交就算）。开工之后提交过的（他说了先提交）不再算
@@ -343,8 +369,15 @@ function consentIssue(g, st, cfg, docs) {
   })));
   if (original.size) { const mixed = files.filter((f) => original.has(f)); if (mixed.length) return '[vibe-kit] 暂存文件在开工前已有用户改动：' + mixed.join('、') + '（开工时没提交的都算）。先核对 diff 与文件段归属，不能自动全部提交；交代范围后取得用户的明确提交许可。'; }
   // 只有审出了问题、还没处理完的才算"没收尾"（问题表第 25、26 条）：审过之后代码又改了的、连续没拿到结论停了的不算，以前它们一直挡着，自动提交就永远提交不了
-  const open = current.some(c => P.reviewable(c.dir, 'code').some(p => P.fixPending(c.dir, p, cfg)));
-  if (open) return '[vibe-kit] 审查还没收尾，成立的问题全部修完、验证并审完后一起提交，不逐轮提交。';
+  // 说清是哪个变更、哪个审查点、几条、下一步的命令（#455：以前只说"审查还没收尾"，模型对着别的变更 resolve，报"没有待处理结论"）
+  const open = current.flatMap((c) => P.reviewable(c.dir, 'code').filter((p) => P.fixPending(c.dir, p, cfg)).map((p) => ({ name: c.name, point: p, rec: P.record(c.dir, p) })));
+  if (open.length) {
+    const left = (r) => (r.blocking === undefined ? Number(r.issues) || 0 : Number(r.blocking) || 0);
+    const what = open.slice(0, 4).map((o) => o.name + ' 的审查点 ' + o.point + (o.rec.status === 'needs_review' ? '（修了，还没复审）' : '（' + left(o.rec) + ' 条 P1、P2 没处理）')).join('；') + (open.length > 4 ? ' 等 ' + open.length + ' 个' : '');
+    const first = open[0]; const run = 'review.js run --change ' + first.name + ' --mode code --point ' + first.point;
+    const next = first.rec.status === 'needs_review' ? '跑 ' + run + ' 复审' : '逐条核实，成立的改、不成立的写依据，写好处理明细后跑 ' + run + ' --decisions <处理明细>（先登记再复审）；问题清单在 ' + String(first.rec.report || '.vibe/reviews/' + first.name + '/code-' + first.point + '.json').replace(/\\/g, '/');
+    return '[vibe-kit] 审查还没收尾：' + what + '。' + next + '。全部修完、验证并审完后一起提交，不逐轮提交。';
+  }
   if (current.some((c) => require('./review-runner').inFlight(c.dir))) return '[vibe-kit] 审查还在运行，等结论回来、修完并验证后一起提交。';
   const since = require('../hooks/verify-gate').lastCommitAt(root);
   const reviewReady = current.every((c) => { try { return require('../lib/task-types').tasks(c.dir).length > 0; } catch (e) { return false; } }) && current.some((c) => P.reviewable(c.dir, 'code').some((p) => P.settled(c.dir, p) && (P.record(c.dir, p).at || 0) > since));
