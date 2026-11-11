@@ -225,6 +225,8 @@ H.section('第 82 条：写进代码的文字里不带套件专属的字眼');
   H.ok('只写业务原因的注释放行', !r, r);
   r = edit(java, 'class A {}', '// 解决 r2 和 r3 的冲突：以 r3 为准\nclass A { int r1; }');
   H.ok('变量名 r2、r3 不算', !r, r);
+  r = edit(java, 'class A {}', '// preview r2: layout\n// prefix r1: name\nclass A {}');
+  H.ok('英文词里带 review、fix 的（preview r2、prefix r1）不算', !r, r);
   r = edit(java, '// 复审 r5 留下的\nclass A {}', '// 复审 r5 留下的\nclass A { int x; }');
   H.ok('改之前这一处就有的不管', !r, r);
   r = H.reasonOf(hookOut('pre-edit', j, 'Write', { file_path: path.join(proj, 'src', 'duty', 'C.java'), content: '// 审核 r7 要求加的类\nclass C {}\n' }));
@@ -249,6 +251,8 @@ H.section('第 80 条：死机、断电之后');
   H.ok('本体成了一片 0：读到的是上一份，不是空的', got['x|change'] && got['x|change'].n === 1, got);
   S.updateState('review-points', (o) => { if (o['x|change']) o['x|change'].n = 3; });
   H.ok('接着上一份记，没有从空的重新记', (St.read(file)['x|change'] || {}).n === 3, St.read(file));
+  let prevOk = false; try { prevOk = !!JSON.parse(fs.readFileSync(file + '.prev', 'utf8'))['x|change']; } catch (e) { prevOk = false; }
+  H.ok('坏的那份没有拿去盖掉上一份', prevOk, '');
   // 不要紧的状态照旧：坏了从空的记
   const plain = path.join(h.kit, 'state', 'tidy-hint.json');
   fs.writeFileSync(plain, Buffer.alloc(50));

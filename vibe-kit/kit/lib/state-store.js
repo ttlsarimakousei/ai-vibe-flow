@@ -82,8 +82,8 @@ function atomicText(file, value, opts) {
       // 先落盘：断电时改名可能已经落到目录里、内容还在缓存里，留下一个空文件（NTFS 只保证目录项）
       const fd = fs.openSync(tmp, 'w');
       try { fs.writeSync(fd, String(value), null, 'utf8'); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-      // 上一份留着：这一份万一还是坏了，读的时候用它
-      try { if (fs.statSync(file).size > 0) fs.copyFileSync(file, file + '.prev'); } catch (e) { /* 第一次写，没有上一份 */ }
+      // 上一份留着：这一份万一还是坏了，读的时候用它。现在这份本身读不懂（断电留下的坏文件）就不拿它盖掉好的上一份
+      try { const cur = fs.readFileSync(file, 'utf8'); if (cur.trim()) { JSON.parse(cur); fs.writeFileSync(file + '.prev', cur, 'utf8'); } } catch (e) { /* 第一次写、或者现在这份是坏的：上一份不动 */ }
     } else fs.writeFileSync(tmp, String(value), 'utf8');
     for (let i = 0; i < 6; i++) { try { fs.renameSync(tmp, file); return true; } catch (e) { pause(20); } }
   } catch (e) { /* 磁盘或权限错误由调用方显示降级 */ }
