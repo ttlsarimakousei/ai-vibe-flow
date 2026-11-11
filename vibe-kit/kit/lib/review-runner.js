@@ -59,7 +59,7 @@ function proposalReferences(rows) {
   return { references, required, contextOnly: [...context].filter(ref => !references.has(ref)) };
 }
 function materials(opts, change) {
-  const items = [], skipped = [], uncovered = [], excluded = [], bases = [], files = new Set(), inputs = new Map(), currents = new Map(); let contextOnly = [];
+  const items = [], skipped = [], uncovered = [], excluded = [], bases = [], files = new Set(), inputs = new Map(), currents = new Map(), outside = new Set(); let contextOnly = [];
   // current：这个文件现在的内容，下一轮拿来比改了什么（代码的 text 还带着基线差异）；role：只用来核对、不审它本身的材料；note：范围文件里的一句话
   const add = (file, text, root, source, role, current, note) => {
     if (files.has(file)) return;
@@ -137,6 +137,11 @@ function materials(opts, change) {
     const isCommit = (root, ref) => !!W.git(root, ['rev-parse', '--verify', ref + '^{commit}']).trim();
     const used = new Set();
     const hint = '--base ' + roots.map((r) => (path.relative(opts.cwd, r).replace(/\\/g, '/') || '.') + '=<改之前的提交>').join(' --base ');
+    // 只收这个 change 的文件（第 77 条、#456，flow-policy.js 的 changeScope）：别的会话、别的变更在同一个仓库里没提交的改动不审。
+    // 用户点名审某一组的按那一组点名的文件走（下面的 selected）；--all 不筛
+    const policy = require('./flow-policy');
+    const scope = change && !opts.all && (!opts.point || opts.point === 'change' || policy.isCross(opts.point)) ? policy.changeScope(change.dir) : null;
+    let othersAll = 0;
     for (const root of roots) {
       const pair = pairs.find((x) => S.normKey(x.root) === S.normKey(root));
       const own = pair ? pair.ref : bare.find((b) => isCommit(root, b));
@@ -161,12 +166,13 @@ function materials(opts, change) {
       });
       if (old) excluded.push({ root, untracked: old, reason: '基线之前就在、之后没改过的未跟踪文件，不算这次的改动' });
       const files = [...new Set(tracked.concat(fresh))];
-      let inherited = 0;
+      let inherited = 0; const others = [];
       for (const file of files) {
         if (/^(?:\.vibe|openspec)\//.test(file)) continue;
         // 整个 change 的审查：开工前就有改动、开工后没再动的文件不是这个 change 的（前面 change 没提交的改动就是这样，复审 20261105 第 2 条）
         if (opts.point === 'change' && saved && preexisting(file) && mtime(file) <= (saved.at || 0)) { inherited++; continue; }
         const f = path.join(root, file);
+        if (scope && scope.known && !scope.has(f)) { others.push(file); outside.add(path.relative(opts.cwd, f).replace(/\\/g, '/')); continue; }
         if (opts.point && change) { const selected = require('./flow-policy').pointFiles(change.dir, opts.point); if (selected.length && !selected.some(p => S.normKey(p) === S.normKey(f))) continue; }
         const label = path.relative(opts.cwd, f).replace(/\\/g, '/'); const current = load(f, root, label, true);
         if (!current) continue; // 读取 Git 差异之前先查链接归属，避免 Git 跟随外部联接。
@@ -177,9 +183,12 @@ function materials(opts, change) {
         add(label, text, root, f, undefined, current.missing ? '' : current.text, current.missing ? '已删除' : oldDirty && (oldDirty.dirtyFiles || []).includes(file) ? '开工前已有改动，不能全部认作本次改动' : '');
       }
       if (inherited) excluded.push({ root, dirty: inherited, reason: '开工前就有改动、开工后没动过的文件，不算这个 change 的改动' });
+      if (others.length) { othersAll += others.length; excluded.push({ root, others: others.length, files: others.slice(0, 20), reason: '不是这个 change 改的（它的任务、设计里没点名，做它的会话也没用编辑工具改过），不审。确实是这个 change 的：在 tasks.md 里点名，或者加 --all 按这个仓库的全部改动审' }); }
     }
     // 不带等号的 --base 一个仓库都不认得：是写错了，不当成缺基线
     for (const b of bare) if (!used.has(b)) throw new Error('审查基线 ' + b + ' 不是本地提交（这几个仓库里都没有）；几个仓库各写各的：' + hint);
+    // 改过的文件都不算这个 change 的：说清楚，不报成"没有代码改动"
+    if (change && !skipped.length && !items.length && !opts.docsOnly && othersAll) throw new Error('开工基线之后改过的 ' + othersAll + ' 个文件都不算这个 change 的（任务、设计里没点名，做它的会话也没用编辑工具改过）：' + excluded.flatMap((x) => x.files || []).slice(0, 8).join('、') + '。里面有这个 change 的：在 tasks.md 里点名再审，或者加 --all 按这个仓库的全部改动审；这个 change 本来就不改代码的，加 --docs-only');
     // 一个代码文件都没有：以前照样审，只审了需求文档也不说（第 71 条内网报告看到的：基线记晚了，改动在基线之前）
     if (change && !skipped.length && !items.length && !opts.docsOnly) throw new Error('没有代码改动可审：开工基线之后 ' + roots.map((r) => path.basename(r)).join('、') + ' 里没有改过的代码文件（openspec、.vibe 不算）。代码在开工基线之前就改了或提交了的，用 --base 指定改之前的提交：' + hint + '；这个 change 本来就不改代码的，加 --docs-only 再跑一次');
     if (change) for (const row of artifacts().filter((r) => !/revisions\.md$/.test(r.file))) add(row.file, row.text, change.dir, undefined, '需求文档');
@@ -187,7 +196,7 @@ function materials(opts, change) {
   const batches = []; let batch = [], size = 0;
   for (const item of items) { if (size + item.text.length > 80000 && batch.length) { batches.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
   if (batch.length) batches.push(batch);
-  return { items, skipped, uncovered, excluded, bases, batches, contextOnly, inputs: [...inputs.values()], currents };
+  return { items, skipped, uncovered, excluded, bases, batches, contextOnly, inputs: [...inputs.values()], currents, outside };
 }
 /** 随提案交付的补充材料变化后结论失效；实施源码的变化留给代码审查，不重开需求审查。 */
 function inputsCurrent(inputs) {
@@ -359,6 +368,16 @@ function prepare(opts) {
   const key = jobKey(opts.cwd, opts.change, opts.mode, opts.point, opts.base); const cfg = S.readConfig();
   const policy = require('./flow-policy');
   if (opts.point && (!change || !policy.reviewable(change.dir, opts.mode).includes(opts.point))) throw new Error('审查点 ' + opts.point + ' 现在还不能审：需求文档用 tasks（四份写完审整套），代码用 change（这个 change 的任务全部做完审整个 change）；用户点名审单份文档、某一组的，那一份要写好、那一组要做完');
+  // 这个 change 还没记过改了哪些文件（升级前开的工）：把当前会话记录里用编辑工具改过的补进去（第 77 条）。要在算指纹之前：指纹和材料用同一个范围
+  if (change && opts.mode === 'code' && !opts.all) {
+    try {
+      const rec = S.readState('change-files')[S.normKey(change.dir)];
+      if (!(rec && rec.born === S.changeBorn(change.dir) && (rec.files || []).length)) {
+        const E = require('./edited-files'); const s = E.findSession({ cwd: opts.cwd, marker: /review\.js/ });
+        if (s && s.transcript) policy.learnEdits(change.dir, E.editedFiles(E.entriesOf(s.transcript), opts.cwd).map((x) => x.abs));
+      }
+    } catch (e) { /* 认不出是哪个会话：只按点了名的和记过的算 */ }
+  }
   const pointHash = opts.point ? policy.fingerprint(change.dir, opts.point) : '';
   const before = W.fingerprint(opts.cwd, opts.mode === 'code' ? 'code' : 'all');
   const input = pointHash || before.hash;
@@ -406,7 +425,7 @@ function prepare(opts) {
     job.files = material.currents.size; job.chars = material.items.reduce((n, x) => n + x.text.length, 0);
     const currents = {}; for (const [f, cur] of material.currents) currents[f] = { text: cur.text, source: cur.source };
     fs.mkdirSync(job.dir, { recursive: true });
-    if (!store.atomicWrite(path.join(job.dir, 'plan.json'), { scoped: job.scoped, why: plan.why, noChange, open: plan.open, closed: plan.closed, carried: plan.carried, kept: plan.kept, changed: plan.changed, itemFiles: plan.scoped ? [...new Set(plan.items.map((x) => x.file))] : [], currents, skipped: material.skipped, uncovered: material.uncovered, excluded: material.excluded, contextOnly: material.contextOnly, materialInputs: material.inputs, deferred: Sc.deferredOf(prevRound), born, fingerprintNote: before.truncated ? '这个目录不是 git 仓库，文件太多，只核对了前面的文件：后面的文件改了认不出来，"审查后输入没变"对它们不作数' : undefined })) throw new Error('审查材料写不进 ' + job.dir);
+    if (!store.atomicWrite(path.join(job.dir, 'plan.json'), { scoped: job.scoped, why: plan.why, noChange, open: plan.open, closed: plan.closed, carried: plan.carried, dropped: plan.dropped, kept: plan.kept, changed: plan.changed, itemFiles: plan.scoped ? [...new Set(plan.items.map((x) => x.file))] : [], currents, skipped: material.skipped, uncovered: material.uncovered, excluded: material.excluded, contextOnly: material.contextOnly, materialInputs: material.inputs, deferred: Sc.deferredOf(prevRound), born, fingerprintNote: before.truncated ? '这个目录不是 git 仓库，文件太多，只核对了前面的文件：后面的文件改了认不出来，"审查后输入没变"对它们不作数' : undefined })) throw new Error('审查材料写不进 ' + job.dir);
     const round = { stage: Sc.stageText(opts.mode, opts.point), scoped: job.scoped, carry: !plan.scoped && opts.point === 'design' ? Sc.carryover(folder, ['proposal', 'specs']) : !plan.scoped && opts.point === 'tasks' ? Sc.carryover(folder, ['proposal', 'specs', 'design']) : [], cross: policy.isCross(opts.point) ? policy.crossText(change.dir, opts.point) : '', paths: !plan.scoped && opts.mode === 'proposal' && change ? pathFacts(change, material.contextOnly) : null };
     const facts = !plan.scoped && !noChange ? safeFacts(opts, material) : '';
     list.forEach((l, i) => {
@@ -658,6 +677,8 @@ function finish(id) {
     const fresh = Sc.dropClosed(result.issues.filter((x) => !off.includes(x)), plan.closed);
     if (fresh.dropped.length) result.repeated = fresh.dropped;
     result.issues = fresh.kept.concat(plan.carried || []);
+    // 上一轮记在别的会话、别的变更的文件上的问题：那些文件现在不算这个 change 的，问题不带了（第 77 条）
+    if ((plan.dropped || []).length) result.droppedOthers = plan.dropped.length;
   } else result.covered = labels;
   if (outside.length) {
     result.suggestions = outside.map((x) => ({ file: x.file, problem: x.problem }));
@@ -732,6 +753,9 @@ function resolve(opts) {
   const policy = require('./flow-policy');
   const pointRec = opts.point && policy.record(change.dir, opts.point);
   // 失败、部分覆盖、超时、取消的结果没有审完全部材料，处理其中的意见也不能把这个点记成已处理。
+  // 已经处理完的、等复审的说清楚（#455：以前一律说"没有完整完成的审查结果…先重新审查"，处理完的也这么说，模型又去审一遍）
+  if (pointRec && pointRec.status === 'resolved') throw new Error('变更 ' + change.name + ' 的审查点 ' + opts.point + ' 的意见已经登记处理完了（resolved），不用再登记。提交被"审查还没收尾"拦的，照那条提示里写的变更和审查点处理，不是这一个');
+  if (pointRec && pointRec.status === 'needs_review') throw new Error('变更 ' + change.name + ' 的审查点 ' + opts.point + ' 的意见已经登记过，等复审（needs_review）：跑 review.js run --change ' + change.name + ' --mode ' + (opts.mode === 'proposal' ? 'proposal' : 'code') + ' --point ' + opts.point + ' 复审，不用再登记');
   if (pointRec && pointRec.status !== 'completed') throw new Error('审查点 ' + opts.point + ' 没有完整完成的审查结果（当前：' + (pointRec.status || '未审查') + '），不能登记处理；先重新审查这个点');
   // 不带审查点的整套审查：按 --mode 读提案或代码的记录（Codex C20：以前固定读代码的，整套提案审查的意见配不上报告）
   const kind = opts.mode === 'proposal' ? 'proposal' : 'code';

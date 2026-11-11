@@ -44,7 +44,7 @@ const LENSES = {
 const RECHECK = '这是复审，不是重新审一遍。只做两件事：1. "上一轮的问题"逐条看现在改对了没有：改对了不报；没改对、只改了一部分的照旧报，severity 不变。2. 材料里这次的改动有没有改出新问题（改错了、改漏了、和上下文对不上）。没改过的内容不要审，看着有问题也不报。"已处理"里的问题已经定过了，不要再报。新问题只报 P1、P2。材料里带 note 的照 note 说的做。';
 
 // 不自己加（用户 2026-11-03 定的，第 43 条）
-const SCOPE_NOTE = '只看这次需求碰到的地方：框架和基础设施（登录鉴权框架、网关、ORM、基类、系统架构）默认是好的，不读实现、不提建议，只看这次的代码怎么用它们。只报这次需求和探索记录里有的事：要做的没做到、写出来的代码或文档错了，照报。需求和探索记录里没有、你觉得还可以加的，scope 写 out，不算问题，人工核验时列给用户；别因为"更完善"要求加东西。';
+const SCOPE_NOTE = '只看这次需求碰到的地方：框架和基础设施（登录鉴权框架、网关、ORM、基类、系统架构）默认是好的，不读实现、不提建议，只看这次的代码怎么用它们。别的模块、别的需求的问题不报：材料里没有的文件不审，哪怕看着有问题；只有这次的改动把别处弄坏了才报，file 写这次改的那个文件。只报这次需求和探索记录里有的事：要做的没做到、写出来的代码或文档错了，照报。需求和探索记录里没有、你觉得还可以加的，scope 写 out，不算问题，人工核验时列给用户；别因为"更完善"要求加东西。';
 const P3 = /^P3$/i;
 /** 挡通过的问题有几条：除了 P3、范围外建议都算（模型没写 severity 的当 P2） */
 function blocking(issues) { return (issues || []).filter((x) => !P3.test(String((x && x.severity) || '')) && !/^out$/i.test(String((x && x.scope) || ''))).length; }
@@ -212,18 +212,21 @@ function planRound(material, prior) {
     changed.push(file); changedLines += d.changed;
     items.push(...chunkItems(file, '这次的改动（- 是改之前，+ 是改之后，其余是上下文）：\n' + d.text, cur.root, cur.source, cur.role));
   }
+  // 上一轮审过、现在不算这个 change 的文件（别的会话、别的变更改的，第 77 条）：不送，记在它上面的问题也不带了
+  const outside = material.outside || new Set();
   for (const file of Object.keys(prior.files)) {
-    if (material.currents.has(file)) continue;
+    if (material.currents.has(file) || outside.has(file)) continue;
     changed.push(file);
     items.push(...chunkItems(file, '这个文件已经删除', '', file));
   }
   if (totalLines && changedLines / totalLines > 0.6) return { scoped: false, why: '改动超过六成，按第一轮全量审' };
   const decided = new Map(prior.decisions.map((d) => [d.id, d]));
-  const open = []; const closed = prior.closed.slice(-50); const carried = []; const also = new Set();
+  const open = []; const closed = prior.closed.slice(-50); const carried = []; const also = new Set(); const dropped = [];
   for (const x0 of prior.issues) {
     // 上一版存下的文件名可能对不上材料（#420）：这里再认一次
     const file = matchLabel(x0.file, material.currents);
     const x = file === x0.file ? x0 : Object.assign({}, x0, { file });
+    if (outside.has(x.file)) { dropped.push(brief(x)); continue; }
     const d = decided.get(x.id);
     if (d && CLOSED.has(d.action)) { closed.push(Object.assign(brief(x), { action: d.action, reason: d.reason })); continue; }
     // 修了的要核对；没登记的也要：文件改过的送去问，没改过的不用问
@@ -235,7 +238,7 @@ function planRound(material, prior) {
     else { const c = Object.assign({}, x); delete c.id; carried.push(c); }
   }
   for (const file of also) { const cur = material.currents.get(file); items.push(...noted(chunkItems(file, cur.text, cur.root, cur.source, cur.role), '这个文件这次没改，只核对"上一轮的问题"里写它的那几条，别的不审')); }
-  return { scoped: true, items, batches: batchesOf(items), open, closed, carried, kept: kept.filter((f) => !also.has(f)), changed };
+  return { scoped: true, items, batches: batchesOf(items), open, closed, carried, dropped, kept: kept.filter((f) => !also.has(f)), changed };
 }
 // ---------- 几个角度的结果合起来 ----------
 function bigrams(s) { const t = String(s || '').replace(/[\s，,。.；;：:、"'“”（）()]+/g, ''); const out = new Set(); for (let i = 0; i + 1 < t.length; i++) out.add(t.slice(i, i + 2)); return out; }

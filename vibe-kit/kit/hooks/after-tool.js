@@ -45,6 +45,10 @@ function handle(j) {
         const d = A.dirtyNote(j); if (d) scopeNote = '[vibe-kit 提醒] ' + d.model;
       }
     } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' && e.code !== 'VIBE_HOOK_BUDGET') require('../lib/feedback').recordHookError('after-tool 开工范围', j, e); }
+    // 编辑工具改成功的文件记到现在在做的 change 上：代码审查只收这个 change 的文件（第 77 条，lib/flow-policy.js 的 changeScope）
+    try {
+      if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(String(j.tool_name || '')) && successful(j) && S.flowState(j).on) require('../lib/flow-policy').noteEdit(j, (j.tool_input && (j.tool_input.file_path || j.tool_input.notebook_path)) || '');
+    } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' && e.code !== 'VIBE_HOOK_BUDGET') require('../lib/feedback').recordHookError('after-tool 记改过的文件', j, e); }
     const cmd = String(j.tool_input && j.tool_input.command || '');
     // 失败的命令走 PostToolUseFailure，顶层是 error、没有 tool_response（docs/claude-code-facts.md 三版实测；2026-10-17 审核问题 11）
     const output = String(j.tool_response && (j.tool_response.stderr || j.tool_response.stdout || j.tool_response.error) || j.error || '');

@@ -46,11 +46,90 @@ function changedCode(dir) {
 }
 // 指纹不看的目录和文件，和 workspace.js 的 fingerprintOne 一样：构建输出变了不让审过的结论失效（复审 20261105 第 6 条）
 const NOT_INPUT = /(^|[\\/])(\.vibe|router-data|node_modules|target|build|dist|out)([\\/]|$)|(^|[\\/])(secrets\.json|\.env(?:\.[^\\/]*)?)$/i;
-/** 整个 change 的代码范围：任务点了名的文件，加开工基线以来改过的文件 */
+/*
+ * 这个 change 的文件范围（问题表第 77 条、#456，2026-11-11）。起因：代码审查按"开工基线以来这个仓库里改过的全部文件"取材料，
+ * 同一个仓库里别的会话、别的变更没提交的改动也算进来，别的模块的问题被记下来，不改就一直挡提交。
+ * 归属按文件认，不让模型判断：
+ *   点了名的   这个 change 的 proposal、design、tasks、specs 里写到的、现在在的文件；tasks、specs 里写到的目录（下面的都算）；只写了文件名的按文件名认
+ *   改过的     做这个 change 的会话用编辑工具改成功的（after-tool 调 noteEdit 记进 state/change-files.json，跨会话留着）；
+ *              审查脚本再把当前会话记录里改过的补进去（learnEdits：升级前开的工、还没记过的也认得出）
+ * 一个在的文件都没点名、也没记过改动：known 是 false，调用方不筛，照旧全收（不然会变成"没有代码可审"）。
+ * 用 Bash 改的（sed、脚本生成的）认不出：在 tasks.md 里点名，或者审的时候加 --all。
+ * 审查取材料（review-runner.js 的 materials）和审查点的指纹（下面的 changeFiles）用同一个范围：别人的文件变了，不让这个 change 审过的结论失效。
+ */
+const NOT_OWN = /(^|\/)(\.vibe|openspec|\.claude|node_modules)(\/|$)/;
+function changeScope(dir) {
+  return require('./invocation').memo('change-scope|' + S.normKey(dir), () => {
+    const roots = S.projectRootsOf(dir).map((r) => path.resolve(r));
+    const files = new Set(); const dirs = new Set(); const names = new Set();
+    for (const f of S.artifactFiles(dir)) {
+      if (/revisions\.md$/.test(f)) continue;
+      const dirsToo = /tasks\.md$/.test(f) || /[\\/]specs[\\/]/.test(f);
+      for (const line of read(f).split(/\r?\n/)) for (const t of S.pathTokens(line)) {
+        const tok = String(t).replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+        if (!tok || NOT_OWN.test(tok)) continue;
+        if (!tok.includes('/')) { if (/\.[A-Za-z0-9]{1,8}$/.test(tok)) names.add(tok.toLowerCase()); continue; }
+        for (const root of path.isAbsolute(tok) ? [''] : roots) {
+          const abs = root ? path.join(root, tok) : tok;
+          let st = null; try { st = fs.statSync(abs); } catch (e) { continue; }
+          if (st.isDirectory()) { if (dirsToo) dirs.add(S.normKey(abs)); } else files.add(S.normKey(abs));
+        }
+      }
+    }
+    const rec = S.readState('change-files')[S.normKey(dir)];
+    const edited = new Set(rec && (!rec.born || rec.born === S.changeBorn(dir)) ? rec.files || [] : []);
+    const has = (abs) => { const k = S.normKey(abs); if (files.has(k) || edited.has(k) || names.has(k.split('/').pop())) return true; for (const d of dirs) if (k.startsWith(d + '/')) return true; return false; };
+    return { known: files.size + dirs.size + edited.size > 0, has, named: files.size + dirs.size, edited: edited.size };
+  });
+}
+/** 这几个文件是做这个 change 时改的：记下来（去重，最多 3000 个）。同名变更归档后重建的从头记 */
+function learnEdits(dir, list) {
+  const k = S.normKey(dir); const born = S.changeBorn(dir);
+  const add = [...new Set((list || []).map((f) => S.normKey(f)))].filter((f) => !NOT_OWN.test(f));
+  if (!add.length) return false;
+  const cur = S.readState('change-files')[k];
+  if (cur && cur.born === born && add.every((f) => (cur.files || []).includes(f))) return false;
+  S.updateState('change-files', (o) => { const r = o[k] && o[k].born === born ? o[k] : { born, files: [] }; r.files = [...new Set((r.files || []).concat(add))].slice(-3000); r.at = Date.now(); o[k] = r; });
+  try { require('./invocation').forget('change-scope|' + k); require('./invocation').forget('change-fingerprint|' + k); } catch (e) { /* 不在钩子里 */ }
+  return true;
+}
+/**
+ * 这个会话现在在做哪个 change（目录）：大任务按当前 change（全面自测、等核验时算最后一个做出代码的）；不是大任务的看切到的、开工范围里唯一的、动过的唯一的。
+ * 不在流程里、定不了返回 ''
+ */
+function currentChangeDir(j) {
+  const st = S.flowState(j); if (!st.on) return '';
+  const B = require('./big-task'); const task = B.forSession(j);
+  if (task) {
+    const name = B.phaseFor(j, task).change;
+    const c = (name && task.changes.find((x) => x.name === name && x.exists)) || task.changes.slice().reverse().find((x) => x.exists && !x.archived && x.done > 0);
+    return c ? c.dir : '';
+  }
+  if (st.currentDir && fs.existsSync(st.currentDir)) return st.currentDir;
+  const scoped = Object.keys((st.applyScope || {}).dirs || {}).filter((d) => fs.existsSync(d));
+  if (scoped.length === 1) return scoped[0];
+  const touched = S.flowChanges(j).filter((d) => fs.existsSync(d));
+  return touched.length === 1 ? touched[0] : '';
+}
+/** 编辑工具改成功了一个文件（after-tool 调）：在流程里的，算到现在在做的 change 上 */
+function noteEdit(j, file) {
+  if (!file) return false;
+  const abs = path.resolve((j && j.cwd) || process.cwd(), String(file));
+  if (NOT_OWN.test(S.normKey(abs))) return false;
+  const dir = currentChangeDir(j);
+  return dir ? learnEdits(dir, [abs]) : false;
+}
+/** 开工基线以来改过的代码里算这个 change 的：范围认得出就只留范围里的，认不出照旧全算 */
+function ownChanged(dir) {
+  const all = changedCode(dir).filter((f) => !NOT_INPUT.test(f));
+  const scope = changeScope(dir);
+  return scope.known ? all.filter((f) => scope.has(f)) : all;
+}
+/** 整个 change 的代码范围：任务点了名的文件，加开工基线以来改过的、算这个 change 的文件 */
 function changeFiles(dir) {
   const out = new Map();
   for (const g of groups(dir)) for (const f of namedFiles(dir, g)) out.set(S.normKey(f), f);
-  for (const f of changedCode(dir)) if (!NOT_INPUT.test(f)) out.set(S.normKey(f), f);
+  for (const f of ownChanged(dir)) out.set(S.normKey(f), f);
   return [...out.keys()].sort().map((k) => out.get(k));
 }
 /** 一个文件的指纹：太大的不读内容，看大小和修改时间 */
@@ -243,7 +322,8 @@ function oldDone(j, dir) {
   try {
     if (fs.statSync(path.join(dir, 'tasks.md')).mtimeMs >= at) return false;
     // 碰过之后又改了代码的不算旧（修用户报的问题）。后面的 change 开工了，工作区的改动算它的
-    if (!laterStarted(dir) && changedCode(dir).some((f) => { try { return fs.statSync(f).mtimeMs >= at; } catch (e) { return true; } })) return false;
+    // 只看算这个 change 的文件（第 77 条）：别的会话在同一个仓库里改了别的模块，不该让早做完的 change 又被催着审
+    if (!laterStarted(dir) && ownChanged(dir).some((f) => { try { return fs.statSync(f).mtimeMs >= at; } catch (e) { return true; } })) return false;
     return true;
   } catch (e) { return false; }
 }
@@ -573,4 +653,4 @@ function selfTestWords(words) {
   }
   return false;
 }
-module.exports = { oncePrompt, groups, isCross, crossText, CHANGE, autoBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };
+module.exports = { changeScope, learnEdits, noteEdit, currentChangeDir, oncePrompt, groups, isCross, crossText, CHANGE, autoBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, automaticApply, planNext, instruction, stop, actionIssue, explicit, testCommand };
