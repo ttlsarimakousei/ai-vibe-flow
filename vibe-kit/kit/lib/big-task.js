@@ -203,15 +203,52 @@ function phaseFor(j, task) {
   if (c && !c.archived && flowState(j).keepCurrent === name) return { phase: 'apply', change: name };
   return phaseOf(task);
 }
+/*
+ * 当前 change 只往后走（第 81、84 条，仓库主人 2026-11-11 定的，替代 11-03 的"回改前面的 change 补了任务，它就排回前面"）。
+ * 起因：做到 c3 时回头改 c2 的需求、补任务，状态栏换成 c2，之后一直在 c2 转（打勾按表的顺序挡、c2 的审查重开又把 c3 的代码一起审）。
+ *   做完过：任务全勾完过一次的 change（记在 state/big-task.json 的 finished，看到全勾完就记，after-tool 改了 tasks.md 也记）。归档的也算
+ *   当前：做完过的最后一个 change 后面，按表的顺序第一个没做完的；后面都做完了，才回头做前面剩下的
+ *   回改：做完过、又有没勾的任务的（revisits）。不抢当前，状态栏第二行写"回改 c2 还有 2 项"
+ * 老任务（没有探索记录）照旧从头找。升级前就补了任务、没记过"做完过"的，照旧按表的顺序
+ */
+/** 这个大任务里做完过的 change：{ 名字: 什么时候 }。现在全勾完、还没记的顺手记上 */
+function finishedMap(task) {
+  if (!task || task.legacy) return {};
+  let seen = {};
+  try { seen = Object.assign({}, taskState(task).finished || {}); } catch (e) { seen = {}; }
+  const add = task.changes.filter((c) => c.exists && c.total > 0 && !c.todo && !seen[c.name]).map((c) => c.name);
+  if (add.length) { for (const n of add) seen[n] = Date.now(); try { setTaskState(task, { finished: seen }); } catch (e) { /* 记不了：照旧按表的顺序 */ } }
+  return seen;
+}
+/** 做完过（全勾完过、或者归档了）的最后一个 change 的位置；一个都没有是 -1 */
+function frontIndex(task) {
+  const seen = finishedMap(task); let f = -1;
+  task.changes.forEach((c, i) => { if (c.archived || seen[c.name]) f = i; });
+  return f;
+}
+/** 回改：排在 current 前面、做完过、现在又有没勾的任务的 change */
+function revisits(task, current) {
+  const at = task.changes.findIndex((c) => c.name === current);
+  if (at <= 0) return [];
+  const seen = finishedMap(task);
+  return task.changes.slice(0, at).filter((c) => c.exists && !c.archived && seen[c.name] && c.todo > 0);
+}
 /**
  * 大任务走到哪一步：explore 探索 / plan 写需求（还没开工）/ apply 做任务 / selftest 全面自测 / verify 等人工核验 / archive 归档中 / done。
- * change 是当前要做的那个：按表的顺序，最前面没做完的。回改前面的 change 补了任务，它就排回前面。
+ * change 是当前要做的那个：做完过的最后一个 change 后面，按表的顺序第一个没做完的（见上面"当前 change 只往后走"）
  */
 function phaseOf(task) {
   const list = task.changes;
   const started = list.some((c) => c.exists || c.archived);
   if (!list.length || (!started && exploreIssues(task).length)) return { phase: 'explore', change: '' };
-  for (let i = 0; i < list.length; i++) {
+  const from = task.legacy ? 0 : frontIndex(task) + 1;
+  for (let i = from; i < list.length; i++) {
+    const c = list[i];
+    if (c.archived || goneRow(task, i)) continue;
+    if (!c.total || (c.todo && !c.done)) return { phase: 'plan', change: c.name };
+    if (c.todo) return { phase: 'apply', change: c.name };
+  }
+  for (let i = 0; i < from; i++) {
     const c = list[i];
     if (c.archived || goneRow(task, i)) continue;
     if (!c.total || (c.todo && !c.done)) return { phase: 'plan', change: c.name };
@@ -306,8 +343,9 @@ function bar(j) {
     ph = phaseFor(j, task); list = task.changes;
     const c = ph.change ? list.find((x) => x.name === ph.change) : null;
     if (c && c.exists) dir = c.dir;
-    // 任务勾完阶段就往后走了，审查这时才开始（第 58 条）：在审、有问题待修的 change 显示它；全做完了显示最后一个，看得到审查走到哪
-    const reviewing = flowState(j).current ? null : list.find((x) => x.exists && !x.archived && x.total && !x.todo && /^[◇✗]/.test(reviewMark(P, x.dir, P.CHANGE)));
+    // 任务勾完阶段就往后走了，审查这时才开始（第 58 条）：在审、有问题待修的 change 显示它；全做完了显示最后一个，看得到审查走到哪。
+    // 后面的 change 开过工了就不显示它（第 81、84 条）：前面的审查写在第二行，不换掉当前 change
+    const reviewing = flowState(j).current ? null : list.find((x, i) => x.exists && !x.archived && x.total && !x.todo && /^[◇✗]/.test(reviewMark(P, x.dir, P.CHANGE)) && !list.slice(i + 1).some((y) => y.archived || (y.exists && y.done > 0)));
     // 要写的 change 还没建目录（第 76 条）：就显示它（提案● 规格○…），不退回显示上一个 change，不然看不出会话在写哪个
     // 只在会话在写需求那一段时这么显示：前一个 change 刚勾完、还在问审不审的时候，照旧显示前一个（复审 P3-15）
     const fresh = !dir && !reviewing && c && !c.exists && !c.archived && ph.phase === 'plan' && flowState(j).stage === 'plan' ? c : null;
@@ -335,7 +373,8 @@ function bar(j) {
   try { const at = dir ? Number((flowState(j).reqEdited || {})[normKey(dir)]) || 0 : 0; if (at && !['tasks', P.CHANGE].some((p) => (Number(P.record(dir, p).at) || 0) > at)) edited = '（需求改过）'; } catch (e) { edited = ''; }
   let stepsOf = ''; try { stepsOf = dir || freshDir ? ' ' + changeSteps(dir || freshDir) : ''; } catch (e) { stepsOf = ''; }
   const mid = name ? shortName(name) + edited + stepsOf : '';
-  const steps = [task ? '探索' + mark(0) : '', mid, '自测' + mark(2) + ' 核验' + mark(3) + ' 归档' + mark(4)].filter(Boolean).join(' │ ');
+  // 大任务的名字放在最前面（第 81、84 条：几个 change 是一件事，看名字就知道在做哪件事）
+  const steps = (task ? shortName(task.name) + '：' : '') + [task ? '探索' + mark(0) : '', mid, '自测' + mark(2) + ' 核验' + mark(3) + ' 归档' + mark(4)].filter(Boolean).join(' │ ');
   let next = '';
   if (ph.phase === 'explore') next = '探索中';
   else if (ph.phase === 'plan' && !dir && freshDir) next = '下一步 写 ' + ph.change + ' 的需求（还没建）';
@@ -346,10 +385,16 @@ function bar(j) {
   else if (ph.phase === 'archive') next = '下一步 按 plan.md 的顺序归档 ' + ph.change;
   if (!next && dir) { const left = T.automatedLeft(dir); if (left.length) next = '下一项 ' + left[0].text; }
   if (!next && name && flowState(j).keepCurrent === name) next = '任务都勾完了，等你说下一步';
-  // 同一个大任务里还有别的 change 做到一半（回改前面的补了任务、切到了别的）：带在后面，不然只看得到一个（第 76 条）
+  // 同一个大任务里别的 change（第 76 条；第 81、84 条分成两种）：排在当前前面的是回改（补了任务、审查有问题待修），别的做到一半的是另有。
   // 老任务不带：老表里做到一半的行可能早就不用了（第 50 条）
-  if (task && !task.legacy) { const others = list.filter((x) => x.exists && !x.archived && x.name !== name && x.total && x.todo > 0 && x.done > 0).map((x) => x.name + ' 做到 ' + x.done + '/' + x.total); if (others.length) next = (next ? next + ' │ ' : '') + '另有 ' + others.join('、'); }
+  if (task && !task.legacy) {
+    const at = list.findIndex((x) => x.name === name);
+    const back = list.filter((x, i) => at >= 0 && i < at && x.exists && !x.archived).map((x) => { const r = x.total ? reviewMark(P, x.dir, P.CHANGE) : ''; const bits = []; if (x.done > 0 && x.todo > 0) bits.push('还有 ' + x.todo + ' 项'); if (/^[◇✗]/.test(r)) bits.push('审查' + r); return bits.length ? x.name + ' ' + bits.join('、') : ''; }).filter(Boolean);
+    const later = list.filter((x, i) => (at < 0 || i > at) && x.exists && !x.archived && x.name !== name && x.total && x.todo > 0 && x.done > 0).map((x) => x.name + ' 做到 ' + x.done + '/' + x.total);
+    if (back.length) next = (next ? next + ' │ ' : '') + '回改 ' + back.join('、');
+    if (later.length) next = (next ? next + ' │ ' : '') + '另有 ' + later.join('、');
+  }
   return { steps, next };
 }
 
-module.exports = { phaseFor, goneRow, currentAlive, dropDeadCurrent, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, exploreOpen, taskState, setTaskState, phaseOf, progressText };
+module.exports = { phaseFor, frontIndex, finishedMap, revisits, goneRow, currentAlive, dropDeadCurrent, bar, specsHash, suggestFile, addSuggestion, suggestions, tasks, ofChange, named, forSession, noteAuto, changeInfo, exploreSections, exploreIssues, exploreOpen, taskState, setTaskState, phaseOf, progressText };

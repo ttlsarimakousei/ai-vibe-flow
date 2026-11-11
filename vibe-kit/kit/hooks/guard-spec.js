@@ -110,12 +110,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   const special = ticked.map((t) => require('../lib/task-types').tickIssue(t, art.dir, j)).filter((t) => t);
   if (special.length) return done(special);
   // 打勾不再检查"验："里的命令跑没跑过（用户 2026-10-17 定的，两种模式都不查）；自动模式还要先做完上一组。审查不在这里挡：整个 change 做完审一次（第 58 条）
-  // 按表的顺序（用户 2026-11-03 定的）：回改前面的 change 补了任务，先做它，再回来
-  try {
-    const B = require('../lib/big-task'); const task = B.ofChange(art.root, art.dir);
-    // 老任务的表不是按这个规矩写的（第 50 条）；用户用 /vk-resume 切过去的是他定的，不挡
-    if (task && !task.legacy && flowState(j).current !== art.name) { const at = task.changes.findIndex((c) => c.name === art.name); const before = task.changes.slice(0, at).find((c) => !c.archived && c.todo > 0 && c.done > 0); if (before) return done(['按 openspec/plan.md 表的顺序做：' + before.name + ' 还有没勾的任务（' + before.done + '/' + before.total + '），先做完它，再回 ' + art.name + '。']); }
-  } catch (e) { /* 算不了不挡打勾 */ }
+  // 以前按表的顺序挡（11-03）："回改前面的 change 补了任务，先做它，再回来"。2026-11-11 起当前 change 只往后走（第 81、84 条，仓库主人定的）：
+  // 回改的任务和当前 change 的任务都能勾，不挡
   if (!cfg.autoMode) return done([]);
   const policy = require('../lib/flow-policy');
   for (const t of ticked) {

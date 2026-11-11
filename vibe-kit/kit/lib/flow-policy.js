@@ -228,10 +228,28 @@ function reviewedByGroups(dir) {
   const rest = record(dir, 'group-rest');
   return rest.status === 'resolved' || rest.status === 'completed' && blockingOf(rest) === 0;
 }
-/** 审过的输入和现在一样吗。整个 change 的点：后面的变更开工了只比文档和任务，代码那一段不比 */
+/**
+ * 这个 change 做完过、同一个大任务里排在后面的 change 已经开工（勾过任务、目录还在）：它现在的改动是回改（第 81、84 条）。
+ * 后面的还没开工的，照旧是它自己的修改，要再审；后面的归档了（目录不在）也照旧要再审（复审 20261105 第 4 条：归档了的热修不该让它从此不再复审）
+ */
+function revisited(dir) {
+  try {
+    const B = require('./big-task'); const task = B.ofChange(path.resolve(dir, '../../..'), dir);
+    if (!task || task.legacy) return false;
+    const at = task.changes.findIndex((c) => S.normKey(c.dir) === S.normKey(dir));
+    if (at < 0 || !B.finishedMap(task)[task.changes[at].name]) return false;
+    return task.changes.slice(at + 1).some((c) => c.exists && !c.archived && c.done > 0);
+  } catch (e) { return false; }
+}
+/**
+ * 审过的输入和现在一样吗。整个 change 的点：后面的变更开工了只比文档和任务，代码那一段不比。
+ * 回改（第 81、84 条，2026-11-11）：做完过、当前 change 已经在它后面的，回改不重开它审过的结论，文档、任务也不比——
+ * 回改的代码在当前 change 的审查里一起审（做它的会话改的文件都记在当前 change 上），对别的 change 的影响走 revisions.md 的"影响 change"
+ */
 function sameInput(dir, point, saved) {
   const now = fingerprint(dir, point);
   if (saved === now) return true;
+  if (point === CHANGE && !!saved && revisited(dir)) return true;
   return point === CHANGE && !!saved && String(saved).split(':')[0] === now.split(':')[0] && laterStarted(dir);
 }
 function passed(dir, point) { const r = record(dir, point); return r.status === 'completed' && blockingOf(r) === 0 && sameInput(dir, point, r.fingerprint) && require('./review-runner').inputsCurrent(r.materialInputs); }
