@@ -264,13 +264,18 @@ function reportReview(result, job) {
     const lost = job.lenses.filter((l) => job.state[l].status === 'failed');
     if (!over && !lost.length) return null;
     const sec = (ms) => Math.round(ms / 1000);
+    // 每个角度的每次请求（第 83 条）：慢在模型那头（模型算的用时接近总用时）、卡在本机起进程、还是到 20 分钟上限被结束
+    const fresh = findJob(job.id) || job;
+    const callText = (c, i) => '第 ' + (i + 1) + ' 次 ' + sec(c.ms) + ' 秒' + (c.killed ? '（到 ' + Math.round(CALL_MS / 60000) + ' 分钟上限被结束）' : '') + (c.apiMs ? '，模型那头 ' + sec(c.apiMs) + ' 秒' : '') + (c.turns ? '、' + c.turns + ' 轮' : '') + '，提示 ' + Math.round((c.chars || 0) / 1000) + ' 千字、输出 ' + (c.out || 0) + ' token' + (c.err ? '，出错：' + c.err : '');
+    const callsOf = (l) => { const a = ((fresh.state || {})[l] || {}).calls; const b = ((job.state || {})[l] || {}).calls; return (a && a.length ? a : b) || []; };
+    const detail = job.lenses.map((l) => { const calls = callsOf(l); return calls.length ? l + '：' + calls.map(callText).join('；') : ''; }).filter(Boolean);
     const lines = ['审查模式 ' + job.mode + (job.point ? '，审查点 ' + job.point : '') + (job.change ? '' : '（不走 OpenSpec）') + (job.scoped ? '，只审修改点' : '，' + job.lenses.length + ' 个角度'),
       '总用时 ' + sec(result.spentMs) + ' 秒，配置页的预期用时 ' + sec(job.expectMs) + ' 秒' + (over ? '，超了 ' + sec(result.spentMs - job.expectMs) + ' 秒' : '，没超'),
       '每个角度：' + job.lenses.map((l) => l + (job.state[l].status === 'submitted' ? ' ' + sec(job.state[l].doneAt - job.started) + ' 秒' : ' 没交')).join('，'),
-      '材料 ' + job.files + ' 个文件、' + Math.round(job.chars / 1000) + ' 千字；结果 ' + result.status];
+      '材料 ' + job.files + ' 个文件、' + Math.round(job.chars / 1000) + ' 千字；结果 ' + result.status].concat(detail.length ? ['每次请求（自动带上的）：'].concat(detail) : []);
     const title = over ? '审查超出预期用时（' + sec(result.spentMs) + ' 秒，预期 ' + sec(job.expectMs) + ' 秒）' : '审查有 ' + lost.length + ' 个角度没交结论';
     const sig = require('./feedback').sigOf(['review-report', job.mode, over ? 'over' : '', lost.length ? 'lost' : '']);
-    return require('./feedback').record({ kind: lost.length ? '出错' : '建议', hook: 'review.js', source: '审查自动记录', title, what: lines.join('\n'), why: '审查做完对着配置页的预期用时自动核对（用户 2026-10-28 定的：不截断审查，超了分析用时和原因上报，用来优化审查）。', cwd: job.root, sig, note: lines[1] });
+    return require('./feedback').record({ kind: lost.length ? '出错' : '建议', hook: 'review.js', source: '审查自动记录', title, what: lines.join('\n'), why: '审查做完对着配置页的预期用时自动核对（用户 2026-10-28 定的：不截断审查，超了分析用时和原因上报，用来优化审查）。', cwd: job.root, sig, note: lines[1] + (detail.length ? '；' + detail.join('；').slice(0, 900) : '') });
   } catch (e) { return null; } // 记不了不影响审查结果
 }
 /** 审完下一步怎么办，写在结果里（模型照着做，不用翻规范） */
@@ -497,10 +502,12 @@ function askClaude(prompt, cwd, settings) {
   // shell:true 时 Node 只把参数拼起来：空参数和带空格的自己加引号
   const a = useShell ? raw.map((x) => (x === '' ? '""' : /[\s"&|<>^]/.test(x) ? '"' + x.replace(/"/g, '\\"') + '"' : x)) : raw;
   const env = Object.assign({}, process.env, { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1' }); delete env.CLAUDECODE;
+  const t0 = Date.now();
   const r = spawnSync(useShell && /\s/.test(exe) ? '"' + exe + '"' : exe, a, { input: prompt, cwd, env, encoding: 'utf8', windowsHide: true, shell: useShell, timeout: CALL_MS, maxBuffer: 128 * 1024 * 1024 });
+  const ms = Date.now() - t0; const killed = !!(r.error && r.error.code === 'ETIMEDOUT') || (!!r.signal && ms >= CALL_MS - 5000);
   let j = null; try { j = JSON.parse(String(r.stdout || '').trim().split(/\r?\n/).filter(Boolean).pop()); } catch (e) { /* 下面报 */ }
   const u = (j && j.usage) || {};
-  return { text: j ? String(j.result || '') : '', out: u.output_tokens || 0, input: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), err: j ? (j.is_error ? R.clip(String(j.result || j.subtype || ''), 200) : '') : R.clip(String(r.stderr || (r.error && r.error.message) || r.stdout || '没有输出'), 200) };
+  return { ms, killed, apiMs: (j && Number(j.duration_api_ms)) || 0, turns: (j && Number(j.num_turns)) || 0, chars: String(prompt).length, text: j ? String(j.result || '') : '', out: u.output_tokens || 0, input: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), err: j ? (j.is_error ? R.clip(String(j.result || j.subtype || ''), 200) : '') : R.clip(String(r.stderr || (r.error && r.error.message) || r.stdout || '没有输出'), 200) };
 }
 /** 后台进程：一个角度。回复里没有 JSON（只想不答）重试一次 */
 function work(id, lens) {
@@ -515,7 +522,7 @@ function work(id, lens) {
     for (let i = 0; i < 2; i++) {
       // 第二次：上一次只想没答，提示它直接交
       const r = askClaude(i ? prompt + '\n上一次你只想没有回结论。这次不要再分析，直接按上面的格式回 JSON。\n' : prompt, job.root, settings);
-      S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id && cur.state[lens]) { cur.state[lens].out = (cur.state[lens].out || 0) + r.out; cur.state[lens].input = (cur.state[lens].input || 0) + r.input; } });
+      S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id && cur.state[lens]) { cur.state[lens].out = (cur.state[lens].out || 0) + r.out; cur.state[lens].input = (cur.state[lens].input || 0) + r.input; cur.state[lens].calls = (cur.state[lens].calls || []).concat({ ms: r.ms, killed: r.killed, apiMs: r.apiMs, turns: r.turns, out: r.out, chars: r.chars, err: r.err ? R.clip(r.err, 80) : '' }).slice(-4); } });
       if (r.err) { why = 'claude -p 出错：' + r.err; if (!r.text) break; }
       const s = submit(id, lens, r.text);
       if (s.ok) return;
@@ -618,7 +625,7 @@ function submit(id, lens, text) {
 function failLens(id, lens, why) {
   const job = findJob(id); if (!job || job.status !== 'running' || !job.state[lens] || job.state[lens].status === 'submitted') return;
   const boot = rebooted(job.state[lens]);
-  S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id) cur.state[lens] = { status: 'failed', why: R.clip(boot ? '电脑重启过，这个角度被打断了' : why, 300), at: Date.now(), reboot: boot || undefined }; });
+  S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id) cur.state[lens] = { status: 'failed', why: R.clip(boot ? '电脑重启过，这个角度被打断了' : why, 300), at: Date.now(), reboot: boot || undefined, calls: cur.state[lens].calls }; });
   if (boot) return;
   const change = job.change ? changeOf(job.root, job.change) : null;
   if (change && job.point) require('./flow-policy').noteFail(change.dir, job.point, job.id + ':' + (job.tries || 0));

@@ -258,10 +258,19 @@ function recordHookErrorRaw(hook, j, err) {
     const stack = String((err && err.stack) || msg).split('\n').slice(0, 14).join('\n');
     const inp = (j && j.tool_input) || {};
     const action = j && j.tool_name ? j.tool_name + '：' + (inp.command || inp.file_path || inp.notebook_path || inp.pattern || '') : String((j && j.hook_event_name) || '');
+    // 慢的：带上这一次各阶段的用时、最慢的几条 git，这台电脑最近 7 天停在哪、几核几 G（第 83 条：定原因要的数据自动带上去，不让用户跑脚本）
+    let timing = '';
+    if (slow) {
+      const parts = [];
+      if (err && err.timeline) parts.push('这一次：' + err.timeline);
+      try { const d = require('./diag').recent(7)['钩子预算'] || {}; const top = Object.entries(d).sort((a, b) => b[1].n - a[1].n).slice(0, 5); if (top.length) parts.push('这台电脑最近 7 天预算用完 ' + top.reduce((n, x) => n + x[1].n, 0) + ' 次，停得最多的：' + top.map(([k, v]) => k + ' ' + v.n + ' 次').join('、')); } catch (e) { /* 老版本没有 */ }
+      try { parts.push('电脑：' + os.cpus().length + ' 核，内存 ' + (os.totalmem() / 1073741824).toFixed(1) + ' GB、空闲 ' + (os.freemem() / 1073741824).toFixed(1) + ' GB，开机 ' + Math.round(os.uptime() / 60) + ' 分钟'); } catch (e) { /* 读不了不带 */ }
+      timing = parts.join('\n');
+    }
     record({
       kind: '出错', hook, source: '钩子自动记录', title: hook + ' 出错：' + (slow ? '本机检查超时（预算用完或 git 超时）' : firstLine(msg).slice(0, 80)),
-      what: '钩子运行时抛了异常。出错时这道检查按放行处理（没有拦），用户和模型都看不到，只有这里有记录。',
-      action: clip(action, 500), stack, sig: slow ? sigOf(['error', hook, 'slow']) : errorSig(hook, msg, stack), note: slow ? firstLine(msg).slice(0, 120) : undefined,
+      what: '钩子运行时抛了异常。出错时这道检查按放行处理（没有拦），用户和模型都看不到，只有这里有记录。' + (timing ? '\n\n用时（自动带上的）：\n' + timing : ''),
+      action: clip(action, 500), stack, sig: slow ? sigOf(['error', hook, 'slow']) : errorSig(hook, msg, stack), note: slow ? firstLine(msg).slice(0, 120) + (err && err.timeline ? '；' + String(err.timeline).slice(0, 900) : '') : undefined,
       sid: (j && j.session_id) || '', cwd: (j && j.cwd) || '', transcript: (j && j.transcript_path) || '',
     });
     hookLog(hook + ' 出错（记进了问题反馈）：' + firstLine(msg));

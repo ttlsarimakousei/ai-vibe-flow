@@ -15,9 +15,11 @@ function readGit(root, args) {
   // 超时用这次钩子剩下的预算，不再单独卡 5 秒（#250、#270、#277：慢电脑上一条 git 要 6 秒，预算还剩一半就算失败了）；不在钩子里的（review.js 这些命令行工具）最多等一分钟
   const run = () => {
     const I = require('./invocation');
-    I.phase('Git ' + args[0] + '（' + path.basename(path.resolve(root)) + '）');
-    try { return execFileSync('git', ['-C', root].concat(args), { windowsHide: true, encoding: 'utf8', timeout: I.remaining(GIT_MAX_MS), maxBuffer: 12 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); }
-    catch (e) { if (e && e.code === 'ETIMEDOUT') { const over = I.budgetError(); if (over) throw over; } throw e; }
+    const label = 'Git ' + args[0] + '（' + path.basename(path.resolve(root)) + '）';
+    I.phase(label);
+    const t0 = Date.now();
+    try { const out = execFileSync('git', ['-C', root].concat(args), { windowsHide: true, encoding: 'utf8', timeout: I.remaining(GIT_MAX_MS), maxBuffer: 12 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }); if (I.note) I.note(label, Date.now() - t0); return out; }
+    catch (e) { if (I.note) I.note(label, Date.now() - t0, e && e.code === 'ETIMEDOUT'); if (e && e.code === 'ETIMEDOUT') { const over = I.budgetError(); if (over) throw over; } throw e; }
   };
   const readonly = /^(rev-parse|status|ls-files|diff)$/.test(args[0]) || args[0] === 'branch' && args[1] === '--show-current' || args[0] === 'config' && args[1] === '--get';
   return readonly ? require('./invocation').memo('workspace-git|' + path.resolve(root) + '|' + JSON.stringify(args), () => crossCall(root, args, run)) : run();
