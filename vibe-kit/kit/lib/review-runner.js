@@ -285,7 +285,7 @@ function nextText(result) {
   if (result.noChange) return '文件和上一轮审过的一样，这次不用审' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
   if (!result.issues.length) return '没有问题，这个点过了。';
   if (!result.blocking) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
-  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细，跑 review.js run 加 --decisions <处理明细>（和这次一样的 --change、--mode、--point、--project）：先登记再复审，一条命令，下一轮只审改过的地方。';
+  return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细，跑 review.js run 加 --decisions <处理明细>（和这次一样的 --change、--mode、--point、--project）：先登记再复审，一条命令，下一轮只审改过的地方。' + (result.mode === 'code' ? '改代码时注释、日志只写业务上的原因，不写审查编号（r1 这类）、第几轮审查、工具的名字：同事看不懂。' : '');
 }
 const MODE_NAME = { proposal: '提案', code: '代码' };
 const WORKER_MS = 45 * 60000; // 一个角度最多两次请求，一次最多 20 分钟

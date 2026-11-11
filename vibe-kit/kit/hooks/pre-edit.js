@@ -6,6 +6,7 @@
  *   3. guard-encoding：会把中文写坏的编辑
  *   4. guard-spec：OpenSpec 产物的门槛
  *   5. 流程里没开工不改源码、探索记录和计划表只在用户开口那一轮改
+ *   6. 写进代码的文字里不带套件专属的字眼（审查编号、第几轮审查、套件的名字；问题表第 82 条）
  * 以前第一道是 guard-kit（不许改套件），2026-11-04 去掉了（仓库主人定的：套件可以改）。
  * 都放行之后，要往 .vibe/ 里写东西的，确保 .vibe/ 已经在那个仓库的 .gitignore 里（写入被拦时不改 .gitignore）。
  * 合成一个入口：一次编辑只起一个进程。
@@ -37,9 +38,53 @@ const exploreCheck = { handle(j) {
   const no = require('../lib/guard-explore').issue(j, f);
   return no ? require('../lib/session').blockOut('PreToolUse', '[vibe-kit 探索记录] ' + no) : null;
 } };
-const checks = [require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js'), startedCheck, exploreCheck];
+/*
+ * 写进代码的文字里不带套件专属的字眼（问题表第 82 条，2026-11-11：注释里出现"（审核r3）"，同事不用这套工具，看不懂）。
+ * 认的是：审查的问题编号（"审核 r3""修复 r2"）、第几轮审查、套件和技能的名字、拦截编号。
+ * 只看这次新写进去的（文件里本来就有的不管），只管代码文件；需求文档、.vibe、套件自己的文件不管。
+ * 同一个文件同一处只拦一次，原样再写一次就放行（确实要这么写的）。不给拦截编号，也不记进全自动报告。
+ */
+const KIT_WORDS = [
+  [/(?:审查|审核|复审|评审|code\s*review|review)\s*(?:意见|问题|结论|发现)?\s*[（(#＃:：]?\s*r\d{1,3}(?![\w.])/i, '审查的问题编号'],
+  [/(?:修复|修正|解决|fix(?:es|ed)?)\s*(?:了)?\s*[（(]?\s*r\d{1,3}(?![\w.(])\s*[）)]?\s*(?:[:：，,。]|$)/im, '审查的问题编号'],
+  [/第\s*[一二三四五六七八九十\d]+\s*轮\s*(?:审查|审核|复审)/, '第几轮审查'],
+  [/vibe-kit|\bvk-(?:cross-review|see-page|db-crud|redis|onboard|handover)\b|〔拦截编号/i, '套件的名字'],
+];
+const CODE_FILE = /\.(java|kt|groovy|js|mjs|cjs|ts|py|go|cs|xml|sql|vue|jsx|tsx|html?|css|scss|sass|less|styl|jsp|jspx|tag|ftl|vm|properties|ya?ml)$/i;
+const NOT_CODE = /(^|[\\/])(\.vibe|openspec|\.claude|node_modules)[\\/]/;
+/** 这次要写进去的新文字（[新, 旧] 成对）：Edit 是 new_string 对 old_string，MultiEdit 逐条，Write 是整份对文件现在的内容 */
+function writtenParts(j, f) {
+  const inp = j.tool_input || {};
+  if (Array.isArray(inp.edits)) return inp.edits.map((e) => [String((e && e.new_string) || ''), String((e && e.old_string) || '')]);
+  if (inp.content !== undefined) { let old = ''; try { old = require('fs').readFileSync(f, 'utf8'); } catch (e) { old = ''; } return [[String(inp.content), old]]; }
+  return [[String(inp.new_string || ''), String(inp.old_string || '')]];
+}
+const wordsCheck = { handle(j) {
+  let f = String((j.tool_input || {}).file_path || '');
+  if (f && !path.isAbsolute(f) && j.cwd) f = path.resolve(j.cwd, f);
+  if (!f || !CODE_FILE.test(f) || NOT_CODE.test(f)) return null;
+  const S = require('../lib/session');
+  if (S.isKitPath && S.isKitPath(f, j.cwd)) return null;
+  for (const [next, old] of writtenParts(j, f)) {
+    for (const [re, what] of KIT_WORDS) {
+      const m = re.exec(next);
+      if (!m) continue;
+      const hit = m[0].trim().replace(/\s+/g, ' ').slice(0, 30);
+      // 改之前这一处就有的（原样带过来的）不管
+      if (old.includes(m[0])) continue;
+      let first = true;
+      try { first = require('../lib/tidy.js').blockOnce(j.session_id, f + '#words#' + hit); } catch (e) { first = true; }
+      if (!first) continue;
+      const out = S.blockOut('PreToolUse', '[vibe-kit 注释] 要写进 ' + path.basename(f) + ' 的文字里有「' + hit + '」（' + what + '）：这是这套工具里的叫法，同事看代码时看不懂。注释、日志、提示语只写业务上的原因，不写审查编号、第几轮审查、工具的名字。例：把"// 修复审核 r3：空列表"写成"// 列表为空时直接返回，不然会拼出 in ()"。改掉再写；确实要这么写的，原样再执行一次就行。');
+      Object.defineProperty(out, 'noBypass', { value: true });
+      return out;
+    }
+  }
+  return null;
+} };
+const checks = [require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js'), startedCheck, exploreCheck, wordsCheck];
 // 和上面一一对应：拦下时记的是哪道检查（兜底放行按这个名字认）
-const NAMES = ['guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec', 'guard-started', 'guard-explore'];
+const NAMES = ['guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec', 'guard-started', 'guard-explore', 'guard-words'];
 let outputs = null;
 try { outputs = require('../lib/outputs.js'); } catch (e) { /* 老版本没有 */ }
 let feedback = null;
