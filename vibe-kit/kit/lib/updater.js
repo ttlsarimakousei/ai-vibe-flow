@@ -88,7 +88,7 @@ const setState = (patch) => updateState('update', (o) => Object.assign(o, patch)
 function pidAlive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; } }
 // 超过租期（LOCK_MS，跑着的会续租）的锁不算有人在跑（复审 U-R1：以前只看进程号活着，进程号被复用以后自动更新、上报一直不跑）
 function lockHeld() {
-  try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && pidAlive(l.pid) && l.pid !== process.pid && !(Number(l.at) > 0 && Date.now() - Number(l.at) > LOCK_MS); } catch (e) { return false; }
+  try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && !stateStore.beforeBoot(l.at) && pidAlive(l.pid) && l.pid !== process.pid && !(Number(l.at) > 0 && Date.now() - Number(l.at) > LOCK_MS); } catch (e) { return false; }
 }
 let updateLock = null;
 function lock() {

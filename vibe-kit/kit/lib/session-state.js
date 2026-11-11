@@ -107,7 +107,7 @@ function cleanState(days) {
       const sd = path.join(d, 'session');
       for (const sid of fs.existsSync(sd) ? fs.readdirSync(sd) : []) {
         const dir = path.join(sd, sid); let newest = 0; let busy = false;
-        try { for (const f of fs.readdirSync(dir)) { const p = path.join(dir, f); try { newest = Math.max(newest, fs.statSync(p).mtimeMs); } catch (e) { /* 刚删 */ } if (/\.lock$/.test(f)) { const o = stateStore.read(p); if (o.pid) { try { process.kill(o.pid, 0); busy = true; } catch (e) { if (e.code === 'EPERM') busy = true; } } } } } catch (e) { continue; }
+        try { for (const f of fs.readdirSync(dir)) { const p = path.join(dir, f); try { newest = Math.max(newest, fs.statSync(p).mtimeMs); } catch (e) { /* 刚删 */ } if (/\.lock$/.test(f)) { const o = stateStore.read(p); if (o.pid && !stateStore.beforeBoot(o.at)) { try { process.kill(o.pid, 0); busy = true; } catch (e) { if (e.code === 'EPERM') busy = true; } } } } } catch (e) { continue; }
         if (!busy && newest && newest < dead) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 别人在用 */ } }
       }
     } catch (e) { /* 清不了下次再清 */ }
@@ -115,7 +115,8 @@ function cleanState(days) {
       const p = path.join(d, f);
       let st; try { st = fs.statSync(p); } catch (e) { continue; }
       if (st.isDirectory()) continue;
-      if (/\.(?:lock|recover)$/.test(f)) { const owner = stateStore.read(p); if (owner.pid) { try { process.kill(owner.pid, 0); continue; } catch (e) { if (e.code === 'EPERM') continue; } } }
+      if (/\.(?:lock|recover)$/.test(f)) { const owner = stateStore.read(p); if (owner.pid && !stateStore.beforeBoot(owner.at)) { try { process.kill(owner.pid, 0); continue; } catch (e) { if (e.code === 'EPERM') continue; } } }
+      if (/\.prev$/.test(f)) { if (!fs.existsSync(p.slice(0, -5))) try { fs.unlinkSync(p); } catch (e) { /* 别人在用 */ } continue; }
       if (/\.tmp$/.test(f)) { if (st.mtimeMs < Date.now() - 3600000) try { fs.unlinkSync(p); } catch (e) { /* 别人在用 */ } continue; }
       if (GLOBAL_STATE.test(f)) continue;
       if (st.mtimeMs < dead) try { fs.unlinkSync(p); } catch (e) { /* 别人在用 */ }

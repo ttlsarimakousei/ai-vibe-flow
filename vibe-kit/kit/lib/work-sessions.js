@@ -4,11 +4,12 @@ const fs = require('fs');
 const S = require('./session');
 const KEEP_MS = 30 * 60000;
 function alive(pid) { if (!pid) return true; try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } }
+const beforeBoot = (at) => { try { return require('./state-store').beforeBoot(at); } catch (e) { return false; } };
 function touch(j) {
   if (!j.session_id) return [];
   const f = S.flowState(j); const h = S.readState(j.session_id + '-home'); const now = Date.now(); let conflicts = [];
   S.updateState('work-sessions', (s) => {
-    for (const [id, r] of Object.entries(s)) if (!r || now - r.at > KEEP_MS || !alive(r.pid) || !(r.scopes || []).some((d) => fs.existsSync(d))) delete s[id];
+    for (const [id, r] of Object.entries(s)) if (!r || now - r.at > KEEP_MS || beforeBoot(r.at) || !alive(r.pid) || !(r.scopes || []).some((d) => fs.existsSync(d))) delete s[id];
     if (!f.on || f.stage !== 'apply' || S.flowView(j).waiting || !require('./apply-scope').valid(j).ok || S.flowDone(j)) { delete s[j.session_id]; return; }
     const scopes = Object.keys(f.applyScope && f.applyScope.dirs || {}).length ? Object.keys(f.applyScope.dirs) : S.flowChanges(j);
     conflicts = Object.entries(s).filter(([id, r]) => id !== j.session_id && r.scopes.some((d) => scopes.includes(d))).map(([id]) => id);

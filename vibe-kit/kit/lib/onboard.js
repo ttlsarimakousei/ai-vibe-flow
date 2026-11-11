@@ -947,7 +947,7 @@ function explore(root, why) {
 // ---------- 钩子调的 ----------
 const LOCK_MS = 5 * 60000;
 function lockFile(root) { return path.join(root, '.vibe', 'onboard.lock'); }
-function locked(root) { try { const l = JSON.parse(fs.readFileSync(lockFile(root), 'utf8')); if (!l || Date.now() - (l.at || 0) > LOCK_MS) return false; try { process.kill(l.pid, 0); return l.pid !== process.pid; } catch (e) { return !!e && e.code === 'EPERM'; } } catch (e) { return false; } }
+function locked(root) { try { const l = JSON.parse(fs.readFileSync(lockFile(root), 'utf8')); if (!l || Date.now() - (l.at || 0) > LOCK_MS || require('./state-store').beforeBoot(l.at)) return false; try { process.kill(l.pid, 0); return l.pid !== process.pid; } catch (e) { return !!e && e.code === 'EPERM'; } } catch (e) { return false; } }
 /** 后台进程干的事：把该探索的都探索一遍 */
 function run(cwd, force) {
   const out = [];

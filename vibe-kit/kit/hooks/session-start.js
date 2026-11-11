@@ -14,6 +14,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const S0 = require('../lib/session');
 const { noteSessionHome, atHome, subdirs, nestedRepos, isShell, cleanState, KIT, ensureVibeIgnored, readState, writeState, normKey, hookLog, readConfig, handoverStale, changeRoots, allChanges, archivedSince, refreshPlan, planUnlisted, planMissingInfo, recordConvBaseline, kitCodeDrift, cli } = require('../lib/session');
 
 const MAX_PROJECT_CHARS = 4000;
@@ -261,6 +262,15 @@ async function handle(j) {
         }
       } catch (e) { /* 没有登记 */ }
       if (running.length) out.push('以前起的服务还在跑：' + running.join('、') + '。要测就照样用 node "' + path.join(KIT, 'tools', 'devserver.js') + '" start …（它记着这些服务，跑的不是现在的代码会在同一个端口自动重启），用不着了就 stop --all；不要另起一个、不要换端口。');
+    } catch (e) { /* 查不了不影响会话开始 */ }
+    // 死机、断电之后（问题表第 80 条）：git 做到一半留下的 index.lock（之后 add、commit 都失败，报的是英文），重启之前开的审查被打断了
+    try {
+      const St = require('../lib/state-store');
+      const locks = [];
+      for (const r of [cwd].concat(repos)) { const f = path.join(r, '.git', 'index.lock'); try { if (St.beforeBoot(fs.statSync(f).mtimeMs)) locks.push(f); } catch (e) { /* 没有 */ } }
+      if (locks.length) out.push('上次电脑没正常关（死机、断电），git 做到一半留下了锁文件：' + locks.join('、') + '。它们比这次开机还早，没有 git 在用：先删掉（rm "<路径>"），不然 git add、git commit 都会报 "index.lock: File exists"。删完 git status 看一眼，做到一半的提交、合并照用户的意思重做。');
+      const cut = Object.values(readState('review-jobs')).filter((x) => x && x.status === 'running' && x.state && (S0.underDir(x.root, cwd) || S0.underDir(cwd, x.root)) && Object.values(x.state).some((s) => s && s.status === 'sent' && St.beforeBoot(s.sentAt)));
+      if (cut.length) out.push('电脑重启之前开的审查被打断了：' + cut.map((x) => (x.change || '不走 OpenSpec 的') + ' 的 ' + (x.point || x.mode)).join('、') + '。不算没审成，再跑一次一样的 review.js run 只补没交的角度。');
     } catch (e) { /* 查不了不影响会话开始 */ }
     cleanState(3);
     if (source === 'clear') { try { require('../lib/work-sessions').clearOwner(process.ppid); } catch (e) { /* 旧状态稍后过期 */ } }

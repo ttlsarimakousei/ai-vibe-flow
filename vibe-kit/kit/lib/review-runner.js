@@ -592,7 +592,10 @@ function waitRound(opts) {
 }
 // 后台进程在就算活着（有个上限，防进程号被复用）。还没有进程号的是刚起的，一小会儿没有就算没了；升级前子代理留下的记录也走这条
 const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return false; } };
-const alive = (s) => !!s && s.status === 'sent' && (s.pid ? pidAlive(s.pid) && Date.now() - (Number(s.sentAt) || 0) < WORKER_MS : Date.now() - (Number(s.sentAt) || 0) < 30000);
+// 重启之前起的（sentAt 比这次开机早）：进程号可能被别的程序占了，不看进程号（第 80 条）
+const alive = (s) => !!s && s.status === 'sent' && !store.beforeBoot(s.sentAt) && (s.pid ? pidAlive(s.pid) && Date.now() - (Number(s.sentAt) || 0) < WORKER_MS : Date.now() - (Number(s.sentAt) || 0) < 30000);
+/** 这个角度是电脑重启打断的：不算一次没拿到结论（不进连续 3 次的数），也不记审查超时 */
+const rebooted = (s) => !!s && s.status === 'sent' && store.beforeBoot(s.sentAt);
 /** 交结论（后台进程调）。JSON 不对返回 { ok: false, error }；同一角度只算一次；交齐了合并入账 */
 function submit(id, lens, text) {
   const job = findJob(id);
@@ -614,7 +617,9 @@ function submit(id, lens, text) {
 /** 这个角度算没交：下一次 prepare 只重开它。连续 3 次没交就不再催（flow-policy 的 halted），不算通过 */
 function failLens(id, lens, why) {
   const job = findJob(id); if (!job || job.status !== 'running' || !job.state[lens] || job.state[lens].status === 'submitted') return;
-  S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id) cur.state[lens] = { status: 'failed', why: R.clip(why, 300), at: Date.now() }; });
+  const boot = rebooted(job.state[lens]);
+  S.updateState('review-jobs', (o) => { const cur = o[job.key]; if (cur && cur.id === id) cur.state[lens] = { status: 'failed', why: R.clip(boot ? '电脑重启过，这个角度被打断了' : why, 300), at: Date.now(), reboot: boot || undefined }; });
+  if (boot) return;
   const change = job.change ? changeOf(job.root, job.change) : null;
   if (change && job.point) require('./flow-policy').noteFail(change.dir, job.point, job.id + ':' + (job.tries || 0));
   try { require('./usage').bump('review.lost'); } catch (e) { /* 数不了就算了 */ }
