@@ -1,0 +1,683 @@
+'use strict';
+/*
+ * 两阶段工作流：自动条件、审查点、人工 Ask 与提示去重。只保存套件本机状态，不把执行安排写进团队任务。
+ * 审查时机（问题表第 57、58 条，用户 2026-11-05 定的，替代 2026-10-14 的"每个产物、每整组 1.x 各审一次"）：
+ *   需求文档：四份写完审一次整套（审查点 tasks：它的输入本来就是四份文档，旧版审过的记录接着认）。
+ *   代码：这个 change 的任务全部做完，审一次整个 change 的改动（审查点 change）。
+ *   单份文档（proposal、specs、design）、做完的某一组（group-N）只有用户点名才审，不算必审的点。
+ */
+const fs = require('fs');
+const path = require('path');
+const S = require('./session');
+const Sc = require('./review-scope');
+const W = require('./workspace');
+const T = require('./task-types');
+const read = f => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return ''; } };
+const key = (dir, point) => S.normKey(dir) + '|' + point;
+// 没有 1.1 这种编号的任务归到前一个有编号的组，开头就没编号的算第 1 组（2026-10-17 审核问题 7：没编号时一个代码审查点都没有，自动审查走不通）
+function groups(dir) {
+  const out = new Map(); let last = '1';
+  for (const t of T.tasks(dir).filter(t => !['review', 'review-fix', 'user', 'deferred'].includes(t.kind))) {
+    const m = t.text.match(/^(\d+)\./); const id = m ? m[1] : last; last = id;
+    if (!out.has(id)) out.set(id, []); out.get(id).push(t);
+  }
+  return [...out].map(([id, tasks]) => ({ id: 'group-' + id, tasks, done: tasks.every(t => t.done) }));
+}
+// 用户点名审某一组时只审任务里点了名的文件；整个 change 的审查点审开工基线以来的全部改动
+const CHANGE = 'change';
+const DOCS = ['proposal', 'specs', 'design', 'tasks'];
+function namedFiles(dir, group) {
+  const roots = S.projectRootsOf(dir); const code = new Set();
+  for (const t of group.tasks) for (const token of S.pathTokens(t.text.split(/(?:验|验证|验收)\s*[:：]/)[0])) {
+    for (const root of roots) { const f = path.resolve(root, token); const checked = W.pathStatus(f, root); if (checked.safe && !checked.missing && !/[\\/](?:openspec|\.vibe)[\\/]/.test(f)) code.add(f); }
+  }
+  return [...code];
+}
+/** 开工基线以来改过的代码文件（绝对路径）：和审查执行器取代码材料的范围一致，不含 .vibe、openspec。没有基线返回空 */
+function changedCode(dir) {
+  const saved = S.readState('work-baselines')[S.normKey(dir)]; if (!saved) return [];
+  const out = [];
+  for (const repo of saved.repos || []) {
+    if (!repo.ref) continue;
+    const files = W.git(repo.root, ['diff', '--name-only', '-z', repo.ref]).split('\0').concat(W.git(repo.root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0'));
+    for (const f of new Set(files)) if (f && !/^(?:\.vibe|openspec)\//.test(f)) out.push(path.join(repo.root, f));
+  }
+  return out;
+}
+// 指纹不看的目录和文件，和 workspace.js 的 fingerprintOne 一样：构建输出变了不让审过的结论失效（复审 20261105 第 6 条）
+const NOT_INPUT = /(^|[\\/])(\.vibe|router-data|node_modules|target|build|dist|out)([\\/]|$)|(^|[\\/])(secrets\.json|\.env(?:\.[^\\/]*)?)$/i;
+/*
+ * 这个 change 的文件范围（问题表第 77 条、#456，2026-11-11）。起因：代码审查按"开工基线以来这个仓库里改过的全部文件"取材料，
+ * 同一个仓库里别的会话、别的变更没提交的改动也算进来，别的模块的问题被记下来，不改就一直挡提交。
+ * 归属按文件认，不让模型判断：
+ *   点了名的   这个 change 的 proposal、design、tasks、specs 里写到的、现在在的文件；tasks、specs 里写到的目录（下面的都算）；只写了文件名的按文件名认
+ *   改过的     做这个 change 的会话用编辑工具改成功的（after-tool 调 noteEdit 记进 state/change-files.json，跨会话留着）；
+ *              审查脚本再把当前会话记录里改过的补进去（learnEdits：升级前开的工、还没记过的也认得出）
+ * 一个在的文件都没点名、也没记过改动：known 是 false，调用方不筛，照旧全收（不然会变成"没有代码可审"）。
+ * 用 Bash 改的（sed、脚本生成的）认不出：在 tasks.md 里点名，或者审的时候加 --all。
+ * 审查取材料（review-runner.js 的 materials）和审查点的指纹（下面的 changeFiles）用同一个范围：别人的文件变了，不让这个 change 审过的结论失效。
+ */
+const NOT_OWN = /(^|\/)(\.vibe|openspec|\.claude|node_modules)(\/|$)/;
+function changeScope(dir) {
+  return require('./invocation').memo('change-scope|' + S.normKey(dir), () => {
+    const roots = S.projectRootsOf(dir).map((r) => path.resolve(r));
+    const files = new Set(); const dirs = new Set(); const names = new Set();
+    for (const f of S.artifactFiles(dir)) {
+      if (/revisions\.md$/.test(f)) continue;
+      const dirsToo = /tasks\.md$/.test(f) || /[\\/]specs[\\/]/.test(f);
+      for (const line of read(f).split(/\r?\n/)) for (const t of S.pathTokens(line)) {
+        const tok = String(t).replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+        if (!tok || NOT_OWN.test(tok)) continue;
+        if (!tok.includes('/')) { if (/\.[A-Za-z0-9]{1,8}$/.test(tok)) names.add(tok.toLowerCase()); continue; }
+        for (const root of path.isAbsolute(tok) ? [''] : roots) {
+          const abs = root ? path.join(root, tok) : tok;
+          let st = null; try { st = fs.statSync(abs); } catch (e) { continue; }
+          if (st.isDirectory()) { if (dirsToo) dirs.add(S.normKey(abs)); } else files.add(S.normKey(abs));
+        }
+      }
+    }
+    const rec = S.readState('change-files')[S.normKey(dir)];
+    // 只算这个 change 的仓库里的文件（复审 R2：记过一个仓库外的编辑，known 就成了真，仓库里没点名的代码全被排除）
+    const rootKeys = roots.map((r) => S.normKey(r));
+    const edited = new Set((rec && (!rec.born || rec.born === S.changeBorn(dir)) ? rec.files || [] : []).filter((f) => rootKeys.some((r) => f === r || f.startsWith(r + '/'))));
+    const has = (abs) => { const k = S.normKey(abs); if (files.has(k) || edited.has(k) || names.has(k.split('/').pop())) return true; for (const d of dirs) if (k.startsWith(d + '/')) return true; return false; };
+    return { known: files.size + dirs.size + edited.size > 0, has, named: files.size + dirs.size, edited: edited.size };
+  });
+}
+/** 这几个文件是做这个 change 时改的：记下来（去重，最多 3000 个）。同名变更归档后重建的从头记 */
+function learnEdits(dir, list) {
+  const k = S.normKey(dir); const born = S.changeBorn(dir);
+  const add = [...new Set((list || []).map((f) => S.normKey(f)))].filter((f) => !NOT_OWN.test(f));
+  if (!add.length) return false;
+  const cur = S.readState('change-files')[k];
+  if (cur && cur.born === born && add.every((f) => (cur.files || []).includes(f))) return false;
+  S.updateState('change-files', (o) => { const r = o[k] && o[k].born === born ? o[k] : { born, files: [] }; r.files = [...new Set((r.files || []).concat(add))].slice(-3000); r.at = Date.now(); o[k] = r; });
+  try { require('./invocation').forget('change-scope|' + k); require('./invocation').forget('change-fingerprint|' + k); } catch (e) { /* 不在钩子里 */ }
+  return true;
+}
+/**
+ * 这个会话现在在做哪个 change（目录）：大任务按当前 change（全面自测、等核验时算最后一个做出代码的）；不是大任务的看切到的、开工范围里唯一的、动过的唯一的。
+ * 不在流程里、定不了返回 ''
+ */
+function currentChangeDir(j) {
+  const st = S.flowState(j); if (!st.on) return '';
+  const B = require('./big-task'); const task = B.forSession(j);
+  if (task) {
+    const name = B.phaseFor(j, task).change;
+    const c = (name && task.changes.find((x) => x.name === name && x.exists)) || task.changes.slice().reverse().find((x) => x.exists && !x.archived && x.done > 0);
+    return c ? c.dir : '';
+  }
+  if (st.currentDir && fs.existsSync(st.currentDir)) return st.currentDir;
+  const scoped = Object.keys((st.applyScope || {}).dirs || {}).filter((d) => fs.existsSync(d));
+  if (scoped.length === 1) return scoped[0];
+  const touched = S.flowChanges(j).filter((d) => fs.existsSync(d));
+  return touched.length === 1 ? touched[0] : '';
+}
+/**
+ * 编辑工具改成功了一个文件（after-tool 调）：在流程里的，算到现在在做的 change 上。
+ * 大任务里当前 change 还一项都没勾过的（文档写好了、还没开工）：同时记到前面开过工、没归档的最后一个 change 上（复审 R1：
+ * c2 勾完在审、在改审出的问题，c3 的文档已经写好，改的文件只记到 c3，c2 复审时看不到）
+ */
+function noteEdit(j, file) {
+  if (!file) return false;
+  const abs = path.resolve((j && j.cwd) || process.cwd(), String(file));
+  if (NOT_OWN.test(S.normKey(abs))) return false;
+  const dir = currentChangeDir(j);
+  if (!dir) return false;
+  let also = '';
+  try {
+    const B = require('./big-task'); const task = B.forSession(j);
+    const at = task ? task.changes.findIndex((c) => S.normKey(c.dir) === S.normKey(dir)) : -1;
+    if (at > 0 && !task.changes[at].done) { const prev = task.changes.slice(0, at).reverse().find((c) => c.exists && !c.archived && c.done > 0); if (prev) also = prev.dir; }
+  } catch (e) { also = ''; }
+  const a = learnEdits(dir, [abs]); const b = also ? learnEdits(also, [abs]) : false;
+  return a || b;
+}
+/** 开工基线以来改过的代码里算这个 change 的：范围认得出就只留范围里的，认不出照旧全算 */
+function ownChanged(dir) {
+  const all = changedCode(dir).filter((f) => !NOT_INPUT.test(f));
+  const scope = changeScope(dir);
+  return scope.known ? all.filter((f) => scope.has(f)) : all;
+}
+/** 整个 change 的代码范围：任务点了名的文件，加开工基线以来改过的、算这个 change 的文件 */
+function changeFiles(dir) {
+  const out = new Map();
+  for (const g of groups(dir)) for (const f of namedFiles(dir, g)) out.set(S.normKey(f), f);
+  for (const f of ownChanged(dir)) out.set(S.normKey(f), f);
+  return [...out.keys()].sort().map((k) => out.get(k));
+}
+/** 一个文件的指纹：太大的不读内容，看大小和修改时间 */
+function fileRow(f) {
+  try { const st = fs.statSync(f); return st.size > 8 * 1024 * 1024 ? [S.normKey(f), st.size, st.mtimeMs] : [S.normKey(f), W.hash(fs.readFileSync(f))]; } catch (e) { return [S.normKey(f), '缺失']; }
+}
+/**
+ * 跨 change 的修改点（用户 2026-11-03 定的）：别的 change 的 revisions.md "影响 change"列到这个 change 的，算这个 change 的一个审查点，
+ * 只审那处修改对它的影响。没列的靠全面自测。这个 change 还没做出代码的不算。指纹只看那一节，改代码不会把审过的点又打开。
+ */
+function crossPoints(dir) {
+  try {
+    const B = require('./big-task'); const name = path.basename(dir);
+    const task = B.ofChange(path.resolve(dir, '../../..'), dir); if (!task) return [];
+    const out = [];
+    for (const c of task.changes) {
+      if (c.name === name || !c.exists) continue;
+      let text = ''; try { text = fs.readFileSync(path.join(c.dir, 'revisions.md'), 'utf8'); } catch (e) { continue; }
+      for (const sec of text.split(/^(?=##\s)/m)) {
+        const m = /影响 change\s*[:：]\s*(.+)/.exec(sec);
+        if (m && m[1].split(/[、,，\s]+/).includes(name)) out.push({ id: 'cross-' + c.name + '-' + W.hash(sec).slice(0, 8), from: c.name, text: sec.trim() });
+      }
+    }
+    return out;
+  } catch (e) { return []; }
+}
+const isCross = (point) => /^cross-/.test(String(point || ''));
+function crossText(dir, point) { const c = crossPoints(dir).find((x) => x.id === point); return c ? c.from + ' 的修改：\n' + c.text : ''; }
+/** 写好了哪几份需求文档（按顺序）。写好不等于要审：要审的点看 points */
+function written(dir) {
+  const files = S.artifactFiles(dir);
+  return DOCS.filter(p => files.some(f => p === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === p + '.md'));
+}
+/** 必审的点。需求文档：tasks 写了才有，审整套。代码：任务全部做完才有 */
+function points(dir, mode) {
+  if (mode === 'code') { const all = groups(dir); return all.length && all.every(g => g.done) ? [CHANGE].concat(crossPoints(dir).map((c) => c.id)) : []; }
+  return written(dir).includes('tasks') ? ['tasks'] : [];
+}
+/** 能审的点：必审的，加上用户点名才审的单份文档、做完的组 */
+function reviewable(dir, mode) {
+  if (mode === 'code') return groups(dir).filter(g => g.done).map(g => g.id).concat(points(dir, 'code'));
+  return written(dir);
+}
+function pointFiles(dir, point) {
+  const files = S.artifactFiles(dir).filter(f => !/revisions\.md$/.test(f));
+  const rank = DOCS.indexOf(point);
+  if (rank >= 0) return files.filter(f => { const p = /[\\/]specs[\\/]/.test(f) ? 'specs' : path.basename(f, '.md'); return DOCS.indexOf(p) >= 0 && DOCS.indexOf(p) <= rank; });
+  // 整个 change：材料取开工基线以来的全部改动，不按文件筛
+  if (point === CHANGE || isCross(point)) return [];
+  const group = groups(dir).find(g => g.id === point); if (!group) return files;
+  return namedFiles(dir, group);
+}
+function fingerprint(dir, point) {
+  if (isCross(point)) return W.hash(JSON.stringify([point, crossText(dir, point)]));
+  // 整个 change：文档和任务一段、代码一段，sameInput 要分开比
+  if (point === CHANGE) {
+    // 一次钩子调用里只算一次：要跑 git、读文件，settled、instruction 会反复问
+    return require('./invocation').memo('change-fingerprint|' + S.normKey(dir), () => {
+      const plan = W.hash(JSON.stringify([groups(dir).map(g => g.tasks.map(t => t.text)), pointFiles(dir, 'design').map(f => [S.normKey(f), W.hash(read(f))])]));
+      const files = changeFiles(dir);
+      return plan + ':' + (files.length ? W.hash(JSON.stringify(files.map(fileRow))) : W.fingerprint(dir, 'code').hash);
+    });
+  }
+  const group = groups(dir).find(g => g.id === point); const files = pointFiles(dir, point);
+  const rows = files.map(f => [S.normKey(f), W.hash(path.basename(f) === 'tasks.md' ? W.progressText(read(f)) : read(f))]);
+  if (group) {
+    rows.push(['任务', group.tasks.map(t => t.text)]);
+    for (const f of pointFiles(dir, 'design')) rows.push([S.normKey(f), W.hash(read(f))]);
+    if (!files.length) rows.push(['代码', W.fingerprint(dir, 'code').hash]);
+  }
+  return W.hash(JSON.stringify(rows));
+}
+// 记录带着变更目录的创建时间：旧变更归档后新建同名变更，路径一样，不能接着用旧轮数（2026-10-17 审核问题 5）。没有 born 的旧记录照认
+function live(dir, r) { return r && (!r.born || r.born === S.changeBorn(dir)) ? r : {}; }
+function record(dir, point) { return live(dir, S.readState('review-points')[key(dir, point)]); }
+// 没有 P1、P2 就算过（问题表第 37 条，用户 2026-11-02 定的）：P3 记在审查记录里，不为它再审一轮。升级前的记录没有 blocking，按总数算
+const blockingOf = (r) => (r.blocking === undefined ? Number(r.issues) || 0 : Number(r.blocking) || 0);
+/**
+ * 这个变更开工之后，同一个项目里又有别的变更开工了。工作区的改动从这时起算后面那个变更的：
+ * 前面的 change 审过之后不因为它重开，跨 change 的影响走 revisions.md 的"影响 change"和全面自测（用户 2026-11-03 定的）
+ */
+function laterStarted(dir) {
+  const all = S.readState('work-baselines'); const k = S.normKey(dir); const me = all[k];
+  if (!me) return false;
+  const roots = new Set((me.repos || []).map(r => S.normKey(r.root)));
+  // 目录不在的（归档了、删了）不算：做完归档了的热修不该让这个 change 的改动从此不再复审（复审 20261105 第 4 条）
+  return Object.keys(all).some(o => o !== k && all[o] && (Number(all[o].at) || 0) > (Number(me.at) || 0) && (all[o].repos || []).some(r => roots.has(S.normKey(r.root))) && fs.existsSync(o));
+}
+/** 旧版按组审完的 change：每组都过了；没点名的文件有改动的，还要 group-rest 审过（2026-10-17 审核问题 6：不能把没审的记成审过） */
+function reviewedByGroups(dir) {
+  const all = groups(dir);
+  if (!all.length || !all.every(g => settled(dir, g.id))) return false;
+  const named = new Set();
+  for (const g of all) { const files = namedFiles(dir, g); if (!files.length) return true; files.forEach(f => named.add(S.normKey(f))); } // 有一组一个文件都没点名：那一组审的就是全部改动
+  if (!changedCode(dir).some(f => !NOT_INPUT.test(f) && !named.has(S.normKey(f)))) return true;
+  const rest = record(dir, 'group-rest');
+  return rest.status === 'resolved' || rest.status === 'completed' && blockingOf(rest) === 0;
+}
+/**
+ * 这个 change 做完过、同一个大任务里排在后面的 change 已经开工（勾过任务、目录还在）：它现在的改动是回改（第 81、84 条）。
+ * 后面的还没开工的，照旧是它自己的修改，要再审；后面的归档了（目录不在）也照旧要再审（复审 20261105 第 4 条：归档了的热修不该让它从此不再复审）
+ */
+function revisited(dir) {
+  try {
+    const B = require('./big-task'); const task = B.ofChange(path.resolve(dir, '../../..'), dir);
+    if (!task || task.legacy) return false;
+    const at = task.changes.findIndex((c) => S.normKey(c.dir) === S.normKey(dir));
+    if (at < 0 || !B.finishedMap(task)[task.changes[at].name]) return false;
+    return task.changes.slice(at + 1).some((c) => c.exists && !c.archived && c.done > 0);
+  } catch (e) { return false; }
+}
+/**
+ * 审过的输入和现在一样吗。整个 change 的点：后面的变更开工了只比文档和任务，代码那一段不比。
+ * 回改（第 81、84 条，2026-11-11）：做完过、当前 change 已经在它后面的，回改不重开它审过的结论，文档、任务也不比——
+ * 回改的代码在当前 change 的审查里一起审（做它的会话改的文件都记在当前 change 上），对别的 change 的影响走 revisions.md 的"影响 change"
+ */
+function sameInput(dir, point, saved) {
+  const now = fingerprint(dir, point);
+  if (saved === now) return true;
+  if (point === CHANGE && !!saved && revisited(dir)) return true;
+  return point === CHANGE && !!saved && String(saved).split(':')[0] === now.split(':')[0] && laterStarted(dir);
+}
+function passed(dir, point) { const r = record(dir, point); return r.status === 'completed' && blockingOf(r) === 0 && sameInput(dir, point, r.fingerprint) && require('./review-runner').inputsCurrent(r.materialInputs); }
+function settled(dir, point) {
+  const r = record(dir, point);
+  if (passed(dir, point) || r.status === 'resolved' && sameInput(dir, point, r.resolvedFingerprint) && require('./review-runner').inputsCurrent(r.materialInputs)) return true;
+  // 旧版按组审完的 change（或者用户点名把每组都审了）不再整个重审一遍
+  return point === CHANGE && !r.status && reviewedByGroups(dir);
+}
+const modeOfPoint = (p) => (DOCS.includes(p) ? 'proposal' : 'code');
+/**
+ * 连续 3 次拿不到结论（用户 2026-11-03 定的）：不再催，不算通过，也不挡提交、不挡往下一组走；收工报告里写着没审成。用户自己说审，照样能审，审成了清零。
+ * 审出问题不算：P1、P2 审修不设上限，出口只有没有 P1、P2、逐条处理完（resolve，驳回要写依据）、用户说提交。
+ */
+function halted(dir, point) { const r = record(dir, point); return (r.failStreak || 0) >= 3 && !settled(dir, point); }
+function pending(dir, mode) { return points(dir, mode).find(p => !settled(dir, p) && !halted(dir, p)) || ''; }
+/**
+ * 这个点的审查"没收尾"：审出了问题、还没处理完。提交等它收尾（审查过程不进提交）。
+ * 审过（零问题或处理完）之后代码又改了的不算没收尾（问题表第 25 条，2026-10-31）：以前也算，任务全勾完后改用户报的 bug，
+ * 人工模式下用户不让重审，提交方式"自动"就永远提交不了
+ */
+// 会话开着自动时，"修了、还没复审"（needs_review）也算没收尾：自动会接着复审，等它审完一起提交（复审 V6）。人工模式不算：用户不让复审时会一直提交不了（第 25 条）
+function fixPending(dir, point, cfg) {
+  const r = record(dir, point);
+  const open = r.status === 'completed' && blockingOf(r) > 0 || r.status === 'needs_review' && !!(cfg && cfg.autoMode);
+  // 用户点名审的组：整个 change 审过了就不算没收尾（自动模式不会再回去复审那一组）
+  if (open && /^group-/.test(String(point)) && settled(dir, CHANGE)) return false;
+  return open && !settled(dir, point) && !halted(dir, point);
+}
+function allPassed(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p)); }
+/** 每个点都有结果了：过了，或者连续没拿到结论停了（自动模式靠它往下走，没过的写进报告） */
+function allDone(dir, mode) { const ps = points(dir, mode); return ps.length > 0 && ps.every(p => settled(dir, p) || halted(dir, p)); }
+// rounds 只记录，不限次数（用户 2026-11-03 定的）：轮数只数"审出问题、修了再审"这一串，上一轮零问题通过了，这次重审从头数。
+function concluded(r) { return r.status === 'completed' && blockingOf(r) === 0; }
+
+function begin(dir, point, id, inputHash) {
+  S.updateState('review-points', o => { const k = key(dir, point); const previous = live(dir, o[k]); const base = concluded(previous) ? 0 : previous.rounds || 0; o[k] = { rounds: base + 1, status: 'running', key: id, fingerprint: inputHash, born: S.changeBorn(dir), at: Date.now(), failStreak: previous.failStreak || 0 }; });
+}
+function noteResult(dir, point, result, inputHash) {
+  S.updateState('review-points', o => {
+    const k = key(dir, point); const previous = live(dir, o[k]);
+    const rounds = previous.key === result.id && previous.status === 'running' ? previous.rounds || 1 : (concluded(previous) ? 0 : previous.rounds || 0) + 1;
+    const block = Sc.blocking(result.issues);
+    // 审成了清零；没审成（材料有问题、部分覆盖）算一次，取消、审查期间文件变了不算
+    const failStreak = result.status === 'completed' ? 0 : ['failed', 'partial'].includes(result.status) ? (previous.failStreak || 0) + 1 : previous.failStreak || 0;
+    o[k] = { rounds, status: result.status, issues: result.issues.length, blocking: block, failStreak, fingerprint: inputHash, report: result.file, key: result.id, materialInputs: result.materialInputs, born: S.changeBorn(dir), at: Date.now() };
+  });
+}
+/** 没拿到结论：一轮记一次（roundId 同一个的不重复记）。一轮 3 个角度都被打断也只算一次（复审 20261104 R2） */
+function noteFail(dir, point, roundId) { S.updateState('review-points', o => { const k = key(dir, point); if (!o[k]) return; if (roundId && o[k].failRound === roundId) return; o[k].failRound = roundId || ''; o[k].failStreak = (o[k].failStreak || 0) + 1; }); }
+/**
+ * 这个 change 的任务是这个会话碰它之前就勾完的（早做完的旧 change，这一轮只改了它的规格、revisions）：没有代码要审，不催（第 69 条）。
+ * 已经开始审的接着审；跨 change 的影响走 revisions.md 的"影响 change"。记录里没有碰它的时间的（升级前开着的会话）照旧
+ */
+function oldDone(j, dir) {
+  const st = S.flowState(j);
+  const at = (st.touchedAt || {})[S.normKey(dir)];
+  if (!at || record(dir, CHANGE).status || st.current === path.basename(dir)) return false;
+  const all = T.tasks(dir);
+  if (!all.length || T.automatedLeft(dir).length) return false;
+  try {
+    if (fs.statSync(path.join(dir, 'tasks.md')).mtimeMs >= at) return false;
+    // 碰过之后又改了代码的不算旧（修用户报的问题）。后面的 change 开工了，工作区的改动算它的
+    // 只看算这个 change 的文件（第 77 条）：别的会话在同一个仓库里改了别的模块，不该让早做完的 change 又被催着审
+    if (!laterStarted(dir) && ownChanged(dir).some((f) => { try { return fs.statSync(f).mtimeMs >= at; } catch (e) { return true; } })) return false;
+    return true;
+  } catch (e) { return false; }
+}
+/**
+ * 探索记录里还有没定的（第 85 条，仓库主人 2026-11-12 定的，以前只管开着自动的会话，第 67 条）：没探索到、没问过的不能写进需求，
+ * 先用提问框问用户、写进探索记录，再写需求。没有探索记录的（表外的 change、老任务）不查。不是这个原因的返回 ''
+ */
+function exploreBlocked(j) {
+  try {
+    const B = require('./big-task'); const t = B.forSession(j);
+    const left = t && B.exploreOpen(t) ? B.exploreIssues(t) : [];
+    return left.length ? '探索还没完：' + left.join('；') + '。没探索到、没问过的不能写进需求：先用提问框问用户（一次问完），答案写进探索记录，"还没定的"清空了再写需求。' : '';
+  } catch (e) { return ''; }
+}
+/** 往上找得到 .git（目录或 worktree 的文件）才算在 git 仓库里；不调 git，出错不会被当成"不是仓库" */
+function inGit(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) { if (fs.existsSync(path.join(d, '.git'))) return true; if (path.dirname(d) === d) return false; }
+}
+/** 需求审过以后让模型问的那一问（第 86 条）。选项的字样 session-config.js 的 autoAnswerOf 认，改了两边一起改 */
+const ASK_APPLY = '交代需求要点（审出、改掉的问题一句话带过），用提问框问怎么实施，选项写"自动实施""实施（每步问我）""先不实施"：'
+  + '自动实施的说明写"做完任务→审查→改→复审……最后一个 change 还有全面自测→改→再测再审，全部通过后自动关；中途你说停就停"，实施（每步问我）写"审查、自测前先问你"。'
+  + '用户选了再动手，选先不实施就停在这里。';
+/**
+ * 需求审过（第 85、86 条，仓库主人 2026-11-12 定的）：按提交方式提交一次，然后用提问框问怎么实施（自动实施 / 实施（每步问我）/ 先不实施）。
+ * 每个 change 的需求审完都问，开着自动也问（仓库主人选的"每个 change 需求审完都问"，替代第 41 条的"开着自动不问开工"）；
+ * 用户说了"只写需求""先别开工"的不问。连续 3 次没拿到审查结论的也问，说明没审成。替代 10-30 的"写完 tasks 时定稿和开工合成一问"
+ */
+function planNext(j, c) {
+  const root = path.resolve(c.dir, '../../..'); const rel = path.relative(root, c.dir).split(path.sep).join('/');
+  // 壳子本身可以不是 git 仓库（openspec 在壳子根，代码在子项目）：没有可提交的，直接问（2026-10-17 审核问题 12）
+  const git = inGit(root); let dirty = '';
+  if (git) { try { dirty = W.checkedGit(root, ['status', '--porcelain', '--', rel]).trim(); } catch (e) { return ''; } }
+  if (dirty) {
+    // 提交方式（用户 2026-10-17 定的）：自动——提交一次；询问——问用户一次；关——不提交。提交过一次的（成没成）不再催，接着问怎么实施
+    const mode = S.commitModeOf(S.readConfig());
+    const msg = mode === 'off' ? '' : once(j, 'plan-commit|' + c.dir, fingerprint(c.dir, 'tasks'), mode === 'ask'
+      ? c.name + ' 的需求文档审过了。提交方式是"询问"：用提问框问用户是否提交 docs: 提案 ' + c.name + '（选项"提交定稿"和"先不提交"），用户说提交再提交；这一问答完接着问怎么实施。'
+      : c.name + ' 的需求文档审过了，提交本变更的产物一次 docs: 提案 ' + c.name + '（只 add 这个变更目录），然后问怎么实施。');
+    if (msg) return msg;
+  }
+  if (S.flowState(j).holdApply) return '';
+  const done = !git ? '（' + c.name + ' 所在的目录不是 git 仓库，没有要提交的）' : dirty ? '（还没提交，提不提交由用户定）' : '';
+  const r = record(c.dir, 'tasks');
+  const half = halted(c.dir, 'tasks') ? '需求审查连续 ' + (r.failStreak || 0) + ' 次没拿到结论，没审成，问的时候跟用户说明。' : '';
+  return once(j, 'plan-apply|' + c.dir, fingerprint(c.dir, 'tasks'), c.name + ' 的需求文档审过了' + done + '。' + half + ASK_APPLY);
+}
+function instruction(dir, point) {
+  const mode = modeOfPoint(point); const rec = record(dir, point);
+  if (halted(dir, point)) return '审查点 ' + point + ' 连续 ' + rec.failStreak + ' 次没拿到结论，不再催：这个点算没审过，收工报告里写明"' + point + ' 没审成"；用户说审再审。';
+  const name = path.basename(dir); const run = 'review.js run --change ' + name + ' --mode ' + mode + ' --point ' + point;
+  // 这个点审过、有没处理的 P1、P2：催处理，不催重审（第 79 条：以前一律催"执行 review.js run"，模型再跑一次得到"文件没变不用审"，问题还是没人改）
+  const left = rec.status === 'completed' ? blockingOf(rec) : 0;
+  // 需求审查强制（第 85 条）：不问用户，审出的成立的直接改；要用户拿主意的业务问题问用户，不自己定
+  const docAsk = mode === 'proposal' ? '不用问用户要不要审、要不要改：成立的直接改；要用户拿主意的（范围、业务规则、验收标准）用提问框问，不自己定。' : '';
+  if (left > 0) return '审查点 ' + point + '（' + name + '）上一轮审出的 ' + left + ' 条 P1、P2 还没处理，不用重新审：读问题清单 ' + String(rec.report || '.vibe/reviews/' + name + '/' + mode + '-' + point + '.json').split(path.sep).join('/') + '，逐条核实，成立的改掉并验证，不成立的写依据；写好处理明细后执行 ' + run + ' --decisions <处理明细>（先登记再复审，一条命令）。' + docAsk;
+  if (rec.status === 'needs_review') return '审查点 ' + point + '（' + name + '）的意见登记过了、还没复审：执行 ' + run + '，只审改过的地方，结论在命令输出里，照 next 做。';
+  const what = point === 'tasks' ? '四份需求文档写完了，强制审一次整套。' : point === CHANGE ? '这个 change 的任务全部做完了，审一次整个 change 的改动。' : '';
+  return what + '审查点 ' + point + '：执行 review.js run --change ' + path.basename(dir) + ' --mode ' + mode + ' --point ' + point + '，结论在命令输出里，照 next 做。自动核验、修改、复验，第二轮起只审改过的地方，没有 P1、P2 就算过。' + (docAsk || '需求变化先沟通并同步相关产物和用例。');
+}
+function entriesOf(j) { return j.transcript_path ? S.tailEntries(j.transcript_path, 3000000) : []; }
+function explicit(j, action) { return S.userSaid(entriesOf(j), action).ok; }
+// 提示只记发过哪条，不生成“未审查/未测试”任务，也不登记放弃状态。
+function oncePrompt(j, id, signature, text) { return once(j, id, signature, text); }
+function once(j, id, signature, text) {
+  if (!j.session_id) return text;
+  let fresh = false; S.updateState(j.session_id + '-workflow-prompts', o => { if (o[id] !== signature) { o[id] = signature; fresh = true; } });
+  return fresh ? text : '';
+}
+/** 同一个状态最多说 max 次（once 是一次）。说够了那一次调 onLast */
+function upTo(j, id, signature, max, text, onLast) {
+  if (!j.session_id) return text;
+  let n = 0; S.updateState(j.session_id + '-workflow-prompts', o => { const prev = o[id] && typeof o[id] === 'object' ? o[id] : null; n = prev && prev.sig === signature ? (prev.n || 0) + 1 : 1; o[id] = { sig: signature, n }; });
+  if (n === max && typeof onLast === 'function') onLast();
+  return n <= max ? text : '';
+}
+// 人工模式的提示每个用户要求最多问一次（用户 2026-10-16 定的）：同一个要求里后面又改了也不再问，只把记下的内容跟到最新；
+// 用户提新要求时，内容比上次记下的又变了才再问。turn 是这一轮用户消息的编号，取不到时只按内容判断。
+function askOnce(j, id, signature, turn, text) {
+  if (!j.session_id) return text;
+  let fresh = false;
+  S.updateState(j.session_id + '-workflow-prompts', o => {
+    const prev = typeof o[id] === 'string' ? { sig: o[id], turn: '' } : o[id] || null;
+    if (turn && prev && prev.turn === turn) { prev.sig = signature; o[id] = prev; return; }
+    if (!prev || prev.sig !== signature) { o[id] = { sig: signature, turn: turn || '' }; fresh = true; }
+  });
+  return fresh ? (typeof text === 'function' ? text() : text) : '';
+}
+// quickPending：改了代码、最后一次修改之后还没跑过快检（verify-gate 算）。这时一起问要不要跑快检，不强制（用户 2026-10-16 定的）
+const QUICK_ASK = '跑快检（项目说明里的快检命令，编译级；这个命令本身要跑测试的，问的时候说明）、要不要';
+// 用户说不要之后（v 是那一次开口），at 这个时间点的改动还在不在那之前：在之前就别再问（#220）
+const stillDeclined = (v, at) => !!v && !(Number(at) > (Number(v.at) || 0));
+/** 这个会话在做任务那一段，dir 又是当前该做的 change（不是大任务的按这一段算）：一项都还没勾也算在做 */
+function applyingNow(j, dir) {
+  if (S.flowStage(j) !== 'apply') return false;
+  const B = require('./big-task');
+  const task = B.forSession(j);
+  return !task || B.phaseFor(j, task).change === path.basename(dir);
+}
+/**
+ * 催审一个点：有没处理的问题、等复审的，模型不动就接着催，同一个状态最多催 3 次（以前只催一次，它收工了就没人管），催够了记进全自动报告；
+ * 别的同一个输入只说一次。需求审查（强制）和自动模式的代码审查共用
+ */
+function reviewPush(j, dir, point) {
+  const rec = record(dir, point); const sig = fingerprint(dir, point) + ':' + (rec.rounds || 0) + ':' + (rec.failStreak || 0);
+  const unsettled = (rec.status === 'completed' && blockingOf(rec) > 0) || rec.status === 'needs_review';
+  // 计数只看状态（复审 R6：带指纹的话模型一改文件就从 1 数起，没有上限）
+  return unsettled ? upTo(j, key(dir, point) + '|unsettled', [rec.status, blockingOf(rec), rec.rounds || 0, rec.key || ''].join(':'), 3, instruction(dir, point), () => { try { require('./report').note(j, { kind: 'hand', title: path.basename(dir) + ' 的审查点 ' + point + (rec.status === 'needs_review' ? ' 修了还没复审' : ' 有 ' + blockingOf(rec) + ' 条 P1、P2 没处理'), detail: '收工时催了 3 次没有动' }); } catch (e) { /* 记不了不影响 */ } }) : once(j, key(dir, point), sig, instruction(dir, point));
+}
+/** lastEditAt：这一轮最后一次改代码、页面的时间（收工检查算），用户说不用审、不用测之后又改了才再问 */
+function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
+  const quick = () => typeof quickPending === 'function' && quickPending() ? QUICK_ASK : '';
+  const cfg = S.readConfigFor(j); const out = [];
+  // 这一轮用户最后的表态是不审、不测（提问框选了"就这样定稿""直接写下一份""不用"，或者原话说了不用）：那一份不再问
+  const noReview = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'review');
+  const noTest = cfg.autoMode ? null : S.userDeclined(entriesOf(j), 'test');
+  // 按 normKey 去重：touched 是原样的路径、flowChanges 是小写正斜杠的，同一个 change 以前会算两遍（第 79 条的"最多催 3 次"一轮就数了两次）
+  const seen = new Set(); const dirs = [...touched, ...S.flowChanges(j)].filter((d) => { const k = S.normKey(d); if (seen.has(k) || !fs.existsSync(d)) return false; seen.add(k); return true; });
+  for (const dir of dirs) {
+    // 每个 change 按自己走到哪算（回改前面的 change、接下一个时，几个 change 不在同一段）：开过工、正在做的算代码，别的算需求
+    const mode = S.changeStarted(dir) || applyingNow(j, dir) ? 'code' : 'proposal';
+    if (oldDone(j, dir)) continue;
+    // 需求阶段没有自动模式（第 85 条）：自动只管代码那一段
+    const auto = mode === 'code' && !!cfg.autoMode;
+    // 连续没拿到结论的点：说一次不再催、写进报告，接着往下（需求审查两种模式都一样）
+    if (auto || mode === 'proposal') for (const p of points(dir, mode).filter((x) => halted(dir, x))) { const m = once(j, key(dir, p) + '|limit', fingerprint(dir, p) + ':' + (record(dir, p).failStreak || 0), instruction(dir, p) + '接着往下做。'); if (m) out.push(m); }
+    // 有角度正在跑：不催，也别再开一个
+    if (require('./review-runner').inFlight(dir, mode)) continue;
+    if (mode === 'proposal') {
+      // 需求一次写到 tasks，写完强制审修（第 85 条，仓库主人 2026-11-12 定的，替代 10-17 的逐份写、每份停下让用户看，和 11-05 的人工写完问要不要审）
+      const docs = written(dir);
+      if (!docs.length) continue;
+      if (!docs.includes('tasks')) {
+        // 探索记录还有没定的：先问用户，不往下写（没探索到、没问过的不写进需求）
+        const why = exploreBlocked(j);
+        const nextDoc = DOCS.find((p) => !docs.includes(p));
+        // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
+        const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).split(path.sep).join('/');
+        const msg = why ? once(j, key(dir, 'explore-open'), why, why) : once(j, key(dir, 'next-doc'), docs.join() + ':' + fingerprint(dir, docs[docs.length - 1]), '需求文档一次写到 tasks：当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '') + ' 写完了 ' + docs.join('、') + '，接着写 ' + nextDoc + '（openspec instructions ' + nextDoc + ' --change "' + path.basename(dir) + '"），中间不停、不问审查。有疑问用提问框问用户；探索记录、用户的话、读过的代码和材料里没有的，不写进需求。');
+        if (msg) out.push(msg);
+        continue;
+      }
+      const point = pending(dir, 'proposal');
+      if (point) { const m = reviewPush(j, dir, point); if (m) out.push(m); }
+      continue;
+    }
+    const point = auto ? pending(dir, mode) : points(dir, mode).slice().reverse().find((p) => !settled(dir, p));
+    if (!point) continue;
+    if (auto) { const m = reviewPush(j, dir, point); if (m) out.push(m); continue; }
+    if (stillDeclined(noReview, lastEditAt) && stillDeclined(noTest, lastEditAt)) {
+      // 记成问过了：同一份内容以后也不再问
+      askOnce(j, key(dir, point), fingerprint(dir, point), turn, '');
+      continue;
+    }
+    // 代码审查点：这一轮用户已经说了审查、自测，收工不再提示去问（审核第四节第 2 条）；没做的由用户的原话管，不靠这里催
+    if (S.userSaid(entriesOf(j), 'review').ok && S.userSaid(entriesOf(j), 'test').ok) continue;
+    // 壳子里几个子项目可能有同名变更：变更不在会话启动的那个项目里时，带上项目的相对路径
+    const root = path.resolve(dir, '../../..'); const rel = path.relative(path.resolve(j.cwd || root), root).split(path.sep).join('/');
+    const name = '当前 ' + path.basename(dir) + (rel ? '（' + rel + '）' : '');
+    const after = '选择放弃就继续，不写未审查或未测试记录、不催补做。审查后先展示全部问题，再用一个提问框逐条选（一条一个问题，一框最多 4 条，多了分几框）：改（推荐）/不改/自行输入；用户选了"改"的，改完直接复验，不再问；没选"改"的复验，这一轮用户已经要求过的直接做，没要求过的先问。';
+    const msg = askOnce(j, key(dir, point), fingerprint(dir, point), turn, () => (point === CHANGE ? name + ' 的任务全部做完了' : name + ' 的 ' + point + ' 已完成') + '。用一个提问框问，一件事一个问题：要不要' + quick() + '审查、要不要按验收用例自测；用户已明确要求的直接执行。' + after);
+    if (msg) out.push(msg);
+  }
+  // 人工模式、不在 OpenSpec 任务组里的代码改动：改完问一次审查、自测。用户答了不用，这个会话后面再改代码不再问那一样
+  // （用户 2026-10-30 定的，替代 2026-10-16"新要求、内容变了才再问"）。验收用例只写在走 OpenSpec 的 design.md 里，这里只说自测（审核第三节第 7 条）
+  // /vk-fix（小改动快车道，用户 2026-10-30 定的斜杠命令）这一轮：不问审查、自测，命令里写明了最后只问一次提交
+  const vkFix = (() => { try { return S.turnVoices(entriesOf(j)).some((v) => (v.kind === 'command' && /^vk-fix$/i.test(String(v.command || ''))) || /^\s*\/vk-fix\b/i.test(String(v.text || ''))); } catch (e) { return false; } })();
+  if (!cfg.autoMode && codeChanged && !dirs.length && !explicit(j, 'test') && !vkFix) {
+    const keyD = j.session_id && j.session_id !== 'unknown' ? String(j.session_id) + '-plain-declined' : '';
+    let sess = keyD ? S.readState(keyD) : {};
+    if (keyD && ((noReview && !sess.review) || (noTest && !sess.test))) { S.updateState(keyD, (o) => { if (noReview && !o.review) o.review = Date.now(); if (noTest && !o.test) o.test = Date.now(); }); sess = S.readState(keyD); }
+    const askReview = !sess.review && !stillDeclined(noReview, lastEditAt);
+    const askTest = !sess.test && !stillDeclined(noTest, lastEditAt);
+    if (askReview || askTest) {
+      const what = askReview && askTest ? '审查、要不要自测' : askReview ? '审查' : '自测';
+      const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用一个提问框问，一件事一个问题：要不要' + q + what + '；用户说不用就直接继续，这个会话里不再问这一样，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
+    }
+  }
+  return out;
+}
+/**
+ * 这条命令真的在备审查：拆开的命令段里有"node <套件的 tools/review.js> prepare"（run 是别名）。以前对整条命令文字匹配，
+ * 记问题反馈、写提交信息时正文里引用了这几个字也被当成要审查（旧第 5 类，#187 第 6 点；同类的 #153 只改了审查预算那一处）
+ */
+function reviewRun(j, cmd, ps) {
+  if (!/review\.js/i.test(cmd)) return false;
+  try {
+    const G = require('../hooks/guard-commit');
+    for (const seg of G.splitCommand(G.preprocess(cmd, ps).s, ps).flat()) {
+      const ws = G.words(G.scanRedirects(seg).rest, ps).map(w => String(w.text));
+      let k = 0;
+      while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(ws[k] || '')) k++;
+      if (!/^node(?:\.exe)?$/i.test(path.basename(String(ws[k] || '').replace(/\\/g, '/')))) continue;
+      const script = String(ws[k + 1] || '');
+      if (!/(?:^|[\\/])review\.js$/i.test(script)) continue;
+      // 认套件的那份；路径里带着套件目录名的也算（写的是 $HOME/.claude/vibe-kit/tools/review.js 这类）
+      const kitOwn = S.normKey(path.resolve(j.cwd || process.cwd(), S.expandHome(script))) === S.normKey(path.join(S.KIT, 'tools/review.js')) || /vibe-kit[\\/]+tools[\\/]+review\.js$/i.test(script);
+      if (kitOwn && ['run', 'prepare'].includes(ws[k + 2])) return true;
+    }
+  } catch (e) { return /review\.js["']?\s+(?:run|prepare)\b/.test(cmd); }
+  return false;
+}
+function actionIssue(j) {
+  const cfg = S.readConfigFor(j); let inp = j.tool_input || {}; let name = String(j.tool_name || '');
+  const cmd = String(inp.command || '');
+  const runsReview = /^(Bash|PowerShell)$/.test(name) && reviewRun(j, cmd, name === 'PowerShell');
+  const reviewer = /^(Agent|Task)$/.test(name) && (/(?:vk|ttls|vibe)-reviewer/.test(inp.subagent_type || '') || /审查任务\s*[:：]/.test(String(inp.prompt || '')));
+  const review = reviewer || runsReview || name === 'Skill' && /cross-review/.test(inp.skill || '');
+  const shellTest = /^(Bash|PowerShell)$/.test(name) && testCommand(cmd, name === 'PowerShell');
+  const test = !review && (shellTest || name === 'Skill' && /see-page/.test(inp.skill || ''));
+  if (!review && !test) return '';
+  // 审查不开子代理（第 72 条，仓库主人 2026-11-05 定的）：脚本调 claude -p
+  if (reviewer) return '审查不开子代理（2026-11-05 起）：跑 review.js run（--change、--mode、--point、--project 照旧），脚本调 claude -p 审完，结论在命令输出里。写法见 /vk-cross-review。';
+  const pointOf = () => { const m = cmd.match(/--change\s+["']?([^\s"']+)/); const p = cmd.match(/--point\s+([\w-]+)/); return { change: m && S.allChanges(j.cwd).find(c => c.name === m[1]), point: p ? p[1] : '' }; };
+  // 需求审查强制（第 85 条，仓库主人 2026-11-12 定的）：四份写完审一次整套，两种模式都不问用户。单份文档不单独审，用户点名的除外
+  if (runsReview && /--mode\s+["']?proposal/.test(cmd)) {
+    const { change, point } = pointOf();
+    if (change && !point) return '需求审查要指定审查点 --point tasks（四份写完审一次整套）。';
+    if (change && !points(change.dir, 'proposal').includes(point) && !explicit(j, 'review')) return '需求文档不单独审 ' + point + '：一次写到 tasks，审一次整套（--point tasks）。现在接着写，写完钩子会提醒。';
+    return '';
+  }
+  // 全部通过、自动关了以后，用户核验时报的问题照旧自动修（第 86 条）：这时跑审查、自测，代码和自测时不一样，就重新打开自动
+  if (!cfg.autoMode) { try { if (require('./auto-run').fixResume(j, true)) Object.assign(cfg, S.readConfigFor(j)); } catch (e) { /* 判断不了照人工 */ } }
+  // 开着自动、在 OpenSpec 流程里：审查不用先问用户（第 68 条）。这一轮算不算自动（插了句话）不影响；用户说了停、普通改动除外
+  const flowNow = S.flowState(j);
+  const sessionAuto = review && cfg.autoSession === true && flowNow.on === true && !flowNow.paused;
+  if (cfg.autoMode || sessionAuto) {
+    if (runsReview) {
+      const { change, point } = pointOf();
+      if (change && !point) return '自动审查必须指定当前审查点 --point ' + (pending(change.dir, 'code') || CHANGE);
+      // 某一组不单独审：用户点名的除外
+      if (change && !points(change.dir, 'code').includes(point) && !explicit(j, 'review')) return '自动模式不单独审 ' + point + '：代码等这个 change 的任务全部做完审一次（--point change）。现在接着做，到时候钩子会提醒。';
+    }
+    return '';
+  }
+  let used = '';
+  if (explicit(j, review ? 'review' : 'test')) {
+    if (!review) return '';
+    const permit = require('./permissions').allow(j, 'review', j.cwd, j.tool_use_id);
+    if (permit.ok) return '';
+    // 上一次审查已经用掉了这次许可：说清楚，免得模型以为是没认出提问框
+    // 1028 起同一句"审查"这一轮里能用好几次（问题反馈表第 16 条），走到这里是别的原因（多个变更没点名这类）：原样说
+    used = permit.reason ? '（' + permit.reason + '）' : '';
+  }
+  // 开关开着、这一轮又不算自动：说清为什么（#227、问题反馈表第 8 条：提示只写"人工模式"，用户和模型都以为套件没读到新开关）
+  let why = '';
+  if (cfg.autoApply) {
+    try {
+      const v = S.flowView(j);
+      why = '（' + (cfg.autoSession ? '这个会话开着自动' : '配置开了 Apply 自动') + '，但这一轮不算自动：'
+        + (v.waiting ? v.waiting : v.phase === '需求与提案' ? '还在写需求那一段，需求阶段没有自动模式（需求的整套审查不用问，别的照人工）' : '这一轮不在 OpenSpec 流程里（问答、插进来的一句话不算）') + '）';
+    } catch (e) { why = ''; }
+  }
+  // 这段话用户也看得到（问题表第 32 条：只说了"启动OA"，看到"人工模式：先用 Ask 询问是否自测或复验及范围"摸不着头脑）：直说用户这一轮没要求什么。
+  // 只是起服务的单独说：问要不要起，不问范围
+  const statusNote = '用户问服务起着没有：先 devserver.js status，起着的直接给地址，没起的问一次要不要起，不分几次问。';
+  if (!review && shellTest && startCommand(cmd, name === 'PowerShell')) {
+    return '用户这一轮没说要起服务' + why + '：先用 Ask 问一次要不要起，得到用户明确要求后执行' + used + '。选项写成"起（服务名）"和"不用"，不问范围，用户选了起就直接起；用户在对话里说"启动 OA""重启后端""把服务起起来""我要看看系统"也算。' + statusNote + '用户放弃就继续，不记录未测试或待办。';
+  }
+  // 说清楚用户怎么答才算（#210、#212：只说"先 Ask"，模型和用户都不知道哪句话算数，去翻套件源码找口令）
+  return '用户这一轮没说要' + (review ? '审查' : '自测') + why + '：先用 Ask 询问是否' + (review ? '审查' : '自测或复验') + '及范围，得到用户明确要求后执行' + used + '。'
+    + (review ? '选项写成"审查（范围）"和"不用"，用户选了审查就直接执行；用户在对话里说"审查""审一下""再审一次"也算。'
+      : '选项写成"自测（范围）"和"不用"，用户选了自测就直接跑；用户在对话里说"自测""跑测试""跑复验""把服务起起来""我要看看系统"也算。' + statusNote)
+    + '用户放弃就继续，不记录未审查、未测试或待办。';
+}
+// 人工模式要先 Ask 的"自测"：跑测试、起服务、看页面。编译、类型检查、静态检查算写代码的一部分，直接跑（用户 2026-10-16 定的）。
+function testCommand(cmd, ps) {
+  const G = require('../hooks/guard-commit');
+  return G.splitCommand(G.preprocess(cmd, ps).s, ps).flat().some(seg => selfTestWords(G.words(seg, ps).map(w => w.text)));
+}
+/** 这条命令只是在起服务，没有跑测试（devserver start、spring-boot:run、npm run dev 这类） */
+function startCommand(cmd, ps) {
+  const G = require('../hooks/guard-commit');
+  const segs = G.splitCommand(G.preprocess(cmd, ps).s, ps).flat().map(seg => G.words(seg, ps).map(w => String(w.text)));
+  const hits = segs.filter(selfTestWords);
+  return hits.length > 0 && hits.every(startWords);
+}
+function startWords(words) {
+  const base = w => path.basename(String(w || '').replace(/\\/g, '/')).replace(/\.(?:exe|cmd|bat|sh)$/i, '').toLowerCase();
+  const low = words.map(w => String(w).toLowerCase());
+  // 前面的环境变量、env、cross-env 跳过（selfTestWords 也是这么看的）
+  let k = 0; while (/^[a-z_][a-z0-9_]*=/.test(low[k] || '') || /^(?:env|cross-env)$/.test(base(low[k]))) k++;
+  const exe = base(low[k]); const args = low.slice(k + 1);
+  if (exe === 'node') return args.some((a, i) => base(a) === 'devserver.js' && args[i + 1] === 'start');
+  if (/^mvnw?$/.test(exe)) return args.some(a => /^[\w.-]+:(?:run|start)$/.test(a)) && !args.some(a => /^(?:test|integration-test|verify)$/.test(a));
+  if (/^gradlew?$/.test(exe)) return args.some(a => /^(?:[\w:-]*:)?(?:bootrun|run|apprun)$/.test(a)) && !args.some(a => /^(?:test|check|build)$/.test(a));
+  if (/^(?:npm|pnpm|yarn)$/.test(exe)) return args.some(a => /^(?:dev|start|serve|preview)(?:[:_-].*)?$/.test(a));
+  return false;
+}
+const SCRIPT_EXT = /\.(?:[cm]?js|ts|py)$/i;
+// 脚本只看文件名，目录只认 test、tests、__tests__、spec：test-package/publish.js 不是自测
+function testScript(file) {
+  const parts = String(file).replace(/[\\/]+$/, '').split(/[\\/]+/); const name = parts[parts.length - 1];
+  return parts.slice(0, -1).some(d => /^(?:tests?|__tests__|spec)$/i.test(d)) || SCRIPT_EXT.test(name) && /(?:^|[-_.])(?:tests?|spec|scenario|probe)(?:[-_.]|$)/i.test(name.replace(SCRIPT_EXT, ''));
+}
+function selfTestWords(words) {
+  const base = w => path.basename(String(w || '')).replace(/\.(?:exe|cmd|bat)$/i, '').toLowerCase();
+  let ws = words.slice();
+  // 前面的环境变量赋值、env / cross-env 包一层的，看里面真正跑的命令
+  for (let k = 0; ;) {
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(ws[k] || '')) { k++; continue; }
+    if (/^(?:env|cross-env)$/.test(base(ws[k]))) { k++; while (/^-/.test(ws[k] || '')) { if (/^(?:-C|--chdir|-u|--unset)$/.test(ws[k])) k++; k++; } continue; }
+    ws = ws.slice(k); break;
+  }
+  let exe = base(ws[0]); let args = ws.slice(1);
+  if (/^(?:npx|pnpx)$/.test(exe)) { args = args.filter(a => !/^(?:-y|--yes|--no-install)$/.test(a)); exe = base(args[0]); args = args.slice(1); }
+  if (/^(?:pytest|jest|vitest|mocha|ava|karma|cypress)$/.test(exe)) return true;
+  if (exe === 'playwright') return args.includes('test');
+  // 后面跟目录、文件、模块名的开关，它的取值不当子命令
+  const plainOf = (valued) => { const out = []; for (let i = 0; i < args.length; i++) { if (valued.test(args[i])) { i++; continue; } if (!/^-/.test(args[i])) out.push(args[i].toLowerCase()); } return out; };
+  if (/^(?:npm|pnpm|yarn)$/.test(exe)) {
+    const w = plainOf(/^(?:--prefix|--cwd|--dir|-C|--filter|-F|--workspace|-w)$/); const sub = w[0] || '';
+    const script = /^(?:run|run-script|rum|urn)$/.test(sub) ? w[1] || '' : sub;
+    return /^(?:t|tst|test)$/.test(sub) || /^(?:test|e2e|cypress|playwright)(?:[:_-].*)?$/.test(script) || /^(?:dev|start|serve|preview)(?:[:_-].*)?$/.test(script);
+  }
+  if (/^mvnw?$/.test(exe)) {
+    const goals = plainOf(/^(?:-f|--file|-pl|--projects|-s|--settings|-gs|--global-settings|-rf|--resume-from|-T|--threads|-t|--toolchains|-l|--log-file|-P|--activate-profiles|-D|--define)$/);
+    const skip = args.some(a => /^-D(?:skipTests|maven\.test\.skip)(?:=true)?$/i.test(a));
+    return goals.some(g => /^[\w.-]+:(?:run|start)$/.test(g)) || !skip && goals.some(g => /^(?:test|integration-test|verify|package|install|deploy)$/.test(g) || /:(?:test|integration-test)$/.test(g));
+  }
+  if (/^gradlew?$/.test(exe)) {
+    const excluded = args.filter((a, i) => i > 0 && /^(?:-x|--exclude-task)$/.test(args[i - 1])).map(a => a.toLowerCase().split(':').pop());
+    const tasks = plainOf(/^(?:-x|--exclude-task|-p|--project-dir|-b|--build-file|-c|--settings-file|-g|--gradle-user-home|-I|--init-script)$/).map(t => t.split(':').pop());
+    const skipTest = excluded.includes('test');
+    return tasks.some(t => /^(?:test|check|build)$/.test(t) ? !skipTest : /^(?:integrationtest|connectedcheck|bootrun|run|apprun)$/.test(t));
+  }
+  if (exe === 'node') {
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '--test') return true;
+      if (/^(?:-e|--eval|-p|--print|-c|--check)$/.test(a)) return false;
+      if (/^(?:-r|--require|--import|--loader|--experimental-loader)$/.test(a)) { i++; continue; }
+      if (/^-/.test(a)) continue;
+      if (/[\\/]skills[\\/](?:vk-db-crud|vk-redis)[\\/]/i.test(a)) return false;
+      if (base(a) === 'devserver.js') return String(args[i + 1] || '').toLowerCase() === 'start';
+      return testScript(a);
+    }
+    return false;
+  }
+  if (/^(?:python3?|py)$/.test(exe)) {
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '-m') return /^(?:pytest|unittest|nose2?|tox)$/i.test(args[i + 1] || '');
+      if (a === '-c') return false;
+      if (/^-/.test(a)) continue;
+      if (/[\\/]skills[\\/](?:vk-db-crud|vk-redis)[\\/]/i.test(a)) return false;
+      return testScript(a) || base(a) === 'manage.py' && String(args[i + 1] || '').toLowerCase() === 'test';
+    }
+    return false;
+  }
+  return false;
+}
+module.exports = { changeScope, learnEdits, noteEdit, currentChangeDir, oncePrompt, groups, isCross, crossText, CHANGE, exploreBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, planNext, reviewPush, instruction, stop, actionIssue, explicit, testCommand };
