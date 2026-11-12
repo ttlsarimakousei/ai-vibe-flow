@@ -196,7 +196,7 @@ function archived(p, name, file) {
     H.ok('自动模式不问归到哪', !/归到 订单/.test(H.reasonOf(o5)), H.reasonOf(o5));
   }
 
-  H.section('第 67 条：开着 vk-auto 写到 tasks 再审，不被拦下看一看');
+  H.section('第 67 条（第 85 条改了）：写到 tasks 再审，不被拦下看一看；开不开自动都一样');
   {
     const h = H.makeHome('fb1105-67', FROM, QUIET);
     const S = require(path.join(h.kit, 'lib/session')); const P = require(path.join(h.kit, 'lib/flow-policy'));
@@ -206,48 +206,41 @@ function archived(p, name, file) {
     const write = (p, d, sid, rel, content) => H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: path.join(d, rel), content }, transcript_path: tf(h, [H.tr.user('写需求')]) });
     const lookAt = /看一看|给我看过/;
 
-    // 表外的 change：没有 plan.md、没有探索记录
+    // 第 85 条（2026-11-12）起需求阶段没有自动模式：开不开自动都一样，一次写到 tasks、写完强制审修，审过问怎么实施
     const a = mk('a'); const ja = { cwd: a.p, session_id: 's67a', transcript_path: tf(h, [H.tr.user('写需求')]) };
     S.setSessionAuto(ja, true, '测试'); S.setFlow(ja, true, '需求', 'plan'); S.flowTouch(ja, a.d);
-    H.ok('表外的 change、开着自动：算生效', S.readConfigFor(ja).autoMode === true, S.flowView(ja));
+    H.ok('写需求这一段：开着自动也不算自动（第 85 条）', S.readConfigFor(ja).autoMode === false, S.flowView(ja));
     const r1 = write(a.p, a.d, 's67a', 'specs/order/spec.md', SPEC);
     H.ok('写完 proposal 接着写 specs：不拦', !blocked(r1), H.reasonOf(r1));
     const m1 = P.stop(ja, [a.d], false, 't1');
-    H.ok('写完 proposal 就停了：催接着写，不说看一看', m1.some((x) => /接着写下一份 specs/.test(x)) && !m1.some((x) => lookAt.test(x)), m1);
+    H.ok('写完 proposal 就停了：催接着写，不说看一看', m1.some((x) => /接着写 specs/.test(x)) && !m1.some((x) => lookAt.test(x)), m1);
     H.write(path.join(a.d, 'specs/order/spec.md'), SPEC); H.write(path.join(a.d, 'design.md'), DESIGN); H.write(path.join(a.d, 'tasks.md'), '## 1. 查询\n\n- [ ] 1.1 改 a.js：加查询\n');
     const m2 = P.stop(ja, [a.d], false, 't2');
-    H.ok('写完 tasks：自动审一次整套', m2.some((x) => /--point tasks/.test(x)) && !m2.some((x) => /用 Ask 问要不要审/.test(x)), m2);
+    H.ok('写完 tasks：强制审一次整套，不问', m2.some((x) => /--point tasks/.test(x) && /强制/.test(x)) && !m2.some((x) => /用 Ask 问要不要审/.test(x)), m2);
     P.noteResult(a.d, 'tasks', { id: 'ok', status: 'completed', issues: [] }, P.fingerprint(a.d, 'tasks'));
-    H.ok('整套审过：表外的 change 也接着开工', P.automaticApply(ja) && S.flowStage(ja) === 'apply', S.flowState(ja));
+    const n1 = P.planNext(ja, { dir: a.d, name: 'add-a' });
+    H.ok('整套审过：开着自动也停下问怎么实施，不自己开工（每个 change 的需求审完都问）', /自动实施/.test(n1) && /实施（每步问我）/.test(n1) && /先不实施/.test(n1) && S.flowStage(ja) === 'plan', n1);
     // 探索记录没写完：说缺什么
     const b = mk('b');
     H.write(path.join(b.p, 'openspec/plan.md'), '# 计划\n\n## 订单\n\n探索记录：explore/订单.md\n\n' + PLAN_HEAD + '| | add-a | | |\n');
     H.write(path.join(b.p, 'openspec/explore/订单.md'), '# 探索\n\n## 还没定的\n\n是否分页\n\n## 范围\n\n只改查询\n');
     const jb = { cwd: b.p, session_id: 's67b', transcript_path: tf(h, [H.tr.user('写需求')]) };
-    S.setSessionAuto(jb, true, '测试'); S.setFlow(jb, true, '需求', 'plan'); S.flowTouch(jb, b.d);
-    H.ok('探索记录还有没定的：自动不生效', S.readConfigFor(jb).autoMode === false);
+    S.setFlow(jb, true, '需求', 'plan'); S.flowTouch(jb, b.d);
     const r2 = write(b.p, b.d, 's67b', 'specs/order/spec.md', SPEC);
-    H.ok('探索记录没写完就写下一份：拦下，说缺什么，不说看一看', blocked(r2) && /探索还没完/.test(H.reasonOf(r2)) && /是否分页/.test(H.reasonOf(r2)) && !lookAt.test(H.reasonOf(r2)), H.reasonOf(r2));
+    H.ok('探索记录还有没定的就写下一份：拦下，说缺什么，不说看一看（没开自动也拦）', blocked(r2) && /探索还没完/.test(H.reasonOf(r2)) && /是否分页/.test(H.reasonOf(r2)) && !lookAt.test(H.reasonOf(r2)), H.reasonOf(r2));
     const m3 = P.stop(jb, [b.d], false, 't3');
     H.ok('收工也一样', m3.some((x) => /探索还没完/.test(x)) && !m3.some((x) => lookAt.test(x)), m3);
     H.write(path.join(b.p, 'openspec/explore/订单.md'), '# 探索\n\n## 还没定的\n\n## 范围\n\n只改查询\n');
-    H.ok('探索记录写完了：生效', S.readConfigFor(jb).autoMode === true);
-    H.ok('接着写 specs：不拦', !blocked(write(b.p, b.d, 's67b', 'specs/order/spec.md', SPEC)));
-    // 老任务
-    const c = mk('c');
-    H.write(path.join(c.p, 'openspec/plan.md'), '# 计划\n\n## 老\n\n' + PLAN_HEAD + '| | add-a | | |\n');
-    const jc = { cwd: c.p, session_id: 's67c', transcript_path: tf(h, [H.tr.user('写需求')]) };
-    S.setSessionAuto(jc, true, '测试'); S.setFlow(jc, true, '需求', 'plan'); S.flowTouch(jc, c.d);
-    H.ok('老任务、开着自动：算生效', S.readConfigFor(jc).autoMode === true);
-    // 没开自动：照旧
+    H.ok('探索记录写完了：接着写 specs 不拦', !blocked(write(b.p, b.d, 's67b', 'specs/order/spec.md', SPEC)));
+    // 没开自动：和开着一样
     const e = mk('e'); const je = { cwd: e.p, session_id: 's67e', transcript_path: tf(h, [H.tr.user('写需求')]) };
     S.setFlow(je, true, '需求', 'plan'); S.flowTouch(je, e.d);
-    H.ok('没开自动：写完 proposal 提醒看一看', P.stop(je, [e.d], false, 't4').some((x) => /提醒用户看一看/.test(x)));
+    H.ok('没开自动：写完 proposal 也是催接着写，不让看一看（以前停下看一看）', P.stop(je, [e.d], false, 't4').some((x) => /接着写 specs/.test(x)) && !P.stop(je, [e.d], false, 't4b').some((x) => lookAt.test(x)));
     const r3 = write(e.p, e.d, 's67e', 'specs/order/spec.md', SPEC);
-    H.ok('没开自动：用户没看就写下一份，拦下', blocked(r3) && /写完还没给我看过/.test(H.reasonOf(r3)), H.reasonOf(r3));
+    H.ok('没开自动：用户没看就写下一份，不拦（以前拦）', !blocked(r3), H.reasonOf(r3));
   }
 
-  H.section('第 68 条：探索完开的 vk-auto，写完四份不问要不要审');
+  H.section('第 68 条（第 85 条改了）：探索记录的没定的怎么认；需求审查不问');
   {
     const h = H.makeHome('fb1105-68', FROM, QUIET);
     const S = require(path.join(h.kit, 'lib/session')); const B = require(path.join(h.kit, 'lib/big-task'));
@@ -261,46 +254,38 @@ function archived(p, name, file) {
       S.setSessionAuto(j, true, '测试'); S.setFlow(j, true, '需求', 'plan'); S.flowTouch(j, d);
       return { p, d, j };
     };
+    const P = require(path.join(h.kit, 'lib/flow-policy'));
     const OK = '# 探索\n\n## 还没定的\n\n## 范围\n\n只改查询\n';
+    // 第 85 条起探索记录挡的是写需求（两种模式），不再管自动生不生效：没定的认法照旧
     for (const [i, text] of ['（无）', '无（都定了）', '已全部确认。', '无。'].entries()) {
       const { j } = mk('w' + i, '# 探索\n\n## 还没定的\n\n' + text + '\n\n## 范围\n\n只改查询\n', 's68w' + i);
-      H.ok('还没定的写成"' + text + '"：算写完了，生效', S.readConfigFor(j).autoMode === true, S.flowView(j));
+      H.ok('还没定的写成"' + text + '"：算写完了，写需求不挡', P.exploreBlocked(j) === '', P.exploreBlocked(j));
     }
     const open = mk('o1', '# 探索\n\n## 还没定的\n\n无法确定分页\n\n## 范围\n\n只改查询\n', 's68o');
-    H.ok('"无法确定分页"：真没定，不生效', S.readConfigFor(open.j).autoMode === false);
+    H.ok('"无法确定分页"：真没定，挡', /探索还没完/.test(P.exploreBlocked(open.j)));
     H.ok('这时候查得到原因', B.exploreIssues ? B.exploreIssues(B.tasks(open.p)[0]).length === 1 : false);
     const paren = mk('b1', '# 探索\n\n## 还没定的\n\n（分页方式待定）\n\n## 范围\n\n只改查询\n', 's68b');
-    H.ok('括号里写的真问题：不算空，不生效', S.readConfigFor(paren.j).autoMode === false);
+    H.ok('括号里写的真问题：不算空，挡', /探索还没完/.test(P.exploreBlocked(paren.j)));
     const gone = mk('g1', OK, 's68g'); fs.rmSync(path.join(gone.p, 'openspec/explore/值班模块.md'));
-    H.ok('写了探索记录、文件却不在：不生效，不开工', S.readConfigFor(gone.j).autoMode === false && !require(path.join(h.kit, 'lib/flow-policy')).automaticApply(gone.j), S.flowView(gone.j));
-    // 只开 Apply 自动（配置）：写需求这一段照人工
+    H.ok('写了探索记录、文件却不在：挡', /探索还没完/.test(P.exploreBlocked(gone.j)), P.exploreBlocked(gone.j));
+    // 需求审查两种模式一样：写到 tasks 强制审，不问
     const cfgOnly = mk('c1', OK, 's68c'); S.setSessionAuto(cfgOnly.j, false, '测试'); H.setConfig(h, { autoApply: true, autoRequirements: false });
-    H.ok('只开 Apply 自动：写需求照人工问', require(path.join(h.kit, 'lib/flow-policy')).stop(cfgOnly.j, [cfgOnly.d], false, 't-c').some((x) => /四份需求文档写完了/.test(x)));
+    H.ok('只开 Apply 自动：写需求照样强制审整套', P.stop(cfgOnly.j, [cfgOnly.d], false, 't-c').some((x) => /四份需求文档写完了，强制审一次整套/.test(x)));
     H.setConfig(h, { autoApply: false, autoRequirements: false });
     const noScope = mk('n1', '# 探索\n\n## 还没定的\n\n## 范围\n', 's68n');
-    H.ok('已经在写文档、范围没写：开着自动也生效', S.readConfigFor(noScope.j).autoMode === true, S.flowView(noScope.j));
+    H.ok('范围没写、没定的清空了：写需求不挡（只有真没定的才挡）', P.exploreBlocked(noScope.j) === '');
     const review = (x, said) => H.hook(h, 'guard-commit', { session_id: x.j.session_id, cwd: x.p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'r' + (++seq), tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change add-a --mode proposal --point tasks --project "' + x.p.replace(/\\/g, '/') + '"' }, transcript_path: tf(h, [H.tr.user(said || '写需求')]) });
     const asks = (r) => /用户这一轮没说要审查/.test(H.reasonOf(r));
     const ok = mk('k1', OK, 's68k');
-    H.ok('开着自动跑审查：不问', !asks(review(ok)), H.reasonOf(review(ok)));
+    H.ok('开着自动跑需求审查：不问', !asks(review(ok)), H.reasonOf(review(ok)));
     H.ok('探索还有没定的：审查也不问（文档写完了就审）', !asks(review(open)), H.reasonOf(review(open)));
-    const aside = mk('a1', OK, 's68a'); S.updateState('s68a-flow', (o) => { o.aside = true; });
-    H.ok('这一轮被判成插话（aside）：开着自动照样生效，审查不问', S.readConfigFor(aside.j).autoMode === true && !asks(review(aside)), H.reasonOf(review(aside)));
-    // 真的一句话：带"文档""写"，以前整轮都按人工算（问题表第 68 条的记录）
-    const real = mk('r1', OK, 's68r');
-    H.hook(h, 'task-anchor', { session_id: 's68r', cwd: real.p, hook_event_name: 'UserPromptSubmit', prompt: '把这几份文档写完', transcript_path: tf(h, [H.tr.user('把这几份文档写完')]) }, { spawn: true });
-    H.ok('用户说"把这几份文档写完"：记成插话，自动照样生效', S.flowState(real.j).aside === true && S.readConfigFor(real.j).autoMode === true, S.flowState(real.j));
-    H.ok('这种话过后写完四份、审过，接着开工', (require(path.join(h.kit, 'lib/flow-policy')).noteResult(real.d, 'tasks', { id: 'x', status: 'completed', issues: [] }, require(path.join(h.kit, 'lib/flow-policy')).fingerprint(real.d, 'tasks')), H.write(path.join(real.d, 'specs/order/spec.md'), '## ADDED Requirements\n\n### Requirement: 查询\n\n系统 SHALL 能查询。\n\n#### Scenario: 空\n\n- **WHEN** 没有订单时查询\n- **THEN** 返回空列表\n'), H.write(path.join(real.d, 'design.md'), '## Context\n\n- 读过 a.js\n'), require(path.join(h.kit, 'lib/flow-policy')).noteResult(real.d, 'tasks', { id: 'x', status: 'completed', issues: [] }, require(path.join(h.kit, 'lib/flow-policy')).fingerprint(real.d, 'tasks')), require(path.join(h.kit, 'lib/flow-policy')).automaticApply(real.j)), S.flowState(real.j));
-    // 范围没写的大任务：开着自动也开工（只有真没定的才挡）
-    H.ok('探索记录范围没写、审过了：接着开工', (H.write(path.join(noScope.d, 'specs/order/spec.md'), '## ADDED Requirements\n\n### Requirement: 查询\n\n系统 SHALL 能查询。\n\n#### Scenario: 空\n\n- **WHEN** 没有订单时查询\n- **THEN** 返回空列表\n'), H.write(path.join(noScope.d, 'design.md'), '## Context\n\n- 读过 a.js\n'), require(path.join(h.kit, 'lib/flow-policy')).noteResult(noScope.d, 'tasks', { id: 'y', status: 'completed', issues: [] }, require(path.join(h.kit, 'lib/flow-policy')).fingerprint(noScope.d, 'tasks')), require(path.join(h.kit, 'lib/flow-policy')).automaticApply(noScope.j)), S.flowState(noScope.j));
     const paused = mk('p1', OK, 's68p'); S.updateState('s68p-flow', (o) => { o.paused = true; });
-    H.ok('用户说了停：先问', asks(review(paused)), H.reasonOf(review(paused)));
-    const plain = mk('q1', OK, 's68q'); S.setFlow(plain.j, false, '测试');
-    H.ok('不在流程里（普通改动）：照人工先问', asks(review(plain)), H.reasonOf(review(plain)));
+    H.ok('用户说了停：需求审查照样不问（第 85 条强制审）', !asks(review(paused)), H.reasonOf(review(paused)));
     const manual = mk('m1', OK, 's68m'); S.setSessionAuto(manual.j, false, '测试');
-    H.ok('没开自动：先问', asks(review(manual)), H.reasonOf(review(manual)));
-    const said = H.reasonOf(review(manual));
-    H.ok('提示里不再提不存在的 workflow.js qualify', !/qualify/.test(said) && !/qualify/.test(H.read(path.join(h.kit, 'lib/flow-policy.js')) || ''), said);
+    H.ok('没开自动：需求审查不问（以前先问）', !asks(review(manual)), H.reasonOf(review(manual)));
+    const one = H.hook(h, 'guard-commit', { session_id: 's68m', cwd: manual.p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'r' + (++seq), tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change add-a --mode proposal --point proposal --project "' + manual.p.replace(/\\/g, '/') + '"' }, transcript_path: tf(h, [H.tr.user('写需求')]) });
+    H.ok('单份文档不单独审（用户没点名）', blocked(one) && /不单独审 proposal/.test(H.reasonOf(one)), H.reasonOf(one));
+    H.ok('提示里不再提不存在的 workflow.js qualify', !/qualify/.test(H.read(path.join(h.kit, 'lib/flow-policy.js')) || ''));
   }
 
   H.section('第 64—66 条：作废的一轮也留基准、子代理的名字、用量上限');

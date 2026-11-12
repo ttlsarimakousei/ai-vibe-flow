@@ -293,7 +293,7 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
   H.ok('老会话头一回开口就说"继续"：也接得上', flow(s13).on === true && (flow(s13).changes || []).includes(S.normKey(chgA)), flow(s13));
   // 会话开始时的说明
   const ss = H.hook(h, 'session-start', { session_id: 's-ss', cwd: proj, hook_event_name: 'SessionStart', source: 'startup', transcript_path: tfile });
-    H.ok('会话开始时分别说明两开关和当前范围', /需求自动关，Apply 自动开/.test(H.reasonOf(ss)) && /不推进别的会话/.test(H.reasonOf(ss)));
+    H.ok('会话开始时分别说明两开关和当前范围', /自动只管实施/.test(H.reasonOf(ss)) && /需求阶段没有自动模式/.test(H.reasonOf(ss)) && /不推进别的会话/.test(H.reasonOf(ss)));
   // 查库、查 redis 的工具：跑之前留一张条子，说这个会话算不算全自动
   const tk = () => ((readJson(path.join(h.kit, 'state', 'tool-flow.json')).byCwd || {})[S.normKey(proj)]) || {};
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python "$HOME/.claude/skills/vk-db-crud/scripts/db.py" --conn dev exec --sql-file .vibe/tmp/x/a.sql' } });

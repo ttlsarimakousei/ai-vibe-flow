@@ -102,7 +102,8 @@ async function handle(j) {
 
     // 全自动模式只在走 OpenSpec 流程时算数：会话刚开始还不知道这个会话要干什么，先把这条界线说清
     const modes = readConfig(j);
-    if (modes.autoRequirements || modes.autoApply) out.push((modes.autoSession ? '这个会话开着自动模式（用户用 /vk-auto 开的）。' : '') + '需求自动' + (modes.autoRequirements ? '开' : '关') + '，Apply 自动' + (modes.autoApply ? '开' : '关') + '。需求先探索并澄清疑问，具备条件才自动写，四份写完审修一次整套；Apply 仅执行当前已确认范围，组之间不审，这个 change 的任务全部做完审修一次。做法上的取舍自己定、记进 revisions.md，需求本身有疑问才 Ask。双自动且文档定稿提交后可衔接 apply；用户只要文档时不开工。人工审查、自测、复验先 Ask。归档和 push 由用户决定，不推进别的会话的变更。');
+    // 自动只管实施（第 85—87 条，2026-11-12）：需求阶段没有自动模式
+    if (modes.autoApply) out.push((modes.autoSession ? '这个会话开着自动实施（用户在提问框里选的）。' : '') + '自动只管实施：做完任务审修、复审，最后一个 change 做完全面自测、改、再测再审，全部通过后自动关。需求阶段没有自动模式：有疑问就问，写完整套强制审修，审过了停下问怎么实施。做法上的取舍自己定、记进 revisions.md。归档和 push 由用户决定，不推进别的会话的变更。');
 
     // 后台自动探索：没探索过、依据的文件改了，就甩一个后台进程去查（不用模型）。几秒钟就好，结果在用户开口时带给模型
     let OB = null;

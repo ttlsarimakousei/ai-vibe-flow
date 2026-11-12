@@ -54,7 +54,7 @@ const CHANGE = {
 H.section('A5 开工：问的是"能开工吗"、答"可以"也算开工；之后又答了提交那一问，开工照旧算；答"先不"的不算');
 {
   const h = H.makeHome('tco-a5', FROM, QUIET);
-  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE));
+  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE)); H.reviewPoints(h, path.join(p, 'openspec/changes/feat-019'), 'proposal'); // 第 85 条起第一次打勾前需求要整套审过
   const S = require(path.join(h.kit, 'lib', 'session.js'));
   let n = 0;
   // 打勾：还没开工时打勾会被拦（提案阶段改业务代码本来就不拦，看不出开没开工）；开工认下来，流程切到做任务那一段
@@ -70,18 +70,18 @@ H.section('A5 开工：问的是"能开工吗"、答"可以"也算开工；之�
   H.ok('写完 tasks 那一问选"定稿并开工"：认成开工', t4.stage === 'apply' && !blocked(t4.r), [t4.stage, H.reasonOf(t4.r)]);
 }
 
-H.section('A7 写完 tasks：定稿和开工合成一问，选过的不再另问开工');
+H.section('A7 需求审过：问怎么实施（自动实施 / 实施（每步问我）/ 先不实施），第 86 条起替代"定稿和开工合成一问"');
 {
   const h = H.makeHome('tco-a7', FROM, QUIET);
-  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE));
+  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE)); H.reviewPoints(h, path.join(p, 'openspec/changes/feat-019'), 'proposal'); // 第 85 条起第一次打勾前需求要整套审过
   const F = require(path.join(h.kit, 'lib', 'flow-policy.js'));
   const c = { name: 'feat-019', dir: path.join(p, 'openspec', 'changes', 'feat-019') };
   let n = 0;
   const next = (answer) => { n++; const entries = [H.tr.user('写 feat-019 的需求'), H.tr.say('tasks 写完了')].concat(answer ? ask('feat-019 的 tasks 写完了，怎么定？', answer) : []); return F.planNext({ session_id: 's-a7-' + n, cwd: p, transcript_path: H.transcript(path.join(h.root, 'a7-' + n + '.jsonl'), entries) }, c) || ''; };
-  const go = next('定稿并开工');
-  H.ok('选了"定稿并开工"：直接开工，不再给"执行 apply / 继续修改 / 暂不执行"', /直接开工/.test(go) && !/暂不执行/.test(go), go);
-  H.ok('选了"只定稿"：不再问开工', next('只定稿') === '', next('只定稿'));
-  H.ok('没选过（旧流程）：照旧问开工', /执行 apply \/ 继续修改 \/ 暂不执行|问能不能开工/.test(next('')), next(''));
+  const q = next('');
+  H.ok('需求审过：问怎么实施，三个选项', /自动实施/.test(q) && /实施（每步问我）/.test(q) && /先不实施/.test(q), q);
+  H.ok('不再有"定稿并开工""只定稿"', !/定稿并开工|只定稿/.test(q), q);
+  H.ok('自动实施的说明写清做到哪、什么时候关', /全部通过后自动关/.test(q) && /说停就停/.test(q), q);
 }
 
 H.section('A8 人工模式改完代码：问一次审查、自测，答了不用，这个会话后面再改代码不再问');
@@ -134,7 +134,7 @@ H.section('A10 会被拦的规矩提前说：进写需求、做任务这两段�
   let n = 0;
   const say = (sid, prompt) => { n++; const r = H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'a10-' + n + '.jsonl'), [H.tr.user(prompt)]) }); return typeof r === 'string' ? r : JSON.stringify(r || ''); };
   const t1 = say('s-a10', '/opsx:explore 做一个订单导出的功能，导出成 xlsx');
-  H.ok('进流程：说了写需求这一段的规矩（一份一份写、审查带审查点）', /写需求这一段的规矩/.test(t1) && /一份一份写/.test(t1) && /--point/.test(t1), t1.slice(0, 600));
+  H.ok('进流程：说了写需求这一段的规矩（一次写到 tasks、强制审、审查带审查点）', /写需求这一段的规矩/.test(t1) && /一次写到 tasks/.test(t1) && /强制审/.test(t1) && /--point/.test(t1), t1.slice(0, 600));
   const t2 = say('s-a10', '再加一个按日期筛选的需求');
   H.ok('同一个会话第二次提需求：不再重复', !/写需求这一段的规矩/.test(t2), t2.slice(0, 300));
   const t3 = say('s-a10', '开工 feat-019');
@@ -172,7 +172,7 @@ H.section('A11 斜杠命令：/vk-commit、/vk-push、/vk-archive、/vk-review�
   const p2 = push([H.tr.user('A 加个字段'), H.tr.say('改好提交了'), ...cmd('vk-commit')]);
   H.ok('只敲了 /vk-commit：git push 照旧拦', stopped(p2), p2);
   // /vk-go 开工：打勾不拦、流程切到做任务那一段
-  const p = H.makeRepo(path.join(h.work, 'proj2'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE));
+  const p = H.makeRepo(path.join(h.work, 'proj2'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE)); H.reviewPoints(h, path.join(p, 'openspec/changes/feat-019'), 'proposal'); // 第 85 条起第一次打勾前需求要整套审过
   const tick = (sid, entries) => { H.inFlow(h, sid, [path.join(p, 'openspec/changes/feat-019')], true, 'plan'); const r = H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'openspec/changes/feat-019/tasks.md'), old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }); return { r, stage: S.flowState({ session_id: sid }).stage }; };
   const g1 = tick('s-a11-go', [H.tr.user('写 feat-019 的需求'), H.tr.say('四份文档都写完了'), ...cmd('vk-go', 'feat-019')]);
   H.ok('敲了 /vk-go feat-019：算开工，打勾不拦', !blocked(g1.r) && g1.stage === 'apply', g1);
@@ -217,7 +217,7 @@ H.section('A13 说法统一：开工选项一套写法；收工几件事分开�
   const old = files.filter((f) => /执行 apply \/ 继续修改|Ask 提供 apply 选项|"apply 开工"和"还要改"|选项写"开工"和"还要改"/.test(H.read(f) || ''));
   H.ok('提示和规范里没有旧的开工选项写法', old.length === 0, old);
   const S = require(path.join(kit, 'lib', 'session.js'));
-  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE));
+  const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE)); H.reviewPoints(h, path.join(p, 'openspec/changes/feat-019'), 'proposal'); // 第 85 条起第一次打勾前需求要整套审过
   let n = 0;
   const tick = (sid, entries) => { H.inFlow(h, sid, [path.join(p, 'openspec/changes/feat-019')], true, 'plan'); const r = H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'openspec/changes/feat-019/tasks.md'), old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }); return { r, stage: S.flowState({ session_id: sid }).stage }; };
   const base = [H.tr.user('写 feat-019 的需求'), H.tr.say('四份文档都写完了')];
@@ -236,7 +236,7 @@ H.section('A13 说法统一：开工选项一套写法；收工几件事分开�
   H.ok('问提交那条排在最后', items.length >= 2 && /还没提交/.test(items[items.length - 1]) && !items.slice(0, -1).some((l) => /还没提交/.test(l)), items);
 }
 
-H.section('A12 /opsx:propose 装好后先说套件的规矩：只写 proposal 就停，一份一份来（不照原文一步全写）');
+H.section('A12 /opsx:propose 装好后先说套件的规矩：探索完才写，一次写到 tasks，写完强制审，审过问怎么实施（第 85 条）');
 {
   const h = H.makeHome('tco-a12', FROM, QUIET, { openspec: true });
   const O = require(path.join(h.kit, 'lib', 'openspec.js'));
@@ -246,7 +246,7 @@ H.section('A12 /opsx:propose 装好后先说套件的规矩：只写 proposal �
   if (r.ok) {
     for (const rel of r.files.filter((f) => /propose/i.test(f))) {
       const t = H.read(path.join(dir, rel)) || '';
-      H.ok(rel + '：插了套件的规矩，frontmatter 还在最前面', /vibe-kit 的规矩/.test(t) && /只建变更、写 proposal\.md，写完停下/.test(t) && (!/^---/.test(H.read(path.join(dir, rel)) || '') || /^---\r?\n[\s\S]*?\r?\n---\r?\n\n> \*\*vibe-kit 的规矩/.test(t)), t.slice(0, 400));
+      H.ok(rel + '：插了套件的规矩，frontmatter 还在最前面', /vibe-kit 的规矩/.test(t) && /一次写完/.test(t) && /强制审一次整套/.test(t) && /自动实施/.test(t) && (!/^---/.test(H.read(path.join(dir, rel)) || '') || /^---\r?\n[\s\S]*?\r?\n---\r?\n\n> \*\*vibe-kit 的规矩/.test(t)), t.slice(0, 400));
     }
     const other = r.files.find((f) => /opsx\/apply\.md$/i.test(f));
     H.ok('别的命令原样拷（不插这段）', !!other && !/vibe-kit 的规矩/.test(H.read(path.join(dir, other)) || ''), other);

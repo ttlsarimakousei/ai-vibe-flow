@@ -179,7 +179,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { autoMode: true });
     // 模型自己调 /opsx:apply 的技能：没说开工就拦
     const k1 = skill('p2', 'opsx:apply');
-    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问能不能开工', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框问能不能开工/.test(H.reasonOf(k1)), H.reasonOf(k1));
+    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问能不能开工', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框问怎么实施/.test(H.reasonOf(k1)), H.reasonOf(k1));
     H.ok('不在流程里的会话调 /opsx:apply：也拦', blocked(skill('p8', 'opsx:apply')));
     H.ok('做任务那一段调 /opsx:apply：放行', skill('p3', 'opsx:apply') === null);
     H.ok('做任务那一段它去调 /opsx:propose（下一个变更）：回到写提案那一段', skill('p3', 'opsx:propose') === null && flow('p3').stage === 'plan', flow('p3'));
@@ -220,7 +220,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     // OpenSpec 规范 2026-11-01 起不进全局约定，进流程时由钩子送（J4），两处合起来看
     const md = (H.read(path.join(h.cfg, 'CLAUDE.md')) || '') + (H.read(path.join(h.kit, 'hook-rules.md')) || '');
-    H.ok('生成约定说明两套自动模式和用户许可', gen.code === 0 && /自动模式按会话开/.test(md) && /按对应规则确认：git push[^。\n]*归档/.test(md));
+    H.ok('生成约定说明自动只管实施和用户许可（第 85—87 条）', gen.code === 0 && /自动只管实施/.test(md) && /按对应规则确认：git push[^。\n]*归档/.test(md));
     H.ok('提交那一节：默认是关，用户说了提交才提交', /提交方式是"关"：不自动提交，也不问/.test(md), md.slice(0, 300));
     H.ok('约定说明双自动条件外先 Ask，归档由用户决定', /其他情况用 Ask 给出 apply 选项/.test(md) && /归档.*用户/.test(md));
     H.setConfig(h, { commitMode: 'auto' });
@@ -262,7 +262,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { commitMode: 'auto' });
     H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     const md = (H.read(path.join(h.cfg, 'CLAUDE.md')) || '') + (H.read(path.join(h.kit, 'hook-rules.md')) || '');
-    H.ok('提交说明：文档定稿后按提交方式提交一次', /定稿后按提交方式一起提交一次/.test(md) && /同一套文档定稿后按提交方式提交一次/.test(md), md.slice(0, 300));
+    H.ok('提交说明：文档定稿后按提交方式提交一次', /定稿后按提交方式一起提交一次/.test(md) && /需求审过：按提交方式提交一次/.test(md), md.slice(0, 300));
     H.ok('交叉审查的技能也改了说法', /人工/.test(H.read(path.join(h.cfg,'skills','vk-cross-review','SKILL.md'))) && /Ask/.test(H.read(path.join(h.cfg,'skills','vk-cross-review','SKILL.md'))));
     // 打勾不攒：它说"攒着等提交时一起勾"，拦下让它现在勾（用户反馈：按阶段提交那一版之后它连勾都不打了）
     const later = '1.2 做完了，验证过了。打勾攒着等这一阶段提交时一起勾。';

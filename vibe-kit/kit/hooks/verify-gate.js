@@ -367,6 +367,28 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices) 
 }
 
 /**
+ * 表外的 change（不归哪个大任务）开着自动做完了（第 86 条，2026-11-12）：代码审过之后自测（它 design 的验收用例），
+ * workflow.js selftest --change 登记，全过了套件关自动、等用户核验。没开自动的照旧等用户自测验收
+ */
+function plainNextTodo(j, cfg, policy) {
+  if (cfg.autoSession !== true) return [];
+  const AR = require('../lib/auto-run'); const T = require('../lib/task-types');
+  const dirs = AR.plainDirs(j).filter((d) => T.tasks(d).length > 0);
+  if (!dirs.length) return [];
+  // 任务没做完、代码审查没收尾的不往下走（审查 stop() 在催）
+  if (dirs.some((d) => !changeStarted(d) || T.automatedLeft(d).length > 0)) return [];
+  if (dirs.some((d) => policy.points(d, 'code').some((p) => !policy.settled(d, p) && !policy.halted(d, p)))) return [];
+  const left = dirs.filter((d) => !AR.changeTested(d));
+  if (left.length) {
+    let code = ''; try { code = require('../lib/workspace').fingerprint(path.resolve(left[0], '../../..'), 'code').hash; } catch (e) { code = ''; }
+    const names = left.map((d) => path.basename(d));
+    const how = names.join('、') + ' 的任务做完、代码审过了：自测。跑 design.md "验收用例"里 Claude 能跑的，结果写成 JSON（[{"case":"AC-01","result":"pass","note":"实际结果"}]，要人看的 result 写 manual），每个 change 跑 node "' + path.join(KIT_DIR, 'tools', 'workflow.js') + '" selftest --change <变更名> --results <文件> --project ' + path.resolve(left[0], '../../..') + ' 登记。有没过的改完记进 revisions.md，审过再测。';
+    return [policy.oncePrompt(j, 'selftest-change|' + names.join(','), code || 'x', how)].filter(Boolean);
+  }
+  AR.finish(j, null);
+  return ['全部通过（代码审过、自测登记过），自动关了。现在停下等用户核验：把测试清单、用例的实际结果、留给人工的用例交给用户；用户核验时报的问题照旧自动改、审、测，通过后再停。用户说归档才归档。'];
+}
+/**
  * 大任务走到哪、下一步干什么（用户 2026-11-03 定的）：一个 change 做完先记落地偏差，开着自动接下一个，没开用提问框问；
  * 全部做完全面自测（改过代码退回重跑）；自测过了等人工核验，自动也停。每句话只说一次。
  */
@@ -376,7 +398,7 @@ function nextStepTodo(j, cfg, turnId, policy, reviewAsked) {
   const B = require('../lib/big-task');
   B.dropDeadCurrent(j);
   const task = B.forSession(j);
-  if (!task) return [];
+  if (!task) return plainNextTodo(j, cfg, policy);
   try { B.noteAuto(j, !!cfg.autoSession); } catch (e) { /* 记不了：接回时不恢复自动 */ }
   const root = path.dirname(task.osDir);
   const state = B.taskState(task);
@@ -398,20 +420,27 @@ function nextStepTodo(j, cfg, turnId, policy, reviewAsked) {
     if (prev && !prev.archived && prev.total && !prev.todo) { try { prevDoneNow = fs.statSync(path.join(prev.dir, 'tasks.md')).mtimeMs >= (Number(st.lastApplyAt) || 0); } catch (e) { prevDoneNow = false; } }
     if (cur && cur.total && !prevDoneNow) return [];
     const note = prevDoneNow ? prev.name + ' 做完了，先在探索记录"落地偏差"写下和计划不一样的地方（' + fresh.explore + '）。' : '';
-    const text = cfg.autoSession === true ? note + '接着做 ' + ph.change + '：读探索记录的公共几节、' + ph.change + ' 那一节和前面 change 的 design、revisions，用 /opsx:new 或 openspec new change 建变更，一份一份写需求。' : note + '用提问框问用户要不要接着做 ' + ph.change + '（选项写"接着做 ' + ph.change + '""先停"）。';
+    // 开着自动：接着写下一个 change 的需求，写完审过照样停下问怎么实施（第 86 条，仓库主人选的"每个 change 需求审完都问"）
+    const text = cfg.autoSession === true ? note + '接着做 ' + ph.change + '：读探索记录的公共几节、' + ph.change + ' 那一节和前面 change 的 design、revisions，用 /opsx:new 或 openspec new change 建变更，需求一次写到 tasks（有疑问用提问框问），写完强制审修，审过了停下问怎么实施。' : note + '用提问框问用户要不要接着做 ' + ph.change + '（选项写"接着做 ' + ph.change + '""先停"）。';
     const prompt = policy.oncePrompt(j, 'next|' + ph.change, 'next', text);
     if (!prompt) return [];
     setFlow(j, true, '接下一个 change ' + ph.change, 'plan');
     return [prompt];
   }
   if (ph.phase === 'selftest') {
-    const sig = 'selftest:' + fresh.changes.map((c) => c.name + c.done).join();
+    // 开着自动：自测没过、改完审过之后要再测（第 86 条"修改→再测再审"）。代码变了再说一次
+    let codeNow = '';
+    if (cfg.autoSession === true) { try { codeNow = require('../lib/workspace').fingerprint(root, 'code').hash; } catch (e) { codeNow = ''; } }
+    const sig = 'selftest:' + fresh.changes.map((c) => c.name + c.done).join() + (codeNow ? ':' + codeNow : '');
     const how = '所有 change 的任务都做完了：全面自测。跑所有 design.md "验收用例"和探索记录"整体验收用例"里 Claude 能跑的，把结果写成 JSON（[{"case":"AC-01","result":"pass","note":"实际结果"}]，要人看的 result 写 manual），跑 node "' + path.join(KIT_DIR, 'tools', 'workflow.js') + '" selftest --task ' + fresh.name + ' --results <文件> --project ' + root + ' 登记。有问题改完记进对应 change 的 revisions.md 再复验。';
     return [policy.oncePrompt(j, 'selftest|' + fresh.name, sig, cfg.autoSession === true ? how : '所有 change 的任务都做完了：用提问框问用户要不要全面自测（选项写"全面自测""不用"）。选全面自测就照这个做：' + how)].filter(Boolean);
   }
   if (ph.phase === 'verify') {
     const sug = B.suggestions(fresh);
-    return [policy.oncePrompt(j, 'verify|' + fresh.name, 'verify:' + (B.taskState(fresh).selfTest || {}).at, '全面自测过了，现在停下等人工核验：把测试清单、用例的实际结果、留给人工的用例' + (sug.length ? '，和范围外建议（' + B.suggestFile(fresh) + '，共 ' + sug.length + ' 条，没做，用户要哪条再走需求）' : '') + '交给用户。用户发现问题就改，记进对应 change 的 revisions.md 再复验；用户说归档才归档，先跑 workflow.js archive-check，按表的顺序。')].filter(Boolean);
+    // 全部通过（代码都审过、全面自测登记过）：套件关自动，让用户自己核验（第 86 条）。核验时报的问题照旧自动修（auto-run.js fixResume）
+    let closed = '';
+    if (cfg.autoSession === true) { try { require('../lib/auto-run').finish(j, fresh); closed = '全部通过，自动关了（用户核验时报的问题照旧自动改、审、测，通过后再停）。'; } catch (e) { closed = ''; } }
+    return [policy.oncePrompt(j, 'verify|' + fresh.name, 'verify:' + (B.taskState(fresh).selfTest || {}).at, closed + '全面自测过了，现在停下等人工核验：把测试清单、用例的实际结果、留给人工的用例' + (sug.length ? '，和范围外建议（' + B.suggestFile(fresh) + '，共 ' + sug.length + ' 条，没做，用户要哪条再走需求）' : '') + '交给用户。用户发现问题就改，记进对应 change 的 revisions.md 再复验；用户说归档才归档，先跑 workflow.js archive-check，按表的顺序。')].filter(Boolean);
   }
   return [];
 }
@@ -858,15 +887,9 @@ async function handle(j) {
   todo.push(...stopAsks);
   try { if (j.session_id) writeState(String(j.session_id) + '-last-stop', { at: Date.now() }); } catch (e) { /* 记不了：探索记录的边界按用户的话算 */ }
   try { todo.push(...nextStepTodo(j, cfg, turnId, policy, stopAsks.length > 0)); Object.assign(cfg, readConfigFor(j)); } catch (e) { hookLog('verify-gate 算大任务下一步出错（不拦）：' + ((e && e.message) || e)); }
-  if (policy.automaticApply(j)) {
-    Object.assign(cfg, readConfigFor(j));
-    // 自动开工：大改之前先存检查点（K3 M07，只送一次）
-    let ckpt = '';
-    try { ckpt = require('../lib/checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; }
-    todo.push('两阶段自动开启且文档已审修定稿，执行 /opsx:apply；组之间不审，这个 change 的任务全部做完审一次。' + (ckpt ? '\n' + ckpt : ''));
-  }
-  if (cfg.autoMode && flowState(j).stage === 'plan') {
-    for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)))) {
+  // 需求审过（第 85、86 条，2026-11-12）：两种模式都一样，按提交方式提交一次，再问怎么实施。开过工的 change 不问
+  if (flowState(j).stage === 'plan') {
+    for (const c of allChanges(cwd).filter(c => flowChanges(j).includes(normKey(c.dir)) && !changeStarted(c.dir))) {
       if (policy.written(c.dir).length === 4 && policy.allDone(c.dir, 'proposal')) { const msg = policy.planNext(j, c); if (msg) todo.push(msg); }
     }
   }
@@ -874,19 +897,7 @@ async function handle(j) {
   // 按提交方式（用户 2026-10-17 定的）：关——不提醒；询问——用户在就让它问"提交 / 还要改"，自动模式下用户不在就记进报告；自动——做完一件完整的事就提交
   const mode = commitMode(cfg);
   if (j.session_id !== undefined && mode !== 'off') {
-    // 需求文档：四份都写完了才算定稿，才提交（一份一份写的时候，中间不催）
-    const plans = calls.filter(isEdit).map(fileOf).filter((f) => { const a = artifactOf(f); return a && a.kind !== 'revisions' && !changeStarted(a.dir) && require('../lib/flow-policy').written(a.dir).length === 4 && (!cfg.autoMode || require('../lib/session').reviewAllowed('proposal', a.dir)); });
-    const pkey = sid + '-plancommit';
-    const planOnce = turnId ? readState(pkey).turnId !== turnId : !j.stop_hook_active;
-    if (plans.length && !cfg.autoMode && !reviewOpenFor(sid, entries, changes) && !proposalBusy() && !userSaid(entries, 'commit').ok && !require('../lib/session').commitDeclined(j, entries) && !ASKED_COMMIT.test(lastSaid || '') && planOnce) {
-      const dirtyPlan = await uncommitted(plans, true);
-      if (dirtyPlan.length) {
-        writeState(pkey, { turnId, at: Date.now() });
-        todo.push(mode === 'auto'
-          ? '需求文档四份都写完了、还没提交：现在整套提交一次 docs: 提案 <变更名>（只 add 这个变更目录）。提交不等于开工，随后用提问框问能不能开工（选项写"开工""还要改""先不做"）；写完 tasks 时已经选了"定稿并开工""只定稿"的不再问。'
-          : '需求文档四份都写完了：交代定稿内容和实际执行的检查结果，用 Ask 问是否提交（选项"提交定稿"和"继续修改"）。同意后整套文档提交一次 docs: 提案 <变更名>；提交不等于开工，随后用提问框问能不能开工（选项写"开工""还要改""先不做"）；写完 tasks 时已经选了"定稿并开工""只定稿"的不再问。');
-      }
-    }
+    // 需求文档的提交由上面的 planNext 管（审过才提交，第 85 条），这里不再另催
     // 提案产物只走上面的提交，不混进实施的提交。
     const planArtifact = (f) => { const a = artifactOf(f); return !!(a && !changeStarted(a.dir)); };
     const mine = [...new Set(calls.filter(isEdit).map(fileOf).filter((f) => !/(^|[\\/])\.(vibe|claude)[\\/]/.test(f) && !planArtifact(f)))];

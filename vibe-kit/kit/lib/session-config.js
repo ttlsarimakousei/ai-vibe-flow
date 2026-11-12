@@ -20,10 +20,12 @@ const { DEFAULT_CONFIG } = require('./config-fields');
  * 全自动模式从 20260929 这一版起算放松保护的（它开着时放行不等用户）：老版本的封条里没有这一项，没有就认文件里的
  */
 /*
- * 自动模式按会话开（问题表第 28 条，用户 2026-10-31 定的，替代 10-14、10-17 的"需求自动、Apply 自动两个配置开关"）：
- * 用户自己敲 /vk-auto（或者说"这个需求自动做""开自动"）打开，/vk-auto off（"别自动了""关掉自动"）关，只对这个会话有效，
- * 记在 state/<会话>-auto-switch.json，由开口钩子（task-anchor）按用户的原话写。
- * 打开时需求、实施两段都算开（cfg.autoRequirements、cfg.autoApply 都为真），照旧要先探索、范围确认（qualify）才自动写需求。
+ * 自动模式按会话记（问题表第 28 条，用户 2026-10-31 定的），只管实施（第 85—87 条，仓库主人 2026-11-12 定的，替代 10-31 的"/vk-auto 开，需求、实施两段都管"）：
+ *   开：只认提问框里选的"自动实施""自动接着做"（需求审过后问"自动实施 / 实施（每步问我）/ 先不实施"，说了停之后再开工时问"自动接着做 / 人工接着做"）。
+ *       /vk-auto 命令删了，对话里说"开自动""这个需求自动做"不算（仓库主人选的"只认关"）。
+ *   关：提问框选了"实施（每步问我）""人工接着做""先不实施"；用户说"别自动了""关掉自动"、说"停"（task-anchor）；全部通过后套件自己关（verify-gate）。
+ * 记在 state/<会话>-auto-switch.json。需求阶段没有自动模式：写需求、审需求两种模式一样（一次写到 tasks，写完强制审修）。
+ * cfg.autoRequirements 跟着开关走，只是给老代码留的名字，需求阶段不再看它。
  * 配置文件里旧的 autoApply、autoRequirements 不再出现在配置页，升级时清掉；还在的（测试、没升级的老配置）当作所有会话的默认值，会话里开过、关过的以会话为准
  */
 const AUTO_SWITCH = (sid) => String(sid) + '-auto-switch';
@@ -51,35 +53,42 @@ function touchSessionAuto(j) {
 }
 
 /**
- * 用户这句话是不是在开、关这个会话的自动模式：'on'、'off'、''。只认用户自己的话，问句不算（"能自动做吗？"）。
- * 只认明说"自动模式"、或者整个分句就是"这个需求自动做""别自动了"的（复审 V2、V3：以前需求里的"超时自动关闭订单"会关、
- * "，自动完成登录"会开）；"自动提交""别自动推送"说的是别的事，不算
+ * 用户这句话是不是在关这个会话的自动模式：'off' 或 ''。开只认提问框（第 87 条，仓库主人选的"只认关"），这里不再返回 'on'。
+ * 只认明说"自动模式"、或者整个分句就是"别自动了"的（复审 V2、V3：以前需求里的"超时自动关闭订单"会关）；"别自动推送"说的是别的事，不算。
+ * "停"也关自动（第 86 条，仓库主人选的"插话不关，说停才关"），在 task-anchor 按 isStop 认
  */
 const CLAUSE_END = '(?=\\s*(?:吧|啊|呀|哈)?\\s*(?:[，,。.；;！!\\n]|$))';
 
 const CLAUSE_START = '(?:^|[，,。；;！!\\n])\\s*(?:请|那就|那你|那|就|你就|你先|先|帮我|你)?\\s*';
-
-const AUTO_ON = new RegExp(CLAUSE_START + '(?:(?:开(?:启|一下)?|打开)\\s*自动模式|开(?:启|一下)?\\s*自动' + CLAUSE_END + '|自动模式\\s*(?:打开|开启|开起来|开一下)'
-  + '|(?:这个|这些|下面的?|接下来的?|剩下的?)\\s*(?:需求|变更|任务)?\\s*(?:你)?\\s*(?:就|都)?\\s*(?:全)?自动(?:地)?\\s*(?:做|跑完|搞定|做完|完成|推进)(?:掉|完)?' + CLAUSE_END
-  + '|全?自动(?:地)?\\s*(?:做|搞定|做完|跑完)(?:掉|完)?' + CLAUSE_END + ')');
 
 const AUTO_OFF = new RegExp(CLAUSE_START + '(?:(?:关(?:掉|闭|一下)?|退出|停止|停掉)\\s*自动模式|(?:关(?:掉|闭)?|退出|停止)\\s*自动' + CLAUSE_END
   + '|自动模式\\s*(?:关(?:掉|闭|了)?|停(?:掉|了|下)?)|把\\s*自动(?:模式)?\\s*(?:关(?:掉|闭|了)?|停(?:掉|了)?)'
   + '|(?:别|不要|不用)(?:再)?\\s*自动(?:模式)?(?:了|做了?|搞了?)?' + CLAUSE_END + ')');
 
 function autoSwitchSaid(text) {
-  let raw = String(text || '');
-  // 斜杠命令：/vk-auto 后面第一个词是 off、关、关闭、关掉就是关，别的（没有、on、开、需求原文）都是开（复审 V1：以前"关"后面跟 \b 认不出，/vk-auto 关 成了开）。
-  // 钩子里拿到的也可能是带标签的样子
-  const tag = /<command-name>\s*\/?vk-auto\s*<\/command-name>(?:[\s\S]*?<command-args>([\s\S]*?)<\/command-args>)?/i.exec(raw);
-  if (tag) raw = '/vk-auto ' + (tag[1] || '');
-  const sl = /^\s*\/vk-auto(?=\s|$)\s*(\S*)/i.exec(raw);
-  if (sl) return /^(?:off|关|关闭|关掉)$/i.test(sl[1]) ? 'off' : 'on';
-  const s = intent.plain(raw);
+  const s = intent.plain(String(text || ''));
   if (!s) return '';
-  if (AUTO_OFF.test(s)) return 'off';
-  if (/[？?]|[吗么]\s*$/.test(s)) return '';
-  return AUTO_ON.test(s) ? 'on' : '';
+  return AUTO_OFF.test(s) ? 'off' : '';
+}
+
+/**
+ * 提问框里的一个答案是不是在选自动：'on'、'off'、''（第 86 条）。套件让模型问的选项：
+ *   需求审过：自动实施 / 实施（每步问我）/ 先不实施；说了停、选了不实施之后再开工：自动接着做 / 人工接着做（开工时是 自动实施 / 实施（每步问我））
+ * 别的提问框里恰好以"实施"开头的选项（"实施方案 A"）不算：关的那几个要带"每步问我""人工""先不"。
+ * loose：套件正等着这一问（用户开口让开工、还没问过）时，问题里说到自动、答案说"自动""auto"也算开，说"人工""手动""每步""先不"算关
+ */
+const ANSWER_ON = /^\s*(?:自动(?:实施|接着做|修)|auto\s*(?:实施|接着做)?)(?![^，,。；;]*(?:不要|别))/i;
+const ANSWER_OFF = /^\s*(?:实施\s*[（(]\s*每步问我|人工(?:实施|接着做|修)|先不(?:实施|做|开工))/;
+function autoAnswerOf(a, q, loose) {
+  const s = String(a || '').replace(/[（(]推荐[)）]/g, '').trim();
+  if (ANSWER_ON.test(s)) return 'on';
+  if (ANSWER_OFF.test(s)) return 'off';
+  // 问题本身要问的是自动、怎么做（"导出用哪种格式"答"自动识别"不算）
+  if (loose && /自动|auto/i.test(String(q || '')) && /实施|开工|接着|怎么做/.test(String(q || ''))) {
+    if (/人工|手动|每步|先不|不实施|不用自动|别自动|不要自动/.test(s)) return 'off';
+    if (/自动|auto/i.test(s)) return 'on';
+  }
+  return '';
 }
 
 /** 一次钩子调用里同一个会话的配置只算一次（2026-11-01，K 批 M13），给出去的是副本；会话自动开关、配置封条写了就作废（session-state.js forgetState） */
@@ -124,4 +133,4 @@ function sealConfig(kitDir, cfg) {
  */
 function commitModeOf(cfg) { return ['off', 'ask', 'auto'].includes(cfg && cfg.commitMode) ? cfg.commitMode : 'off'; }
 
-module.exports = { DEFAULT_CONFIG, sessionAuto, setSessionAuto, touchSessionAuto, autoSwitchSaid, readConfig, sealConfig, commitModeOf };
+module.exports = { DEFAULT_CONFIG, sessionAuto, setSessionAuto, touchSessionAuto, autoSwitchSaid, autoAnswerOf, readConfig, sealConfig, commitModeOf };

@@ -23,7 +23,8 @@ const change = (name) => ({
   ['openspec/changes/' + name + '/design.md']: DESIGN,
   ['openspec/changes/' + name + '/tasks.md']: '- [ ] 1.1 改 src/A.java：加功能\n',
 });
-const repo = (name) => H.makeRepo(path.join(h.work, name), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, change('feat-019'), change('opt-group')));
+// 第 85 条起第一次打勾前需求要整套审过：夹具里两个变更都记成审过
+const repo = (name) => { const p = H.makeRepo(path.join(h.work, name), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, change('feat-019'), change('opt-group'))); for (const c of ['feat-019', 'opt-group']) H.reviewPoints(h, path.join(p, 'openspec', 'changes', c), 'proposal'); return p; };
 const tick = (p, sid, entries, name) => H.hook(h, 'pre-edit', { session_id: sid, cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'openspec/changes/' + (name || 'feat-019') + '/tasks.md'), old_string: '- [ ] 1.1', new_string: '- [x] 1.1' }, transcript_path: tf(entries) });
 const prompt = (p, sid, text, entries) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt: text, transcript_path: tf(entries) });
 

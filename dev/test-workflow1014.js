@@ -11,7 +11,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   const j = { cwd: p, session_id: 'manual', transcript_path: tf([H.tr.user('修改 a.js')]), tool_use_id: 'r1', tool_name: 'Bash', tool_input: { command: 'node test-order.js' } };
   const runHook = (name, patch) => H.hook(h, name, Object.assign({}, j, patch));
   H.ok('人工自测先 Ask', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit'))));
-  const review = { tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js') + '" prepare --change add-a --mode proposal --point proposal' } };
+  const review = { tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js') + '" prepare --change add-a --mode code --point change' } }; // 需求审查第 85 条起强制、不问，这几项看代码审查
   H.ok('人工审查先 Ask', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', review))));
   H.ok('明确自测要求直接执行', !/用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', { transcript_path: tf([H.tr.user('运行测试')]) }))));
   H.ok('明确主动审查不拒绝', !/用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', Object.assign({}, review, { transcript_path: tf([H.tr.user('审核一下')]) })))));
@@ -55,10 +55,10 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.write(exploreFile, '# 探索\n\n## 还没定的\n\n是否分页\n\n## 范围\n\n只修改查询对应实现\n');
     H.ok('未决需求继续沟通', !S.readConfigFor(j).autoMode);
     H.write(exploreFile, '# 探索\n\n## 还没定的\n\n## 范围\n\n只修改查询对应实现\n');
-    H.ok('探索记录写完后需求自动生效', S.readConfigFor(j).autoMode);
+    H.ok('探索记录写完后：写需求不挡，需求阶段照样不算自动（第 85 条）', !S.readConfigFor(j).autoMode && P.exploreBlocked(j) === '');
     for (const [req, apply] of [[false, false], [false, true], [true, false], [true, true]]) {
       cfg({ autoRequirements: req, autoApply: apply });
-      H.ok('需求阶段只看需求开关：' + req + '/' + apply, S.readConfigFor(j).autoMode === req);
+      H.ok('需求阶段不看开关，一律不算自动：' + req + '/' + apply, S.readConfigFor(j).autoMode === false);
     }
     cfg({ autoRequirements: true, autoApply: true });
     P.begin(d, 'proposal', 'interrupted', P.fingerprint(d, 'proposal'));
@@ -77,12 +77,14 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     for (const point of ['design', 'tasks']) P.noteResult(d, point, good, P.fingerprint(d, point));
     // "自动"档等文档提交一次再开工；关、询问在全自动下不等（用户 2026-11-03 定的）
     H.setConfig(h, { commitMode: 'auto' });
-    H.ok('"自动"档：定稿未提交不自动 apply', !P.automaticApply(j));
+    H.ok('"自动"档：审过先催提交一次，不自己开工', /提交本变更的产物一次/.test(P.planNext(j, { dir: d, name: 'add-a' }) || '') && S.flowState(j).stage === 'plan');
     H.git(p, ['add', 'openspec/changes/add-a/design.md', 'openspec/changes/add-a/tasks.md']); H.git(p, ['commit', '-qm', 'docs: 提案 add-a']);
     S.updateState(j.session_id + '-flow', o => { o.holdApply = true; });
-    H.ok('仅要求需求文档，即使双自动也不开工', !P.automaticApply(j));
+    H.ok('仅要求需求文档：不问怎么实施', P.planNext(j, { dir: d, name: 'add-a' }) === '');
     S.updateState(j.session_id + '-flow', o => { o.holdApply = false; });
-    H.ok('双自动在文档定稿提交后衔接 Apply', P.automaticApply(j) && S.flowState(j).stage === 'apply' && (H.setConfig(h, { commitMode: 'off' }), true), { flow: S.flowState(j), dirs: S.flowChanges(j), points: P.points(d, 'proposal').map(p => [p, P.passed(d, p)]), status: H.git(p, ['status', '--porcelain', '--', 'openspec/changes/add-a']), cfg: [S.readConfig().autoApply, S.readConfig().autoRequirements] });
+    const askNow = P.planNext(j, { dir: d, name: 'add-a' });
+    H.ok('开着自动、文档审过提交了：停下问怎么实施（第 86 条），不自己衔接 Apply', /自动实施/.test(askNow) && S.flowState(j).stage === 'plan', askNow);
+    H.setConfig(h, { commitMode: 'off' }); S.setFlow(j, true, '提问框选了自动实施', 'apply');
     for (const [req, apply] of [[false, false], [false, true], [true, false], [true, true]]) {
       cfg({ autoRequirements: req, autoApply: apply });
       H.ok('Apply 阶段只看 Apply 开关：' + req + '/' + apply, S.readConfigFor(j).autoMode === apply);
@@ -127,7 +129,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     const db = path.join(p, 'openspec/changes/add-b');
     const outer = P.stop({ cwd: h.work, session_id: 'label-outer', transcript_path: tf([H.tr.user('写需求')]) }, [db], false, 'turn-label');
     const inner = P.stop({ cwd: p, session_id: 'label-inner', transcript_path: tf([H.tr.user('写需求')]) }, [db], false, 'turn-label');
-    H.ok('人工提示带上变更所在的项目', outer.some(x => /当前 add-b（p） 的 proposal/.test(x)) && inner.some(x => /当前 add-b 的 proposal/.test(x)), [outer, inner]);
+    H.ok('需求那一段的提示带上变更所在的项目', outer.some(x => /当前 add-b（p） 写完了 proposal/.test(x)) && inner.some(x => /当前 add-b 写完了 proposal/.test(x)), [outer, inner]);
   }
   // 旧 autoMode=true 的安装迁移；显式的低保护封条不能在迁移中意外放松。
   cfg({ autoMode: true, autoApply: true, autoRequirements: true });

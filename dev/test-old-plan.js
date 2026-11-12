@@ -103,6 +103,7 @@ H.section('表外的 change 能开工');
 {
   const p = project('# 计划\n\n' + TABLE(['real-c']));
   change(p, 'real-c', 0, 2); change(p, 'unlisted-c', 0, 2);
+  H.reviewPoints(h, path.join(p, 'openspec', 'changes', 'unlisted-c'), 'proposal'); // 第 85 条起第一次打勾前需求要审过
   const j = session(p, '开工 unlisted-c');
   S.setFlow(j, true, '测试', 'apply');
   const g = A.grant(j, '开工 unlisted-c', '', {});
@@ -145,6 +146,7 @@ H.section('/vk-resume <变更名> 切当前 change');
   const n = project(null);
   newPlan(n, '导出', ['c1', 'c2']);
   change(n, 'c1', 1, 1); change(n, 'c2', 0, 2);
+  H.reviewPoints(h, path.join(n, 'openspec', 'changes', 'c2'), 'proposal'); // 第 85 条起接回就开工要先审过需求
   const j = session(n, '/vk-resume');
   const r = resume(j, 'c2');
   H.ok('新任务也能切', /切到 c2/.test(said(r)) && S.flowState(j).current === 'c2', said(r));

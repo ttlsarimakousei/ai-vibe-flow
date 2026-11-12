@@ -346,7 +346,8 @@ function consentIssue(g, st, cfg, docs) {
   const automaticPlan = mode === 'auto' && fl.stage === 'plan' && files.length && files.every(f => { const k = normKey(path.resolve(repoRoot(g.dir) || g.dir, f)); return planFiles.includes(k) || planRoots.some(d => k.startsWith(d)); });
   if (automaticPlan) return '';
   // 全自动下提案提交照提交方式走（第 42 条，用户 2026-11-03 定的）：关任何情况都不自动提交，询问在全自动下不问，都不让模型去问用户
-  const autoOn = cfg.autoMode || S.readConfig(j).autoSession === true;
+  // 写需求那一段没有自动（第 85 条）：开着自动、提交方式"询问"的照人工问提交；"关"照旧不提交也不问
+  const autoOn = cfg.autoMode || (S.readConfig(j).autoSession === true && (fl.stage === 'apply' || mode === 'off'));
   if (!approved && proposalCommit && autoOn && mode !== 'auto') return mode === 'off' ? '[vibe-kit] 提交方式是"关"：任何情况下都不自动提交，也不问。接着做，用户说了"提交"再提交。' : '[vibe-kit] 提交方式是"询问"，全自动下不问：先不提交，接着做，收工时列进全自动报告。';
   if (!approved && proposalCommit && fl.stage !== 'apply') return '[vibe-kit] 提案提交要单独确认：先交代定稿内容，问用户是否提交；开工许可不能代替提交许可。';
   if (approved) return '';

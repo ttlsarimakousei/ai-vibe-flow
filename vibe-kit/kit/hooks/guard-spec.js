@@ -8,7 +8,7 @@
  *             用户自己敲 /opsx:propose、全自动模式、交接之后的新会话（这个会话读过一天内的交接记录）不要求分轮
  *   tasks.md：只写实现任务（用户 2026-10-17 定的），每项写清改哪个文件（路径，而且找得到，新建的写明"新建"）；不写"验：…"；
  *             不许"联调、完善、收尾"这种任务；新写的测试、审查、验收任务拦下，让它写进 design.md 的"验收用例"
- *             打勾不检查验法；自动模式下这个变更的第一次打勾（apply 开工）要提案审过，后面的组要等前面的组做完
+ *             打勾不检查验法；这个变更的第一次打勾（apply 开工）要提案审过（两种模式，第 85 条），自动模式下后面的组要等前面的组做完
  *   specs：每条 Requirement 至少一个四井号的 Scenario，场景里有 WHEN 和 THEN
  *   design.md：提到的路径要找得到（新建的在同一行写明"新建"）；新写的设计 Context（现状）一节不能空，要有"验收用例"一节
  * 只判这次新加、改过的行：老变更里以前写的不追究，打勾不算改。revisions.md（修订记录）不检查。
@@ -86,7 +86,7 @@ function crossChangeIssues(art, text, isAdded) {
 
 /**
  * 打勾前的检查：这次编辑把哪些任务打了勾。不查验法（用户 2026-10-17 定的：任务里不写"验："，两种模式打勾都不查）。
- * 自动模式下：这个变更的第一次打勾（apply 开工）要提案审过，状态里没有记录就去会话记录里找一次成功的审提案调用兜底；
+ * 这个变更的第一次打勾（apply 开工）要提案审过（2026-11-12 起两种模式都查，第 85 条），状态里没有记录就去会话记录里找一次成功的审提案调用兜底；
  * 后面的组要等前面的组做完（只看勾没勾；审查等整个 change 做完，用户 2026-11-05 定的）。老变更里的审查、验收任务按 task-types 的规矩查。
  * 返回 { issues, ticked, skipped }：skipped 现在总是空的（以前是验法里明说"不做"的部分）
  */
@@ -101,7 +101,8 @@ function tickCheck(j, file, oldText, newText, art, cfg, roots) {
   let entries = null;
   const load = () => entries || (entries = j.transcript_path ? tailEntries(j.transcript_path, 6000000).filter((e) => e && !e.isSidechain) : []);
   const done = (issues) => ({ issues, ticked, skipped });
-  if (cfg.autoMode && !/^\s*[-*]\s*\[[xX]\]/m.test(oldText)) {
+  // 第一次打勾（开工）之前需求要整套审过（第 85 条：需求写完强制审修，两种模式一样；以前只管自动模式）。连续 3 次没拿到结论的不挡（allDone 算）
+  if (!/^\s*[-*]\s*\[[xX]\]/m.test(oldText)) {
     const ok = require('../lib/session').reviewAllowed('proposal', art.dir);
     const waiting = !ok && require('../lib/review-runner').inFlight(art.dir, 'proposal');
     if (!ok && waiting) return done(['变更 ' + art.name + ' 的提案审查还在后台跑，结论还没回来。再跑一次一样的 review.js run 接着等，看到结论、改完再开工打勾；不会重开。']);
@@ -173,24 +174,15 @@ function handle(j, opts) {
   format.push(...require('../lib/proposal-files').issuesIn(newText, art, isAdded));
   const flow = [];     // 流程上的问题（没验证、没审、没探索）：只说这件事
   let notStarted = false; // 写需求那一段就打勾
-  // 需求文档一份一份来（用户 2026-10-17 定的）：proposal → specs → design → tasks。审查不在这里挡，tasks 写完审一次整套（第 57 条，用户 2026-11-05 定的）；自动模式不停
+  // 需求文档一次写到 tasks（第 85 条，仓库主人 2026-11-12 定的，替代 10-17 的"一份一份来、写完一份停下给我看"）：中间不停，写完强制审修。
+  // 这里只挡一件事：探索记录里还有没定的，不新建需求文档（没探索到、没问过的不能写进需求），两种模式一样（以前只管开着自动的，第 67 条）。
   // 只管还没开工的 change（第 76 条）：做任务时改需求要加一份规格，不是第一次写需求，不拦
   const flNow = flowState(j);
   // 开过工：勾过任务；或者在做任务那一段的开工范围里、任务清单已经写了（大任务里自动并进来的、还在第一次写需求的 change 不算，复审 P2-5）
   const begun = require('../lib/session').changeStarted(art.dir) || !!(flNow.stage === 'apply' && flNow.applyScope && (flNow.applyScope.dirs || {})[normKey(art.dir)] && fs.existsSync(path.join(art.dir, 'tasks.md')));
-  if (!existed && !cfg.autoMode && !begun && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
-    const policy = require('../lib/flow-policy'); const point = art.kind === 'spec' ? 'specs' : art.kind; const order = ['proposal', 'specs', 'design', 'tasks'];
-    const earlier = policy.written(art.dir).filter(p => order.indexOf(p) < order.indexOf(point));
-    if (earlier.length) {
-      // 人工：上一份写完要停下提醒用户看一看。上一份最后一次写入之后用户说过话（"写下一份"这类回复）才写下一份
-      const prev = earlier[earlier.length - 1];
-      const own = policy.pointFiles(art.dir, prev).filter(f => prev === 'specs' ? /[\\/]specs[\\/]/.test(f) : path.basename(f) === prev + '.md');
-      const wroteAt = Math.max(0, ...own.map(f => { try { return fs.statSync(f).mtimeMs; } catch (e) { return 0; } }));
-      let saidAt = 0; try { const v = j.transcript_path ? lastUserVoice(tailEntries(j.transcript_path, 3000000)) : null; saidAt = (v && v.at) || 0; } catch (e) { saidAt = Date.now(); }
-      // 开着自动不让用户看一看（第 67 条）：探索记录没写完的说缺什么，别的放行
-      if (wroteAt && saidAt < wroteAt && cfg.autoSession === true) { const why = policy.autoBlocked(j); if (why) flow.push(why); }
-      else if (wroteAt && saidAt < wroteAt) flow.push(prev + ' 写完还没给我看过。一份一份来：先停下，交代 ' + prev + ' 写了什么，提醒我看一看，用提问框引导下一步（选项写"写下一份（' + point + '）""我要改"，这里不问审查，四份写完再问）；我说写下一份再写 ' + point + '，拿模板：openspec instructions ' + point + ' --change "' + art.name + '"');
-    }
+  if (!existed && !begun && ['proposal', 'spec', 'design', 'tasks'].includes(art.kind)) {
+    const why = require('../lib/flow-policy').exploreBlocked(j);
+    if (why) flow.push(why);
   }
   const hedges = findHedges(newText, isAdded);
   for (const h of hedges) format.push('第 ' + h.line + ' 行有"' + h.word + '"：' + h.text);
@@ -213,7 +205,7 @@ function handle(j, opts) {
     if (tk) flow.push(...tk.issues);
     // 还在写提案那一段（用户没说开工）就打勾：拦下。用户 2026-10-07 定的：任务清单要他看过、他说了开工才开始做（规矩见 lib/session.js"流程分两段"）
     if (tk && tk.ticked.length) {
-      const fl = flowState(j); if (fl.on && fl.stage === 'plan' && !(cfg.autoSwitch && require('../lib/flow-policy').automaticApply(j)) && !require('../lib/apply-scope').startedInScope(j, art.dir)) notStarted = true;
+      const fl = flowState(j); if (fl.on && fl.stage === 'plan' && !require('../lib/apply-scope').startedInScope(j, art.dir)) notStarted = true;
       // 用户说了开工、却没认下来（#214）：说出原因，不再说"我还没说开工"
       let why = ''; try { why = notStarted ? require('../lib/apply-scope').refusal(j) : ''; } catch (e) { why = ''; }
       if (notStarted) flow.unshift(why ? '我说了开工，但' + why + '。认下来之前先不打勾' : '我还没说开工：提案、规格、设计、任务清单要我看过，我说了开工才开始做任务、打勾。先把要点交代给我（改哪些地方、新加的操作和接口、任务清单，我没提过的单独列），用提问框问我能不能开工（选项写"开工""还要改""先不做"）；我说开工、或者我自己敲 /vk-go（或 /opsx:apply）之后再做');

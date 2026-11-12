@@ -124,33 +124,21 @@ H.section('问句、插话不退出流程（第 44 条）');
   H.ok('"退出流程"才退出', fl(j).on === false, fl(j));
 }
 
-H.section('开着自动不再问开工（第 41 条）');
+H.section('第 86 条起开着自动也问怎么实施（替代第 41 条的"开着自动不再问开工"）');
 {
   const proj = project(['c1', 'c2']);
   const d1 = docs(proj, 'c1');
   docs(proj, 'c2');
   H.reviewPoints(h, d1, 'proposal');
-  let j = session(proj, [H.tr.user('这个对吗？')]);
-  S.setFlow(j, true, '测试', 'plan');
-  S.setSessionAuto(j, true, '测试');
-  H.ok('多个 change、最后一句是问句：照样开工当前这个', P.automaticApply(j) === true && fl(j).stage === 'apply', fl(j));
-  H.ok('开工范围有了', A.valid(j).ok && !!fl(j).applyScope, fl(j));
-
-  j = session(proj, [H.tr.user('做'), H.tr.call('AskUserQuestion', { questions: [] }, 'toolu_noanswer')]);
-  S.setFlow(j, true, '测试', 'plan');
-  S.setSessionAuto(j, true, '测试');
-  H.ok('提问框没答：也不挡', P.automaticApply(j) === true, fl(j));
-
-  j = session(proj);
+  let j = session(proj);
   S.setFlow(j, true, '测试', 'plan');
   S.setSessionAuto(j, true, '测试');
   const c1 = S.allChanges(proj).find((c) => c.name === 'c1');
-  H.ok('自动下 planNext 不问开工', !/能不能开工|开工/.test(P.planNext(j, c1) || ''), P.planNext(j, c1));
-
+  H.ok('开着自动：需求审过也问怎么实施', /自动实施/.test(P.planNext(j, c1) || ''), P.planNext(j, c1));
+  H.ok('开着自动：不自己开工', fl(j).stage === 'plan', fl(j));
   const man = session(proj);
   S.setFlow(man, true, '测试', 'plan');
-  H.ok('人工：automaticApply 不开', P.automaticApply(man) === false);
-  H.ok('人工：照旧问开工', /开工/.test(P.planNext(man, c1) || ''), P.planNext(man, c1));
+  H.ok('人工：一样问', /自动实施/.test(P.planNext(man, c1) || ''), P.planNext(man, c1));
 
   const ex = path.join(proj, 'openspec', 'explore', '导出.md');
   const good = H.read(ex);
@@ -158,13 +146,13 @@ H.section('开着自动不再问开工（第 41 条）');
   j = session(proj);
   S.setFlow(j, true, '测试', 'plan');
   S.setSessionAuto(j, true, '测试');
-  H.ok('探索还有没定的：不开工', P.automaticApply(j) === false);
+  H.ok('探索还有没定的：写需求挡（两种模式一样）', /探索还没完/.test(P.exploreBlocked(j)), P.exploreBlocked(j));
   H.ok('写需求这段自动不生效', S.flowView(j).effective === false, S.flowView(j));
   H.write(ex, good);
-  H.ok('清空后生效', S.flowView(j).effective === true, S.flowView(j));
+  H.ok('清空后写需求不挡；写需求这段照样不算自动（第 85 条）', P.exploreBlocked(j) === '' && S.flowView(j).effective === false, S.flowView(j));
 
   S.updateState(j.session_id + '-flow', (s) => { s.holdApply = true; });
-  H.ok('用户说只写需求：不开工', P.automaticApply(j) === false);
+  H.ok('用户说只写需求：不问怎么实施', P.planNext(j, c1) === '', P.planNext(j, c1));
 }
 
 H.section('全自动下提案提交照提交方式走（第 42 条）');
@@ -186,7 +174,7 @@ H.section('全自动下提案提交照提交方式走（第 42 条）');
   c = commitCase('off', true);
   H.ok('关：不提交，也不让模型去问', /提交方式是"关"/.test(H.reasonOf(c.r)) && !/问用户/.test(H.reasonOf(c.r)), c.r);
   c = commitCase('ask', false);
-  H.ok('询问：全自动下不问，记进报告', /全自动下不问/.test(H.reasonOf(c.r)) && !/问用户是否/.test(H.reasonOf(c.r)), c.r);
+  H.ok('询问：写需求那一段不算自动（第 85 条），照人工问用户是否提交', /问用户是否提交/.test(H.reasonOf(c.r)), c.r);
 
   H.setConfig(h, { commitMode: 'off' });
   const proj = project(['c1']);
@@ -206,10 +194,10 @@ H.section('自动下"自动"档等提交一次，提交不成也往下走');
   const j = session(proj);
   S.setFlow(j, true, '测试', 'plan');
   S.setSessionAuto(j, true, '测试');
-  H.ok('还没提交：先不开工', P.automaticApply(j) === false);
+  H.ok('还没提交：不自己开工', fl(j).stage === 'plan');
   const c1 = S.allChanges(proj).find((c) => c.name === 'c1');
   H.ok('催提交一次', /提交本变更/.test(P.planNext(j, c1) || ''));
-  H.ok('催过了还没提交：照样开工', P.automaticApply(j) === true, fl(j));
+  H.ok('催过了还没提交：照样往下问怎么实施（第 86 条，不自己开工）', /自动实施/.test(P.planNext(j, c1) || '') && fl(j).stage === 'plan', P.planNext(j, c1));
   H.setConfig(h, { commitMode: 'off' });
 }
 

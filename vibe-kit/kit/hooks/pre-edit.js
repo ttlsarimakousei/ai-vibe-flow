@@ -24,7 +24,11 @@ const startedCheck = { handle(j) {
   if (!f) return null;
   const S = require('../lib/session'); const A = require('../lib/apply-scope');
   const no = A.notStarted(j, f);
-  if (!no || S.confirmApply(j, { hint: f }) || require('../lib/flow-policy').automaticApply(j)) return null;
+  if (!no || S.confirmApply(j, { hint: f })) {
+    // 用户让开工、接着做了，自动还没问过（第 86 条，仓库主人 2026-11-12 定的）：改代码前先问一次自动还是人工
+    if (CODE_FILE.test(f) && !NOT_CODE.test(f)) { const ask = require('../lib/auto-run').askPending(j); if (ask) return S.blockOut('PreToolUse', '[vibe-kit] ' + ask); }
+    return null;
+  }
   const out = S.blockOut('PreToolUse', '[vibe-kit 范围] ' + no);
   // 用户 2026-11-10 定的："写需求的任何情况下都不能动代码"：不给拦截编号、不认通行证
   Object.defineProperty(out, 'noBypass', { value: true });

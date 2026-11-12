@@ -65,6 +65,27 @@ function taskSelfTest(root, name, resultsFile) {
   B.setTaskState(task, { selfTest: { at: Date.now(), count: list.length, code: W.fingerprint(cwdRoot, 'code').hash, manual: list.filter((x) => x.result === 'manual').map((x) => x.case) } });
   return { ok: true, count: list.length, next: '全面自测登记了。把测试清单、实际结果、' + (B.suggestions(task).length ? '范围外建议、' : '') + '留给人工的用例交给用户，等用户人工核验，用户说归档才归档。' };
 }
+/**
+ * 表外的 change（不归哪个大任务）的自测登记（第 86 条，2026-11-12）：自动实施做到最后要全面自测，全过了套件才关自动。
+ * 和大任务的一样：任务全部做完才行；每条用例要有结果，有没过的不登记；说 pass 要有本机跑过的命令。登记之后改了代码就作废（比代码指纹）
+ */
+function changeSelfTest(root, name, resultsFile) {
+  const c = S.allChanges(root).find((x) => x.name === name);
+  if (!c) throw new Error('没有叫 ' + name + ' 的变更（openspec/changes/ 下没归档的）');
+  const left = T.automatedLeft(c.dir);
+  if (!T.tasks(c.dir).length || left.length) throw new Error(name + ' 的任务还没做完（还有 ' + left.length + ' 项），全部做完才自测');
+  let list; try { list = JSON.parse(fs.readFileSync(resultsFile, 'utf8')); } catch (e) { throw new Error('结果文件读不了，要 JSON 数组：[{"case":"AC-01","result":"pass","note":"实际结果"}]'); }
+  if (!Array.isArray(list) || !list.length) throw new Error('结果文件是空的：每条用例写一条，[{"case":"AC-01","result":"pass","note":"实际结果"}]');
+  const bad = list.filter((x) => !x || !x.case || !['pass', 'fail', 'manual'].includes(x.result));
+  if (bad.length) throw new Error('有 ' + bad.length + ' 条写法不对：case、result（pass、fail、manual）都要有');
+  const fail = list.filter((x) => x.result === 'fail');
+  if (fail.length) return { ok: false, failed: fail.map((x) => x.case), next: '有没过的用例：改完记进 ' + name + ' 的 revisions.md，重跑用例，再登记。' };
+  const projectRoot = path.resolve(c.dir, '../../..');
+  let ran = 0; try { ran = require('./evidence').commands(projectRoot).length; } catch (e) { ran = 0; }
+  if (list.some((x) => x.result === 'pass') && !ran) throw new Error('这个项目里还没有本机跑过的验证命令记录，说 pass 对不上：先真跑用例（测试命令、接口、页面场景）再登记');
+  require('./auto-run').noteChangeTest(c.dir, W.fingerprint(projectRoot, 'code').hash, list.filter((x) => x.result === 'manual').map((x) => x.case));
+  return { ok: true, count: list.length, next: '自测登记了。把测试清单、实际结果、留给人工的用例交给用户，等用户核验，用户说归档才归档。' };
+}
 /** 归档前预演：拷 openspec/ 到临时目录，按表的顺序跑一遍归档，全过才记下来（改名对不上这种到归档才报错，停在一半，用户 2026-11-03 定的） */
 function archiveCheck(root, name) {
   const B = require('./big-task');
@@ -89,4 +110,4 @@ function archiveCheck(root, name) {
   B.setTaskState(task, { archiveCheck: { at: Date.now(), specs: B.specsHash(task) } });
   return { ok: true, order: task.changes.filter((c) => !c.archived).map((c) => c.name), next: '预演过了，按这个顺序归档。' };
 }
-module.exports = { facts, brief, services, deliver, taskTemplate, decisionIssues, commitPlan, selfTest, taskSelfTest, archiveCheck };
+module.exports = { facts, brief, services, deliver, taskTemplate, decisionIssues, commitPlan, selfTest, taskSelfTest, changeSelfTest, archiveCheck };

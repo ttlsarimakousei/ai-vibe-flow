@@ -79,9 +79,10 @@ function jar(file, version) {
   H.write(path.join(pd, 'specs/a/spec.md'), '## ADDED Requirements\n\n### Requirement: A\nA SHALL work.\n\n#### Scenario: ok\n- **WHEN** x\n- **THEN** y\n');
   H.write(path.join(pd, 'design.md'), '## Context\n读了 src/A.js。\n');
   H.inFlow(h, 'ask-plan', [pd], true, 'plan');
+  H.reviewPoints(h, pd, 'proposal'); // 第 85 条起需求写完强制审，审过才问提交
   H.run(h, process.execPath, ['-e', 'require(' + JSON.stringify(path.join(h.kit, 'lib/session.js')) + ').recordReview("proposal",' + JSON.stringify(pd) + ',0,"test-plan",Date.now());']);
   const planStop = H.hook(h, 'verify-gate', { session_id: 'ask-plan', cwd: proj, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: '提案写好了', transcript_path: tf([H.tr.user('写提案'), H.tr.ran('Write', { file_path: path.join(pd, 'proposal.md'), content: '## Why\n\n解决问题。\n' }), H.tr.say('提案写好了')]) });
-  H.ok('需求文档四份写完收工就询问提交，不拖到 apply', /需求文档四份都写完了[^\n]*用 Ask 问是否提交/.test(H.reasonOf(planStop)) && /提交不等于开工/.test(H.reasonOf(planStop)), H.reasonOf(planStop));
+  H.ok('需求审过收工就询问提交，不拖到 apply（第 85 条起审过才提交）', /需求文档审过了。提交方式是\"询问\"：用提问框问用户是否提交/.test(H.reasonOf(planStop)) && /接着问怎么实施/.test(H.reasonOf(planStop)), H.reasonOf(planStop));
   H.section('中文项目的进程归属不要求目录后还有斜杠');
   const dcode = 'process.argv.push("--dir",' + JSON.stringify(proj) + ');const D=require(' + JSON.stringify(path.join(h.kit, 'tools/devserver.js')) + ');console.log(JSON.stringify([D.belongs({pid:1234,cmd:' + JSON.stringify('java.exe "-Dmaven.multiModuleProjectDirectory=' + proj + '"') + '},null,false),D.belongs({pid:1234,cmd:' + JSON.stringify('java.exe "-Dmaven.multiModuleProjectDirectory=' + proj + '-other"') + '},null,false)]));';
   const dr = H.run(h, process.execPath, ['-e', dcode], { cwd: proj });

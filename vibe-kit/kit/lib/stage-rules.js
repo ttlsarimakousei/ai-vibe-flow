@@ -35,9 +35,8 @@ function stageRules(j, stage, cfg) {
   writeState(k, Object.assign({}, readState(k), { [stage]: Date.now() }));
   const tool = (n) => 'node "' + path.join(KIT, 'tools', n).split(path.sep).join('/') + '"';
   const head = spec ? spec + '\n\n' : '';
-  // 会话开着自动（复审 V10）：初次探索、范围和疑问跟用户确认完以后接着写到 tasks，中间不审、不停；没开的写完一份停下提醒用户看一看。都是四份写完才审（第 57 条）
-  const oneByOne = cfg && cfg.autoSwitch ? '需求文档一份一份写（这个会话开着自动：初次探索、范围和疑问跟用户确认完以后，接着写到 tasks，中间不审、不停）' : '需求文档一份一份写，写完一份停下提醒用户看一看，用户说了再写下一份（/opsx:continue），中间不问审查';
-  if (stage === 'plan') return head + '写需求这一段的规矩（照做就不会被拦）：' + oneByOne + '；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；四份写完审一次整套：' + tool('review.js') + ' prepare --change <变更名> --mode proposal --point tasks。';
+  // 需求阶段没有自动模式（第 85 条，仓库主人 2026-11-12 定的，替代 10-17 的"一份一份写"）：一次写到 tasks，写完强制审修，审过问怎么实施
+  if (stage === 'plan') return head + '写需求这一段的规矩（照做就不会被拦）：探索记录"还没定的"清空了才写；需求文档一次写到 tasks（proposal → specs → design → tasks，中间不停、不问审查），写的时候有任何疑问用提问框问，探索记录、用户的话、读过的代码和材料里没有的不写进需求；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；四份写完强制审一次整套，不问用户：' + tool('review.js') + ' run --change <变更名> --mode proposal --point tasks，成立的直接改、要用户拿主意的问用户，改到过；审过了按提交方式提交，再用提问框问怎么实施（"自动实施""实施（每步问我）""先不实施"）。';
   // 这个会话开着自动：开工前先存检查点（K3 M07，lib/checkpoint.js；和收工钩子共用"只送一次"的记录，不进全局约定）
   let ckpt = '';
   if (cfg && cfg.autoSwitch) { try { ckpt = require('./checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; } }

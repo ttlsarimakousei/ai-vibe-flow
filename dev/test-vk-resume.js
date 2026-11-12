@@ -68,11 +68,20 @@ H.section('当前 change 还没开工：回到写需求');
   H.ok('c2 没建：写需求', fl(j).stage === 'plan' && /写 c2 的需求/.test(r.systemMessage || ''), r);
   // 第 53 条：接回就算开工
   ticks(proj, 'c2', 0, 3);
+  const k0 = session(proj);
+  const r0 = say(k0, '/vk-resume c2');
+  H.ok('c2 任务写好了、需求还没整套审过：接回写需求那一段，先审（第 85 条）', fl(k0).stage === 'plan' && /需求还没整套审过/.test(r0.systemMessage || ''), [fl(k0), r0.systemMessage]);
+  H.reviewPoints(h, path.join(proj, 'openspec', 'changes', 'c2'), 'proposal');
   const k = session(proj);
   const r2 = say(k, '/vk-resume c2');
   H.ok('c2 任务写好了、一个没勾：接回就算开工（第 53 条）', fl(k).stage === 'apply' && fl(k).current === 'c2' && A.valid(k).ok && /接回就算开工/.test(r2.systemMessage || ''), [fl(k), r2.systemMessage]);
   const edit = H.hook(h, 'pre-edit', Object.assign({}, k, { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(proj, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' } }));
   H.ok('接回后改代码：不再要用户说开工', !/还没说开工|用户说开工/.test(H.reasonOf(edit)), H.reasonOf(edit));
+  H.ok('接回就开工、没恢复自动：改代码前先问一次怎么实施（第 86 条）', /先用提问框问一次怎么实施/.test(H.reasonOf(edit)), H.reasonOf(edit));
+  const q = 'c2 接着做，怎么实施？';
+  const k2 = Object.assign({}, k, { transcript_path: H.transcript(path.join(h.root, k.session_id + '-ans.jsonl'), [H.tr.user('/vk-resume c2'), ...H.tr.ran('AskUserQuestion', { questions: [{ question: q, options: [{ label: '自动实施' }, { label: '实施（每步问我）' }] }] }, 'User has answered your questions: "' + q + '"="实施（每步问我）". You can now continue with the user\'s answers in mind.')]) });
+  const edit2 = H.hook(h, 'pre-edit', Object.assign({}, k2, { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(proj, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' } }));
+  H.ok('选了"实施（每步问我）"：放行，自动关着', !edit2 && S.sessionAuto(k2) === false, H.reasonOf(edit2));
 }
 
 H.section('自动：死机前开着才恢复');
@@ -81,13 +90,13 @@ H.section('自动：死机前开着才恢复');
   ticks(proj, 'c1', 1, 1);
   const old = session(proj);
   say(old, '/vk-resume 乙');
-  say(old, '/vk-auto');
+  S.setSessionAuto(old, true, '提问框选了自动'); // 2026-11-12 起只在提问框里开（/vk-auto 删了）
   say(old, '继续');
   // 换一个新会话，等于死机后回来（按会话的状态都没了，大任务的状态跨会话留着）
   const j = session(proj);
   const r = say(j, '/vk-resume 乙');
   H.ok('恢复自动，屏幕上说一句', S.sessionAuto(j) === true && /自动已恢复/.test(r.systemMessage || ''), r);
-  say(j, '/vk-auto off');
+  say(j, '别自动了');
   say(j, '继续');
   const j2 = session(proj);
   const r2 = say(j2, '/vk-resume 乙');
@@ -123,7 +132,7 @@ H.section('不写名字：提问框答了才切（第 54 条）；自己输入�
   const again = H.hook(h, 'verify-gate', Object.assign({}, j, { hook_event_name: 'Stop', stop_hook_active: true, last_assistant_message: '好的' })) || {};
   H.ok('只切一次', !/切到这个 change/.test(again.reason || ''), again);
   // 自己输入的、不在表里的 change：先补进 plan.md
-  ticks(proj, 'side-c', 0, 2);
+  ticks(proj, 'side-c', 0, 2); H.reviewPoints(h, path.join(proj, 'openspec', 'changes', 'side-c'), 'proposal');
   const k = session(proj);
   say(k, '/vk-resume');
   const s2 = pickThen(k, 'side-c');

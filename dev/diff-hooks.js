@@ -493,6 +493,8 @@ for (const c of cases) {
   // 第 76 条（2026-11-10）：开工那句话里"改需求会退回人工、等重新说开工"换成"用户让改的照改、接着做"
   if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') { c.expect = /用户中途让改需求的：这一轮里照改[\s\S]*不用让用户再说开工/; c.since = V1852; }
   if (c.name === 'K3：自动模式开工提醒存检查点') { c.expect = /用户让改需求的，照改 proposal\.md、specs[\s\S]*checkpoint\.js/; c.since = V1852; }
+  // 第 85 条（这一版改的）：写需求那一段的规矩换成"探索完才写、一次写到 tasks、写完强制审修、审过问怎么实施"
+  if (c.name === '开口：让它停') { c.expect = /写需求这一段的规矩（照做就不会被拦）：探索记录\\"还没定的\\"清空了才写；需求文档一次写到 tasks[\s\S]*四份写完强制审一次整套，不问用户[\s\S]*自动实施/; c.since = NEXT; }
 }
 for (const c of cases) after1104(c);
 // #438（2026-11-10）：git 里原来就有的 index-old.jsp（旁边有 index.jsp）改了再 add，以前当成备份拦一次

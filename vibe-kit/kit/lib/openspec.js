@@ -20,7 +20,7 @@ const { spawnSync } = require('child_process');
 const KIT = path.join(__dirname, '..');
 const PKG = path.join(KIT, 'openspec', 'node_modules', '@fission-ai', 'openspec');
 const BIN = path.join(PKG, 'bin', 'openspec.js');
-// 装成用户级的命令：一份一份写要 new、continue；ff（一口气生成全部）不装，和"一份一份来"冲突（用户 2026-10-17 定的）
+// 装成用户级的命令。ff 不装：2026-11-12 起需求一次写到 tasks，用 /opsx:propose（或 new 加 continue）就行，不用再多一个入口
 const WORKFLOWS = ['explore', 'propose', 'new', 'continue', 'apply', 'verify', 'archive'];
 
 function info() {
@@ -169,8 +169,9 @@ function ensureRoot(cwd) {
  * OpenSpec 自己的全局配置写成 custom + 我们要的几个命令。返回装了哪些文件（相对 claudeDir），卸载时按它收回
  */
 const PROPOSE_FILE = /(?:^|\/)(?:openspec-propose\/SKILL\.md|opsx\/propose\.md)$/i;
-const KIT_PROPOSE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：需求文档一份一份写。这个命令只建变更、写 proposal.md，写完停下提醒用户看一看；'
-  + '用户说了再用 /opsx:continue 写下一份（specs、design、tasks），每份写完都停，四份写完才问要不要审。会话开着自动的不停，接着写到 tasks 再审。下面原文里"一步生成全部"的部分不照做（用户 2026-10-17 定的"一份一份来"）。\n\n';
+// 2026-11-12 起需求一次写到 tasks（第 85 条，仓库主人定的，替代 10-17 的"一份一份来"）：原文的"一步生成全部"照做，套件只补三件事
+const KIT_PROPOSE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：探索记录"还没定的"清空了才写。proposal → specs → design → tasks 一次写完，中间不停、不问审查；'
+  + '写的时候有任何疑问用提问框问用户，探索记录、用户的话、读过的代码和材料里没有的不写进需求。四份写完强制审一次整套（review.js run --mode proposal --point tasks，不问用户），改到过了按提交方式提交，再用提问框问怎么实施（"自动实施""实施（每步问我）""先不实施"）。下面原文里"写完就开工"的部分不照做。\n\n';
 const EXPLORE_FILE = /(?:^|\/)(?:openspec-explore\/SKILL\.md|opsx\/explore\.md)$/i;
 // 自带模板要求决定留在对话里、写文件前单独确认，死机探索结果就没了（用户 2026-11-03 定的：探索结果要全记）
 const KIT_EXPLORE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：探索结果边谈边写进文件，不留在对话里，死机了也能接回。第一次有结论时跑 `node "$HOME/.claude/vibe-kit/tools/plan.js" new --task <大任务名> --changes <变更名，逗号分隔>`，建 `openspec/plan.md` 的一节和 `openspec/explore/<大任务名>.md`，之后定一件写一件。'
@@ -198,7 +199,7 @@ function installClaudeFiles(claudeDir, beforeOverwrite) {
         if (fs.statSync(p).isDirectory()) { copy(p, r2); continue; }
         const to = path.join(claudeDir, r2); fs.mkdirSync(path.dirname(to), { recursive: true });
         const name = r2.split(path.sep).join('/');
-        // /opsx:propose 原文是"一步生成全部文档"，和套件的"一份一份写"冲突，模型照着写会被拦（审核 R3）：插一段套件的规矩
+        // /opsx:propose、/opsx:explore 前面插一段套件的规矩（审核 R3；propose 那段 2026-11-12 改成一次写到 tasks、写完强制审修）
         const rule = PROPOSE_FILE.test(name) ? KIT_PROPOSE_RULE : EXPLORE_FILE.test(name) ? KIT_EXPLORE_RULE : '';
         const text = rule ? withKitRule(fs.readFileSync(p, 'utf8'), rule) : null;
         const same = () => (text != null ? fs.readFileSync(to, 'utf8') === text : fs.readFileSync(to).equals(fs.readFileSync(p)));

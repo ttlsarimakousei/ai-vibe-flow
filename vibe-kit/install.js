@@ -310,7 +310,7 @@ function autoCompactNote(r, s) {
   if (env !== undefined && (r === 'set' || r === 'kept')) console.log('  [!] settings.json 的 env 里你自己设了 CLAUDE_CODE_AUTO_COMPACT_WINDOW=' + env + '，Claude Code 以它为准，配置页的"自动压缩线"不起作用');
 }
 /**
- * Claude Code 自带的"自动模式"（auto mode，和套件的 /vk-auto 是两回事）。2.1.284 起，没配权限模式的会话默认进它：
+ * Claude Code 自带的"自动模式"（auto mode，和套件的自动实施是两回事）。2.1.284 起，没配权限模式的会话默认进它：
  * 有风险的命令（node -e、curl、git commit、查库这类）先发给一个分类模型审，系统提示有 14 万字符；经网关用的话每条这样的命令多一次请求、算用量，
  * 分类模型答得不合格式就重试，最多十次，然后把命令拦下（2026-10-05 在 2.1.289 上用假网关实测：套件的端到端测试因此挂了 31 项；
  * 2026-11-09 去掉这一项试了一次，2.1.289 的端到端 6 套不过，git commit、查库被拦）。
@@ -560,8 +560,8 @@ function seePageMode() { return kitConfig().autoSeePage === false ? 'off' : 'on'
 function reviewModeText() {
   return '脚本 review.js run 调 claude -p 审，结论在命令输出里，不开子代理；第一轮按材料大小 1～3 个角度，后面只审改过的地方。自动核验、修改、复验，没有 P1、P2 就算过；连续 3 次没拿到结论就停止催，不算通过。人工审查、自测或复验先 Ask，用户这一轮已经要求过的直接做。';
 }
-const AUTO_MODE_TEXT = '### 自动执行范围\n\n需求自动和 Apply 自动分别由本轮提醒给出。需求先有用户描述、探索现状并沟通未决问题，满足条件才自动写，四份写完审修一次整套；Apply 按已授权范围做，这个 change 的任务全部做完审修一次，所有 change 做完全面自测。业务疑问先 Ask，不猜需求。只做当前范围，不自行开下一变更；需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
-const AUTO_TOP_TEXT = '> 自动模式按会话开（用户敲 /vk-auto 或说"这个需求自动做"，只对那个会话有效）；开没开、在哪一段生效以本轮提醒为准。人工模式先 Ask 是否审查、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
+const AUTO_MODE_TEXT = '### 自动执行范围\n\n自动只管实施，开没开由本轮提醒给出。需求阶段没有自动模式：先探索、问清疑问，一次写到 tasks，写完强制审修，审过了问用户怎么实施。自动实施做完这个 change 的任务审修一次，所有 change 做完全面自测、改、再测再审，全部通过后自动关。业务疑问先 Ask，不猜需求。需要用户的账号、归档或 push 许可时仍要 Ask。审查执行、服务起停和诊断留在本机，不写团队 tasks。';
+const AUTO_TOP_TEXT = '> 自动只管实施：需求审过后用户在提问框里选"自动实施"才开，只对那个会话有效，全部通过后自动关；开没开以本轮提醒为准。需求写完的整套审查不用问。人工模式先 Ask 是否审查代码、自测或复验，用户放弃后直接继续，不留未审查或未测试记录。';
 /** 约定和规范里的占位符换成按开关生成的文字 */
 function fill(text) {
   const c = kitConfig();
@@ -1028,7 +1028,7 @@ if (mode === 'install') {
       }
     }
   }
-  // 2026-10-31（用户定的，问题表第 28 条）：自动模式改成每个会话一个开关（/vk-auto），配置里旧的两个开关（需求自动、Apply 自动）清掉一次。
+  // 2026-10-31（用户定的，问题表第 28 条）：自动模式改成每个会话一个开关，配置里旧的两个开关（需求自动、Apply 自动）清掉一次。2026-11-12 起开关只在提问框里选（第 87 条，/vk-auto 删了）。
   // 升级这一刻正在走流程的会话（一天之内动过）原来开着自动的：给它补一个会话开关（开），升级不打断正在自动干活的会话
   {
     const f31 = path.join(KIT, 'state', 'auto-session-migration.json');
@@ -1055,7 +1055,7 @@ if (mode === 'install') {
           try { fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2) + '\n'); } catch (e) { /* 写不了：下次更新再清 */ }
         }
         try { fs.mkdirSync(path.dirname(f31), { recursive: true }); fs.writeFileSync(f31, JSON.stringify({ at: Date.now(), was, carried })); } catch (e) { /* 写不了：下次再做一遍，结果一样 */ }
-        console.log('  [OK] 自动模式改成每个会话一个开关：要自动的会话里敲 /vk-auto（或者说"这个需求自动做"），/vk-auto off 关；配置页上不再有两个自动开关'
+        console.log('  [OK] 自动模式改成每个会话一个开关：需求审过后在提问框里选"自动实施"，说"别自动了"关；配置页上不再有两个自动开关'
           + (carried ? '。正在自动干活的 ' + carried + ' 个会话照旧开着' : ''));
       }
     }

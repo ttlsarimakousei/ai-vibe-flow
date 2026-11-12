@@ -162,8 +162,38 @@ function flowAdopt(j) {
   return next;
 }
 
+/**
+ * 这一轮提问框里选的自动、人工（第 86 条）：选了"自动实施""自动接着做"开这个会话的自动，选了"实施（每步问我）""人工接着做""先不实施"关。
+ * 同一个答案只认一次（st.autoAnswer 记着）：全部通过后套件关了自动，同一轮后面的钩子不能又按这个答案打开。
+ * 用户开口让开工、套件等着问（st.autoAsk）时认得宽一点（问题里说到自动、答"自动"也算），认下来就不等了。返回 'on'、'off'、''
+ */
+function syncAutoAnswer(j) {
+  const sid = j && j.session_id;
+  if (!sid || sid === 'unknown' || !j.transcript_path) return '';
+  return require('./invocation').memo('auto-answer|' + sid, () => {
+    try {
+      const st = flowState(j);
+      const V = require('./session-voice'); const { tailEntries } = require('./session-transcript');
+      const { autoAnswerOf, setSessionAuto } = require('./session-config');
+      let pick = null;
+      for (const v of V.turnVoices(tailEntries(j.transcript_path, 3000000))) {
+        if (v.kind !== 'answer') continue;
+        for (const x of v.answers || []) { const w = autoAnswerOf(x.a, x.q, !!st.autoAsk); if (w) pick = { v, w }; }
+      }
+      if (!pick) return '';
+      const k = V.voiceKey(pick.v) + ':' + pick.w;
+      if (st.autoAnswer === k) return '';
+      updateState(flowKey(j), (s) => { s.autoAnswer = k; delete s.autoAsk; delete s.autoStopped; return s; });
+      setSessionAuto(j, pick.w === 'on', pick.w === 'on' ? '提问框选了自动' : '提问框选了人工或先不实施');
+      hookLog('自动模式 会话 ' + sid + (pick.w === 'on' ? ' 提问框选了自动' : ' 提问框选了人工或先不实施'));
+      return pick.w;
+    } catch (e) { return ''; }
+  });
+}
+
 /** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */
 function readConfigFor(j) {
+  syncAutoAnswer(j);
   const c = readConfig(j); c.autoSwitch = c.autoApply || c.autoRequirements;
   // 算流程状态要读任务、算指纹、调 git，出错不能让调用的钩子整道放行（2026-10-17 审核问题 14）：按人工模式算，更严
   let view; try { view = flowView(j); } catch (e) { hookLog('readConfigFor 算流程状态出错，按人工模式算：' + ((e && e.message) || e)); view = { effective: false, phase: '普通任务' }; }
@@ -184,11 +214,9 @@ function flowView(j) {
   if (st.on && st.stage === 'apply') { try { const B = require('./big-task'); const t = B.forSession(j); verifying = !!t && !t.legacy && B.phaseOf(t).phase === 'verify'; } catch (e) { verifying = false; } }
   // st.waiting 里的 scope 是内部值（模型自己改了需求、等用户重新说开工），不能原样给人看（第 76 条：状态栏写着"等你：scope"）
   const waiting = (st.waiting === 'scope' ? '需求文档被改过，说"开工"或 /vk-go 接着做' : st.waiting) || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : verifying ? '等你核验' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
-  // 写需求那一段的自动：探索记录写完了才算（"还没定的"清空、范围写了）。老会话 planReady 还认
-  // 第 67、68 条：会话开着自动、已经在写这个 change 的文档：只有探索记录里真有没定的才不算生效（表外的 change、老任务没有记录可查，范围没写也不退回人工）。以前退回人工，写完 proposal 被拦下让用户看一看，写完四份还问要不要审
-  const planOk = () => { if (st.planReady) return true; try { const B = require('./big-task'); const t = B.forSession(j); if (cfg.autoSession === true && dirs.length > 0) return !B.exploreOpen(t); return !!t && !t.legacy && B.exploreIssues(t).length === 0; } catch (e) { return false; } };
+  // 需求阶段没有自动模式（第 85 条，仓库主人 2026-11-12 定的）：写需求那一段两种模式一样，一次写到 tasks、写完强制审修，有疑问就问。自动只在做任务那一段算
   // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。配置开关开着时自动不再生效，但收工还要交这一轮的报告；会话开关开着时照样自动
-  return { session: cfg.autoSession === true, switchOn: cfg.autoApply || cfg.autoRequirements, effective: !!(st.on === true && !over && !waiting && !(st.aside && cfg.autoSession !== true) && (st.stage === 'apply' ? cfg.autoApply : cfg.autoRequirements && planOk())), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
+  return { session: cfg.autoSession === true, switchOn: !!cfg.autoApply, effective: !!(st.on === true && !over && !waiting && !(st.aside && cfg.autoSession !== true) && st.stage === 'apply' && cfg.autoApply), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
 }
 
 /**
@@ -230,4 +258,4 @@ function touchChange(sid, dir) {
   } catch (e) { /* 记不了不影响归档 */ }
 }
 
-module.exports = { FLOW_SLASH, FLOW_TAG, FLOW_SKILL, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, APPLY_SLASH, APPLY_TAG, applyIntent, changeStarted, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowAdopt, readConfigFor, flowView, sessionChanges, touchChange };
+module.exports = { FLOW_SLASH, FLOW_TAG, FLOW_SKILL, syncAutoAnswer, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, APPLY_SLASH, APPLY_TAG, applyIntent, changeStarted, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowAdopt, readConfigFor, flowView, sessionChanges, touchChange };

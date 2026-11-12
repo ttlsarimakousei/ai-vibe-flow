@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 问题表第 24—28 条（2026-10-31，docs/feedback-20261030.md"第 24—28 条"）：
- *   28 自动模式按会话开：/vk-auto 开、/vk-auto off 关，只对这个会话有效
+ *   28 自动模式按会话记，只对这个会话有效（87：/vk-auto 删了，开只认提问框里选的"自动实施"，关认"别自动了"）
  *   24 会话开着自动时：任务做完等验收照样算自动；用户改了需求按改后的重定范围，不退回人工
  *   25 提交方式"自动"：任务都勾完以后，改完用户报的问题也算做完一件事，能提交
  *   26 审查轮数在问题处理完以后不清零；到上限的点不挡提交、不挡往下走
@@ -34,32 +34,37 @@ H.section('第 27 条："服务都起着吗，我要看看系统"算让它起服
   H.ok('会话记录里这句话：自测许可有效（起服务不用再问）', S.userSaid(es, 'test').ok);
 }
 
-H.section('第 28 条：自动模式按会话开，/vk-auto 开、/vk-auto off 关，只对这个会话有效');
+H.section('第 28、87 条：自动按会话记；/vk-auto 删了（2026-11-12），开只认提问框里选的"自动实施"，关认"别自动了"');
 {
   const h = H.makeHome('tas-28', FROM, QUIET);
   const S = require(path.join(h.kit, 'lib', 'session.js'));
   const said = (t) => (S.autoSwitchSaid ? S.autoSwitchSaid(t) : 'none');
   const sa = (sid) => (S.sessionAuto ? S.sessionAuto({ session_id: sid }) : null);
-  for (const [t, want] of [['/vk-auto', 'on'], ['/vk-auto 做一个订单导出', 'on'], ['/vk-auto off', 'off'], ['这个需求自动做', 'on'], ['开自动', 'on'], ['别自动了', 'off'], ['关掉自动模式', 'off'], ['能自动做吗？', ''], ['自动提交打开', ''], ['这个能不能自动完成', '']]) H.ok('"' + t + '" → ' + (want || '不算'), said(t) === want, said(t));
+  for (const [t, want] of [['/vk-auto', ''], ['/vk-auto 做一个订单导出', ''], ['这个需求自动做', ''], ['开自动', ''], ['别自动了', 'off'], ['关掉自动模式', 'off'], ['能自动做吗？', '']]) H.ok('"' + t + '" → ' + (want || '不算'), said(t) === want, said(t));
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE(false)));
-  let n = 0;
-  const say = (sid, prompt) => { n++; return H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'a28-' + n + '.jsonl'), [H.tr.user(prompt)]) }); };
-  const r1 = say('s-on', '/vk-auto');
-  H.ok('敲 /vk-auto：这个会话开了，模型拿到怎么做', sa('s-on') === true && /这个会话的自动模式开了/.test(textOf(r1)) && /不自己加需求/.test(textOf(r1)), textOf(r1).slice(0, 400));
-  H.ok('/vk-auto 只是开关：不让模型提问（用户 2026-11-04 定的）', /只是个开关/.test(textOf(r1)) && /不要提问/.test(textOf(r1)) && !/先用提问框问/.test(textOf(r1)), textOf(r1).slice(0, 200));
-  const cmd = H.read(path.join(H.SRC, 'claude', 'commands', 'vk-auto.md')) || '';
-  H.ok('命令文件也一样，参数只有 off', /只是个开关/.test(cmd) && !/先用提问框问/.test(cmd) && /argument-hint: \[off\]/.test(cmd), cmd.slice(0, 300));
-  H.ok('这个会话按开着算（需求、实施两段都开）', S.readConfigFor({ session_id: 's-on', cwd: p }).autoApply === true && S.readConfigFor({ session_id: 's-on', cwd: p }).autoRequirements === true);
-  say('s-off', '改一下 A');
-  H.ok('别的会话不受影响', S.readConfigFor({ session_id: 's-off', cwd: p }).autoApply === false);
-  const sl = (sid) => H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: p, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: p }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: p }).out.replace(/\x1b\[[0-9;]*m/g, '');
+  H.ok('命令文件 vk-auto.md 删了', !fs.existsSync(path.join(H.SRC, 'claude', 'commands', 'vk-auto.md')));
+  const answered = (n, a) => H.transcript(path.join(h.root, 'a28-' + n + '.jsonl'), [H.tr.user('接着做'), H.tr.ran('AskUserQuestion', { questions: [{ question: 'feat-028 的需求审过了，怎么实施？', header: '实施', options: [{ label: '自动实施' }, { label: '实施（每步问我）' }, { label: '先不实施' }] }] }, 'User has answered your questions: "feat-028 的需求审过了，怎么实施？"="' + a + '". You can now continue with the user\'s answers in mind.')]);
+  S.readConfigFor({ session_id: 's-on', cwd: p, transcript_path: answered(1, '自动实施') });
+  H.ok('提问框里选了"自动实施"：这个会话开了', sa('s-on') === true);
+  H.ok('这个会话按开着算', S.readConfigFor({ session_id: 's-on', cwd: p }).autoApply === true);
+  S.readConfigFor({ session_id: 's-off', cwd: p, transcript_path: answered(2, '实施（每步问我）') });
+  H.ok('选了"实施（每步问我）"：关着；别的会话不受影响', sa('s-off') === false && S.readConfigFor({ session_id: 's-off', cwd: p }).autoApply === false);
+  S.readConfigFor({ session_id: 's-other', cwd: p, transcript_path: answered(3, '实施方案 A') });
+  H.ok('别的提问框里以"实施"开头的选项（"实施方案 A"）不动开关', sa('s-other') === null);
+  const sl = (sid) => H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: p, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: p }, context_window: { context_window_size: 1000000 } }) }).out;
   H.ok('状态栏：开着的会话写"自动 开"，别的会话写"自动 关"', /自动 开/.test(sl('s-on')) && /自动 关/.test(sl('s-off')), sl('s-on') + '\n' + sl('s-off'));
-  const r2 = say('s-on', '/vk-auto off');
-  H.ok('/vk-auto off：关了', sa('s-on') === false && /自动模式关了/.test(textOf(r2)));
+  // 同一个答案只认一次：套件关了之后，同一轮后面的钩子不能按这个答案又打开
+  const t1 = answered(4, '自动实施');
+  S.readConfigFor({ session_id: 's-once', cwd: p, transcript_path: t1 });
+  S.setSessionAuto({ session_id: 's-once' }, false, '全部通过');
+  S.readConfigFor({ session_id: 's-once', cwd: p, transcript_path: t1 });
+  H.ok('同一个"自动实施"答案只认一次：关了之后不会又按它打开', sa('s-once') === false);
+  let n = 0;
+  const say = (sid, prompt) => { n++; return H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 's28-' + n + '.jsonl'), [H.tr.user(prompt)]) }); };
+  const r2 = say('s-on', '别自动了');
+  H.ok('"别自动了"：关了，模型知道之后让接着做要先问', sa('s-on') === false && /自动关了/.test(textOf(r2)) && /问一次自动还是人工/.test(textOf(r2)), textOf(r2).slice(0, 300));
   say('s-words', '这个需求自动做');
-  H.ok('说"这个需求自动做"也算开', sa('s-words') === true);
-  const r3 = say('s-req', '/vk-auto 做一个订单导出的功能，导出成 xlsx');
-  H.ok('/vk-auto 带着需求：开了，不按句子进流程（改动大的由模型问要不要探索）', sa('s-req') === true && !S.flowState({ session_id: 's-req' }).on, textOf(r3));
+  H.ok('说"这个需求自动做"不再开（仓库主人选的"只认关"）', sa('s-words') !== true);
   // 安装器：配置里旧的两个开关清掉，正在流程里的会话补一个会话开关
   const pkg = (() => { if (!FROM) return H.makePackage('tas-pkg', '20261031.1200'); const d = path.join(H.tempDir('tas-pkg'), 'vibe-kit'); H.copyDir(FROM, d, (x) => x === 'node_modules' || x === '.git'); H.stubDeps(d); return d; })();
   const u = H.freshHome('tas-inst');
@@ -74,18 +79,17 @@ H.section('第 28 条：自动模式按会话开，/vk-auto 开、/vk-auto off �
   H.ok('升级：正在流程里的会话补了会话开关（不打断正在自动干活的）', JSON.parse(H.read(path.join(u.kit, 'state', 'busy-auto-switch.json')) || '{}').on === true && /正在自动干活的 1 个会话照旧开着/.test(i2.out), i2.out.slice(-500));
 }
 
-H.section('复审 V1—V4：/vk-auto 关 是关；需求原文里的"自动关闭""自动完成"不动开关；开着的开关不会 3 天后被清掉');
+H.section('复审 V2—V4：需求原文里的"自动关闭""自动完成"不动开关；开着的开关不会 3 天后被清掉');
 {
   const h = H.makeHome('tas-v', FROM, QUIET);
   const S = require(path.join(h.kit, 'lib', 'session.js'));
   const said = (t) => (S.autoSwitchSaid ? S.autoSwitchSaid(t) : 'none');
-  for (const [t, want] of [['/vk-auto 关', 'off'], ['/vk-auto 关闭', 'off'], ['/vk-auto 实现订单超时自动关闭', 'on'], ['<command-name>/vk-auto</command-name>\n<command-args>关</command-args>', 'off'],
-    ['那就全自动做吧', 'on'], ['你别自动了，我自己来', 'off'], ['把自动关了', 'off'],
+  for (const [t, want] of [['那就全自动做吧', ''], ['你别自动了，我自己来', 'off'], ['把自动关了', 'off'],
     ['这个功能别自动提交，我来点', ''], ['先别自动推送', ''], ['做一个功能：订单超时自动关闭。', ''], ['账号自动停用', ''],
     ['支付成功后，自动完成订单状态流转', ''], ['每天零点，自动推进到下一个状态', ''], ['开自动提交', ''], ['开一下自动保存', '']]) H.ok('"' + t.replace(/\n/g, ' ') + '" → ' + (want || '不算'), said(t) === want, said(t));
   const p = H.makeRepo(path.join(h.work, 'proj'), { 'a.txt': 'x\n', '.gitignore': '.vibe/\n' });
   const say = (sid, prompt, n) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'v-' + n + '.jsonl'), [H.tr.user(prompt)]) });
-  say('s-v4', '/vk-auto', 1);
+  S.setSessionAuto({ session_id: 's-v4' }, true, '提问框选了自动');
   const f = path.join(h.kit, 'state', 's-v4-auto-switch.json');
   const old = new Date(Date.now() - 4 * 86400000); fs.utimesSync(f, old, old);
   say('s-v4', '接着做', 2);

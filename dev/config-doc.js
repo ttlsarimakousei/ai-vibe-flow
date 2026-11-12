@@ -12,7 +12,7 @@ const BEGIN = '<!-- 下面的表由 dev/config-doc.js 从 kit/lib/config-fields.
 const END = '<!-- 表到这里 -->';
 function table() {
   const rows = VIEW_FIELDS.concat(FIELDS).filter((f) => f.doc).map((f) => '| ' + f.doc + ' | ' + f.since + ' | ' + f.defText + ' |');
-  return ['| 开关（配置页上的名字） | 哪一版加的 | 默认 |', '|---|---|---|', '| ~~自动完善需求 autoRequirements、自动完成 Apply autoApply~~ | 1017 起，2026-10-31 那一版去掉 | 改成每个会话一个开关：会话里敲 /vk-auto |'].concat(rows).join('\n');
+  return ['| 开关（配置页上的名字） | 哪一版加的 | 默认 |', '|---|---|---|', '| ~~自动完善需求 autoRequirements、自动完成 Apply autoApply~~ | 1017 起，2026-10-31 那一版去掉 | 改成每个会话一个开关；2026-11-12 起只管实施，需求审过后在提问框里选"自动实施"（/vk-auto 删了） |'].concat(rows).join('\n');
 }
 const text = fs.readFileSync(FILE, 'utf8');
 const a = text.indexOf(BEGIN);

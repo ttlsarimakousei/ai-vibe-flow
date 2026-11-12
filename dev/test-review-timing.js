@@ -176,7 +176,7 @@ const review = async (...a) => { try { return await H.fakeReview(...a); } catch 
     H.ok('复审 4：同名变更重建（born 不一样）：基线重记', fresh.born !== 1 && fresh.at >= old.at, fresh);
   }
 
-  H.section('自动模式写需求：写到 tasks 再审，中间不审、不停');
+  H.section('写需求（第 85 条起开不开自动都一样）：写到 tasks 再审，中间不审、不停');
   {
     const h = H.makeHome('timing-auto', FROM, QUIET);
     const S = require(path.join(h.kit, 'lib/session')); const P = require(path.join(h.kit, 'lib/flow-policy')); const A = require(path.join(h.kit, 'lib/apply-scope'));
@@ -189,20 +189,20 @@ const review = async (...a) => { try { return await H.fakeReview(...a); } catch 
     cfg({ autoApply: true, autoRequirements: true });
     S.setFlow(j, true, '需求', 'plan'); S.flowTouch(j, d);
     put(d, 'proposal');
-    H.ok('自动模式生效了（这节的前提）', S.readConfigFor(j).autoMode);
+    H.ok('写需求这一段不算自动（第 85 条：需求阶段没有自动模式）', !S.readConfigFor(j).autoMode);
     const pre = (kind) => H.hook(h, 'pre-edit', Object.assign({}, j, { hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: doc(d, kind), content: { specs: SPEC, design: DESIGN, tasks: TASKS }[kind] } }));
     const r1 = pre('specs');
     H.ok('proposal 没审也能写 specs', !blocked(r1), H.reasonOf(r1));
     const m1 = P.stop(j, [d], false, 't1');
-    H.ok('只写了 proposal 就停了：催接着写 specs，不催审查', m1.some((x) => /接着写下一份 specs/.test(x)) && !m1.some((x) => /review\.js prepare/.test(x)), m1);
+    H.ok('只写了 proposal 就停了：催接着写 specs，不催审查', m1.some((x) => /接着写 specs/.test(x)) && !m1.some((x) => /review\.js prepare/.test(x)), m1);
     H.ok('同样的内容只催一次', P.stop(j, [d], false, 't1').length === 0);
     const guard = (point, said) => H.hook(h, 'guard-commit', Object.assign({}, j, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'g' + (++seq), transcript_path: said ? tf([H.tr.user(said)]) : j.transcript_path, tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" prepare --change add-a --mode proposal --point ' + point + ' --project "' + p.replace(/\\/g, '/') + '"' } }));
     const r2 = guard('proposal');
-    H.ok('没人要求就单独审 proposal：拦下，说写完 tasks 再审', /自动模式不单独审 proposal/.test(H.reasonOf(r2)) && /--point tasks/.test(H.reasonOf(r2)), H.reasonOf(r2));
+    H.ok('没人要求就单独审 proposal：拦下，说写完 tasks 再审', /需求文档不单独审 proposal/.test(H.reasonOf(r2)) && /--point tasks/.test(H.reasonOf(r2)), H.reasonOf(r2));
     const r3 = guard('proposal', '审一下 proposal');
-    H.ok('用户说了审一下：放行', !/自动模式不单独审/.test(H.reasonOf(r3)), H.reasonOf(r3));
+    H.ok('用户说了审一下：放行', !/不单独审/.test(H.reasonOf(r3)), H.reasonOf(r3));
     put(d, 'specs');
-    H.ok('specs 写了、design 没写：催 design', P.stop(j, [d], false, 't2').some((x) => /接着写下一份 design/.test(x)));
+    H.ok('specs 写了、design 没写：催 design', P.stop(j, [d], false, 't2').some((x) => /接着写 design/.test(x)));
     const r4 = pre('design');
     H.ok('specs 没审也能写 design', !blocked(r4), H.reasonOf(r4));
     put(d, 'design');
@@ -211,14 +211,15 @@ const review = async (...a) => { try { return await H.fakeReview(...a); } catch 
     put(d, 'tasks');
     const m2 = P.stop(j, [d], false, 't3');
     H.ok('tasks 写完：催审一次整套（--point tasks）', m2.some((x) => /四份需求文档写完了/.test(x) && /--point tasks/.test(x)), m2);
-    H.ok('审查点 tasks：放行', !/自动模式不单独审/.test(H.reasonOf(guard('tasks'))));
-    H.ok('整套没审：不开工', !P.automaticApply(j));
+    H.ok('审查点 tasks：放行，不问用户', !/不单独审|没说要审查/.test(H.reasonOf(guard('tasks'))));
+    H.ok('整套没审：不问怎么实施', !P.allDone(d, 'proposal'));
     P.noteResult(d, 'tasks', GOOD, P.fingerprint(d, 'tasks'));
-    H.ok('整套审过：直接开工（别的几份没有单独的记录也开工）', P.automaticApply(j) && S.flowStage(j) === 'apply', S.flowState(j));
+    const ask = P.planNext(j, { dir: d, name: 'add-a' });
+    H.ok('整套审过：停下问怎么实施（自动实施 / 实施（每步问我）/ 先不实施），不自己开工（第 86 条）', /自动实施/.test(ask) && /先不实施/.test(ask) && S.flowStage(j) === 'plan', ask);
 
     H.section('自动模式做任务：组之间不审、不挡，全部做完审一次');
     H.git(p, ['add', '-A']); H.git(p, ['commit', '-qm', 'docs: 提案 add-a']);
-    A.grant(j, 'add-a', '');
+    A.grant(j, 'add-a', ''); S.setFlow(j, true, '提问框选了自动实施', 'apply');
     const tickEdit = (id) => H.hook(h, 'pre-edit', Object.assign({}, j, { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: doc(d, 'tasks'), old_string: '- [ ] ' + id, new_string: '- [x] ' + id } }));
     const r6 = tickEdit('1.1');
     H.ok('第一次打勾：文档审过了就放行', !blocked(r6), H.reasonOf(r6));
@@ -238,7 +239,7 @@ const review = async (...a) => { try { return await H.fakeReview(...a); } catch 
     H.ok('真走收工钩子：不会催去审 group-1、group-rest', !/group-1|group-rest/.test(H.reasonOf(stopHook)), H.reasonOf(stopHook));
   }
 
-  H.section('人工模式写需求：写完一份提醒看一看、引导下一步；tasks 写完才问要不要审');
+  H.section('没开自动写需求（第 85 条起和开着一样）：一次写到 tasks，不停下看一看；tasks 写完强制审，不问');
   {
     const h = H.makeHome('timing-manual', FROM, QUIET);
     const S = require(path.join(h.kit, 'lib/session')); const P = require(path.join(h.kit, 'lib/flow-policy'));
@@ -248,24 +249,20 @@ const review = async (...a) => { try { return await H.fakeReview(...a); } catch 
     S.setFlow(j, true, '需求', 'plan'); S.flowTouch(j, d);
     put(d, 'proposal');
     const m1 = P.stop(j, [d], false, 't1');
-    H.ok('proposal 写完：提醒看一看，引导写 specs', m1.some((x) => /提醒用户看一看/.test(x) && /写下一份（specs）/.test(x)), m1);
+    H.ok('proposal 写完：催接着写 specs，不提醒看一看（以前停下看一看）', m1.some((x) => /接着写 specs/.test(x)) && !m1.some((x) => /看一看/.test(x)), m1);
     H.ok('proposal 写完：不问审查', !m1.some((x) => /审一下/.test(x)), m1);
     const pre = (kind, entries) => H.hook(h, 'pre-edit', { cwd: p, session_id: 'manual-plan', hook_event_name: 'PreToolUse', tool_name: 'Write', transcript_path: tf(entries || [H.tr.user('写需求')]), tool_input: { file_path: doc(d, kind), content: { specs: SPEC, design: DESIGN, tasks: TASKS }[kind] } });
     const early = pre('specs');
-    H.ok('用户还没看就写 specs：拦下，引导下一步，不提审查', blocked(early) && /写下一份（specs）/.test(H.reasonOf(early)) && !/审一下/.test(H.reasonOf(early)), H.reasonOf(early));
-    ago(doc(d, 'proposal'), 2 * 3600000);
-    const ok1 = pre('specs', [H.tr.user('写需求'), H.tr.ran('AskUserQuestion', { questions: [{ question: 'proposal 写好了，接下来？' }] }, 'User has answered your questions: "proposal 写好了，接下来？"="写下一份（specs）". You can now continue with the user\'s answers in mind.')]);
-    H.ok('用户选了写下一份：放行', !blocked(ok1), H.reasonOf(ok1));
-    put(d, 'specs'); ago(doc(d, 'specs'), 2 * 3600000);
-    H.ok('specs 写完：引导写 design，不问审查', P.stop(j, [d], false, 't2').every((x) => /写下一份（design）/.test(x) && !/审一下/.test(x)));
+    H.ok('用户还没看就写 specs：不拦（以前拦下引导下一步）', !blocked(early), H.reasonOf(early));
+    put(d, 'specs');
+    H.ok('specs 写完：催写 design，不问审查', P.stop(j, [d], false, 't2').every((x) => /接着写 design/.test(x) && !/审一下/.test(x)));
     put(d, 'design');
-    H.ok('design 写完：引导写 tasks，不问审查', P.stop(j, [d], false, 't3').every((x) => /写下一份（tasks）/.test(x) && !/审一下/.test(x)));
+    H.ok('design 写完：催写 tasks，不问审查', P.stop(j, [d], false, 't3').every((x) => /接着写 tasks/.test(x) && !/审一下/.test(x)));
     put(d, 'tasks');
     const m2 = P.stop(j, [d], false, 't4');
-    H.ok('tasks 写完：问要不要审整套，定稿和开工一起问', m2.some((x) => /四份需求文档写完了/.test(x) && /审一下/.test(x) && /定稿并开工/.test(x) && /只定稿/.test(x)), m2);
+    H.ok('tasks 写完：强制审整套，不问要不要审、不问定稿', m2.some((x) => /四份需求文档写完了，强制审一次整套/.test(x) && /--point tasks/.test(x)) && !m2.some((x) => /定稿并开工|只定稿|Ask 问要不要审/.test(x)), m2);
     P.noteResult(d, 'tasks', GOOD, P.fingerprint(d, 'tasks'));
-    H.ok('整套审过：不再回头问前面几份', P.stop(j, [d], false, 't5').length === 0);
-
+    H.ok('整套审过：不再回头催前面几份', P.stop(j, [d], false, 't5').length === 0);
     H.section('人工模式做任务：组之间不问，全部做完问一次审查和自测');
     H.git(p, ['add', '-A']); H.git(p, ['commit', '-qm', 'docs: 提案 add-a']);
     S.setFlow(j, true, '开工', 'apply');
@@ -378,8 +375,8 @@ const review = async (...a) => { try { return await H.fakeReview(...a); } catch 
     const St = require(path.join(h.kit, 'lib/stage-rules'));
     const plan = St.stageRules({ session_id: 'r1' }, 'plan', { autoSwitch: false }); const apply = St.stageRules({ session_id: 'r2' }, 'apply', { autoSwitch: false });
     const auto = St.stageRules({ session_id: 'r3' }, 'plan', { autoSwitch: true });
-    H.ok('写需求那一段：--point tasks，人工不问审查', /--point tasks/.test(plan) && !/<proposal\|specs/.test(plan) && /提醒用户看一看/.test(plan), plan);
-    H.ok('写需求那一段：自动中间不审、不停', /中间不审、不停/.test(auto), auto);
+    H.ok('写需求那一段：--point tasks，一次写到 tasks、强制审、不问（第 85 条）', /--point tasks/.test(plan) && !/<proposal\|specs/.test(plan) && !/看一看/.test(plan) && /一次写到 tasks/.test(plan) && /强制审/.test(plan), plan);
+    H.ok('写需求那一段：开不开自动说法一样，中间不停、不问审查', auto === plan.replace('r1', 'r3') || (/中间不停、不问审查/.test(auto) && /中间不停、不问审查/.test(plan)), auto);
     H.ok('做任务那一段：--point change', /--point change/.test(apply) && !/group-<组号>/.test(apply), apply);
   }
 
