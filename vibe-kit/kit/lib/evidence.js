@@ -131,7 +131,9 @@ function current(root, kind) {
   const out = rows.filter((r) => r.root.toLowerCase() === fp.root.toLowerCase() && r.fingerprint === fp.hash && r.environment === env);
   const top = S.normKey(fp.root); const below = new Map();
   for (const r of rows) { const k = S.normKey(r.root); if (k.startsWith(top + '/')) below.set(k, (below.get(k) || []).concat(r)); }
-  for (const mine of below.values()) {
+  // 最多看最近有证据的 8 个（复审 20261113 R5：每个都要算一次指纹，几条 git；钩子里有预算。壳子的子项目一般就五六个）
+  const recent = [...below.values()].sort((a, b) => Math.max(...b.map((r) => Number(r.at) || 0)) - Math.max(...a.map((r) => Number(r.at) || 0))).slice(0, 8);
+  for (const mine of recent) {
     // 预算用完照旧抛给钩子的放行入口；别的错（那个仓库没了、读不了）不算它的证据
     let sfp; try { if (!fs.existsSync(mine[0].root)) continue; sfp = W.fingerprint(mine[0].root, 'code'); } catch (e) { if (e && e.code === 'VIBE_HOOK_BUDGET') throw e; continue; }
     const senv = environment(sfp.root);

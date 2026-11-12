@@ -127,6 +127,10 @@ function askPending(j) {
     const turn = turnKey(j);
     // 找不到这一轮的开头（会话记录太长）：分不清是不是新的一轮，不问
     if (turn && st.fixAskTurn !== turn) { S.updateState(flowKey(j), (s) => { s.autoAsk = 'fix'; s.fixAskTurn = turn; return s; }); st = S.flowState(j); }
+  } else if (st.autoAsk === 'fix') {
+    // 上一轮拦下让它问、用户没答就说了别的（复审 20261113 R4）：还等着的这一问算这一轮的，不然答完又按"新的一轮"再问一次
+    const turn = turnKey(j);
+    if (turn && st.fixAskTurn !== turn) S.updateState(flowKey(j), (s) => { s.fixAskTurn = turn; return s; });
   }
   return st.autoAsk ? askLine(st.autoAsk) : '';
 }

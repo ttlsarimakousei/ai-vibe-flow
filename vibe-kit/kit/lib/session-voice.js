@@ -250,23 +250,26 @@ const ENTRY_WORD = /openspec|opsx/i;
 const ENTRY_NOT = /(?:不走|不用|别用|别走|不要|不需要|跳过|先不)\s*(?:走\s*)?(?:openspec|opsx)/i;
 const EXPLORE_WORD = /探索|explore/i;
 const VK_FLOW = /vk\s*流程/i;
-const ENTRY_ANSWER_NO = /^(?:不|别|先不|直接改|跳过|算了|取消)|(?:不走|不用|别用|别走|不要|不需要|跳过|先不)\s*(?:走\s*)?(?:探索|explore|openspec|opsx|流程)/i;
+const ENTRY_ANSWER_NO = /^(?:不|别|先不|直接改|跳过|算了|取消|no\b|skip\b)|(?:不走|不用|别用|别走|不要|不需要|跳过|先不)\s*(?:走\s*)?(?:探索|explore|openspec|opsx|流程)|\b(?:don'?t|do not|not|no|skip|without)\b[^,.;\n]{0,20}(?:openspec|opsx|explore)/i;
+// 明说要进流程的写法：/opsx:explore 这几个进流程的命令、"vk 流程"，或者 openspec、opsx 挨着"流程、探索、提案"。
+// 只是提到 openspec 的不算（复审 20261113 R1：问"openspec validate 要不要跑？"答"是"、选项里带 openspec/specs/… 这种路径，会把普通会话记成在流程里，之后改代码被"没开工不改源码"拦住）
+const ENTRY_ASK = /\/?opsx:(?:explore|propose|new|ff)\b|vk\s*流程|(?:openspec|opsx)[^，,。；;\n]{0,12}(?:流程|探索|提案)|(?:流程|探索|提案)[^，,。；;\n]{0,12}(?:openspec|opsx)/i;
 /**
  * 提问框的一个答案是不是选了进流程（第 89 条、#467，2026-11-12）。以前要问题和答案里都有"探索"：模型自己写的问题不带这两个字
  * （"这个需求改动较大，怎么推进？"），用户选了"走 /opsx:explore 探索"也认不出，被拦下再问一遍。选项是用户点的，现在主要看答案：
  *   答案里点了 /opsx:…、openspec、vk 流程                                    → 算
  *   问题里点了这些，答案是"探索""好""可以""走流程"                            → 算
- *   答案里只有"探索"两个字（"先探索一下代码"）                                → 模型正要进流程（调技能、建变更、写提案）时算；
- *                                                                              strict（没人调、钩子自己记成在流程里）时不算，免得普通问答被带进流程
+ *   答案里只有"探索"两个字（"先探索一下代码"）                                → 模型正要进流程（调技能、建变更、写提案）时算
+ *   strict（没人调、钩子自己把会话记成在流程里）                              → 只认明说进流程的（ENTRY_ASK）：答案里有，或者问题里有、答案是"探索""好""走流程"
  *   "不探索""直接改""不走 openspec"                                           → 不算
  */
 function entryAnswer(x, strict) {
   const a = bareAnswer(x && x.a).trim(); const q = String((x && x.q) || '');
   if (!a || ENTRY_ANSWER_NO.test(a)) return false;
-  if (ENTRY_WORD.test(a) || VK_FLOW.test(a)) return true;
   const yes = EXPLORE_WORD.test(a) || YES_SHORT.test(a) || /^走(?:流程)?[\s。！!]*$/.test(a);
+  if (strict) return ENTRY_ASK.test(a) || (ENTRY_ASK.test(q) && yes);
+  if (ENTRY_WORD.test(a) || VK_FLOW.test(a)) return true;
   if ((ENTRY_WORD.test(q) || VK_FLOW.test(q)) && yes) return true;
-  if (strict) return false;
   return EXPLORE_WORD.test(a) || (EXPLORE_WORD.test(q) && yes);
 }
 /** 这一轮提问框里选了进流程的那个答案（没有返回 null）。strict 见 entryAnswer */

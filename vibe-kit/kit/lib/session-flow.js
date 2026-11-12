@@ -49,7 +49,7 @@ function setFlow(j, on, why, stage) {
   // 建变更被拦"用户没说要走 OpenSpec"
   let stale = false;
   try { stale = !!on && !flowState(j).on && flowDone(j); } catch (e) { stale = false; }
-  updateState(k, (st) => { if (stale) { st.changes = []; for (const k of ['touchedAt', 'applyScope', 'reqEdited', 'planReady', 'applySource', 'lastApplyAt', 'applyVoice', 'applyVoiceSchema', 'applyRefused', 'dirtyTold', 'waiting']) delete st[k]; } st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; else delete st.current; if (stage === 'plan' || stage === 'apply') st.stage = stage; return st; });
+  updateState(k, (st) => { if (stale) { st.changes = []; for (const k of ['touchedAt', 'applyScope', 'reqEdited', 'planReady', 'applySource', 'lastApplyAt', 'applyVoice', 'applyVoiceSchema', 'applyRefused', 'dirtyTold', 'waiting', 'autoFix', 'fixAskTurn', 'autoAsk', 'autoStopped']) delete st[k]; } st.on = !!on; st.why = String(why || ''); st.at = Date.now(); if (on) st.was = st.at; else delete st.current; if (stage === 'plan' || stage === 'apply') st.stage = stage; return st; });
   if (stale) { try { const ck = String(j.session_id) + '-changes'; const left = (readState(ck).dirs || []).filter((d) => fs.existsSync(d)); writeState(ck, { dirs: left, at: Date.now() }); } catch (e) { /* 清不了：下一句话可能又判成走完，照旧 */ } }
   return !!on;
 }
@@ -213,7 +213,9 @@ function syncEntryAnswer(j) {
     try {
       const st = flowState(j);
       if (st.on) return false;
-      if (!/have been answered|has answered your questions|The user answered|AskUserQuestion/.test(tailText(j.transcript_path, 262144))) return false;
+      // 每个钩子进程都会走到这里（复审 20261113 R2）：只看最后 64KB 里有没有提问框的答案（认结果的那句话，不认工具名——工具名在最近的记录里常有）。
+      // 答案一到，模型下一次调工具时它就在最后几条里；没有就不解析会话记录
+      if (!/have been answered|has answered your questions|The user answered/.test(tailText(j.transcript_path, 65536))) return false;
       const V = require('./session-voice');
       const v = V.entryPick(j, true);
       if (!v) return false;

@@ -127,6 +127,15 @@ H.section('第 88 条：全部通过关了自动之后，用户每报一次问�
   H.ok('选了"实施（每步问我）"：放行，自动关着', !blocked(t.preEdit(t4)) && S.sessionAuto(j) === false, H.reasonOf(t.preEdit(t4)));
   t4.push(...t.edit(t4, 'class A { int fixed2; }\n'));
   H.ok('同一轮里接着改：不再问', !ASK_FIX.test(H.reasonOf(t.preEdit(t4))));
+  // 拦下让它问、用户没答就换了话题（复审 R4）：下一轮接着等这一问，答完不再问第二次
+  const t4b = [H.tr.user('日志级别也调一下')];
+  t.say(t4b, '日志级别也调一下');
+  H.ok('新的一轮：先问', ASK_FIX.test(H.reasonOf(t.preEdit(t4b))));
+  const t4c = [H.tr.user('算了，先把标题改了')];
+  t.say(t4c, '算了，先把标题改了');
+  H.ok('没答就换了话题：这一轮接着等那一问', ASK_FIX.test(H.reasonOf(t.preEdit(t4c))));
+  t4c.push(...ans('怎么改？', '实施（每步问我）'));
+  H.ok('答了之后同一轮不再问第二次', !blocked(t.preEdit(t4c)) && !ASK_FIX.test(H.reasonOf(t.preEdit(t4c))), H.reasonOf(t.preEdit(t4c)));
   // 说了别自动了：核验期那一问也关掉
   const t5 = [H.tr.user('别自动了')];
   t.say(t5, '别自动了');
@@ -206,6 +215,18 @@ H.section('第 88 条：代码审查催够了没动也关自动；任务没做�
   H.ok('之后每一轮改代码不再问', !ASK_FIX.test(H.reasonOf(t3.preEdit(t3b))), H.reasonOf(t3.preEdit(t3b)));
 }
 
+H.section('复审 R3：这件事的变更都归档了、同一个会话再进流程，上一件事留下的"先问"记号清掉');
+{
+  const t = verifying('f1113-stale', false);
+  t.stop([H.tr.user('接着做'), H.tr.say('自测登记了')]);
+  H.ok('前提：套件关了自动、记着先问', t.S.flowState(t.j).autoFix === true && !!t.S.flowState(t.j).fixAskTurn, t.S.flowState(t.j));
+  fs.rmSync(t.d, { recursive: true, force: true });
+  t.S.setFlow(t.j, false, '变更归档了');
+  t.S.setFlow(t.j, true, '敲了 OpenSpec 的命令', 'plan');
+  const st = t.S.flowState(t.j);
+  H.ok('重新进流程：autoFix、fixAskTurn、autoAsk、autoStopped 都清了', !st.autoFix && !st.fixAskTurn && !st.autoAsk && !st.autoStopped, st);
+}
+
 H.section('第 89 条、#467：提问框选了探索主要看答案；认下来就记成在流程里');
 {
   const h = H.makeHome('f1113-entry', FROM, { commitMode: 'off' });
@@ -245,6 +266,13 @@ H.section('第 89 条、#467：提问框选了探索主要看答案；认下来�
   S.setFlow(j2, false, '用户说退出流程');
   S.readConfigFor(j2);
   H.ok('同一个答案只认一次：退出流程之后不再按它进', S.flowState(j2).on !== true, S.flowState(j2));
+  // 只是提到 openspec 的问答（复审 R1）：钩子不自己把会话记成在流程里
+  for (const [q, a] of [['openspec validate 要不要跑？', '是'], ['改哪份文档？', 'openspec/specs/x/spec.md 那份'], ['Use OpenSpec here?', "don't use openspec"]]) {
+    const jn = session([H.tr.user('校验一下文档'), ans(q, a)]);
+    S.readConfigFor(jn);
+    H.ok('问"' + q + '"答"' + a + '"：不记成在流程里', S.flowState(jn).on !== true, S.flowState(jn));
+  }
+  H.ok('英文的否定也不算选了探索', NO.test(H.reasonOf(skill(session([big, ans('Use OpenSpec here?', "don't use openspec")]), 'opsx:explore'))));
   // 普通问答里选了"探索代码库"：不进流程，改代码不被"没开工不改源码"拦
   const j3 = session([H.tr.user('看看这个报错是哪来的'), ans('要我先探索一下代码再回答吗？', '探索代码库')]);
   S.readConfigFor(j3);
@@ -304,6 +332,8 @@ H.section('#463：用户这一轮只让起服务，改代码前拦一次');
   H.ok('只说了"启动项目"：改 pom.xml 拦下，让它先说原因、问用户', blocked(a.first) && /没让改代码/.test(H.reasonOf(a.first)) && /提问框/.test(H.reasonOf(a.first)), H.reasonOf(a.first));
   H.ok('这一轮只拦一次：问过之后再改放行', !/没让改代码/.test(H.reasonOf(a.again())));
   H.ok('"启动项目，起不来就修一下"：不拦', !/没让改代码/.test(H.reasonOf(edit('启动项目，起不来就修一下', 'pom.xml').first)));
+  const cmdTurn = (() => { const sid = 'st' + (++k); const tp = H.transcript(path.join(h.root, sid + '.jsonl'), [{ type: 'user', uuid: 'u-cmd-' + k, timestamp: new Date().toISOString(), message: { role: 'user', content: '<command-name>/vk-go</command-name>\n<command-args>启动项目</command-args>' } }]); return H.hook(h, 'pre-edit', { session_id: sid, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(proj, 'pom.xml'), old_string: '<project/>', new_string: '<project></project>' }, transcript_path: tp }); })();
+  H.ok('这一轮是斜杠命令起的：不拦', !/没让改代码/.test(H.reasonOf(cmdTurn)), H.reasonOf(cmdTurn));
   H.ok('只说了启动、往 .vibe/tmp 里写脚本：不拦', !/没让改代码/.test(H.reasonOf(edit('启动项目', '.vibe/tmp/run/start.xml').first)));
   H.ok('它已经先问过用户了（这一轮有提问框的答案）：不拦', !/没让改代码/.test(H.reasonOf(edit('启动项目', 'pom.xml', ans('起不来，缺一个依赖，要改 pom.xml 吗？', '改（pom.xml）')).first)));
   const dev = H.read(path.join(SRCDIR, 'kit', 'tools', 'devserver.js')) || '';
