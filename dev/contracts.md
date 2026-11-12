@@ -22,7 +22,7 @@
 | 验证证据不扩大：只算命令针对的仓库，版本查询、curl 不算 | `test-devserver-speed.js` · "C3 命令跑完记证据" |
 | 升级不重置用户的开关（迁移标记长期保留） | `test-auto-mode-kept.js` · "迁移标记长期保留" |
 | 新版装坏了退回上一版；退不回去时看得见 | `test-update.js` · "新版装坏了：退回上一版"；`test-fixes-1031.js` · "F2 装坏了" |
-| 自动模式按会话开，只认用户明说的 | `test-auto-session.js` · "第 28 条"；`test-auto-session.js` · "复审 V1—V4" |
+| 自动按会话记，开只认提问框里选的，关认用户明说的（2026-11-12 起 /vk-auto 删了） | `test-auto-session.js` · "第 28、87 条"；`test-auto-session.js` · "复审 V2—V4" |
 | 斜杠命令算用户点头，模型自己调不算 | `test-confirm-once.js` · "A11 斜杠命令"；`test-confirm-once.js` · "复审 V12" |
 | 提交方式"自动"做完一件事就提交，审查到上限不挡 | `test-auto-session.js` · "第 25 条"；`test-auto-session.js` · "第 26 条" |
 | 起服务按内容判断改过没有，少重启 | `test-devserver-speed.js` · "C1 改过没有按内容算" |
