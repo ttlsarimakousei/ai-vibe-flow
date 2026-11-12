@@ -130,8 +130,18 @@ function mergeIntent(text) {
   const s = plain(text);
   return new RegExp(SQUASH_PUSH, 'i').test(s) || /合并\s*(?:push|推送)|合并(?:成|为)\s*(?:1|一)\s*(?:条|个)/i.test(s);
 }
+/**
+ * 整句只是让把服务起起来（"启动项目""重启一下后端""把 OA 跑起来"），没让改东西、测东西（#463）。
+ * 话长的、带着改、修、加、测这类词的不算：那是别的要求里顺带提到启动
+ */
+function startOnly(text) {
+  const s = plain(text);
+  if (!s || s.length > 40 || !explicit(s, 'test')) return false;
+  if (!(new RegExp(START_APP).test(s) || START_CN.test(s) || START_AFTER.test(s) || /(?:启动|重启|运行)(?:一下|下)?\s*(?:服务|项目|应用|系统)|跑起来|起起来|起服务/.test(s))) return false;
+  return !/改|修|调整|新增|加上|添加|实现|开发|写|做|弄|搞|补|删|换成|替换|升级|降级|解决|处理|排查|优化|重构|完成|然后|之后|并且|顺便|自测|测试|验证|复验|审查|提交|推送/.test(s);
+}
 /** 话里有没有提到这件事（提问框的问题用）：不管是不是要做 */
 function has(text, action) { const op = TOPIC[action]; return !!op && new RegExp(op, 'i').test(plain(text)); }
 /** 话里有这件事的动作词、而且不是在说那件事本身（"审查报告""测试失败"）：提问框的答案用，不要求在句首 */
 function mentions(text, action) { const op = TOPIC[action]; return !!op && new RegExp(op + '(?!\\s*' + NOUN + ')', 'i').test(plain(text)); }
-module.exports = { plain, explicit, denied, has, mentions, mergeIntent };
+module.exports = { plain, explicit, denied, has, mentions, mergeIntent, startOnly };

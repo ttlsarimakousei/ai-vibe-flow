@@ -209,6 +209,8 @@ function httpAnswers(port) {
 const NO_HTTP_MS = 60000;
 const NO_HTTP_NOTE = '，端口通了 60 秒一直没答 HTTP，当它不是网页服务';
 /** 等超时了、端口通着却还没答 HTTP 时怎么说 */
+// 起不来、要改东西才能起的：先问用户（#463：用户只说"启动项目"，模型为了起服务一路改了 pom、依赖、框架配置）
+const ASK_BEFORE_FIX = '要改构建配置、依赖、框架配置或源码才能起的：先把原因和要改哪些文件告诉用户，用户说改再改，不要自己一路改下去。';
 const noHttpYet = (port, waitSec) => '没起来：端口 ' + port + ' 通了，但 ' + waitSec + ' 秒内一直没答 HTTP（Tomcat 这类先占端口、后部署应用，多半还在部署；不是网页服务的，端口通了 60 秒才算起来）。';
 /** 正在监听这个端口的进程号（本机所有地址上的都算） */
 function listeners(port) {
@@ -717,7 +719,7 @@ async function waitUp(rec, waitSec) {
         return launch(rec.name, rec.port, cmd2, { auto: rec.auto, avoid: rec.avoid, retriedOnline: true, asked: rec.asked || rec.cmd });
       }
       console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
-      console.log('没起来：日志里报了 "' + fail + '"，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒。看上面的日志改好再 start；进程已经停了。');
+      console.log('没起来：日志里报了 "' + fail + '"，用了 ' + Math.round((Date.now() - rec.startedAt) / 1000) + ' 秒。进程已经停了，看上面的日志。' + ASK_BEFORE_FIX + '改好再 start。');
       return 1;
     }
     // 端口每 2 秒连一次（只连不发请求，用户 2026-10-28 定的）；日志刚说起好了的，马上连一次（C4：以前要等到下一轮，最多晚 2 秒）
@@ -756,7 +758,7 @@ async function waitUp(rec, waitSec) {
   } else if (dead) dropRec(rec.name);
   console.log('日志最后几段（' + rec.log + '）：\n' + logTail(rec.log).split(/\r?\n/).slice(-30).join('\n'));
   if (open) console.log(noHttpYet(rec.port, waitSec) + (dead ? '启动命令已经退出了，看上面的日志有没有报错。' : '进程还在、记录留着：过一会儿再 start 一次会接着等它，不会重起；也看看上面的日志有没有报错。'));
-  else console.log(dead ? '没起来：' + rec.name + ' 的进程已经退出了，看上面的日志。' : '没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。进程还在、记录留着：多半还在启动（大项目要一两分钟），过一会儿再 start 一次会接着等它，不会重起；也可能它实际监听的不是这个端口，看上面的日志。');
+  else console.log(dead ? '没起来：' + rec.name + ' 的进程已经退出了，看上面的日志。' + ASK_BEFORE_FIX : '没起来：' + waitSec + ' 秒内端口 ' + rec.port + ' 还没通。进程还在、记录留着：多半还在启动（大项目要一两分钟），过一会儿再 start 一次会接着等它，不会重起；也可能它实际监听的不是这个端口，看上面的日志。');
   return 1;
 }
 

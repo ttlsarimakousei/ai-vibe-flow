@@ -6,7 +6,8 @@
  *   3. guard-encoding：会把中文写坏的编辑
  *   4. guard-spec：OpenSpec 产物的门槛
  *   5. 流程里没开工不改源码、探索记录和计划表只在用户开口那一轮改
- *   6. 写进代码的文字里不带套件专属的字眼（审查编号、第几轮审查、套件的名字；问题表第 82 条）
+ *   6. 用户这一轮只让起服务、没让改代码：改代码前拦一次，先问（#463）
+ *   7. 写进代码的文字里不带套件专属的字眼（审查编号、第几轮审查、套件的名字；问题表第 82 条）
  * 以前第一道是 guard-kit（不许改套件），2026-11-04 去掉了（仓库主人定的：套件可以改）。
  * 都放行之后，要往 .vibe/ 里写东西的，确保 .vibe/ 已经在那个仓库的 .gitignore 里（写入被拦时不改 .gitignore）。
  * 合成一个入口：一次编辑只起一个进程。
@@ -59,6 +60,30 @@ const KIT_WORDS = [
 ];
 const CODE_FILE = /\.(java|kt|groovy|js|mjs|cjs|ts|py|go|cs|xml|sql|vue|jsx|tsx|html?|css|scss|sass|less|styl|jsp|jspx|tag|ftl|vm|properties|ya?ml)$/i;
 const NOT_CODE = /(^|[\\/])(\.vibe|openspec|\.claude|node_modules)[\\/]/;
+/*
+ * 用户这一轮只让起服务（"启动项目""重启后端"），没让改代码（#463，仓库主人 2026-11-12 定的"钩子拦一次"）。
+ * 起因：同事只说"启动项目"，构建不过，模型为了把服务起起来连着改了 pom、依赖、框架配置 6 个文件，用户还得一个个回退。
+ * 这一轮第一次改代码、配置文件时拦一次：先把原因和要改哪些文件告诉用户，用提问框问；问过之后这一轮再改就放行（拦的是"没问就改"）。
+ * 自动实施生效的那一轮不管（用户不在）；.vibe、openspec 里的文件不管。不给拦截编号。
+ */
+const startOnlyCheck = { handle(j) {
+  let f = String((j.tool_input || {}).file_path || '');
+  if (f && !path.isAbsolute(f) && j.cwd) f = path.resolve(j.cwd, f);
+  if (!f || !CODE_FILE.test(f) || NOT_CODE.test(f)) return null;
+  if (!j.session_id || j.session_id === 'unknown' || !j.transcript_path) return null;
+  const S = require('../lib/session');
+  const voices = S.turnVoices(S.tailEntries(j.transcript_path, 3000000)); const first = voices[0];
+  if (!first || first.kind !== 'prompt' || !require('../lib/intent').startOnly(first.text)) return null;
+  // 它已经先问过用户了（这一轮有提问框的答案）：不拦，改不改照用户选的
+  if (voices.some((v) => v.kind === 'answer')) return null;
+  if (readConfigFor(j).autoMode) return null;
+  let once = false;
+  try { once = require('../lib/tidy.js').blockOnce(j.session_id, 'start-only#' + S.voiceKey(first)); } catch (e) { once = false; /* 记不了"拦过这一轮"：放行（出错放行） */ }
+  if (!once) return null;
+  const out = S.blockOut('PreToolUse', '[vibe-kit] 用户这一轮只说了"' + String(first.text).replace(/\s+/g, ' ').slice(0, 30) + '"，没让改代码。起不来先停下：把原因（报错原样给）、要改哪些文件、为什么告诉用户，用提问框问要不要改（选项写"改（这几个文件）""不改，我自己处理"）。用户选了改再改，这句话这一轮只说一次。');
+  Object.defineProperty(out, 'noBypass', { value: true });
+  return out;
+} };
 /** 这个文件在套件自己的源码仓库里（往上有 vibe-kit/kit/hooks/pre-edit.js）：维护套件的人写套件的名字是正常的 */
 function kitSource(f) {
   let d = path.dirname(path.resolve(f));
@@ -98,9 +123,9 @@ const wordsCheck = { handle(j) {
   }
   return null;
 } };
-const checks = [require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js'), startedCheck, exploreCheck, wordsCheck];
+const checks = [require('./guard-vibe.js'), require('./guard-output.js'), require('./guard-encoding.js'), require('./guard-spec.js'), startedCheck, exploreCheck, startOnlyCheck, wordsCheck];
 // 和上面一一对应：拦下时记的是哪道检查（兜底放行按这个名字认）
-const NAMES = ['guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec', 'guard-started', 'guard-explore', 'guard-words'];
+const NAMES = ['guard-vibe', 'guard-output', 'guard-encoding', 'guard-spec', 'guard-started', 'guard-explore', 'guard-start-only', 'guard-words'];
 let outputs = null;
 try { outputs = require('../lib/outputs.js'); } catch (e) { /* 老版本没有 */ }
 let feedback = null;
