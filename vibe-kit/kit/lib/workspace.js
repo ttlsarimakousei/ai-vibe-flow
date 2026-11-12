@@ -26,12 +26,13 @@ function readGit(root, args) {
 }
 /*
  * 跨钩子的缓存（#421、#339、#349、#358：内网那台一条 git 要一两秒，壳子里几个子仓库，钩子 12 秒预算用完，一周钩子出错 909 次）。只在钩子里用，命令行工具照样现查。
- *   不怎么变的（rev-parse --show-toplevel、config --get）：记 10 分钟；仓库的 .git 没了、不是仓库的目录里有了 .git 就作废
+ *   不怎么变的（rev-parse --show-toplevel、rev-parse --show-object-format、config --get）：记 10 分钟；仓库的 .git 没了、不是仓库的目录里有了 .git 就作废
  *   跟着文件变的（diff、ls-files、status、rev-parse HEAD 这些）：记 20 秒，还要"代"相同。改文件、跑命令的工具做完（PostToolUse）、
  *   用户开口、会话开始都换一代（session-out.js 的 cli 入口），所以只在两次改动之间、20 秒以内复用。超过 256 KB 的不记
  */
 const STABLE_MS = 10 * 60000; const VOLATILE_MS = 20000; const CACHE_MAX = 256 * 1024;
-const stableArgs = (args) => (args[0] === 'rev-parse' && args.length === 2 && args[1] === '--show-toplevel') || (args[0] === 'config' && args[1] === '--get');
+// --show-object-format（sha1 还是 sha256）建仓库时就定了：以前当成跟着文件变的，改过文件的仓库每个钩子都要再起一次 git（#465 的用时明细里每个仓库多一条 rev-parse，约 1 秒）
+const stableArgs = (args) => (args[0] === 'rev-parse' && args.length === 2 && (args[1] === '--show-toplevel' || args[1] === '--show-object-format')) || (args[0] === 'config' && args[1] === '--get');
 function gitEpoch() { try { return Number(require('./session').readState('git-epoch').n) || 0; } catch (e) { return 0; } }
 /** 换一代：改过文件、用户开过口之后，跟着文件变的那些不能再用 */
 function bumpGitEpoch() { try { require('./session').updateState('git-epoch', (o) => { o.n = (Number(o.n) || 0) + 1; o.at = Date.now(); }); } catch (e) { /* 记不了：缓存按 20 秒自己过期 */ } }
