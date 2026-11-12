@@ -256,24 +256,34 @@ function decisionIssue(j) {
 }
 /**
  * 审完对着配置页的"审查预期用时"看：超了，或者有角度没交，就记一条问题反馈（用户 2026-10-28 定的，问题反馈表第 6 条），
- * 写清用在哪，给维护的人持续优化审查用。只有用时、文件数、字数，不带材料原文和审查意见
+ * 写清用在哪，给维护的人持续优化审查用。只有用时、文件数、字数，不带材料原文和审查意见。
+ * 超没超按套件这头的用时比（#466，仓库主人 2026-11-12 定的"只报套件这头慢的"）：总用时减去模型那头的时间（几个角度同时跑，按最慢的那个角度算；
+ * 到上限被结束的那次整段算模型那头）。起因：内网的模型一次请求就要十来分钟，每次审查都超、都建一条议题，而套件这头只花了几秒，改不了。
+ * 模型那头慢的只记进钩子流水账。模型没报用时的（老版本）照旧按总用时比
  */
 function reportReview(result, job) {
   try {
-    const over = result.spentMs > job.expectMs;
-    const lost = job.lenses.filter((l) => job.state[l].status === 'failed');
-    if (!over && !lost.length) return null;
     const sec = (ms) => Math.round(ms / 1000);
+    const seen = findJob(job.id) || job;
+    const callsFor = (l) => { const a = ((seen.state || {})[l] || {}).calls; const b = ((job.state || {})[l] || {}).calls; return (a && a.length ? a : b) || []; };
+    const modelMs = Math.max(0, ...job.lenses.map((l) => callsFor(l).reduce((n, c) => n + (c.apiMs ? Math.min(Number(c.apiMs) || 0, Number(c.ms) || Infinity) : c.killed ? Number(c.ms) || 0 : 0), 0)));
+    const kitMs = Math.max(0, result.spentMs - modelMs);
+    const over = kitMs > job.expectMs;
+    const lost = job.lenses.filter((l) => job.state[l].status === 'failed');
+    if (!over && !lost.length) {
+      if (result.spentMs > job.expectMs) S.hookLog('审查用时 ' + sec(result.spentMs) + ' 秒，超过预期的 ' + sec(job.expectMs) + ' 秒：模型那头 ' + sec(modelMs) + ' 秒，套件这头 ' + sec(kitMs) + ' 秒，不建议题');
+      return null;
+    }
     // 每个角度的每次请求（第 83 条）：慢在模型那头（模型算的用时接近总用时）、卡在本机起进程、还是到 20 分钟上限被结束
     const fresh = findJob(job.id) || job;
     const callText = (c, i) => '第 ' + (i + 1) + ' 次 ' + sec(c.ms) + ' 秒' + (c.killed ? '（到 ' + Math.round(CALL_MS / 60000) + ' 分钟上限被结束）' : '') + (c.apiMs ? '，模型那头 ' + sec(c.apiMs) + ' 秒' : '') + (c.turns ? '、' + c.turns + ' 轮' : '') + '，提示 ' + Math.round((c.chars || 0) / 1000) + ' 千字、输出 ' + (c.out || 0) + ' token' + (c.err ? '，出错：' + c.err : '');
     const callsOf = (l) => { const a = ((fresh.state || {})[l] || {}).calls; const b = ((job.state || {})[l] || {}).calls; return (a && a.length ? a : b) || []; };
     const detail = job.lenses.map((l) => { const calls = callsOf(l); return calls.length ? l + '：' + calls.map(callText).join('；') : ''; }).filter(Boolean);
     const lines = ['审查模式 ' + job.mode + (job.point ? '，审查点 ' + job.point : '') + (job.change ? '' : '（不走 OpenSpec）') + (job.scoped ? '，只审修改点' : '，' + job.lenses.length + ' 个角度'),
-      '总用时 ' + sec(result.spentMs) + ' 秒，配置页的预期用时 ' + sec(job.expectMs) + ' 秒' + (over ? '，超了 ' + sec(result.spentMs - job.expectMs) + ' 秒' : '，没超'),
+      '总用时 ' + sec(result.spentMs) + ' 秒（模型那头 ' + sec(modelMs) + ' 秒，套件这头 ' + sec(kitMs) + ' 秒），配置页的预期用时 ' + sec(job.expectMs) + ' 秒' + (over ? '，套件这头超了 ' + sec(kitMs - job.expectMs) + ' 秒' : '，没超'),
       '每个角度：' + job.lenses.map((l) => l + (job.state[l].status === 'submitted' ? ' ' + sec(job.state[l].doneAt - job.started) + ' 秒' : ' 没交')).join('，'),
       '材料 ' + job.files + ' 个文件、' + Math.round(job.chars / 1000) + ' 千字；结果 ' + result.status].concat(detail.length ? ['每次请求（自动带上的）：'].concat(detail) : []);
-    const title = over ? '审查超出预期用时（' + sec(result.spentMs) + ' 秒，预期 ' + sec(job.expectMs) + ' 秒）' : '审查有 ' + lost.length + ' 个角度没交结论';
+    const title = over ? '审查超出预期用时（套件这头 ' + sec(kitMs) + ' 秒，预期 ' + sec(job.expectMs) + ' 秒）' : '审查有 ' + lost.length + ' 个角度没交结论';
     const sig = require('./feedback').sigOf(['review-report', job.mode, over ? 'over' : '', lost.length ? 'lost' : '']);
     return require('./feedback').record({ kind: lost.length ? '出错' : '建议', hook: 'review.js', source: '审查自动记录', title, what: lines.join('\n'), why: '审查做完对着配置页的预期用时自动核对（用户 2026-10-28 定的：不截断审查，超了分析用时和原因上报，用来优化审查）。', cwd: job.root, sig, note: lines[1] + (detail.length ? '；' + detail.join('；').slice(0, 900) : '') });
   } catch (e) { return null; } // 记不了不影响审查结果
@@ -898,4 +908,4 @@ function runsForLessons(calls, results, cwd) {
   }
   return out;
 }
-module.exports = { runsForLessons, prepare, run, work, askClaude, claudeExe, repairJson, submit, failLens, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };
+module.exports = { reportReview, runsForLessons, prepare, run, work, askClaude, claudeExe, repairJson, submit, failLens, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };
