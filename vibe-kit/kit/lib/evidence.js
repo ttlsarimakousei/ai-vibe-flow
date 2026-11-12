@@ -120,9 +120,24 @@ function recordTool(j, ok) {
   if (rec) { try { require('./usage').bump(rec.ok ? 'evidence.success' : 'evidence.fail'); } catch (e) { /* 本机证据仍然有效 */ } }
   return rec;
 }
+/**
+ * 这个目录现在还有效的成功证据。目录下面别的仓库名下的也算（#464，2026-11-12）：壳子里 mvn -f 子项目/pom.xml、npm --prefix 子项目 跑的
+ * 记在子项目名下，全面自测登记、审查登记处理结果从壳子根查，以前一条都看不到，登记不上（子模块、套了两层的也一样）。
+ * 记在哪个仓库名下，就按那个仓库现在的指纹和环境比
+ */
 function current(root, kind) {
   const S = require('./session'); const fp = W.fingerprint(root, 'code'); const env = environment(fp.root);
-  return (S.readState('evidence').rows || []).filter((r) => r.ok && r.root.toLowerCase() === fp.root.toLowerCase() && r.fingerprint === fp.hash && r.environment === env && (!kind || r.kind === kind));
+  const rows = (S.readState('evidence').rows || []).filter((r) => r.ok && (!kind || r.kind === kind));
+  const out = rows.filter((r) => r.root.toLowerCase() === fp.root.toLowerCase() && r.fingerprint === fp.hash && r.environment === env);
+  const top = S.normKey(fp.root); const below = new Map();
+  for (const r of rows) { const k = S.normKey(r.root); if (k.startsWith(top + '/')) below.set(k, (below.get(k) || []).concat(r)); }
+  for (const mine of below.values()) {
+    // 预算用完照旧抛给钩子的放行入口；别的错（那个仓库没了、读不了）不算它的证据
+    let sfp; try { if (!fs.existsSync(mine[0].root)) continue; sfp = W.fingerprint(mine[0].root, 'code'); } catch (e) { if (e && e.code === 'VIBE_HOOK_BUDGET') throw e; continue; }
+    const senv = environment(sfp.root);
+    out.push(...mine.filter((r) => r.root.toLowerCase() === sfp.root.toLowerCase() && r.fingerprint === sfp.hash && r.environment === senv));
+  }
+  return out;
 }
 /** 当前有效的成功命令。kinds 给了只要这几类 */
 function commands(root, kinds) { return current(root).filter((r) => r.kind !== 'inspection' && (!kinds || kinds.includes(r.kind))).map((r) => r.command); }
