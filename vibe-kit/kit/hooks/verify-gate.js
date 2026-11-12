@@ -382,7 +382,9 @@ function plainNextTodo(j, cfg, policy) {
   if (left.length) {
     let code = ''; try { code = require('../lib/workspace').fingerprint(path.resolve(left[0], '../../..'), 'code').hash; } catch (e) { code = ''; }
     const names = left.map((d) => path.basename(d));
-    const how = names.join('、') + ' 的任务做完、代码审过了：自测。跑 design.md "验收用例"里 Claude 能跑的，结果写成 JSON（[{"case":"AC-01","result":"pass","note":"实际结果"}]，要人看的 result 写 manual），每个 change 跑 node "' + path.join(KIT_DIR, 'tools', 'workflow.js') + '" selftest --change <变更名> --results <文件> --project ' + path.resolve(left[0], '../../..') + ' 登记。有没过的改完记进 revisions.md，审过再测。';
+    // 每个 change 各带自己的项目目录（复审 20261112 R8：几个 change 在不同子项目时，只写第一个的对不上）
+    const cmds = left.map((d) => 'node "' + path.join(KIT_DIR, 'tools', 'workflow.js') + '" selftest --change ' + path.basename(d) + ' --results <文件> --project ' + path.resolve(d, '../../..')).join('；');
+    const how = names.join('、') + ' 的任务做完、代码审过了：自测。跑 design.md "验收用例"里 Claude 能跑的，结果写成 JSON（[{"case":"AC-01","result":"pass","note":"实际结果"}]，要人看的 result 写 manual），每个 change 登记一次：' + cmds + '。有没过的改完记进 revisions.md，审过再测。';
     return [policy.oncePrompt(j, 'selftest-change|' + names.join(','), code || 'x', how)].filter(Boolean);
   }
   AR.finish(j, null);

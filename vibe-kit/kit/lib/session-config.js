@@ -77,8 +77,9 @@ function autoSwitchSaid(text) {
  * 别的提问框里恰好以"实施"开头的选项（"实施方案 A"）不算：关的那几个要带"每步问我""人工""先不"。
  * loose：套件正等着这一问（用户开口让开工、还没问过）时，问题里说到自动、答案说"自动""auto"也算开，说"人工""手动""每步""先不"算关
  */
-const ANSWER_ON = /^\s*(?:自动(?:实施|接着做|修)|auto\s*(?:实施|接着做)?)(?![^，,。；;]*(?:不要|别))/i;
-const ANSWER_OFF = /^\s*(?:实施\s*[（(]\s*每步问我|人工(?:实施|接着做|修)|先不(?:实施|做|开工))/;
+// 只认套件让模型写的那几个选项开头（复审 20261112 R2：以前 auto_increment、Auto-detect、"自动修复…"算开，别的问题答"先不做"算关）
+const ANSWER_ON = /^\s*(?:自动(?:实施|接着做)|auto\s*(?:实施|接着做))(?![^，,。；;]*(?:不要|别))/i;
+const ANSWER_OFF = /^\s*(?:实施\s*[（(]\s*每步问我|人工(?:实施|接着做)|先不实施)/;
 function autoAnswerOf(a, q, loose) {
   const s = String(a || '').replace(/[（(]推荐[)）]/g, '').trim();
   if (ANSWER_ON.test(s)) return 'on';

@@ -163,10 +163,11 @@ function resumeTask(j) {
   const autoBack = B.taskState(task).auto === true;
   if (autoBack) S.setSessionAuto(j, true, '/vk-resume 接回');
   // 接回就开工、死机前没开着自动的：开工前问一次自动还是人工（第 86 条）
-  if (reviewed && !autoBack) { try { require('../lib/auto-run').markAsk(j, 'start'); } catch (e) { /* 记不了：照人工 */ } }
+  // 死机前这个 change 已经在提问框里选过人工的不再问（复审 20261112 R6）
+  if (reviewed && !autoBack && (B.taskState(task).asked || {})[ph.change] !== 'off') { try { require('../lib/auto-run').markAsk(j, 'start'); } catch (e) { /* 记不了：照人工 */ } }
   if (stage === 'apply') { try { require('../lib/apply-scope').grant(j, ph.change || (task.changes.find((c) => c.exists) || {}).name || '', ''); } catch (e) { /* 开工范围记不了：改代码时会说 */ } }
   const STEP = { explore: '接着探索，把结果写进探索记录', plan: ready ? ph.change + ' 的任务写好了、需求还没整套审过：先审（review.js run --change ' + ph.change + ' --mode proposal --point tasks，不用问用户），改到过了再问怎么实施' : '写 ' + ph.change + ' 的需求（一次写到 tasks）', apply: finished ? want + ' 的' + FINISHED_STEP : '接着做 ' + ph.change + ' 的任务', selftest: '任务都做完了：全面自测', verify: '等用户人工核验', archive: '接着按表的顺序归档 ' + ph.change };
-  if (reviewed) STEP.plan = '接着做 ' + ph.change + ' 的任务（任务写好了、需求审过了，接回就算开工）' + (autoBack ? '，开着自动' : '；开工前先用提问框问一次怎么实施（选项"自动实施""实施（每步问我）"）');
+  if (reviewed) STEP.plan = '接着做 ' + ph.change + ' 的任务（任务写好了、需求审过了，接回就算开工）' + (autoBack ? '，开着自动' : (B.taskState(task).asked || {})[ph.change] === 'off' ? '，用户死机前选过人工' : '；开工前先用提问框问一次怎么实施（选项"自动实施""实施（每步问我）"）');
   const rel = task.explore ? '探索记录 ' + task.explore + '（公共几节和 ' + (ph.change || '要做的 change') + ' 那一节）、' : '';
   return {
     user: '[vibe-kit] ' + (pointed ? '切到 ' + want + '，大任务 ' : '接回大任务 ') + task.name + '：' + B.progressText(task) + (autoBack ? '；自动已恢复' : '') + '。下一步：' + STEP[ph.phase] + '。',
@@ -499,10 +500,11 @@ async function handle(j) {
   let prevStage = 'plan';
   try { prevStage = flowState(j).stage === 'apply' ? 'apply' : 'plan'; } catch (e) { prevStage = 'plan'; }
   try { const d = decideFlow(j, cfg, note, resumed); on = d.on; cont = d.cont; stage = d.stage; applyStart = d.applyStart; } catch (e) { on = false; }
-  // 说"停"：自动关（第 86 条，仓库主人选的"插话不关，说停才关"），用户之后让接着做时问一次自动还是人工。插话、提问不关
+  // 说"停"：自动关（第 86 条，仓库主人选的"插话不关，说停才关"），用户之后让接着做时问一次自动还是人工。插话、提问不关。
+  // 只认明说的停、暂停、等等（HALT），"不用""算了"这种回答不算（复审 20261112 R7①）；核验期自动已关、还挂着自动修的，说停也把自动修关掉（R7②）
   let stopped = false;
   if (!note && on && autoSaid !== 'off') {
-    try { if (flowState(j).paused && require('../lib/session').sessionAuto(j) === true) stopped = require('../lib/auto-run').stopByUser(j, '用户说停：' + String(j.prompt || '').slice(0, 80)); } catch (e) { stopped = false; }
+    try { if (HALT.test(String(j.prompt || '').trim()) && !KEEP_GOING.test(String(j.prompt || '').trim())) stopped = require('../lib/auto-run').stopByUser(j, '用户说停：' + String(j.prompt || '').slice(0, 80)); } catch (e) { stopped = false; }
     if (stopped) Object.assign(cfg, readConfig(j));
   }
   // 用户让开工、接着做，自动关着（第 86 条：选了不实施、说过停、没问就让开工的）：先问一次自动还是人工，问完才能改代码（pre-edit 等）
@@ -511,7 +513,8 @@ async function handle(j) {
     try {
       const AR = require('../lib/auto-run'); const st1 = flowState(j); const p1 = String(j.prompt || '');
       if (require('../lib/session').sessionAuto(j) !== true && !st1.paused) {
-        if (st1.autoStopped && (applyIntent(p1) || /继续|接着/.test(p1))) { AR.markAsk(j, 'resume'); askNow = AR.askLine('resume'); }
+        // 只认开工说法和短的"继续""接着做"（R7③："继续观察一下日志"不算让接着做）
+        if (st1.autoStopped && (applyIntent(p1) || /^(?:那就|好的?|嗯|行)?[，,\s]*(?:继续|接着(?:做|来|干)?)(?:吧|啊|呀)?[\s。.！!~～]*$/.test(p1.trim()))) { AR.markAsk(j, 'resume'); askNow = AR.askLine('resume'); }
         // 只管第一次开工（开工范围里的 change 一项都没勾过）：做任务中途改了需求、退回后再说开工的不问
         else if (applyStart && prevStage !== 'apply' && !Object.keys((st1.applyScope || {}).dirs || {}).some((d) => require('../lib/session').changeStarted(d))) { AR.markAsk(j, 'start'); askNow = AR.askLine('start'); }
       }

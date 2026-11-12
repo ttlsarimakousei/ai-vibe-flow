@@ -44,6 +44,8 @@ H.section('第 28、87 条：自动按会话记；/vk-auto 删了（2026-11-12�
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE(false)));
   H.ok('命令文件 vk-auto.md 删了', !fs.existsSync(path.join(H.SRC, 'claude', 'commands', 'vk-auto.md')));
   const answered = (n, a) => H.transcript(path.join(h.root, 'a28-' + n + '.jsonl'), [H.tr.user('接着做'), H.tr.ran('AskUserQuestion', { questions: [{ question: 'feat-028 的需求审过了，怎么实施？', header: '实施', options: [{ label: '自动实施' }, { label: '实施（每步问我）' }, { label: '先不实施' }] }] }, 'User has answered your questions: "feat-028 的需求审过了，怎么实施？"="' + a + '". You can now continue with the user\'s answers in mind.')]);
+  // 只认流程里的提问框答案（复审 20261112 R2）：这几个会话先进流程
+  for (const sid of ['s-on', 's-off', 's-other', 's-once']) H.inFlow(h, sid, [path.join(p, 'openspec', 'changes', 'feat-028')], true, 'plan');
   S.readConfigFor({ session_id: 's-on', cwd: p, transcript_path: answered(1, '自动实施') });
   H.ok('提问框里选了"自动实施"：这个会话开了', sa('s-on') === true);
   H.ok('这个会话按开着算', S.readConfigFor({ session_id: 's-on', cwd: p }).autoApply === true);

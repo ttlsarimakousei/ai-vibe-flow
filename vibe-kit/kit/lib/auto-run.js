@@ -38,7 +38,7 @@ function finish(j, task) {
   S.hookLog('自动模式 会话 ' + j.session_id + ' 全部通过，套件关了自动');
 }
 
-/** 用户说停、别自动了：关自动，记下来（再让接着做时问一次自动还是人工），核验期的自动修也不再开。返回关之前开没开着 */
+/** 用户说停、别自动了：关自动，记下来（再让接着做时问一次自动还是人工），核验期的自动修也不再开。返回关掉了什么（开着的自动、核验期的自动修） */
 function stopByUser(j, why) {
   if (!j || !j.session_id || j.session_id === 'unknown') return false;
   const was = S.sessionAuto(j) === true;
@@ -48,8 +48,9 @@ function stopByUser(j, why) {
     const B = require('./big-task'); const t = B.forSession(j);
     if (t) { const ts = B.taskState(t); fix = !!ts.autoFix; if (ts.autoFix || ts.auto) B.setTaskState(t, { autoFix: false, auto: false }); }
   } catch (e) { /* 记不了：核验时改代码可能又自动修 */ }
-  S.updateState(flowKey(j), (s) => { if (was || fix || s.autoFix) s.autoStopped = true; delete s.autoFix; delete s.autoAsk; return s; });
-  return was;
+  let flowFix = false;
+  S.updateState(flowKey(j), (s) => { flowFix = !!s.autoFix; if (was || fix || s.autoFix) s.autoStopped = true; delete s.autoFix; delete s.autoAsk; return s; });
+  return was || fix || flowFix;
 }
 
 /**

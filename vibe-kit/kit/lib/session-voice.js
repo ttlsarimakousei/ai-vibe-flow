@@ -288,6 +288,8 @@ function confirmApply(j, more) {
  */
 function answerStartsApply(x) {
   if (applyIntent(x.a)) return true;
+  // 需求审过那一问选"自动实施""自动接着做"也是开工（复审 20261112 R1：它不是开工说法，选了自动却改不了代码）
+  if (require('./session-config').autoAnswerOf(x.a, x.q) === 'on') return true;
   const a = bareAnswer(x.a);
   return YES_SHORT.test(a) && intent.has(x.q, 'apply') && !/(?:先不|暂不|不要|别)[^，,。；;！!\n]{0,6}(?:开工|apply|执行|实施)/i.test(x.q);
 }

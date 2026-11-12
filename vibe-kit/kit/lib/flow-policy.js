@@ -550,7 +550,7 @@ function actionIssue(j) {
     return '';
   }
   // 全部通过、自动关了以后，用户核验时报的问题照旧自动修（第 86 条）：这时跑审查、自测，代码和自测时不一样，就重新打开自动
-  if (!cfg.autoMode) { try { if (require('./big-task').fixResume(j, true)) Object.assign(cfg, S.readConfigFor(j)); } catch (e) { /* 判断不了照人工 */ } }
+  if (!cfg.autoMode) { try { if (require('./auto-run').fixResume(j, true)) Object.assign(cfg, S.readConfigFor(j)); } catch (e) { /* 判断不了照人工 */ } }
   // 开着自动、在 OpenSpec 流程里：审查不用先问用户（第 68 条）。这一轮算不算自动（插了句话）不影响；用户说了停、普通改动除外
   const flowNow = S.flowState(j);
   const sessionAuto = review && cfg.autoSession === true && flowNow.on === true && !flowNow.paused;

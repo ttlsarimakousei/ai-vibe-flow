@@ -66,10 +66,10 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     prompt('s-auto', '/opsx:explore 做一个导出功能，写需求', es);
     es = es.concat([H.tr.say('feat-019 的提案、规格、设计、任务都写完了，能开工吗？')]);
     H.setConfig(h, { autoApply: true });
-    // 还在需求阶段时去审查：提示写清 Apply 自动开着、为什么这一轮不算
-    const reviewCmd = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --change feat-019 --mode proposal --point design --project "' + p.replace(/\\/g, '/') + '"';
+    // 还在需求阶段时去审代码：提示写清 Apply 自动开着、为什么这一轮不算（第 85 条起需求审查强制、不问，这里看代码审查）
+    const reviewCmd = 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --change feat-019 --mode code --point change --project "' + p.replace(/\\/g, '/') + '"';
     const before = H.hook(h, 'guard-commit', { session_id: 's-auto', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'rv-1', tool_input: { command: reviewCmd }, transcript_path: tf(es) });
-    H.ok('不算自动时：提示说配置页开了 Apply 自动、还在需求阶段要说开工', /Apply 自动/.test(H.reasonOf(before)) && /开工|开始实施/.test(H.reasonOf(before)), H.reasonOf(before));
+    H.ok('不算自动时：提示说配置页开了 Apply 自动、还在写需求那一段（需求阶段没有自动模式）', /Apply 自动/.test(H.reasonOf(before)) && /需求阶段没有自动模式/.test(H.reasonOf(before)), H.reasonOf(before));
     es = es.concat([H.tr.user('开始实施 feat-019')]);
     prompt('s-auto', '开始实施 feat-019', es);
     H.ok('说"开始实施 feat-019"：进了实施阶段，Apply 自动算数', S.flowState({ session_id: 's-auto' }).stage === 'apply' && S.readConfigFor({ session_id: 's-auto', cwd: p }).autoMode === true, S.flowState({ session_id: 's-auto' }));

@@ -446,7 +446,7 @@ add('K3：编译成功什么都不加', 'after-tool', built('PostToolUse', () =>
 // K3（2026-11-01）：这个会话开着自动，开工时先提醒存检查点（会话号单独起，免得自动开关带到别的输入上）
 add('K3：自动模式开工提醒存检查点', 'task-anchor', (kit) => {
   const proj = project(kit);
-  fs.writeFileSync(path.join(kit.kit, 'state', 'sess-ckpt-auto-switch.json'), JSON.stringify({ on: true, at: Date.now(), by: '/vk-auto' }));
+  fs.writeFileSync(path.join(kit.kit, 'state', 'sess-ckpt-auto-switch.json'), JSON.stringify({ on: true, at: Date.now(), by: '提问框选了自动' }));
   const j = base(proj, kit, { session_id: 'sess-ckpt', hook_event_name: 'UserPromptSubmit', prompt: '/opsx:apply add-export' });
   j.transcript_path = H.transcript(path.join(path.dirname(proj), 't.jsonl'), [H.tr.user('/opsx:apply add-export')]);
   return { proj, j };

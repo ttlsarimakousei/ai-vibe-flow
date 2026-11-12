@@ -22,7 +22,7 @@ const { allChanges } = require('./session-projects');
  *   问句、插话、别的斜杠命令、"继续"       → 不动
  *   "停""等等"                             → 不动，记 paused：这一轮收工不催，下一句话接着做
  *   "先别开工""只写需求"                   → 回到写需求那一段，清开工范围，不自动开工
- *   让它出一份代码之外的东西               → 不动，记 aside：这一轮放哪照常问用户，全自动不作数（会话开着 /vk-auto 的照样算自动，第 68 条：需求里带"导出""表格"就被判成插话，整轮退回人工）
+ *   让它出一份代码之外的东西               → 不动，记 aside：这一轮放哪照常问用户，全自动不作数（会话开着自动的照样算自动，第 68 条：需求里带"导出""表格"就被判成插话，整轮退回人工）
  *   变更都归档了、"退出流程"               → 退出
  * 流程又分两段（stage，见下面"流程分两段"）：写提案那一段 plan，做任务那一段 apply。全自动只在 apply 那一段算开着。
  * 不在流程里时，钩子拿到的 cfg.autoMode 是 false：照有人在的样子来（能问、不催着往下做、不出全自动报告）。cfg.autoSwitch 是开关本身。
@@ -173,6 +173,11 @@ function syncAutoAnswer(j) {
   return require('./invocation').memo('auto-answer|' + sid, () => {
     try {
       const st = flowState(j);
+      // 不在流程里的不认（复审 20261112 R2：问"主键怎么生成"选 auto_increment 也开过自动）
+      if (!st.on) return '';
+      // 每个钩子进程都会走到这里（复审 R5：整读 3MB 会话记录约 28 毫秒）：先看最后 256KB 里有没有提问框的答案，没有就不解析。
+      // 答案一到，下一次工具调用的钩子就会看到它，这时它就在最后几条里
+      if (!/User has answered your questions|AskUserQuestion/.test(tailText(j.transcript_path, 262144))) return '';
       const V = require('./session-voice'); const { tailEntries } = require('./session-transcript');
       const { autoAnswerOf, setSessionAuto } = require('./session-config');
       let pick = null;
@@ -186,9 +191,19 @@ function syncAutoAnswer(j) {
       updateState(flowKey(j), (s) => { s.autoAnswer = k; delete s.autoAsk; delete s.autoStopped; return s; });
       setSessionAuto(j, pick.w === 'on', pick.w === 'on' ? '提问框选了自动' : '提问框选了人工或先不实施');
       hookLog('自动模式 会话 ' + sid + (pick.w === 'on' ? ' 提问框选了自动' : ' 提问框选了人工或先不实施'));
+      // 记到大任务上当前这个 change：死机后 /vk-resume 接回时，选过的不再问（复审 R6）
+      try { const B = require('./big-task'); const t = B.forSession(j); const c = t && B.phaseFor(j, t).change; if (c) B.setTaskState(t, { asked: Object.assign({}, B.taskState(t).asked, { [c]: pick.w }) }); } catch (e) { /* 记不了：接回时多问一次 */ }
       return pick.w;
     } catch (e) { return ''; }
   });
+}
+/** 文件最后 n 个字节的文字（读不了给 ''） */
+function tailText(file, n) {
+  let fd = null;
+  try {
+    fd = fs.openSync(file, 'r'); const size = fs.fstatSync(fd).size; const len = Math.min(size, n);
+    const buf = Buffer.alloc(len); fs.readSync(fd, buf, 0, len, size - len); return buf.toString('utf8');
+  } catch (e) { return ''; } finally { if (fd !== null) try { fs.closeSync(fd); } catch (e) { /* 关不了不管 */ } }
 }
 
 /** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */

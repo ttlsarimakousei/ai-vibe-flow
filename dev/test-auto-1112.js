@@ -168,6 +168,87 @@ H.section('第 85 条：探索没完不让写需求、第一次打勾前要审�
   H.ok('审过了：打勾放行', !blocked(tick()));
 }
 
+H.section('复审 20261112 R1、R2：需求审过那一问只选"自动实施"就算开工；无关的答案不动开关');
+{
+  const h = H.makeHome('a1112-r1', FROM, QUIET);
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  const { p, d } = bigProject(h, 'r1', false);
+  H.reviewPoints(h, d, 'proposal');
+  H.inFlow(h, 's-r1', [d], true, 'plan');
+  const j = { session_id: 's-r1', cwd: p };
+  const tp = H.transcript(path.join(h.root, 'r1-a.jsonl'), [H.tr.user('写需求'), H.tr.say('c1 的需求审过了'), ...ans('c1 的需求审过了，怎么实施？', '自动实施')]);
+  const e = H.hook(h, 'pre-edit', { session_id: 's-r1', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' }, transcript_path: tp });
+  H.ok('只选了"自动实施"（用户没另说开工）：改代码放行，进了做任务那一段，自动开了', !blocked(e) && S.flowState(j).stage === 'apply' && S.sessionAuto(j) === true, [H.reasonOf(e), S.flowState(j).stage]);
+  const C = require(path.join(h.kit, 'lib', 'session-config.js'));
+  for (const [a, q] of [['auto_increment', '主键怎么生成？'], ['Auto-detect', '编码怎么认？'], ['automatic', '模式？'], ['自动修复重试', '失败了怎么办？'], ['先不做', '要加索引吗？']]) { const got = C.autoAnswerOf ? C.autoAnswerOf(a, q, false) : '旧版没有 autoAnswerOf'; H.ok('"' + a + '"不动开关', got === '', got); }
+  // 不在流程里的提问框答案不认
+  const j2 = { session_id: 's-r1-out', cwd: p, transcript_path: H.transcript(path.join(h.root, 'r1-b.jsonl'), [H.tr.user('问一下'), ...ans('怎么实施？', '自动实施')]) };
+  S.readConfigFor(j2);
+  H.ok('不在流程里：提问框选了"自动实施"也不开', S.sessionAuto(j2) !== true);
+}
+
+H.section('复审 20261112 R3、R4、R7：核验期用 Bash 改了代码、跑审查前重新打开；改说明文档不算；"不用"不关自动；核验期说停关掉自动修');
+{
+  const h = H.makeHome('a1112-r3', FROM, QUIET);
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  const { p, d } = bigProject(h, 'r3', true);
+  H.git(p, ['add', '-A']); H.git(p, ['commit', '-qm', 'init']);
+  H.reviewPoints(h, d, 'proposal'); H.reviewPoints(h, d, 'code');
+  const B = require(path.join(h.kit, 'lib', 'big-task.js')); const W = require(path.join(h.kit, 'lib', 'workspace.js'));
+  const task = () => B.tasks(p)[0];
+  const j = { session_id: 's-r3', cwd: p };
+  H.inFlow(h, 's-r3', [d], true, 'apply'); S.updateState('s-r3-flow', (s) => { s.task = '订单'; return s; });
+  const verifyNow = () => { B.setTaskState(task(), { selfTest: { at: Date.now(), count: 1, code: W.fingerprint(p, 'code').hash, manual: [] }, autoFix: true, auto: false }); S.setSessionAuto(j, false, '全部通过'); };
+  verifyNow();
+  // 改了又改回原样（代码指纹没变）：不算。改别的文件和收工时作废自测的规矩一样，按代码指纹（openspec 文档不算）
+  H.write(path.join(p, 'src', 'A.java'), 'class A {}\n');
+  H.hook(h, 'after-tool', { session_id: 's-r3', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: path.join(p, 'src', 'A.java'), content: 'class A {}\n' }, tool_response: { filePath: path.join(p, 'src', 'A.java') }, transcript_path: H.transcript(path.join(h.root, 'r3-a.jsonl'), [H.tr.user('看一下 A')]) });
+  H.ok('核验时改了又改回原样（代码指纹没变）：不重新打开自动', S.sessionAuto(j) === false && !!B.taskState(task()).selfTest, B.taskState(task()));
+  // 用 Bash 改了代码（after-tool 看不到），跑审查前重新打开
+  H.write(path.join(p, 'src', 'A.java'), 'class A { int bashFixed; }\n');
+  const review = H.hook(h, 'guard-commit', { session_id: 's-r3', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'r3-rv', tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --change c1 --mode code --point change --project "' + p.replace(/\\/g, '/') + '"' }, transcript_path: H.transcript(path.join(h.root, 'r3-b.jsonl'), [H.tr.user('导出的文件名不对')]) });
+  H.ok('核验时 Bash 改了代码、跑审查：自动重新打开，不问用户（以前调错了模块，这条路径没生效）', S.sessionAuto(j) === true && !/没说要审查/.test(H.reasonOf(review)), [S.sessionAuto(j), H.reasonOf(review)]);
+  // "不用"不关自动
+  const say = (prompt, n) => H.hook(h, 'task-anchor', { session_id: 's-r3', cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'r3-s' + n + '.jsonl'), [H.tr.user(prompt)]) });
+  say('不用', 1);
+  H.ok('自动开着时回一句"不用"：自动不关', S.sessionAuto(j) === true);
+  // 核验期（自动已关、挂着自动修）说停：自动修关掉
+  verifyNow();
+  say('停', 2);
+  H.ok('核验期说"停"：自动修也关掉', !B.taskState(task()).autoFix && S.flowState(j).autoStopped === true, B.taskState(task()));
+  const r = say('继续观察一下日志', 3);
+  H.ok('说过停之后"继续观察一下日志"：不当成让接着做，不问', !/自动接着做/.test(textOf(r)) && S.flowState(j).autoAsk !== 'resume', textOf(r).slice(0, 300));
+}
+
+H.section('复审 20261112 R6：死机前这个 change 选过人工，/vk-resume 接回不再问');
+{
+  const h = H.makeHome('a1112-r6', FROM, QUIET);
+  const S = require(path.join(h.kit, 'lib', 'session.js'));
+  const { p, d } = bigProject(h, 'r6', false);
+  H.reviewPoints(h, d, 'proposal');
+  H.inFlow(h, 's-r6-old', [d], true, 'plan'); S.updateState('s-r6-old-flow', (s) => { s.task = '订单'; return s; });
+  S.readConfigFor({ session_id: 's-r6-old', cwd: p, transcript_path: H.transcript(path.join(h.root, 'r6-a.jsonl'), [H.tr.user('写需求'), ...ans('c1 怎么实施？', '实施（每步问我）')]) });
+  const B = require(path.join(h.kit, 'lib', 'big-task.js'));
+  H.ok('选人工记到大任务的这个 change 上', (B.taskState(B.tasks(p)[0]).asked || {}).c1 === 'off', B.taskState(B.tasks(p)[0]));
+  const r = H.hook(h, 'task-anchor', { session_id: 's-r6-new', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '/vk-resume 订单', transcript_path: H.transcript(path.join(h.root, 'r6-b.jsonl'), [H.tr.user('/vk-resume 订单')]) });
+  H.ok('接回：不再问自动还是人工', !S.flowState({ session_id: 's-r6-new' }).autoAsk && /选过人工/.test(textOf(r)), [S.flowState({ session_id: 's-r6-new' }), textOf(r).slice(0, 300)]);
+}
+
+H.section('复审 20261112 R9：旧版装过的 vk-auto.md，升级后删掉');
+{
+  const OLD = path.join(H.REPO, 'dev', 'baseline', '20261112.0003', 'vibe-kit');
+  if (!FROM && fs.existsSync(path.join(OLD, 'claude', 'commands', 'vk-auto.md'))) {
+    const oldPkg = path.join(H.tempDir('a1112-old'), 'vibe-kit'); H.copyDir(OLD, oldPkg, (x) => x === 'node_modules' || x === '.git'); H.stubDeps(oldPkg);
+    const newPkg = H.makePackage('a1112-new', '20261113.0000');
+    const u = H.freshHome('a1112-up');
+    const i1 = H.node(u, path.join(oldPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+    const cmd = path.join(u.home, '.claude', 'commands', 'vk-auto.md');
+    H.ok('旧版装上了 vk-auto.md', i1.code === 0 && fs.existsSync(cmd), i1.out.slice(-300));
+    const i2 = H.node(u, path.join(newPkg, 'install.js'), ['--no-router', '--no-open'], { cwd: u.root, timeout: 240000 });
+    H.ok('升级到这一版：没改过的 vk-auto.md 删了', i2.code === 0 && !fs.existsSync(cmd), i2.out.slice(-300));
+  }
+}
+
 H.section('第 87 条：/vk-auto 删了；给模型的说法里没有它，也没有"一份一份写"');
 {
   H.ok('命令文件 vk-auto.md 不在了', !fs.existsSync(path.join(SRCDIR, 'claude', 'commands', 'vk-auto.md')));

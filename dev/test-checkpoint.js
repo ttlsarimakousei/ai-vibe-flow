@@ -123,8 +123,8 @@ const snap = (t) => ({ status: H.git(t.repo, ['status', '--porcelain']).out, cac
     // 人工模式开工：不送
     const m = prompt('s-manual', '/opsx:apply add-export');
     H.ok('人工模式开工：不提检查点', !/检查点/.test(ctxOf(m) + JSON.stringify(m || '')), m);
-    // 这个会话开了自动（/vk-auto），开工
-    fs.writeFileSync(path.join(h.kit, 'state', 's-auto-auto-switch.json'), JSON.stringify({ on: true, at: Date.now(), by: '/vk-auto' }));
+    // 这个会话开了自动（提问框选了自动实施），开工
+    fs.writeFileSync(path.join(h.kit, 'state', 's-auto-auto-switch.json'), JSON.stringify({ on: true, at: Date.now(), by: '提问框选了自动' }));
     const a = prompt('s-auto', '/opsx:apply add-export');
     H.ok('自动模式开工：送一句先存检查点', /大改之前先存一个检查点：node "[^"]*checkpoint\.js" save --why/.test(ctxOf(a)), a);
     // 第 1 组做完、审过：下一组开改之前再送一次
