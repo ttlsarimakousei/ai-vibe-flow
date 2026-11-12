@@ -263,7 +263,8 @@ function check(j) {
   I.phase('命令：读开关');
   let cfg = readConfigFor(j);
   // 建变更：不在流程里要有用户的话才行（用户 2026-11-03 定的：不按模糊的话进流程）
-  if (!flowState(j).on && /(^|[\s;&|("'])openspec(\.cmd)?\s+new\s+change\b/i.test(cmd) && !require('../lib/session').entryVoice(j)) return blockOut('PreToolUse', '[vibe-kit] 用户没说要走 OpenSpec，不建变更。改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"；选探索再建。');
+  // 认下来就记成在流程里（第 89 条：以前只放行不记，下一轮写提案又被拦"用户没说要走 OpenSpec"）
+  if (!flowState(j).on && /(^|[\s;&|("'])openspec(\.cmd)?\s+new\s+change\b/i.test(cmd) && !require('../lib/session').enterByVoice(j, '建变更')) return blockOut('PreToolUse', '[vibe-kit] 用户没说要走 OpenSpec，不建变更。' + require('./guard-ask').NOT_ENTERED + '；选探索再建。');
   // 查库、查 redis 的工具只看得到开关，看不到这个会话在不在流程里：跑它们之前留一张条子（按当前目录记，工具那头两分钟内认），
   // 说这个会话现在算不算全自动。不留的话，开关开着、用户却在场的会话里，工具会照"用户不在"来
   if (cfg.autoSwitch && /\b(db\.py|redis\.js)\b/i.test(cmd)) noteToolFlow(j, cfg);

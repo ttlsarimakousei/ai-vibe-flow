@@ -471,7 +471,8 @@ const after1104 = (c) => {
 };
 // 2026-11-03：进流程只有三种门（敲 /opsx:…、话里明确有 openspec、提问框选探索）；问句、"停"不退出流程；新建提案要有探索记录
 for (const c of cases) {
-  if (c.name === '没探索就写提案') { c.expect = /用户没说要走 OpenSpec/; c.since = V1104; }
+  // 第 89 条、#467（NEXT）：拦下时写明选项里带"探索"两个字就认，不用和"探索"一字不差
+  if (c.name === '没探索就写提案') { c.expect = /用户没说要走 OpenSpec[\s\S]*选项里带\\"探索\\"两个字就认/; c.since = NEXT; }
   // 2026-11-04 ttls- 改成 vk-：模型用旧名字调技能，直接说新名字（复审第 8 条）
   if (c.name === '交接：没有用户要求不能调技能') { c.expect = /技能改名了：ttls-handover 现在叫 vk-handover/; c.since = V2337; }
   // 套件不接 MCP，不认工具名（第 48 条）；路由删了，改说配置页的接口（第 39 条）

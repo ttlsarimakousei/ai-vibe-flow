@@ -53,8 +53,11 @@ function voiceAt(list, i) {
           if (call) { fromAsk = call.name === 'AskUserQuestion'; break; }
         }
         if (fromAsk) {
-          const answers = answersOf(t);
-          if (!answers.length && structured) for (const [q, a] of Object.entries(structured)) if (typeof a === 'string') answers.push({ q, a });
+          // 先认结构化的那份（问题 → 答案）：结果文字里问题原样带着，问题里有英文引号时按文字拆会从最后一个引号截断
+          // （第 89 条，2026-11-12：问"是否走 "/opsx:explore 探索"？"拆出来的问题只剩"？"）。没有结构化的（老版本、测试）照旧按文字拆
+          const answers = [];
+          if (structured && typeof structured === 'object' && !Array.isArray(structured)) for (const [q, a] of Object.entries(structured)) if (typeof a === 'string' && a) answers.push({ q, a });
+          if (!answers.length) answers.push(...answersOf(t));
           if (answers.length) return { kind: 'answer', text: t, answers, id: String(e.uuid || b.tool_use_id || ''), at, pos: i };
         }
       }
@@ -246,14 +249,50 @@ function saidBefore(entries, pos) {
 const ENTRY_WORD = /openspec|opsx/i;
 const ENTRY_NOT = /(?:不走|不用|别用|别走|不要|不需要|跳过|先不)\s*(?:走\s*)?(?:openspec|opsx)/i;
 const EXPLORE_WORD = /探索|explore/i;
-/** 这一轮用户明确要进流程：话里有 openspec（"不走 openspec"不算），或者提问框问探索、选了探索（用户 2026-11-03 定的，不按模糊的话猜） */
+const VK_FLOW = /vk\s*流程/i;
+const ENTRY_ANSWER_NO = /^(?:不|别|先不|直接改|跳过|算了|取消)|(?:不走|不用|别用|别走|不要|不需要|跳过|先不)\s*(?:走\s*)?(?:探索|explore|openspec|opsx|流程)/i;
+/**
+ * 提问框的一个答案是不是选了进流程（第 89 条、#467，2026-11-12）。以前要问题和答案里都有"探索"：模型自己写的问题不带这两个字
+ * （"这个需求改动较大，怎么推进？"），用户选了"走 /opsx:explore 探索"也认不出，被拦下再问一遍。选项是用户点的，现在主要看答案：
+ *   答案里点了 /opsx:…、openspec、vk 流程                                    → 算
+ *   问题里点了这些，答案是"探索""好""可以""走流程"                            → 算
+ *   答案里只有"探索"两个字（"先探索一下代码"）                                → 模型正要进流程（调技能、建变更、写提案）时算；
+ *                                                                              strict（没人调、钩子自己记成在流程里）时不算，免得普通问答被带进流程
+ *   "不探索""直接改""不走 openspec"                                           → 不算
+ */
+function entryAnswer(x, strict) {
+  const a = bareAnswer(x && x.a).trim(); const q = String((x && x.q) || '');
+  if (!a || ENTRY_ANSWER_NO.test(a)) return false;
+  if (ENTRY_WORD.test(a) || VK_FLOW.test(a)) return true;
+  const yes = EXPLORE_WORD.test(a) || YES_SHORT.test(a) || /^走(?:流程)?[\s。！!]*$/.test(a);
+  if ((ENTRY_WORD.test(q) || VK_FLOW.test(q)) && yes) return true;
+  if (strict) return false;
+  return EXPLORE_WORD.test(a) || (EXPLORE_WORD.test(q) && yes);
+}
+/** 这一轮提问框里选了进流程的那个答案（没有返回 null）。strict 见 entryAnswer */
+function entryPick(j, strict) {
+  if (!j || !j.transcript_path) return null;
+  for (const v of turnVoices(tailEntries(j.transcript_path, 3000000))) if (v.kind === 'answer' && v.answers.some((a) => entryAnswer(a, strict))) return v;
+  return null;
+}
+/** 这一轮用户明确要进流程：话里有 openspec（"不走 openspec"不算），或者提问框里选了探索（用户 2026-11-03 定的，不按模糊的话猜） */
 function entryVoice(j) {
   if (!j || !j.transcript_path) return false;
   for (const v of turnVoices(tailEntries(j.transcript_path, 3000000))) {
     if (v.kind === 'prompt' && ENTRY_WORD.test(v.text) && !ENTRY_NOT.test(v.text)) return true;
-    if (v.kind === 'answer' && v.answers.some((a) => EXPLORE_WORD.test(a.q) && EXPLORE_WORD.test(a.a) && !/^(?:不|别|先不|直接改)/.test(String(a.a).trim()))) return true;
+    if (v.kind === 'answer' && v.answers.some((a) => entryAnswer(a, false))) return true;
   }
   return false;
+}
+/**
+ * 模型要进流程（调 OpenSpec 的技能、建变更、写提案）：已经在流程里，或者这一轮用户明确要进，就记成在流程里（写需求那一段）并放行。
+ * 以前只有调技能那条路会记（第 89 条）：选了探索、模型没调技能、自己读代码探索的，下一轮建变更、写提案又被拦"用户没说要走 OpenSpec"
+ */
+function enterByVoice(j, why) {
+  if (flowState(j).on) return true;
+  if (!entryVoice(j)) return false;
+  setFlow(j, true, why || '用户明确要走 OpenSpec', 'plan');
+  return true;
 }
 
 /**
@@ -346,4 +385,4 @@ function atHome(j) {
   return normKey(home) === normKey(cur) ? j : Object.assign({}, j, { cwd: home, realCwd: cur });
 }
 
-module.exports = { ANSWERED, lastUserVoice, turnVoices, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, saidBefore, confirmApply, entryVoice, sessionHome, noteSessionHome, atHome };
+module.exports = { ANSWERED, lastUserVoice, turnVoices, voiceKey, userSaid, userDeclined, commitDeclined, canWriteHandover, saidBefore, confirmApply, entryVoice, entryPick, enterByVoice, sessionHome, noteSessionHome, atHome };

@@ -8,6 +8,8 @@
  *     开工都要真人许可（提问框选了"自动实施""实施（每步问我）"、说了开工）；开着自动也不自己衔接（第 86 条，2026-11-12：每个 change 的需求审完都问）。
  */
 const { readConfigFor, flowState, setFlow, FLOW_SKILL, blockOut, hookLog, cli, confirmApply, entryVoice } = require('../lib/session');
+// 三道门（调技能、建变更、写提案）共用这句话：选项不用和"探索"一字不差，答案里带"探索"或点了 /opsx:explore 都认（第 89 条、#467）
+const NOT_ENTERED = '改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"（选项里带"探索"两个字就认，例："走 /opsx:explore 探索"）';
 let report = null;
 try { report = require('../lib/report.js'); } catch (e) { /* 老版本没有 */ }
 
@@ -54,7 +56,7 @@ function handle(j) {
           if (!st.on) setFlow(j, true, '调了 ' + first, 'plan');
         } else {
           // 探索、提案、建变更：不在流程里要有用户的话才进；进了在写提案那一段（已经在做任务的会话里再调 propose，也回到这一段：下一个变更的提案也要用户看）
-          if (!st.on && !entryVoice(j)) return blockOut('PreToolUse', '[vibe-kit] 用户没说要走 OpenSpec。改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"；选探索再调。不用走流程的改动直接改。');
+          if (!st.on && !entryVoice(j)) return blockOut('PreToolUse', '[vibe-kit] 用户没说要走 OpenSpec。' + NOT_ENTERED + '；选探索再调。不用走流程的改动直接改。');
           setFlow(j, true, '调了 ' + first, 'plan');
         }
         if (cfg.autoSwitch && !out) hookLog('全自动模式 这个会话调了 ' + first.slice(0, 40) + (st.on ? '' : '，进了 OpenSpec 流程') + (/^(opsx:|openspec[-:])(apply|archive|bulk-archive|verify|sync)\b/i.test(first) ? '' : '：在写提案那一段，照有人在的样子来'));
@@ -70,5 +72,5 @@ function handle(j) {
   return null;
 }
 
-module.exports = { handle };
+module.exports = { handle, NOT_ENTERED };
 if (require.main === module) cli(handle);

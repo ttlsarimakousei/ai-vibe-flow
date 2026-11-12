@@ -47,7 +47,8 @@ function bugFixFirstIssue(j) {
 /** 新建提案：这个会话要在流程里（或者这一轮用户明确要走）；要有探索记录，短的也行（用户 2026-11-03 定的）；要真读过项目里的代码 */
 function exploreFirstIssue(j, art, cfg) {
   const fl = flowState(j);
-  if (!fl.on && !require('../lib/session').entryVoice(j)) return '用户没说要走 OpenSpec，不写提案。改动较大的先用提问框问："要用 /opsx:explore 探索吗（会进入 vk 流程）"，选项写"探索""直接改"；选探索再写。';
+  // 认下来就记成在流程里（第 89 条）
+  if (!fl.on && !require('../lib/session').enterByVoice(j, '写提案')) return '用户没说要走 OpenSpec，不写提案。' + require('./guard-ask').NOT_ENTERED + '；选探索再写。';
   const B = require('../lib/big-task');
   const task = B.ofChange(art.root, art.dir);
   const tool = 'node "' + path.join(__dirname, '..', 'tools', 'plan.js') + '" new --task <大任务名> --changes ' + art.name;

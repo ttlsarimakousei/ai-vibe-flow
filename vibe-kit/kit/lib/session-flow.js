@@ -200,6 +200,32 @@ function syncAutoAnswer(j) {
 /** 文件最后 n 个字节的文字（读不了给 ''） */
 function tailText(file, n) {
   let fd = null;
+/**
+ * 提问框里选了进流程（第 89 条，2026-11-12）：记成在流程里、写需求那一段。以前只有模型接着调 /opsx:… 的技能才记：
+ * 选了探索、模型没调技能、自己读代码探索的，流程一直没记上，下一轮建变更、写提案被拦"用户没说要走 OpenSpec"，要用户再选一遍。
+ * 只认点了 /opsx:…、openspec、vk 流程的那一问（session-voice.js entryAnswer 的 strict）：普通问答里选了"探索一下代码"不进流程。
+ * 同一个答案只认一次（st.entryAnswer）：用户说了退出流程、变更归档之后，不能又按它进
+ */
+function syncEntryAnswer(j) {
+  const sid = j && j.session_id;
+  if (!sid || sid === 'unknown' || !j.transcript_path) return false;
+  return require('./invocation').memo('entry-answer|' + sid, () => {
+    try {
+      const st = flowState(j);
+      if (st.on) return false;
+      if (!/have been answered|has answered your questions|The user answered|AskUserQuestion/.test(tailText(j.transcript_path, 262144))) return false;
+      const V = require('./session-voice');
+      const v = V.entryPick(j, true);
+      if (!v) return false;
+      const k = V.voiceKey(v);
+      if (st.entryAnswer === k) return false;
+      setFlow(j, true, '提问框选了探索', 'plan');
+      updateState(flowKey(j), (s) => { s.entryAnswer = k; return s; });
+      hookLog('流程 会话 ' + sid + ' 提问框选了探索，记成在 OpenSpec 流程里（写需求那一段）');
+      return true;
+    } catch (e) { return false; }
+  });
+}
   try {
     fd = fs.openSync(file, 'r'); const size = fs.fstatSync(fd).size; const len = Math.min(size, n);
     const buf = Buffer.alloc(len); fs.readSync(fd, buf, 0, len, size - len); return buf.toString('utf8');
@@ -211,6 +237,7 @@ function readConfigFor(j) {
   syncAutoAnswer(j);
   const c = readConfig(j); c.autoSwitch = c.autoApply || c.autoRequirements;
   // 算流程状态要读任务、算指纹、调 git，出错不能让调用的钩子整道放行（2026-10-17 审核问题 14）：按人工模式算，更严
+  syncEntryAnswer(j);
   let view; try { view = flowView(j); } catch (e) { hookLog('readConfigFor 算流程状态出错，按人工模式算：' + ((e && e.message) || e)); view = { effective: false, phase: '普通任务' }; }
   c.autoMode = !!view.effective;
   return c;
@@ -273,4 +300,4 @@ function touchChange(sid, dir) {
   } catch (e) { /* 记不了不影响归档 */ }
 }
 
-module.exports = { FLOW_SLASH, FLOW_TAG, FLOW_SKILL, syncAutoAnswer, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, APPLY_SLASH, APPLY_TAG, applyIntent, changeStarted, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowAdopt, readConfigFor, flowView, sessionChanges, touchChange };
+module.exports = { FLOW_SLASH, FLOW_TAG, FLOW_SKILL, syncAutoAnswer, syncEntryAnswer, flowState, setFlow, flowTouch, flowChanges, flowStage, flowDone, APPLY_SLASH, APPLY_TAG, applyIntent, changeStarted, BUG_REPORT, WANTS_PROPOSAL, SMALL_FIX_TEXT, flowAdopt, readConfigFor, flowView, sessionChanges, touchChange };
