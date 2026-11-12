@@ -37,7 +37,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 文件 | 管什么 |
 |---|---|
 | `session.js` | 公共入口：开关与封条、会话记录、变更、壳子、审查记账、阶段展示、真人动作和压缩窗口。状态锁、调用缓存、意图与范围指纹拆到专用模块，保持旧调用方接口 |
-| `auto-run.js` | 自动实施这一趟（第 85—87 条，2026-11-12）：用户说停关自动（`stopByUser`）、全部通过套件关自动（`finish`，verify-gate 调）、核验时改了代码重新打开（`fixResume`，after-tool、审查自测命令前调）、让开工了先问自动还是人工（`markAsk`、`askPending`，task-anchor 记、pre-edit 等）；表外 change 的自测记录 `state/change-selftest.json`（跨会话） |
+| `auto-run.js` | 自动实施这一趟（第 85—87 条，2026-11-12）：用户说停关自动（`stopByUser`）、全部通过套件关自动（`finish`，verify-gate 调）、任务都做完了审查或自测催够了没动也关（`giveUp`，第 88 条，20261113 这一版起）、让开工了先问自动还是人工（`markAsk`、`askPending`，task-anchor 记、pre-edit 等）；套件自己关了之后用户每报一次问题改代码前问一次（`askPending` 里按 `autoFix`、`fixAskTurn` 判断，替代 11-12 的 `fixResume` 悄悄重开）；表外 change 的自测记录 `state/change-selftest.json`（跨会话） |
 | `plan-link.js` | 哪些 change 可能是一件事（第 61、62 条）：名字前缀、文档互相提到、任务改同一批文件。只给线索，问过的记在 `state/plan-link.json` |
 | `flow-policy.js` | 两阶段资格、审查点（`points` 必审：整套文档 `tasks`、整个 change `change`；`reviewable` 加上用户点名才审的单份文档和组）、轮数与关联指纹、人工 Ask 去重、定稿后的 apply 衔接 |
 | `openspec.js` | 套件自带的 OpenSpec（`kit/openspec/`，2026-10-17 集成）：能不能用（Node 版本）、把命令里的 `openspec` 改成调用自带的那份、项目没初始化时 `init --tools none`、安装时生成用户级 `/opsx:*` 命令和技能 |
