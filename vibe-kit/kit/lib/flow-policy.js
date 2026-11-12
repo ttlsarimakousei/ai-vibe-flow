@@ -431,11 +431,13 @@ function applyingNow(j, dir) {
  * 催审一个点：有没处理的问题、等复审的，模型不动就接着催，同一个状态最多催 3 次（以前只催一次，它收工了就没人管），催够了记进全自动报告；
  * 别的同一个输入只说一次。需求审查（强制）和自动模式的代码审查共用
  */
-function reviewPush(j, dir, point) {
+function reviewPush(j, dir, point, repeat) {
   const rec = record(dir, point); const sig = fingerprint(dir, point) + ':' + (rec.rounds || 0) + ':' + (rec.failStreak || 0);
   const unsettled = (rec.status === 'completed' && blockingOf(rec) > 0) || rec.status === 'needs_review';
   // 计数只看状态（复审 R6：带指纹的话模型一改文件就从 1 数起，没有上限）
-  return unsettled ? upTo(j, key(dir, point) + '|unsettled', [rec.status, blockingOf(rec), rec.rounds || 0, rec.key || ''].join(':'), 3, instruction(dir, point), () => { try { require('./report').note(j, { kind: 'hand', title: path.basename(dir) + ' 的审查点 ' + point + (rec.status === 'needs_review' ? ' 修了还没复审' : ' 有 ' + blockingOf(rec) + ' 条 P1、P2 没处理'), detail: '收工时催了 3 次没有动' }); } catch (e) { /* 记不了不影响 */ } }) : once(j, key(dir, point), sig, instruction(dir, point));
+  return unsettled ? upTo(j, key(dir, point) + '|unsettled', [rec.status, blockingOf(rec), rec.rounds || 0, rec.key || ''].join(':'), 3, instruction(dir, point), () => { try { require('./report').note(j, { kind: 'hand', title: path.basename(dir) + ' 的审查点 ' + point + (rec.status === 'needs_review' ? ' 修了还没复审' : ' 有 ' + blockingOf(rec) + ' 条 P1、P2 没处理'), detail: '收工时催了 3 次没有动' }); } catch (e) { /* 记不了不影响 */ } })
+    // 还没开始审的：自动模式的代码审查同一份输入最多催 3 次（第 88 条：以前只说一次，中间被用户插了句话、它答完就收工，审查没人再催，自动一直开着）
+    : repeat ? upTo(j, key(dir, point) + '|pending', sig, 3, instruction(dir, point)) : once(j, key(dir, point), sig, instruction(dir, point));
 }
 /** lastEditAt：这一轮最后一次改代码、页面的时间（收工检查算），用户说不用审、不用测之后又改了才再问 */
 function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
@@ -476,7 +478,7 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
     }
     const point = auto ? pending(dir, mode) : points(dir, mode).slice().reverse().find((p) => !settled(dir, p));
     if (!point) continue;
-    if (auto) { const m = reviewPush(j, dir, point); if (m) out.push(m); continue; }
+    if (auto) { const m = reviewPush(j, dir, point, true); if (m) out.push(m); continue; }
     if (stillDeclined(noReview, lastEditAt) && stillDeclined(noTest, lastEditAt)) {
       // 记成问过了：同一份内容以后也不再问
       askOnce(j, key(dir, point), fingerprint(dir, point), turn, '');
@@ -549,8 +551,6 @@ function actionIssue(j) {
     if (change && !points(change.dir, 'proposal').includes(point) && !explicit(j, 'review')) return '需求文档不单独审 ' + point + '：一次写到 tasks，审一次整套（--point tasks）。现在接着写，写完钩子会提醒。';
     return '';
   }
-  // 全部通过、自动关了以后，用户核验时报的问题照旧自动修（第 86 条）：这时跑审查、自测，代码和自测时不一样，就重新打开自动
-  if (!cfg.autoMode) { try { if (require('./auto-run').fixResume(j, true)) Object.assign(cfg, S.readConfigFor(j)); } catch (e) { /* 判断不了照人工 */ } }
   // 开着自动、在 OpenSpec 流程里：审查不用先问用户（第 68 条）。这一轮算不算自动（插了句话）不影响；用户说了停、普通改动除外
   const flowNow = S.flowState(j);
   const sessionAuto = review && cfg.autoSession === true && flowNow.on === true && !flowNow.paused;
@@ -680,4 +680,4 @@ function selfTestWords(words) {
   }
   return false;
 }
-module.exports = { changeScope, learnEdits, noteEdit, currentChangeDir, oncePrompt, groups, isCross, crossText, CHANGE, exploreBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, planNext, reviewPush, instruction, stop, actionIssue, explicit, testCommand };
+module.exports = { changeScope, learnEdits, noteEdit, currentChangeDir, oncePrompt, upTo, groups, isCross, crossText, CHANGE, exploreBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, planNext, reviewPush, instruction, stop, actionIssue, explicit, testCommand };

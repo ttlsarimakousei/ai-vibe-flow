@@ -3,7 +3,7 @@
  * 问题表第 85—87 条（2026-11-12，docs/feedback-20261112.md）：
  *   85 需求一次写到 tasks，写完强制审修；需求阶段没有自动模式；探索没完不写需求
  *   86 需求审过问"自动实施 / 实施（每步问我）/ 先不实施"；自动一路做到全部通过自己关；说停才关，插话不关；
- *      说过停、选过不实施、没问就让开工的，再开工先问；自己关了以后核验时报的问题照旧自动修
+ *      说过停、选过不实施、没问就让开工的，再开工先问；自己关了以后核验时再报问题先问一次（第 88 条改的，细的在 test-feedback1112.js）
  *   87 /vk-auto 删了
  * 用法：node dev/test-auto-1112.js [旧版的 vibe-kit 目录]（给了就拿旧版跑，看哪些项不过）
  */
@@ -85,7 +85,7 @@ H.section('第 86 条：选过"先不实施"（或没问就说开工），开工
   H.ok('改需求文档不等这一问', !/怎么实施/.test(H.reasonOf(e3)), H.reasonOf(e3));
 }
 
-H.section('第 86 条：全部通过套件自己关自动；核验时改了代码照旧自动修；说"别自动了"之后不再自动修');
+H.section('第 86 条：全部通过套件自己关自动；核验时改了代码不再悄悄重开（第 88 条）；说"别自动了"之后核验期不再问');
 {
   const h = H.makeHome('a1112-done', FROM, QUIET);
   const S = require(path.join(h.kit, 'lib', 'session.js'));
@@ -102,18 +102,18 @@ H.section('第 86 条：全部通过套件自己关自动；核验时改了代�
   S.setSessionAuto(j, true, '提问框选了自动');
   const r = H.hook(h, 'verify-gate', { session_id: 's-done', cwd: p, hook_event_name: 'Stop', stop_hook_active: false, transcript_path: H.transcript(path.join(h.root, 'done-1.jsonl'), [H.tr.user('接着做'), H.tr.say('自测登记了')]) });
   H.ok('全部通过：自动关了，说一句', S.sessionAuto(j) === false && /全部通过，自动关了/.test(H.reasonOf(r)), H.reasonOf(r));
-  H.ok('记下了：核验时报的问题照旧自动修', B.taskState(task()).autoFix === true && B.taskState(task()).auto === false, B.taskState(task()));
+  H.ok('记下了：核验时再报问题，改之前先问', B.taskState(task()).autoFix === true && B.taskState(task()).auto === false, B.taskState(task()));
   // 用户核验时报了问题，模型改了代码
   H.write(path.join(p, 'src', 'A.java'), 'class A { int fixed; }\n');
   const after = (n) => H.hook(h, 'after-tool', { session_id: 's-done', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A {}', new_string: 'class A { int fixed; }' }, tool_response: { filePath: path.join(p, 'src', 'A.java') }, transcript_path: H.transcript(path.join(h.root, 'done-a' + n + '.jsonl'), [H.tr.user('导出的文件名不对')]) });
   after(1);
-  H.ok('核验时改了代码：自动重新打开，自测结果作废（回到全面自测）', S.sessionAuto(j) === true && !B.taskState(task()).selfTest && B.phaseOf(task()).phase === 'selftest', [S.sessionAuto(j), B.taskState(task())]);
+  H.ok('核验时改了代码：不再悄悄重开自动（第 88 条：改之前先问，选了自动才开）', S.sessionAuto(j) === false && B.taskState(task()).autoFix === true, [S.sessionAuto(j), B.taskState(task())]);
   // 用户说别自动了
   H.hook(h, 'task-anchor', { session_id: 's-done', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '别自动了', transcript_path: H.transcript(path.join(h.root, 'done-2.jsonl'), [H.tr.user('别自动了')]) });
   B.setTaskState(task(), { selfTest: { at: Date.now(), count: 1, code: W.fingerprint(p, 'code').hash, manual: [] } });
   H.write(path.join(p, 'src', 'A.java'), 'class A { int fixed2; }\n');
   after(2);
-  H.ok('说了"别自动了"：核验时再改代码也不自动修', S.sessionAuto(j) === false && !B.taskState(task()).autoFix, [S.sessionAuto(j), B.taskState(task())]);
+  H.ok('说了"别自动了"：核验期的那一问也关掉', S.sessionAuto(j) === false && !B.taskState(task()).autoFix, [S.sessionAuto(j), B.taskState(task())]);
 }
 
 H.section('第 86 条：不归哪个大任务的 change 也自测（workflow.js selftest --change），全过了才关自动');
@@ -141,7 +141,7 @@ H.section('第 86 条：不归哪个大任务的 change 也自测（workflow.js 
   H.ok('自测登记过：自动关了，等用户核验', S.sessionAuto(j) === false && /全部通过/.test(H.reasonOf(r2)) && S.flowState(j).autoFix === true, H.reasonOf(r2));
   H.write(path.join(p, 'src', 'A.java'), 'class A { int fixed; }\n');
   H.hook(h, 'after-tool', { session_id: 's-plain', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: path.join(p, 'src', 'A.java'), content: 'class A { int fixed; }\n' }, tool_response: { filePath: path.join(p, 'src', 'A.java') }, transcript_path: H.transcript(path.join(h.root, 'plain-a.jsonl'), [H.tr.user('导出报错了')]) });
-  H.ok('核验时改了代码：自动重新打开，自测记录作废', S.sessionAuto(j) === true && !S.readState('change-selftest')[S.normKey(d)], S.readState('change-selftest'));
+  H.ok('核验时改了代码：不再悄悄重开自动，自测记录按代码指纹失效', S.sessionAuto(j) === false && require(path.join(h.kit, 'lib', 'auto-run.js')).changeTested(d) === false, [S.sessionAuto(j), S.readState('change-selftest')]);
 }
 
 H.section('第 85 条：探索没完不让写需求、第一次打勾前要审过（没开自动也一样）');
@@ -187,7 +187,7 @@ H.section('复审 20261112 R1、R2：需求审过那一问只选"自动实施"�
   H.ok('不在流程里：提问框选了"自动实施"也不开', S.sessionAuto(j2) !== true);
 }
 
-H.section('复审 20261112 R3、R4、R7：核验期用 Bash 改了代码、跑审查前重新打开；改说明文档不算；"不用"不关自动；核验期说停关掉自动修');
+H.section('复审 20261112 R3、R4、R7：核验期改了代码、跑审查都不再悄悄重开（第 88 条）；"不用"不关自动；核验期说停把那一问也关掉');
 {
   const h = H.makeHome('a1112-r3', FROM, QUIET);
   const S = require(path.join(h.kit, 'lib', 'session.js'));
@@ -203,11 +203,12 @@ H.section('复审 20261112 R3、R4、R7：核验期用 Bash 改了代码、跑�
   // 改了又改回原样（代码指纹没变）：不算。改别的文件和收工时作废自测的规矩一样，按代码指纹（openspec 文档不算）
   H.write(path.join(p, 'src', 'A.java'), 'class A {}\n');
   H.hook(h, 'after-tool', { session_id: 's-r3', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: path.join(p, 'src', 'A.java'), content: 'class A {}\n' }, tool_response: { filePath: path.join(p, 'src', 'A.java') }, transcript_path: H.transcript(path.join(h.root, 'r3-a.jsonl'), [H.tr.user('看一下 A')]) });
-  H.ok('核验时改了又改回原样（代码指纹没变）：不重新打开自动', S.sessionAuto(j) === false && !!B.taskState(task()).selfTest, B.taskState(task()));
-  // 用 Bash 改了代码（after-tool 看不到），跑审查前重新打开
+  H.ok('核验时改了又改回原样（代码指纹没变）：自动照旧关着，自测记录还在', S.sessionAuto(j) === false && !!B.taskState(task()).selfTest, B.taskState(task()));
+  // 用 Bash 改了代码、跑审查：自动照旧关着（第 88 条起核验期不悄悄重开）
   H.write(path.join(p, 'src', 'A.java'), 'class A { int bashFixed; }\n');
   const review = H.hook(h, 'guard-commit', { session_id: 's-r3', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 'r3-rv', tool_input: { command: 'node "' + path.join(h.kit, 'tools/review.js').replace(/\\/g, '/') + '" run --change c1 --mode code --point change --project "' + p.replace(/\\/g, '/') + '"' }, transcript_path: H.transcript(path.join(h.root, 'r3-b.jsonl'), [H.tr.user('导出的文件名不对')]) });
-  H.ok('核验时 Bash 改了代码、跑审查：自动重新打开，不问用户（以前调错了模块，这条路径没生效）', S.sessionAuto(j) === true && !/没说要审查/.test(H.reasonOf(review)), [S.sessionAuto(j), H.reasonOf(review)]);
+  H.ok('核验时 Bash 改了代码、跑审查：不悄悄重开自动', S.sessionAuto(j) === false, [S.sessionAuto(j), H.reasonOf(review)]);
+  S.setSessionAuto(j, true, '测试：提问框选了自动');
   // "不用"不关自动
   const say = (prompt, n) => H.hook(h, 'task-anchor', { session_id: 's-r3', cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 'r3-s' + n + '.jsonl'), [H.tr.user(prompt)]) });
   say('不用', 1);

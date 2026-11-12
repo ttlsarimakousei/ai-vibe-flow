@@ -5,9 +5,11 @@
  *         说了停、选了不实施、没问就让开工的，用户再让开工、接着做时问一次（flow 记 autoAsk，pre-edit 等它问完再改代码）。
  *         答案由 session-flow.js 的 syncAutoAnswer 认，选项的字样在 session-config.js 的 autoAnswerOf
  *   关    用户说"停""别自动了"（stopByUser：记 autoStopped，下次让接着做时问）；提问框选了人工、先不实施；
- *         全部通过（最后一个 change 的代码审过、全面自测登记过）套件自己关（finish，verify-gate 调）
- *   核验  自己关之后用户核验时报的问题照旧自动修（仓库主人选的"照旧自动修"）：关的时候记 autoFix，核验时改了代码就重新打开（fixResume），
- *         自测结果作废，改→审→测，全部通过再关。用户说了停、别自动了的不再开
+ *         全部通过（最后一个 change 的代码审过、全面自测登记过）套件自己关（finish，verify-gate 调）；
+ *         任务都做完了、审查或自测催过没动、收工时已经没什么可催的，套件也自己关并让模型把情况告诉用户（giveUp，第 88 条：以前催一次就不管了，自动一直开着）
+ *   核验  套件自己关了以后（记 autoFix），用户每报一次问题，改代码前问一次"自动实施 / 实施（每步问我）"（第 88 条，仓库主人 2026-11-12 定的"每次先问"，
+ *         替代同一天早些时候的"照旧自动修"：一改代码就悄悄重开）。选了自动：改→审→自测，全部通过再关；下一次报问题再问，流程重复。
+ *         一个用户回合只问一次（fixAskTurn 记着问过的那一轮）；套件关自动的那一轮不问。用户说了停、别自动了的不问（照旧等他说接着做时问）
  * autoFix 记在哪：大任务记在 state/big-task.json（跨会话，/vk-resume 接回也认），表外的 change 记在会话的流程记录里。
  * 表外的 change（不归哪个大任务）也有全面自测：跑它 design 的验收用例，workflow.js selftest --change 登记，记在 state/change-selftest.json
  */
@@ -30,15 +32,37 @@ function dropChangeTest(dirs) { S.updateState(SELFTEST, (o) => { for (const d of
 /** 这个会话在流程里动过的、目录还在的 change */
 function plainDirs(j) { return S.flowChanges(j).filter((d) => fs.existsSync(d)); }
 
+/** 这一轮是用户哪句话起的（那句话的指纹）；会话记录里找不到这一轮的开头给 '' */
+function turnKey(j) {
+  try {
+    if (!j || !j.transcript_path) return '';
+    const first = S.turnVoices(S.tailEntries(j.transcript_path, 3000000))[0];
+    return first && first.kind !== 'answer' ? S.voiceKey(first) : '';
+  } catch (e) { return ''; }
+}
+
+/** 套件自己关自动：记下之后用户再让改时先问（autoFix），关的这一轮不问 */
+function closeByKit(j, task, why) {
+  S.setSessionAuto(j, false, why);
+  if (task) require('./big-task').setTaskState(task, { auto: false, autoFix: true });
+  const turn = turnKey(j);
+  S.updateState(flowKey(j), (s) => { if (!task) s.autoFix = true; if (turn) s.fixAskTurn = turn; delete s.autoAsk; return s; });
+}
+
 /** 全部通过，套件自己关自动（verify-gate 调）。task 是大任务，没有就是表外的 change */
 function finish(j, task) {
-  S.setSessionAuto(j, false, '全部通过，自动关了');
-  if (task) require('./big-task').setTaskState(task, { auto: false, autoFix: true });
-  else S.updateState(flowKey(j), (s) => { s.autoFix = true; return s; });
+  closeByKit(j, task, '全部通过，自动关了');
   S.hookLog('自动模式 会话 ' + j.session_id + ' 全部通过，套件关了自动');
 }
 
-/** 用户说停、别自动了：关自动，记下来（再让接着做时问一次自动还是人工），核验期的自动修也不再开。返回关掉了什么（开着的自动、核验期的自动修） */
+/** 任务都做完了、what（代码审查没收尾、全面自测没登记）催过没动，收工时已经没什么可催的：关自动（verify-gate 调），不让它一直开着 */
+function giveUp(j, task, what) {
+  closeByKit(j, task, what + '，催过没动，自动关了');
+  S.hookLog('自动模式 会话 ' + j.session_id + ' ' + what + '，催过没动，套件关了自动');
+  try { require('./report').note(j, { kind: 'hand', title: '自动实施没走完就停了：' + what, detail: '收工时催过没有动，自动关了' }); } catch (e) { /* 记不了不影响 */ }
+}
+
+/** 用户说停、别自动了：关自动，记下来（再让接着做时问一次自动还是人工），核验期也不再问。返回关掉了什么（开着的自动、核验期的那一问） */
 function stopByUser(j, why) {
   if (!j || !j.session_id || j.session_id === 'unknown') return false;
   const was = S.sessionAuto(j) === true;
@@ -47,53 +71,64 @@ function stopByUser(j, why) {
   try {
     const B = require('./big-task'); const t = B.forSession(j);
     if (t) { const ts = B.taskState(t); fix = !!ts.autoFix; if (ts.autoFix || ts.auto) B.setTaskState(t, { autoFix: false, auto: false }); }
-  } catch (e) { /* 记不了：核验时改代码可能又自动修 */ }
+  } catch (e) { /* 记不了：核验时改代码可能还会问一次 */ }
   let flowFix = false;
   S.updateState(flowKey(j), (s) => { flowFix = !!s.autoFix; if (was || fix || s.autoFix) s.autoStopped = true; delete s.autoFix; delete s.autoAsk; return s; });
   return was || fix || flowFix;
 }
 
+/** 套件自己关过自动、还没被用户说停：这个会话的流程记录或它在做的大任务上记着 autoFix */
+function fixRecorded(j, st) {
+  if (st.autoFix) return true;
+  try {
+    // 每次改代码都会问到这里：哪个大任务都没记的直接走，不读计划表
+    if (!Object.values(S.readState('big-task')).some((x) => x && x.autoFix)) return false;
+    const B = require('./big-task'); const t = B.forSession(j);
+    return !!(t && B.taskState(t).autoFix);
+  } catch (e) { return false; }
+}
+/** 任务都做完了（大任务到了全面自测、等核验；表外的 change 任务都勾完）：这时提问框里答的自动还是人工，说的是怎么改用户报的问题 */
+function allDone(j) {
+  try {
+    const B = require('./big-task'); const t = B.forSession(j);
+    if (t) return ['selftest', 'verify'].includes(B.phaseFor(j, t).phase);
+    const T = require('./task-types'); const dirs = plainDirs(j).filter((d) => T.tasks(d).length > 0);
+    return dirs.length > 0 && dirs.every((d) => T.automatedLeft(d).length === 0);
+  } catch (e) { return false; }
+}
 /**
- * 核验时改了代码：重新打开自动，自测结果作废（回到全面自测）。
- * checkCode：没看到编辑工具改文件（跑审查、自测命令前调），比一下代码和自测时一不一样
+ * 提问框里答了自动还是人工之后（session-flow.js syncAutoAnswer 调）：答的不是核验期那一问（是开工、接着做、下一个 change 的需求审完那一问），
+ * 新的一趟实施开始了，autoFix 清掉——这一趟选了人工的，中间每一轮改代码不再问；选了自动的，全部通过时会重新记上。
+ * 核验期那一问怎么认：钩子拦下让它问的（wasFix），或者任务都做完了（模型照规范自己先问的，钩子还没来得及拦）
  */
-function fixResume(j, checkCode) {
-  if (!j || !j.session_id || j.session_id === 'unknown' || S.sessionAuto(j) === true) return false;
-  const st = S.flowState(j);
-  if (!st.on || st.autoStopped || st.paused) return false;
-  // 每次改文件都会调：哪儿都没记 autoFix 的直接走，不读计划表
-  if (!st.autoFix && !Object.values(S.readState('big-task')).some((x) => x && x.autoFix)) return false;
-  const B = require('./big-task');
-  const t = B.forSession(j);
-  if (t) {
-    const ts = B.taskState(t);
-    if (!ts.autoFix || !ts.selfTest || B.phaseOf(t).phase !== 'verify') return false;
-    if (checkCode) { let now = ''; try { now = require('./workspace').fingerprint(path.dirname(t.osDir), 'code').hash; } catch (e) { return false; } if (!now || now === ts.selfTest.code) return false; }
-    B.setTaskState(t, { selfTest: null, auto: true });
-  } else {
-    if (!st.autoFix) return false;
-    const dirs = plainDirs(j); const rec = S.readState(SELFTEST);
-    if (!dirs.length || !dirs.every((d) => rec[S.normKey(d)])) return false;
-    if (checkCode && dirs.every(changeTested)) return false;
-    dropChangeTest(dirs);
-  }
-  S.setSessionAuto(j, true, '核验时改了代码，照旧自动修');
-  S.hookLog('自动模式 会话 ' + j.session_id + ' 核验时改了代码，重新打开自动');
-  return true;
+function answered(j, wasFix) {
+  if (wasFix || allDone(j)) return;
+  try { S.updateState(flowKey(j), (s) => { delete s.autoFix; return s; }); } catch (e) { /* 清不了：多问一次 */ }
+  try { const B = require('./big-task'); const t = B.forSession(j); if (t && B.taskState(t).autoFix) B.setTaskState(t, { autoFix: false }); } catch (e) { /* 清不了：多问一次 */ }
 }
 
 // 用户让开工、接着做，自动关着：问一次（第 86 条）。选项的字样 session-config.js 的 autoAnswerOf 认，改了两边一起改
 const ASK_START = '用户让开工了：先用提问框问一次怎么实施，选项写"自动实施""实施（每步问我）"（自动实施的说明写"做完任务→审查→改→复审……最后一个 change 还有全面自测→改→再测再审，全部通过后自动关；中途你说停就停"），用户选了再改代码。';
 const ASK_RESUME = '用户让接着做，自动是用户说停关掉的：先用提问框问一次，选项写"自动接着做""人工接着做"，用户选了再改代码。';
-function askLine(kind) { return kind === 'resume' ? ASK_RESUME : ASK_START; }
+const ASK_FIX = '自动已经关了（全部通过后关的，或者催了几次没动关的），用户又让改：改代码前先用提问框问一次怎么改，选项写"自动实施""实施（每步问我）"（自动实施的说明写"改→审查→自测，全部通过后自动关；中途你说停就停"），用户选了再改代码。只问这一次，不要连着问别的。';
+function askLine(kind) { return kind === 'resume' ? ASK_RESUME : kind === 'fix' ? ASK_FIX : ASK_START; }
 function markAsk(j, kind) { S.updateState(flowKey(j), (s) => { s.autoAsk = kind || 'start'; if (kind === 'resume') delete s.autoStopped; return s; }); }
-/** 用户让开工了、还没问自动还是人工：改代码前先问（pre-edit 调）。返回要说的话，不用等的给 '' */
+/**
+ * 改代码前要不要先问自动还是人工（pre-edit 调）。返回要说的话，不用等的给 ''。
+ *   用户让开工、接着做，还没问过（flow 记着 autoAsk）
+ *   套件自己关了自动之后，用户又让改（核验时报问题）：每个用户回合问一次（第 88 条）
+ */
 function askPending(j) {
   if (!j || !j.session_id || j.session_id === 'unknown') return '';
   S.syncAutoAnswer(j);
-  const st = S.flowState(j);
-  if (!st.on || !st.autoAsk || S.sessionAuto(j) === true) return '';
-  return askLine(st.autoAsk);
+  let st = S.flowState(j);
+  if (!st.on || S.sessionAuto(j) === true) return '';
+  if (!st.autoAsk && !st.autoStopped && !st.paused && fixRecorded(j, st)) {
+    const turn = turnKey(j);
+    // 找不到这一轮的开头（会话记录太长）：分不清是不是新的一轮，不问
+    if (turn && st.fixAskTurn !== turn) { S.updateState(flowKey(j), (s) => { s.autoAsk = 'fix'; s.fixAskTurn = turn; return s; }); st = S.flowState(j); }
+  }
+  return st.autoAsk ? askLine(st.autoAsk) : '';
 }
 
-module.exports = { finish, stopByUser, fixResume, askLine, markAsk, askPending, changeTested, noteChangeTest, dropChangeTest, plainDirs, SELFTEST };
+module.exports = { finish, giveUp, stopByUser, answered, askLine, markAsk, askPending, changeTested, noteChangeTest, dropChangeTest, plainDirs, SELFTEST };

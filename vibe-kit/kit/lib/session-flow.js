@@ -188,7 +188,10 @@ function syncAutoAnswer(j) {
       if (!pick) return '';
       const k = V.voiceKey(pick.v) + ':' + pick.w;
       if (st.autoAnswer === k) return '';
+      const wasFix = st.autoAsk === 'fix';
       updateState(flowKey(j), (s) => { s.autoAnswer = k; delete s.autoAsk; delete s.autoStopped; return s; });
+      // 答的是开工、接着做、下一个 change 那一问：新的一趟实施，核验期"每次先问"的记号清掉（第 88 条，lib/auto-run.js answered）
+      try { require('./auto-run').answered(j, wasFix); } catch (e) { /* 清不了：多问一次 */ }
       setSessionAuto(j, pick.w === 'on', pick.w === 'on' ? '提问框选了自动' : '提问框选了人工或先不实施');
       hookLog('自动模式 会话 ' + sid + (pick.w === 'on' ? ' 提问框选了自动' : ' 提问框选了人工或先不实施'));
       // 记到大任务上当前这个 change：死机后 /vk-resume 接回时，选过的不再问（复审 R6）
@@ -197,9 +200,6 @@ function syncAutoAnswer(j) {
     } catch (e) { return ''; }
   });
 }
-/** 文件最后 n 个字节的文字（读不了给 ''） */
-function tailText(file, n) {
-  let fd = null;
 /**
  * 提问框里选了进流程（第 89 条，2026-11-12）：记成在流程里、写需求那一段。以前只有模型接着调 /opsx:… 的技能才记：
  * 选了探索、模型没调技能、自己读代码探索的，流程一直没记上，下一轮建变更、写提案被拦"用户没说要走 OpenSpec"，要用户再选一遍。
@@ -226,6 +226,9 @@ function syncEntryAnswer(j) {
     } catch (e) { return false; }
   });
 }
+/** 文件最后 n 个字节的文字（读不了给 ''） */
+function tailText(file, n) {
+  let fd = null;
   try {
     fd = fs.openSync(file, 'r'); const size = fs.fstatSync(fd).size; const len = Math.min(size, n);
     const buf = Buffer.alloc(len); fs.readSync(fd, buf, 0, len, size - len); return buf.toString('utf8');
@@ -234,31 +237,46 @@ function syncEntryAnswer(j) {
 
 /** 给钩子用的开关：全自动模式开着、这个会话又不在 OpenSpec 流程里（或者还在写提案那一段），autoMode 按关着算 */
 function readConfigFor(j) {
+  syncEntryAnswer(j);
   syncAutoAnswer(j);
   const c = readConfig(j); c.autoSwitch = c.autoApply || c.autoRequirements;
   // 算流程状态要读任务、算指纹、调 git，出错不能让调用的钩子整道放行（2026-10-17 审核问题 14）：按人工模式算，更严
-  syncEntryAnswer(j);
-  let view; try { view = flowView(j); } catch (e) { hookLog('readConfigFor 算流程状态出错，按人工模式算：' + ((e && e.message) || e)); view = { effective: false, phase: '普通任务' }; }
-  c.autoMode = !!view.effective;
+  let effective = false; try { effective = !!flowView(j).effective; } catch (e) { hookLog('readConfigFor 算流程状态出错，按人工模式算：' + ((e && e.message) || e)); effective = false; }
+  c.autoMode = effective;
   return c;
 }
 
-/** 展示和执行共用结果，需求改变、等待验收或归档后不能显示为自动实施。 */
+/**
+ * 展示和执行共用结果，需求改变、等待验收或归档后不能显示为自动实施。
+ * effective、waiting、awaitingUser 用到才算（#458—#461、#465，2026-11-12）："任务都做完、代码审查都过了"要比每个 change 的审查指纹
+ * （每个 change 每个仓库一条 git diff），以前每个钩子读开关都算一遍——内网那台一条 git 要一两秒，壳子里三个仓库、几个 change，
+ * 一次工具调用前的检查光这一步就 11 秒，12 秒的预算用完整道检查放行。现在只有真要用它的地方才算：
+ *   effective      会话没开自动的直接是 false；开着自动的看 waiting，waiting 里只有"没开会话自动"才问到审查指纹
+ *   awaitingUser   只有收工、用户开口交报告时读
+ */
 function flowView(j) {
   const cfg = readConfig(j); const st = flowState(j); const over = st.on && flowDone(j);
   const scope = st.on && st.stage === 'apply' ? require('./apply-scope').valid(j) : { ok: true };
   const typed = require('./task-types'); const dirs = flowChanges(j).filter((d) => fs.existsSync(d));
   // 用户验收不靠打勾（用户 2026-10-17 定的）：任务全打勾、代码审查都过了，就是等用户按验收用例自测。老变更里没勾的 [用户验收] 不算自动能做的，结果一样
-  const userWait = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code'));
+  let uw; const userWait = () => (uw === undefined ? (uw = st.stage === 'apply' && dirs.length > 0 && dirs.every((d) => typed.automatedLeft(d).length === 0 && require('./flow-policy').allPassed(d, 'code'))) : uw);
   // 会话里开了自动（问题表第 24 条，2026-10-31）：任务做完、等用户验收时照样算自动，用户报的问题自动改、审、测，归档照旧等用户说。
   // 用户改了需求（范围变化）在 apply-scope.valid 里按用户的话重定范围，不退回人工
   let verifying = false;
   if (st.on && st.stage === 'apply') { try { const B = require('./big-task'); const t = B.forSession(j); verifying = !!t && !t.legacy && B.phaseOf(t).phase === 'verify'; } catch (e) { verifying = false; } }
   // st.waiting 里的 scope 是内部值（模型自己改了需求、等用户重新说开工），不能原样给人看（第 76 条：状态栏写着"等你：scope"）
-  const waiting = (st.waiting === 'scope' ? '需求文档被改过，说"开工"或 /vk-go 接着做' : st.waiting) || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : verifying ? '等你核验' : userWait && !cfg.autoSession ? '等用户自测验收' : '');
+  // 等人工核验时会话自动是关着的（全部通过套件自己关）。开着的只有一种：核验时用户报了问题、那一问选了自动实施（第 88 条），这时照样算自动：
+  // 改、审、自测都不用再问，全部通过收工时再关
+  let w; const waiting = () => (w === undefined ? (w = (st.waiting === 'scope' ? '需求文档被改过，说"开工"或 /vk-go 接着做' : st.waiting) || (st.paused ? '你说了停，说句话接着做' : !scope.ok ? '范围变化，等用户确认' : verifying && cfg.autoSession !== true ? '等你核验' : !cfg.autoSession && userWait() ? '等用户自测验收' : '')) : w);
   // 需求阶段没有自动模式（第 85 条，仓库主人 2026-11-12 定的）：写需求那一段两种模式一样，一次写到 tasks、写完强制审修，有疑问就问。自动只在做任务那一段算
+  const base = st.on === true && !over && !(st.aside && cfg.autoSession !== true) && st.stage === 'apply' && !!cfg.autoApply;
   // awaitingUser：Apply 能自动做的都做完、审过，只剩用户验收。配置开关开着时自动不再生效，但收工还要交这一轮的报告；会话开关开着时照样自动
-  return { session: cfg.autoSession === true, switchOn: !!cfg.autoApply, effective: !!(st.on === true && !over && !waiting && !(st.aside && cfg.autoSession !== true) && st.stage === 'apply' && cfg.autoApply), phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', waiting, archived: !!over, awaitingUser: !!(userWait && cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting) };
+  return {
+    session: cfg.autoSession === true, switchOn: !!cfg.autoApply, phase: over || !st.on ? '普通任务' : st.stage === 'apply' ? '实施' : '需求与提案', archived: !!over,
+    get effective() { return !!(base && !waiting()); },
+    get waiting() { return waiting(); },
+    get awaitingUser() { return !!(cfg.autoApply && st.on === true && !over && scope.ok && !st.waiting && userWait()); },
+  };
 }
 
 /**

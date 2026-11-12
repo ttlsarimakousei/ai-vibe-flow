@@ -49,12 +49,7 @@ function handle(j) {
     try {
       if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(String(j.tool_name || '')) && successful(j) && S.flowState(j).on) require('../lib/flow-policy').noteEdit(j, (j.tool_input && (j.tool_input.file_path || j.tool_input.notebook_path)) || '');
     } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' && e.code !== 'VIBE_HOOK_BUDGET') require('../lib/feedback').recordHookError('after-tool 记改过的文件', j, e); }
-    // 全部通过、自动关了以后，用户核验时报的问题改了代码：照旧自动修（第 86 条，仓库主人选的"照旧自动修"），重新打开自动、自测结果作废。
-    // 比代码指纹（复审 20261112 R4）：改回原样的不算；算哪些文件和收工时作废自测一样（workspace.fingerprint 的 code，openspec 文档不算）
-    try {
-      const f = String((j.tool_input && (j.tool_input.file_path || j.tool_input.notebook_path)) || '');
-      if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(String(j.tool_name || '')) && successful(j) && f && !/(^|[\\/])(\.vibe|openspec|\.claude|node_modules)[\\/]/.test(f)) require('../lib/auto-run').fixResume(j, true);
-    } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' && e.code !== 'VIBE_HOOK_BUDGET') require('../lib/feedback').recordHookError('after-tool 核验期自动修', j, e); }
+    // 全部通过、自动关了以后，用户核验时报了问题：改代码前先问（pre-edit 的 askPending，第 88 条，2026-11-12 起不再一改代码就悄悄重开自动）
     // 改了 tasks.md：这个大任务里全勾完的 change 记成做完过（第 81、84 条：之后再补任务就是回改，不抢当前 change）
     try {
       const tf = String((j.tool_input && j.tool_input.file_path) || '');

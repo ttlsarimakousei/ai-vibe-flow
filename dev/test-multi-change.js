@@ -187,10 +187,11 @@ H.section('全面自测和人工核验放到最后');
   const okRun = tool(proj, 'selftest', '--task', TASK, '--results', f);
   H.ok('登记了', /"ok": true/.test(okRun.out), okRun);
   H.ok('进人工核验', B && B.phaseOf(B.named(proj, TASK)).phase === 'verify');
-  H.ok('状态写等你核验，自动也停', S.flowView(j).waiting === '等你核验' && S.flowView(j).effective === false, S.flowView(j));
   tool(proj, 'suggest', '--task', TASK, '--text', '导出时加个进度条');
   const v = H.reasonOf(stop(j));
   H.ok('收工：交给用户，列范围外建议', /人工核验/.test(v) && /范围外建议/.test(v) && /1 条/.test(v), v);
+  // 20261113 起：等核验时会话自动开着的只有"核验时那一问选了自动实施"，那时照样算自动；"自动也停"由收工时套件关自动做到
+  H.ok('收工之后：自动关了，状态写等你核验', S.sessionAuto(j) !== true && S.flowView(j).waiting === '等你核验' && S.flowView(j).effective === false, S.flowView(j));
   H.write(path.join(proj, 'src', 'A.java'), 'class A { int x; }\n');
   stop(j);
   H.ok('改过代码：退回全面自测', B.phaseOf(B.named(proj, TASK)).phase === 'selftest', B.phaseOf(B.named(proj, TASK)));

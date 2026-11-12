@@ -367,17 +367,35 @@ async function leftoverTodo(j, entries, cfg, lastSaid, changes, start, notices) 
 }
 
 /**
+ * 任务都做完了、what（代码审查没收尾、全面自测没登记）催过没动，这次收工已经没什么可催的：关自动，让模型把情况告诉用户（第 88 条，2026-11-12）。
+ * 以前催一次（审出问题的催 3 次）就不管了：自动一直开着，用户以为还在跑。只在这一轮自动真的在生效时关（等用户确认范围、说了停的不算）
+ */
+function closeIdle(j, cfg, task, what) {
+  if (!cfg.autoMode) return [];
+  try { require('../lib/auto-run').giveUp(j, task, what); } catch (e) { return []; }
+  return ['自动实施这一趟没走完：' + what + '，催过了没有动，自动关了。现在停下，把情况原样告诉用户：做到哪一步、' + what + '是因为什么（命令的报错原样给）、还差什么。用户再让改时会先问一次自动还是每步问。'];
+}
+/** 代码审查没收尾、这次收工审查那边什么都没催（催够了）、也没有在跑的审查：没人推了 */
+function reviewIdle(j, cfg, task, dirs, reviewAsked) {
+  if (cfg.autoSession !== true || reviewAsked) return [];
+  const Rr = require('../lib/review-runner');
+  if (dirs.some((d) => Rr.inFlight(d, 'code'))) return [];
+  return closeIdle(j, cfg, task, '代码审查没收尾（' + dirs.map((d) => path.basename(d)).join('、') + '）');
+}
+/**
  * 表外的 change（不归哪个大任务）开着自动做完了（第 86 条，2026-11-12）：代码审过之后自测（它 design 的验收用例），
  * workflow.js selftest --change 登记，全过了套件关自动、等用户核验。没开自动的照旧等用户自测验收
  */
-function plainNextTodo(j, cfg, policy) {
+function plainNextTodo(j, cfg, policy, reviewAsked) {
   if (cfg.autoSession !== true) return [];
   const AR = require('../lib/auto-run'); const T = require('../lib/task-types');
   const dirs = AR.plainDirs(j).filter((d) => T.tasks(d).length > 0);
   if (!dirs.length) return [];
-  // 任务没做完、代码审查没收尾的不往下走（审查 stop() 在催）
+  // 任务没做完的不往下走（接着做任务）
   if (dirs.some((d) => !changeStarted(d) || T.automatedLeft(d).length > 0)) return [];
-  if (dirs.some((d) => policy.points(d, 'code').some((p) => !policy.settled(d, p) && !policy.halted(d, p)))) return [];
+  // 代码审查没收尾的不往下走：审查 stop() 在催；它催够了就关自动
+  const unreviewed = dirs.filter((d) => policy.points(d, 'code').some((p) => !policy.settled(d, p) && !policy.halted(d, p)));
+  if (unreviewed.length) return reviewIdle(j, cfg, null, unreviewed, reviewAsked);
   const left = dirs.filter((d) => !AR.changeTested(d));
   if (left.length) {
     let code = ''; try { code = require('../lib/workspace').fingerprint(path.resolve(left[0], '../../..'), 'code').hash; } catch (e) { code = ''; }
@@ -385,10 +403,12 @@ function plainNextTodo(j, cfg, policy) {
     // 每个 change 各带自己的项目目录（复审 20261112 R8：几个 change 在不同子项目时，只写第一个的对不上）
     const cmds = left.map((d) => 'node "' + path.join(KIT_DIR, 'tools', 'workflow.js') + '" selftest --change ' + path.basename(d) + ' --results <文件> --project ' + path.resolve(d, '../../..')).join('；');
     const how = names.join('、') + ' 的任务做完、代码审过了：自测。跑 design.md "验收用例"里 Claude 能跑的，结果写成 JSON（[{"case":"AC-01","result":"pass","note":"实际结果"}]，要人看的 result 写 manual），每个 change 登记一次：' + cmds + '。有没过的改完记进 revisions.md，审过再测。';
-    return [policy.oncePrompt(j, 'selftest-change|' + names.join(','), code || 'x', how)].filter(Boolean);
+    // 同一份代码最多催 3 次（第 88 条：以前只说一次，它跑了几条用例没登记就收工，自动一直开着）；还不登记就关自动
+    const m = policy.upTo(j, 'selftest-change|' + names.join(','), code || 'x', 3, how);
+    return m ? [m] : closeIdle(j, cfg, null, '自测没登记（' + names.join('、') + '）');
   }
   AR.finish(j, null);
-  return ['全部通过（代码审过、自测登记过），自动关了。现在停下等用户核验：把测试清单、用例的实际结果、留给人工的用例交给用户；用户核验时报的问题照旧自动改、审、测，通过后再停。用户说归档才归档。'];
+  return ['全部通过（代码审过、自测登记过），自动关了。现在停下等用户核验：把测试清单、用例的实际结果、留给人工的用例在回复里交给用户（不要为了交代在项目里新建文件）；用户核验时再报问题，改之前会先问一次自动实施还是每步问。用户说归档才归档。'];
 }
 /**
  * 大任务走到哪、下一步干什么（用户 2026-11-03 定的）：一个 change 做完先记落地偏差，开着自动接下一个，没开用提问框问；
@@ -400,7 +420,7 @@ function nextStepTodo(j, cfg, turnId, policy, reviewAsked) {
   const B = require('../lib/big-task');
   B.dropDeadCurrent(j);
   const task = B.forSession(j);
-  if (!task) return plainNextTodo(j, cfg, policy);
+  if (!task) return plainNextTodo(j, cfg, policy, reviewAsked);
   try { B.noteAuto(j, !!cfg.autoSession); } catch (e) { /* 记不了：接回时不恢复自动 */ }
   const root = path.dirname(task.osDir);
   const state = B.taskState(task);
@@ -413,7 +433,13 @@ function nextStepTodo(j, cfg, turnId, policy, reviewAsked) {
   const open = fresh.changes.filter((c) => c.exists && !c.archived);
   // 代码审查还没收尾的不往下走：stop() 在催。人工模式用户选了不审的（这次收工没在问、这一轮没要求审、也没开过审查）接着往下，放弃不留待办（第 57、58 条）
   const reviewOpen = (c) => !policy.oldDone(j, c.dir) && policy.points(c.dir, 'code').some((p) => !policy.settled(c.dir, p) && !policy.halted(c.dir, p) && (cfg.autoMode || reviewAsked || policy.explicit(j, 'review') || !!policy.record(c.dir, p).status));
-  if (open.some((c) => c.total && !c.todo && reviewOpen(c))) return [];
+  // 任务都做完了（到了全面自测、等核验那一步）、stop() 催够了（同一个状态 3 次）、也没有在跑的审查：没人推了，关自动告诉用户（第 88 条）。
+  // 只看这个会话在做的 change（stop() 只催它们）；还有任务没做完的照旧不动
+  const unreviewed = open.filter((c) => c.total && !c.todo && reviewOpen(c));
+  if (unreviewed.length) {
+    const mine = unreviewed.filter((c) => flowChanges(j).includes(normKey(c.dir))).map((c) => c.dir);
+    return mine.length && (ph.phase === 'selftest' || ph.phase === 'verify') ? reviewIdle(j, cfg, fresh, mine, reviewAsked) : [];
+  }
   if (ph.phase === 'plan' && st.stage === 'apply') {
     // 开工了、第一项还没勾的（phaseOf 也算 plan）不是接下一个（复审 20261104 R1）：这个 change 还没写任务，或者前一个是这次开工之后才做完的，才接
     const i = fresh.changes.findIndex((c) => c.name === ph.change);
@@ -435,14 +461,23 @@ function nextStepTodo(j, cfg, turnId, policy, reviewAsked) {
     if (cfg.autoSession === true) { try { codeNow = require('../lib/workspace').fingerprint(root, 'code').hash; } catch (e) { codeNow = ''; } }
     const sig = 'selftest:' + fresh.changes.map((c) => c.name + c.done).join() + (codeNow ? ':' + codeNow : '');
     const how = '所有 change 的任务都做完了：全面自测。跑所有 design.md "验收用例"和探索记录"整体验收用例"里 Claude 能跑的，把结果写成 JSON（[{"case":"AC-01","result":"pass","note":"实际结果"}]，要人看的 result 写 manual），跑 node "' + path.join(KIT_DIR, 'tools', 'workflow.js') + '" selftest --task ' + fresh.name + ' --results <文件> --project ' + root + ' 登记。有问题改完记进对应 change 的 revisions.md 再复验。';
-    return [policy.oncePrompt(j, 'selftest|' + fresh.name, sig, cfg.autoSession === true ? how : '所有 change 的任务都做完了：用提问框问用户要不要全面自测（选项写"全面自测""不用"）。选全面自测就照这个做：' + how)].filter(Boolean);
+    // 开着自动：同一份代码最多催 3 次（第 88 条：以前只说一次，它跑了几条用例没登记就收工，自动一直开着）；还不登记就关自动、让它把情况告诉用户
+    if (cfg.autoSession === true) {
+      const m = policy.upTo(j, 'selftest|' + fresh.name, sig, 3, how);
+      if (m) return [m];
+      const closed = closeIdle(j, cfg, fresh, '全面自测没登记');
+      // 关了之后不再用人工的问法接着问"要不要全面自测"：情况已经让它告诉用户了，等用户说。人工那一问的记号不带代码指纹，按它记成说过了
+      if (closed.length) policy.oncePrompt(j, 'selftest|' + fresh.name, 'selftest:' + fresh.changes.map((c) => c.name + c.done).join(), '-');
+      return closed;
+    }
+    return [policy.oncePrompt(j, 'selftest|' + fresh.name, sig, '所有 change 的任务都做完了：用提问框问用户要不要全面自测（选项写"全面自测""不用"）。选全面自测就照这个做：' + how)].filter(Boolean);
   }
   if (ph.phase === 'verify') {
     const sug = B.suggestions(fresh);
-    // 全部通过（代码都审过、全面自测登记过）：套件关自动，让用户自己核验（第 86 条）。核验时报的问题照旧自动修（auto-run.js fixResume）
+    // 全部通过（代码都审过、全面自测登记过）：套件关自动，让用户自己核验（第 86 条）。核验时用户再报问题，改之前先问一次（第 88 条，auto-run.js askPending）
     let closed = '';
-    if (cfg.autoSession === true) { try { require('../lib/auto-run').finish(j, fresh); closed = '全部通过，自动关了（用户核验时报的问题照旧自动改、审、测，通过后再停）。'; } catch (e) { closed = ''; } }
-    return [policy.oncePrompt(j, 'verify|' + fresh.name, 'verify:' + (B.taskState(fresh).selfTest || {}).at, closed + '全面自测过了，现在停下等人工核验：把测试清单、用例的实际结果、留给人工的用例' + (sug.length ? '，和范围外建议（' + B.suggestFile(fresh) + '，共 ' + sug.length + ' 条，没做，用户要哪条再走需求）' : '') + '交给用户。用户发现问题就改，记进对应 change 的 revisions.md 再复验；用户说归档才归档，先跑 workflow.js archive-check，按表的顺序。')].filter(Boolean);
+    if (cfg.autoSession === true) { try { require('../lib/auto-run').finish(j, fresh); closed = '全部通过，自动关了（用户核验时再报问题，改之前会先问一次自动实施还是每步问）。'; } catch (e) { closed = ''; } }
+    return [policy.oncePrompt(j, 'verify|' + fresh.name, 'verify:' + (B.taskState(fresh).selfTest || {}).at, closed + '全面自测过了，现在停下等人工核验：在回复里（不要为了交代在项目里新建文件）把测试清单、用例的实际结果、留给人工的用例' + (sug.length ? '，和范围外建议（' + B.suggestFile(fresh) + '，共 ' + sug.length + ' 条，没做，用户要哪条再走需求）' : '') + '交给用户。用户发现问题就改，记进对应 change 的 revisions.md 再复验；用户说归档才归档，先跑 workflow.js archive-check，按表的顺序。')].filter(Boolean);
   }
   return [];
 }
