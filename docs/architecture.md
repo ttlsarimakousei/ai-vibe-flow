@@ -37,6 +37,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 文件 | 管什么 |
 |---|---|
 | `session.js` | 公共入口：开关与封条、会话记录、变更、壳子、审查记账、阶段展示、真人动作和压缩窗口。状态锁、调用缓存、意图与范围指纹拆到专用模块，保持旧调用方接口 |
+| `auto-run.js` | 自动实施这一趟（第 85—87 条，2026-11-12）：用户说停关自动（`stopByUser`）、全部通过套件关自动（`finish`，verify-gate 调）、核验时改了代码重新打开（`fixResume`，after-tool、审查自测命令前调）、让开工了先问自动还是人工（`markAsk`、`askPending`，task-anchor 记、pre-edit 等）；表外 change 的自测记录 `state/change-selftest.json`（跨会话） |
 | `plan-link.js` | 哪些 change 可能是一件事（第 61、62 条）：名字前缀、文档互相提到、任务改同一批文件。只给线索，问过的记在 `state/plan-link.json` |
 | `flow-policy.js` | 两阶段资格、审查点（`points` 必审：整套文档 `tasks`、整个 change `change`；`reviewable` 加上用户点名才审的单份文档和组）、轮数与关联指纹、人工 Ask 去重、定稿后的 apply 衔接 |
 | `openspec.js` | 套件自带的 OpenSpec（`kit/openspec/`，2026-10-17 集成）：能不能用（Node 版本）、把命令里的 `openspec` 改成调用自带的那份、项目没初始化时 `init --tools none`、安装时生成用户级 `/opsx:*` 命令和技能 |
@@ -90,7 +91,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 |---|---|
 | 开关 | `~/.claude/vibe-kit/config.json`（放松保护的三个开关另有封条 `state/config-seal.json`） |
 | 本机环境（JDK、Maven、Tomcat） | `~/.claude/vibe-kit/local.json`，sync 后生成到全局约定的"本机环境"一节 |
-| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`（在不在流程里、写提案还是做任务；`current` 是用户用 /vk-resume <变更名> 切到的 change，`big-task.phaseFor` 优先用它）、`<会话>-auto-switch.json`（这个会话的自动模式开没开，用户敲 /vk-auto 时开口钩子写，2026-10-31 起替代配置里的两个自动开关）、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里，可以按时间清的固定名字在 `DISPOSABLE_STATE` 里。代码里每个固定名字都要落在这两份之一（`dev/test-auto-mode-kept.js` 扫代码查）：2026-10-30 以前迁移标记 `defaults-1017-migration` 两边都不在，3 天后被删，之后每次更新都把用户的开关改回默认 |
+| 小状态 | `~/.claude/vibe-kit/state/<名字>.json`。按会话的（`<会话>.json`、`<会话>-flow.json`（在不在流程里、写提案还是做任务；`current` 是用户用 /vk-resume <变更名> 切到的 change，`big-task.phaseFor` 优先用它）、`<会话>-auto-switch.json`（这个会话的自动实施开没开：提问框选了"自动实施""自动接着做"时 `session-flow.syncAutoAnswer` 写，说停、全部通过时 `auto-run.js` 关；2026-11-12 起 /vk-auto 删了）；`-flow.json` 里和自动有关的几项：`autoAnswer` 认过的那个答案、`autoAsk` 用户让开工了等模型问自动还是人工、`autoStopped` 用户说停关的、`autoFix` 表外的 change 全部通过后核验时自动修、`<会话>-report.json`……）过几天自动删；跨会话的名字在 `session.js` 的 `GLOBAL_STATE` 里，可以按时间清的固定名字在 `DISPOSABLE_STATE` 里。代码里每个固定名字都要落在这两份之一（`dev/test-auto-mode-kept.js` 扫代码查）：2026-10-30 以前迁移标记 `defaults-1017-migration` 两边都不在，3 天后被删，之后每次更新都把用户的开关改回默认 |
 | 钩子流水账 | `state/hooks.log`（出问题先看它） |
 | 问题反馈 | `~/.claude/vibe-kit/feedback/`（装新版、卸载都不删），对应的议题记在 `feedback/issues.json` |
 | 安装清单 | `~/.claude/vibe-kit/installed.json`：套件往 settings.json 里加了什么，卸载时只收回这些 |
