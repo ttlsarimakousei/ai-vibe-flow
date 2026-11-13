@@ -388,6 +388,9 @@ function mergeSettings(s, remove, hooksOnly) {
     PostToolUseFailure: [{ matcher: 'Bash|PowerShell', hooks: [fast('after-tool')] }],
     // 收工检查的本机预算是 40 秒（lib/session-out.js 的 BUDGET_MS）：写明等 120 秒，不靠 Claude Code 的默认值
     Stop: [{ hooks: [Object.assign(hook('verify-gate.js'), { timeout: 120 })] }],
+    // 自动实施时提问框、权限确认框没人回，等够时间替用户收掉（问题表第 90 条，hooks/ask-timeout.js）。它本来就是要等的：
+    // 最长能配 120 分钟，写明的超时要比这长。命令钩子默认只等 600 秒，到点被结束、输出丢掉，框就一直挂着。不写 matcher：所有工具的确认框都管
+    PermissionRequest: [{ hooks: [Object.assign(hook('ask-timeout.js'), { timeout: 7500 })] }],
   };
   // 钩子：先把自己以前加的摘掉（按单个钩子摘，不连累同一组里别人的钩子；命令方式、HTTP 方式的都认），再加新的。重复安装不会越加越多
   s.hooks = s.hooks || {};

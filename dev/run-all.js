@@ -48,6 +48,7 @@ suites.unshift(...['workflow', 'review', 'push', 'diagnostics', 'feedback', 'dec
 suites.unshift(['提案审查结果有效性', 'test-proposal-review-state.js', []]);
 suites.unshift(['ttls- 改成 vk-', 'test-vk-names.js', []]);
 suites.unshift(['第 88、89 条和议题 #458—#467 核验期先问、选探索、壳子证据', 'test-feedback1113.js', []]);
+suites.unshift(['第 90 条 自动实施时询问没人回替用户收掉', 'test-feedback1113-2.js', []]);
 suites.unshift(['第 85—87 条 需求一次写完强制审修、自动只管实施', 'test-auto-1112.js', []], ['第 77—84 条 审查范围、死机、多 change 回改', 'test-feedback1111.js', []], ['第 76 条 中途改需求', 'test-feedback1110.js', []], ['第 75 条 启动和账号', 'test-feedback1109-login.js', []], ['20261109 钩子', 'test-feedback1109-hooks.js', []], ['20261109 审查', 'test-feedback1109-review.js', []], ['审查 claude -p', 'test-review-cli.js', []], ['第 59—63 条', 'test-feedback1105.js', []], ['审查时机', 'test-review-timing.js', []], ['大任务', 'test-big-task.js', []], ['进流程和流程状态', 'test-flow-entry.js', []], ['接回 /vk-resume', 'test-vk-resume.js', []], ['一个大任务多个 change', 'test-multi-change.js', []], ['审查全部用子代理', 'test-review-flow.js', []], ['收回模型路由', 'test-router-retire.js', []], ['配置页用时才起', 'test-config-page.js', []], ['MCP 工具的令牌保护', 'test-guard-mcp.js', []], ['状态栏步骤条', 'test-statusline-bar.js', []], ['删干净了没有', 'test-no-leftovers.js', []], ['历史 plan.md 和切 change', 'test-old-plan.js', []]);
 suites.unshift(...['apply', 'stop', 'review-scope', 'review-command', 'budget', 'output', 'push'].map((name) => ['1024 反馈 ' + name, 'test-feedback1024-' + name + '.js', []]));
 suites.push(['发版保护（尝鲜组、固定和跳过）', 'test-update-canary.js', ['18755']]);

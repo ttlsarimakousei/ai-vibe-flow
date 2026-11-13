@@ -60,6 +60,8 @@ const FIELDS = [
   { name: 'usageReport', type: 'enum', def: 'on', values: ['on', 'off'], page: 'remote', doc: '使用情况上报（开 / 关）', since: '1001', defText: '开' },
   { name: 'perfReport', type: 'enum', def: 'on', values: ['on', 'local', 'off'], page: 'remote', doc: '耗时异常上报 perfReport（上报 / 只记本机 / 关）', since: '2026-10-31 那一版', defText: '上报' },
   { name: 'reviewBudgetSeconds', type: 'int', def: 300, min: 10, max: 1800, page: 'kit', doc: '审查预期用时 reviewBudgetSeconds（1028 这一版起不截断，超了自动记问题反馈；1113 这一版起扣掉模型那头的时间再比；以前叫"审查总预算"）', since: '1017', defText: '300 秒' },
+  // 问题表第 90 条（仓库主人 2026-11-13 定的）：自动实施时提问框、权限确认框发出后没人回，等这么多分钟替他收掉（hooks/ask-timeout.js）。0 = 一直等
+  { name: 'askTimeoutMin', type: 'int', def: 10, min: 1, max: 120, zero: true, page: 'kit', doc: '自动实施时询问没人回，等多久替你做主 askTimeoutMin（分钟；0 是一直等）', since: '20261113.1001 之后那一版', defText: '10 分钟' },
 ];
 // 配置页上有、文件里不存的两项（J2）：说明写在手册里，取值在这里
 const VIEW_FIELDS = [
