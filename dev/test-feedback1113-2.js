@@ -78,6 +78,10 @@ const WAIT = 1500;
   const r3 = await run({ tool_name: 'Bash', tool_input: push, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Bash', push, 'toolu_b2')]) });
   H.ok('推送：到点按不允许，留给用户', (decision(r3) || {}).behavior === 'deny' && /留给用户/.test((decision(r3) || {}).message || ''), r3.out);
   H.ok('推送记进"留给你做的"', items('hand').some((x) => /git push origin main/.test(x.title)), R.stateOf(j).items);
+  const dbc = { command: 'python "$HOME/.claude/skills/vk-db-crud/scripts/db.py" --conn dev exec --sql "DELETE FROM T" --ack DELETE-T-rows-unknown-1234abcd', description: '删' };
+  const rdb = await run({ tool_name: 'Bash', tool_input: dbc, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Bash', dbc, 'toolu_db1')]) });
+  H.ok('查库、redis 的命令（复审 R1）：到点按不允许，不替用户放行', (decision(rdb) || {}).behavior === 'deny' && /不替用户放行/.test((decision(rdb) || {}).message || ''), rdb.out);
+  H.ok('查库的命令记进"留给你做的"', items('hand').some((x) => /查库、redis 的命令/.test(x.title) && /db\.py/.test(x.title)), R.stateOf(j).items);
   const ed = { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' };
   const r4 = await run({ tool_name: 'Edit', tool_input: ed, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Edit', ed, 'toolu_e1')]) });
   H.ok('改文件的确认框：到点按允许', (decision(r4) || {}).behavior === 'allow', r4.out);
@@ -94,6 +98,13 @@ const WAIT = 1500;
   // 同一个问题前面问过一次、有结果，这一次还没结果：认最后一次
   const r8 = await run({ tool_name: 'AskUserQuestion', tool_input: Q, transcript_path: tp([H.tr.user('做导出'), H.tr.ran('AskUserQuestion', Q, '答过'), H.tr.say('再问一次'), H.tr.call('AskUserQuestion', Q, 'toolu_ask8')]) });
   H.ok('同一个问题前面答过、这一次没答：照样到点收掉', (decision(r8) || {}).behavior === 'deny', r8.out);
+  // 会话记录里找不到这次调用（复审 R3）
+  const trNone = tp([H.tr.user('做导出'), H.tr.say('我先看看')]);
+  const r8b = await run({ tool_name: 'AskUserQuestion', tool_input: Q, transcript_path: trNone }, { VIBE_KIT_ASK_TIMEOUT_MS: '6000' }, () => setTimeout(() => fs.appendFileSync(trNone, JSON.stringify(Object.assign(H.tr.user('不用问了'), { timestamp: new Date().toISOString() })) + '\n'), 1500));
+  H.ok('找不到这次调用、用户另说了一句：退出，不出决定', !r8b.out && r8b.ms < 5000, [r8b.out, r8b.ms]);
+  const before = items('ask').length;
+  const r8c = await run({ tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '找不到的那一问', options: [{ label: 'A' }] }] }, transcript_path: tp([H.tr.user('做导出'), H.tr.say('我先看看')]) });
+  H.ok('找不到这次调用、也没有新的话：到点照样收掉，报告里写明可能已经处理过', (decision(r8c) || {}).behavior === 'deny' && items('ask').length === before + 1 && /会话记录里没找到这一问/.test(items('ask').slice(-1)[0].detail), [r8c.out, items('ask').slice(-1)]);
 
   H.section('不管的：没开自动、等待设成 0、ExitPlanMode');
   const r9 = await run({ tool_name: 'ExitPlanMode', tool_input: { plan: 'x' }, transcript_path: tp([H.tr.user('做导出'), H.tr.call('ExitPlanMode', { plan: 'x' }, 'toolu_p1')]) });
