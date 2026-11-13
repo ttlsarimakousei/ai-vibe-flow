@@ -160,17 +160,22 @@ const SECRET = 'r3dis-秘密-口令';
   const nc = rd(['ping'], { cwd: empty }).j;
   H.ok('没有配置：说清缺什么、写在哪', !nc.ok && nc.code === 'NO_CONFIG' && /\.vibe[\\/]+redis\.json/.test(nc.error), nc);
 
-  H.section('全自动模式（用户不在）：不改数据');
+  H.section('全自动模式（用户不在）：set、删单个 key 照做，批量删留给用户（问题表第 91 条）');
   conf({ dev: { host: '127.0.0.1', port: PORT + 1 } });
   // 会话开着自动、在做任务：钩子留的条子说 auto（2026-10-31 起配置里的 autoMode 不算了，复审 V5）
   const ticket = (auto) => H.write(path.join(h.kit, 'state', 'tool-flow.json'), JSON.stringify({ byCwd: { [path.resolve(proj).split(path.sep).join('/').toLowerCase()]: { auto, at: Date.now(), sid: 'test' } } }));
   ticket(true);
-  const s2 = rd(['set', 'str:1', '改了']);
-  H.ok('set 被拦下，退出码 3，说了怎么办', s2.code === 3 && s2.j.code === 'BLOCKED' && /留给用户/.test(s2.j.error), s2.out);
-  H.ok('del 被拦下', rd(['del', 'str:1']).code === 3);
-  H.ok('读照常，数据没变', rd(['get', 'str:1']).j.data === '你好');
+  const s2 = rd(['set', 'auto:1', '改了']);
+  H.ok('set 照做（以前全自动下一律不做）', s2.code === 0 && s2.j.ok && rd(['get', 'auto:1']).j.data === '改了', s2.out);
+  rd(['set', 'auto:2', '2']);
+  const d2 = rd(['del', 'auto:1', 'auto:2']);
+  H.ok('一次删两个 key：拦下，退出码 3，说了留给用户', d2.code === 3 && d2.j.code === 'BLOCKED' && /一次删 2 个 key/.test(d2.j.error) && /留给用户/.test(d2.j.error), d2.out);
+  H.ok('拦下的没删', rd(['get', 'auto:1']).j.data === '改了' && rd(['get', 'auto:2']).j.data === '2');
+  const d1 = rd(['del', 'auto:1']);
+  H.ok('删单个 key：照做', d1.code === 0 && d1.j.deleted === 1, d1.out);
+  H.ok('读照常', rd(['get', 'str:1']).j.data === '你好');
   ticket(false);
-  H.ok('关了全自动：能写', rd(['set', 'tmp:1', '1']).j.ok && rd(['del', 'tmp:1']).j.deleted === 1);
+  H.ok('关了全自动：批量删照做', rd(['set', 'tmp:1', '1']).j.ok && rd(['del', 'tmp:1', 'auto:2']).j.deleted === 2);
 
   H.section('用量：只记工具的事');
   const all = H.read(path.join(h.kit, 'state', 'tool-usage.jsonl')) || '';

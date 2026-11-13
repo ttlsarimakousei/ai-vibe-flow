@@ -22,10 +22,11 @@
  * 错误码：NO_CONFIG | NO_CONN | CONN_REFUSED | NET_UNREACHABLE | HOST_UNRESOLVED | CONN_LOST | TIMEOUT | CMD_TIMEOUT
  *        | AUTH_FAILED | REDIS_ERROR | UNSUPPORTED_TYPE | UNSUPPORTED_MODE | BLOCKED | BAD_ARGS | UNKNOWN
  *
- * 退出码：0 做完了（含 ok:false 的业务失败）；1 参数错误、内部异常；3 被拦下（全自动模式下的写操作）
+ * 退出码：0 做完了（含 ok:false 的业务失败）；1 参数错误、内部异常；3 被拦下（全自动模式下一次删几个 key）
  *
  * 安全：不提供 FLUSHALL / FLUSHDB / CONFIG 这类清库、改配置的子命令（脚本做不到）。
- *      全自动模式（用户不在：开关开着、这个会话又在走 OpenSpec 流程）下 set、del 不做，留给用户。
+ *      全自动模式（用户不在：这个会话选了自动实施、在做任务）下一次删几个 key 不做，留给用户；set、删单个 key 照做
+ *      （问题表第 91 条，仓库主人 2026-11-13 定的：和查库一起放开。以前 set、del 一律不做）。
  *      一条命令在一个连接里做完：先认证、切库，确认成功了才发后面的命令。
  *      （以前是一起发出去：切库失败的时候，写命令照样在 0 号库里执行了。）
  */
@@ -589,8 +590,8 @@ async function main() {
 
   let session = null;
   try {
-    // 全自动模式（用户不在）：改数据的事留给用户
-    if (spec.write && autoMode()) throw Object.assign(mkErr('BLOCKED', '全自动模式（用户不在）：' + name + ' 会改 redis 里的数据，不做。在那项任务后面标"（留给用户：要改 redis 的数据）"，接着做别的。'), { exit: 3 });
+    // 全自动模式（用户不在）：一次删几个 key 要人点头，留给用户；set、删单个 key 照做（问题表第 91 条）
+    if (name === 'del' && args.length > 1 && autoMode()) throw Object.assign(mkErr('BLOCKED', '全自动模式（用户不在）：一次删 ' + args.length + ' 个 key 要人点头，不做。在那项任务后面标"（留给用户：要改 redis 的数据）"，接着做别的。'), { exit: 3 });
     const c = pickConn(all, opt.conn);
     if (!c.host) throw mkErr('NO_CONFIG', '连接 ' + c.name + ' 没写 host');
     if (c.mode === 'cluster' || c.mode === 'sentinel') throw mkErr('UNSUPPORTED_MODE', '连接 ' + c.name + ' 是' + (c.mode === 'cluster' ? '集群' : '哨兵') + '模式，这个客户端只支持单机。用项目自己的办法查，或者让用户来查。');
