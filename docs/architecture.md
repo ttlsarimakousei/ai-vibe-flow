@@ -26,6 +26,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；MCP 工具的返回原样给模型 |
+| 提问框、权限确认框要问用户的时候（PermissionRequest） | `ask-timeout.js` | 只在这个会话的自动实施在生效时管：等 `askTimeoutMin` 分钟（默认 10）没人回，提问框按不允许收掉、让模型自己定，别的确认框按允许，像推送、发布的按不允许；记进全自动报告。隔 3 秒看一眼会话记录，框有了结果、用户另说了话就退出。不走 `cli()` 的 12 秒预算 |
 | 模型说做完了 | `verify-gate.js` | 自动阶段文档没写到 tasks 催接着写，写完催审整套，任务全部做完催审整个 change；人工阶段 Ask；提醒提交与自动提交分开；核对材料、修订链和实际验证结果，交付用例及结果，用户决定验收归档 |
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
@@ -237,3 +238,11 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - **当前 change 只往后走**（`big-task`）：`finishedMap` 记做完过的 change（`state/big-task.json` 里大任务那一条的 `finished`，`phaseOf` 和 `after-tool` 改 tasks.md 时记）；`phaseOf` 从做完过的最后一个后面找；`revisits` 列回改。`bar` 前面带大任务名，第三行分"回改""另有"；在审的 change 后面有开过工的就不显示它。`guard-spec` 不再按表的顺序挡打勾。`flow-policy.revisited`：做完过、当前 change 在它后面的，`sameInput` 不重开审过的结论。
 - **死机、断电**（`state-store`）：`DURABLE` 那几份写完 `fsync` 再改名，改名前把上一份拷成 `.prev`；读出来是空的、一片 0、5 秒前写的还读不懂，用 `.prev`。`bootTime`、`beforeBoot`：锁、审查进程（`review-runner.alive`）、活跃会话（`work-sessions`）、自动更新的锁、后台探索的锁、清状态时的锁，时间比这次开机早的按失效。重启打断的审查角度记 `reboot`，不进 `noteFail`、不记超时。`session-start` 说出比开机早的 `.git/index.lock` 和被打断的审查。`cleanState` 删掉本体不在了的 `.prev`。
 - **慢的原因自动上报**（`invocation`）：一次调用里记各阶段开始的时间（`phases`）和每条子进程的用时（`note`，`workspace.readGit` 调）；预算用完的错误带 `timeline`，`feedback.recordHookErrorRaw` 写进正文和"又出现了"那一行，加上 `diag.recent(7)` 的停留统计和电脑配置。审查每次请求记 `ms`、`killed`（到 `CALL_MS` 被结束）、`apiMs`、`turns`、`chars`、`out` 进 `review-jobs` 的 `state[角度].calls`，`reportReview` 带上。这条替代 `diag.js` 开头"只记本机、不上报"（仓库主人 2026-11-11 定的）。
+
+## 20261113 第二批（第 90、91 条）
+
+核对和改法见 [feedback-20261113-2.md](feedback-20261113-2.md)。结构上的变化：
+
+- **询问没人回**（`hooks/ask-timeout.js`，安装器登记在 PermissionRequest 上，`timeout: 7500` 秒）：框显示的同时钩子被调（实测 2.1.120—2.1.316），钩子给出决定时框收起。等的时候按名字和输入在会话记录里找这次调用（钩子输入里没有 `tool_use_id`），找到它的结果、或者它后面有用户的话，就退出。提问框到点 `deny` 带一句话：不用 `allow` + `updatedInput.answers` 替用户选，那样会话记录里是"用户答了"，开工、推送、归档认表态的检查会当成用户点了头。到点记进 `report`（`ask`、`bypass`、`hand`）。开关 `askTimeoutMin`（`config-fields`，0 是一直等）。
+- **查库要不要人点头**（`vk-db-crud/scripts/db.py` 的 `write_policy`）：替代"有人在时凡是改库都要人确认"和"全自动下留不下备份的不做"。`auto_plan` 照旧算留不留得下备份；留不下、又会删东西（`_removes`：DELETE、TRUNCATE、DROP、ALTER 里有 DROP、CREATE OR REPLACE TABLE、看不懂的语句）、删的又不是这个项目里工具自己建的（`_own_object`，看留痕里 7 天内、同一个项目、执行成功的 `created`）才要人点头。确认串登记时记下 `note`（ask / free），有人在时第二步照它算，不再连库。有人在时新增、修改不为留备份多连一次库。驱动带不回自增主键（`IDS_UNKNOWN`）时不带 `--key-columns` 再执行一遍。留痕 `op.json` 的 `auto` 改成"没人确认就做的"，全自动报告照旧按它列。
+- **redis**（`vk-redis/scripts/redis.js`）：全自动下只拦一次删几个 key 的 `del`。

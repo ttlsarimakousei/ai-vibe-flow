@@ -255,3 +255,17 @@ npm 上最新是 2.1.289（2026-10-03）。下面这些来自官方的 CHANGELOG
 权限按改写后的命令查。`-p` 模式下要确认的命令直接不执行；交互模式下跳过权限模式里 cd 串着别的命令照样问（2026-09-30 用户实测），这个探针测不到。
 
 模型名（探针在 scratchpad，没留在仓库；假网关，三版一样）：`--model sonnet` 加 `ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-flash[1m]` 发的是 `deepseek-flash`（`[1m]` 去掉，加 `context-1m` 的 beta 头）；只设 `ANTHROPIC_MODEL=deepseek-flash[1m]`、`--model sonnet` 发的是 Claude 的 sonnet 名字（2.1.120 `claude-sonnet-4-6`、2.1.259 `claude-sonnet-5`、2.1.289 `claude-sonnet-5-5`）；不给 `--model` 发 `ANTHROPIC_MODEL` 去掉 `[1m]` 的名字。所以 #427 的 `unrecognized_model`（模型写着 `deepseek-flash[1m]`）不是 CLI 报的，多半是网关把 sonnet 映射成了带 `[1m]` 的名字。
+
+## 框显示以后钩子还能不能作答（2026-11-13 实测）
+
+`dev/probes/cc-ask-timeout.js`：交互界面（winpty），假网关、假用户目录，2.1.120、2.1.259、2.1.289、2.1.316（内网在用的）。四版结果一样：
+
+| 做法 | 结果 |
+|---|---|
+| 模型调 AskUserQuestion | PreToolUse 先跑完，框显示，0.2 秒后 PermissionRequest 钩子被调（提问框也走这个时机）；约 6 秒后 Notification `permission_prompt` |
+| PermissionRequest 钩子等 10 秒，`allow` 带 `updatedInput.answers` | 框自己收起，工具返回钩子给的答案，屏幕写"Allowed by PermissionRequest hook"，会话接着走 |
+| 等 10 秒，`deny` 带 message | 框收起，模型收到一条出错的工具结果，内容就是 message |
+| 用户 5 秒时先答，钩子 14 秒才给决定 | 用户的答案作数；钩子进程不会被结束，一直跑到自己退出，后到的决定不起作用 |
+| Bash 的权限确认框，钩子等 10 秒后 `allow` | 框收起，命令执行 |
+
+官方文档（code.claude.com/docs/en/hooks，2026-11-13 读）：PermissionRequest 的决定是 `hookSpecificOutput.decision.behavior` allow / deny，allow 可带 `updatedInput`，deny 可带 `message`；Notification 不能作答；没有"多久没答就怎样"的设置；命令钩子默认超时 600 秒，到点结束、输出丢掉。settings.json 里新加的钩子要重开 Claude Code 才登记得上。

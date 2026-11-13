@@ -4,26 +4,27 @@
 
 ## 在做
 
-没有在做的。最近一次发版 20261113.1001（main 和标签 v20261113.1001 在 GitHub），带的是问题表第 88、89 条和导出议题 #458—#467：核验期每报一次问题先问、审查和自测催够了自己关自动、选探索主要看答案、壳子里认子项目的验证证据、提交的祈使句、只让启动时改代码前拦一次、审查超时只报套件这头慢的、读开关不再每次算审查指纹。核对、定的四件事、自审、Sonnet 复审的处理、发版结果都在 [feedback-20261113.md](feedback-20261113.md)。
+第 90、91 条修完、提交了，没发版（上一次发版 20261113.1001）。核对、仓库主人定的四件事、自审在 [feedback-20261113-2.md](feedback-20261113-2.md)。
+
+- 第 90 条 fc377ee：新钩子 `hooks/ask-timeout.js`（PermissionRequest），自动实施时框发出 `askTimeoutMin` 分钟（默认 10）没人回就收掉。
+- 第 91 条 c5c7476（查库）、7bfc117（redis）：开发库上只有还原不了的删要人确认。
 
 ## 待仓库主人做的
 
-- 内网 GitLab 发布：解压 `vibe-kit-20261113.1001.zip`，双击发布的 bat，或在包目录里跑 `node publish.js --now`（马上装）。20261112.1523 没发过的话不用单发，直接发这一版。
-- 系统临时目录里 11-03、11-04、11-05、11-11 留下的 `vkt-*`/`vke-*`（86 个）要自己删，不清的话 `run-all` 结尾报退出码 1。
-- 发布后留意下一批导出议题里 #458—#461、#465（钩子预算用完）还剩多少、用时明细里是哪几条 git：定要不要把验证证据的指纹挪到后台算。
+- 定要不要打包发版。发版前按规矩请别的模型复审这批（未结清单里有一行）。
+- 内网 GitLab 发布 20261113.1001（没发过的话，等这一版一起发也行）。
+- 系统临时目录里 11-03、11-04、11-05、11-11 留下的 `vkt-*`/`vke-*` 要自己删，不清的话 `run-all` 结尾报退出码 1。
 
 ## 要注意的
 
-- 核验期"每次先问"（第 88 条）：套件自己关自动时记 `autoFix`（大任务在 `big-task.json`，表外的在流程记录），`auto-run.askPending` 按"这一轮开头那句话的指纹"（`fixAskTurn`）一个用户回合问一次；套件关自动的那一轮不问，`autoStopped` 的不问。选项的字样仍是"自动实施""实施（每步问我）"，`session-config.autoAnswerOf` 认，改了两边一起改。
-- 催够了关自动：全面自测、没开始的代码审查同一个状态催 3 次（`flow-policy.upTo`），`verify-gate` 的 `closeIdle`、`reviewIdle` 只在任务都做完、自动在生效时关。
-- `flowView` 的 `effective`、`waiting`、`awaitingUser` 是用到才算的 getter：要用就读出来放进变量，别把整个对象传走；读的时候可能抛预算用完的错。
-- 进流程：`session-voice.entryAnswer(x, strict)`。模型正要进流程时宽（答案里有"探索"就算），钩子自己记（`syncEntryAnswer`）时严（只认 `/opsx:explore` 这几个命令、"vk 流程"、openspec 挨着"流程、探索、提案"）。
-- 验证证据：`evidence.current` 把目录下面别的仓库名下的也算上（最近 8 个），各按自己的指纹比。
-- 配置页每个开关的一句话说明不超过 90 个字（`ui-kit-0929.js` 查），多的放进"细节"。
-- 跑测试时 test-1007、test-1008 的"桌面上没有冒出窗口"会被 Claude 桌面应用自己的窗口弄不过，看进程名是 claude 就不是套件的问题。
-- 老规矩照旧：Bash 不 `cd`；`.bat` 按字节改；查语法只用 `node --check`；带引号、反斜杠的补丁用 Write 写成脚本再跑；新测试要 `node dev/contracts.js --write`、加进 `run-all.js`；`hooks/` 下的文件不能删；拿旧版比用 `dev/baseline/20261113.1001/vibe-kit`，下一版的钩子比对用例先写 `NEXT`。
+- `ask-timeout` 不走 `cli()` 的 12 秒预算（它本来就要等），读开关单独给 12 秒；安装器写 `timeout: 7500`，要比能配的最长等待（120 分钟）长。新加的钩子升级后要重开 Claude Code 才登记得上（更新说明里写了）。
+- 提问框到点是 `deny` 带 message，不用 `allow` + `answers`：替用户选了，会话记录里就是"用户答了"，开工、推送、归档认表态的检查会当成用户点了头。
+- 查库 `db.py` 的 `write_policy`：留不下备份、又会删东西、删的又不是这个项目里工具 7 天内自己建的，才要人点头。确认串登记里记 `note`（ask / free），有人在时第二步照它算。`op.json` 的 `auto` 现在是"没人确认就做的"。
+- 实测：框显示以后 PermissionRequest 钩子的决定照样作数，用户先答了钩子进程不会被结束（docs/claude-code-facts.md 最后一节，探针 `dev/probes/cc-ask-timeout.js`）。
+- 第 88、89 条那批的注意事项照旧：`flowView` 的 getter 用到才算；进流程看 `session-voice.entryAnswer`；配置页一句话说明不超过 90 字。
+- 老规矩照旧：Bash 不 `cd`；`.bat` 按字节改；带引号、反斜杠的补丁用 Write 写成脚本再跑；新测试要 `node dev/contracts.js --write`、加进 `run-all.js`；`hooks/` 下的文件不能删；拿旧版比用 `dev/baseline/20261113.1001/vibe-kit`，下一版的钩子比对用例先写 `NEXT`。
 
 ## 环境
 
-- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。内网在用 2.1.316，安装文件在 C:\WorkSpace\内网安装ClaudeCLI。
+- Claude Code 测试版本：%LOCALAPPDATA%\Programs\claude-code-versions\2.1.120 / 2.1.259 / 2.1.289。内网在用 2.1.316，安装文件在 C:\WorkSpace\内网安装ClaudeCLI（探针可以直接给这个 exe 的路径）。
 - Python 3.12、JDK 17（%LOCALAPPDATA%\Programs\…）、H2 在 ~/.m2。8 GB 内存，端到端用 `--e2e-lanes 2`。
