@@ -150,7 +150,8 @@ function archivedOf(j, since) {
 /**
  * 全自动模式下它改过的库。查库的工具（vk-db-crud）每做一次写操作，在 ~/.db-crud/journal/<连接名>/<时间>-<类型>/ 留一份：
  * op.json（哪张表、几行、是不是全自动做的、在哪个项目里、新增的主键）、before.json（改前快照）、undo.sql（还原脚本）。
- * 这一轮里、这个项目里、没人确认就做的那几次列出来（op.json 的 auto；2026-11-13 起开发库上不用人点头的都算，问题表第 91 条）。用户 2026-09-30 定的：全自动不拦改库，改、删尽量有备份脚本，
+ * 这一轮里、这个项目里、全自动模式下（用户不在）做的那几次列出来：op.json 的 unattended（2026-11-13 起记；以前的记录没有，按 auto 认）。
+ * auto 2026-11-13 起是"没人确认就做的"，有人在的会话里不问就做的也是 true，不拿它筛（复审 R4）。用户 2026-09-30 定的：全自动不拦改库，改、删尽量有备份脚本，
  * 新增要记下表和主键——记下的东西得让他回来一眼看得到
  */
 function dbWrites(cwd, since) {
@@ -171,7 +172,8 @@ function dbWrites(cwd, since) {
       const dir = path.join(root, c, n);
       let op = null;
       try { op = JSON.parse(fs.readFileSync(path.join(dir, 'op.json'), 'utf8')); } catch (e) { continue; }
-      if (!op || op.auto !== true || !op.result || !op.result.ok || !op.project) continue;
+      const unattended = op && (op.unattended === undefined ? op.auto === true : op.unattended === true);
+      if (!op || !unattended || !op.result || !op.result.ok || !op.project) continue;
       // 别的项目里（另一个窗口）做的不算这一份报告的
       const p = normKey(String(op.project));
       if (!(p === here || p.startsWith(here + '/') || here.startsWith(p + '/'))) continue;

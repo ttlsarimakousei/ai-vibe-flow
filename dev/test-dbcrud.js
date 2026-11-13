@@ -154,7 +154,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   // 建表：记下来，还原脚本是 DROP
   const ac = autoExec('CREATE TABLE T_AUTO (ID INT PRIMARY KEY, NAME VARCHAR(20))');
   H.ok('建表：第一步说了不用等人确认', ac.a.code === 4 && FREE.test(ac.a.out) && !/给人看过之后/.test(ac.a.out), ac.a.out + ac.a.err);
-  H.ok('建表：执行了，还原脚本是 DROP，留痕里记着没有人确认、在哪个项目里', ac.b && ac.b.code === 0 && /建了     TABLE T_AUTO/.test(ac.b.out) && /^DROP TABLE T_AUTO;$/m.test(undoOf('create')) && opOf('create').auto === true && path.resolve(opOf('create').project || '').toLowerCase() === path.resolve(proj).toLowerCase() && opOf('create').created.kind === 'TABLE', [ac.b && ac.b.out + ac.b.err, undoOf('create'), opOf('create')]);
+  H.ok('建表：执行了，还原脚本是 DROP，留痕里记着没有人确认、在哪个项目里', ac.b && ac.b.code === 0 && /建了     TABLE T_AUTO/.test(ac.b.out) && /^DROP TABLE T_AUTO;$/m.test(undoOf('create')) && opOf('create').auto === true && opOf('create').unattended === true && path.resolve(opOf('create').project || '').toLowerCase() === path.resolve(proj).toLowerCase() && opOf('create').created.kind === 'TABLE', [ac.b && ac.b.out + ac.b.err, undoOf('create'), opOf('create')]);
   // 新增：主键写在语句里的直接记
   const ai = autoExec("INSERT INTO T_AUTO (ID, NAME) VALUES (1, '甲'), (2, '乙')");
   H.ok('新增：执行了，表和主键记下来了', ai.b && ai.b.code === 0 && /影响 2 行，已提交/.test(ai.b.out) && /新增的行  表 T_AUTO，主键 ID：1、2（语句里写明的）/.test(ai.b.out), ai.a.out + (ai.b ? ai.b.out + ai.b.err : ''));
@@ -206,6 +206,19 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
     const r = autoExec(sql);
     H.ok('别人建的表，' + name + '：全自动下不做，留给用户', r.a.code === 3 && why.test(r.a.err) && /留给用户：要改库/.test(r.a.err) && !/--ack/.test(r.a.out), r.a.out + r.a.err);
   }
+  // 别的写法的删（复审 R7）：全自动下都不做
+  for (const [name, sql] of [['WITH 开头的删', 'WITH t AS (SELECT 1 AS ID) DELETE FROM T_OTHER'], ['MERGE 里带删', 'MERGE INTO T_OTHER o USING (SELECT 1 AS ID) s ON (o.ID = s.ID) WHEN MATCHED THEN DELETE'], ['CREATE OR REPLACE TABLE', 'CREATE OR REPLACE TABLE T_OTHER (ID INT)'], ['删约束', 'ALTER TABLE T_OTHER DROP CONSTRAINT C_NONE'], ['一条里加列又删列', 'ALTER TABLE T_OTHER ADD COLUMN Y INT, DROP COLUMN X']]) {
+    const r = autoExec(sql);
+    H.ok('别人建的表，' + name + '：全自动下不做', r.a.code === 3 && /留给用户：要改库/.test(r.a.err) && !/--ack/.test(r.a.out), r.a.out + r.a.err);
+  }
+  // 别的 schema 里的同名表不算自己建的（复审 R2）
+  foreign('CREATE SCHEMA S2');
+  foreign('CREATE TABLE S2.T_TWIN (ID INT PRIMARY KEY)');
+  autoExec('CREATE TABLE T_TWIN (ID INT PRIMARY KEY)');
+  const tw2 = autoExec('DROP TABLE S2.T_TWIN');
+  H.ok('自己在默认 schema 建了 T_TWIN，删 S2.T_TWIN：不算自己建的，全自动下不删', tw2.a.code === 3 && /留给用户：要改库/.test(tw2.a.err), tw2.a.out + tw2.a.err);
+  const tw3 = autoExec('DROP TABLE T_TWIN');
+  H.ok('删自己建的那张（写法和建的时候一样）：照做', tw3.a.code === 4 && /是这个项目里工具自己建的/.test(tw3.a.out) && tw3.b && tw3.b.code === 0, tw3.a.out + tw3.a.err + (tw3.b ? tw3.b.out + tw3.b.err : ''));
   const ob = autoExec('DELETE FROM T_OTHER WHERE ID > 0', ['--snapshot-max-rows', '1']);
   H.ok('删的行数超过改前快照的上限：还原不了，全自动下不做', ob.a.code === 3 && /超过改前快照的上限 1 行/.test(ob.a.err), ob.a.out + ob.a.err);
   H.ok('被拒的这些都没动库', countOf('T_OTHER') === '2' && /\bX\b/.test(db(['columns', '--table', 'T_OTHER', '--fresh']).out), db(['columns', '--table', 'T_OTHER', '--fresh']).out);
@@ -253,7 +266,7 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const ui2 = db(['exec', '--undo', insEntry, '--ack', ackOf(ui1)]);
   H.ok('新增的还原：按主键一行一行删，有一行已经没了就全部回滚', ui1.code === 4 && /语句    2 条 DELETE/.test(ui1.out) && ui2.code === 2 && /应该正好 1 行/.test(ui2.err) && countOf('T_AUTO') === '2', ui1.out + ui2.out + ui2.err);
   execBoth("INSERT INTO T_AUTO (ID, NAME) VALUES (2, '乙')");
-  H.ok('有人在的时候新增：主键写在语句里的也记下来（一样是没有人确认就做的）', JSON.stringify((opOf('insert').inserted || {}).ids) === '[["2"]]' && opOf('insert').auto === true && /^DELETE FROM T_AUTO WHERE ID = 2;$/m.test(undoOf('insert')), [opOf('insert'), undoOf('insert')]);
+  H.ok('有人在的时候新增：主键写在语句里的也记下来（一样是没有人确认就做的，但记着用户在：全自动报告不列，复审 R4）', JSON.stringify((opOf('insert').inserted || {}).ids) === '[["2"]]' && opOf('insert').auto === true && opOf('insert').unattended === false &&/^DELETE FROM T_AUTO WHERE ID = 2;$/m.test(undoOf('insert')), [opOf('insert'), undoOf('insert')]);
   const ui3 = db(['exec', '--undo', insEntry]);
   const ui4 = db(['exec', '--undo', insEntry, '--ack', ackOf(ui3)]);
   H.ok('两行都在的时候再还原：删掉了', ui4.code === 0 && /还原完成：2 条语句，影响 2 行/.test(ui4.out) && countOf('T_AUTO') === '1', ui3.out + ui4.out + ui4.err);

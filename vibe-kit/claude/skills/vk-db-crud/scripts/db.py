@@ -1673,9 +1673,14 @@ def _removes(stmt):
     return False
 
 
-def _bare(name):
-    """对象名去掉 schema 前缀和引号、转小写：比名字用。"""
-    return sqlguard._clean_ident(str(name or "").split(".")[-1]).strip().lower()
+def _qual(name):
+    """
+    对象名去掉引号、转小写，schema 前缀照留：比名字用。
+    带不带 schema 要和建的时候写的一样才算同一个（复审 R2：只比裸名的话，A.T 是自己建的，B.T 也被当成自己建的）。
+    建的时候没写 schema、删的时候写了（或者反过来），按不是同一个算：多问一次，不会少问。
+    """
+    parts = [sqlguard._clean_ident(p).strip().lower() for p in str(name or "").split(".")]
+    return ".".join(p for p in parts if p)
 
 
 def _made_here(conn, project_root):
@@ -1718,9 +1723,9 @@ def _own_object(conn, project_root, stmt):
         for c in made:
             if str(c.get("kind") or "").upper() != kind:
                 continue
-            if _bare(name) not in [_bare(x) for x in str(c.get("name") or "").split("、")]:
+            if _qual(name) not in [_qual(x) for x in str(c.get("name") or "").split("、")]:
                 continue
-            if table is not None and _bare(c.get("table")) != _bare(table):
+            if table is not None and _qual(c.get("table")) != _qual(table):
                 continue
             return True
         return False
@@ -2061,6 +2066,8 @@ def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, li
         "result": {k: v for k, v in r.items() if not k.startswith("_")},
         # 是不是没有人确认就做的（2026-11-13 起不问的那些都是）、在哪个项目里做的：全自动报告按这两样把它列出来
         "auto": free,
+        # 做的时候用户在不在（全自动模式）：全自动报告的"库里改过的"按它列，有人在的会话里不问就做的不列（复审 R4）
+        "unattended": auto_mode(),
         "project": str(pathlib.Path(project_root).resolve()),
     }
     journal.write_op(entry, op)
