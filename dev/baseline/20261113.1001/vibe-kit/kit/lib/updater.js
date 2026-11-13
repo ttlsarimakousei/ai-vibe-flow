@@ -1,0 +1,546 @@
+'use strict';
+/*
+ * 自动更新：内网 GitLab 的仓库里放着解开的安装包，这台电脑用 git 拉下来，跑里面的 install.js。
+ *
+ *   钩子（会话开始、用户开口、收工）到时间了就调 kick()：只看一眼状态文件，该检查了就甩出一个没有窗口的后台进程，自己马上返回
+ *   后台进程（node lib/updater.js run）：
+ *     1. 问仓库现在是哪个提交（git ls-remote，零点几秒）；和上次一样就不用拉
+ *     2. 不一样：拉到暂存处 ~/.claude/vibe-kit/update/repo（只要最新的那一个提交，之后每次只下载变了的文件）
+ *     3. 暂存处的版本和装着的不一样（"跟着仓库走"：仓库退回了旧版，这里也跟着退），而且开关是"自动装"：
+ *        跑暂存处里的 install.js（和手动双击安装完全一样）→ 自检
+ *        自检不过：从仓库拉上一版的标签装回去，这个坏版本记下来不再装，等仓库里出了新的再说
+ *     4. 顺带把还没上报的问题反馈建成议题（lib/issues.js）
+ *
+ * 发版保护（K2，仓库主人 2026-11-01 定的"尝鲜组"；以前一发新版所有电脑两小时内全装上，出了问题全员中招）：
+ *   尝鲜组   配置页勾了"先装新版"（updateEarly）的电脑：一发现新版就装，和以前一样
+ *   别的电脑 等这一版发布满 24 小时（按仓库里那个提交的时间；比现在晚一小时以上、读不出来的，按这台电脑第一次看到它的时间），
+ *            而且尝鲜组没在仓库里报"这一版有问题"（开着的"[有问题的版本] <版本>"议题，lib/issues.js），才自动装。
+ *            仓库退回了旧版（维护的人把大家退回去）不等，马上跟着退。
+ *            查不到有没有人报（没有令牌、接口不通）按"没问题"：24 小时已经给了尝鲜组和维护的人一天；很多电脑没有建 issue 的令牌，
+ *            按"等等再装"它们就永远装不上。查过的结果记两小时，过了再查（维护的人关掉误报的那条，别的电脑最晚两小时后知道）。
+ *            勾了"先装新版"的电脑不查，一发现就装：尝鲜组本来就是来试的，多一台装上、装回也是给维护的人的证据
+ *   固定     配置页"固定在这一版"（config.json 的 updatePin，存的是固定时装着的版本）：不再自动装任何版本——新版、仓库退回的旧版、
+ *            装坏后的修复都不做，直到点"取消固定"；"立即更新"也要先取消。照常检查，配置页上看得到仓库里有什么
+ *   跳过     配置页"跳过这一版"（updateSkip，存的是跳过的版本）：仓库里是这一版时不自动装，出了别的版本照常（不用再去取消）
+ *
+ * 连仓库走哪条路（手填的令牌、SSH 密钥、这台电脑上 git 登录的身份）由 lib/gitlab.js 挨个试，这里不管。
+ *
+ * 开关（config.json）：autoUpdate = auto 自动装 / notify 只提醒（状态栏、配置页上说有新版，点了才装）/ off 不检查；updateCheckHours 几小时查一次（默认 2）；
+ * updateEarly 先装新版（默认不勾）；updatePin、updateSkip 由配置页的按钮写（空 = 没固定、没跳过）。
+ * 更新源在 lib/gitlab.js（配置页里填，默认是团队的那个仓库）。
+ *
+ * 为什么放在 lib/ 里：模型只能跑 page/ 和 tools/ 里的脚本（guard-commit），这里的它跑不了——更新等于执行仓库里的代码，不能让模型来触发。
+ * 状态在 state/update.json（全局，不按时间清；发版保护用的几项：remoteAt、remoteSeenAt 这一版什么时候发布的、flag 查到的"这一版有没有问题"），
+ * 日志在 update/update.log，安装器的输出在 update/last-install.log。
+ *
+ * 配置页的几个按钮（测试连接、立即检查、立即更新、申请令牌、导出议题）也是起一个进程跑这个文件：连 GitLab 可能要等十几秒，
+ * 不能在配置页的进程里等。这些命令往标准输出写一行 JSON，令牌从不写出来。
+ */
+const fs = require('fs');
+const path = require('path');
+const { spawn, spawnSync } = require('child_process');
+const { KIT, CFG_DIR, readConfig, readState, updateState } = require('./session');
+const gl = require('./gitlab');
+const stateStore = require('./state-store');
+
+const DIR = path.join(KIT, 'update');
+const STAGE = path.join(DIR, 'repo');
+const LOG = path.join(DIR, 'update.log');
+const LOCK = path.join(DIR, 'lock.json');
+const INSTALL_LOG = path.join(DIR, 'last-install.log');
+const VERSION_RE = /^\d{8}\.\d{4}$/;
+const LOCK_MS = 40 * 60000;
+// 发版保护（见文件开头）：没勾"先装新版"的等多久；查过的"这一版有没有问题"记多久
+const CANARY_WAIT_MS = 24 * 3600000;
+const FLAG_TTL_MS = 2 * 3600000;
+
+const modeOf = (cfg) => { const m = (cfg || readConfig()).autoUpdate; return ['auto', 'notify', 'off'].includes(m) ? m : 'auto'; };
+/** 配置里存的版本号（固定、跳过）：不像版本号的当没有 */
+const verOf = (v) => { const s = String(v == null ? '' : v).trim(); return VERSION_RE.test(s) ? s : ''; };
+/** 仓库里现在这一版什么时候发布的（check() 记的）：提交的时间，不可信时是这台电脑第一次看到它的时间 */
+const releasedAt = (st) => Number(st && st.remoteAt) || Number(st && st.remoteSeenAt) || 0;
+/** 本地日期 YYYY-MM-DD */
+const dayKey = (t) => { const d = t ? new Date(t) : new Date(); const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+/** 给人看的时间：今天、明天的只写几点 */
+function whenText(t) {
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  const hm = p(d.getHours()) + ':' + p(d.getMinutes());
+  if (dayKey(t) === dayKey()) return '今天 ' + hm;
+  if (dayKey(t) === dayKey(Date.now() + 86400000)) return '明天 ' + hm;
+  return (d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + hm;
+}
+const hoursOf = (cfg) => { const n = Number((cfg || readConfig()).updateCheckHours); return n >= 1 && n <= 24 ? n : 2; };
+const readText = (f) => { try { return fs.readFileSync(f, 'utf8').replace(/^﻿/, '').trim(); } catch (e) { return ''; } };
+const installedVersion = () => readText(path.join(KIT, 'VERSION'));
+const stamp = () => new Date().toLocaleString('zh-CN', { hour12: false });
+
+function log(line) {
+  try {
+    fs.mkdirSync(DIR, { recursive: true });
+    try { if (fs.statSync(LOG).size > 200 * 1024) fs.renameSync(LOG, LOG + '.1'); } catch (e) { /* 还没有 */ }
+    fs.appendFileSync(LOG, stamp() + ' ' + line + '\n');
+  } catch (e) { /* 记不了就算了 */ }
+}
+const setState = (patch) => updateState('update', (o) => Object.assign(o, patch));
+
+// ---------- 同一时间只跑一个 ----------
+function pidAlive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; } }
+// 超过租期（LOCK_MS，跑着的会续租）的锁不算有人在跑（复审 U-R1：以前只看进程号活着，进程号被复用以后自动更新、上报一直不跑）
+function lockHeld() {
+  try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && !stateStore.beforeBoot(l.at) && pidAlive(l.pid) && l.pid !== process.pid && !(Number(l.at) > 0 && Date.now() - Number(l.at) > LOCK_MS); } catch (e) { return false; }
+}
+let updateLock = null;
+function lock() {
+  if (updateLock) return false;
+  updateLock = stateStore.acquire(LOCK, { waitMs: 0, leaseMs: LOCK_MS });
+  return !!updateLock;
+}
+function unlock() { if (updateLock) updateLock.release(); updateLock = null; }
+/** 锁还是自己的吗 */
+function ownLock() { try { const l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); return !!l && l.pid === process.pid && !!updateLock && l.token === updateLock.token; } catch (e) { return false; } }
+/** 核对锁还是自己的，顺带续租：拿锁时间拨到现在（一分钟最多一次）。拉取、安装加起来可能超过租期，不续租会被别的进程当失效抢走（复审 U-R4） */
+function touchLock() {
+  try {
+    const l = JSON.parse(fs.readFileSync(LOCK, 'utf8'));
+    if (!(l && l.pid === process.pid && updateLock && l.token === updateLock.token)) return false;
+    if (Date.now() - (Number(l.at) || 0) > 60000) stateStore.atomicWrite(LOCK, Object.assign({}, l, { at: Date.now() }));
+    return true;
+  } catch (e) { return false; }
+}
+/** 上次自动更新装坏了、也没能装回上一版，而且之后没有成功装过（安装器装完会记 state/install-done.json）。
+ *  以前只认"装着的版本号就是坏的那一版"，安装器在写版本号之前就失败的（版本号还是旧的、文件半新半旧）认不出来（复审 U-R3） */
+function brokenOf(st) {
+  const f = st && st.failed;
+  if (!f || f.rolledBack !== false) return null;
+  const done = readState('install-done');
+  return Number(done.at) > Number(f.at || 0) ? null : f;
+}
+
+// ---------- 问仓库、拉到暂存处 ----------
+/** 仓库现在是哪个提交。没指定分支就用仓库的默认分支。返回 { ok, commit, branch, empty, route, why } */
+function remoteHead(s) {
+  const p = s.parsed;
+  if (!p.ok) return { ok: false, why: p.why };
+  const r = gl.viaRoutes(s, (route) => gl.git(null, s.branch ? ['ls-remote', route.url, 'refs/heads/' + s.branch] : ['ls-remote', '--symref', route.url, 'HEAD'], { settings: s, route, timeout: 40000 }));
+  if (r.code !== 0) return { ok: false, why: gl.explainRoutes(r, '问仓库有没有新版') };
+  let branch = s.branch;
+  let commit = '';
+  for (const l of r.out.split(/\r?\n/)) {
+    const m = /^ref:\s+refs\/heads\/(\S+)\s+HEAD$/.exec(l);
+    if (m) { branch = m[1]; continue; }
+    const c = /^([0-9a-f]{40})\s+(\S+)$/.exec(l);
+    if (c && (c[2] === 'HEAD' || c[2] === 'refs/heads/' + s.branch)) commit = c[1];
+  }
+  if (!commit) return s.branch ? { ok: false, why: '仓库里没有 ' + s.branch + ' 这个分支' } : { ok: true, empty: true, branch: branch || '', route: r.route };
+  return { ok: true, commit, branch: branch || 'main', route: r.route };
+}
+const stageCommit = () => { const r = gl.git(STAGE, ['rev-parse', 'HEAD'], { timeout: 15000 }); return r.code === 0 ? r.out.trim() : ''; };
+/** 暂存处是不是从现在这个仓库拉的（换了仓库地址就重新来） */
+const stageHolds = (s) => fs.existsSync(path.join(STAGE, '.git')) && !!gl.repoKey(s) && readState('update').stageKey === gl.repoKey(s);
+/** 暂存处里是不是一个完整的安装包；是的话返回它的版本号 */
+function stagedVersion(dir) {
+  const d = dir || STAGE;
+  for (const f of ['install.js', 'settings.fragment.json', 'kit/VERSION', 'kit/lib/session.js', 'kit/hooks/verify-gate.js', 'claude/CLAUDE.md']) if (!fs.existsSync(path.join(d, f))) return '';
+  const v = readText(path.join(d, 'kit', 'VERSION'));
+  return VERSION_RE.test(v) ? v : '';
+}
+function stage(s, head, again) {
+  fs.mkdirSync(DIR, { recursive: true });
+  touchLock();
+  let first = false;
+  if (!stageHolds(s) || again) {
+    try { fs.rmSync(STAGE, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch (e) { return { ok: false, why: '清不掉旧的暂存处（被别的程序占着）：' + STAGE }; }
+    const i = gl.git(DIR, ['init', '-q', STAGE], { timeout: 60000 });
+    if (i.code !== 0) return { ok: false, why: gl.explainGit(i, '建暂存处') };
+    setState({ stageKey: gl.repoKey(s) });
+    first = true;
+  }
+  // 不登记远端、不记地址：每次把地址直接给 git，走哪条路都一样用
+  const f = gl.viaRoutes(s, (route) => gl.git(STAGE, ['fetch', '-q', '--depth', '1', '--no-tags', route.url, head.branch], { settings: s, route, timeout: 600000 }));
+  touchLock();
+  // 以前拉到一半被结束（超时、关机）的暂存处会留下 .lock 文件，之后每次都失败：整个重建再来一次
+  const broken = (r) => /\.lock\b|index\.lock|shallow\.lock|unable to create|File exists|corrupt|bad object|not a git repository/i.test(String(r.err || r.out || '') + ' ' + String(r.why || ''));
+  if (f.code !== 0) {
+    if (!again && !first && broken(f.last || f)) { log('暂存处坏了（像是上次拉到一半被结束，留下了锁文件），重建再拉一次'); return stage(s, head, true); }
+    return { ok: false, why: gl.explainRoutes(f, first ? '第一次拉仓库' : '拉新版') };
+  }
+  const c = gl.git(STAGE, ['checkout', '-q', '-f', 'FETCH_HEAD'], { timeout: 120000 });
+  if (c.code !== 0) {
+    if (!again && broken(c)) { log('暂存处切不到新版（' + String(c.err || '').split(/\r?\n/)[0] + '），重建再拉一次'); return stage(s, head, true); }
+    return { ok: false, why: gl.explainGit(c, '切到新版') };
+  }
+  gl.git(STAGE, ['clean', '-q', '-fdx'], { timeout: 120000 });
+  return { ok: true, ms: f.ms + c.ms, first, route: f.route };
+}
+/**
+ * 检查一次：问仓库、有变化就拉到暂存处。只下载，不安装。返回现在的情况（也记进 state/update.json）
+ */
+function check() {
+  const s = gl.settings();
+  const now = Date.now();
+  const fail = (why) => { setState({ lastCheckAt: now, lastCheckOk: false, lastError: why }); log('检查没成功：' + why); return status(); };
+  if (!gl.gitVersion()) return fail('这台电脑上找不到 git，自动更新用不了');
+  const head = remoteHead(s);
+  if (!head.ok) return fail(head.why);
+  if (head.empty) return fail('仓库是空的，还没发布过');
+  const st = readState('update');
+  const have = stageHolds(s) ? stageCommit() : '';
+  if (have !== head.commit) {
+    const r = stage(s, head);
+    if (!r.ok) return fail(r.why);
+    log('拉到了 ' + head.branch + ' 的 ' + head.commit.slice(0, 8) + '（' + r.ms + ' ms，走的是' + r.route.label + (r.first ? '，第一次' : '') + '）');
+  }
+  const v = stagedVersion();
+  if (!v) return fail('仓库里的东西不像是 vibe-kit 的安装包（没有 install.js、kit/VERSION 这些）。先用"发布"把包推进去');
+  // 这一版什么时候发布的（发版保护：没勾"先装新版"的等它发布满 24 小时）：发布脚本每次推一个新提交，提交的时间就是发布的时间。
+  // 维护的电脑钟快了（提交时间比现在晚一小时以上）、读不出来的，按这台电脑第一次看到这个提交的时间
+  const changed = st.remoteCommit !== head.commit;
+  const seenAt = changed || !Number(st.remoteSeenAt) ? now : Number(st.remoteSeenAt);
+  let at = changed ? 0 : Number(st.remoteAt) || 0;
+  if (!at) { const t = gl.git(STAGE, ['log', '-1', '--format=%ct', 'HEAD'], { timeout: 15000 }); at = t.code === 0 && /^\d+$/.test(t.out.trim()) ? Number(t.out.trim()) * 1000 : 0; }
+  if (!(at > 0) || at > now + 3600000) at = seenAt;
+  setState({ lastCheckAt: now, lastCheckOk: true, lastError: '', remoteCommit: head.commit, remoteBranch: head.branch, remoteVersion: v, remoteAt: at, remoteSeenAt: seenAt, repo: gl.maskUrl(s.repo), route: head.route.name, routeLabel: head.route.label });
+  if (v !== st.remoteVersion) log('仓库里现在是 ' + v + '，这台电脑装着 ' + (installedVersion() || '（没有版本号）'));
+  return status();
+}
+
+// ---------- 安装、自检、装回上一版 ----------
+/**
+ * 要装的比装着的旧（维护者把所有人退回旧版、或者装回上一版）：旧版的安装器只认它那时的技能名字，
+ * 这一版装的、旧版没有的技能和代理（vk-*）会留下来，和旧名字并存。装之前记下现在装的原样，装完把没改过的删掉；
+ * 这一版收进 retired/ 的旧技能（urai-db-crud、redis），旧版里还是单独装的，挪回去
+ */
+function snapshotOwn() {
+  const snap = path.join(DIR, 'pristine-before');
+  try { fs.rmSync(snap, { recursive: true, force: true }); } catch (e) { /* 没有 */ }
+  const copy = (src, dst) => { fs.mkdirSync(dst, { recursive: true }); for (const n of fs.readdirSync(src)) { const s = path.join(src, n); const d = path.join(dst, n); const st = fs.statSync(s); if (st.isDirectory()) copy(s, d); else if (st.isFile()) fs.copyFileSync(s, d); } };
+  try { for (const d of ['skills', 'agents']) if (fs.existsSync(path.join(KIT, 'pristine', d))) copy(path.join(KIT, 'pristine', d), path.join(snap, d)); return snap; } catch (e) { return ''; }
+}
+function tidyAfterDowngrade(snap) {
+  const out = [];
+  if (!snap) return out;
+  const list = (d) => { try { return fs.readdirSync(d); } catch (e) { return []; } };
+  const files = (dir, rel, acc) => { for (const n of list(path.join(dir, rel))) { if (n === '__pycache__') continue; const r = rel ? path.join(rel, n) : n; const st = fs.statSync(path.join(dir, r)); if (st.isDirectory()) files(dir, r, acc); else acc.push(r); } return acc; };
+  const sameFile = (a, b) => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch (e) { return false; } };
+  const sameDir = (a, b) => { try { const x = files(a, '', []).sort(); const y = files(b, '', []).sort(); return x.length === y.length && x.every((f, i) => f === y[i] && sameFile(path.join(a, f), path.join(b, f))); } catch (e) { return false; } };
+  const now = new Set(list(path.join(KIT, 'pristine', 'skills')));
+  for (const n of list(path.join(snap, 'skills'))) {
+    if (now.has(n)) continue;
+    const d = path.join(CFG_DIR, 'skills', n);
+    if (fs.existsSync(d) && sameDir(d, path.join(snap, 'skills', n))) { try { fs.rmSync(d, { recursive: true, force: true }); out.push('删了技能 ' + n); } catch (e) { out.push('技能 ' + n + ' 删不掉'); } }
+  }
+  const nowAgents = new Set(list(path.join(KIT, 'pristine', 'agents')));
+  for (const n of list(path.join(snap, 'agents'))) {
+    if (nowAgents.has(n)) continue;
+    const f = path.join(CFG_DIR, 'agents', n);
+    if (fs.existsSync(f) && sameFile(f, path.join(snap, 'agents', n))) { try { fs.unlinkSync(f); out.push('删了代理 ' + n); } catch (e) { out.push('代理 ' + n + ' 删不掉'); } }
+  }
+  // retired/ 里收着的以前单独装的技能：旧版里它们是单独装的，挪回去
+  for (const r of list(path.join(KIT, 'retired'))) {
+    const m = /^(urai-db-crud|db-crud|redis)-\d{8}-\d{6}$/.exec(r);
+    if (!m) continue;
+    const d = path.join(CFG_DIR, 'skills', m[1]);
+    if (fs.existsSync(d)) continue;
+    try { fs.renameSync(path.join(KIT, 'retired', r), d); out.push('挪回了以前单独装的 ' + m[1]); } catch (e) { out.push(m[1] + ' 挪不回去'); }
+  }
+  try { fs.rmSync(snap, { recursive: true, force: true }); } catch (e) { /* 留着 */ }
+  return out;
+}
+const olderThan = (a, b) => VERSION_RE.test(a) && VERSION_RE.test(b) && a < b;
+function runInstaller(dir) {
+  const target = stagedVersion(dir);
+  const cur = installedVersion();
+  const snap = olderThan(target, cur) ? snapshotOwn() : '';
+  const r = runInstallerOnly(dir);
+  if (snap && r.ok) { const done = tidyAfterDowngrade(snap); if (done.length) log('装回旧版 ' + target + ' 之后收拾：' + done.join('；')); }
+  return r;
+}
+function runInstallerOnly(dir) {
+  touchLock();
+  // --no-router：只有装回旧版时旧的 install.js 才认，别让它把路由装回来；新版不认这个参数
+  const args = [path.join(dir, 'install.js'), '--no-open', '--no-router'];
+  const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: CFG_DIR, VIBE_KIT_AUTO_UPDATE: '1' });
+  const r = spawnSync(process.execPath, args, { cwd: dir, env, encoding: 'utf8', windowsHide: true, timeout: 10 * 60000, maxBuffer: 16 * 1024 * 1024 });
+  touchLock();
+  const out = String(r.stdout || '') + String(r.stderr || '') + (r.error ? '\n' + r.error.message : '');
+  try { fs.writeFileSync(INSTALL_LOG, stamp() + ' node ' + args.join(' ') + '\n退出码 ' + r.status + '\n' + out); } catch (e) { /* 记不了就算了 */ }
+  return { ok: r.status === 0, out, status: r.status };
+}
+/**
+ * 装完自检：每个钩子、每个库都载得进来；状态栏跑得出一行字。在另一个进程里做，这里的代码是装之前载入的那一份。
+ * 注意：跑这份名单的是"装之前的那一版"。以后的版本要是把名单里的某个钩子文件删了，老版本装完会认为新版坏了、退回去，
+ * 永远升不上来——要去掉一个钩子，文件得留成一个什么都不做的空壳（hooks/source-hint.js 就是这样），过几版再删
+ */
+function selfCheck() {
+  const script = [
+    "const fs = require('fs'); const path = require('path');", 'const kit = ' + JSON.stringify(KIT) + ';',
+    "for (const d of ['lib', 'hooks']) for (const f of fs.readdirSync(path.join(kit, d)).sort()) if (/[.]js$/.test(f)) { try { require(path.join(kit, d, f)); } catch (e) { console.log('载不进来：' + d + '/' + f + '：' + (e && e.message)); process.exit(3); } }",
+    "for (const h of ['pre-edit', 'guard-commit', 'guard-ask', 'guard-read', 'verify-gate', 'session-start', 'task-anchor']) if (typeof require(path.join(kit, 'hooks', h + '.js')).handle !== 'function') { console.log('钩子 ' + h + ' 没有 handle'); process.exit(3); }",
+    "const entry = path.join(kit, 'lib', 'entry-check.js'); if (fs.existsSync(entry)) { const r = require(entry).check(); if (!r.ok) { console.log(r.why); process.exit(3); } } console.log('ok');",
+  ].join('\n');
+  const a = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', windowsHide: true, timeout: 60000 });
+  if (a.status !== 0 || !/ok/.test(String(a.stdout))) return { ok: false, why: (String(a.stdout || '') + String(a.stderr || '')).trim().split(/\r?\n/).slice(0, 3).join('；') || '自检进程没跑完' };
+  const b = spawnSync(process.execPath, [path.join(KIT, 'statusline.js')], { input: '{}', encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  if (b.status !== 0 || !String(b.stdout || '').trim()) return { ok: false, why: '状态栏跑不出来：' + String(b.stderr || '').trim().split(/\r?\n/)[0] };
+  return { ok: true };
+}
+/** 装回的那一版没带依赖清单（K1-6 之前的版本）：把新版留下的清单删掉，不然体检拿新版的清单对旧版的包，报依赖不对 */
+function dropStaleDeps(pkg) { try { if (!fs.existsSync(path.join(pkg, 'kit', 'deps.json'))) fs.rmSync(path.join(KIT, 'deps.json'), { force: true }); } catch (e) { /* 只影响体检的一行 */ } }
+function rollback(prev, s) {
+  const backup = readState('update').localBackup;
+  if (backup && backup.version === prev && require('./local-backup').verify(path.join(DIR, 'previous-package'), backup)) {
+    const restored = runInstaller(path.join(DIR, 'previous-package'));
+    if (restored.ok && installedVersion() === prev && selfCheck().ok) { dropStaleDeps(path.join(DIR, 'previous-package')); log('已从本地恢复上一版 ' + prev); return { ok: true, local: true }; }
+    log('本地恢复未通过，沿用仓库标签恢复');
+  }
+  if (!VERSION_RE.test(prev)) return { ok: false, why: '装之前的版本没有版本号，没法从仓库里找回来' };
+  const tag = 'refs/tags/v' + prev;
+  const f = gl.viaRoutes(s, (route) => gl.git(STAGE, ['fetch', '-q', '--depth', '1', route.url, '+' + tag + ':' + tag], { settings: s, route, timeout: 300000 }));
+  if (f.code !== 0) return { ok: false, why: '仓库里找不到上一版（标签 v' + prev + '）：' + gl.explainRoutes(f, '拉上一版') };
+  const c = gl.git(STAGE, ['checkout', '-q', '-f', tag], { timeout: 120000 });
+  if (c.code !== 0 || stagedVersion() !== prev) return { ok: false, why: '切不到上一版 v' + prev };
+  const r = runInstaller(STAGE);
+  if (r.ok && installedVersion() === prev) dropStaleDeps(STAGE);
+  return r.ok && installedVersion() === prev ? { ok: true } : { ok: false, why: '装回上一版也没成功，看 ' + INSTALL_LOG };
+}
+const failedTimes = (st, v) => (st.failed && st.failed.version === v ? Number(st.failed.times) || 0 : 0);
+/**
+ * 发版保护：仓库里那一版现在该不该自动装（只看配置和状态文件，不连网；状态栏、配置页也用它说现在是什么状态）。
+ * 返回 { hold, until, flag }：hold 为空是可以装；'pin' 固定在这一版；'skip' 跳过了仓库里这一版；'wait' 等尝鲜组（until 之后再装）；'flag' 尝鲜组报了这一版有问题
+ */
+function gate(cfg, st, installed, now) {
+  const remote = (st && st.remoteVersion) || '';
+  if (!remote || remote === installed) return { hold: '' };
+  // 固定在这一版：什么都不自动装，仓库退回的旧版也不装；跳过的就是仓库里这一版：不装，等下一版
+  if (verOf(cfg.updatePin)) return { hold: 'pin' };
+  if (verOf(cfg.updateSkip) === remote) return { hold: 'skip' };
+  // 尝鲜组：一发现新版就装，和以前一样
+  if (cfg.updateEarly === true) return { hold: '' };
+  // 仓库退回了旧版（维护的人把大家退回去，多半是新版出了事）：不等，马上跟着退
+  if (olderThan(remote, installed)) return { hold: '' };
+  const until = releasedAt(st) + CANARY_WAIT_MS;
+  if (now < until) return { hold: 'wait', until };
+  const f = st.flag;
+  if (f && f.version === remote && f.bad === true) return { hold: 'flag', flag: f };
+  return { hold: '' };
+}
+/** 要不要装：暂存处是一个完整的包、版本和装着的不一样、而且这个版本没有连着装坏过两次、发版保护不拦（anyway：在配置页上点的，装坏过也再试，也不等尝鲜组） */
+function needInstall(anyway) {
+  const st = readState('update');
+  const v = stagedVersion();
+  // 安装器"什么都没动"拒绝过这一版（退出码 4）：6 小时内不再试（每试一次都要先备份上一版、跑一遍安装器），在配置页点"立即更新"照样试（复审 S5）
+  const rf = st.refused;
+  if (anyway !== true && rf && rf.version === v && Date.now() - (Number(rf.at) || 0) < 6 * 3600000) return false;
+  const cur = installedVersion();
+  if (!(!!v && v === st.remoteVersion && v !== cur)) return false;
+  if (anyway === true) return true;
+  return failedTimes(st, v) < 2 && !gate(readConfig(), st, cur, Date.now()).hold;
+}
+/**
+ * 没勾"先装新版"的电脑：等满 24 小时、要装之前，去仓库查尝鲜组有没有报这一版有问题，结果记进 state/update.json 的 flag（两小时内不再查）。
+ * 查不到（没有令牌、不能用 SSH 申请、接口不通）记成 ok: false、不算有问题，照装（理由见文件开头）。
+ * evenWaiting：配置页点"立即检查"时，还在等的也查一次、不管两小时，让页面马上看得到
+ */
+async function refreshFlag(cfg, evenWaiting) {
+  try {
+    const st = readState('update');
+    const v = st.remoteVersion || '';
+    const cur = installedVersion();
+    if (!v || v === cur || stagedVersion() !== v || failedTimes(st, v) >= 2) return null;
+    if (cfg.updateEarly === true || olderThan(v, cur)) return null;
+    // 固定着、跳过了这一版：不装，也就不用查
+    if (verOf(cfg.updatePin) || verOf(cfg.updateSkip) === v) return null;
+    if (!evenWaiting && Date.now() < releasedAt(st) + CANARY_WAIT_MS) return null;
+    const f = st.flag;
+    if (!evenWaiting && f && f.version === v && Date.now() - (Number(f.at) || 0) < FLAG_TTL_MS) return f;
+    let r;
+    try { r = await require('./issues.js').versionFlag(v); } catch (e) { r = { ok: false, why: String((e && e.message) || e) }; }
+    const flag = r && r.ok ? { version: v, ok: true, bad: !!r.bad, iid: Number(r.iid) || 0, url: String(r.url || ''), count: Number(r.count) || 0, at: Date.now() } : { version: v, ok: false, bad: false, why: String((r && r.why) || '没查成').slice(0, 300), at: Date.now() };
+    setState({ flag });
+    if (flag.bad && !(f && f.version === v && f.bad)) log('尝鲜组报了 ' + v + ' 有问题（议题 #' + flag.iid + '），先不装');
+    if (!flag.bad && f && f.version === v && f.bad) log(v + ' 那条"有问题"的议题关掉了，照常装');
+    if (!flag.ok && !(f && f.version === v && f.ok === false)) log('查不到尝鲜组有没有报 ' + v + ' 有问题（' + flag.why + '），按没问题算');
+    return flag;
+  } catch (e) { log('查"这一版有没有问题"时出错：' + ((e && e.message) || e)); return null; }
+}
+
+function apply() {
+  const s = gl.settings();
+  const from = installedVersion();
+  const to = stagedVersion();
+  if (!to) return { ok: false, why: '暂存处里没有可装的包，先检查一次' };
+  if (to === from) return { ok: true, same: true, version: to };
+  // 锁已经不是自己的了（别的进程接手了）：不装，免得两个安装器同时拷文件
+  if (!ownLock()) return { ok: false, why: '更新的锁被别的进程拿走了，这次不装' };
+  touchLock();
+  log('开始安装 ' + to + '（现在是 ' + (from || '没有版本号') + '）');
+  const backup = require('./local-backup').save(KIT, path.join(DIR, 'previous-package'));
+  setState({ localBackup: backup.ok ? { version: backup.version, manifestHash: backup.manifestHash, at: Date.now() } : null });
+  const r = runInstaller(STAGE);
+  // 安装器"什么都没动"（退出码 4：settings.json 读不懂、全局约定不是 UTF-8、Node 太老）：装回上一版也会被同样拒绝，
+  // 不回退、不算装坏，记下原因，等用户把电脑上的问题改好，下次检查照样再装（审核 P43）
+  if (r.status === 4) {
+    const why = '安装器没动手（' + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
+    log(why);
+    const first = !((readState('update').refused || {}).version === to);
+    setState({ refused: { version: to, why, at: Date.now() } });
+    // 同一版第一次被拒时记一条问题反馈：用户看不到日志，配置页和状态栏也会说（复审 S5）
+    if (first) { try { require('./feedback.js').record({ kind: '出错', hook: '自动更新', source: '钩子自动记录', title: '自动更新到 ' + to + ' 没动手：' + why.slice(0, 60), what: '从 ' + from + ' 更新到 ' + to + '，安装器什么都没动就停了：' + why + '。没装回上一版，也不算装坏；把电脑上的问题改好，6 小时后会再试，或者在配置页点"立即更新"。' }); } catch (e) { /* 记不了不影响 */ } }
+    return { ok: false, refused: true, why, version: to, from };
+  }
+  let why = '';
+  if (!r.ok) why = '安装器没跑完（' + (r.out.split(/\r?\n/).filter((l) => /\[X\]/.test(l))[0] || '看 ' + INSTALL_LOG).trim() + '）';
+  else if (installedVersion() !== to) why = '装完版本号不对：是 ' + installedVersion();
+  else { const c = selfCheck(); if (!c.ok) why = '装完自检没过：' + c.why; }
+  const hist = (readState('update').history || []).slice(-9);
+  if (!why) {
+    setState({ lastApplied: { at: Date.now(), from, to }, failed: null, refused: null, history: hist.concat({ at: Date.now(), from, to, ok: true }) });
+    log('已更新到 ' + to);
+    return { ok: true, version: to, from };
+  }
+  log('没装成：' + why);
+  const st = readState('update');
+  const times = failedTimes(st, to) + 1;
+  const back = rollback(from, s);
+  log(back.ok ? '已装回上一版 ' + from : '没能装回上一版：' + back.why);
+  setState({ failed: { version: to, from, times, why, at: Date.now(), rolledBack: back.ok }, history: hist.concat({ at: Date.now(), from, to, ok: false, why, rolledBack: back.ok }) });
+  // 暂存处回到仓库最新的那个提交，下次检查不用重新下载
+  try { if (st.remoteCommit) gl.git(STAGE, ['checkout', '-q', '-f', st.remoteCommit], { timeout: 120000 }); } catch (e) { /* 下次检查会重新拉 */ }
+  try { require('./feedback.js').record({ kind: '出错', hook: '自动更新', source: '钩子自动记录', title: '自动更新到 ' + to + ' 没装成：' + why.slice(0, 60), what: '从 ' + from + ' 更新到 ' + to + ' 时：' + why + '。' + (back.ok ? '已经装回 ' + from + '。' : '没能装回上一版：' + back.why), stack: readText(INSTALL_LOG).slice(-3000), sig: require('./feedback.js').sigOf(['update', to, why.slice(0, 40)]) }); } catch (e) { /* 记不了就算了 */ }
+  return { ok: false, why, rolledBack: back.ok, rollbackSource: back.ok ? back.local ? 'local' : 'remote' : '', version: to, from };
+}
+
+// ---------- 现在的情况（配置页、状态栏用） ----------
+/**
+ * 发版保护现在处在哪一步（状态栏、配置页顶部、status() 共用，只看配置和状态文件，不连网）：
+ * { hold: '' / 'pin' / 'skip' / 'wait' / 'flag', until: 等到什么时候, flag: 尝鲜组报的那一条,
+ *   pin: 固定在哪一版（没固定是空的，仓库里没有新版也给）, skip: 跳过的那一版（仓库里现在就是它才给） }
+ */
+function phase(cfg, st, installed, now) {
+  const s = st || {};
+  const c = cfg || {};
+  const g = gate(c, s, installed, now || Date.now());
+  const pin = verOf(c.updatePin);
+  return { hold: g.hold || '', until: g.until || 0, flag: g.hold === 'flag' ? g.flag : null, pin, skip: g.hold === 'skip' ? s.remoteVersion : '' };
+}
+function status() {
+  const cfg = readConfig();
+  const st = readState('update');
+  const installed = installedVersion();
+  const remote = st.remoteVersion || '';
+  const failed = st.failed && st.failed.version === remote ? st.failed : null;
+  // 装坏了、也没装回去：现在装着的就是坏的那一版（配置页顶部、状态栏都要说）
+  const broken = brokenOf(st);
+  const refused = st.refused && st.refused.version === remote && remote !== installed ? st.refused : null;
+  const ph = phase(cfg, st, installed, Date.now());
+  return {
+    refused, broken,
+    mode: modeOf(cfg), hours: hoursOf(cfg), installed, remote, branch: st.remoteBranch || '', commit: String(st.remoteCommit || '').slice(0, 8), route: st.route || '', routeLabel: st.routeLabel || '',
+    differs: !!remote && remote !== installed, behind: !!remote && remote !== installed && !(failed && failed.times >= 2),
+    lastCheckAt: st.lastCheckAt || 0, lastCheckOk: st.lastCheckOk !== false, lastError: st.lastError || '', lastApplied: st.lastApplied || null, failed,
+    history: (st.history || []).slice(-10).reverse(), running: lockHeld(), log: LOG, maintainer: gl.isMaintainer(),
+    // 发版保护：先装新版（尝鲜组）勾没勾；现在等不等、等到什么时候；这一版什么时候发布的；查到的"这一版有没有问题"（只给仓库里现在这一版的）
+    early: cfg.updateEarly === true, hold: ph.hold, waitUntil: ph.hold === 'wait' ? ph.until : 0, remoteAt: releasedAt(st),
+    // 固定在哪一版（空 = 没固定）；跳过的版本（配置里存的，不管仓库里现在是不是它）
+    pin: ph.pin, skip: verOf(cfg.updateSkip),
+    flag: st.flag && st.flag.version === remote && remote !== installed ? st.flag : null,
+  };
+}
+
+// ---------- 钩子调的：到时间了就甩一个后台进程 ----------
+function spawnBackground(args) {
+  const env = Object.assign({}, process.env);
+  const c = spawn(process.execPath, [__filename].concat(args), { detached: true, windowsHide: true, stdio: 'ignore', env, cwd: KIT });
+  c.on('error', () => {});
+  c.unref();
+  return true;
+}
+/**
+ * 该检查更新了、或者有还没上报的问题：甩一个后台进程去做，自己马上返回。一分钟内不重复甩，已经有一个在跑也不甩。
+ * 只读两个小文件，钩子里每次都调也不碍事
+ */
+function kick(why) {
+  try {
+    // 临时不想让它在后台检查更新、上报问题（排查问题、跑测试）：环境变量 VIBE_KIT_NO_UPDATE=1
+    if (process.env.VIBE_KIT_NO_UPDATE === '1') return false;
+    const cfg = readConfig();
+    const st = readState('update');
+    const now = Date.now();
+    const dueUpdate = modeOf(cfg) !== 'off' && now - (st.lastCheckAt || 0) >= hoursOf(cfg) * 3600000;
+    // 已经下载好、还没装上的：十分钟后再试一次
+    const dueApply = modeOf(cfg) === 'auto' && now - (st.lastKickAt || 0) >= 10 * 60000 && needInstall();
+    let dueIssues = false;
+    if (cfg.issueUpload !== 'off') { const d = readState('issues-dirty'); const i = readState('issues'); dueIssues = (d.at || 0) > (i.lastSyncAt || 0) && now >= (i.blockedUntil || 0) && now - (i.lastTryAt || 0) >= 5 * 60000; }
+    // 使用情况：有过完了的日子还没传（今天查过、传完了就不再看；传不上去一小时后再试）
+    let dueUsage = false;
+    if (cfg.usageReport !== 'off') { const u = readState('usage-sync'); const U = require('./usage.js'); const today = U.dayKey(); dueUsage = u.checkedDay !== today && now >= (u.blockedUntil || 0) && now - (u.lastTryAt || 0) >= 3600000 && U.days().some((d) => d < today); }
+    if (!dueUpdate && !dueApply && !dueIssues && !dueUsage) return false;
+    if (now - (st.lastKickAt || 0) < 60000 || lockHeld()) return false;
+    setState({ lastKickAt: now, lastKickWhy: String(why || '') });
+    return spawnBackground(['run']);
+  } catch (e) { return false; }
+}
+
+/** 后台进程干的事：检查 → （自动装的）安装 → 上报问题、使用情况 */
+async function run(opt) {
+  const o = opt || {};
+  if (!lock()) return { skipped: '已经有一个在跑了' };
+  const out = {};
+  try {
+    const cfg = readConfig();
+    const st = readState('update');
+    // 这一次真的跑过安装器没有
+    let installed = false;
+    // 上次装坏了、也没能装回上一版（审核 P04）：版本号已经是坏的那一版，以前之后就当"已是最新"不再管。这次再试着装回上一版
+    // 只在自动更新模式下、离上次试过 6 小时以上才试（复审 U-R2：以前每次检查都重装，只提醒的模式也装）
+    // 固定在这一版的不试（固定 = 什么都不自动装）
+    const pin = verOf(cfg.updatePin);
+    const bad = brokenOf(st);
+    if (bad && bad.from && !pin && modeOf(cfg) === 'auto' && Date.now() - (Number(bad.retriedAt) || Number(bad.at) || 0) >= 6 * 3600000) {
+      const back = rollback(bad.from, gl.settings());
+      log(back.ok ? '上次没装回去，这次装回了上一版 ' + bad.from : '还是没能装回上一版 ' + bad.from + '：' + back.why);
+      if (back.ok) { setState({ failed: Object.assign({}, bad, { rolledBack: true, retriedAt: Date.now() }) }); installed = true; }
+      else setState({ failed: Object.assign({}, bad, { retriedAt: Date.now() }) });
+    }
+    if (modeOf(cfg) !== 'off' || o.force) {
+      if (o.force || Date.now() - (st.lastCheckAt || 0) >= hoursOf(cfg) * 3600000 || !st.remoteVersion) out.check = check();
+      // 没勾"先装新版"的：等满了 24 小时，装之前查一下尝鲜组有没有报这一版有问题（只提醒的也查，配置页上好说清楚）
+      if (!o.force) { const f = await refreshFlag(cfg, false); if (f) out.flag = f; }
+      // 固定在这一版：配置页点"立即更新"也不装，要先取消固定（配置页上这个按钮是灰的，这里再挡一次）
+      if (o.force && pin && needInstall(true)) { out.apply = { ok: false, pinned: true, why: '固定在 ' + pin + '，不更新。要更新先在配置页"更新和上报"点"取消固定"' }; log('固定在 ' + pin + '，没装 ' + stagedVersion()); }
+      else if ((modeOf(cfg) === 'auto' || o.force) && needInstall(!!o.force)) {
+        out.apply = apply(); installed = true;
+      }
+    }
+    // 刚装过新版的话，这个进程里载入的还是旧代码：上报留给下一次（新代码来做）。
+    if (cfg.issueUpload !== 'off' && !o.noIssues && !installed) { try { out.issues = await require('./issues.js').sync(); } catch (e) { log('上报问题时出错：' + ((e && e.message) || e)); } }
+    if (cfg.usageReport !== 'off' && !o.noIssues && !installed) { try { out.usage = await require('./issues.js').syncUsage(); } catch (e) { log('上报使用情况时出错：' + ((e && e.message) || e)); } }
+  } catch (e) { log('后台更新出错：' + ((e && e.stack) || e)); out.error = String((e && e.message) || e); } finally { unlock(); }
+  return out;
+}
+
+module.exports = { DIR, STAGE, LOG, INSTALL_LOG, CANARY_WAIT_MS, FLAG_TTL_MS, modeOf, hoursOf, installedVersion, stagedVersion, remoteHead, check, needInstall, gate, phase, refreshFlag, whenText, apply, selfCheck, status, kick, run, spawnBackground, lockHeld };
+
+if (require.main === module) {
+  const cmd = process.argv[2] || 'status';
+  const has = (f) => process.argv.includes(f);
+  const print = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+  (async () => {
+    if (cmd === 'run') { const r = await run({ force: has('--force') }); if (has('--print')) print(r); }
+    // 配置页点"立即检查"：顺带查一下尝鲜组有没有报仓库里这一版有问题（没勾"先装新版"、仓库里的比装着的新才查）
+    else if (cmd === 'check') { let ran = false; if (lock()) { try { const c = check(); if (c.lastCheckOk) await refreshFlag(readConfig(), true); ran = true; } finally { unlock(); } } print(Object.assign(status(), ran ? {} : { skipped: '已经有一个在跑了' })); }
+    else if (cmd === 'apply') print(await run({ force: true, noIssues: true }));
+    else if (cmd === 'selfcheck') { const c = selfCheck(); console.log(c.ok ? 'ok' : c.why); process.exitCode = c.ok ? 0 : 1; }
+    else if (cmd === 'diagnose') print(await gl.diagnose(readConfig()));
+    else if (cmd === 'mint') { const m = gl.mintToken(); if (m.ok) log('用 SSH 申请了一个令牌，到期日 ' + (m.expires || '（没说）')); print(m); }
+    else if (cmd === 'issues-sync') { let r = { skipped: '已经有一个在跑了' }; if (lock()) { try { r = await require('./issues.js').sync({ force: true }); } finally { unlock(); } } print(r); }
+    else if (cmd === 'issues-summary') print(Object.assign(require('./issues.js').summary(), { lastExport: require('./issues.js').lastExport() }));
+    // 导出只导出（页面交给浏览器下载），关掉是另一步：issues-close <编号,编号|-> --name <导出的文件名>
+    else if (cmd === 'issues-export') print(await require('./issues.js').exportIssues());
+    else if (cmd === 'issues-close') { const i = process.argv.indexOf('--name'); print(await require('./issues.js').closeExported(String(process.argv[3] || '').split(',').map(Number).filter((x) => x > 0), i > 0 ? process.argv[i + 1] : '')); }
+    else if (cmd === 'usage-sync') { let r = { skipped: '已经有一个在跑了' }; if (lock()) { try { r = await require('./issues.js').syncUsage({ force: true }); } finally { unlock(); } } print(r); }
+    else if (cmd === 'usage-preview') print(require('./issues.js').usagePreview());
+    else print(status());
+  })().catch((e) => { log('出错：' + ((e && e.stack) || e)); print({ ok: false, error: String((e && e.message) || e) }); process.exitCode = 1; });
+}
