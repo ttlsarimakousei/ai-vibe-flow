@@ -83,7 +83,7 @@ EXIT_OK = 0
 EXIT_USAGE = 1          # 参数或配置不对
 EXIT_FAILED = 2         # 跑到了数据库那头，但失败了
 EXIT_BLOCKED = 3        # 被安全规则拦住
-EXIT_NEED_ACK = 4       # 要人确认才能继续，不是错误
+EXIT_NEED_ACK = 4       # 第一步：影响面打出来了，带确认串重跑才执行（要不要等人点头看输出），不是错误
 
 # 这次调用的探测缓存。找 java、翻 Maven 仓库找驱动都不便宜，
 # 探一次写进 .vibe/db-crud.env.json，后面的调用直接读。
@@ -736,7 +736,7 @@ def cmd_columns(args, conn, project_root):
         print("主键：%s" % ("、".join(pk) if pk else "（没有主键）"))
         if not pk:
             # 只在这里说，不往连接配置里记：一张表记一条的话，人记的那几条会被挤得显示不出来
-            print("★ 没有主键的表，改数据之后很难精确还原：改之前先想清楚怎么还原。")
+            print("★ 没有主键的表：改过、新增的行工具还原不了。照常做，不用问，做了在交代里说一句。")
     return code
 
 
@@ -791,7 +791,7 @@ def cmd_query(args, conn, project_root):
         if why:
             print("拦住了：query 只跑查询。%s。" % why, file=sys.stderr)
             print("  " + " ".join(s.raw.split())[:120], file=sys.stderr)
-            print("要改数据、改结构用 exec（会先算影响面、要人确认）。", file=sys.stderr)
+            print("要改数据、改结构用 exec（两步：先算影响面，再带确认串执行）。", file=sys.stderr)
             return EXIT_BLOCKED
 
     width, cell = width_args(args)
@@ -1338,28 +1338,29 @@ def auto_mode():
 
 
 def _auto_blocked(reasons=None):
-    """全自动模式下这条写操作不执行：备份不了，或者本来就是要人拿主意的。"""
+    """全自动模式下这条写操作不执行：要人点头的（还原不了的删、看不懂的语句、还原），用户不在。"""
     print("拦住了：全自动模式（用户不在），这条写操作不执行。", file=sys.stderr)
     for r in (reasons or ["还原不是全自动模式下做的事：它自己不留改前快照，做了就回不去。"]):
         print("  · " + r, file=sys.stderr)
-    print("全自动模式下只做留得下备份的写操作：改、删要取得全改前快照、生成得出还原脚本；新增要记得下主键；"
-          "建表、建索引、加列要写得出对应的 DROP。", file=sys.stderr)
+    print("开发库上新增、修改、建表、加列改列和留得下改前快照的删不用人点头；还原不了的删（整表删、清空、删表、删列）"
+          "和看不懂的语句要人点头。", file=sys.stderr)
     print("在那项任务后面标「（留给用户：要改库）」，把第一步打印的影响面写进最后的交代，接着做别的。", file=sys.stderr)
     if RUN is not None:
         RUN.error("BLOCKED")
     return EXIT_BLOCKED
 
 
-# ------------------------------------------------------------ 全自动模式下的写操作
+# ------------------------------------------------------------ 留备份要用的东西
 #
-# 用户 2026-09-30 定的：全自动模式不拦改库，条件是留得下备份 ——
+# 留得下备份的条件（auto_plan，2026-09-30 起）——
 #   改、删   改前快照要取全，还原脚本（undo.sql）要生成得出来：影响面数得清、不超过快照上限，
 #            UPDATE 的表得有主键，表里不能有二进制列
 #   新增     把表和新行的主键记下来，还原脚本是按主键一行一行删。语句里写明了主键值的直接记；
-#            没写的（自增、序列）让驱动把主键带回来，带不回来就不执行
+#            没写的（自增、序列）让驱动把主键带回来
 #   建表、建索引、建视图、建序列、加列   记下来，还原脚本是对应的 DROP
-# 备份不了的不执行，留给用户：没有 WHERE、连表、影响面数不出来、超过快照上限、没有主键、INSERT … SELECT、
+# 留不下备份的：没有 WHERE、连表、影响面数不出来、超过快照上限、没有主键、INSERT … SELECT、
 # 撞键就改的插入、改列删列、清空、删表、授权、看不懂的语句。
+# 留不下备份的做不做，2026-11-13 起由 write_policy 定（问题表第 91 条）：以前全自动模式下一律不做。
 
 _LITERAL = re.compile(r"^(?:[Nn]?'(?:[^']|'')*'|[-+]?\d+(?:\.\d+)?)$")
 
@@ -1564,7 +1565,8 @@ def _table_meta(conn, project_root, stmt, args):
 
 def auto_plan(args, conn, project_root, stmt, risk, rows):
     """
-    全自动模式下这条写操作做不做。返回 {"ok": 行不行, "why": [不行的原因], …执行时要用的东西}。
+    这条写操作留不留得下备份。返回 {"ok": 留不留得下, "why": [留不下的原因], …执行时要用的东西}。
+    留不下的做不做由 write_policy 定（2026-11-13 之前：全自动模式下留不下的一律不做）。
     行的时候带着：ids（语句里写明的主键值）、key_cols（要让驱动带回来的主键列）、pk、types、undo_ddl、created。
     """
     why = []
@@ -1632,6 +1634,177 @@ def auto_plan(args, conn, project_root, stmt, risk, rows):
     return plan
 
 
+# ------------------------------------------------------------ 这条写操作要不要人点头
+#
+# 仓库主人 2026-11-13 定的（问题表第 91 条：执行 SQL 老是询问，往设定上就没有主键的表里插入也问）。
+# 替代两条老规矩：有人在时"只要会改数据库就必须确认"、全自动模式下"留不下备份的不执行"。
+# 连接只配开发环境的库，人工、自动实施一个规矩 ——
+#   不问   新增、修改（有没有主键、带不带 WHERE 都一样）、建对象、加列改列、授权；
+#          留得下改前快照的删（带条件、行数数得清、不超过快照上限、表里没有二进制列：能还原）；
+#          删这个项目里工具自己建的表、加的列和约束（留痕里有，OWN_DAYS 天内）
+#   要问   还原不了的删：没有 WHERE 的 DELETE、连表删、清空、DROP（删表、删索引、删视图都算）、删列、
+#          影响面数不出来或超过快照上限的 DELETE；看不懂的语句（保不准是不是删）
+#   直接拒 删库删 schema、禁止名单、只读连接、超过硬上限（照旧，在这之前就拦了）
+# 要问的：有人在，照旧把影响面给人看、等他同意；自动实施时用户不在，不执行，留给用户。
+# 不问的还是两步（第一步看影响面，第二步带确认串），确认串由模型自己看过影响面就带上。备份照旧尽量留，留不全的在第一步的输出里标 ★。
+
+OWN_DAYS = 7
+# 认不出类型、但看得出不是删的语句：注释、撞键就改的合并和替换、改名
+_NOT_REMOVING = re.compile(r"^\s*(COMMENT\s+ON|MERGE\b|REPLACE\s+INTO|RENAME\b)", re.I)
+_DROP_ONE = re.compile(r"^\s*DROP\s+(TABLE|INDEX|VIEW|SEQUENCE)\s+(?:IF\s+EXISTS\s+)?(%s)(?:\s+ON\s+%s)?"
+                       r"(?:\s+(?:CASCADE(?:\s+CONSTRAINTS)?|RESTRICT|PURGE))*\s*$" % (sqlguard._QUALIFIED, sqlguard._QUALIFIED), re.I)
+
+
+def _removes(stmt):
+    """这条语句会不会删东西（删行、清空、删对象、删列）。看不懂的按会删算。"""
+    k = stmt.kind
+    if k in (sqlguard.DELETE, sqlguard.TRUNCATE, sqlguard.DROP_TABLE, sqlguard.DROP_SCHEMA):
+        return True
+    masked = sqlguard._mask_literals(stmt.raw, stmt.dialect)
+    if k == sqlguard.ALTER_TABLE:
+        return re.search(r"\b(DROP|TRUNCATE)\b", sqlguard._top_level(masked), re.I) is not None
+    if k == sqlguard.CREATE:
+        # CREATE OR REPLACE TABLE 会把原来的表连数据一起换掉
+        return re.match(r"^\s*CREATE\s+OR\s+REPLACE\s+(?:\w+\s+)*?TABLE\b", masked, re.I) is not None
+    if k == sqlguard.UNKNOWN:
+        if "/*!" in stmt.raw or not _NOT_REMOVING.match(masked):
+            return True
+        return re.search(r"\b(DELETE|DROP|TRUNCATE)\b", masked, re.I) is not None
+    return False
+
+
+def _bare(name):
+    """对象名去掉 schema 前缀和引号、转小写：比名字用。"""
+    return sqlguard._clean_ident(str(name or "").split(".")[-1]).strip().lower()
+
+
+def _made_here(conn, project_root):
+    """这个项目里工具自己建过的对象：留痕里 OWN_DAYS 天内、执行成功、记着 created 的。返回 [{"kind", "name", "table"}]。"""
+    root = journal.journal_root() / re.sub(r"[^\w.-]", "_", conn["name"])
+    here = _norm_key(pathlib.Path(project_root).resolve())
+    since = datetime.datetime.now() - datetime.timedelta(days=OWN_DAYS)
+    out = []
+    try:
+        names = sorted(os.listdir(str(root)))
+    except OSError:
+        return out
+    for n in names:
+        if not re.search(r"-(create|alter_table)$", n):
+            continue
+        try:
+            at = datetime.datetime.strptime(n[:15], "%Y%m%d-%H%M%S")
+        except ValueError:
+            continue
+        if at < since:
+            continue
+        op = journal.load_op(root / n)
+        if not op or not isinstance(op.get("created"), dict) or not (op.get("result") or {}).get("ok"):
+            continue
+        if _norm_key(op.get("project") or "") != here:
+            continue
+        out.append(op["created"])
+    return out
+
+
+def _own_object(conn, project_root, stmt):
+    """这条删的是不是这个项目里工具自己建的东西。是，返回一句说明；不是、认不全的返回 ""。"""
+    made = []
+    loaded = []
+
+    def has(kind, name, table=None):
+        if not loaded:
+            loaded.append(True)
+            made.extend(_made_here(conn, project_root))
+        for c in made:
+            if str(c.get("kind") or "").upper() != kind:
+                continue
+            if _bare(name) not in [_bare(x) for x in str(c.get("name") or "").split("、")]:
+                continue
+            if table is not None and _bare(c.get("table")) != _bare(table):
+                continue
+            return True
+        return False
+
+    k = stmt.kind
+    raw = stmt.raw
+    masked = sqlguard._mask_literals(raw, stmt.dialect)
+    if k in (sqlguard.DELETE, sqlguard.TRUNCATE):
+        if stmt.table and not stmt.multi_table and has("TABLE", stmt.table):
+            return "表 %s 是这个项目里工具自己建的" % stmt.table
+        return ""
+    if k == sqlguard.DROP_TABLE:
+        m = _DROP_ONE.match(masked)
+        if m and has(m.group(1).upper(), raw[m.start(2):m.end(2)]):
+            return "%s %s 是这个项目里工具自己建的" % (m.group(1).upper(), " ".join(raw[m.start(2):m.end(2)].split()))
+        return ""
+    if k == sqlguard.ALTER_TABLE:
+        m = re.match(r"^\s*ALTER\s+TABLE\s+(%s)\s+" % sqlguard._QUALIFIED, masked, re.I)
+        if not m:
+            return ""
+        table = raw[m.start(1):m.end(1)]
+        parts = _split_top(raw, masked, m.end(), len(masked))
+        for p in parts:
+            c = re.match(r"^DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?(%s)$" % sqlguard._IDENT, p, re.I)
+            if c:
+                if not has("CONSTRAINT", c.group(1), table):
+                    return ""
+                continue
+            c = re.match(r"^DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(%s)$" % sqlguard._IDENT, p, re.I)
+            if not c or re.match(r"(?i)^(CONSTRAINT|PRIMARY|UNIQUE|FOREIGN|INDEX|KEY|CHECK|PARTITION|COLUMN)$", c.group(1)):
+                return ""
+            if not has("COLUMN", c.group(1), table):
+                return ""
+        return "删的是这个项目里工具自己给表 %s 加的列、约束" % " ".join(table.split()) if parts else ""
+    return ""
+
+
+def _ddl_plan(stmt, conn):
+    """建对象、加列：还原脚本和建了什么（不连库）。写不出还原脚本的返回 None。"""
+    if stmt.kind not in (sqlguard.CREATE, sqlguard.ALTER_TABLE):
+        return None
+    undo, created, err = _ddl_undo(stmt, conn["dialect"])
+    return None if err else {"ok": True, "why": [], "undo_ddl": undo, "created": created}
+
+
+def write_policy(args, conn, project_root, stmt, risk, rows, unattended):
+    """
+    这条写操作要不要人点头。返回 {"ask": 要不要, "why": [要问的原因], "plan": 留备份要用的东西或 None,
+    "weak": [备份留不全的原因], "own": 删的是自己建的东西时的那句说明}。
+    unattended 是全自动模式（用户不在）：照 2026-09-30 起的做法先连一次库看表的主键、有没有二进制列，备份留到最全。
+    有人在的时候新增、修改不为这个多连一次库（一条命令起一次 java 要一两秒）：主键写在语句里的照样记，自增的记不下来，和以前一样。
+    """
+    if not unattended and stmt.kind in (sqlguard.INSERT, sqlguard.UPDATE):
+        return {"ask": False, "why": [], "plan": None, "weak": [], "own": ""}
+    plan = auto_plan(args, conn, project_root, stmt, risk, rows)
+    if plan["ok"]:
+        return {"ask": False, "why": [], "plan": plan, "weak": [], "own": ""}
+    why = list(plan["why"])
+    if not _removes(stmt):
+        return {"ask": False, "why": [], "plan": None, "weak": why, "own": ""}
+    own = _own_object(conn, project_root, stmt)
+    if own:
+        return {"ask": False, "why": [], "plan": None, "weak": why, "own": own}
+    return {"ask": True, "why": why, "plan": None, "weak": [], "own": ""}
+
+
+def _say_next(pol, token, again=False):
+    """第一步最后那几句：这条要不要等人点头、带哪个确认串。"""
+    if pol["ask"]:
+        print("这条是还原不了的删（或者看不懂的语句），要人确认才能执行。把上面的内容%s给人看过之后，重跑一遍并带上："
+              % ("重新" if again else ""))
+    else:
+        if pol["own"]:
+            print("（%s，不用问。）" % pol["own"])
+        for w in pol["weak"]:
+            print("★ 备份留不全：%s。照做，做完工具还原不了，交代里说一句。" % w)
+        print("开发库：这条不用等人确认。上面的影响面%s看过没问题（行数和预期的一样），就重跑一遍并带上：" % ("现在的样子" if again else ""))
+    print()
+    print("  --ack %s" % token)
+    print()
+    if not pol["ask"]:
+        print("执行时尽量留改前快照和还原脚本（新增的记下表和主键）。执行完把它打印的留痕目录写进最后的交代。")
+
+
 def _limits_and_forbid(args, conn):
     """
     这一次用的禁止名单和几条线。连接配置里写的是底线，命令行上给的只能再收紧：
@@ -1651,6 +1824,7 @@ def cmd_exec(args, conn, project_root):
     写操作。两步走：
       第一步不带 --ack，算清影响面和风险，把要做的事摆出来，什么都不改；
       第二步带上打印出来的那串 --ack，才真的执行。
+    确认串要不要等人点头看 write_policy：还原不了的删、看不懂的语句要，别的模型自己看过影响面就带上。
 
     ack 串里带着表名和影响行数，是有意的：Claude Code 的确认弹窗只显示命令行，
     SQL 在文件里它看不见，把关键信息放进 ack 串，弹窗里才看得出要动什么。
@@ -1684,11 +1858,12 @@ def cmd_exec(args, conn, project_root):
         return _blocked(pre)
 
     count_sql = sqlguard.count_sql_for(stmt)
-    # 只要会改数据库，就必须确认，不按风险等级区分。
+    # 只要会改数据库，就要走两步（第一步只看影响面，第二步带确认串），不按风险等级区分。
     # 规则简单才不会被误解：曾经按等级放行 SAFE 的写操作，结果「想先看看影响面」
     # 的那一次调用就把数据改了 —— 想预览得用 --dry-run，可没人记得住。
+    # 确认串要不要等人点头由 write_policy 定（2026-11-13，问题表第 91 条）：还原不了的删、看不懂的语句才要
     needs_ack = stmt.kind != sqlguard.SELECT
-    # 全自动模式（用户不在）：不等人确认，但只做留得下备份的写操作，见 auto_plan
+    # 全自动模式（用户不在）：要人点头的那几种不执行，留给用户
     auto = needs_ack and auto_mode()
 
     # ---- 带了确认串：直接去执行，行数在事务里核对 ----
@@ -1699,14 +1874,18 @@ def cmd_exec(args, conn, project_root):
             risk = classify(n if n is not None else -1)
             if risk.blocked:
                 return _blocked(risk)
-            plan = None
             if auto:
-                plan = auto_plan(args, conn, project_root, stmt, risk, n if n is not None else -1)
-                if not plan["ok"]:
-                    return _auto_blocked(plan["why"])
+                pol = write_policy(args, conn, project_root, stmt, risk, n if n is not None else -1, True)
+                if pol["ask"]:
+                    return _auto_blocked(pol["why"])
+            else:
+                # 有人在：要不要人点头第一步已经定了，记在确认串的登记里，这里不为它再连一次库。
+                # 没记的（上一版给出的串）按人点过头算
+                pol = {"ask": journal.pending_note(args.ack) != "free", "why": [], "plan": _ddl_plan(stmt, conn),
+                       "weak": [], "own": ""}
             ok, why_not = journal.pending_take(args.ack, _fingerprint(conn, stmt, risk))
             if ok:
-                return _apply(args, conn, project_root, stmt, risk, n, count_sql, classify, limits, plan)
+                return _apply(args, conn, project_root, stmt, risk, n, count_sql, classify, limits, pol)
 
     # ---- 预扫影响面 ----
     rows = -1
@@ -1732,25 +1911,16 @@ def cmd_exec(args, conn, project_root):
         print("这是查询，不是写操作。用 query 跑：db.py --conn %s query --sql \"...\"" % conn["name"])
         return EXIT_USAGE
 
-    # 全自动模式：这条做不做现在就说清楚。备份不了的不给确认串，留给用户
-    if auto:
-        plan = auto_plan(args, conn, project_root, stmt, risk, risk.rows if risk.rows is not None else rows)
-        if not plan["ok"]:
-            return _auto_blocked(plan["why"])
+    # 这条要不要人点头现在就说清楚。要人点头、又是全自动模式（用户不在）的不给确认串，留给用户
+    pol = write_policy(args, conn, project_root, stmt, risk, risk.rows if risk.rows is not None else rows, auto)
+    if pol["ask"] and auto:
+        return _auto_blocked(pol["why"])
 
-    token = new_ack(conn, stmt.kind, stmt.table, risk.rows, _fingerprint(conn, stmt, risk))
+    token = new_ack(conn, stmt.kind, stmt.table, risk.rows, _fingerprint(conn, stmt, risk), _ack_note(pol))
     if args.ack:
         print("确认串对不上：%s。你给的是 %s。" % (why_not, args.ack), file=sys.stderr)
-        print("什么都没有执行。%s，用下面这个新的串。" % ("看一遍上面的内容" if auto else "把上面的内容重新给人看一遍"), file=sys.stderr)
-    if auto:
-        print("全自动模式：这条留得下备份，不用等人确认。上面的影响面看过没问题，就重跑一遍并带上：")
-    else:
-        print("这是写操作，要确认才能执行。把上面的内容给人看过之后，重跑一遍并带上：")
-    print()
-    print("  --ack %s" % token)
-    print()
-    if auto:
-        print("执行时留改前快照和还原脚本（新增的记下表和主键）。执行完把它打印的留痕目录写进最后的交代。")
+        print("什么都没有执行。%s，用下面这个新的串。" % ("把上面的内容重新给人看一遍" if pol["ask"] else "看一遍上面的内容"), file=sys.stderr)
+    _say_next(pol, token)
     return EXIT_NEED_ACK
 
 
@@ -1794,17 +1964,23 @@ def _insert_record(stmt, conn, plan, r, pk_cols):
     return rec, "\n".join(lines) if lines else None
 
 
-def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, limits, plan=None):
-    """真的执行。确认串已经对上了、用掉了。plan 是全自动模式下 auto_plan 给的（有人在的时候是 None）。"""
+def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, limits, pol=None):
+    """
+    真的执行。确认串已经对上了、用掉了。pol 是 write_policy 给的：pol["plan"] 是留备份要用的东西（留不下的是 None），
+    pol["ask"] 是这条是不是人点过头的。
+    """
+    plan = (pol or {}).get("plan")
+    free = bool(pol) and not pol["ask"]
     entry = journal.new_entry_dir(conn["name"], stmt.kind)
     snapshot_path = entry / "before.json"
     before_sql = sqlguard.before_image_sql_for(stmt)
 
     labeled = []
     extra = ["--snapshot-max-rows", str(args.snapshot_max_rows)]
-    # 新增、主键不在语句里：让驱动把主键带回来，带不回来就不提交
+    # 新增、主键不在语句里：让驱动把主键带回来（带回来的和新增的行数对不上就回滚，见下面 IDS_UNKNOWN）
+    keys = []
     if plan and plan.get("key_cols"):
-        extra += ["--key-columns", ",".join(str(c) for c in plan["key_cols"]), "--require-ids", "true"]
+        keys = ["--key-columns", ",".join(str(c) for c in plan["key_cols"]), "--require-ids", "true"]
     if count_sql and expect is not None:
         labeled.append(("count", count_sql))
         extra += ["--expect-count", str(expect)]
@@ -1828,7 +2004,7 @@ def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, li
         extra += ["--pk-table", bare] + scope_args(conn, schema)
 
     started = datetime.datetime.now()
-    r = run_runner(conn, "apply", project_root, labeled=labeled, extra_args=extra, timeout=args.timeout)
+    r = run_runner(conn, "apply", project_root, labeled=labeled, extra_args=extra + keys, timeout=args.timeout)
 
     def drop_entry():
         try:
@@ -1839,10 +2015,9 @@ def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, li
             pass
 
     if r.get("code") == "IDS_UNKNOWN":
-        # 全自动模式：新增的行的主键拿不到。没有执行（执行了的也回滚了）
-        drop_entry()
-        return _auto_blocked(["新增的行的主键记不下来：%s" % str(r.get("error", ""))[:200],
-                              "主键是自己定的值的话，把它直接写进语句里（写在列名单和 VALUES 里），就记得下来"])
+        # 驱动带不回新增的行的主键，那一遍没有执行（执行了的也回滚了）。不要主键再做一遍：
+        # 开发库上新增不因为记不下主键就不做（问题表第 91 条），留痕和输出里会写明主键没记下来
+        r = run_runner(conn, "apply", project_root, labeled=labeled, extra_args=extra, timeout=args.timeout)
 
     if r.get("code") in ("COUNT_CHANGED", "AFFECTED_MORE"):
         # 确认之后、执行之前，库里的数据变了。没有执行（执行了的也回滚了）。把现在的影响面摆出来，重新确认
@@ -1857,17 +2032,12 @@ def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, li
             print("★ 没有执行（已经回滚）：确认的是 %s 行，真执行的时候动了 %s 行。这期间数据变了。" % (expect, now))
         print()
         _show_plan(conn, stmt, now, risk2)
-        if plan is not None:
-            # 全自动模式：行数变了，能不能做要重新看一遍（可能超过快照上限了）
-            plan2 = auto_plan(args, conn, project_root, stmt, risk2, now)
-            if not plan2["ok"]:
-                return _auto_blocked(plan2["why"])
-            print("全自动模式：看一遍上面现在的影响面，没问题就重跑一遍并带上：")
-        else:
-            print("把上面的内容重新给人看过之后，重跑一遍并带上：")
-        print()
-        print("  --ack %s" % new_ack(conn, stmt.kind, stmt.table, risk2.rows, _fingerprint(conn, stmt, risk2)))
-        print()
+        # 行数变了，要不要人点头重新看一遍（删的行数可能超过快照上限了）
+        away = auto_mode()
+        pol2 = write_policy(args, conn, project_root, stmt, risk2, now, away)
+        if pol2["ask"] and away:
+            return _auto_blocked(pol2["why"])
+        _say_next(pol2, new_ack(conn, stmt.kind, stmt.table, risk2.rows, _fingerprint(conn, stmt, risk2), _ack_note(pol2)), again=True)
         return EXIT_NEED_ACK
 
     if r.get("code") == "OVER_LIMIT":
@@ -1889,8 +2059,8 @@ def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, li
         "ack": args.ack,
         "before_image_sql": before_sql,
         "result": {k: v for k, v in r.items() if not k.startswith("_")},
-        # 是不是全自动模式下做的（没有人确认）、在哪个项目里做的：全自动报告按这两样把它列出来
-        "auto": plan is not None,
+        # 是不是没有人确认就做的（2026-11-13 起不问的那些都是）、在哪个项目里做的：全自动报告按这两样把它列出来
+        "auto": free,
         "project": str(pathlib.Path(project_root).resolve()),
     }
     journal.write_op(entry, op)
@@ -1946,7 +2116,7 @@ def _apply(args, conn, project_root, stmt, risk, expect, count_sql, classify, li
         # 建表、建索引、加列：还原脚本是对应的 DROP（只写出来，不执行：DROP 要人来做）
         op["created"] = plan.get("created")
         journal.write_op(entry, op)
-        notes = ["★ 这是删掉刚建的对象的语句。删表、删列会连里面的数据一起删，要人看过再执行（全自动模式下不做）"]
+        notes = ["★ 这是删掉刚建的对象的语句。删表、删列会连里面的数据一起删：确实要删，拿出来用 exec --sql 一条一条执行"]
         undo_path = journal.write_undo(entry, plan["undo_ddl"], notes, header)
         c = plan.get("created") or {}
         print()
@@ -1985,17 +2155,23 @@ def _fingerprint(conn, stmt, risk):
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def new_ack(conn, kind, table, rows, fingerprint):
+def _ack_note(pol):
+    """确认串登记时顺带记下的：这条要不要人点头。"""
+    return "ask" if pol["ask"] else "free"
+
+
+def new_ack(conn, kind, table, rows, fingerprint, note=None):
     """
     出一个确认串并登记。前半段是人看的（动哪张表、多少行），后半段是防串改的指纹。
     指纹里掺了一个随机数：同一条语句每次第一步给出的串都不一样，用过的串不能再用。
+    note 是顺带记下的（要不要人点头），第二步有人在的时候照它算，不再连库重算。
     """
     nonce = hashlib.sha256(os.urandom(32)).hexdigest()[:16]
     digest = hashlib.sha256((fingerprint + nonce).encode("utf-8")).hexdigest()[:8]
     name = re.sub(r"[^A-Za-z0-9_-]", "_", (table or "table").split(".")[-1])[:80] or "table"
     n = "%drows" % rows if rows is not None and rows >= 0 else "rows-unknown"
     token = "%s-%s-%s-%s" % (kind, name, n, digest)
-    journal.pending_put(token, fingerprint)
+    journal.pending_put(token, fingerprint, note)
     return token
 
 
@@ -2042,7 +2218,7 @@ def cmd_undo(args, conn, project_root):
 
     if op.get("kind") in (sqlguard.CREATE, sqlguard.ALTER_TABLE):
         print("那一次是建对象、加列，还原就是把建的东西删掉：删表、删列会连里面的数据一起删，这里不代做。", file=sys.stderr)
-        print("确实要删，把 undo.sql 里的语句拿出来，用 exec --sql 一条一条执行（要人确认）：", file=sys.stderr)
+        print("确实要删，把 undo.sql 里的语句拿出来，用 exec --sql 一条一条执行：", file=sys.stderr)
         for s in stmts[:5]:
             print("  " + " ".join(s.raw.split())[:200], file=sys.stderr)
         return EXIT_USAGE

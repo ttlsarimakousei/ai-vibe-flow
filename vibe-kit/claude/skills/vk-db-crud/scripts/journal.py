@@ -166,13 +166,28 @@ def _claim(token):
     return True
 
 
-def pending_put(token, fingerprint):
-    """登记一个刚给出去的确认串。登记不上（目录写不了、被占着）就抛 OSError：没登记的串第二步不认，得让人知道。"""
+def pending_put(token, fingerprint, note=None):
+    """
+    登记一个刚给出去的确认串。登记不上（目录写不了、被占着）就抛 OSError：没登记的串第二步不认，得让人知道。
+    note 是顺带记下的一句话（这条要不要人点头："ask" / "free"），第二步用 pending_note 看。
+    """
     def put():
         items = _pending_load()
-        items[str(token)] = {"fp": str(fingerprint), "at": datetime.datetime.now().timestamp()}
+        rec = {"fp": str(fingerprint), "at": datetime.datetime.now().timestamp()}
+        if note:
+            rec["note"] = str(note)
+        items[str(token)] = rec
         _pending_save(items)
     _locked(put)
+
+
+def pending_note(token):
+    """登记这个确认串时顺带记下的那句话。没记、串不在了返回 None。只看，不取走。"""
+    try:
+        rec = _pending_load().get(str(token))
+    except (OSError, ValueError):
+        return None
+    return rec.get("note") if isinstance(rec, dict) else None
 
 
 def pending_take(token, fingerprint):

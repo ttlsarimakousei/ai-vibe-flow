@@ -3,7 +3,7 @@
  * vk-db-crud：拿一个真的 JDBC 数据库（H2，MySQL 兼容模式）走完整的读写循环。
  *   建表 → 插入含中文、NULL、空串、引号的行 → 找表 → 看结构（大小写自己试、第二次走缓存）→ 按值找 → 几条查询一起跑
  *   → 两步确认的更新（行数变了不执行）→ 反向 SQL → 查询命令里塞写语句被拦
- *   → 全自动模式：留得下备份的直接做（改、删留快照和还原脚本，新增记下表和主键，建表加列记下 DROP），留不下的不做 → 驱动登记表 → 后台执行器
+ *   → 不用人点头的直接做、尽量留备份（改、删留快照和还原脚本，新增记下表和主键，建表加列记下 DROP）；还原不了的删要人点头，全自动下留给用户（问题表第 91 条） → 驱动登记表 → 后台执行器
  * 这台电脑没有 Java、没有 Python 的话跑不了。运行环境装在各自的正式位置（见 dev/README.md），给 auto 就自己去找；
  * 也可以给一个放着便携版的目录（里面有 python/python.exe、jdk/bin/java.exe、h2.jar）。
  * 达梦、神通、Oracle、金仓、MySQL 的真库这里测不了。
@@ -136,19 +136,25 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   const col4 = db(['columns', '--table', 'T_ORDER']);
   H.ok('通过工具改了结构：本地存的表结构作废，重新查到了新列', alt.b.code === 0 && col4.code === 0 && /REMARK2/.test(col4.out) && !/来自本地缓存/.test(col4.out), alt.b.out + alt.b.err + col4.out);
 
-  H.section('全自动模式（用户不在）：留得下备份的直接做，留不下的留给用户');
+  H.section('不用人点头的直接做（人工、全自动一样）；还原不了的删要人点头，全自动下留给用户（问题表第 91 条）');
   const lastEntry = (kind) => { const names = fs.existsSync(jdir) ? fs.readdirSync(jdir).filter((n) => n.endsWith('-' + kind)).sort() : []; return names.length ? path.join(jdir, names.pop()) : ''; };
   const opOf = (kind) => { try { return JSON.parse(H.read(path.join(lastEntry(kind), 'op.json')) || '{}'); } catch (e) { return {}; } };
   const undoOf = (kind) => H.read(path.join(lastEntry(kind), 'undo.sql')) || '';
   const countOf = (table) => ((db(['peek', '--table', table, '--count']).out.match(/^(\d+)\s*$/m) || [])[1] || '');
-  /** 全自动模式下一条写操作：第一步被拒就到此为止 */
+  /** 一条写操作两步走：第一步被拒就到此为止 */
   const autoExec = (sql, more) => { const f = sqlFile('a' + Date.now() + Math.random().toString(16).slice(2, 6) + '.sql', sql); const a = db(['exec', '--sql-file', f].concat(more || [])); const b = a.code === 4 ? db(['exec', '--sql-file', f, '--ack', ackOf(a)].concat(more || [])) : null; return { a, b }; };
+  /** 别人建的表：建完把留痕里那条"建了"删掉，工具就不认它是自己建的 */
+  const foreign = (ddl) => { const r = execBoth(ddl); try { fs.rmSync(lastEntry('create'), { recursive: true, force: true }); } catch (e) { /* 没有 */ } return r; };
+  const FREE = /开发库：这条不用等人确认/;
   {
+  // 有人在（没有条子）：改也不用等人点头
+  const mi = db(['exec', '--sql', 'UPDATE T_ORDER SET NOTE = NOTE WHERE ID = 3']);
+  H.ok('有人在的时候：改不用等人确认（以前凡是改库都要给人看）', mi.code === 4 && FREE.test(mi.out) && !/给人看过之后/.test(mi.out), mi.out + mi.err);
   AUTO = true;
   // 建表：记下来，还原脚本是 DROP
   const ac = autoExec('CREATE TABLE T_AUTO (ID INT PRIMARY KEY, NAME VARCHAR(20))');
-  H.ok('建表：第一步说了不用等人确认', ac.a.code === 4 && /全自动模式：这条留得下备份，不用等人确认/.test(ac.a.out) && !/给人看过之后/.test(ac.a.out), ac.a.out + ac.a.err);
-  H.ok('建表：执行了，还原脚本是 DROP，留痕里记着是全自动做的、在哪个项目里', ac.b && ac.b.code === 0 && /建了     TABLE T_AUTO/.test(ac.b.out) && /^DROP TABLE T_AUTO;$/m.test(undoOf('create')) && opOf('create').auto === true && path.resolve(opOf('create').project || '').toLowerCase() === path.resolve(proj).toLowerCase() && opOf('create').created.kind === 'TABLE', [ac.b && ac.b.out + ac.b.err, undoOf('create'), opOf('create')]);
+  H.ok('建表：第一步说了不用等人确认', ac.a.code === 4 && FREE.test(ac.a.out) && !/给人看过之后/.test(ac.a.out), ac.a.out + ac.a.err);
+  H.ok('建表：执行了，还原脚本是 DROP，留痕里记着没有人确认、在哪个项目里', ac.b && ac.b.code === 0 && /建了     TABLE T_AUTO/.test(ac.b.out) && /^DROP TABLE T_AUTO;$/m.test(undoOf('create')) && opOf('create').auto === true && path.resolve(opOf('create').project || '').toLowerCase() === path.resolve(proj).toLowerCase() && opOf('create').created.kind === 'TABLE', [ac.b && ac.b.out + ac.b.err, undoOf('create'), opOf('create')]);
   // 新增：主键写在语句里的直接记
   const ai = autoExec("INSERT INTO T_AUTO (ID, NAME) VALUES (1, '甲'), (2, '乙')");
   H.ok('新增：执行了，表和主键记下来了', ai.b && ai.b.code === 0 && /影响 2 行，已提交/.test(ai.b.out) && /新增的行  表 T_AUTO，主键 ID：1、2（语句里写明的）/.test(ai.b.out), ai.a.out + (ai.b ? ai.b.out + ai.b.err : ''));
@@ -161,62 +167,98 @@ if (!process.argv[2] || ![PY, JAVA, H2].every((f) => f && fs.existsSync(f))) {
   autoExec('CREATE TABLE T_SEQ (ID INT AUTO_INCREMENT PRIMARY KEY, NAME VARCHAR(20))');
   const as = autoExec("INSERT INTO T_SEQ (NAME) VALUES ('x'), ('y')");
   H.ok('新增、主键是自增的：驱动把主键带回来了，照样记下', as.b && as.b.code === 0 && /主键 ID：1、2（驱动带回来的）/.test(as.b.out) && JSON.stringify(opOf('insert').inserted.ids) === '[["1"],["2"]]' && /^DELETE FROM T_SEQ WHERE ID = 2;$/m.test(undoOf('insert')), [as.a.out, as.b && as.b.out + as.b.err, opOf('insert').inserted]);
-  const sel = autoExec('INSERT INTO T_AUTO (ID, NAME) SELECT ID + 10, NAME FROM T_AUTO');
-  H.ok('INSERT … SELECT：主键记不下来，不给确认串，留给用户', sel.a.code === 3 && !/--ack/.test(sel.a.out) && /主键记不下来/.test(sel.a.err) && /留给用户：要改库/.test(sel.a.err) && countOf('T_AUTO') === '3', sel.a.out + sel.a.err);
-  // 改、删：改前快照取得全、有主键 → 直接做
+  autoExec('CREATE TABLE T_SEL (ID INT PRIMARY KEY, NAME VARCHAR(20))');
+  const sel = autoExec('INSERT INTO T_SEL (ID, NAME) SELECT ID + 10, NAME FROM T_AUTO');
+  H.ok('INSERT … SELECT：照做，说了主键记不下来（以前留给用户）', sel.a.code === 4 && FREE.test(sel.a.out) && /备份留不全：[^\n]*主键记不下来/.test(sel.a.out) && sel.b && sel.b.code === 0 && countOf('T_SEL') === '3', sel.a.out + sel.a.err + (sel.b ? sel.b.out + sel.b.err : ''));
+  // 改、删：改前快照取得全、有主键 → 留着备份做
   const au = autoExec("UPDATE T_AUTO SET NAME = '改过' WHERE ID = 1");
   H.ok('改：执行了，留了改前快照，还原脚本按主键改回去', au.b && au.b.code === 0 && /影响 1 行，已提交/.test(au.b.out) && /改前快照 1 行/.test(au.b.out) && /UPDATE T_AUTO SET NAME = '甲' WHERE ID = 1;/.test(undoOf('update')) && opOf('update').auto === true, [au.b && au.b.out + au.b.err, undoOf('update')]);
   const ad = autoExec('DELETE FROM T_AUTO WHERE ID = 2');
   H.ok('删：执行了，还原脚本把删掉的行插回去', ad.b && ad.b.code === 0 && /INSERT INTO T_AUTO \(ID, NAME\) VALUES \(2, '乙'\);/.test(undoOf('delete')) && countOf('T_AUTO') === '2', [ad.b && ad.b.out + ad.b.err, undoOf('delete')]);
-  const nw = autoExec('DELETE FROM T_AUTO');
-  H.ok('没有 WHERE 的删除：不做，说了原因', nw.a.code === 3 && /没有 WHERE/.test(nw.a.err) && countOf('T_AUTO') === '2', nw.a.out + nw.a.err);
   const big2 = autoExec("UPDATE T_AUTO SET NAME = 'z' WHERE ID > 0", ['--snapshot-max-rows', '1']);
-  H.ok('动的行数超过改前快照的上限：备份不全，不做', big2.a.code === 3 && /超过改前快照的上限 1 行/.test(big2.a.err), big2.a.out + big2.a.err);
-  // 没有主键的表
+  H.ok('改的行数超过改前快照的上限：照做，说了备份留不全（以前留给用户）', big2.a.code === 4 && /备份留不全：[^\n]*超过改前快照的上限 1 行/.test(big2.a.out) && big2.b && big2.b.code === 0 && /影响 2 行，已提交/.test(big2.b.out), big2.a.out + big2.a.err + (big2.b ? big2.b.out + big2.b.err : ''));
+  // 没有主键的表（第 91 条的原话：往设定上就没有主键的表里插入也问）
   const np = autoExec('CREATE TABLE T_NOPK (ID INT, X VARCHAR(10))');
   const npi = autoExec("INSERT INTO T_NOPK VALUES (1, 'a')");
-  H.ok('没有主键的表：新增不做（以后定位不到）', np.b && np.b.code === 0 && npi.a.code === 3 && /没有主键/.test(npi.a.err) && countOf('T_NOPK') === '0', npi.a.out + npi.a.err);
+  H.ok('没有主键的表：新增照做，说了主键记不下来', np.b && np.b.code === 0 && npi.a.code === 4 && FREE.test(npi.a.out) && /备份留不全：[^\n]*没有主键/.test(npi.a.out) && npi.b && npi.b.code === 0 && /主键没记下来（表没有主键）/.test(npi.b.out) && countOf('T_NOPK') === '1', npi.a.out + npi.a.err + (npi.b ? npi.b.out + npi.b.err : ''));
+  const npu = autoExec("UPDATE T_NOPK SET X = 'b' WHERE ID = 1");
+  H.ok('没有主键的表：改也照做', npu.a.code === 4 && /备份留不全：[^\n]*没有主键/.test(npu.a.out) && npu.b && npu.b.code === 0 && /影响 1 行，已提交/.test(npu.b.out), npu.a.out + npu.a.err + (npu.b ? npu.b.out + npu.b.err : ''));
   // 有二进制列的表
   autoExec('CREATE TABLE T_BIN (ID INT PRIMARY KEY, DATA BLOB)');
   const bi = autoExec('INSERT INTO T_BIN (ID) VALUES (1)');
   const bu = autoExec('UPDATE T_BIN SET ID = 2 WHERE ID = 1');
-  H.ok('有二进制列的表：新增照做，改不做（值写不进还原脚本）', bi.b && bi.b.code === 0 && bu.a.code === 3 && /有二进制列（DATA）/.test(bu.a.err), [bi.b && bi.b.out + bi.b.err, bu.a.out + bu.a.err]);
+  H.ok('有二进制列的表：新增、改都照做，改的说了值写不进还原脚本', bi.b && bi.b.code === 0 && bu.a.code === 4 && /备份留不全：[^\n]*有二进制列（DATA）/.test(bu.a.out) && bu.b && bu.b.code === 0, [bi.b && bi.b.out + bi.b.err, bu.a.out + bu.a.err, bu.b && bu.b.out + bu.b.err]);
   // 改结构
   const aa = autoExec('ALTER TABLE T_AUTO ADD COLUMN AGE INT');
   H.ok('加列：执行了，还原脚本是删这一列', aa.b && aa.b.code === 0 && /建了     COLUMN AGE（表 T_AUTO）/.test(aa.b.out) && /^ALTER TABLE T_AUTO DROP COLUMN AGE;$/m.test(undoOf('alter_table')), [aa.b && aa.b.out + aa.b.err, undoOf('alter_table')]);
-  for (const [name, sql, why] of [['删列', 'ALTER TABLE T_AUTO DROP COLUMN AGE', /只有加列、加约束留得下还原脚本/], ['删表', 'DROP TABLE T_NOPK', /结构或权限变更/], ['清空', 'TRUNCATE TABLE T_AUTO', /结构或权限变更/], ['建了就盖掉原来的', 'CREATE OR REPLACE VIEW V_AUTO AS SELECT * FROM T_AUTO', /会盖掉已有的对象/]]) {
+  const am = autoExec('ALTER TABLE T_AUTO ALTER COLUMN NAME SET DATA TYPE VARCHAR(40)');
+  H.ok('改列：照做（以前留给用户）', am.a.code === 4 && FREE.test(am.a.out) && am.b && am.b.code === 0, am.a.out + am.a.err + (am.b ? am.b.out + am.b.err : ''));
+  const rv = autoExec('CREATE OR REPLACE VIEW V_AUTO AS SELECT * FROM T_SEL');
+  H.ok('建了就盖掉原来的视图：照做，说了原来的样子留不下来', rv.a.code === 4 && /备份留不全：[^\n]*会盖掉已有的对象/.test(rv.a.out) && rv.b && rv.b.code === 0, rv.a.out + rv.a.err + (rv.b ? rv.b.out + rv.b.err : ''));
+  const cm = autoExec("COMMENT ON COLUMN T_AUTO.NAME IS '名字'");
+  H.ok('加注释（认不出类型、看得出不是删）：照做', cm.a.code === 4 && FREE.test(cm.a.out) && cm.b && cm.b.code === 0, cm.a.out + cm.a.err + (cm.b ? cm.b.out + cm.b.err : ''));
+  // 删：别人建的表上，留得下改前快照的照做，还原不了的要人点头
+  foreign('CREATE TABLE T_OTHER (ID INT PRIMARY KEY, X VARCHAR(10))');
+  autoExec("INSERT INTO T_OTHER VALUES (1, 'a'), (2, 'b'), (3, 'c')");
+  const od = autoExec('DELETE FROM T_OTHER WHERE ID = 3');
+  H.ok('别人建的表上带条件的删：留得下改前快照，照做', od.a.code === 4 && FREE.test(od.a.out) && od.b && od.b.code === 0 && /INSERT INTO T_OTHER \(ID, X\) VALUES \(3, 'c'\);/.test(undoOf('delete')) && countOf('T_OTHER') === '2', od.a.out + od.a.err + (od.b ? od.b.out + od.b.err : ''));
+  for (const [name, sql, why] of [['没有 WHERE 的删除', 'DELETE FROM T_OTHER', /没有 WHERE/], ['删列', 'ALTER TABLE T_OTHER DROP COLUMN X', /只有加列、加约束留得下还原脚本/], ['清空', 'TRUNCATE TABLE T_OTHER', /结构或权限变更/], ['删表', 'DROP TABLE T_OTHER', /结构或权限变更/], ['看不懂的语句', 'CALL NO_SUCH_PROC()', /认不出这是什么语句/]]) {
     const r = autoExec(sql);
-    H.ok(name + '：不做，留给用户', r.a.code === 3 && why.test(r.a.err) && !/--ack/.test(r.a.out), r.a.out + r.a.err);
+    H.ok('别人建的表，' + name + '：全自动下不做，留给用户', r.a.code === 3 && why.test(r.a.err) && /留给用户：要改库/.test(r.a.err) && !/--ack/.test(r.a.out), r.a.out + r.a.err);
   }
-  H.ok('被拒的这些都没动库', countOf('T_AUTO') === '2' && db(['columns', '--table', 'T_AUTO', '--fresh']).out.includes('AGE') && countOf('T_NOPK') === '0', db(['columns', '--table', 'T_AUTO', '--fresh']).out);
-  H.ok('查询不受影响', db(['peek', '--table', 'T_ORDER', '--count']).code === 0);
+  const ob = autoExec('DELETE FROM T_OTHER WHERE ID > 0', ['--snapshot-max-rows', '1']);
+  H.ok('删的行数超过改前快照的上限：还原不了，全自动下不做', ob.a.code === 3 && /超过改前快照的上限 1 行/.test(ob.a.err), ob.a.out + ob.a.err);
+  H.ok('被拒的这些都没动库', countOf('T_OTHER') === '2' && /\bX\b/.test(db(['columns', '--table', 'T_OTHER', '--fresh']).out), db(['columns', '--table', 'T_OTHER', '--fresh']).out);
   H.ok('被拒的记进了用量（类别 BLOCKED）', usage().some((u) => (u.errors || []).includes('BLOCKED')), usage().slice(-3));
-  // 全自动模式只在走 OpenSpec 流程的会话里算数：钩子留了条子说这个会话不在流程里（用户在），就照有人在的样子来
+  // 删的是这个项目里工具自己建的（留痕里有）：不用人点头
+  const dc = autoExec('ALTER TABLE T_AUTO DROP COLUMN AGE');
+  H.ok('删自己加的列：照做，说了是自己加的', dc.a.code === 4 && FREE.test(dc.a.out) && /工具自己给表 T_AUTO 加的列/.test(dc.a.out) && dc.b && dc.b.code === 0 && !db(['columns', '--table', 'T_AUTO', '--fresh']).out.includes('AGE'), dc.a.out + dc.a.err + (dc.b ? dc.b.out + dc.b.err : ''));
+  autoExec('CREATE TABLE T_TMP (ID INT PRIMARY KEY)');
+  autoExec('INSERT INTO T_TMP VALUES (1), (2)');
+  const tw = autoExec('DELETE FROM T_TMP');
+  H.ok('自己建的表整表删：照做', tw.a.code === 4 && /表 T_TMP 是这个项目里工具自己建的/.test(tw.a.out) && tw.b && tw.b.code === 0 && countOf('T_TMP') === '0', tw.a.out + tw.a.err + (tw.b ? tw.b.out + tw.b.err : ''));
+  const tt = autoExec('TRUNCATE TABLE T_TMP');
+  const td = autoExec('DROP TABLE T_TMP');
+  H.ok('自己建的表清空、删表：照做', tt.b && tt.b.code === 0 && td.a.code === 4 && /TABLE T_TMP 是这个项目里工具自己建的/.test(td.a.out) && td.b && td.b.code === 0, [tt.a.out + tt.a.err, td.a.out + td.a.err, td.b && td.b.out + td.b.err]);
+  // 留痕里是别的项目建的、8 天前建的：不算这次自己建的
+  autoExec('CREATE TABLE T_OLD (ID INT PRIMARY KEY)');
+  const old = new Date(Date.now() - 8 * 86400000); const p2 = (n) => String(n).padStart(2, '0');
+  fs.renameSync(lastEntry('create'), path.join(jdir, '' + old.getFullYear() + p2(old.getMonth() + 1) + p2(old.getDate()) + '-000000-000-create'));
+  const dold = autoExec('DROP TABLE T_OLD');
+  H.ok('8 天前建的表：不算这次自己建的，全自动下不删', dold.a.code === 3 && /留给用户：要改库/.test(dold.a.err), dold.a.out + dold.a.err);
+  autoExec('CREATE TABLE T_ELSE (ID INT PRIMARY KEY)');
+  const ce = path.join(lastEntry('create'), 'op.json'); const ceOp = JSON.parse(H.read(ce)); ceOp.project = path.join(h.work, 'other-project'); H.write(ce, JSON.stringify(ceOp));
+  const delse = autoExec('DROP TABLE T_ELSE');
+  H.ok('留痕里记着是别的项目建的表：不算自己建的，全自动下不删', delse.a.code === 3, delse.a.out + delse.a.err);
+  H.ok('查询不受影响', db(['peek', '--table', 'T_ORDER', '--count']).code === 0);
+  // 要人点头的那几种，全自动只在走 OpenSpec 流程的会话里算数：钩子留了条子说这个会话不在流程里（用户在），就给确认串、让它给人看
   AUTO = false;
   const ticket = (auto, ageMs) => autoTicket(auto, ageMs);
   ticket(false);
-  const t1 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
-  H.ok('条子说用户在：照有人在的样子来（给确认串，让它给人看）', t1.code === 4 && /把上面的内容给人看过之后/.test(t1.out) && !/全自动模式/.test(t1.out + t1.err), t1.out + t1.err);
+  const t1 = db(['exec', '--sql', 'DELETE FROM T_OTHER']);
+  H.ok('条子说用户在：还原不了的删给确认串，让它给人看', t1.code === 4 && /要人确认才能执行。把上面的内容给人看过之后/.test(t1.out) && !FREE.test(t1.out) && !/全自动模式/.test(t1.out + t1.err), t1.out + t1.err);
   ticket(false, 5 * 60000);
-  const t2 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
+  const t2 = db(['exec', '--sql', 'DELETE FROM T_OTHER']);
   H.ok('条子是五分钟前的：不认，按有人在算（没有全局开关了，2026-10-31）', t2.code === 4 && !/全自动模式/.test(t2.out + t2.err), t2.out + t2.err);
   ticket(true);
-  const t3 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
+  const t3 = db(['exec', '--sql', 'DELETE FROM T_OTHER']);
   H.ok('条子说在流程里：按用户不在算', t3.code === 3 && /全自动模式（用户不在）/.test(t3.err), t3.out + t3.err);
   fs.unlinkSync(path.join(h.kit, 'state', 'tool-flow.json'));
-  const t4 = db(['exec', '--sql', 'DELETE FROM T_NOPK']);
-  H.ok('没有条子（终端里手敲的）：按有人在算，给确认串', t4.code === 4 && !/全自动模式/.test(t4.out + t4.err), t4.out + t4.err);
-  // 人回来了：全自动模式下新增的那两行，照还原脚本删掉
+  const t4 = db(['exec', '--sql', 'DELETE FROM T_OTHER']);
+  H.ok('没有条子（终端里手敲的）：按有人在算，给确认串', t4.code === 4 && /给人看过之后/.test(t4.out) && !/全自动模式/.test(t4.out + t4.err), t4.out + t4.err);
+  const t5 = db(['exec', '--sql', 'DELETE FROM T_OTHER', '--ack', ackOf(t4)]);
+  H.ok('人同意了、带上确认串：执行了，留痕里记着是人确认的', t5.code === 0 && countOf('T_OTHER') === '0' && opOf('delete').auto === false, [t5.out + t5.err, opOf('delete')]);
+  // 人回来了：新增的那两行，照还原脚本删掉
   const ui1 = db(['exec', '--undo', insEntry]);
   const ui2 = db(['exec', '--undo', insEntry, '--ack', ackOf(ui1)]);
   H.ok('新增的还原：按主键一行一行删，有一行已经没了就全部回滚', ui1.code === 4 && /语句    2 条 DELETE/.test(ui1.out) && ui2.code === 2 && /应该正好 1 行/.test(ui2.err) && countOf('T_AUTO') === '2', ui1.out + ui2.out + ui2.err);
   execBoth("INSERT INTO T_AUTO (ID, NAME) VALUES (2, '乙')");
-  H.ok('有人在的时候新增：主键写在语句里的也记下来（不算全自动做的）', JSON.stringify((opOf('insert').inserted || {}).ids) === '[["2"]]' && opOf('insert').auto === false && /^DELETE FROM T_AUTO WHERE ID = 2;$/m.test(undoOf('insert')), [opOf('insert'), undoOf('insert')]);
+  H.ok('有人在的时候新增：主键写在语句里的也记下来（一样是没有人确认就做的）', JSON.stringify((opOf('insert').inserted || {}).ids) === '[["2"]]' && opOf('insert').auto === true && /^DELETE FROM T_AUTO WHERE ID = 2;$/m.test(undoOf('insert')), [opOf('insert'), undoOf('insert')]);
   const ui3 = db(['exec', '--undo', insEntry]);
   const ui4 = db(['exec', '--undo', insEntry, '--ack', ackOf(ui3)]);
   H.ok('两行都在的时候再还原：删掉了', ui4.code === 0 && /还原完成：2 条语句，影响 2 行/.test(ui4.out) && countOf('T_AUTO') === '1', ui3.out + ui4.out + ui4.err);
   const ud0 = db(['exec', '--undo', lastEntry('create')]);
-  H.ok('建表的还原不代做：说清要人来删', ud0.code === 1 && /还原就是把建的东西删掉/.test(ud0.err) && /DROP TABLE/.test(ud0.err), ud0.out + ud0.err);
+  H.ok('建表的还原不代做：说清要拿出来执行', ud0.code === 1 && /还原就是把建的东西删掉/.test(ud0.err) && /DROP TABLE/.test(ud0.err), ud0.out + ud0.err);
   }
   // 手改 config.json 打开的不算（封条里没有）
   fs.writeFileSync(path.join(h.kit, 'config.json'), JSON.stringify(Object.assign(JSON.parse(H.read(path.join(h.kit, 'config.json'))), { autoMode: true })));
