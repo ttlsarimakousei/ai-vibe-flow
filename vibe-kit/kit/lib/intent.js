@@ -83,7 +83,10 @@ function denied(text, action) {
   if (!op) return true;
   const s = plain(text);
   // "提交前我再看看"：动作词紧跟"前"是在说那之前的事（"提交前端代码"不算）
-  const no = new RegExp('(?:先别|不要|不用|不能|不准|不必|无需|先不|暂不|暂时不|不急着|不着急|还不能|还不要|不可以|不让|不要再|取消)[^，,。；;！!\\n]{0,10}' + op + '|' + op + '[^，,。；;！!\\n]{0,12}(?:先缓缓|先别|不要|暂缓|先等|等一下|晚点|稍后|后再说|以后再说|等等|还没|之前|以前)|' + op + '\\s*前(?![端台面])|(?:是否|要不要|能不能|可不可以)[^，,。；;！!\\n]{0,6}' + op + '|' + op + '[^，,。；;！!\\n]{0,20}(?:[？?]|怎么|怎样|如何|什么|为什么|会不会|我自己|我来|留给我)', 'i');
+  // 动作词后面的"不要""先别"说的是另一件事（"git commit 不要 push""提交，先别推送"，#472）：不算否定这一件
+  // 只放宽提交（推送、归档的认法只能收紧）
+  const OTHER = action === 'commit' ? '(?!\\s*(?:git\\s+)?(?:push\\b|推送|推上去|推到|推|上传|发布|部署|合并))' : '';
+  const no = new RegExp('(?:先别|不要|不用|不能|不准|不必|无需|先不|暂不|暂时不|不急着|不着急|还不能|还不要|不可以|不让|不要再|取消)[^，,。；;！!\\n]{0,10}' + op + '|' + op + '[^，,。；;！!\\n]{0,12}(?:(?:先缓缓|先别|不要|暂缓|先等)' + OTHER + '|等一下|晚点|稍后|后再说|以后再说|等等|还没|之前|以前)|' + op + '\\s*前(?![端台面])|(?:是否|要不要|能不能|可不可以)[^，,。；;！!\\n]{0,6}' + op + '|' + op + '[^，,。；;！!\\n]{0,20}(?:[？?]|怎么|怎样|如何|什么|为什么|会不会|我自己|我来|留给我)', 'i');
   return no.test(s) || /^(?:暂停|先停|等等|等一下|取消)[\s，,。！!]/.test(s);
 }
 function explicit(text, action) {
@@ -95,6 +98,8 @@ function explicit(text, action) {
   if ((action === 'review' || action === 'test') && new RegExp('(?:^|[，,。；;\\n])\\s*(?:\\d+[.、]\\s*)?' + PREFIX + DO + '?' + SCOPE + '*' + DO + '?' + op + '(?!\\s*' + NOUN + ')', 'i').test(s)) return true;
   if (action === 'commit' && new RegExp('(?:^|[，,。；;\\n])\\s*(?:\\d+[.、]\\s*)?' + PREFIX + GIT_COMMIT + op + '(?!\\s*' + NOUN + ')', 'i').test(s)) return true;
   if (action === 'commit' && new RegExp(CLAUSE_HEAD + PREFIX + '(?:' + COMMIT_SPLIT + '|' + COMMIT_SOFT + '|' + COMMIT_BA + ')' + CLAUSE_TAIL, 'i').test(s)) return true;
+  // "只 git commit，不要 push""只提交不推送"（#472）：只放宽提交
+  if (action === 'commit' && new RegExp(CLAUSE_HEAD + '(?:只|仅|就)\\s*' + PREFIX + GIT_COMMIT + '?' + op + '(?!\\s*' + NOUN + ')', 'i').test(s)) return true;
   if (action === 'reviewSkip' && new RegExp('(?:^|[，,。；;\\n])\\s*(?:这次|本次|我决定|决定)?\\s*' + op + '(?!\\s*' + NOUN + ')', 'i').test(s)) return true;
   if (action !== 'apply' && new RegExp('^(?:请)?(?:把|将)[^，,。；;！!?？\\n]{1,48}' + op + '\\s*(?:吧|一下|一次)?[\\s。！!]*$', 'i').test(s)) return true;
   // "服务都起着吗，我要看看系统""我想看一下页面""给我打开系统用用"：要它把服务起起来给自己看（问题表第 27 条，2026-10-31）。
