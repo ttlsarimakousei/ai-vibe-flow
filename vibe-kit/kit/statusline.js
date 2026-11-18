@@ -4,7 +4,7 @@
  *   第一行  警告 │ 目录(分支) │ 上下文进度条 │ 自动 开
  *   第二行  步骤条：探索✓ │ c2-api 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○（lib/big-task.js 的 bar）
  *           ✓做完 ●正在做 ○没开始；◆审过 ◇在审 ✗N 有 N 条 P1、P2 待修。没进流程不显示：目录里有没勾完的 change 也不显示
- *   第三行  下一项，或者在等你什么
+ *   第三行  这个目录里 devserver 起着的服务和端口（用户 2026-11-17 定的，替代"下一项，或者在等你什么"）；没有就不显示
  *   有才出现的一行：放松了的保护、经验待确认、更新
  * 终端窄的时候被截掉的是每一行的末尾，所以要紧的放前面，警告放在第一行最前面。
  * 用了多少 token 优先用 Claude Code 自己给的数；旧版本不给，就读会话记录里最后一次回复的用量。
@@ -36,6 +36,29 @@ function gitBranch(dir) {
     }
   } catch (e) { /* 不是 git 仓库 */ }
   return '';
+}
+/**
+ * 这个目录里（服务在它下面跑、或者它在服务的目录下面）devserver 起着的服务："在跑：backend :30010 │ front :31234"。
+ * 读 devserver 的全机登记（state/devserver.json）和每个服务的记录文件（停服务时删）；看管进程不在了的不算。
+ * 状态栏刷得勤，只读两份小文件、用 process.kill(pid, 0) 看进程在不在，不查进程表。没有返回 ''
+ */
+function runningLine(cwd) {
+  let reg = {};
+  try { reg = JSON.parse(fs.readFileSync(path.join(__dirname, 'state', 'devserver.json'), 'utf8')) || {}; } catch (e) { return ''; }
+  const norm = (p) => path.resolve(String(p || '')).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const here = norm(cwd);
+  const near = (p) => { const x = norm(p); return !!p && (x === here || x.startsWith(here + '/') || here.startsWith(x + '/')); };
+  const alive = (pid) => { if (!(pid > 0)) return false; try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+  const out = [];
+  for (const e of Object.values(reg)) {
+    if (!e || !e.file || out.length >= 6) continue;
+    let rec = null; try { rec = JSON.parse(fs.readFileSync(e.file, 'utf8')); } catch (x) { continue; }
+    // 看管进程退了、它起的进程还在（startup.bat 甩到后台的 Tomcat 这类，复审 R3）：看记录里的进程树
+    if (!rec || rec.port !== e.port || !(alive(rec.pid) || (Array.isArray(rec.tree) && rec.tree.some((p) => p && alive(p.pid))))) continue;
+    if (!near(rec.cwd || e.cwd) && !near(path.dirname(path.dirname(path.dirname(e.file))))) continue;
+    out.push(String(rec.name || e.name || '服务') + ' :' + rec.port + (rec.upAt ? '' : '（启动中）'));
+  }
+  return out.length ? '在跑：' + out.join(' │ ') : '';
 }
 /** 84k、230k、1M、1.5M */
 const k = (n) => (n >= 1000000 ? String(Math.round(n / 100000) / 10) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n)));
@@ -100,8 +123,9 @@ process.stdin.on('end', () => {
     }
     if (b) { steps = b.steps; next = b.next; }
   } catch (e) { steps = ''; next = ''; }
-  // 在等你：写明你下一步说什么
-  if (fl.waiting && !/^等你核验/.test(next)) next = '等你：' + fl.waiting + (/范围变化/.test(fl.waiting) ? '，说开工或 /vk-go' : '');
+  // 第三行不再写下一项、在等你什么（用户 2026-11-17 定的），改成这个项目里 devserver 起着的服务和端口
+  void next;
+  next = runningLine(cwd);
   // 有经验在几个项目里都成了规则、等你确认要不要升成用户级（去配置页"经验规则"里点）
   try { if (cfg.lessons !== 'off') { const n = require('./lib/lessons').pendingUser().length; if (n) extra.push(C.yellow + '经验待确认 ' + n + ' 条' + C.reset); } } catch (e) { /* 老版本没有，或者读不了 */ }
   // 自动更新：刚更新过（一小时内）说一声；开关是"只提醒"的挂着"有新版"；新版装不上的也挂着；

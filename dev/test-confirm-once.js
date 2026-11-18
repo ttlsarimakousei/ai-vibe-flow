@@ -179,15 +179,15 @@ H.section('A11 斜杠命令：/vk-commit、/vk-push、/vk-archive、/vk-review�
   const say = (sid, prompt) => H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, sid + '-p.jsonl'), [H.tr.user(prompt)]) });
   say('s-a11-go2', '/vk-go feat-019');
   H.ok('用户开口就是 /vk-go：进了流程、在做任务那一段', S.flowState({ session_id: 's-a11-go2' }).on === true && S.flowState({ session_id: 's-a11-go2' }).stage === 'apply', S.flowState({ session_id: 's-a11-go2' }));
-  // 状态栏：任务都做完在等你时，写下一步说什么（第三行）
+  // 任务都做完在等你时，步骤条的"下一步"还算（2026-11-17 起状态栏不显示它，第三行改成在跑的服务）
   const slJ = { session_id: 's-a11-sl', cwd: p };
   S.setFlow(slJ, true, '测试', 'apply');
   const doneC = path.join(p, 'openspec', 'changes', 'feat-020');
   H.write(path.join(doneC, 'proposal.md'), '## Why\n要。\n');
   H.write(path.join(doneC, 'tasks.md'), '## 1. 实现\n\n- [x] 1.1 改 a\n');
   S.flowTouch(slJ, doneC);
-  const sl = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: 's-a11-sl', cwd: p, workspace: { current_dir: p }, context_window: { used_percentage: 30, context_window_size: 1000000, current_usage: { input_tokens: 300000 } } }), cwd: p }).out.replace(/\x1b\[[0-9;]*m/g, '');
-  H.ok('状态栏：等你核验时写"看完说归档或 /vk-archive"', /等你核验：看完说归档或 \/vk-archive/.test(sl), sl);
+  const sl = (require(path.join(h.kit, 'lib', 'big-task.js')).bar(slJ) || {}).next || '';
+  H.ok('等你核验时写"看完说归档或 /vk-archive"', /等你核验：看完说归档或 \/vk-archive/.test(sl), sl);
   // /vk-fix：小改动这一轮不问审查、自测
   const fix = (sid, entries) => (H.write(path.join(proj, 'src', 'A.java'), 'class A { int ' + sid.replace(/\W/g, '') + '; }\n'), F.stop({ session_id: sid, cwd: proj, transcript_path: H.transcript(path.join(h.root, sid + '.jsonl'), entries) }, [], true, 1, null, Date.now()) || []).join('\n');
   const e1 = H.tr.ran('Edit', { file_path: path.join(proj, 'src', 'A.java'), old_string: 'a', new_string: 'b' }, 'ok');

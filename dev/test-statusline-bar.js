@@ -1,6 +1,7 @@
 'use strict';
 /*
- * 状态栏（第 46、47 条）：没进流程不显示 change，只有一行；流程里三行：第一行目录、上下文、自动，第二行步骤条，第三行下一项或等待。
+ * 状态栏（第 46、47 条）：没进流程不显示 change，只有一行；流程里第一行目录、上下文、自动，第二行步骤条。
+ * 第三行 2026-11-17 起是这个目录里 devserver 起着的服务和端口（用户定的，替代"下一项或等待"）。
  * 模型名、自动压缩、"当前生效"、用量都没了。折叠、截断、缓存。
  * 用法：node dev/test-statusline-bar.js [旧版套件目录]（拿 2248 跑要不过）
  */
@@ -58,9 +59,8 @@ H.section('流程里：步骤条和下一项');
   P.begin(d2, 'group-2', 'y', 'f');
   void d1;
   const ls = run({}, p.proj, 's-flow');
-  H.ok('三行', ls.length === 3, ls);
+  H.ok('没有服务在跑：两行（2026-11-17 起第三行不写下一项）', ls.length === 2 && !/下一项/.test(ls.join('\n')), ls);
   H.ok('第二行一字不差（change 名后面不带第几个/共几个，2026-11-04；前面带大任务名，2026-11-11）', ls[1] === '导出：探索✓ │ c2-api 提案✓ 规格✓ 设计✓ 任务✓◆ 1组✓◆ 2组●◇ 3组○ 审查○ │ 自测○ 核验○ 归档○', ls[1]);
-  H.ok('第三行是下一项', /^下一项 2\.2/.test(ls[2]), ls[2]);
   H.ok('第一行不写"当前生效"', !/当前生效/.test(ls.join('\n')), ls);
   P.noteResult(d2, 'group-1', { id: 'z', status: 'completed', issues: [{ severity: 'P1' }, { severity: 'P2' }, { severity: 'P3' }] }, P.fingerprint(d2, 'group-1'));
   S.writeState('changes-cache', {});
@@ -92,7 +92,28 @@ H.section('等用户');
   B.setTaskState(B.named(p.proj, '导出'), { selfTest: { at: Date.now() } });
   const ls = run({}, p.proj, 's-verify');
   H.ok('核验：第二行自测做完、核验在做', /自测✓ 核验● 归档○/.test(ls[1]), ls[1]);
-  H.ok('第三行写等你做什么', /等你核验：看完说归档或 \/vk-archive/.test(ls[2]), ls[2]);
+  H.ok('不再写"等你核验"（2026-11-17 起）', !/等你核验/.test(ls.join('\n')), ls);
+}
+
+H.section('在跑的服务（2026-11-17 起第三行）');
+{
+  const p = project(['c1']);
+  const sub = path.join(p.proj, 'backend');
+  const other = path.join(h.work, 'elsewhere');
+  const rec = (dir, name, port, extra) => { const f = path.join(dir, '.vibe', 'run', name + '.json'); H.write(f, JSON.stringify(Object.assign({ name, pid: process.pid, port, cwd: dir, startedAt: Date.now(), upAt: Date.now() }, extra))); return f; };
+  const reg = {};
+  reg['30010'] = { port: 30010, name: 'backend', file: rec(sub, 'backend', 30010), cwd: sub };
+  reg['31234'] = { port: 31234, name: 'front', file: rec(p.proj, 'front', 31234, { upAt: 0 }), cwd: p.proj };
+  reg['32000'] = { port: 32000, name: 'gone', file: rec(p.proj, 'gone', 32000, { pid: 999999 }), cwd: p.proj };
+  reg['33000'] = { port: 33000, name: 'other', file: rec(other, 'other', 33000), cwd: other };
+  reg['34000'] = { port: 34000, name: 'stopped', file: path.join(p.proj, '.vibe', 'run', 'stopped.json'), cwd: p.proj };
+  H.write(path.join(h.kit, 'state', 'devserver.json'), JSON.stringify(reg));
+  const ls = run({}, p.proj, 's-run');
+  const line = ls.find((l) => /^在跑：/.test(l)) || '';
+  H.ok('没进流程也显示：在跑的服务和端口', /backend :30010/.test(line) && /front :31234（启动中）/.test(line), ls);
+  H.ok('看管进程没了的、记录删了的、别的项目的不显示', !/gone|stopped|other/.test(line), line);
+  H.ok('壳子的子项目里起的也算这个目录的', /backend/.test(line), line);
+  H.write(path.join(h.kit, 'state', 'devserver.json'), '{}');
 }
 
 H.section('有才出现的一行');
