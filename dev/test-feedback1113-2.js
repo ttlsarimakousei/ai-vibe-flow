@@ -1,6 +1,7 @@
 'use strict';
 /*
- * 问题表第 90 条（2026-11-13，docs/feedback-20261113-2.md）：自动实施时提问框、权限确认框发出后没人回，等够时间替用户收掉（hooks/ask-timeout.js）。
+ * 问题表第 90 条（2026-11-13，docs/feedback-20261113-2.md）：提问框、权限确认框发出后没人回，等够时间替用户收掉（hooks/ask-timeout.js）。
+ * 2026-11-18 起任何时候都算（以前只在自动实施时），按在做什么给不同的交代，开工那一问到点替用户开工（docs/feedback-20261118.md）。
  *   提问框：到点按"不允许"收掉，带一句话让模型自己定，记进全自动报告"它想问你、没问成的"
  *   别的确认框：到点按"允许"，记进"放行的检查"；像推送、发布的按"不允许"，记进"留给你做的"
  *   框有了结果、用户另说了话：马上退出，什么都不说；没开自动、等待设成 0、ExitPlanMode：马上退出，什么都不说
@@ -106,7 +107,7 @@ const WAIT = 1500;
   const r8c = await run({ tool_name: 'AskUserQuestion', tool_input: { questions: [{ question: '找不到的那一问', options: [{ label: 'A' }] }] }, transcript_path: tp([H.tr.user('做导出'), H.tr.say('我先看看')]) });
   H.ok('找不到这次调用、也没有新的话：到点照样收掉，报告里写明可能已经处理过', (decision(r8c) || {}).behavior === 'deny' && items('ask').length === before + 1 && /会话记录里没找到这一问/.test(items('ask').slice(-1)[0].detail), [r8c.out, items('ask').slice(-1)]);
 
-  H.section('不管的：没开自动、等待设成 0、ExitPlanMode');
+  H.section('不管的：等待设成 0、ExitPlanMode（没开自动的 2026-11-18 起照样管）');
   const r9 = await run({ tool_name: 'ExitPlanMode', tool_input: { plan: 'x' }, transcript_path: tp([H.tr.user('做导出'), H.tr.call('ExitPlanMode', { plan: 'x' }, 'toolu_p1')]) });
   H.ok('ExitPlanMode：不管', !r9.out && r9.ms < WAIT, [r9.out, r9.ms]);
   H.setConfig(h, { askTimeoutMin: 0 });
@@ -115,8 +116,75 @@ const WAIT = 1500;
   H.setConfig(h, { askTimeoutMin: 10 });
   S.setSessionAuto(j, false, '测试：人工');
   const r11 = await run({ tool_name: 'AskUserQuestion', tool_input: Q, transcript_path: tp([H.tr.user('做导出'), H.tr.call('AskUserQuestion', Q, 'toolu_ask11')]) });
-  H.ok('没开自动：不管，框一直等人', !r11.out && r11.ms < WAIT, [r11.out, r11.ms]);
+  H.ok('没开自动：照样到点收掉（2026-11-18 起任何时候都算，since NEXT）', (decision(r11) || {}).behavior === 'deny' && /按用户不在处理/.test((decision(r11) || {}).message || ''), [r11.out, r11.ms]);
+  const r11b = await run({ tool_name: 'Bash', tool_input: { command: 'mvn -q compile' }, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Bash', { command: 'mvn -q compile' }, 'toolu_b11')]) });
+  H.ok('没开自动：权限确认框到点按允许（仓库主人选的"什么时候都按允许"）', (decision(r11b) || {}).behavior === 'allow', r11b.out);
+  const r11c = await run({ tool_name: 'Bash', tool_input: { command: 'rm -rf target' }, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Bash', { command: 'rm -rf target' }, 'toolu_b12')]) });
+  H.ok('还原不了的删（rm -rf）：到点按不允许，留给用户（复审 R7）', (decision(r11c) || {}).behavior === 'deny' && /还原不了/.test((decision(r11c) || {}).message || ''), r11c.out);
   S.setSessionAuto(j, true, '提问框选了自动');
+
+  H.section('按在做什么给不同的交代（2026-11-18）：写需求、普通任务、开工那一问到点开工');
+  {
+    // 写需求那一段：标"用户没回，按推荐定的"，记 revisions.md
+    const h2 = H.makeHome('f11132-plan', FROM, QUIET);
+    const S2 = require(path.join(h2.kit, 'lib', 'session.js'));
+    const p2 = H.makeRepo(path.join(h2.work, 'p'), {
+      'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n',
+      'openspec/changes/c-exp/proposal.md': '## Why\n\n要导出。\n\n## What Changes\n\n- 改 src/A.java\n',
+      'openspec/changes/c-exp/specs/x/spec.md': '## ADDED Requirements\n\n### Requirement: 导出\n\n系统 SHALL 导出。\n\n#### Scenario: 正常\n\n- **WHEN** 调用\n- **THEN** 成功\n',
+      'openspec/changes/c-exp/design.md': '## Context\n\n- 读过 src/A.java\n',
+      'openspec/changes/c-exp/tasks.md': '## 1. 导出\n\n- [ ] 1.1 改 src/A.java：加导出\n',
+    });
+    const d2 = path.join(p2, 'openspec', 'changes', 'c-exp');
+    const sid2 = 's-ask-plan'; const j2 = { session_id: sid2, cwd: p2 };
+    H.inFlow(h2, sid2, [d2], true, 'plan');
+    const hook2 = path.join(h2.kit, 'hooks', 'ask-timeout.js');
+    const run2 = (sid0, input) => new Promise((resolve) => {
+      if (!fs.existsSync(hook2)) return resolve({ out: null });
+      const c = spawn(process.execPath, [hook2], { cwd: p2, env: H.envFor(h2, { VIBE_KIT_ASK_TIMEOUT_MS: String(WAIT), VIBE_KIT_ASK_POLL_MS: '150' }), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      let out = '';
+      c.stdout.on('data', (x) => { out += x; });
+      const timer = setTimeout(() => { try { c.kill(); } catch (e) { /* 已经退了 */ } }, 60000);
+      c.on('close', () => { clearTimeout(timer); let o = null; try { o = out.trim() ? JSON.parse(out) : null; } catch (e) { o = { raw: out }; } resolve({ out: o }); });
+      c.stdin.end(JSON.stringify(Object.assign({ session_id: sid0, cwd: p2, hook_event_name: 'PermissionRequest', permission_mode: 'default' }, input)));
+    });
+    const tp2 = (entries) => H.transcript(path.join(h2.root, 'tr2-' + (++seq) + '.jsonl'), entries);
+    const QP = { questions: [{ question: '导出要不要分页', options: [{ label: '分页（推荐）' }, { label: '不分页' }] }] };
+    const rp = await run2(sid2, { tool_name: 'AskUserQuestion', tool_input: QP, transcript_path: tp2([H.tr.user('写需求'), H.tr.call('AskUserQuestion', QP, 'toolu_p1')]) });
+    const mp = (decision(rp) || {}).message || '';
+    H.ok('写需求那一段到点：选推荐的写进需求，标"（用户没回，按推荐定的）"，记 revisions.md、交代时列出来', (decision(rp) || {}).behavior === 'deny' && /用户没回，按推荐定的/.test(mp) && /revisions\.md/.test(mp) && /探索记录/.test(mp) && /列出来/.test(mp), mp);
+    H.ok('写需求那一段到点：没有开工、没开自动', S2.flowState(j2).stage === 'plan' && S2.sessionAuto(j2) !== true);
+    // 不走 OpenSpec 的普通任务
+    const rn = await run2('s-ask-plain', { tool_name: 'AskUserQuestion', tool_input: QP, transcript_path: tp2([H.tr.user('看看这个'), H.tr.call('AskUserQuestion', QP, 'toolu_n1')]) });
+    const mn = (decision(rn) || {}).message || '';
+    H.ok('普通任务到点：自己定，交代时说清替用户定了什么', (decision(rn) || {}).behavior === 'deny' && /替用户定了什么/.test(mn) && !/revisions\.md/.test(mn), mn);
+    // 需求审过那一问（开始实施 / 先不实施）：到点替用户开工
+    H.reviewPoints(h2, d2, 'proposal');
+    const QA = { questions: [{ question: 'c-exp 的需求审过了，开始实施吗？', options: [{ label: '开始实施（推荐）' }, { label: '先不实施' }] }] };
+    const ra = await run2(sid2, { tool_name: 'AskUserQuestion', tool_input: QA, transcript_path: tp2([H.tr.user('写需求'), H.tr.call('AskUserQuestion', QA, 'toolu_a1')]) });
+    const ma = (decision(ra) || {}).message || '';
+    H.ok('开工那一问到点：替用户开工，进了做任务那一段，自动开着（仓库主人选的"没人答到点就开工"）', (decision(ra) || {}).behavior === 'deny' && /替用户开工了/.test(ma) && S2.flowState(j2).stage === 'apply' && S2.sessionAuto(j2) === true, [ma, S2.flowState(j2).stage, S2.sessionAuto(j2)]);
+    H.ok('开工范围登记上了：改代码不再被"还没开工"拦', !/开工/.test(H.reasonOf(H.hook(h2, 'pre-edit', { session_id: sid2, cwd: p2, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p2, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' }, transcript_path: tp2([H.tr.user('写需求')]) }))));
+    // 问题里没点名、有两个变更：开工没认下来，停下等用户
+    const sid3 = 's-ask-two'; const j3 = { session_id: sid3, cwd: p2 };
+    for (const [rel, text] of Object.entries({ 'openspec/changes/c-two/proposal.md': '## Why\n\n二。\n\n## What Changes\n\n- 改 src/A.java\n', 'openspec/changes/c-two/tasks.md': '## 1. 二\n\n- [ ] 1.1 改 src/A.java：二\n' })) H.write(path.join(p2, rel), text);
+    H.inFlow(h2, sid3, [d2, path.join(p2, 'openspec', 'changes', 'c-two')], true, 'plan');
+    const QB = { questions: [{ question: '需求审过了，开始实施吗？', options: [{ label: '开始实施' }, { label: '先不实施' }] }] };
+    const rb = await run2(sid3, { tool_name: 'AskUserQuestion', tool_input: QB, transcript_path: tp2([H.tr.user('写需求'), H.tr.call('AskUserQuestion', QB, 'toolu_b1')]) });
+    const mb = (decision(rb) || {}).message || '';
+    H.ok('开工那一问没点名变更：不替用户开工，说清原因、停下等用户（复审 R2）', (decision(rb) || {}).behavior === 'deny' && /没替用户开工/.test(mb) && /不要自己开工/.test(mb) && S2.flowState(j3).stage !== 'apply' && S2.sessionAuto(j3) !== true, [mb, S2.flowState(j3).stage]);
+    // 点名了、需求还没整套审过：不开工（复审 R2）
+    const sid4 = 's-ask-unreviewed'; const j4 = { session_id: sid4, cwd: p2 };
+    H.inFlow(h2, sid4, [path.join(p2, 'openspec', 'changes', 'c-two')], true, 'plan');
+    const QC = { questions: [{ question: 'c-two 的需求审过了，开始实施吗？', options: [{ label: '开始实施' }, { label: '先不实施' }] }] };
+    const rc = await run2(sid4, { tool_name: 'AskUserQuestion', tool_input: QC, transcript_path: tp2([H.tr.user('写需求'), H.tr.call('AskUserQuestion', QC, 'toolu_c1')]) });
+    H.ok('点名的变更需求还没整套审过：不替用户开工', /没替用户开工/.test((decision(rc) || {}).message || '') && S2.flowState(j4).stage !== 'apply', [(decision(rc) || {}).message, S2.flowState(j4).stage]);
+    // 会话记录里找不到这一问（用户可能已经答了、读不到）：不开工（复审 R8）
+    const sid5 = 's-ask-notfound'; const j5 = { session_id: sid5, cwd: p2 };
+    H.inFlow(h2, sid5, [d2], true, 'plan');
+    const rd = await run2(sid5, { tool_name: 'AskUserQuestion', tool_input: QA, transcript_path: tp2([H.tr.user('写需求'), H.tr.say('我问一下')]) });
+    H.ok('会话记录里找不到这一问：不替用户开工', /没替用户开工/.test((decision(rd) || {}).message || '') && S2.flowState(j5).stage !== 'apply' && S2.sessionAuto(j5) !== true, [(decision(rd) || {}).message, S2.flowState(j5).stage]);
+  }
   let T = null;
   try { T = require(hookFile); } catch (e) { T = null; }
   H.ok('等多久按配置算：10 分钟是 60 万毫秒，0 和没填是不等', !!T && T.waitOf({ askTimeoutMin: 10 }) === 600000 && T.waitOf({ askTimeoutMin: 0 }) === 0 && T.waitOf({}) === 0, T && [T.waitOf({ askTimeoutMin: 10 }), T.waitOf({ askTimeoutMin: 0 })]);
@@ -126,7 +194,7 @@ const WAIT = 1500;
   const f = F.FIELDS.find((x) => x.name === 'askTimeoutMin');
   H.ok('字段表里有 askTimeoutMin，默认 10，0 到 120', !!f && f.def === 10 && f.zero === true && f.max === 120 && f.page === 'kit', f);
   const ui = H.read(path.join(SRCDIR, 'kit', 'ui', 'ui.html')) || '';
-  H.ok('配置页有这一项，说明写了只在自动实施时、要点头的不算', /id="k_askTimeoutMin"/.test(ui) && /fNum\('askTimeoutMin'/.test(ui) && /推送、归档、发布/.test(ui), '');
+  H.ok('配置页有这一项，说明写了任何时候都算、要点头的不算', /id="k_askTimeoutMin"/.test(ui) && /fNum\('askTimeoutMin'/.test(ui) && /推送、归档、发布/.test(ui) && /不管在哪个阶段/.test(ui), '');
 
   H.section('安装器登记 PermissionRequest');
   const fh = H.freshHome('f11132-inst');

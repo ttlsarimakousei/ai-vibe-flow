@@ -1,15 +1,18 @@
 'use strict';
 /*
- * PermissionRequest 钩子：自动实施时，提问框、权限确认框发出后没人回，等够时间替用户收掉（问题表第 90 条，仓库主人 2026-11-13 定的）。
- *   提问框（AskUserQuestion）：到点按"不允许"收掉，带一句话让模型自己定、记下来接着做。不替用户选选项：
- *     脚本选了的话，会话记录里就是"用户答了"，推送、归档、开工这些认用户表态的检查会当成用户点了头。
+ * PermissionRequest 钩子：提问框、权限确认框发出后没人回，等够时间替用户收掉（问题表第 90 条，仓库主人 2026-11-13 定的；
+ * 2026-11-18 仓库主人改成任何时候都算：探索、写需求、实施、核验、不走 OpenSpec 的普通任务都一样，以前只在自动实施时）。
+ *   提问框（AskUserQuestion）：到点按"不允许"收掉，带一句话让模型自己定、记下来接着做。按在做什么给不同的交代：
+ *     写需求那一段：选推荐的写进需求，写进去的地方标"（用户没回，按推荐定的）"，记进 revisions.md，最后交代时列出来（仓库主人选的"按推荐定，标出来"）；
+ *     做任务、核验那一段：照自动模式的规矩自己定、记进 revisions.md；普通任务：自己定，交代时说清替用户定了什么。
+ *     需求审过问"开始实施 / 先不实施"的那一问：到点钩子替用户开工（登记开工范围、进做任务那一段），仓库主人选的"问，没人答到点就开工"。
+ *     别的不替用户选选项：脚本选了的话，会话记录里就是"用户答了"，推送、归档这些认用户表态的检查会当成用户点了头。
  *   别的工具的权限确认框：到点按"允许"（仓库主人定的）。命令里像推送、发布的除外：按"不允许"收掉，留给用户。
  *     跑查库、redis 工具的命令也按"不允许"（复审 R1）：那两个工具认"用户在不在"看钩子跑命令前留的条子，两分钟内才算数；
  *     框挂了 10 分钟再放行，条子早过期了，工具会当成有人在，要人确认的删就能拿着确认串执行。
  *     关服务（devserver.js stop）也按"不允许"：自己起的服务用户说关才关（用户 2026-11-17 定的）。
  *   ExitPlanMode 不管。
- * 只在这个会话的自动实施在生效（readConfigFor(j).autoMode）时等；别的时候马上退出、什么都不说，框照常等人。
- * 会话的自动开关没开的（readConfig 的 autoApply），不算流程状态就退：每个确认框都起这个进程，不为它调 git（复审 R6）。
+ * 任何时候都等（2026-11-18 起，权限确认框也是，仓库主人选的"什么时候都按允许"）。只读配置和流程状态文件，不调 git。
  * 等多久：配置页"询问没人回，等多久替你做主"（askTimeoutMin，默认 10 分钟，0 是一直等）。
  *
  * 实测（dev/probes/cc-ask-timeout.js，2.1.120、2.1.259、2.1.289、2.1.316）：框先显示、钩子同时被调；钩子给出决定时框自己收起、
@@ -27,6 +30,9 @@ const TAIL_BYTES = 800000;     // 看会话记录最后这么多字节
 const PUSH_LIKE = /push|publish|发布到/i;   // 和 lib/session-out.js 的 pushFailOut 一个认法
 const DATA_TOOL = /\b(db\.py|redis\.js)\b/i;  // 和 hooks/guard-commit.js 给查库、redis 留条子的认法一样
 const NOT_OURS = /^(ExitPlanMode|EnterPlanMode)$/;
+// 删东西、丢改动、还原不了的命令：确认框到点也不放（复审 R7）。rm -r/-f、git reset --hard、git clean -f、git checkout -- .、git restore .、
+// git branch -D、git stash drop/clear、Remove-Item -Recurse、rd/rmdir /s、del /s、format
+const DESTRUCTIVE = /(?:^|[\s;&|(])rm\s+(?:-[a-zA-Z]*[rRf][a-zA-Z]*\s+|--(?:recursive|force)\s+)|\bgit(?:\s+-C\s+\S+)?\s+(?:reset\s+(?:\S+\s+)*--hard|clean\s+(?:\S+\s+)*-[a-zA-Z]*f|checkout\s+(?:\S+\s+)*--\s+\.|restore\s+(?:--\S+\s+)*\.(?:\s|$)|branch\s+(?:\S+\s+)*-D\b|stash\s+(?:drop|clear)\b)|Remove-Item\b[^|;&]*-Recurse|(?:^|[\s;&|(])(?:rd|rmdir)\s+\/s|(?:^|[\s;&|(])del\s+(?:\/[a-zA-Z]\s+)*\/s|(?:^|[\s;&|(])format\s+[a-zA-Z]:/i;
 const clip = (s, n) => { const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; };
 const answer = (decision) => ({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision } });
 
@@ -107,31 +113,88 @@ function decide(j, waitMs, found) {
   const S = require('../lib/session');
   if (tool === 'AskUserQuestion') {
     const qs = Array.isArray(j.tool_input && j.tool_input.questions) ? j.tool_input.questions : [];
+    let st = {}; try { st = S.flowState(j) || {}; } catch (e) { st = {}; }
+    // 需求审过问"开始实施 / 先不实施"的那一问：到点替用户开工（仓库主人 2026-11-18 选的"问，没人答到点就开工"）
+    const applyAsk = st.on && st.stage !== 'apply' && qs.some((q) => ((q && q.options) || []).some((o) => S.autoAnswerOf(o && o.label, q.question) === 'on'));
+    const started = applyAsk ? startApply(j, qs, waited, found) : null;
+    if (started) return started;
+    if (applyAsk) {
+      // 对不上（会话记录里没找到这一问、问题里没点名唯一一个变更、需求还没整套审过）：不替用户开工，停下等用户
+      S.hookLog('ask-timeout 开工那一问等了 ' + waited + '没人答，对不上开工的条件，没替用户开工：' + clip(qs.map((q) => q && q.question).join('；'), 80));
+      return answer({ behavior: 'deny', message: '[vibe-kit] 开工那一问发出 ' + waited + '没人答。没替用户开工：问题里要点名一个变更、它的需求要整套审过，会话记录里要找得到这一问，有一样对不上。不要自己开工，停在这里，写进最后的交代，等用户回来说开工。' });
+    }
     for (const q of qs.slice(0, 4)) note({ kind: 'ask', title: clip(q && q.question, 160), detail: ((q && q.options) || []).map((o) => clip(o && o.label, 40)).join(' / ') + '；等了 ' + waited + '没人答，让它自己定了' });
     S.hookLog('ask-timeout 提问框等了 ' + waited + '没人答，收掉让模型自己定：' + clip(qs.map((q) => q && q.question).join('；'), 80));
-    return answer({ behavior: 'deny', message: '[vibe-kit] 自动实施：这个提问框发出 ' + waited + '没人答，按用户不在处理。这一问你自己定：选你推荐的那一项，拿不准就选改动最小、最容易改回来的；把问的是什么、你怎么定的记进 revisions.md（起因：自动模式决定，用户没回），写进最后的交代，接着做。'
-      + '要用户本人点头的事不能自己定（推送、归档、发布、开始下一个 change、还原不了的删）：那一步留给用户，写进最后的交代，接着做别的；没有别的可做就收工。同一个问题不要再问一遍。' });
+    const head = '[vibe-kit] 这个提问框发出 ' + waited + '没人答，按用户不在处理。这一问你自己定：选你推荐的那一项，拿不准就选改动最小、最容易改回来的；';
+    const how = !st.on ? '最后交代时说清你替用户定了什么、为什么，接着做。'
+      : st.stage !== 'apply' ? '定的内容写进需求文档的，在写进去的那句话后面标"（用户没回，按推荐定的）"；还没建变更、在探索的，写进探索记录"定了的"一节，带同样的标记；建了变更的，再记一条进它的 revisions.md（起因：用户没回，按推荐定的）。最后交代时把这几处列出来，让用户回来改。接着做。'
+        : '把问的是什么、你怎么定的记进 revisions.md（起因：自动模式决定，用户没回），写进最后的交代，接着做。';
+    return answer({ behavior: 'deny', message: head + how + HARD + '同一个问题不要再问一遍。' });
   }
   const cmd = String((j.tool_input && j.tool_input.command) || '');
   const what = tool + (cmd ? '：' + clip(cmd, 120) : '');
   if (/^(Bash|PowerShell)$/.test(tool) && DATA_TOOL.test(cmd)) {
     note({ kind: 'hand', title: '查库、redis 的命令要你确认、没人点，没让它跑：' + clip(cmd, 120), detail: '框挂久了，工具认不出你在不在' });
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是查库、redis 的命令，按不允许收掉：' + clip(cmd, 80));
-    return answer({ behavior: 'deny', message: '[vibe-kit] 自动实施：这条查库、redis 的命令弹了确认框，' + waited + '没人点，不替用户放行。换一个不弹框的写法（不和 cd 串在一起，路径写全）重跑一次；还弹就把这一步留给用户，写进最后的交代，接着做别的。' });
+    return answer({ behavior: 'deny', message: '[vibe-kit] 这条查库、redis 的命令弹了确认框，' + waited + '没人点，不替用户放行。换一个不弹框的写法（不和 cd 串在一起，路径写全）重跑一次；还弹就把这一步留给用户，写进最后的交代，接着做别的。' });
   }
   // 关服务要用户点头（用户 2026-11-17 定的）：没人点就留着
   if (/^(Bash|PowerShell)$/.test(tool) && /devserver(?:\.js)?["']?\s+stop\b/i.test(cmd)) {
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是关服务，按不允许收掉：' + clip(cmd, 80));
-    return answer({ behavior: 'deny', message: '[vibe-kit] 自动实施：关服务的确认框 ' + waited + '没人点，服务留着。不要再试，最后的交代里写一句哪些服务在跑、端口是多少，接着做别的。' });
+    return answer({ behavior: 'deny', message: '[vibe-kit] 关服务的确认框 ' + waited + '没人点，服务留着。不要再试，最后的交代里写一句哪些服务在跑、端口是多少，接着做别的。' });
+  }
+  // 还原不了的删、丢改动的命令（复审 R7：和提问框那边"还原不了的删留给用户"一个口径）：按不允许，留给用户
+  if (/^(Bash|PowerShell)$/.test(tool) && DESTRUCTIVE.test(cmd)) {
+    note({ kind: 'hand', title: '要你确认的命令没人点，没让它跑：' + clip(cmd, 120), detail: '删东西、丢改动还原不了，要你自己来' });
+    S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是还原不了的删除，按不允许收掉：' + clip(cmd, 80));
+    return answer({ behavior: 'deny', message: '[vibe-kit] 这个确认框发出 ' + waited + '没人点。命令会删东西或丢掉改动，还原不了，留给用户：不要再试、不要换个写法删，写进最后的交代，接着做别的。' });
   }
   if (/^(Bash|PowerShell)$/.test(tool) && PUSH_LIKE.test(cmd)) {
     note({ kind: 'hand', title: '要你确认的命令没人点，没让它跑：' + clip(cmd, 120), detail: '推送、发布要你自己来' });
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，像推送、发布，按不允许收掉：' + clip(cmd, 80));
-    return answer({ behavior: 'deny', message: '[vibe-kit] 自动实施：这个确认框发出 ' + waited + '没人点。命令里有推送或发布，留给用户：不要再试，写进最后的交代，接着做别的。' });
+    return answer({ behavior: 'deny', message: '[vibe-kit] 这个确认框发出 ' + waited + '没人点。命令里有推送或发布，留给用户：不要再试，写进最后的交代，接着做别的。' });
   }
   note({ kind: 'bypass', title: '权限确认框没人点，到点替你点了允许：' + what, detail: '等了 ' + waited });
   S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，按允许收掉：' + clip(what, 80));
   return answer({ behavior: 'allow' });
+}
+
+const HARD = '要用户本人点头的事不能自己定（推送、归档、发布、还原不了的删）：那一步留给用户，写进最后的交代，接着做别的；没有别的可做就收工。';
+
+/**
+ * 开工那一问到点：替用户开工。按问题里点名的变更登记开工范围（和用户选了"开始实施"走同一个 grant），进做任务那一段，自动开着。
+ * 只在这几样都对得上时开（复审 R2、R8）：会话记录里找到了这一问、还没有结果（found 为真）；问题里点了一个变更的名字；
+ * 那个变更的需求整套审过了。对不上的返回 null，照普通的提问框收掉、让模型自己定（它定不了开工：没有用户的话，pre-edit 照旧拦）。
+ * 开工没认下来（grant 不成）：收掉这个框，说清为什么没开工、停下等用户。返回要打印的决定
+ */
+function startApply(j, qs, waited, found) {
+  if (found !== true) return null;
+  const S = require('../lib/session');
+  const context = qs.map((q) => String((q && q.question) || '')).join('\n');
+  let named = [];
+  try {
+    const cwd = j.cwd || process.cwd();
+    named = S.allChanges(cwd).filter((c) => S.mentionsChange(context, c.name));
+    if (!named.length) named = S.nearChanges(cwd, context);
+  } catch (e) { named = []; }
+  if (named.length !== 1) return null;
+  let reviewed = false;
+  try { reviewed = require('../lib/flow-policy').allDone(named[0].dir, 'proposal'); } catch (e) { reviewed = false; }
+  if (!reviewed) return null;
+  let g = null;
+  try { g = require('../lib/apply-scope').grant(j, '开始实施 ' + named[0].name, context, {}); } catch (e) { g = { ok: false, reason: (e && e.message) || String(e) }; }
+  if (!g || !g.ok) {
+    S.hookLog('ask-timeout 开工那一问等了 ' + waited + '没人答，想替用户开工没认下来：' + clip(g && g.reason, 80));
+    return answer({ behavior: 'deny', message: '[vibe-kit] 开工那一问发出 ' + waited + '没人答，想按"开始实施"替用户开工，开工没认下来：' + clip(g && g.reason, 200) + '。停在这里，写进最后的交代，等用户回来说开工。' });
+  }
+  S.setFlow(j, true, '开工那一问没人答，到点开工', 'apply');
+  S.setSessionAuto(j, true, '开工那一问没人答，到点开工');
+  const names = (g.targets || []).join('、');
+  try { require('../lib/report.js').note(j, { kind: 'decision', title: '开工那一问没人答，到点替你开工了：' + clip(names, 120), detail: '等了 ' + waited }); } catch (e) { /* 记不了不影响 */ }
+  S.hookLog('ask-timeout 开工那一问等了 ' + waited + '没人答，到点开工：' + clip(names, 80));
+  // 同一个框里还有别的问题（复审 R2）：那几问照普通的到点规矩自己定
+  const rest = qs.length > 1 ? '这个提问框里别的问题你自己定：选你推荐的那一项，记进 revisions.md（起因：自动模式决定，用户没回）。' : '';
+  return answer({ behavior: 'deny', message: '[vibe-kit] 开工那一问发出 ' + waited + '没人答，按"开始实施"替用户开工了（' + names + '）：接着做任务，照自动实施的规矩做完、审查、改、复审，同一个问题不要再问。' + rest + '最后交代时写一句"开工那一问你没回，到点开工了"。' });
 }
 
 /** 父进程（Claude Code 起的那层）还在不在。查不了按还在算 */
@@ -147,12 +210,9 @@ async function handle(j, opts) {
   const tool = String((j && j.tool_name) || '');
   if (!tool || NOT_OURS.test(tool)) return null;
   const S = require('../lib/session');
-  // 会话的自动开关没开：不算流程状态（要读任务、调 git），直接不管
-  try { if (S.readConfig(j).autoApply !== true) return null; } catch (e) { return null; }
-  // 算流程状态要读任务、调 git：照别的钩子给 12 秒，算不出来就不管这个框
+  // 任何时候都等（2026-11-18 起）：只读配置，不算流程状态、不调 git（每个确认框都起这个进程）
   let cfg = null;
-  try { cfg = require('../lib/invocation').run(() => S.readConfigFor(j), { budgetMs: 12000 }); } catch (e) { return null; }
-  if (!cfg || cfg.autoMode !== true) return null;
+  try { cfg = S.readConfig(j); } catch (e) { return null; }
   const waitMs = waitOf(cfg);
   if (!(waitMs > 0)) return null;
   const sleep = (opts && opts.sleep) || ((ms) => new Promise((r) => setTimeout(r, ms)));
