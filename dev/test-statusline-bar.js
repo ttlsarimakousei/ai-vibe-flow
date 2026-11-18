@@ -42,7 +42,7 @@ H.section('没进流程：只有第一行，不显示 change');
   p.docs('c1', '## 1. 实现\n\n- [ ] 1.1 改 a\n');
   const ls = run({}, p.proj, 's-none');
   H.ok('只有一行', ls.length === 1, ls);
-  H.ok('有目录、上下文、自动关', /上下文 .*32% 320k\/1M/.test(ls[0]) && /自动 关/.test(ls[0]), ls[0]);
+  H.ok('有目录、上下文，不再显示自动开没开（2026-11-18，since NEXT）', /上下文 .*32% 320k\/1M/.test(ls[0]) && !/自动 [开关]/.test(ls[0]), ls[0]);
   H.ok('目录里有没勾的 change 也不显示（第 46 条）', !/c1/.test(ls[0]) && !/opsx/.test(ls[0]), ls[0]);
   H.ok('不显示模型名、自动压缩、用量', !/Opus/.test(ls[0]) && !/自动压缩/.test(ls[0]) && !/今天/.test(ls[0]), ls[0]);
 }

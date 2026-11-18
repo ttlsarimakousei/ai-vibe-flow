@@ -214,8 +214,8 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.ok('历史 apply 调用不补造开工许可', !flow('p10').on);
     // 状态栏
     const sl = (sid) => { const r = H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: proj, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: proj }, context_window: { context_window_size: 1000000, used_percentage: 30, current_usage: { input_tokens: 300000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }), cwd: proj }); return r.out.replace(/\x1b\[[0-9;]*m/g, ''); };
-    H.ok('状态栏分开显示两开关，不猜历史阶段', /自动 开/.test(sl('p2')) && !/实施，当前生效/.test(sl('p9')));
-    H.ok('状态栏显示自动开着', /自动 开/.test(sl('p1')), sl('p1'));
+    H.ok('状态栏不猜历史阶段，也不再显示自动开没开（2026-11-18）', !/自动 [开关]/.test(sl('p2')) && !/实施，当前生效/.test(sl('p9')));
+    H.ok('状态栏不显示"自动 开"（2026-11-18 实施一律自动）', !/自动 [开关]/.test(sl('p1')), sl('p1'));
     // 约定的文字
     const gen = H.node(h, path.join(h.kit, 'install.js'), ['--sync'], { cwd: h.root, timeout: 60000 });
     // OpenSpec 规范 2026-11-01 起不进全局约定，进流程时由钩子送（J4），两处合起来看

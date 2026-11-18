@@ -1,7 +1,7 @@
 'use strict';
 /*
  * Claude Code 状态栏（用户 2026-11-03 定的，第 46、47 条）：
- *   第一行  警告 │ 目录(分支) │ 上下文进度条 │ 自动 开
+ *   第一行  警告 │ 目录(分支) │ 上下文进度条（2026-11-18 起不再显示"自动 开/关"：实施一律自动，仓库主人定的）
  *   第二行  步骤条：探索✓ │ c2-api 提案✓◆ 规格✓◆ 设计✓◆ 任务✓◆ 1组✓◆ 2组●◇ 3组○ │ 自测○ 核验○ 归档○（lib/big-task.js 的 bar）
  *           ✓做完 ●正在做 ○没开始；◆审过 ◇在审 ✗N 有 N 条 P1、P2 待修。没进流程不显示：目录里有没勾完的 change 也不显示
  *   第三行  这个目录里 devserver 起着的服务和端口（用户 2026-11-17 定的，替代"下一项，或者在等你什么"）；没有就不显示
@@ -105,10 +105,7 @@ process.stdin.on('end', () => {
   if (cfg._tampered) line1.unshift(C.red + '⚠ 套件开关文件被直接改过，没生效，去配置页核对' + C.reset);
   // 套件代码和安装时的指纹对不上，以前挂红字。2026-11-04 起套件可以改（仓库主人定的），状态栏不再显示；doctor.js 照样查得到
 
-  // 自动模式按会话开（问题表第 28 条）
   const flowJ = { session_id: j.session_id, cwd };
-  let fl = {}; try { const v = require('./lib/session').flowView(flowJ) || {}; fl = { switchOn: v.switchOn, waiting: v.waiting }; } catch (e) { fl = {}; }
-  line1.push(fl.switchOn ? C.yellow + '自动 开' + C.reset : C.dim + '自动 关' + C.reset);
   // 步骤条和下一项按会话缓存 5 秒：状态栏刷新得勤，大任务每次都读一遍 tasks.md、plan.md 太慢
   let steps = ''; let next = '';
   try {

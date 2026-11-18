@@ -54,7 +54,7 @@ H.section('第 28、87 条：自动按会话记；/vk-auto 删了（2026-11-12�
   S.readConfigFor({ session_id: 's-other', cwd: p, transcript_path: answered(3, '实施方案 A') });
   H.ok('别的提问框里以"实施"开头的选项（"实施方案 A"）不动开关', sa('s-other') === null);
   const sl = (sid) => H.node(h, path.join(h.kit, 'statusline.js'), [], { input: JSON.stringify({ session_id: sid, cwd: p, model: { display_name: 'Qwen3' }, version: '2.1.259', workspace: { current_dir: p }, context_window: { context_window_size: 1000000 } }) }).out;
-  H.ok('状态栏：开着的会话写"自动 开"，别的会话写"自动 关"', /自动 开/.test(sl('s-on')) && /自动 关/.test(sl('s-off')), sl('s-on') + '\n' + sl('s-off'));
+  H.ok('状态栏不再显示自动开没开（2026-11-18，since NEXT）', !/自动 [开关]/.test(sl('s-on')) && !/自动 [开关]/.test(sl('s-off')), sl('s-on') + '\n' + sl('s-off'));
   // 同一个答案只认一次：套件关了之后，同一轮后面的钩子不能按这个答案又打开
   const t1 = answered(4, '自动实施');
   S.readConfigFor({ session_id: 's-once', cwd: p, transcript_path: t1 });
