@@ -115,7 +115,9 @@ function tempPaths(command, root) {
   const temps = [require('os').tmpdir(), process.env.TEMP, process.env.TMP].filter(Boolean).map(norm);
   const home = root ? norm(path.resolve(root)) : '';
   const isTemp = (p) => !(home && (p === home || p.startsWith(home + '/'))) && (temps.some((t) => p === t || p.startsWith(t + '/')) || /\/appdata\/local\/temp(\/|$)/.test(p) || /^\/tmp(\/|$)/.test(p));
-  const tool = (p) => /\/program files( \(x86\))?\//.test(p) || /\.(exe|cmd|bat)$/.test(p) || /\/(javac|java|node|python3?|py|mvnw?|gradlew?|npm|npx|pnpm|yarn|go|dotnet|tsc)$/.test(p);
+  // ~/.claude 下面的（套件的工具、技能的脚本，比如看页面的 probe-run.js）是工具，不算点名的文件
+  let claudeDir = ''; try { claudeDir = norm(path.dirname(require('./session').KIT)); } catch (e) { claudeDir = ''; }
+  const tool = (p) => /\/program files( \(x86\))?\//.test(p) || /\.(exe|cmd|bat)$/.test(p) || /\/(javac|java|node|python3?|py|mvnw?|gradlew?|npm|npx|pnpm|yarn|go|dotnet|tsc)$/.test(p) || (!!claudeDir && p.startsWith(claudeDir + '/'));
   let text = String(command);
   for (const re of OUTPUT_PARTS) text = text.replace(re, ' ');
   const found = [];
