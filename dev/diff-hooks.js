@@ -95,6 +95,7 @@ const V0152 = '20261110.0152'; // 第 75 条：启动方式写回项目说明、
 const V1852 = '20261110.1852'; // 第 76 条：做任务时用户让改需求接着做、写需求时不改代码不能放行；#438 已跟踪的文件不当过程文件
 const V0003 = '20261112.0003'; // 第 82 条：写进代码的文字里不带审查编号这类套件字眼
 const V202611131001 = '20261113.1001'; // 第 88、89 条和议题 #458—#467：拦"没说要走 OpenSpec"时写明选项里带"探索"就认
+const V202611181047 = '20261118.1047'; // 11-17 这批：起服务不拦、关服务要问、收工提示写明审查自测
 const V1523 = '20261112.1523'; // 第 85—87 条：需求一次写到 tasks、写完强制审修，审过问怎么实施；/vk-auto 删了
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -509,17 +510,17 @@ add('改代码：注释里写审查编号', 'pre-edit', wordsSession(edit('src/A
 add('改代码：注释只写业务原因', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 列表为空时直接返回\nclass A {}' }, { 'src/A.java': 'class A {}\n' })));
 // 2026-11-17（这一版，#475、#482，用户定的）：起服务不拦；自测的提示里"devserver status"那句换成"起服务不用问"；关服务要用户点头
 for (const c of cases) {
-  if (/devserver\.js" start/.test(c.name)) { c.expect = /放行，没有输出/; c.since = NEXT; }
-  if (c.name === '反馈1007：env -C 跑套件场景脚本') { c.expect = /用户这一轮没说要自测：先用 Ask 询问是否自测或复验及范围[\s\S]*起服务不用问，直接用 devserver\.js start 起/; c.since = NEXT; }
+  if (/devserver\.js" start/.test(c.name)) { c.expect = /放行，没有输出/; c.since = V202611181047; }
+  if (c.name === '反馈1007：env -C 跑套件场景脚本') { c.expect = /用户这一轮没说要自测：先用 Ask 询问是否自测或复验及范围[\s\S]*起服务不用问，直接用 devserver\.js start 起/; c.since = V202611181047; }
   // 起服务走 devserver 的提示末尾：以前"测完：… stop --all"，现在"测完服务留着，不要主动停"
-  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /起服务自测用 devserver\.js[\s\S]*它起好（答了 HTTP）才返回[\s\S]*测完服务留着，不要主动停，用户说关再 stop/; c.since = NEXT; }
+  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /起服务自测用 devserver\.js[\s\S]*它起好（答了 HTTP）才返回[\s\S]*测完服务留着，不要主动停，用户说关再 stop/; c.since = V202611181047; }
   // #477：收工问审查、自测时让问题里写明"审查""自测"（"要不要在页面上量一下"答不用，以前认不出是不测）
-  if (c.name === '收工：改了代码没验证') { c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续，这个会话里不再问这一样/; c.since = NEXT; }
-  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续/; c.since = NEXT; }
-  if (c.name === '收工：改了页面没看') { c.expect = /^(?![\s\S]*probe-run)[\s\S]*用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续/; c.since = NEXT; }
+  if (c.name === '收工：改了代码没验证') { c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续，这个会话里不再问这一样/; c.since = V202611181047; }
+  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续/; c.since = V202611181047; }
+  if (c.name === '收工：改了页面没看') { c.expect = /^(?![\s\S]*probe-run)[\s\S]*用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续/; c.since = V202611181047; }
 }
-add('命令：devserver stop，用户没说关', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --all'), /"permissionDecision": "ask"[\s\S]*\[vibe-kit 关服务\] 这条命令会停掉所有自己起的服务/, NEXT);
-add('命令：devserver stop 再 start（重启）', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --name a && node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name a --port 8080 -- mvn spring-boot:run'), /放行，没有输出/, NEXT);
+add('命令：devserver stop，用户没说关', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --all'), /"permissionDecision": "ask"[\s\S]*\[vibe-kit 关服务\] 这条命令会停掉所有自己起的服务/, V202611181047);
+add('命令：devserver stop 再 start（重启）', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --name a && node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name a --port 8080 -- mvn spring-boot:run'), /放行，没有输出/, V202611181047);
 
 let same = 0;
 let changed = 0;
