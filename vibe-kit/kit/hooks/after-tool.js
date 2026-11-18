@@ -49,7 +49,7 @@ function handle(j) {
     try {
       if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(String(j.tool_name || '')) && successful(j) && S.flowState(j).on) require('../lib/flow-policy').noteEdit(j, (j.tool_input && (j.tool_input.file_path || j.tool_input.notebook_path)) || '');
     } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' && e.code !== 'VIBE_HOOK_BUDGET') require('../lib/feedback').recordHookError('after-tool 记改过的文件', j, e); }
-    // 全部通过、自动关了以后，用户核验时报了问题：改代码前先问（pre-edit 的 askPending，第 88 条，2026-11-12 起不再一改代码就悄悄重开自动）
+    // 全部通过、自动关了以后，用户核验时报了问题：改代码时直接重开自动（pre-edit 的 autoOnEdit，2026-11-18 实施一律自动）
     // 改了 tasks.md：这个大任务里全勾完的 change 记成做完过（第 81、84 条：之后再补任务就是回改，不抢当前 change）
     try {
       const tf = String((j.tool_input && j.tool_input.file_path) || '');

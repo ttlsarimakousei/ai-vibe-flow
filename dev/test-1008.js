@@ -179,7 +179,7 @@ const blocked = (o) => !!o && (o.decision === 'block' || (!!o.hookSpecificOutput
     H.setConfig(h, { autoMode: true });
     // 模型自己调 /opsx:apply 的技能：没说开工就拦
     const k1 = skill('p2', 'opsx:apply');
-    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问能不能开工', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框问怎么实施/.test(H.reasonOf(k1)), H.reasonOf(k1));
+    H.ok('写提案那一段它自己调 /opsx:apply：拦下，让它把提案交代给我、问开不开始实施', blocked(k1) && /还没到 apply/.test(H.reasonOf(k1)) && /用提问框问开不开始实施/.test(H.reasonOf(k1)), H.reasonOf(k1));
     H.ok('不在流程里的会话调 /opsx:apply：也拦', blocked(skill('p8', 'opsx:apply')));
     H.ok('做任务那一段调 /opsx:apply：放行', skill('p3', 'opsx:apply') === null);
     H.ok('做任务那一段它去调 /opsx:propose（下一个变更）：回到写提案那一段', skill('p3', 'opsx:propose') === null && flow('p3').stage === 'plan', flow('p3'));

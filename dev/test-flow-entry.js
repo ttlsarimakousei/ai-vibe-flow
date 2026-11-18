@@ -134,11 +134,11 @@ H.section('第 86 条起开着自动也问怎么实施（替代第 41 条的"开
   S.setFlow(j, true, '测试', 'plan');
   S.setSessionAuto(j, true, '测试');
   const c1 = S.allChanges(proj).find((c) => c.name === 'c1');
-  H.ok('开着自动：需求审过也问怎么实施', /自动实施/.test(P.planNext(j, c1) || ''), P.planNext(j, c1));
+  H.ok('开着自动：需求审过也问开不开始实施', /开始实施/.test(P.planNext(j, c1) || ''), P.planNext(j, c1));
   H.ok('开着自动：不自己开工', fl(j).stage === 'plan', fl(j));
   const man = session(proj);
   S.setFlow(man, true, '测试', 'plan');
-  H.ok('人工：一样问', /自动实施/.test(P.planNext(man, c1) || ''), P.planNext(man, c1));
+  H.ok('人工：一样问', /开始实施/.test(P.planNext(man, c1) || ''), P.planNext(man, c1));
 
   const ex = path.join(proj, 'openspec', 'explore', '导出.md');
   const good = H.read(ex);
@@ -197,7 +197,7 @@ H.section('自动下"自动"档等提交一次，提交不成也往下走');
   H.ok('还没提交：不自己开工', fl(j).stage === 'plan');
   const c1 = S.allChanges(proj).find((c) => c.name === 'c1');
   H.ok('催提交一次', /提交本变更/.test(P.planNext(j, c1) || ''));
-  H.ok('催过了还没提交：照样往下问怎么实施（第 86 条，不自己开工）', /自动实施/.test(P.planNext(j, c1) || '') && fl(j).stage === 'plan', P.planNext(j, c1));
+  H.ok('催过了还没提交：照样往下问开不开始实施（第 86 条，不自己开工）', /开始实施/.test(P.planNext(j, c1) || '') && fl(j).stage === 'plan', P.planNext(j, c1));
   H.setConfig(h, { commitMode: 'off' });
 }
 

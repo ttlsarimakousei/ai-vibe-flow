@@ -171,7 +171,7 @@ function ensureRoot(cwd) {
 const PROPOSE_FILE = /(?:^|\/)(?:openspec-propose\/SKILL\.md|opsx\/propose\.md)$/i;
 // 2026-11-12 起需求一次写到 tasks（第 85 条，仓库主人定的，替代 10-17 的"一份一份来"）：原文的"一步生成全部"照做，套件只补三件事
 const KIT_PROPOSE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：探索记录"还没定的"清空了才写。proposal → specs → design → tasks 一次写完，中间不停、不问审查；'
-  + '写的时候有任何疑问用提问框问用户，探索记录、用户的话、读过的代码和材料里没有的不写进需求。四份写完强制审一次整套（review.js run --mode proposal --point tasks，不问用户），改到过了按提交方式提交，再用提问框问怎么实施（"自动实施""实施（每步问我）""先不实施"）。下面原文里"写完就开工"的部分不照做。\n\n';
+  + '写的时候有任何疑问用提问框问用户，探索记录、用户的话、读过的代码和材料里没有的不写进需求。四份写完强制审一次整套（review.js run --mode proposal --point tasks，不问用户），改到过了按提交方式提交，再用提问框问开不开始实施（问题里写变更名，选项"开始实施""先不实施"）。下面原文里"写完就开工"的部分不照做。\n\n';
 const EXPLORE_FILE = /(?:^|\/)(?:openspec-explore\/SKILL\.md|opsx\/explore\.md)$/i;
 // 自带模板要求决定留在对话里、写文件前单独确认，死机探索结果就没了（用户 2026-11-03 定的：探索结果要全记）
 const KIT_EXPLORE_RULE = '> **vibe-kit 的规矩（优先于下面 OpenSpec 的原文）**：探索结果边谈边写进文件，不留在对话里，死机了也能接回。第一次有结论时跑 `node "$HOME/.claude/vibe-kit/tools/plan.js" new --task <大任务名> --changes <变更名，逗号分隔>`，建 `openspec/plan.md` 的一节和 `openspec/explore/<大任务名>.md`，之后定一件写一件。'

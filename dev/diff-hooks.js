@@ -521,6 +521,15 @@ for (const c of cases) {
 }
 add('命令：devserver stop，用户没说关', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --all'), /"permissionDecision": "ask"[\s\S]*\[vibe-kit 关服务\] 这条命令会停掉所有自己起的服务/, V202611181047);
 add('命令：devserver stop 再 start（重启）', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --name a && node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name a --port 8080 -- mvn spring-boot:run'), /放行，没有输出/, V202611181047);
+// 2026-11-18（这一版，仓库主人定的"实施一律自动"）：说开工就开自动，不再先问自动还是人工。开工那一条要是共用 sess-diff，
+// 后面同一会话里的拦截都带上"全自动模式"那句，比对的就不是那道检查本身了：给它自己的会话
+for (const c of cases) {
+  if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') { ownSession(c, 'sess-diff-apply'); c.expect = /^(?=[\s\S]*用户让开工了：自动开了)(?=[\s\S]*不用让用户再说开工)(?![\s\S]*先用提问框问一次怎么实施)/; c.since = NEXT; }
+  // 以前靠开工那一条把 sess-diff 带进流程：现在自己进写需求那一段。需求审过那一问改成"开始实施 / 先不实施"
+  // 提问框答了开工（confirmApply）也开自动：给它自己的会话，不然 sess-diff 后面的拦截都带上"全自动模式"那句
+  if (c.name === '1013：多变更提问绑定开工目标') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-1013'; H.inFlow(kit, 'sess-diff-1013', [], true, 'plan'); return r; }; c.expect = /开始 apply：全自动模式开着/; c.since = NEXT; }
+  if (c.name === '开口：让它停') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-halt'; H.inFlow(kit, r.j.session_id, [path.join(r.proj, 'openspec/changes/add-export')], true, 'plan'); return r; }; c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*四份写完强制审一次整套，不问用户[\s\S]*开始实施\W{0,6}先不实施\W{0,4}；实施一律自动/; c.since = NEXT; }
+}
 
 let same = 0;
 let changed = 0;

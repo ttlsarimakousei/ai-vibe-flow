@@ -36,7 +36,7 @@ function bigProject(h, name, done, withPlan) {
 }
 const ans = (q, a) => H.tr.ran('AskUserQuestion', { questions: [{ question: q, options: [{ label: '自动实施' }, { label: '实施（每步问我）' }, { label: '先不实施' }] }] }, 'User has answered your questions: "' + q + '"="' + a + '". You can now continue with the user\'s answers in mind.');
 
-H.section('第 86 条：自动实施中说"停"才关，插话不关；说过停再说"继续"，先问自动还是人工');
+H.section('第 86 条：自动实施中说"停"才关，插话不关；说过停再说"继续"，直接接着自动做（2026-11-18 实施一律自动，以前先问自动还是人工）');
 {
   const h = H.makeHome('a1112-stop', FROM, QUIET);
   const S = require(path.join(h.kit, 'lib', 'session.js'));
@@ -53,15 +53,17 @@ H.section('第 86 条：自动实施中说"停"才关，插话不关；说过停
   H.ok('说"停"：自动关了，模型知道停在这里', S.sessionAuto(j) === false && /自动关了/.test(textOf(r)), textOf(r).slice(0, 300));
   H.ok('记下是用户说停关的', S.flowState(j).autoStopped === true, S.flowState(j));
   const r2 = say('继续');
-  H.ok('说过停再说"继续"：先问自动接着做还是人工接着做', /自动接着做/.test(textOf(r2)) && /人工接着做/.test(textOf(r2)) && S.flowState(j).autoAsk === 'resume', textOf(r2).slice(0, 400));
+  H.ok('说过停再说"继续"：直接开自动，不问自动还是人工（since NEXT）', S.sessionAuto(j) === true && /自动开了/.test(textOf(r2)) && !/人工接着做/.test(textOf(r2)) && !S.flowState(j).autoAsk && !S.flowState(j).autoStopped, [textOf(r2).slice(0, 400), S.flowState(j)]);
   const edit = (tp) => H.hook(h, 'pre-edit', { session_id: 's-stop', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' }, transcript_path: tp });
   const e1 = edit(H.transcript(path.join(h.root, 'stop-e1.jsonl'), [H.tr.user('继续')]));
-  H.ok('没问就改代码：拦下，说先问', blocked(e1) && /自动接着做/.test(H.reasonOf(e1)), H.reasonOf(e1));
-  const e2 = edit(H.transcript(path.join(h.root, 'stop-e2.jsonl'), [H.tr.user('继续'), ...ans('接着怎么做？', '自动接着做')]));
-  H.ok('选了"自动接着做"：放行，自动又开了', !blocked(e2) && S.sessionAuto(j) === true && !S.flowState(j).autoAsk, H.reasonOf(e2));
+  H.ok('接着改代码：不拦，自动开着', !blocked(e1) && S.sessionAuto(j) === true, H.reasonOf(e1));
+  // 老版本留下的"等着问"（autoAsk）：改代码时直接开，不拦
+  S.setSessionAuto(j, false, '测试'); S.updateState('s-stop-flow', (s) => { s.autoAsk = 'resume'; return s; });
+  const e2 = edit(H.transcript(path.join(h.root, 'stop-e2.jsonl'), [H.tr.user('继续')]));
+  H.ok('老版本留下等着问的：改代码不拦，直接开了自动', !blocked(e2) && S.sessionAuto(j) === true && !S.flowState(j).autoAsk, H.reasonOf(e2));
 }
 
-H.section('第 86 条：选过"先不实施"（或没问就说开工），开工前先问一次');
+H.section('第 86 条：选过"先不实施"（或没问就说开工），说开工直接自动做（2026-11-18 起不再先问一次）');
 {
   const h = H.makeHome('a1112-start', FROM, QUIET);
   const S = require(path.join(h.kit, 'lib', 'session.js'));
@@ -73,12 +75,14 @@ H.section('第 86 条：选过"先不实施"（或没问就说开工），开工
   S.readConfigFor(Object.assign({}, j, { transcript_path: H.transcript(path.join(h.root, 'start-0.jsonl'), [H.tr.user('写需求'), ...ans('c1 的需求审过了，怎么实施？', '先不实施')]) }));
   H.ok('选"先不实施"：自动关着', S.sessionAuto(j) === false);
   const r = H.hook(h, 'task-anchor', { session_id: 's-start', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '开工', transcript_path: H.transcript(path.join(h.root, 'start-1.jsonl'), [H.tr.user('开工')]) });
-  H.ok('后来用户说"开工"：进了做任务那一段，先问自动实施还是实施（每步问我）', S.flowState(j).stage === 'apply' && /先用提问框问一次怎么实施/.test(textOf(r)) && /自动实施/.test(textOf(r)), [S.flowState(j).stage, textOf(r).slice(0, 400)]);
+  H.ok('后来用户说"开工"：进了做任务那一段，自动开了，不问（since NEXT）', S.flowState(j).stage === 'apply' && S.sessionAuto(j) === true && !/怎么实施/.test(textOf(r)) && /自动开了/.test(textOf(r)), [S.flowState(j).stage, textOf(r).slice(0, 400)]);
   const edit = (tp) => H.hook(h, 'pre-edit', { session_id: 's-start', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' }, transcript_path: tp });
   const e1 = edit(H.transcript(path.join(h.root, 'start-e1.jsonl'), [H.tr.user('开工')]));
-  H.ok('没问就改代码：拦下', blocked(e1) && /怎么实施/.test(H.reasonOf(e1)), H.reasonOf(e1));
-  const e2 = edit(H.transcript(path.join(h.root, 'start-e2.jsonl'), [H.tr.user('开工'), ...ans('c1 开工，怎么实施？', '自动实施')]));
-  H.ok('选了"自动实施"：放行，自动开了', !blocked(e2) && S.sessionAuto(j) === true, H.reasonOf(e2));
+  H.ok('改代码：不拦', !blocked(e1), H.reasonOf(e1));
+  // 新的选项"开始实施"：算开工、开自动
+  S.setSessionAuto(j, false, '测试');
+  const e2 = edit(H.transcript(path.join(h.root, 'start-e2.jsonl'), [H.tr.user('开工'), ...H.tr.ran('AskUserQuestion', { questions: [{ question: 'c1 的需求审过了，开始实施吗？', options: [{ label: '开始实施' }, { label: '先不实施' }] }] }, 'User has answered your questions: "c1 的需求审过了，开始实施吗？"="开始实施". You can now continue with the user\'s answers in mind.')]));
+  H.ok('选了"开始实施"：放行，自动开了', !blocked(e2) && S.sessionAuto(j) === true, H.reasonOf(e2));
   // 问 openspec 文件、改需求文档不等这一问
   S.updateState('s-start-flow', (s) => { s.autoAsk = 'start'; return s; }); S.setSessionAuto(j, false, '测试');
   const e3 = H.hook(h, 'pre-edit', { session_id: 's-start', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(d, 'design.md'), old_string: '读过', new_string: '读过了' }, transcript_path: H.transcript(path.join(h.root, 'start-e3.jsonl'), [H.tr.user('开工')]) });
@@ -102,12 +106,12 @@ H.section('第 86 条：全部通过套件自己关自动；核验时改了代�
   S.setSessionAuto(j, true, '提问框选了自动');
   const r = H.hook(h, 'verify-gate', { session_id: 's-done', cwd: p, hook_event_name: 'Stop', stop_hook_active: false, transcript_path: H.transcript(path.join(h.root, 'done-1.jsonl'), [H.tr.user('接着做'), H.tr.say('自测登记了')]) });
   H.ok('全部通过：自动关了，说一句', S.sessionAuto(j) === false && /全部通过，自动关了/.test(H.reasonOf(r)), H.reasonOf(r));
-  H.ok('记下了：核验时再报问题，改之前先问', B.taskState(task()).autoFix === true && B.taskState(task()).auto === false, B.taskState(task()));
+  H.ok('记下了：核验时再报问题，改代码时重开自动', B.taskState(task()).autoFix === true && B.taskState(task()).auto === false, B.taskState(task()));
   // 用户核验时报了问题，模型改了代码
   H.write(path.join(p, 'src', 'A.java'), 'class A { int fixed; }\n');
   const after = (n) => H.hook(h, 'after-tool', { session_id: 's-done', cwd: p, hook_event_name: 'PostToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A {}', new_string: 'class A { int fixed; }' }, tool_response: { filePath: path.join(p, 'src', 'A.java') }, transcript_path: H.transcript(path.join(h.root, 'done-a' + n + '.jsonl'), [H.tr.user('导出的文件名不对')]) });
   after(1);
-  H.ok('核验时改了代码：不再悄悄重开自动（第 88 条：改之前先问，选了自动才开）', S.sessionAuto(j) === false && B.taskState(task()).autoFix === true, [S.sessionAuto(j), B.taskState(task())]);
+  H.ok('核验时改了代码（改完之后的钩子）：不在这里重开自动（改代码前 pre-edit 才重开，见 test-feedback1113）', S.sessionAuto(j) === false && B.taskState(task()).autoFix === true, [S.sessionAuto(j), B.taskState(task())]);
   // 用户说别自动了
   H.hook(h, 'task-anchor', { session_id: 's-done', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '别自动了', transcript_path: H.transcript(path.join(h.root, 'done-2.jsonl'), [H.tr.user('别自动了')]) });
   B.setTaskState(task(), { selfTest: { at: Date.now(), count: 1, code: W.fingerprint(p, 'code').hash, manual: [] } });

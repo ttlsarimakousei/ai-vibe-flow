@@ -219,7 +219,7 @@ function archived(p, name, file) {
     H.ok('写完 tasks：强制审一次整套，不问', m2.some((x) => /--point tasks/.test(x) && /强制/.test(x)) && !m2.some((x) => /用 Ask 问要不要审/.test(x)), m2);
     P.noteResult(a.d, 'tasks', { id: 'ok', status: 'completed', issues: [] }, P.fingerprint(a.d, 'tasks'));
     const n1 = P.planNext(ja, { dir: a.d, name: 'add-a' });
-    H.ok('整套审过：开着自动也停下问怎么实施，不自己开工（每个 change 的需求审完都问）', /自动实施/.test(n1) && /实施（每步问我）/.test(n1) && /先不实施/.test(n1) && S.flowStage(ja) === 'plan', n1);
+    H.ok('整套审过：开着自动也停下问开不开始实施，不自己开工（每个 change 的需求审完都问；2026-11-18 起选项是开始实施 / 先不实施）', /开始实施/.test(n1) && /先不实施/.test(n1) && !/每步问我/.test(n1) && S.flowStage(ja) === 'plan', n1);
     // 探索记录没写完：说缺什么
     const b = mk('b');
     H.write(path.join(b.p, 'openspec/plan.md'), '# 计划\n\n## 订单\n\n探索记录：explore/订单.md\n\n' + PLAN_HEAD + '| | add-a | | |\n');

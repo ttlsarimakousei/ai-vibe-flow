@@ -322,6 +322,12 @@ function confirmApply(j, more) {
   const context = v.kind === 'answer' ? v.answers.filter(answerStartsApply).map((a) => a.q).join('\n') : '';
   if (!require('./apply-scope').grant(j, text, context, { said: saidBefore(entries, v.pos), hint, args }).ok) return false;
   setFlow(j, true, '用户确认开工', 'apply');
+  // 实施一律自动（仓库主人 2026-11-18 定的）：问"能开工吗"答"可以"、选"定稿并开工"这类也开自动；点的是老版本的"实施（每步问我）""人工接着做"的不开
+  try {
+    const C = require('./session-config');
+    const manual = v.kind === 'answer' && v.answers.some((x) => C.autoAnswerOf(x.a, x.q) === 'off');
+    if (!manual && C.sessionAuto(j) !== true) require('./auto-run').autoOn(j, '用户确认开工');
+  } catch (e) { /* 开不了：照人工 */ }
   return true;
 }
 
@@ -331,7 +337,7 @@ function confirmApply(j, more) {
  */
 function answerStartsApply(x) {
   if (applyIntent(x.a)) return true;
-  // 需求审过那一问选"自动实施""自动接着做"也是开工（复审 20261112 R1：它不是开工说法，选了自动却改不了代码）
+  // 需求审过那一问选"开始实施"（老选项"自动实施""自动接着做"）也是开工（复审 20261112 R1：它不是开工说法，选了自动却改不了代码）
   if (require('./session-config').autoAnswerOf(x.a, x.q) === 'on') return true;
   const a = bareAnswer(x.a);
   return YES_SHORT.test(a) && intent.has(x.q, 'apply') && !/(?:先不|暂不|不要|别)[^，,。；;！!\n]{0,6}(?:开工|apply|执行|实施)/i.test(x.q);

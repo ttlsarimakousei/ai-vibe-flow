@@ -5,7 +5,7 @@
  *   Skill / SlashCommand：模型调 OpenSpec 的技能，不在流程里时要有用户的话（话里明确有 openspec，或者提问框选了探索，用户 2026-11-03 定的），不然拦下让它先问；
  *     调 propose / explore / new 回到提案阶段；archive / verify 不授予 apply。交接技能需要当前用户明确要求。
  *     调 /opsx:apply 的技能：用户还没说开工（不在流程里，或者还在写提案那一段）就拦下——提案、任务清单要他看过、他说了开工才做
- *     开工都要真人许可（提问框选了"自动实施""实施（每步问我）"、说了开工）；开着自动也不自己衔接（第 86 条，2026-11-12：每个 change 的需求审完都问）。
+ *     开工都要用户许可（提问框选了"开始实施"、说了开工；那一问到点没人答由 ask-timeout 替用户开工，2026-11-18）；开着自动也不自己衔接（第 86 条，2026-11-12：每个 change 的需求审完都问）。
  */
 const { readConfigFor, flowState, setFlow, FLOW_SKILL, blockOut, hookLog, cli, confirmApply, entryVoice } = require('../lib/session');
 // 三道门（调技能、建变更、写提案）共用这句话：选项不用和"探索"一字不差，答案里带"探索"或点了 /opsx:explore 都认（第 89 条、#467）
@@ -21,7 +21,7 @@ function applyGate(j) {
   hookLog('guard-ask block Skill opsx:apply（' + (why ? '开工没认下来：' + why.slice(0, 60) : '用户还没说开工') + '）');
   try { require('../lib/feedback.js').countBlock('guard-apply', '[vibe-kit] 还没到 apply', String((j && j.session_id) || '')); } catch (e) { /* 数不了不影响 */ }
   if (why) return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：用户说了开工，但' + why + '。调 /opsx:apply 时参数写上变更名也行（/opsx:apply <变更名>）。');
-  return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：用户还没让开工。需求要先写到 tasks、整套审过（review.js run --point tasks，不用问用户）；审过了把要点交代给我：改哪些地方、新加的操作和接口、任务清单；我原话里没提过、你自己加上的，单独列出来。然后用提问框问怎么实施（选项写"自动实施""实施（每步问我）""先不实施"）。我选了、或者我自己敲 /vk-go（或 /opsx:apply），再开始。');
+  return blockOut('PreToolUse', '[vibe-kit] 还没到 apply：用户还没让开工。需求要先写到 tasks、整套审过（review.js run --point tasks，不用问用户）；审过了把要点交代给我：改哪些地方、新加的操作和接口、任务清单；我原话里没提过、你自己加上的，单独列出来。然后用提问框问开不开始实施（问题里写变更名，选项写"开始实施""先不实施"）。我选了、或者我自己敲 /vk-go（或 /opsx:apply），再开始；这一问没人答，到点套件替我开工。');
 }
 // 套件装的技能（模型能调）。别的 vk- 开头的是给用户敲的命令
 const VK_SKILLS = /^vk-(onboard|see-page|cross-review|handover|db-crud|redis)$/i;

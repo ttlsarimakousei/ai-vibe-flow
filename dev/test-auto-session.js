@@ -64,7 +64,7 @@ H.section('第 28、87 条：自动按会话记；/vk-auto 删了（2026-11-12�
   let n = 0;
   const say = (sid, prompt) => { n++; return H.hook(h, 'task-anchor', { session_id: sid, cwd: p, hook_event_name: 'UserPromptSubmit', prompt, transcript_path: H.transcript(path.join(h.root, 's28-' + n + '.jsonl'), [H.tr.user(prompt)]) }); };
   const r2 = say('s-on', '别自动了');
-  H.ok('"别自动了"：关了，模型知道之后让接着做要先问', sa('s-on') === false && /自动关了/.test(textOf(r2)) && /问一次自动还是人工/.test(textOf(r2)), textOf(r2).slice(0, 300));
+  H.ok('"别自动了"：关了，模型知道之后说继续就接着自动做、不用问（2026-11-18）', sa('s-on') === false && /自动关了/.test(textOf(r2)) && /不用问自动还是人工/.test(textOf(r2)), textOf(r2).slice(0, 300));
   say('s-words', '这个需求自动做');
   H.ok('说"这个需求自动做"不再开（仓库主人选的"只认关"）', sa('s-words') !== true);
   // 安装器：配置里旧的两个开关清掉，正在流程里的会话补一个会话开关

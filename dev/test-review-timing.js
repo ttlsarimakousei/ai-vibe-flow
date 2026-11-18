@@ -215,7 +215,7 @@ const review = async (...a) => { try { return await H.fakeReview(...a); } catch 
     H.ok('整套没审：不问怎么实施', !P.allDone(d, 'proposal'));
     P.noteResult(d, 'tasks', GOOD, P.fingerprint(d, 'tasks'));
     const ask = P.planNext(j, { dir: d, name: 'add-a' });
-    H.ok('整套审过：停下问怎么实施（自动实施 / 实施（每步问我）/ 先不实施），不自己开工（第 86 条）', /自动实施/.test(ask) && /先不实施/.test(ask) && S.flowStage(j) === 'plan', ask);
+    H.ok('整套审过：停下问开不开始实施（开始实施 / 先不实施，2026-11-18 起），不自己开工（第 86 条）', /开始实施/.test(ask) && /先不实施/.test(ask) && S.flowStage(j) === 'plan', ask);
 
     H.section('自动模式做任务：组之间不审、不挡，全部做完审一次');
     H.git(p, ['add', '-A']); H.git(p, ['commit', '-qm', 'docs: 提案 add-a']);

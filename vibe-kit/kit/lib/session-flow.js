@@ -163,7 +163,7 @@ function flowAdopt(j) {
 }
 
 /**
- * 这一轮提问框里选的自动、人工（第 86 条）：选了"自动实施""自动接着做"开这个会话的自动，选了"实施（每步问我）""人工接着做""先不实施"关。
+ * 这一轮提问框里选的自动、人工（第 86 条）：选了"开始实施"（2026-11-18 起）、"自动实施""自动接着做"（老选项）开这个会话的自动，选了"先不实施"、老选项"实施（每步问我）""人工接着做"关。
  * 同一个答案只认一次（st.autoAnswer 记着）：全部通过后套件关了自动，同一轮后面的钩子不能又按这个答案打开。
  * 用户开口让开工、套件等着问（st.autoAsk）时认得宽一点（问题里说到自动、答"自动"也算），认下来就不等了。返回 'on'、'off'、''
  */
@@ -190,7 +190,7 @@ function syncAutoAnswer(j) {
       if (st.autoAnswer === k) return '';
       const wasFix = st.autoAsk === 'fix';
       updateState(flowKey(j), (s) => { s.autoAnswer = k; delete s.autoAsk; delete s.autoStopped; return s; });
-      // 答的是开工、接着做、下一个 change 那一问：新的一趟实施，核验期"每次先问"的记号清掉（第 88 条，lib/auto-run.js answered）
+      // 答的是开工、接着做、下一个 change 那一问：新的一趟实施，核验期的记号清掉（lib/auto-run.js answered）
       try { require('./auto-run').answered(j, wasFix); } catch (e) { /* 清不了：多问一次 */ }
       setSessionAuto(j, pick.w === 'on', pick.w === 'on' ? '提问框选了自动' : '提问框选了人工或先不实施');
       hookLog('自动模式 会话 ' + sid + (pick.w === 'on' ? ' 提问框选了自动' : ' 提问框选了人工或先不实施'));

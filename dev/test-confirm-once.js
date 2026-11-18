@@ -70,7 +70,7 @@ H.section('A5 开工：问的是"能开工吗"、答"可以"也算开工；之�
   H.ok('写完 tasks 那一问选"定稿并开工"：认成开工', t4.stage === 'apply' && !blocked(t4.r), [t4.stage, H.reasonOf(t4.r)]);
 }
 
-H.section('A7 需求审过：问怎么实施（自动实施 / 实施（每步问我）/ 先不实施），第 86 条起替代"定稿和开工合成一问"');
+H.section('A7 需求审过：问开不开始实施（开始实施 / 先不实施，2026-11-18 起实施一律自动），第 86 条起替代"定稿和开工合成一问"');
 {
   const h = H.makeHome('tco-a7', FROM, QUIET);
   const p = H.makeRepo(path.join(h.work, 'proj'), Object.assign({ 'pom.xml': '<project/>\n', 'src/A.java': 'class A {}\n', '.gitignore': '.vibe/\n' }, CHANGE)); H.reviewPoints(h, path.join(p, 'openspec/changes/feat-019'), 'proposal'); // 第 85 条起第一次打勾前需求要整套审过
@@ -79,9 +79,9 @@ H.section('A7 需求审过：问怎么实施（自动实施 / 实施（每步问
   let n = 0;
   const next = (answer) => { n++; const entries = [H.tr.user('写 feat-019 的需求'), H.tr.say('tasks 写完了')].concat(answer ? ask('feat-019 的 tasks 写完了，怎么定？', answer) : []); return F.planNext({ session_id: 's-a7-' + n, cwd: p, transcript_path: H.transcript(path.join(h.root, 'a7-' + n + '.jsonl'), entries) }, c) || ''; };
   const q = next('');
-  H.ok('需求审过：问怎么实施，三个选项', /自动实施/.test(q) && /实施（每步问我）/.test(q) && /先不实施/.test(q), q);
+  H.ok('需求审过：问开不开始实施，两个选项，问题里写变更名（since NEXT）', /开始实施/.test(q) && /先不实施/.test(q) && !/每步问我/.test(q) && /写上变更名/.test(q), q);
   H.ok('不再有"定稿并开工""只定稿"', !/定稿并开工|只定稿/.test(q), q);
-  H.ok('自动实施的说明写清做到哪、什么时候关', /全部通过后自动关/.test(q) && /说停就停/.test(q), q);
+  H.ok('开始实施的说明写清是自动做、做到哪、什么时候停，没人答到点开工', /自动做/.test(q) && /全部通过后停下/.test(q) && /说停就停/.test(q) && /到点套件会替用户开工/.test(q), q);
 }
 
 H.section('A8 人工模式改完代码：问一次审查、自测，答了不用，这个会话后面再改代码不再问');
@@ -246,7 +246,7 @@ H.section('A12 /opsx:propose 装好后先说套件的规矩：探索完才写，
   if (r.ok) {
     for (const rel of r.files.filter((f) => /propose/i.test(f))) {
       const t = H.read(path.join(dir, rel)) || '';
-      H.ok(rel + '：插了套件的规矩，frontmatter 还在最前面', /vibe-kit 的规矩/.test(t) && /一次写完/.test(t) && /强制审一次整套/.test(t) && /自动实施/.test(t) && (!/^---/.test(H.read(path.join(dir, rel)) || '') || /^---\r?\n[\s\S]*?\r?\n---\r?\n\n> \*\*vibe-kit 的规矩/.test(t)), t.slice(0, 400));
+      H.ok(rel + '：插了套件的规矩，frontmatter 还在最前面', /vibe-kit 的规矩/.test(t) && /一次写完/.test(t) && /强制审一次整套/.test(t) && /开始实施/.test(t) && (!/^---/.test(H.read(path.join(dir, rel)) || '') || /^---\r?\n[\s\S]*?\r?\n---\r?\n\n> \*\*vibe-kit 的规矩/.test(t)), t.slice(0, 400));
     }
     const other = r.files.find((f) => /opsx\/apply\.md$/i.test(f));
     H.ok('别的命令原样拷（不插这段）', !!other && !/vibe-kit 的规矩/.test(H.read(path.join(dir, other)) || ''), other);

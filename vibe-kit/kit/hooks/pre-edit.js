@@ -26,8 +26,8 @@ const startedCheck = { handle(j) {
   const S = require('../lib/session'); const A = require('../lib/apply-scope');
   const no = A.notStarted(j, f);
   if (!no || S.confirmApply(j, { hint: f })) {
-    // 用户让开工、接着做了，自动还没问过（第 86 条，仓库主人 2026-11-12 定的）：改代码前先问一次自动还是人工
-    if (CODE_FILE.test(f) && !NOT_CODE.test(f)) { const ask = require('../lib/auto-run').askPending(j); if (ask) return S.blockOut('PreToolUse', '[vibe-kit] ' + ask); }
+    // 实施一律自动（仓库主人 2026-11-18 定的，替代第 86、88 条"改代码前先问一次自动还是人工"）：核验时报了问题、老版本留下等着问的，直接开自动，不拦
+    if (CODE_FILE.test(f) && !NOT_CODE.test(f)) { try { require('../lib/auto-run').autoOnEdit(j); } catch (e) { /* 开不了：照人工改 */ } }
     return null;
   }
   const out = S.blockOut('PreToolUse', '[vibe-kit 范围] ' + no);

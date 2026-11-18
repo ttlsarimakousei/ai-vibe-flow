@@ -1,7 +1,7 @@
 'use strict';
 /*
  * 问题表第 88、89 条和导出议题 #458—#467（2026-11-13，docs/feedback-20261113.md）：
- *   88    全部通过套件关了自动之后，用户每报一次问题，改代码前问一次"自动实施 / 实施（每步问我）"；选了自动：改→审→自测，全部通过再关；
+ *   88    全部通过套件关了自动之后，用户报问题（2026-11-18 起改代码时直接重开自动，以前先问"自动实施 / 实施（每步问我）"）：改→审→自测，全部通过再关；
  *         自测、代码审查催 3 次没动就关自动并让模型把情况告诉用户；不再一改代码就悄悄重开
  *   89、#467  提问框选了探索主要看答案；认下来就记成在流程里
  *   #464  壳子里子项目名下的验证证据，从壳子根看也算
@@ -76,27 +76,24 @@ function verifying(name, big) {
     },
   };
 }
+// 2026-11-18 以前核验期改代码前让它问的那句；现在不问了，只用来查没有这句
 const ASK_FIX = /先用提问框问一次怎么改/;
 
-H.section('第 88 条：全部通过关了自动之后，用户每报一次问题，改代码前问一次；选了自动：改→审→自测，全部通过再关');
+H.section('全部通过关了自动之后，用户报问题：改代码时直接重开自动，改→审→自测，全部通过再关（2026-11-18 实施一律自动，替代第 88 条的"每次先问"）');
 {
   const t = verifying('f1113-fix', true);
   const { S, B, j } = t;
   const t1 = [H.tr.user('接着做'), H.tr.say('自测登记了')];
   const r1 = t.stop(t1);
-  H.ok('全部通过：自动关了，说清以后再报问题会先问、结果不要另建文件交代', S.sessionAuto(j) === false && /全部通过，自动关了/.test(H.reasonOf(r1)) && /先问一次/.test(H.reasonOf(r1)) && /不要为了交代在项目里新建文件/.test(H.reasonOf(r1)) && !/照旧自动/.test(H.reasonOf(r1)), H.reasonOf(r1));
-  H.ok('记下了：之后再让改，先问', t.autoFix() === true, B.taskState(t.task()));
-  H.ok('关自动的这一轮里接着改代码：不问（用户还没报问题）', !ASK_FIX.test(H.reasonOf(t.preEdit(t1))), H.reasonOf(t.preEdit(t1)));
+  H.ok('全部通过：自动关了，说清以后再报问题直接自动改、结果不要另建文件交代', S.sessionAuto(j) === false && /全部通过，自动关了/.test(H.reasonOf(r1)) && /直接自动改/.test(H.reasonOf(r1)) && !/先问一次/.test(H.reasonOf(r1)) && /不要为了交代在项目里新建文件/.test(H.reasonOf(r1)), H.reasonOf(r1));
+  H.ok('记下了：之后再让改，重开自动', t.autoFix() === true, B.taskState(t.task()));
+  const e0 = t.preEdit(t1);
+  H.ok('关自动的这一轮里接着改代码：不拦、不重开（用户还没报问题）', !blocked(e0) && S.sessionAuto(j) === false, H.reasonOf(e0));
   // 用户核验时报了问题（新的一轮）
   const t2 = [H.tr.user('导出的文件名不对，改一下')];
   t.say(t2, '导出的文件名不对，改一下');
   const e1 = t.preEdit(t2);
-  H.ok('用户报了问题：改代码前拦下，让它先问"自动实施 / 实施（每步问我）"', blocked(e1) && ASK_FIX.test(H.reasonOf(e1)) && /自动实施/.test(H.reasonOf(e1)) && /实施（每步问我）/.test(H.reasonOf(e1)), H.reasonOf(e1));
-  H.ok('没问之前自动照旧关着（不再一改代码就悄悄重开）', S.sessionAuto(j) === false);
-  t2.push(...ans('这个问题怎么改？', '自动实施'));
-  const e2 = t.preEdit(t2);
-  H.ok('选了"自动实施"：放行，自动开了', !blocked(e2) && S.sessionAuto(j) === true && !S.flowState(j).autoAsk, [H.reasonOf(e2), S.flowState(j)]);
-  H.ok('答的是核验期那一问：之后再报问题照样问', t.autoFix() === true, B.taskState(t.task()));
+  H.ok('用户报了问题：改代码不拦，直接重开自动（since NEXT）', !blocked(e1) && !ASK_FIX.test(H.reasonOf(e1)) && S.sessionAuto(j) === true && t.autoFix() === false, [H.reasonOf(e1), B.taskState(t.task())]);
   t2.push(...t.edit(t2, 'class A { int fixed1; }\n'));
   const r2 = t.stop(t2.concat([H.tr.say('改好了')]));
   H.ok('改完收工：照自动催代码审查，不是让它去问用户要不要审', /review\.js run --change c1 --mode code --point change/.test(H.reasonOf(r2)) && !/用一个提问框问/.test(H.reasonOf(r2)), H.reasonOf(r2));
@@ -106,55 +103,47 @@ H.section('第 88 条：全部通过关了自动之后，用户每报一次问�
   H.ok('催着的时候自动照旧开着', S.sessionAuto(j) === true);
   const r3 = t.stop(t2.concat([H.tr.say('测过了，都正常')]));
   H.ok('催了 3 次还没登记：关自动，让它把情况告诉用户（以前自动一直开着）', S.sessionAuto(j) === false && /全面自测没登记/.test(H.reasonOf(r3)) && /自动关了/.test(H.reasonOf(r3)) && /告诉用户/.test(H.reasonOf(r3)), H.reasonOf(r3));
-  H.ok('这样关的也记着：之后再让改，先问', t.autoFix() === true);
+  H.ok('这样关的也记着：之后再让改，重开自动', t.autoFix() === true);
   const after = H.reasonOf(t.stop(t2.concat([H.tr.say('情况是这样')])));
   H.ok('关了之后再收工：不再拦这件事，也不换成人工的问法接着问', !/全面自测/.test(after), after);
-  // 用户让接着做：新的一轮再问；选自动、登记自测、全部通过再关
+  // 用户让接着做：新的一轮直接重开；登记自测、全部通过再关
   const t3 = [H.tr.user('继续')];
   t.say(t3, '继续');
-  H.ok('用户让接着做（新的一轮）：改代码前再问一次', ASK_FIX.test(H.reasonOf(t.preEdit(t3))));
-  t3.push(...ans('接着怎么改？', '自动实施'));
-  H.ok('又选了自动', !blocked(t.preEdit(t3)) && S.sessionAuto(j) === true);
+  const e3 = t.preEdit(t3);
+  H.ok('用户让接着做（新的一轮）：改代码不拦，自动开了', !blocked(e3) && S.sessionAuto(j) === true, H.reasonOf(e3));
   const w = t.selftest();
   H.ok('全面自测登记成功', w.status === 0 && /"ok": true/.test(w.stdout), w.stdout + w.stderr);
   const r4 = t.stop(t3.concat([H.tr.say('自测登记了')]));
   H.ok('自审、自测都过了：自动自己关了', S.sessionAuto(j) === false && /全部通过，自动关了/.test(H.reasonOf(r4)) && B.phaseOf(t.task()).phase === 'verify', H.reasonOf(r4));
-  // 再报问题：流程重复。这次选每步问
+  // 再报问题：流程重复
   const t4 = [H.tr.user('导出的列顺序也不对')];
   t.say(t4, '导出的列顺序也不对');
-  H.ok('再报一次问题：又问一次', ASK_FIX.test(H.reasonOf(t.preEdit(t4))));
-  t4.push(...ans('怎么改？', '实施（每步问我）'));
-  H.ok('选了"实施（每步问我）"：放行，自动关着', !blocked(t.preEdit(t4)) && S.sessionAuto(j) === false, H.reasonOf(t.preEdit(t4)));
-  t4.push(...t.edit(t4, 'class A { int fixed2; }\n'));
-  H.ok('同一轮里接着改：不再问', !ASK_FIX.test(H.reasonOf(t.preEdit(t4))));
-  // 拦下让它问、用户没答就换了话题（复审 R4）：下一轮接着等这一问，答完不再问第二次
+  const e4 = t.preEdit(t4);
+  H.ok('再报一次问题：又直接重开自动', !blocked(e4) && S.sessionAuto(j) === true, H.reasonOf(e4));
+  // 老版本留下的"等着问"（autoAsk 'fix'）：改代码时直接开，不拦
+  S.setSessionAuto(j, false, '测试'); S.updateState(t.sid + '-flow', (s) => { s.autoAsk = 'fix'; return s; });
   const t4b = [H.tr.user('日志级别也调一下')];
-  t.say(t4b, '日志级别也调一下');
-  H.ok('新的一轮：先问', ASK_FIX.test(H.reasonOf(t.preEdit(t4b))));
-  const t4c = [H.tr.user('算了，先把标题改了')];
-  t.say(t4c, '算了，先把标题改了');
-  H.ok('没答就换了话题：这一轮接着等那一问', ASK_FIX.test(H.reasonOf(t.preEdit(t4c))));
-  t4c.push(...ans('怎么改？', '实施（每步问我）'));
-  H.ok('答了之后同一轮不再问第二次', !blocked(t.preEdit(t4c)) && !ASK_FIX.test(H.reasonOf(t.preEdit(t4c))), H.reasonOf(t.preEdit(t4c)));
-  // 说了别自动了：核验期那一问也关掉
+  const e4b = t.preEdit(t4b);
+  H.ok('老版本留下等着问的：不拦，直接开了自动', !blocked(e4b) && S.sessionAuto(j) === true && !S.flowState(j).autoAsk, [H.reasonOf(e4b), S.flowState(j)]);
+  // 说了别自动了：核验期也不再自己重开
   const t5 = [H.tr.user('别自动了')];
   t.say(t5, '别自动了');
   const t6 = [H.tr.user('标题也改一下')];
   t.say(t6, '标题也改一下');
-  H.ok('用户说过"别自动了"：之后报问题不再问', !ASK_FIX.test(H.reasonOf(t.preEdit(t6))) && t.autoFix() === false, H.reasonOf(t.preEdit(t6)));
+  const e6 = t.preEdit(t6);
+  H.ok('用户说过"别自动了"：之后报问题不自己重开，改代码不拦', !blocked(e6) && S.sessionAuto(j) === false && t.autoFix() === false, [H.reasonOf(e6), S.sessionAuto(j)]);
 }
 
-H.section('第 88 条：不归哪个大任务的 change 一样（先问、催 3 次、关）');
+H.section('不归哪个大任务的 change 一样（核验时报问题直接重开、催 3 次、关）');
 {
   const t = verifying('f1113-plain', false);
   const { S, j } = t;
   const r1 = t.stop([H.tr.user('接着做'), H.tr.say('自测登记了')]);
-  H.ok('全部通过：自动关了', S.sessionAuto(j) === false && /全部通过/.test(H.reasonOf(r1)) && /先问一次/.test(H.reasonOf(r1)), H.reasonOf(r1));
+  H.ok('全部通过：自动关了', S.sessionAuto(j) === false && /全部通过/.test(H.reasonOf(r1)) && /直接自动改/.test(H.reasonOf(r1)), H.reasonOf(r1));
   const t2 = [H.tr.user('导出报错了')];
   t.say(t2, '导出报错了');
-  H.ok('报了问题：改代码前先问', ASK_FIX.test(H.reasonOf(t.preEdit(t2))) && S.sessionAuto(j) === false);
-  t2.push(...ans('怎么改？', '自动实施'));
-  H.ok('选了自动：放行', !blocked(t.preEdit(t2)) && S.sessionAuto(j) === true);
+  const e2 = t.preEdit(t2);
+  H.ok('报了问题：改代码不拦，自动开了', !blocked(e2) && S.sessionAuto(j) === true, H.reasonOf(e2));
   t2.push(...t.edit(t2, 'class A { int fixed; }\n'));
   H.ok('改完收工：催代码审查', /review\.js run --change c1/.test(H.reasonOf(t.stop(t2.concat([H.tr.say('改好了')])))));
   H.reviewPoints(t.h, t.d, 'code');
@@ -164,7 +153,6 @@ H.section('第 88 条：不归哪个大任务的 change 一样（先问、催 3 
   H.ok('还没登记：关自动，让它告诉用户', S.sessionAuto(j) === false && /自测没登记/.test(H.reasonOf(r3)) && /自动关了/.test(H.reasonOf(r3)), H.reasonOf(r3));
   const t3 = [H.tr.user('那你登记一下')];
   t.say(t3, '那你登记一下');
-  t3.push(...ans('怎么做？', '自动实施'));
   t.preEdit(t3);
   const w = t.selftest();
   H.ok('自测登记成功', w.status === 0 && /"ok": true/.test(w.stdout), w.stdout + w.stderr);
