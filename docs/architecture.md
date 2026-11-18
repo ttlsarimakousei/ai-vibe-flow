@@ -246,3 +246,12 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 - **询问没人回**（`hooks/ask-timeout.js`，安装器登记在 PermissionRequest 上，`timeout: 7500` 秒）：框显示的同时钩子被调（实测 2.1.120—2.1.316），钩子给出决定时框收起。等的时候按名字和输入在会话记录里找这次调用（钩子输入里没有 `tool_use_id`），找到它的结果、或者它后面有用户的话，就退出。提问框到点 `deny` 带一句话：不用 `allow` + `updatedInput.answers` 替用户选，那样会话记录里是"用户答了"，开工、推送、归档认表态的检查会当成用户点了头。到点记进 `report`（`ask`、`bypass`、`hand`）。开关 `askTimeoutMin`（`config-fields`，0 是一直等）。
 - **查库要不要人点头**（`vk-db-crud/scripts/db.py` 的 `write_policy`）：替代"有人在时凡是改库都要人确认"和"全自动下留不下备份的不做"。`auto_plan` 照旧算留不留得下备份；留不下、又会删东西（`_removes`：DELETE、TRUNCATE、DROP、ALTER 里有 DROP、CREATE OR REPLACE TABLE、看不懂的语句）、删的又不是这个项目里工具自己建的（`_own_object`，看留痕里 7 天内、同一个项目、执行成功的 `created`）才要人点头。确认串登记时记下 `note`（ask / free），有人在时第二步照它算，不再连库。有人在时新增、修改不为留备份多连一次库。驱动带不回自增主键（`IDS_UNKNOWN`）时不带 `--key-columns` 再执行一遍。留痕 `op.json` 的 `auto` 改成"没人确认就做的"，全自动报告照旧按它列。
 - **redis**（`vk-redis/scripts/redis.js`）：全自动下只拦一次删几个 key 的 `del`。
+
+## 20261117（议题 #468—#482，仓库主人定的三件事）
+
+核对和改法见 [feedback-20261117.md](feedback-20261117.md)。结构上的变化：
+
+- **起服务不拦、关服务要问**（`flow-policy.actionIssue`、`flow-policy.stopIssue`、`guard-commit`）：`startCommand` 认出的只起服务的命令直接放行。`stopIssue` 认 `devserver.js stop`（同一条里又 `start` 的是重启，不管）；这一轮用户原话 `intent.stopService`、或者提问框问关服务（`intent.asksStop`）答了关，就不管；否则人工弹确认框（和推送的确认合在一个框里），全自动 `stop-service` 拦下。`ask-timeout` 到点对关服务按不允许。
+- **状态栏第三行**（`statusline.runningLine`）：读 devserver 的全机登记 `state/devserver.json` 和每条记录文件，看管进程用 `process.kill(pid, 0)` 看还在不在，运行目录在当前目录下面或上面的才列。`big-task.bar` 的 `next` 照旧算，状态栏不显示。
+- **跨壳子开工**（`session-projects.nearChanges`、`apply-scope.grant`、`review-runner.changeOf`）：话里点名、当前目录下找不到的变更，按名字到上一级目录下的别的目录、上两级目录下再下一层找 `openspec/changes/<名字>`；`grant` 找到唯一一个就开它（这边 plan.md 的大任务也列了它时一起进范围），开工范围的 `roots` 是那个壳子和它的子项目。`review.js --change` 同样找。
+- **验证证据在壳子里分仓库记**（`evidence.recordTool`、`evidence.shellTargets`、`evidence.current`）：壳子根跑、没点子项目的命令，会话用编辑工具改过哪些子项目就各记一条（同一条命令记同一个 `cmd` 和 `parts`）；一个子项目都没改过的照旧算壳子加全部子项目的整个指纹。`current` 查壳子时，壳子名下有记录才算整个指纹；同一个 `cmd` 的几条要都还对才算（复审 R1：改了 B，A 那条不能单独顶着）。
