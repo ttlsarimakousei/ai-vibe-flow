@@ -26,7 +26,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
 | 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；MCP 工具的返回原样给模型 |
-| 提问框、权限确认框要问用户的时候（PermissionRequest） | `ask-timeout.js` | 只在这个会话的自动实施在生效时管：等 `askTimeoutMin` 分钟（默认 10）没人回，提问框按不允许收掉、让模型自己定，别的确认框按允许，像推送、发布的、跑查库和 redis 工具的按不允许（框挂久了那两个工具的条子过期，会当成有人在）；记进全自动报告。隔 3 秒看一眼会话记录，框有了结果、用户另说了话就退出。不走 `cli()` 的 12 秒预算 |
+| 提问框、权限确认框要问用户的时候（PermissionRequest） | `ask-timeout.js` | 任何时候都管（2026-11-18 起，以前只在自动实施时）：等 `askTimeoutMin` 分钟（默认 10）没人回，提问框按不允许收掉、让模型自己定（按流程状态给写需求、做任务、普通任务不同的交代）；需求审过"开始实施 / 先不实施"那一问到点由它 `apply-scope.grant` 替用户开工、开自动（会话记录里找到这一问、问题里点名唯一一个变更、需求整套审过才开）。别的确认框按允许，像推送、发布的、跑查库和 redis 工具的、关服务的、还原不了的删（`DESTRUCTIVE`）按不允许（框挂久了那两个工具的条子过期，会当成有人在）；记进全自动报告。只读配置和流程状态，不调 git。隔 3 秒看一眼会话记录，框有了结果、用户另说了话就退出。不走 `cli()` 的 12 秒预算 |
 | 模型说做完了 | `verify-gate.js` | 自动阶段文档没写到 tasks 催接着写，写完催审整套，任务全部做完催审整个 change；人工阶段 Ask；提醒提交与自动提交分开；核对材料、修订链和实际验证结果，交付用例及结果，用户决定验收归档 |
 
 钩子的写法：每个文件导出 `handle(j)`，返回对象（JSON 输出）、字符串（原样输出，进模型的上下文）或 `null`（放行）。文件底部 `if (require.main === module) cli(handle)`，命令方式就是直接跑这个文件。拦截用 `lib/session.js` 的 `blockOut(event, reason)`，要用户确认用 `askOut(reason)`。
@@ -38,7 +38,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 文件 | 管什么 |
 |---|---|
 | `session.js` | 公共入口：开关与封条、会话记录、变更、壳子、审查记账、阶段展示、真人动作和压缩窗口。状态锁、调用缓存、意图与范围指纹拆到专用模块，保持旧调用方接口 |
-| `auto-run.js` | 自动实施这一趟（第 85—87 条，2026-11-12）：用户说停关自动（`stopByUser`）、全部通过套件关自动（`finish`，verify-gate 调）、任务都做完了审查或自测催够了没动也关（`giveUp`，第 88 条，20261113 这一版起）、让开工了先问自动还是人工（`markAsk`、`askPending`，task-anchor 记、pre-edit 等）；套件自己关了之后用户每报一次问题改代码前问一次（`askPending` 里按 `autoFix`、`fixAskTurn` 判断，替代 11-12 的 `fixResume` 悄悄重开）；表外 change 的自测记录 `state/change-selftest.json`（跨会话） |
+| `auto-run.js` | 自动实施这一趟（第 85—87 条，2026-11-12）：用户说停关自动（`stopByUser`）、全部通过套件关自动（`finish`，verify-gate 调）、任务都做完了审查或自测催够了没动也关（`giveUp`，第 88 条，20261113 这一版起）、实施一律自动（2026-11-18，替代"先问自动还是人工"）：用户说开工、说过停又说继续直接开（`autoOn`，task-anchor 调），套件自己关了之后用户报问题改代码时直接重开（`autoOnEdit`，pre-edit 调，按 `autoFix`、`fixAskTurn` 判断，关自动的那一轮不重开）；表外 change 的自测记录 `state/change-selftest.json`（跨会话） |
 | `plan-link.js` | 哪些 change 可能是一件事（第 61、62 条）：名字前缀、文档互相提到、任务改同一批文件。只给线索，问过的记在 `state/plan-link.json` |
 | `flow-policy.js` | 两阶段资格、审查点（`points` 必审：整套文档 `tasks`、整个 change `change`；`reviewable` 加上用户点名才审的单份文档和组）、轮数与关联指纹、人工 Ask 去重、定稿后的 apply 衔接 |
 | `openspec.js` | 套件自带的 OpenSpec（`kit/openspec/`，2026-10-17 集成）：能不能用（Node 版本）、把命令里的 `openspec` 改成调用自带的那份、项目没初始化时 `init --tools none`、安装时生成用户级 `/opsx:*` 命令和技能 |
@@ -243,7 +243,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 
 核对和改法见 [feedback-20261113-2.md](feedback-20261113-2.md)。结构上的变化：
 
-- **询问没人回**（`hooks/ask-timeout.js`，安装器登记在 PermissionRequest 上，`timeout: 7500` 秒）：框显示的同时钩子被调（实测 2.1.120—2.1.316），钩子给出决定时框收起。等的时候按名字和输入在会话记录里找这次调用（钩子输入里没有 `tool_use_id`），找到它的结果、或者它后面有用户的话，就退出。提问框到点 `deny` 带一句话：不用 `allow` + `updatedInput.answers` 替用户选，那样会话记录里是"用户答了"，开工、推送、归档认表态的检查会当成用户点了头。到点记进 `report`（`ask`、`bypass`、`hand`）。开关 `askTimeoutMin`（`config-fields`，0 是一直等）。
+- **询问没人回**（`hooks/ask-timeout.js`，安装器登记在 PermissionRequest 上，`timeout: 7500` 秒）：框显示的同时钩子被调（实测 2.1.120—2.1.316），钩子给出决定时框收起。等的时候按名字和输入在会话记录里找这次调用（钩子输入里没有 `tool_use_id`），找到它的结果、或者它后面有用户的话，就退出。提问框到点 `deny` 带一句话：不用 `allow` + `updatedInput.answers` 替用户选，那样会话记录里是"用户答了"，推送、归档认表态的检查会当成用户点了头。开工那一问是例外（仓库主人 2026-11-18 定的到点开工）：钩子自己登记开工范围、进 apply、开自动，不靠假的答案。到点记进 `report`（`ask`、`bypass`、`hand`）。开关 `askTimeoutMin`（`config-fields`，0 是一直等）。
 - **查库要不要人点头**（`vk-db-crud/scripts/db.py` 的 `write_policy`）：替代"有人在时凡是改库都要人确认"和"全自动下留不下备份的不做"。`auto_plan` 照旧算留不留得下备份；留不下、又会删东西（`_removes`：DELETE、TRUNCATE、DROP、ALTER 里有 DROP、CREATE OR REPLACE TABLE、看不懂的语句）、删的又不是这个项目里工具自己建的（`_own_object`，看留痕里 7 天内、同一个项目、执行成功的 `created`）才要人点头。确认串登记时记下 `note`（ask / free），有人在时第二步照它算，不再连库。有人在时新增、修改不为留备份多连一次库。驱动带不回自增主键（`IDS_UNKNOWN`）时不带 `--key-columns` 再执行一遍。留痕 `op.json` 的 `auto` 改成"没人确认就做的"，全自动报告照旧按它列。
 - **redis**（`vk-redis/scripts/redis.js`）：全自动下只拦一次删几个 key 的 `del`。
 
