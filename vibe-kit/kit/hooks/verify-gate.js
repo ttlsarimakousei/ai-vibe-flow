@@ -678,9 +678,14 @@ function autoReport(j, cfg, entries, lastSaid, changes) {
   if (!report || !j.session_id) return '';
   // 做完最后一组、只剩用户验收时自动已不生效，这一轮自动做的事仍要交报告。
   // 只交给本会话真跑过的自动轮次（有 round）；交过之后又有新情况照样再交（和自动生效时一样，最多三次）；用户开口后报告从头记。
-  const closing = !cfg.autoMode && require('../lib/session').flowView(j).awaitingUser;
+  // 套件这一轮自己关了自动（审查、自测催够了没动，giveUp）：这一轮自动做的事照样交报告（2026-11-18 实施一律自动以后，会话的自动总是开着，
+  // 催够了关掉的多了；以前只认"做完了、等用户验收"那一种，催够了关的这一轮报告就丢了）
+  const st0 = report.stateOf(j);
+  let kitClosed = false;
+  try { const sw = readState(String(j.session_id) + '-auto-switch'); kitClosed = sw.on === false && /自动关了$/.test(String(sw.by || '')) && !!st0.round && (Number(sw.at) || 0) >= st0.round; } catch (e) { kitClosed = false; }
+  const closing = !cfg.autoMode && (kitClosed || require('../lib/session').flowView(j).awaitingUser);
   if (!cfg.autoMode && !closing) return '';
-  const st = report.stateOf(j);
+  const st = st0;
   if (closing && !st.round) return '';
   // 这一轮只是答了句话（问句不退出流程了，2026-11-03）：不交报告，也不拿这句话盖掉交代。正在要交代的那一次（stop_hook_active）照常
   const S0 = require('../lib/session');
