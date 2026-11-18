@@ -92,7 +92,51 @@ function actual(j) {
   if (/^\s*"?(?:[^"\s]*[\\/])?(?:java|javac|node|npm|npx|pnpm|yarn|mvnw?|gradlew?|python3?|py|go|dotnet|tsc|ant|make)(?:\.exe|\.cmd|\.bat)?"?\s+(?:-v|-V|-version|--version|version)\s*$/i.test(command)) return null;
   if (/\bcurl(?:\.exe)?\b/i.test(command) && !require('./session').VERIFY_CMD.test(command.replace(/\bcurl(?:\.exe)?\b[^\n;&|]*/gi, ''))) return null;
   if (/probe-run\.js/.test(command) && !/PAGE_PROBE\s+\{"ok":true[,}]/.test(String(response.stdout || ''))) return null;
+  if (onlyTemp(command, root, name === 'PowerShell')) return null;
   return { root: W.rootOf(root), command, kind: kindOf(command) };
+}
+/**
+ * 命令里点名的文件、目录都在系统临时目录里（#484：在 %TEMP% 下 javac 编一个试验文件，也当成项目的验证证据记，
+ * 为它算子项目的指纹，一条 git 要 3 秒的电脑上钩子预算用完）：它证明不了项目的代码，不记。
+ * 只看写全了的路径（C:/…、/c/…、/tmp/…，带引号的整段算一个）；工具本身（Program Files 下的、.exe、javac 这类）不算；
+ * 在项目目录（root）里面的不算临时目录（项目本身放在临时目录下也一样）。一个都没点的照旧记。
+ * 输出去处不算（复审 R1：npm test > /tmp/x.log、| tee /tmp/o.log、--junitxml=/tmp/r.xml、javac -d 临时目录，测的还是项目）：
+ * 重定向、tee 的目标、写结果的选项（-d、-o、--output、--junitxml 这类，和所有 --名字=值）先去掉再看
+ */
+const OUTPUT_PARTS = [
+  /\d?>>?\|?\s*("[^"]*"|'[^']*'|[^\s"'|;&<>()]+)/g,
+  /&>>?\s*("[^"]*"|'[^']*'|[^\s"'|;&<>()]+)/g,
+  /\btee(?:\.exe)?(?:\s+-[a-z]+)*\s+("[^"]*"|'[^']*'|[^\s"'|;&<>()]+)/gi,
+  /(?:^|\s)(?:-d|-o|-od|--out(?:put)?(?:-?dir(?:ectory)?)?|--outdir|--junitxml|--reports?-dir|--log-file|--logfile|-Dmaven\.repo\.local)(?:\s+|=)("[^"]*"|'[^']*'|[^\s"'|;&<>()]+)/gi,
+  /(?:^|\s)--[\w-]+=("[^"]*"|'[^']*'|[^\s"'|;&<>()]+)/g,
+];
+function tempPaths(command, root) {
+  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\/([a-zA-Z])\//, '$1:/').replace(/\/+$/, '').toLowerCase();
+  const temps = [require('os').tmpdir(), process.env.TEMP, process.env.TMP].filter(Boolean).map(norm);
+  const home = root ? norm(path.resolve(root)) : '';
+  const isTemp = (p) => !(home && (p === home || p.startsWith(home + '/'))) && (temps.some((t) => p === t || p.startsWith(t + '/')) || /\/appdata\/local\/temp(\/|$)/.test(p) || /^\/tmp(\/|$)/.test(p));
+  const tool = (p) => /\/program files( \(x86\))?\//.test(p) || /\.(exe|cmd|bat)$/.test(p) || /\/(javac|java|node|python3?|py|mvnw?|gradlew?|npm|npx|pnpm|yarn|go|dotnet|tsc)$/.test(p);
+  let text = String(command);
+  for (const re of OUTPUT_PARTS) text = text.replace(re, ' ');
+  const found = [];
+  for (const m of text.matchAll(/"([A-Za-z]:[\\/][^"]*)"|'([A-Za-z]:[\\/][^']*)'|(?<![\w.:])([A-Za-z]:[\\/][^\s"'|;&<>()]*)|(?<![\w.:/])(\/(?:[a-zA-Z]|tmp)\/[^\s"'|;&<>()]*)/g)) {
+    const p = norm(m[1] || m[2] || m[3] || m[4]);
+    if (p && !tool(p)) found.push(p);
+  }
+  return found.length > 0 && found.every(isTemp);
+}
+/**
+ * 按段看（复审 R1：node <临时>/x.js && npm test，后半段测的是项目）：真在跑验证的那几段，每段点名的都在临时目录里才算"只在临时目录"。
+ * 拆不开、认不出哪段在验证的，按整条看
+ */
+function onlyTemp(command, root, ps) {
+  let segs = null;
+  try {
+    const G = require('../hooks/guard-commit');
+    segs = G.splitCommand(G.preprocess(command, ps).s, ps).flat().filter((seg) => typeof seg === 'string' && verifyWords(G.words(G.scanRedirects(seg).rest, ps).map((w) => w.text), ps, 0));
+  } catch (e) { segs = null; }
+  if (!segs || !segs.length) return tempPaths(command, root);
+  return segs.every((seg) => tempPaths(seg, root));
 }
 /** 证据分类：page 页面、接口场景；test 跑测试；compile 编译、类型、静态检查；other 别的（node 跑个脚本这类） */
 function kindOf(command) {
@@ -180,4 +224,4 @@ function current(root, kind) {
 }
 /** 当前有效的成功命令。kinds 给了只要这几类 */
 function commands(root, kinds) { return current(root).filter((r) => r.kind !== 'inspection' && (!kinds || kinds.includes(r.kind))).map((r) => r.command); }
-module.exports = { environment, actual, recordTool, current, commands, kindOf };
+module.exports = { environment, actual, recordTool, current, commands, kindOf, onlyTemp };
