@@ -102,7 +102,8 @@ const SAID = {
   reviewAccept: { yes: /审查|风险|意见/, command: /^$/ },
   review: { yes: /审查|审核|复审|审一下|审审|再审/, command: /^(?:(?:vk-|ttls-)?cross-review|vk-review)$/i },
   // 编译、构建、快检不算要求自测（用户 2026-10-16 定的；10-17 审核问题 8：说"编译一下"曾被当成许可跑测试、起服务）
-  test: { yes: /自测|测试|验证|复验|看页面|起服务|启动(?:服务|项目|应用)|跑起来/, command: /^(?:(?:vk-|ttls-)?see-page|vk-test)$/i },
+  // "要不要在 3001 页面上量一下实际位置"（#477）：量一下、实测、看效果也是问自测，答"不用"算不测（复审 R2：不认"页面上"，"要不要在页面上显示 X"不是问自测）
+  test: { yes: /自测|测试|验证|复验|看页面|起服务|启动(?:服务|项目|应用)|跑起来|量一下|测量|实测|看(?:一下|下)?效果|截图比对/, command: /^(?:(?:vk-|ttls-)?see-page|vk-test)$/i },
   reviewBudget: { yes: /审查预算|重新审查/, command: /^$/ },
   handover: { yes: /交接|handover/i, command: /^(?:vk-|ttls-)?handover$/i },
   accept: { yes: /自测|验收/, command: /^$/ },

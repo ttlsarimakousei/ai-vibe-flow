@@ -505,7 +505,7 @@ function stop(j, touched, codeChanged, turn, quickPending, lastEditAt) {
     const askTest = !sess.test && !stillDeclined(noTest, lastEditAt);
     if (askReview || askTest) {
       const what = askReview && askTest ? '审查、要不要自测' : askReview ? '审查' : '自测';
-      const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用一个提问框问，一件事一个问题：要不要' + q + what + '；用户说不用就直接继续，这个会话里不再问这一样，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
+      const msg = askOnce(j, 'plain-test', W.fingerprint(j.cwd, 'code').hash, turn, () => { const q = quick(); return '本次代码已修改' + (q ? '，最后一次修改之后还没跑过快检' : '') + '。用一个提问框问，一件事一个问题：要不要' + q + what + '（问题里写明"审查""自测"，例："要不要自测（在页面上量按钮位置）？"）；用户说不用就直接继续，这个会话里不再问这一样，不记待办、不反复提醒。'; }); if (msg) out.push(msg);
     }
   }
   return out;
