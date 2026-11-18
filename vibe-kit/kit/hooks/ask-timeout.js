@@ -6,6 +6,7 @@
  *   别的工具的权限确认框：到点按"允许"（仓库主人定的）。命令里像推送、发布的除外：按"不允许"收掉，留给用户。
  *     跑查库、redis 工具的命令也按"不允许"（复审 R1）：那两个工具认"用户在不在"看钩子跑命令前留的条子，两分钟内才算数；
  *     框挂了 10 分钟再放行，条子早过期了，工具会当成有人在，要人确认的删就能拿着确认串执行。
+ *     关服务（devserver.js stop）也按"不允许"：自己起的服务用户说关才关（用户 2026-11-17 定的）。
  *   ExitPlanMode 不管。
  * 只在这个会话的自动实施在生效（readConfigFor(j).autoMode）时等；别的时候马上退出、什么都不说，框照常等人。
  * 会话的自动开关没开的（readConfig 的 autoApply），不算流程状态就退：每个确认框都起这个进程，不为它调 git（复审 R6）。
@@ -117,6 +118,11 @@ function decide(j, waitMs, found) {
     note({ kind: 'hand', title: '查库、redis 的命令要你确认、没人点，没让它跑：' + clip(cmd, 120), detail: '框挂久了，工具认不出你在不在' });
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是查库、redis 的命令，按不允许收掉：' + clip(cmd, 80));
     return answer({ behavior: 'deny', message: '[vibe-kit] 自动实施：这条查库、redis 的命令弹了确认框，' + waited + '没人点，不替用户放行。换一个不弹框的写法（不和 cd 串在一起，路径写全）重跑一次；还弹就把这一步留给用户，写进最后的交代，接着做别的。' });
+  }
+  // 关服务要用户点头（用户 2026-11-17 定的）：没人点就留着
+  if (/^(Bash|PowerShell)$/.test(tool) && /devserver(?:\.js)?["']?\s+stop\b/i.test(cmd)) {
+    S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是关服务，按不允许收掉：' + clip(cmd, 80));
+    return answer({ behavior: 'deny', message: '[vibe-kit] 自动实施：关服务的确认框 ' + waited + '没人点，服务留着。不要再试，最后的交代里写一句哪些服务在跑、端口是多少，接着做别的。' });
   }
   if (/^(Bash|PowerShell)$/.test(tool) && PUSH_LIKE.test(cmd)) {
     note({ kind: 'hand', title: '要你确认的命令没人点，没让它跑：' + clip(cmd, 120), detail: '推送、发布要你自己来' });

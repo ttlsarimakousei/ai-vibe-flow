@@ -262,7 +262,7 @@ async function handle(j) {
           if (pidAlive && await portOpen(rec.port)) { seenPorts.add(rec.port); running.push(rec.name + '（端口 ' + rec.port + '，运行目录 ' + rec.cwd + '，' + new Date(rec.startedAt).toLocaleString('zh-CN', { hour12: false }) + ' 起的）'); }
         }
       } catch (e) { /* 没有登记 */ }
-      if (running.length) out.push('以前起的服务还在跑：' + running.join('、') + '。要测就照样用 node "' + path.join(KIT, 'tools', 'devserver.js') + '" start …（它记着这些服务，跑的不是现在的代码会在同一个端口自动重启），用不着了就 stop --all；不要另起一个、不要换端口。');
+      if (running.length) out.push('以前起的服务还在跑：' + running.join('、') + '。要测就照样用 node "' + path.join(KIT, 'tools', 'devserver.js') + '" start …（它记着这些服务，跑的不是现在的代码会在同一个端口自动重启），不要另起一个、不要换端口；不要主动停，用户说关再 stop。');
     } catch (e) { /* 查不了不影响会话开始 */ }
     // 死机、断电之后（问题表第 80 条）：git 做到一半留下的 index.lock（之后 add、commit 都失败，报的是英文），重启之前开的审查被打断了
     try {

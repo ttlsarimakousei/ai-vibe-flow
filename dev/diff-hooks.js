@@ -507,6 +507,19 @@ add('git add 已经跟踪着的 index-old.jsp', 'guard-commit', cmd('git add web
 const wordsSession = (build) => (kit) => { const o = build(kit); o.j.session_id = 'sess-words'; return o; };
 add('改代码：注释里写审查编号', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 修复审核 r3：空列表\nclass A {}' }, { 'src/A.java': 'class A {}\n' })), /\[vibe-kit 注释\][\s\S]*审核 r3/, V0003);
 add('改代码：注释只写业务原因', 'pre-edit', wordsSession(edit('src/A.java', 'Edit', { old_string: 'class A {}', new_string: '// 列表为空时直接返回\nclass A {}' }, { 'src/A.java': 'class A {}\n' })));
+// 2026-11-17（这一版，#475、#482，用户定的）：起服务不拦；自测的提示里"devserver status"那句换成"起服务不用问"；关服务要用户点头
+for (const c of cases) {
+  if (/devserver\.js" start/.test(c.name)) { c.expect = /放行，没有输出/; c.since = NEXT; }
+  if (c.name === '反馈1007：env -C 跑套件场景脚本') { c.expect = /用户这一轮没说要自测：先用 Ask 询问是否自测或复验及范围[\s\S]*起服务不用问，直接用 devserver\.js start 起/; c.since = NEXT; }
+  // 起服务走 devserver 的提示末尾：以前"测完：… stop --all"，现在"测完服务留着，不要主动停"
+  if (['命令：mvn spring-boot:run', '命令：npm run dev'].includes(c.name)) { c.expect = /起服务自测用 devserver\.js[\s\S]*它起好（答了 HTTP）才返回[\s\S]*测完服务留着，不要主动停，用户说关再 stop/; c.since = NEXT; }
+  // #477：收工问审查、自测时让问题里写明"审查""自测"（"要不要在页面上量一下"答不用，以前认不出是不测）
+  if (c.name === '收工：改了代码没验证') { c.expect = /本次代码已修改，最后一次修改之后还没跑过快检。用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续，这个会话里不再问这一样/; c.since = NEXT; }
+  if (c.name === '收工：改了、验了、没提交') { c.expect = /^(?![\s\S]*还没提交)[\s\S]*本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续/; c.since = NEXT; }
+  if (c.name === '收工：改了页面没看') { c.expect = /^(?![\s\S]*probe-run)[\s\S]*用一个提问框问，一件事一个问题：要不要跑快检[\s\S]*要不要审查、要不要自测（问题里写明\\"审查\\"\\"自测\\"[\s\S]*用户说不用就直接继续/; c.since = NEXT; }
+}
+add('命令：devserver stop，用户没说关', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --all'), /"permissionDecision": "ask"[\s\S]*\[vibe-kit 关服务\] 这条命令会停掉所有自己起的服务/, NEXT);
+add('命令：devserver stop 再 start（重启）', 'guard-commit', cmd('node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --name a && node "$HOME/.claude/vibe-kit/tools/devserver.js" start --name a --port 8080 -- mvn spring-boot:run'), /放行，没有输出/, NEXT);
 
 let same = 0;
 let changed = 0;

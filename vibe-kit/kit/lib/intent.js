@@ -140,8 +140,24 @@ function startOnly(text) {
   if (!(new RegExp(START_APP).test(s) || START_CN.test(s) || START_AFTER.test(s) || /(?:启动|重启|运行)(?:一下|下)?\s*(?:服务|项目|应用|系统)|跑起来|起起来|起服务/.test(s))) return false;
   return !/改|修|调整|新增|加上|添加|实现|开发|写|做|弄|搞|补|删|换成|替换|升级|降级|解决|处理|排查|优化|重构|完成|然后|之后|并且|顺便|自测|测试|验证|复验|审查|提交|推送/.test(s);
 }
+/*
+ * 用户要关服务（用户 2026-11-17 定的：自己起的服务不主动关，要停先问，除非用户自己说了关）。
+ * "你关闭服务，我自己启动""停掉后端""把服务都关了""后端停一下""stop --all"。否定、在问的不算（"别关服务""服务关了吗"）
+ */
+// 对象只认服务一类（复审 R2："关闭系统通知""关闭 chrome""关闭这个项目的警告"以前算要关服务）：服务、前后端、进程、端口，
+// 英文只认常见的服务名；"xx服务""xx项目"要到这一句结束
+const STOP_VERB = '(?:关闭|关掉|关了|关一下|停掉|停止|停了|停一下|停下|结束掉|kill掉?|stop|关|停)';
+const STOP_WHAT = '(?:(?:所有|全部|你起的|你启动的|起的|这些|那些|刚才的?)的?\\s*)?(?:(?:backend|frontend|front|server|api|web|admin|app|services?)\\b|前后端|前端|后端|后台|前台|服务端|服务|进程|端口|[\\u4e00-\\u9fa5]{1,6}?(?:服务|项目|应用)(?=\\s*(?:$|[，,。；;！!\\n]|吧|了|掉|都|全|一下|下|先)))';
+const STOP_RE = new RegExp('(?:' + STOP_VERB + '\\s*(?:一下|下)?\\s*' + STOP_WHAT + '|(?:把|将)?\\s*' + STOP_WHAT + '\\s*(?:都|全|全部|先)?\\s*(?:关|停)(?:掉|了|闭|止|一下|下)?(?![^，,。；;！!\\n]{0,4}[吗么呢没？?])|devserver(?:\\.js)?\\s+stop\\b|stop\\s+--all\\b|^\\s*(?:可以|好|好的|行|那就|嗯)?[，,\\s]*(?:都|全)?(?:关|停)(?:掉|了|吧)+[\\s。！!]*$|(?:重启|重新启动)(?:一下|下)?)', 'i');
+const STOP_NO = /(?:不要|不用|别|先别|先不|暂时不|不必|无需|不准|留着|保留|不能)[^，,。；;！!\n]{0,6}(?:关|停|stop|重启|重新启动)|(?:关|停|重启)[^，,。；;！!\n]{0,8}[吗么呢？?]|(?:要不要|是否|能不能|可不可以)[^，,。；;！!\n]{0,6}(?:关|停|重启)/i;
+function stopService(text) {
+  const s = plain(text);
+  return !!s && STOP_RE.test(s) && !STOP_NO.test(s);
+}
+/** 提问框问的是不是关服务（"要不要停掉服务？""后端要关吗"） */
+function asksStop(question) { return new RegExp('(?:' + STOP_VERB + '|关|停)').test(plain(question)) && new RegExp(STOP_WHAT).test(plain(question)); }
 /** 话里有没有提到这件事（提问框的问题用）：不管是不是要做 */
 function has(text, action) { const op = TOPIC[action]; return !!op && new RegExp(op, 'i').test(plain(text)); }
 /** 话里有这件事的动作词、而且不是在说那件事本身（"审查报告""测试失败"）：提问框的答案用，不要求在句首 */
 function mentions(text, action) { const op = TOPIC[action]; return !!op && new RegExp(op + '(?!\\s*' + NOUN + ')', 'i').test(plain(text)); }
-module.exports = { plain, explicit, denied, has, mentions, mergeIntent, startOnly };
+module.exports = { plain, explicit, denied, has, mentions, mergeIntent, startOnly, stopService, asksStop };

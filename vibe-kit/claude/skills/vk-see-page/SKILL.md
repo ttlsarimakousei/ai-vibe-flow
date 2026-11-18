@@ -77,5 +77,5 @@ description: 改了前端页面或后端接口之后、还原原型或设计图�
 
 ## 收尾
 
-- 你起的服务要停掉：`node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --all`（接下来马上还要测就先留着，下次 start 会直接复用）。
+- 你起的服务留着，不要主动停：用户要看，下次 start 也会直接复用。用户说关再停：`node "$HOME/.claude/vibe-kit/tools/devserver.js" stop --all`。交代里写一句哪些服务在跑、端口是多少。
 - 告诉用户：验了什么、结果如何（读到的值、差异百分比）、产物在哪个目录。没验到的地方明说。

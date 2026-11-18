@@ -317,6 +317,10 @@ function check(j) {
   if (cb) return cb;
   const actionIssue = require('../lib/flow-policy').actionIssue(j);
   if (actionIssue) return counted('manual-action', '[vibe-kit] ' + actionIssue);
+  // 关服务要用户点头（用户 2026-11-17 定的）：全自动拦下、服务留着；有人在就弹确认框问
+  I.phase('命令：关服务');
+  const stopAsk = require('../lib/flow-policy').stopIssue(j, cfg);
+  if (stopAsk && stopAsk.auto) return counted('stop-service', stopAsk.text);
   // 全自动模式：用户不在，确认框没人点，会一直挂着。push、发布直接拦下，记进报告
   // 推送代码的授权不能用于发布内网安装包，发布仍单独确认。
   // 普通 git push（用户 2026-10-25 定的，问题反馈表第 5 条）：用户说了"推送""push"就直接推，几笔提交都一样，不出推送计划；
@@ -343,7 +347,7 @@ function check(j) {
     if (st.used.length) return pass(feedback.bypassOutcome(st.used, cfg, j, st.blocked, action));
     return pass(null);
   }
-  const ask = pushApproved ? '' : st.push;
+  const ask = [stopAsk ? stopAsk.text : '', pushApproved ? '' : st.push].filter(Boolean).join('\n');
   if (st.used.length) {
     const out = feedback.bypassOutcome(st.used, cfg, j, st.blocked, action);
     // 放行申请和 push 确认一起问

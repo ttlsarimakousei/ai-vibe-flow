@@ -543,6 +543,9 @@ function actionIssue(j) {
   if (!review && !test) return '';
   // 审查不开子代理（第 72 条，仓库主人 2026-11-05 定的）：脚本调 claude -p
   if (reviewer) return '审查不开子代理（2026-11-05 起）：跑 review.js run（--change、--mode、--point、--project 照旧），脚本调 claude -p 审完，结论在命令输出里。写法见 /vk-cross-review。';
+  // 起服务不拦（用户 2026-11-17 定的，#475、#482：用户说"你先启动后端+2个前端"、提问框选"起（backend）"都被认成没说，按提示问了也走不通）。
+  // 只是起服务的命令（devserver start、spring-boot:run、npm run dev 这类）直接跑；跑测试、看页面照旧先问
+  if (!review && shellTest && startCommand(cmd, name === 'PowerShell')) return '';
   const pointOf = () => { const m = cmd.match(/--change\s+["']?([^\s"']+)/); const p = cmd.match(/--point\s+([\w-]+)/); return { change: m && S.allChanges(j.cwd).find(c => c.name === m[1]), point: p ? p[1] : '' }; };
   // 需求审查强制（第 85 条，仓库主人 2026-11-12 定的）：四份写完审一次整套，两种模式都不问用户。单份文档不单独审，用户点名的除外
   if (runsReview && /--mode\s+["']?proposal/.test(cmd)) {
@@ -583,15 +586,59 @@ function actionIssue(j) {
   }
   // 这段话用户也看得到（问题表第 32 条：只说了"启动OA"，看到"人工模式：先用 Ask 询问是否自测或复验及范围"摸不着头脑）：直说用户这一轮没要求什么。
   // 只是起服务的单独说：问要不要起，不问范围
-  const statusNote = '用户问服务起着没有：先 devserver.js status，起着的直接给地址，没起的问一次要不要起，不分几次问。';
-  if (!review && shellTest && startCommand(cmd, name === 'PowerShell')) {
-    return '用户这一轮没说要起服务' + why + '：先用 Ask 问一次要不要起，得到用户明确要求后执行' + used + '。选项写成"起（服务名）"和"不用"，不问范围，用户选了起就直接起；用户在对话里说"启动 OA""重启后端""把服务起起来""我要看看系统"也算。' + statusNote + '用户放弃就继续，不记录未测试或待办。';
-  }
+  const statusNote = '起服务不用问，直接用 devserver.js start 起。';
   // 说清楚用户怎么答才算（#210、#212：只说"先 Ask"，模型和用户都不知道哪句话算数，去翻套件源码找口令）
   return '用户这一轮没说要' + (review ? '审查' : '自测') + why + '：先用 Ask 询问是否' + (review ? '审查' : '自测或复验') + '及范围，得到用户明确要求后执行' + used + '。'
     + (review ? '选项写成"审查（范围）"和"不用"，用户选了审查就直接执行；用户在对话里说"审查""审一下""再审一次"也算。'
-      : '选项写成"自测（范围）"和"不用"，用户选了自测就直接跑；用户在对话里说"自测""跑测试""跑复验""把服务起起来""我要看看系统"也算。' + statusNote)
+      : '选项写成"自测（范围）"和"不用"，用户选了自测就直接跑；用户在对话里说"自测""跑测试""跑复验""我要看看系统"也算。' + statusNote)
     + '用户放弃就继续，不记录未审查、未测试或待办。';
+}
+/*
+ * 关服务要用户点头（用户 2026-11-17 定的）：修改 → 审查 → 修改 → 自测时自己起的服务，测完不主动关，要关先问；用户自己说了关的直接关。
+ * 认的是 devserver.js stop；同一条命令里又 start 的是重启，不算关。用户这一轮说了关（原话、或者提问框里问关服务答了关）就不管。
+ * 返回 null，或者 { auto, text }：auto 为真（全自动，用户不在）拦下、服务留着；否则弹 Claude Code 的确认框问用户。
+ */
+function stopIssue(j, cfg) {
+  if (!/^(Bash|PowerShell)$/.test(String(j.tool_name || ''))) return null;
+  const cmd = String((j.tool_input || {}).command || '');
+  if (!/devserver/i.test(cmd) || !/\bstop\b/i.test(cmd)) return null;
+  const ps = j.tool_name === 'PowerShell';
+  const G = require('../hooks/guard-commit');
+  const base = w => path.basename(String(w || '').replace(/\\/g, '/')).replace(/\.(?:exe|cmd)$/i, '').toLowerCase();
+  let stop = null; let start = false;
+  for (const seg of G.splitCommand(G.preprocess(cmd, ps).s, ps).flat()) {
+    const ws = G.words(seg, ps).map(w => String(w.text));
+    // 前面的环境变量、PowerShell 的 &、cmd 的 call 跳过
+    let k = 0; while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(ws[k] || '') || /^(?:&|call)$/i.test(ws[k] || '')) k++;
+    if (base(ws[k]) !== 'node') continue;
+    const at = ws.findIndex((w, i) => i > k && base(w) === 'devserver.js');
+    if (at < 0) continue;
+    if (ws[at + 1] === 'stop') { const n = ws.indexOf('--name', at); stop = stop || (ws.includes('--all') || n < 0 ? '所有自己起的服务' : '服务 ' + ws[n + 1]); }
+    if (ws[at + 1] === 'start') start = true;
+  }
+  // 套在 bash -c、powershell -Command 里的拆不出来（复审 R2）：整条命令里有 node … devserver.js stop、没有 start 也算
+  if (!stop && /\b(?:bash|sh|powershell|pwsh|cmd)(?:\.exe)?\s+(?:-\w+\s+)*(?:-c|-lc|-command|\/c)\s/i.test(cmd) && /\bnode(?:\.exe)?\b[^\n]*devserver(?:\.js)?["']?\s+stop\b/i.test(cmd) && !/devserver(?:\.js)?["']?\s+start\b/i.test(cmd)) stop = /--name\s+["']?([\w.-]+)/.test(cmd) ? '服务 ' + cmd.match(/--name\s+["']?([\w.-]+)/)[1] : '所有自己起的服务';
+  if (!stop || start) return null;
+  let said = false;
+  try {
+    const intent = require('./intent');
+    for (const v of S.turnVoices(entriesOf(j))) {
+      if (v.kind === 'answer') {
+        for (const x of v.answers) {
+          const a = String(x.a || '');
+          if (intent.stopService(a)) said = true;
+          else if (intent.asksStop(x.q)) said = !/不|别|留|保留|先放着|暂时|算了|以后/.test(a) && /^(?:关|停|好|可以|是|行|同意|确认|ok|yes|都关|全关|kill|stop)/i.test(a.trim());
+        }
+      } else if (v.kind === 'prompt') said = intent.stopService(v.text);
+    }
+  } catch (e) { said = false; }
+  if (said) return null;
+  const auto = !!(cfg || S.readConfigFor(j)).autoMode;
+  return {
+    auto,
+    text: auto ? '[vibe-kit 关服务] 全自动：用户没说要关服务，' + stop + '留着不停，用户要看。不要再试，最后的交代里写一句哪些服务在跑、端口是多少，接着做别的。要重启直接再 start（改过代码它自己在原来的端口重启）。'
+      : '[vibe-kit 关服务] 这条命令会停掉' + stop + '。用户这一轮没说要关：自己起的服务测完留着给用户看，要关先问。点允许就停，不允许就留着。要重启直接再 start（改过代码它自己在原来的端口重启）。'
+  };
 }
 // 人工模式要先 Ask 的"自测"：跑测试、起服务、看页面。编译、类型检查、静态检查算写代码的一部分，直接跑（用户 2026-10-16 定的）。
 function testCommand(cmd, ps) {
@@ -680,4 +727,4 @@ function selfTestWords(words) {
   }
   return false;
 }
-module.exports = { changeScope, learnEdits, noteEdit, currentChangeDir, oncePrompt, upTo, groups, isCross, crossText, CHANGE, exploreBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, planNext, reviewPush, instruction, stop, actionIssue, explicit, testCommand };
+module.exports = { changeScope, learnEdits, noteEdit, currentChangeDir, oncePrompt, upTo, groups, isCross, crossText, CHANGE, exploreBlocked, oldDone, written, points, reviewable, pointFiles, fingerprint, sameInput, record, passed, settled, halted, fixPending, pending, allPassed, allDone, begin, noteResult, noteFail, planNext, reviewPush, instruction, stop, actionIssue, stopIssue, explicit, testCommand };
