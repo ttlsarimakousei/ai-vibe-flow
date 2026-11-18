@@ -134,7 +134,12 @@ function materials(opts, change) {
       if (!found && refs.required.has(ref)) skipped.push({ file: ref, reason: '明确指定的审查材料不存在或不在项目范围内；核对路径后再审' });
     }
   } else {
-    const roots = change ? S.projectRootsOf(change.dir) : [W.rootOf(opts.cwd)];
+    // 壳子本身不是 git 仓库、代码都在下面的子仓库里（#488）：壳子根没有基线可言，不算进要基线的仓库。
+    // 以前它进了 skipped（"缺开工基线"），子仓库的 --base 全给了也永远是 partial，复审登记不上
+    const all = change ? S.projectRootsOf(change.dir) : [W.rootOf(opts.cwd)];
+    // 认"不是 git 仓库"先看有没有 .git（复审 R6：W.git 出任何错都给空串，git 超时、dubious ownership 时会把真仓库也排除掉）
+    const roots = all.length > 1 && !fs.existsSync(path.join(all[0], '.git')) && !W.git(all[0], ['rev-parse', '--show-toplevel']).trim() ? all.slice(1) : all;
+    if (roots !== all) excluded.push({ root: all[0], reason: '壳子不是 git 仓库，代码在子项目里，按子项目审' });
     const saved = change && S.readState('work-baselines')[S.normKey(change.dir)];
     // --base 可以写几次：<仓库相对路径>=<提交> 指定某个仓库的基线（#189：壳子带两个子项目，只有一个值时对每个仓库都用它，
     // 在没有这个提交的仓库里整轮报"审查基线不是本地提交"）。不带等号的值只用在认得它的仓库上，其余仓库用开工时登记的基线
