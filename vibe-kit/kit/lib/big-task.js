@@ -41,8 +41,37 @@ function build(osDir, plan, name, explore, rows) {
     name, osDir, planFile: plan.file,
     explore: explore ? path.resolve(osDir, explore) : '',
     legacy: !explore,
-    changes: rows.map((r) => changeInfo(r.name, changesDir)),
+    changes: withFar(rows.map((r) => changeInfo(r.name, changesDir)), osDir),
   };
+}
+/**
+ * 表里的 change 这边没有、也没归档的：到兄弟壳子里按名字找（#487，跨壳子开工的补充：gwjh 壳子的 plan.md 列了 OA 壳子的支撑变更，
+ * 以前这一行当成"目录不在"跳过，开工范围进不去，改 OA 的代码被拦）。每个名字找到唯一一个才用它（far 记着），找不到照旧。
+ * 找一次要扫上一级、上两级目录（复审 R4：每个钩子、每次状态栏刷新都扫，慢盘上几百毫秒）：几个名字一起扫一遍，结果记 10 分钟（state/big-task-far.json）
+ */
+const FAR_MS = 10 * 60000;
+function withFar(infos, osDir) {
+  const names = infos.filter((c) => !c.exists && !c.archived).map((c) => c.name);
+  if (!names.length) return infos;
+  const dirs = farDirs(osDir, names);
+  return infos.map((c) => (dirs[c.name] && !c.exists && !c.archived ? Object.assign(changeInfo(c.name, path.dirname(dirs[c.name])), { far: true }) : c));
+}
+function farDirs(osDir, names) {
+  const key = normKey(osDir) + '|' + names.slice().sort().join(',');
+  return require('./invocation').memo('big-task-far|' + key, () => {
+    try {
+      const hit = readState('big-task-far')[key];
+      if (hit && Date.now() - (Number(hit.at) || 0) < FAR_MS && Object.values(hit.dirs || {}).every((d) => fs.existsSync(d))) return hit.dirs || {};
+      const found = require('./session-projects').nearChanges(path.dirname(osDir), names.join('\n'));
+      const dirs = {};
+      for (const n of names) { const m = found.filter((x) => x.name === n.toLowerCase()); if (m.length === 1) dirs[n] = m[0].dir; }
+      updateState('big-task-far', (o) => {
+        for (const k of Object.keys(o)) if (!(Date.now() - (Number(o[k] && o[k].at) || 0) < FAR_MS)) delete o[k];
+        o[key] = { at: Date.now(), dirs };
+      });
+      return dirs;
+    } catch (e) { return {}; }
+  });
 }
 
 /** 这个目录能看到的所有大任务（壳子里每个子项目各算） */

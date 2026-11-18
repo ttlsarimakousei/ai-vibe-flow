@@ -60,6 +60,8 @@ function grant(j, text, context, opts) {
   if (task) { const own = all.filter((c) => task.changes.some((x) => S.normKey(x.dir) === S.normKey(c.dir))); if (own.length) targets = own; }
   // 兄弟壳子里的那个照样在范围里：这边 plan.md 的大任务也列了它的名字时，范围是这边的几个加上它
   if (viaFar && !targets.some((c) => S.normKey(c.dir) === S.normKey(far[0].dir))) targets = targets.concat(far);
+  // 大任务表里列着、在兄弟壳子里的 change（#487，big-task.js 的 farInfo 找到的）：一样在范围里，按表的顺序做到它时不用再点名开工
+  if (task && targets.length) for (const x of task.changes) if (x.far && x.exists && !targets.some((c) => S.normKey(c.dir) === S.normKey(x.dir))) targets = targets.concat([{ name: x.name, dir: x.dir }]);
   if (!targets.length) return refuse(j, all.length ? '有 ' + all.map((c) => c.name).slice(0, 5).join('、') + ' 几个变更，用户说开工时没点名：让用户说"开工 ' + all[0].name + '"这样带上变更名，或者在提问框的选项里写明' : '没有当前变更，按普通任务沟通', all);
   const scope = { at: Date.now(), dirs: {}, roots: [], task: task ? task.name : '' };
   for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir), req: requirementHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
