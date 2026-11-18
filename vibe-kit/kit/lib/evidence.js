@@ -110,15 +110,42 @@ function recordTool(j, ok) {
   ok = ok && !/\b(?:BUILD FAILURE|[1-9]\d*\s+(?:tests?\s+)?failed|Tests run:[^\n]*Failures:\s*[1-9])\b/i.test(out);
   // 失败的不记：本来就不算通过，算指纹（几次 git）白花时间
   if (!ok) { try { require('./usage').bump('evidence.fail'); } catch (e) { /* 数不了就算了 */ } return null; }
-  const fp = W.fingerprint(a.root, 'code'); const env = environment(fp.root); const id = W.hash(j.session_id + '|' + j.tool_use_id);
-  let rec;
+  // 壳子根跑、没点子项目的：只算这个会话改过文件的那几个子项目，各记一条（同一条命令记一个 cmd，查的时候要几条都还对）；
+  // 会话没改过子项目的（只改了壳子的文档、用 Bash 改的）照旧算壳子加全部子项目的整个指纹（复审 R1）
+  const targets = shellTargets(j, a.root);
+  const fps = targets ? targets.map((t) => W.fingerprint(t, 'code')) : [W.fingerprint(a.root, 'code')];
+  const env = environment(a.root);
+  const cmd = W.hash(j.session_id + '|' + j.tool_use_id);
+  const made = [];
   S.updateState('evidence', (s) => {
-    const rows = s.rows || (s.rows = []); if (rows.some((x) => x.id === id)) return;
-    rec = { id, session: j.session_id, root: fp.root, fingerprint: fp.hash, environment: env, command: R.clip(a.command, 2000), kind: a.kind, ok: !!ok, at: Date.now(), durationMs: Math.max(0, Number(j.duration_ms) || 0) };
-    rows.push(rec); s.rows = rows.filter((x) => Date.now() - x.at < 14 * 86400000).slice(-300);
+    const rows = s.rows || (s.rows = []);
+    for (const fp of fps) {
+      const id = targets ? W.hash(cmd + '|' + S.normKey(fp.root)) : cmd;
+      if (rows.some((x) => x.id === id)) continue;
+      const rec = { id, session: j.session_id, root: fp.root, fingerprint: fp.hash, environment: env, command: R.clip(a.command, 2000), kind: a.kind, ok: !!ok, at: Date.now(), durationMs: Math.max(0, Number(j.duration_ms) || 0) };
+      if (targets) { rec.cmd = cmd; rec.parts = fps.length; }
+      rows.push(rec); made.push(rec);
+    }
+    s.rows = rows.filter((x) => Date.now() - x.at < 14 * 86400000).slice(-300);
   });
-  if (rec) { try { require('./usage').bump(rec.ok ? 'evidence.success' : 'evidence.fail'); } catch (e) { /* 本机证据仍然有效 */ } }
-  return rec;
+  if (made.length) { try { require('./usage').bump(made[0].ok ? 'evidence.success' : 'evidence.fail'); } catch (e) { /* 本机证据仍然有效 */ } }
+  return made[0];
+}
+/**
+ * 在壳子根跑的验证命令记到哪几个仓库（用户 2026-11-17 选的"只算命令点了名的仓库"，#468、#470、#471、#473：
+ * 以前算壳子加全部子项目的指纹，五六个子项目、一条 git 一两秒的电脑上钩子 12 秒预算用完）。
+ * 这个会话用编辑工具改过文件的子项目。一个子项目都没改过、或者不是壳子，返回 null（照旧算整个指纹）
+ */
+function shellTargets(j, root) {
+  const S = require('./session');
+  if (!S.isShell(root)) return null;
+  const subs = S.nestedRepos(root).map((r) => path.resolve(r));
+  const key = (p) => S.normKey(p);
+  const hit = new Set();
+  let edited = [];
+  try { if (j.transcript_path) edited = require('./edited-files').editedFiles(S.tailEntries(j.transcript_path, 3000000).filter((e) => e && !e.isSidechain), j.cwd).map((f) => f.abs); } catch (e) { if (e && e.code === 'VIBE_HOOK_BUDGET') throw e; edited = []; }
+  for (const f of edited) { const k = key(f); const sub = subs.find((r) => k.startsWith(key(r) + '/')); if (sub) hit.add(sub); }
+  return hit.size ? [...hit] : null;
 }
 /**
  * 这个目录现在还有效的成功证据。目录下面别的仓库名下的也算（#464，2026-11-12）：壳子里 mvn -f 子项目/pom.xml、npm --prefix 子项目 跑的
@@ -126,9 +153,15 @@ function recordTool(j, ok) {
  * 记在哪个仓库名下，就按那个仓库现在的指纹和环境比
  */
 function current(root, kind) {
-  const S = require('./session'); const fp = W.fingerprint(root, 'code'); const env = environment(fp.root);
-  const rows = (S.readState('evidence').rows || []).filter((r) => r.ok && (!kind || r.kind === kind));
-  const out = rows.filter((r) => r.root.toLowerCase() === fp.root.toLowerCase() && r.fingerprint === fp.hash && r.environment === env);
+  const S = require('./session');
+  const all = (S.readState('evidence').rows || []).filter((r) => r.ok && (!kind || r.kind === kind));
+  const rows = all;
+  // 壳子：记在壳子名下的（整个指纹）有才算一次整个的（2026-11-17：壳子根跑、改过子项目的分开记在子项目名下，不再每次都算整个）
+  const top0 = W.rootOf(root);
+  const here0 = rows.filter((r) => r.root.toLowerCase() === top0.toLowerCase());
+  const shell = S.isShell(top0);
+  const fp = !shell || here0.length ? W.fingerprint(root, 'code') : { root: top0, hash: '' }; const env = environment(fp.root);
+  const out = here0.filter((r) => r.fingerprint === fp.hash && r.environment === env);
   const top = S.normKey(fp.root); const below = new Map();
   for (const r of rows) { const k = S.normKey(r.root); if (k.startsWith(top + '/')) below.set(k, (below.get(k) || []).concat(r)); }
   // 最多看最近有证据的 8 个（复审 20261113 R5：每个都要算一次指纹，几条 git；钩子里有预算。壳子的子项目一般就五六个）
@@ -139,7 +172,11 @@ function current(root, kind) {
     const senv = environment(sfp.root);
     out.push(...mine.filter((r) => r.root.toLowerCase() === sfp.root.toLowerCase() && r.fingerprint === sfp.hash && r.environment === senv));
   }
-  return out;
+  // 壳子根的一条命令分几个子项目记的（cmd、parts）：几条都还对才算（复审 R1：改了 B，A 那条不能单独顶着）。
+  // 只查了 root 下面的：分在别处的那几条（root 是子项目时）不在这里比，按记在这个仓库名下的算
+  const valid = new Map(); for (const r of out) if (r.cmd) valid.set(r.cmd, (valid.get(r.cmd) || 0) + 1);
+  const underTop = (r) => { const k = S.normKey(r.root); return k === top || k.startsWith(top + '/'); };
+  return out.filter((r) => !r.cmd || !shell || valid.get(r.cmd) >= all.filter((x) => x.cmd === r.cmd && underTop(x)).length);
 }
 /** 当前有效的成功命令。kinds 给了只要这几类 */
 function commands(root, kinds) { return current(root).filter((r) => r.kind !== 'inspection' && (!kinds || kinds.includes(r.kind))).map((r) => r.command); }
