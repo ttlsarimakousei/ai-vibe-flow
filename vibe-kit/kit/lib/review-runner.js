@@ -21,7 +21,14 @@ const Sc = require('./review-scope');
 const Facts = require('./review-facts');
 const { spawn, spawnSync } = require('child_process');
 const secretFile = (f) => /(^|[\\/])(secrets\.json|router-data|\.env(?:\.[^/]*)?|db-crud\.ini|redis\.json|login\.json)([\\/]|$)/i.test(f);
-function changeOf(cwd, name) { return name ? S.allChanges(cwd).find((c) => c.name.toLowerCase() === String(name).toLowerCase()) : null; }
+// 当前目录下没有的，到兄弟壳子里按名字找（跨壳子开工，用户 2026-11-17 选的，#476 的补充：review.js run --change 认不到 OA 壳子的变更）
+function changeOf(cwd, name) {
+  if (!name) return null;
+  const want = String(name).toLowerCase();
+  const here = S.allChanges(cwd).find((c) => c.name.toLowerCase() === want);
+  if (here) return here;
+  try { const far = S.nearChanges(cwd, want).filter((c) => c.name === want); return far.length === 1 ? far[0] : null; } catch (e) { return null; }
+}
 // 不带变更名的审查按"项目 + 基线"算一次审查（#211：以前只按项目算，前一次不相干的审查把累计预算占掉了，这次一开始就超时）
 function jobKey(cwd, name, mode, point, base) { const c = changeOf(cwd, name); const b = !c && base ? '|' + [].concat(base).filter(Boolean).join(',') : ''; return W.hash((c ? S.normKey(c.dir) : W.rootOf(cwd).toLowerCase() + b) + '|' + mode + (point ? '|' + point : '')).slice(0, 24); }
 function baseline(j, dirs) {
@@ -908,4 +915,4 @@ function runsForLessons(calls, results, cwd) {
   }
   return out;
 }
-module.exports = { reportReview, runsForLessons, prepare, run, work, askClaude, claudeExe, repairJson, submit, failLens, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };
+module.exports = { changeOf, reportReview, runsForLessons, prepare, run, work, askClaude, claudeExe, repairJson, submit, failLens, sweep, inFlight, materials, inputsCurrent, baseline, status, cancel, resolve, jobKey, parseResult, decisionIssue };

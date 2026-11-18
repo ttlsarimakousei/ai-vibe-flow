@@ -220,4 +220,27 @@ function archivedSince(dir) {
   return out;
 }
 
-module.exports = { subdirs, looksLikeProject, nestedRepos, isShell, changeRoots, TASK_DEFER, isDeferredTask, listChanges, activeChanges, ensureVibeIgnored, changeNames, archivedChanges, changeBorn, allChanges, archivedNames, archivedSince };
+/**
+ * 兄弟壳子里的变更（用户 2026-11-17 选的"跨壳子开工"，#476、#478）：话里点了名、当前目录下找不到的变更，
+ * 到上一级目录下的别的目录、上两级目录下再下一层（JSSLT/JWJH/gwjh-workspace 和 JSSLT/OA/oa-workspace）里找。
+ * 只按话里像变更名的词（带连字符的英文）查 openspec/changes/<名字> 在不在，不列别人的变更目录。返回 [{ name, dir }]
+ */
+function nearChanges(dir, text) {
+  const names = [...new Set((String(text || '').match(/[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)+/g) || []).map((s) => s.toLowerCase()))].slice(0, 20);
+  if (!names.length) return [];
+  const start = path.resolve(dir || process.cwd());
+  const k = (p) => path.resolve(p).toLowerCase();
+  const inside = (d) => k(d) === k(start) || k(start).startsWith(k(d) + path.sep) || k(d).startsWith(k(start) + path.sep);
+  const p1 = path.dirname(start); const p2 = path.dirname(p1);
+  const cands = []; let budget = 200;
+  if (p1 !== start) for (const a of subdirs(p1)) { if (--budget < 0) break; if (!inside(a)) cands.push(a); }
+  if (p2 !== p1) for (const a of subdirs(p2)) { if (--budget < 0) break; if (k(a) === k(p1)) continue; for (const b of subdirs(a)) { if (--budget < 0) break; cands.push(b); } }
+  const out = [];
+  for (const d of cands) for (const n of names) {
+    const c = path.join(d, 'openspec', 'changes', n);
+    if (fs.existsSync(path.join(c, 'proposal.md')) || fs.existsSync(path.join(c, 'tasks.md'))) out.push({ name: n, dir: c });
+  }
+  return out;
+}
+
+module.exports = { subdirs, looksLikeProject, nestedRepos, isShell, changeRoots, TASK_DEFER, isDeferredTask, listChanges, activeChanges, ensureVibeIgnored, changeNames, archivedChanges, changeBorn, allChanges, archivedNames, archivedSince, nearChanges };

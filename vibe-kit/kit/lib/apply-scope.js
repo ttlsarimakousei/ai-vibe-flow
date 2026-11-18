@@ -48,11 +48,18 @@ function grant(j, text, context, opts) {
   const under = (k, d) => k === d || k.startsWith(d + '/');
   const inChange = hk ? all.filter((c) => under(hk, S.normKey(c.dir))) : [];
   const hinted = !hk ? [] : inChange.length ? inChange : all.filter((c) => S.projectRootsOf(c.dir).some((r) => under(hk, S.normKey(r))));
-  let targets = named.length ? named : argued.length === 1 ? argued : asked.length === 1 ? asked : all.length === 1 ? all : touched.length === 1 ? touched : spoken.length === 1 ? spoken : hinted.length === 1 ? hinted : [];
+  // 用户点名的（原话、/opsx:apply 的参数、提问框问的）在当前目录下找不到：到兄弟壳子里找，只有一个就开它
+  // （用户 2026-11-17 选的"跨壳子开工"，#476、#478：gwjh 壳子的会话开工 OA 壳子里的变更，改 OA 的代码被拦，cd 过去又不让）
+  let far = [];
+  if (!named.length && !argued.length && !asked.length) { try { const seen = new Set(all.map((c) => c.name.toLowerCase())); far = S.nearChanges(j.cwd || process.cwd(), [text, o.args || '', context || ''].join('\n')).filter((c) => !seen.has(c.name)); } catch (e) { far = []; } }
+  let targets = named.length ? named : argued.length === 1 ? argued : asked.length === 1 ? asked : far.length === 1 ? far : all.length === 1 ? all : touched.length === 1 ? touched : spoken.length === 1 ? spoken : hinted.length === 1 ? hinted : [];
   // 大任务里几个 change 是一件事（用户 2026-11-03 定的）：开工范围是整个大任务，回改前面的 change、接下一个都不用再认一次
   let task = null;
   try { const B = require('./big-task'); task = targets[0] ? B.ofChange(j.cwd || process.cwd(), targets[0].dir || targets[0].name) : B.forSession(j); } catch (e) { task = null; }
+  const viaFar = far.length === 1 && targets === far;
   if (task) { const own = all.filter((c) => task.changes.some((x) => S.normKey(x.dir) === S.normKey(c.dir))); if (own.length) targets = own; }
+  // 兄弟壳子里的那个照样在范围里：这边 plan.md 的大任务也列了它的名字时，范围是这边的几个加上它
+  if (viaFar && !targets.some((c) => S.normKey(c.dir) === S.normKey(far[0].dir))) targets = targets.concat(far);
   if (!targets.length) return refuse(j, all.length ? '有 ' + all.map((c) => c.name).slice(0, 5).join('、') + ' 几个变更，用户说开工时没点名：让用户说"开工 ' + all[0].name + '"这样带上变更名，或者在提问框的选项里写明' : '没有当前变更，按普通任务沟通', all);
   const scope = { at: Date.now(), dirs: {}, roots: [], task: task ? task.name : '' };
   for (const c of targets) { scope.dirs[S.normKey(c.dir)] = { hash: planHash(c.dir), req: requirementHash(c.dir) }; for (const root of S.projectRootsOf(c.dir)) if (!scope.roots.includes(S.normKey(root))) scope.roots.push(S.normKey(root)); }
@@ -170,7 +177,7 @@ function check(j, target) {
   const asDir = a ? null : S.artifactOf(path.join(String(target), 'tasks.md'));
   if (asDir && S.normKey(asDir.dir) === file && !inScope(st.applyScope, asDir, j)) return '这个变更不在当前 apply 许可里，先沟通范围并单独开工';
   const v = valid(j); if (!v.ok) return v.reason;
-  if (!a && !(st.applyScope.roots || []).some((r) => file === r || file.startsWith(r + '/'))) return '目标项目不在当前 apply 许可里，不能借用另一个项目的全自动状态';
+  if (!a && !(st.applyScope.roots || []).some((r) => file === r || file.startsWith(r + '/'))) return '目标项目不在当前 apply 许可里，不能借用另一个项目的全自动状态。要做的是别的壳子里的变更：用提问框问开工，选项写明变更名（例："开工 <变更名>"），用户选了就把那个壳子加进范围，不用 cd 过去';
   return '';
 }
 // 修订产物时退出失效的实施范围；源码与任务打勾仍必须有新版开工许可。
