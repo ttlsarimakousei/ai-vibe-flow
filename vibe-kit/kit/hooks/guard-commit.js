@@ -76,11 +76,64 @@ function setBlock(st, kind, msg, target) {
   st.kind = kind;
   st.target = t;
 }
+/**
+ * 用 Bash 改 OpenSpec 的四份需求文档（proposal、specs、design、tasks）：拦下，让它用编辑工具（#485 顺带查出，仓库主人 2026-11-18 选的"拦"）。
+ * 那次模型 sed -i 一次把 tasks.md 全勾上，打勾的检查（开工前要审过、按组顺序）、写文档的检查都只看编辑工具，全绕过去了。
+ * 认：重定向写进去的（> >>，2> 不算）、sed/perl -i、tee、Set-Content/Add-Content/Out-File/Clear-Content、cp/mv/Copy-Item/Move-Item 盖上去的、
+ * node/python 的一行脚本里写文件又点了这几份的。只读的（cat、grep、sed -n）不管；revisions.md、归档目录里的不管。
+ * 拦截种类 spec-write 不在 feedback.js 的可放行表里：不给编号，不能申请放行。返回拦截的话，不拦给 ''
+ */
+function specWriteIssue(x, head, dir) {
+  const S = require('../lib/session');
+  const hit = (t) => {
+    if (!t || !t.text || dynamic(t)) return '';
+    const abs = path.resolve(dir, local(t.text)); const a = S.artifactOf(abs);
+    return a && a.kind !== 'revisions' && !/\/changes\/archive\//i.test(normKey(abs)) ? abs : '';
+  };
+  const rest = x.ws.slice(head.i + 1); const name = head.name; const plain = rest.filter((w) => !w.text.startsWith('-'));
+  const files = x.redirs.filter((r) => r.fd !== '2' && !/^(?:\/dev\/null|nul|\$null)$/i.test(r.target)).map((r) => ({ text: r.target, raw: r.target }));
+  if (/^(sed|perl)$/.test(name) && rest.some((w) => /^-[A-Za-z]*i/.test(w.text) || /^--in-place/.test(w.text))) files.push(...plain);
+  if (WRITE_TO.test(name) || /^(clear-content|clc)$/.test(name)) files.push(...plain);
+  if (/^(cp|mv|copy|move|copy-item|cpi|move-item|mi|install)$/.test(name) && plain.length) files.push(plain[plain.length - 1]);
+  let target = '';
+  for (const t of files) { target = hit(t); if (target) break; }
+  // 兜底（复审 R5）：find -exec sed -i、通配符、[System.IO.File]::WriteAllText、dd of=、awk -i inplace、node/python（含 here-doc 里的脚本）写文件。
+  // 尽力而为：路径写在变量里的（$f）认不出
+  if (!target) {
+    const texts = x.ws.map((w) => String(w.text)); const base = (t) => path.basename(t).toLowerCase().replace(/\.(exe|cmd)$/, '');
+    const raw = texts.join(' ') + '\n' + (x.doc || '');
+    const writes = (texts.some((t) => /^(sed|perl)$/.test(base(t))) && texts.some((t) => /^-[A-Za-z]*i/.test(t) || /^--in-place/.test(t)))
+      || (texts.some((t) => /^g?awk$/.test(base(t))) && /-i\s*inplace/.test(raw))
+      || /WriteAll(?:Text|Lines|Bytes)|AppendAll(?:Text|Lines)/.test(raw)
+      || (texts.some((t) => base(t) === 'dd') && /\bof=/.test(raw))
+      || (/^(node|python3?|py)$/.test(name) && /writeFileSync|appendFileSync|write_text|\.write\(|open\([^)]*['"][wa]\+?['"]/.test(raw));
+    const m = writes && raw.match(SPEC_DOC);
+    if (m) target = path.resolve(dir, local(m[0]));
+  }
+  if (!target) return '';
+  return specWriteText(path.relative(dir, target).split(path.sep).join('/'));
+}
+// 变更目录里的四份文档、带通配符的、变更目录本身（find openspec/changes/x -exec sed -i）。revisions.md、归档目录不算
+const SPEC_DOC = /[^\s'"`(,=]*openspec[\\/]+changes[\\/]+(?!archive(?:[\\/]|\s|$))[^\\/\s'"`*?]+(?:[\\/]+(?:proposal\.md|design\.md|tasks\.md|specs[\\/][^\s'"`)]*|[^\s'"`)]*\*[^\s'"`)]*)|[\\/]?(?=[\s'"`)]|$))/i;
+/**
+ * 整条命令看一遍（复审 R5）：PowerShell 的 [System.IO.File]::WriteAllText('…tasks.md', …) 被括号拆成两段，按段看认不出。返回拦截的话，不拦给 ''
+ */
+function specWriteWhole(cmd) {
+  const s = String(cmd || '');
+  if (!/WriteAll(?:Text|Lines|Bytes)|AppendAll(?:Text|Lines)/.test(s)) return '';
+  const m = s.match(SPEC_DOC);
+  return m ? specWriteText(m[0].replace(/\\/g, '/')) : '';
+}
+function specWriteText(rel) {
+  return '[vibe-kit] 这条命令用 Bash 改 OpenSpec 的需求文档（' + rel + '）。sed -i、重定向、tee、Set-Content、cp/mv 盖上去这类改法绕过了打勾和写文档的检查，不能这样改。'
+    + '用编辑工具改（Edit，新建文件用 Write）；打勾做完一项勾一项，一次 Edit 把那一行的"- [ ]"改成"- [x]"，不要攒到最后一次全勾。只是看内容的用 Read、grep、sed -n。';
+}
 function analyze(cmd, ps, st, cfg, depth) {
   // st.securityOnly：check() 开头那一遍，只查读令牌、结束进程（不登记阶段，不受 12 秒预算管；别的检查等正常那一遍）
   if (!st.securityOnly) require('../lib/invocation').phase('分析执行命令');
   const decision = st.securityOnly ? '' : require('../lib/review-runner').decisionIssue(Object.assign({}, st.j, { cwd: st.dir, tool_input: { command: cmd } }));
   if (decision) { setBlock(st, 'review-decision', '[vibe-kit 审查决定] ' + decision); return; }
+  if (!st.securityOnly && cfg.specGate !== false && !st.block) { let w = ''; try { w = specWriteWhole(cmd); } catch (e) { w = ''; checkFailed('Bash 改需求文档', st.j, e); } if (w) setBlock(st, 'spec-write', w); }
   // 包装命令换过目录后，相对发布脚本也要按内层的目录检查。
   if (publishAnywhere(cmd, st.dir)) st.publishing = true;
   const { s, docs } = preprocess(cmd, ps);
@@ -133,6 +186,7 @@ function analyze(cmd, ps, st, cfg, depth) {
       if (st.securityOnly) continue;
       const viaTool = ws.some((w) => /devserver\.js$/i.test(w.text));
       if (!viaTool && !st.block) { const s = serverStart(ws, head, st.dir); if (s) setBlock(st, 'server', serverMsg(s, st.dir)); }
+      if (cfg.specGate !== false && !st.block) { let w = ''; try { w = specWriteIssue(x, head, st.dir); } catch (e) { w = ''; checkFailed('Bash 改需求文档', st.j, e); } if (w) setBlock(st, 'spec-write', w); }
       if (tidy && !st.block) { const p = processTarget(x, head, st.dir); if (p && tidy.blockOnce(st.j.session_id, p.key)) setBlock(st, 'process', tidy.processMsg(p.show)); }
       if (!st.block && !st.archiveUnknown) {
         const outputs = archiveStream ? x.redirs.map(r => ({ text: r.target, raw: r.target })) : [];
