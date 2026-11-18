@@ -203,7 +203,17 @@ function materials(opts, change) {
   const batches = []; let batch = [], size = 0;
   for (const item of items) { if (size + item.text.length > 80000 && batch.length) { batches.push(batch); batch = []; size = 0; } batch.push(item); size += item.text.length; }
   if (batch.length) batches.push(batch);
-  return { items, skipped, uncovered, excluded, bases, batches, contextOnly, inputs: [...inputs.values()], currents, outside };
+  // 复审时上一轮审过、这一轮没进材料的文件还在不在（#489，review-scope.js planRound 用）：在就读出现在的内容，不当成删了。
+  // 只管代码审查；只认这个 change 的项目目录下面的、普通的 UTF-8 文本，敏感配置照旧不读
+  const homes = change ? S.projectRootsOf(change.dir) : [opts.cwd];
+  const reread = opts.mode !== 'code' ? null : (label) => {
+    const f = path.resolve(opts.cwd, label); const root = homes.find((r) => S.underDir(f, r));
+    if (!root || secretFile(f)) return null;
+    const c = W.pathStatus(f, root);
+    if (!c.safe || c.missing || c.stat.size > 4 * 1024 * 1024) return null;
+    try { const b = fs.readFileSync(f); if (b.includes(0)) return null; return { text: R.material(new (require('util').TextDecoder)('utf8', { fatal: true }).decode(b)), root, source: f }; } catch (e) { return null; }
+  };
+  return { items, skipped, uncovered, excluded, bases, batches, contextOnly, inputs: [...inputs.values()], currents, outside, reread };
 }
 /** 随提案交付的补充材料变化后结论失效；实施源码的变化留给代码审查，不重开需求审查。 */
 function inputsCurrent(inputs) {

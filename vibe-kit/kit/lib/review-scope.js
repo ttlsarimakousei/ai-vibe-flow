@@ -200,6 +200,14 @@ function planRound(material, prior) {
   const covered = new Set(prior.covered);
   const items = []; const changed = []; const kept = [];
   let changedLines = 0; let totalLines = 0;
+  const outside = material.outside || new Set();
+  // 上一轮审过、这一轮没进材料、文件其实还在的（#489：开工前就有改动、开工后没动过，被筛出了材料，复审报成"这个文件已经删除"，6 条假 P1）：
+  // 读出现在的内容放回来，照上一轮审过的文件比；真不在了的才算删了
+  if (material.reread) for (const file of Object.keys(prior.files)) {
+    if (material.currents.has(file) || outside.has(file)) continue;
+    const cur = material.reread(file);
+    if (cur) material.currents.set(file, cur);
+  }
   for (const [file, cur] of material.currents) {
     const n = lines(cur.text).length;
     totalLines += n;
@@ -213,7 +221,6 @@ function planRound(material, prior) {
     items.push(...chunkItems(file, '这次的改动（- 是改之前，+ 是改之后，其余是上下文）：\n' + d.text, cur.root, cur.source, cur.role));
   }
   // 上一轮审过、现在不算这个 change 的文件（别的会话、别的变更改的，第 77 条）：不送，记在它上面的问题也不带了
-  const outside = material.outside || new Set();
   for (const file of Object.keys(prior.files)) {
     if (material.currents.has(file) || outside.has(file)) continue;
     changed.push(file);
