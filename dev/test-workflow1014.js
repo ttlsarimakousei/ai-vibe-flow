@@ -84,7 +84,7 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
     H.ok('仅要求需求文档：不问怎么实施', P.planNext(j, { dir: d, name: 'add-a' }) === '');
     S.updateState(j.session_id + '-flow', o => { o.holdApply = false; });
     const askNow = P.planNext(j, { dir: d, name: 'add-a' });
-    H.ok('开着自动、文档审过提交了：停下问怎么实施（第 86 条），不自己衔接 Apply', /自动实施/.test(askNow) && S.flowState(j).stage === 'plan', askNow);
+    H.ok('开着自动、文档审过提交了：停下问开不开始实施（第 86 条，2026-11-18 起选项是开始实施 / 先不实施），不自己衔接 Apply', /开始实施/.test(askNow) && S.flowState(j).stage === 'plan', askNow);
     H.setConfig(h, { commitMode: 'off' }); S.setFlow(j, true, '提问框选了自动实施', 'apply');
     for (const [req, apply] of [[false, false], [false, true], [true, false], [true, true]]) {
       cfg({ autoRequirements: req, autoApply: apply });

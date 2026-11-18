@@ -296,12 +296,14 @@ H.section('#9 全自动模式只在走 OpenSpec 流程时算数');
     H.ok('会话开始时分别说明两开关和当前范围', /自动只管实施/.test(H.reasonOf(ss)) && /需求阶段没有自动模式/.test(H.reasonOf(ss)) && /不推进别的会话/.test(H.reasonOf(ss)));
   // 查库、查 redis 的工具：跑之前留一张条子，说这个会话算不算全自动
   const tk = () => ((readJson(path.join(h.kit, 'state', 'tool-flow.json')).byCwd || {})[S.normKey(proj)]) || {};
+  // 2026-11-18 起开工就开会话的自动，会话的开关盖过配置：s3 前面说过"等等，先停一下"关了，这里把会话的开关打开，看不在流程里时条子怎么写
+  S.setSessionAuto({ session_id: s3 }, true, '测试：自动开关开着');
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python "$HOME/.claude/skills/vk-db-crud/scripts/db.py" --conn dev exec --sql-file .vibe/tmp/x/a.sql' } });
   H.ok('不在流程里的会话跑查库的工具：条子上写着不算全自动', tk().auto === false && tk().at > 0, tk());
   prompt(s3, '/opsx:apply add-ec-expiry-remind');
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node "$HOME/.claude/skills/vk-redis/scripts/redis.js" --conn dev set k v' } });
   H.ok('在流程里的会话跑：条子上写着算', tk().auto === true, tk());
-  H.setConfig(h, { autoMode: false });
+  H.setConfig(h, { autoMode: false }); S.setSessionAuto({ session_id: s3 }, false, '测试：自动关着');
   dropState('tool-flow');
   H.hook(h, 'guard-commit', { session_id: s3, cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'python db.py --conn dev query --sql "select 1"' } });
   H.ok('全自动模式关着：不留条子', !fs.existsSync(path.join(h.kit, 'state', 'tool-flow.json')));

@@ -28,6 +28,9 @@ const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
     const flow = (sid) => readJson(path.join(h.kit, 'state', sid + '-flow.json'));
     say('f1', '/opsx:apply add-export');
     H.ok('（敲了 /opsx:apply：在流程里）', flow('f1').on === true, flow('f1'));
+    // 2026-11-18 起开工就开会话的自动，会话开着自动时"让它出一份文档"照自动的做法（第 68 条：需求里带"导出"被判成插话）。
+    // 这里看只开了配置开关、会话没开的老路子：把会话的开关清掉
+    fs.writeFileSync(path.join(h.kit, 'state', 'f1-auto-switch.json'), '{}');
     const r1 = say('f1', '帮我生成一个文件用来记录这次改动的要点');
     H.ok('在流程里让它生成一个文件记东西：还在流程里，这一轮全自动不作数', flow('f1').on === true && flow('f1').aside === true, flow('f1'));
     H.ok('提醒它开工前先定好放哪，是问我的说法，不是全自动的"先放 pending"', /开工前先定好放哪/.test(r1) && /用提问框问我/.test(r1) && !/pending/.test(r1), r1);
