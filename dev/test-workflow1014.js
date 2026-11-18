@@ -22,7 +22,8 @@ const fs = require('fs'); const path = require('path'); const http = require('ht
   H.ok('MCP 的文件检查直接跑', runHook('guard-commit', { tool_name: 'mcp__ide__get_file_problems', tool_input: { filePath: 'a.js', projectPath: p } }) === null);
   H.ok('MCP 的运行配置不算自测，不问', runHook('guard-commit', { tool_name: 'mcp__ide__execute_run_configuration', tool_input: { configurationName: 'app', projectPath: p } }) === null);
   const kitTool = (t) => 'node "' + path.join(h.kit, 'tools', t).replace(/\\/g, '/') + '"';
-  H.ok('起服务人工先 Ask', /用户这一轮没说要.*Ask/.test(H.reasonOf(runHook('guard-commit', { tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } }))));
+  // 2026-11-17 起起服务不拦（#475、#482，用户定的）
+  H.ok('起服务人工也不问（2026-11-17 起）', !H.reasonOf(runHook('guard-commit', { tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } })));
   H.ok('用户说把服务起起来就直接起', runHook('guard-commit', { transcript_path: tf([H.tr.user('把服务起起来')]), tool_input: { command: kitTool('devserver.js') + ' start --name a --port auto -- node a.js' } }) === null);
   H.ok('查服务状态不算自测', runHook('guard-commit', { tool_input: { command: kitTool('devserver.js') + ' list' } }) === null);
   H.ok('编译人工模式直接跑', runHook('guard-commit', { tool_input: { command: 'mvn -q -o compile' } }) === null);
