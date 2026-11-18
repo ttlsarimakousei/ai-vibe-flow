@@ -116,7 +116,7 @@ const WAIT = 1500;
   H.setConfig(h, { askTimeoutMin: 10 });
   S.setSessionAuto(j, false, '测试：人工');
   const r11 = await run({ tool_name: 'AskUserQuestion', tool_input: Q, transcript_path: tp([H.tr.user('做导出'), H.tr.call('AskUserQuestion', Q, 'toolu_ask11')]) });
-  H.ok('没开自动：照样到点收掉（2026-11-18 起任何时候都算，since NEXT）', (decision(r11) || {}).behavior === 'deny' && /按用户不在处理/.test((decision(r11) || {}).message || ''), [r11.out, r11.ms]);
+  H.ok('没开自动：照样到点收掉（2026-11-18 起任何时候都算，since 20261119.0611）', (decision(r11) || {}).behavior === 'deny' && /按用户不在处理/.test((decision(r11) || {}).message || ''), [r11.out, r11.ms]);
   const r11b = await run({ tool_name: 'Bash', tool_input: { command: 'mvn -q compile' }, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Bash', { command: 'mvn -q compile' }, 'toolu_b11')]) });
   H.ok('没开自动：权限确认框到点按允许（仓库主人选的"什么时候都按允许"）', (decision(r11b) || {}).behavior === 'allow', r11b.out);
   const r11c = await run({ tool_name: 'Bash', tool_input: { command: 'rm -rf target' }, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Bash', { command: 'rm -rf target' }, 'toolu_b12')]) });

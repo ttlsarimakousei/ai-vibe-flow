@@ -93,7 +93,7 @@ H.section('全部通过关了自动之后，用户报问题：改代码时直接
   const t2 = [H.tr.user('导出的文件名不对，改一下')];
   t.say(t2, '导出的文件名不对，改一下');
   const e1 = t.preEdit(t2);
-  H.ok('用户报了问题：改代码不拦，直接重开自动（since NEXT）', !blocked(e1) && !ASK_FIX.test(H.reasonOf(e1)) && S.sessionAuto(j) === true && t.autoFix() === false, [H.reasonOf(e1), B.taskState(t.task())]);
+  H.ok('用户报了问题：改代码不拦，直接重开自动（since 20261119.0611）', !blocked(e1) && !ASK_FIX.test(H.reasonOf(e1)) && S.sessionAuto(j) === true && t.autoFix() === false, [H.reasonOf(e1), B.taskState(t.task())]);
   t2.push(...t.edit(t2, 'class A { int fixed1; }\n'));
   const r2 = t.stop(t2.concat([H.tr.say('改好了')]));
   H.ok('改完收工：照自动催代码审查，不是让它去问用户要不要审', /review\.js run --change c1 --mode code --point change/.test(H.reasonOf(r2)) && !/用一个提问框问/.test(H.reasonOf(r2)), H.reasonOf(r2));

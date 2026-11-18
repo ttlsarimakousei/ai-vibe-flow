@@ -39,7 +39,7 @@ const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 
     const change = S.allChanges(shell).find((c) => c.name === 'feat-020-survey-year');
     let m = null; let err = '';
     try { m = R.materials({ cwd: shell, mode: 'code', point: 'change', base: ['trees=' + b1, 'app=' + b2] }, change); } catch (e) { err = e.message; }
-    H.ok('两个子仓库的 --base 都给了：壳子根不进"缺开工基线"，材料完整（since NEXT）', !!m && !m.skipped.some((x) => /缺开工基线/.test(x.reason)), err || (m && m.skipped));
+    H.ok('两个子仓库的 --base 都给了：壳子根不进"缺开工基线"，材料完整（since 20261119.0611）', !!m && !m.skipped.some((x) => /缺开工基线/.test(x.reason)), err || (m && m.skipped));
     H.ok('两个子仓库的改动都在材料里', !!m && m.items.some((x) => /trees\/src\/A\.java$/.test(x.file)) && m.items.some((x) => /app\/src\/B\.js$/.test(x.file)), m && m.items.map((x) => x.file));
     H.ok('排除说明里写明壳子不是 git 仓库、按子项目审', !!m && m.excluded.some((x) => /壳子不是 git 仓库/.test(x.reason || '')), m && m.excluded);
     let m2 = null; err = '';
@@ -56,7 +56,7 @@ const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 
     const material = { currents: new Map([['pc/Edited.vue', cur('<template>e2</template>\n')]]), reread: (f) => (f === 'pc/Config.vue' ? cur('<template>a</template>\n') : null) };
     const plan = Sc.planRound(material, prior);
     const said = (f) => plan.items.filter((x) => x.file === f).map((x) => x.text).join('\n');
-    H.ok('文件还在、内容没变：不说"已经删除"，算没改（since NEXT）', !/已经删除/.test(said('pc/Config.vue')) && (plan.kept || []).includes('pc/Config.vue'), [said('pc/Config.vue'), plan.kept]);
+    H.ok('文件还在、内容没变：不说"已经删除"，算没改（since 20261119.0611）', !/已经删除/.test(said('pc/Config.vue')) && (plan.kept || []).includes('pc/Config.vue'), [said('pc/Config.vue'), plan.kept]);
     H.ok('真不在了的：照旧说已经删除', /已经删除/.test(said('pc/Gone.vue')), said('pc/Gone.vue'));
     H.ok('改过的照旧只送改动', /这次的改动/.test(said('pc/Edited.vue')), said('pc/Edited.vue'));
     // materials 给的 reread：项目里的普通文件读得出来，不在的、敏感配置读不出来
@@ -82,7 +82,7 @@ const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 
     const tmp = path.join(require('os').tmpdir(), 'ftcu2').replace(/\\/g, '/');
     const cmd = 'mkdir -p "' + tmp + '" && "C:/Program Files/Java/jdk1.8.0_251/bin/javac" -d "' + tmp + '" "' + tmp + '/P.java" 2>&1 | grep -c E-SafeNet';
     const j = (command) => ({ session_id: 's-484', cwd: p, tool_name: 'Bash', tool_use_id: 'tu-' + (++seq), tool_input: { command }, tool_response: { stdout: '0', stderr: '' } });
-    H.ok('#484 原样：javac 编临时目录里的文件，不算验证（since NEXT）', E.actual(j(cmd)) === null, E.actual(j(cmd)));
+    H.ok('#484 原样：javac 编临时目录里的文件，不算验证（since 20261119.0611）', E.actual(j(cmd)) === null, E.actual(j(cmd)));
     H.ok('AppData/Local/Temp 下的写法（/c/Users/…）也认', E.actual(j('javac /c/Users/x/AppData/Local/Temp/q/A.java')) === null);
     // 复审 R1：输出写到临时目录（日志、报告、编译输出），测的还是项目：照旧记
     for (const c of ['mvn test > ' + tmp + '/m.log 2>&1', 'npm test 2>&1 | tee /tmp/o.log', 'pytest --junitxml=/tmp/r.xml', 'mvn -q compile > /tmp/x.log', 'node ' + tmp + '/prep.js && npm test']) H.ok('输出写到临时目录、测的是项目：照旧记 · ' + c, !!E.actual(j(c)), c);
@@ -106,7 +106,7 @@ const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 
     const oaCode = H.makeRepo(path.join(oa, 'oa'), { 'pom.xml': '<project/>\n', 'src/E.java': 'class E {}\n' });
     const task = B.tasks(gw).find((t) => t.name === '采砂证');
     const far = task && task.changes.find((c) => c.name === 'add-ec-cert-city-issue');
-    H.ok('大任务里 OA 那一行认出了兄弟壳子的目录（since NEXT）', !!far && far.exists === true && far.far === true && S.normKey(far.dir) === S.normKey(path.join(oa, 'openspec', 'changes', 'add-ec-cert-city-issue')), far);
+    H.ok('大任务里 OA 那一行认出了兄弟壳子的目录（since 20261119.0611）', !!far && far.exists === true && far.far === true && S.normKey(far.dir) === S.normKey(path.join(oa, 'openspec', 'changes', 'add-ec-cert-city-issue')), far);
     const jx = { session_id: 's-487', cwd: gw, transcript_path: tp([H.tr.user('开工 add-hdca-cert-gateway')]) };
     H.inFlow(h, 's-487', [path.join(gw, 'openspec', 'changes', 'add-hdca-cert-gateway')], true, 'apply');
     const g = A.grant(jx, '开工 add-hdca-cert-gateway', '');
@@ -136,7 +136,7 @@ const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 
       ["sed -i 's/a/b/' openspec/changes/duty-plan/*.md", 'sed -i 带通配符'],
       ["python3 - <<'EOF'\nopen('openspec/changes/duty-plan/tasks.md', 'w').write('x')\nEOF", 'here-doc 里的 python 写 tasks.md'],
     );
-    for (const [cmd, what] of hit) { const r = bash(cmd); H.ok(what + '：拦下（since NEXT）', SPEC.test(H.reasonOf(r)), H.reasonOf(r)); }
+    for (const [cmd, what] of hit) { const r = bash(cmd); H.ok(what + '：拦下（since 20261119.0611）', SPEC.test(H.reasonOf(r)), H.reasonOf(r)); }
     const rnet = bash("[System.IO.File]::WriteAllText('openspec/changes/duty-plan/tasks.md', 'x')", true);
     H.ok('PowerShell [System.IO.File]::WriteAllText 写 tasks.md：拦下', SPEC.test(H.reasonOf(rnet)), H.reasonOf(rnet));
     const rps = bash('Set-Content -Path openspec/changes/duty-plan/tasks.md -Value x', true);
@@ -167,7 +167,7 @@ const QUIET = { specGate: true, autoVerify: false, autoSeePage: false, lessons: 
       return { r, j: { session_id: sid, cwd: p } };
     };
     const a = mk('s-go-yes', '可以', ['可以', '再看看']);
-    H.ok('问"能开工吗"答"可以"：开工了，自动也开了（since NEXT）', !H.reasonOf(a.r) && S.flowState(a.j).stage === 'apply' && S.sessionAuto(a.j) === true, [H.reasonOf(a.r), S.flowState(a.j).stage, S.sessionAuto(a.j)]);
+    H.ok('问"能开工吗"答"可以"：开工了，自动也开了（since 20261119.0611）', !H.reasonOf(a.r) && S.flowState(a.j).stage === 'apply' && S.sessionAuto(a.j) === true, [H.reasonOf(a.r), S.flowState(a.j).stage, S.sessionAuto(a.j)]);
     const b = mk('s-go-manual', '实施（每步问我）', ['自动实施', '实施（每步问我）', '先不实施']);
     H.ok('点了老版本的"实施（每步问我）"：开工，自动关着（用户明说的）', !H.reasonOf(b.r) && S.flowState(b.j).stage === 'apply' && S.sessionAuto(b.j) === false, [H.reasonOf(b.r), S.flowState(b.j).stage, S.sessionAuto(b.j)]);
     // 复审 R2："开始实施"后面跟着别的字的不算选了开始实施

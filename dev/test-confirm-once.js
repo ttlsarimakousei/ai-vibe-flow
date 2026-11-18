@@ -79,7 +79,7 @@ H.section('A7 需求审过：问开不开始实施（开始实施 / 先不实施
   let n = 0;
   const next = (answer) => { n++; const entries = [H.tr.user('写 feat-019 的需求'), H.tr.say('tasks 写完了')].concat(answer ? ask('feat-019 的 tasks 写完了，怎么定？', answer) : []); return F.planNext({ session_id: 's-a7-' + n, cwd: p, transcript_path: H.transcript(path.join(h.root, 'a7-' + n + '.jsonl'), entries) }, c) || ''; };
   const q = next('');
-  H.ok('需求审过：问开不开始实施，两个选项，问题里写变更名（since NEXT）', /开始实施/.test(q) && /先不实施/.test(q) && !/每步问我/.test(q) && /写上变更名/.test(q), q);
+  H.ok('需求审过：问开不开始实施，两个选项，问题里写变更名（since 20261119.0611）', /开始实施/.test(q) && /先不实施/.test(q) && !/每步问我/.test(q) && /写上变更名/.test(q), q);
   H.ok('不再有"定稿并开工""只定稿"', !/定稿并开工|只定稿/.test(q), q);
   H.ok('开始实施的说明写清是自动做、做到哪、什么时候停，没人答到点开工', /自动做/.test(q) && /全部通过后停下/.test(q) && /说停就停/.test(q) && /到点套件会替用户开工/.test(q), q);
 }

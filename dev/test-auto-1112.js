@@ -53,7 +53,7 @@ H.section('第 86 条：自动实施中说"停"才关，插话不关；说过停
   H.ok('说"停"：自动关了，模型知道停在这里', S.sessionAuto(j) === false && /自动关了/.test(textOf(r)), textOf(r).slice(0, 300));
   H.ok('记下是用户说停关的', S.flowState(j).autoStopped === true, S.flowState(j));
   const r2 = say('继续');
-  H.ok('说过停再说"继续"：直接开自动，不问自动还是人工（since NEXT）', S.sessionAuto(j) === true && /自动开了/.test(textOf(r2)) && !/人工接着做/.test(textOf(r2)) && !S.flowState(j).autoAsk && !S.flowState(j).autoStopped, [textOf(r2).slice(0, 400), S.flowState(j)]);
+  H.ok('说过停再说"继续"：直接开自动，不问自动还是人工（since 20261119.0611）', S.sessionAuto(j) === true && /自动开了/.test(textOf(r2)) && !/人工接着做/.test(textOf(r2)) && !S.flowState(j).autoAsk && !S.flowState(j).autoStopped, [textOf(r2).slice(0, 400), S.flowState(j)]);
   const edit = (tp) => H.hook(h, 'pre-edit', { session_id: 's-stop', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' }, transcript_path: tp });
   const e1 = edit(H.transcript(path.join(h.root, 'stop-e1.jsonl'), [H.tr.user('继续')]));
   H.ok('接着改代码：不拦，自动开着', !blocked(e1) && S.sessionAuto(j) === true, H.reasonOf(e1));
@@ -75,7 +75,7 @@ H.section('第 86 条：选过"先不实施"（或没问就说开工），说开
   S.readConfigFor(Object.assign({}, j, { transcript_path: H.transcript(path.join(h.root, 'start-0.jsonl'), [H.tr.user('写需求'), ...ans('c1 的需求审过了，怎么实施？', '先不实施')]) }));
   H.ok('选"先不实施"：自动关着', S.sessionAuto(j) === false);
   const r = H.hook(h, 'task-anchor', { session_id: 's-start', cwd: p, hook_event_name: 'UserPromptSubmit', prompt: '开工', transcript_path: H.transcript(path.join(h.root, 'start-1.jsonl'), [H.tr.user('开工')]) });
-  H.ok('后来用户说"开工"：进了做任务那一段，自动开了，不问（since NEXT）', S.flowState(j).stage === 'apply' && S.sessionAuto(j) === true && !/怎么实施/.test(textOf(r)) && /自动开了/.test(textOf(r)), [S.flowState(j).stage, textOf(r).slice(0, 400)]);
+  H.ok('后来用户说"开工"：进了做任务那一段，自动开了，不问（since 20261119.0611）', S.flowState(j).stage === 'apply' && S.sessionAuto(j) === true && !/怎么实施/.test(textOf(r)) && /自动开了/.test(textOf(r)), [S.flowState(j).stage, textOf(r).slice(0, 400)]);
   const edit = (tp) => H.hook(h, 'pre-edit', { session_id: 's-start', cwd: p, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(p, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' }, transcript_path: tp });
   const e1 = edit(H.transcript(path.join(h.root, 'start-e1.jsonl'), [H.tr.user('开工')]));
   H.ok('改代码：不拦', !blocked(e1), H.reasonOf(e1));

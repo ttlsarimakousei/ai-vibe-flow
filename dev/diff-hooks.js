@@ -96,6 +96,7 @@ const V1852 = '20261110.1852'; // 第 76 条：做任务时用户让改需求接
 const V0003 = '20261112.0003'; // 第 82 条：写进代码的文字里不带审查编号这类套件字眼
 const V202611131001 = '20261113.1001'; // 第 88、89 条和议题 #458—#467：拦"没说要走 OpenSpec"时写明选项里带"探索"就认
 const V202611181047 = '20261118.1047'; // 11-17 这批：起服务不拦、关服务要问、收工提示写明审查自测
+const V202611190611 = '20261119.0611'; // 11-18 这批：实施一律自动（说开工就开、需求审过问开始实施）、提问框到点
 const V1523 = '20261112.1523'; // 第 85—87 条：需求一次写到 tasks、写完强制审修，审过问怎么实施；/vk-auto 删了
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -524,13 +525,13 @@ add('命令：devserver stop 再 start（重启）', 'guard-commit', cmd('node "
 // 2026-11-18（这一版，仓库主人定的"实施一律自动"）：说开工就开自动，不再先问自动还是人工。开工那一条要是共用 sess-diff，
 // 后面同一会话里的拦截都带上"全自动模式"那句，比对的就不是那道检查本身了：给它自己的会话
 for (const c of cases) {
-  if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') { ownSession(c, 'sess-diff-apply'); c.expect = /^(?=[\s\S]*用户让开工了：自动开了)(?=[\s\S]*不用让用户再说开工)(?![\s\S]*先用提问框问一次怎么实施)/; c.since = NEXT; }
+  if (c.name === '开口：敲 /opsx:apply（开工时说全自动开没开）') { ownSession(c, 'sess-diff-apply'); c.expect = /^(?=[\s\S]*用户让开工了：自动开了)(?=[\s\S]*不用让用户再说开工)(?![\s\S]*先用提问框问一次怎么实施)/; c.since = V202611190611; }
   // 以前靠开工那一条把 sess-diff 带进流程：现在自己进写需求那一段。需求审过那一问改成"开始实施 / 先不实施"
   // 提问框答了开工（confirmApply）也开自动：给它自己的会话，不然 sess-diff 后面的拦截都带上"全自动模式"那句
   // 开工那一条不再把 sess-diff 带进做任务那一段，这一条落到人工的收工提示上：那句提示 20261118.1047 改过（#477，问题里写明审查、自测）
   if (c.name === '收工：说了没验证') { c.expect = /本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测（问题里写明\W+审查\W+自测/; c.since = V202611181047; }
-  if (c.name === '1013：多变更提问绑定开工目标') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-1013'; H.inFlow(kit, 'sess-diff-1013', [], true, 'plan'); return r; }; c.expect = /开始 apply：全自动模式开着/; c.since = NEXT; }
-  if (c.name === '开口：让它停') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-halt'; H.inFlow(kit, r.j.session_id, [path.join(r.proj, 'openspec/changes/add-export')], true, 'plan'); return r; }; c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*四份写完强制审一次整套，不问用户[\s\S]*开始实施\W{0,6}先不实施\W{0,4}；实施一律自动/; c.since = NEXT; }
+  if (c.name === '1013：多变更提问绑定开工目标') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-1013'; H.inFlow(kit, 'sess-diff-1013', [], true, 'plan'); return r; }; c.expect = /开始 apply：全自动模式开着/; c.since = V202611190611; }
+  if (c.name === '开口：让它停') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-halt'; H.inFlow(kit, r.j.session_id, [path.join(r.proj, 'openspec/changes/add-export')], true, 'plan'); return r; }; c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*四份写完强制审一次整套，不问用户[\s\S]*开始实施\W{0,6}先不实施\W{0,4}；实施一律自动/; c.since = V202611190611; }
 }
 
 let same = 0;

@@ -77,7 +77,7 @@ H.section('当前 change 还没开工：回到写需求');
   H.ok('c2 任务写好了、一个没勾：接回就算开工（第 53 条）', fl(k).stage === 'apply' && fl(k).current === 'c2' && A.valid(k).ok && /接回就算开工/.test(r2.systemMessage || ''), [fl(k), r2.systemMessage]);
   const edit = H.hook(h, 'pre-edit', Object.assign({}, k, { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(proj, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' } }));
   H.ok('接回后改代码：不再要用户说开工', !/还没说开工|用户说开工/.test(H.reasonOf(edit)), H.reasonOf(edit));
-  H.ok('接回就开工、没恢复自动：直接开自动，改代码不拦（2026-11-18 实施一律自动，since NEXT）', !edit && S.sessionAuto(k) === true, H.reasonOf(edit));
+  H.ok('接回就开工、没恢复自动：直接开自动，改代码不拦（2026-11-18 实施一律自动，since 20261119.0611）', !edit && S.sessionAuto(k) === true, H.reasonOf(edit));
   const q = 'c2 接着做，怎么实施？';
   const k2 = Object.assign({}, k, { transcript_path: H.transcript(path.join(h.root, k.session_id + '-ans.jsonl'), [H.tr.user('/vk-resume c2'), ...H.tr.ran('AskUserQuestion', { questions: [{ question: q, options: [{ label: '自动实施' }, { label: '实施（每步问我）' }] }] }, 'User has answered your questions: "' + q + '"="实施（每步问我）". You can now continue with the user\'s answers in mind.')]) });
   const edit2 = H.hook(h, 'pre-edit', Object.assign({}, k2, { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: path.join(proj, 'src', 'A.java'), old_string: 'class A', new_string: 'class A ' } }));
@@ -104,7 +104,7 @@ H.section('自动：死机前开着才恢复');
   say(j, '继续');
   const j3 = session(proj);
   const r3 = say(j3, '/vk-resume 乙');
-  H.ok('说过停又说"继续"：自动接着开，再接回也恢复（since NEXT）', S.sessionAuto(j) === true && S.sessionAuto(j3) === true && /自动已恢复/.test(r3.systemMessage || ''), [S.sessionAuto(j), r3]);
+  H.ok('说过停又说"继续"：自动接着开，再接回也恢复（since 20261119.0611）', S.sessionAuto(j) === true && S.sessionAuto(j3) === true && /自动已恢复/.test(r3.systemMessage || ''), [S.sessionAuto(j), r3]);
 }
 
 H.section('死机前说过停：接回开工也不自己开自动，说继续才开（复审 R9，2026-11-18）');
