@@ -64,7 +64,7 @@ function gateIssue(task, art) {
   if (task.changes.some((c) => c.name !== art.name && (c.archived || (c.exists && fs.existsSync(path.join(c.dir, 'proposal.md')))))) return '';
   if (doneOf(task)) return '';
   const tool = 'node "' + path.join(__dirname, '..', 'tools', 'review.js').split(path.sep).join('/') + '"';
-  return '写提案之前，探索记录要先过一轮多角度讨论（问题表第 92 条）：跑 ' + tool + ' run --mode explore --task ' + task.name + ' --project "' + path.dirname(task.osDir).split(path.sep).join('/') + '"（Bash 的 timeout 写 600000）。'
+  return '写提案之前，探索记录要先过一轮多角度讨论（问题表第 92 条）：跑 ' + tool + ' run --mode explore --task "' + task.name + '" --project "' + path.dirname(task.osDir).split(path.sep).join('/') + '"（Bash 的 timeout 写 600000）。'
     + '它从用户和业务、现有代码、反方三个角度看探索记录，要问用户的问题直接写进"还没定的"；有的话用提问框一次问完，答案写进"定了的"、从"还没定的"删掉，清空了再写提案。没提出问题就直接写。';
 }
 
