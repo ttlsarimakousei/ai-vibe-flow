@@ -252,6 +252,8 @@ function build(j, cfg, mine) {
   for (const c of changes.concat(archived)) for (const d of c.decisions || []) decisions.push('（' + c.name + '）' + d.head + (d.why ? '。起因：' + d.why : '') + (d.did ? '。改了：' + d.did : ''));
   // 做任务时改了 design、tasks、修订记录（需求本身没变，没退出自动，用户 2026-10-30 定的）：算它自己定的事，列给用户看
   for (const x of by('docEdit')) decisions.push(x.title + (x.times > 1 ? '（改了 ' + x.times + ' 次）' : ''));
+  // 钩子替用户定的（开工那一问没人答、到点开工，hooks/ask-timeout.js）：以前记了 decision 这一类，合报告时没列出来（第 94 条自审）
+  for (const x of by('decision')) decisions.push(x.title + (x.detail ? '（' + x.detail + '）' : ''));
   // 这一轮没有新定的、以前几轮定过的：说清楚，不能写成"revisions.md 里没有"（议题 #7：文件里明明有 7 条，是上一轮记的）
   const earlier = changes.filter((c) => (c.decisionsAll || 0) > (c.decisions || []).length).map((c) => c.name + ' ' + (c.decisionsAll - (c.decisions || []).length) + ' 条');
   const noDecision = earlier.length ? '这一轮没有新定的。以前几轮定过的还在各自的 revisions.md 里（起因：自动模式决定）：' + earlier.join('、') + '。' : '没有（revisions.md 里没有"起因：自动模式决定"的条目）。';

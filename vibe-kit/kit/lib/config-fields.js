@@ -61,7 +61,9 @@ const FIELDS = [
   { name: 'perfReport', type: 'enum', def: 'on', values: ['on', 'local', 'off'], page: 'remote', doc: '耗时异常上报 perfReport（上报 / 只记本机 / 关）', since: '2026-10-31 那一版', defText: '上报' },
   { name: 'reviewBudgetSeconds', type: 'int', def: 300, min: 10, max: 1800, page: 'kit', doc: '审查预期用时 reviewBudgetSeconds（1028 这一版起不截断，超了自动记问题反馈；1113 这一版起扣掉模型那头的时间再比；以前叫"审查总预算"）', since: '1017', defText: '300 秒' },
   // 问题表第 90 条（仓库主人 2026-11-13 定的；2026-11-18 起任何时候都算，以前只在自动实施时）：提问框、权限确认框发出后没人回，等这么多分钟替他收掉（hooks/ask-timeout.js）。0 = 一直等
-  { name: 'askTimeoutMin', type: 'int', def: 10, min: 1, max: 120, zero: true, page: 'kit', doc: '询问没人回，等多久替你做主 askTimeoutMin（分钟；0 是一直等。2026-11-18 起任何时候都算）', since: '20261113.1001 之后那一版', defText: '10 分钟' },
+  { name: 'askTimeoutMin', type: 'int', def: 10, min: 1, max: 120, zero: true, page: 'kit', doc: '询问没人回，等多久替你做主 askTimeoutMin（分钟；0 是一直等。2026-11-18 起任何时候都算；2026-11-20 起探索阶段改看下一项）', since: '20261113.1001 之后那一版', defText: '10 分钟' },
+  // 第 94 条（仓库主人 2026-11-20 定的"写需求和实施还是 10 分钟，需求探索讨论阶段 1 小时"）：大任务还在探索（"还没定的"没清空、还没开始写提案）时按这一项等
+  { name: 'askTimeoutExploreMin', type: 'int', def: 60, min: 1, max: 120, zero: true, page: 'kit', doc: '探索阶段询问没人回，等多久替你做主 askTimeoutExploreMin（分钟；0 是一直等。大任务还在探索时按它，写需求、实施、不走 OpenSpec 的按上一项）', since: '本版', defText: '60 分钟' },
 ];
 // 配置页上有、文件里不存的两项（J2）：说明写在手册里，取值在这里
 const VIEW_FIELDS = [

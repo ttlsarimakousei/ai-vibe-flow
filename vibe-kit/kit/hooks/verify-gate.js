@@ -674,7 +674,7 @@ function autoModeTodo(j, cfg, entries, lastSaid, turnId, changes, busy) {
  * 同一轮里交一次；交过之后又有新情况的再交，最多三次。只有提交、别的什么都没有的，写好报告文件、不拦。
  * 交过之后的收工：把它最后说的话接到报告后面
  */
-function autoReport(j, cfg, entries, lastSaid, changes) {
+function autoReport(j, cfg, entries, lastSaid, changes, due) {
   if (!report || !j.session_id) return '';
   // 做完最后一组、只剩用户验收时自动已不生效，这一轮自动做的事仍要交报告。
   // 只交给本会话真跑过的自动轮次（有 round）；交过之后又有新情况照样再交（和自动生效时一样，最多三次）；用户开口后报告从头记。
@@ -712,6 +712,7 @@ function autoReport(j, cfg, entries, lastSaid, changes) {
     + '5. 没验证的（哪一项、为什么没验）\n'
     + '6. 放行的检查（哪道检查、理由）\n'
     + '7. 套件问题（只写数量和可点的详情链接）\n'
+    + (due ? require('../lib/auto-decisions').dueItem(due, 8) : '')
     + '写完就收工，不要再做别的。';
 }
 /**
@@ -1043,8 +1044,12 @@ async function handle(j) {
   }
   // 这个会话动过的变更都归档了：流程走完了，记成不在流程里（状态栏不再写"在做任务"，下一句"继续"也不接回去）。报告照交，它认的是上面算好的 cfg
   try { if (flowState(j).on && flowDone(j)) { setFlow(j, false, '变更归档了'); hookLog('全自动模式 这个会话动过的变更都归档了，流程走完，记成不在流程里'); } } catch (e) { /* 记不了不影响收工 */ }
+  // 询问没人回、到点替用户定的事（问题表第 94 条）：大任务全部做完时一次列给他。取了就记成列过，接在全自动报告里，没有报告就单独交代
+  let due = null;
+  try { due = require('../lib/auto-decisions').takeDue(j); } catch (e) { hookLog('verify-gate 替用户定的事出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（替用户定的事）', j, e); }
   // 全自动模式收工：把这一轮的报告交给它，照着交代
-  try { const rp = autoReport(j, cfg, entries, lastSaid, changes()); if (rp) return withPlanNotes(blockOut('Stop', rp)); } catch (e) { hookLog('verify-gate 全自动报告出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（全自动报告）', j, e); }
+  try { const rp = autoReport(j, cfg, entries, lastSaid, changes(), due); if (rp) return withPlanNotes(blockOut('Stop', rp)); } catch (e) { hookLog('verify-gate 全自动报告出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（全自动报告）', j, e); }
+  if (due) { hookLog('verify-gate 替用户定的事 ' + due.count + ' 件交给它列出来：' + due.heads.join('、')); return withPlanNotes(blockOut('Stop', require('../lib/auto-decisions').dueText(due))); }
   // 验证的事都没落下，再看要不要问一句交接（两件事不挤在一起说）
   const ask = handoverQuestion(j, cfg, entries, wroteHo);
   if (ask) return withPlanNotes(blockOut('Stop', ask));

@@ -620,16 +620,21 @@
       <h2>自动模式（只管实施，实施一律自动）</h2>
       <p class="hint">自动模式不在这里开，也不用选（2026-11-18 起；/vk-auto 2026-11-12 起就没有了）：需求审过后，会话里用提问框问你"开始实施 / 先不实施"，开工就是自动，只对那个会话有效；你自己说开工、说过停又说继续、核验时报问题，也直接自动做。状态栏不再显示自动开没开。需求阶段没有自动模式。开了以后：做完任务审查、修改、复审，最后一个 change 做完全面自测、修改、再测再审，全部通过后自动关、等你核验；还有下一个 change 的，接着写它的需求，审过了停下再问你。你插话、提问它接着做；说"停""别自动了"就关。按提交方式提交，收工交报告。不加你没说的需求；你中途报的问题、改的需求照改，接着自动做。归档、push 照旧要你点头；改库只有还原不了的删留给你，别的直接做（见手册"查库和 redis"）。</p>
       <div class="opt">
-        <div><div class="t">询问没人回，等多久替你做主</div><div class="d">提问框、权限确认框发出这么久没人回，就替你收掉，接着做。不管在哪个阶段、走不走 OpenSpec 都算（2026-11-18 起，以前只在自动实施时）。0 是一直等。</div>
+        <div><div class="t">询问没人回，等多久替你做主</div><div class="d">提问框、权限确认框发出这么久没人回，就替你收掉，接着做。不管在哪个阶段、走不走 OpenSpec 都算（2026-11-18 起，以前只在自动实施时）。0 是一直等。大任务还在探索时按下一项"探索阶段等多久"。到点替你定的每一件都记下来，大任务全部做完时一次列给你。</div>
           <details class="more"><summary>细节</summary><ul>
             <li>你先答了就照你答的。</li>
             <li>提问框：到点收掉，它自己定（选它推荐的，拿不准选改动最小的）。写需求时定的，在需求文档里写进去的地方标"（用户没回，按推荐定的）"，探索时定的写进探索记录，都记进 revisions.md，最后交代时列给你改；做任务时定的记进 revisions.md 和全自动报告"它想问你、没问成的"；不走 OpenSpec 的，交代时说清替你定了什么。不替你选选项。</li>
             <li>需求审过那一问（开始实施 / 先不实施）：问题里点了变更名、需求整套审过的，到点替你开工，自动实施；对不上就停着等你。</li>
             <li>要你本人点头的事不算：推送、归档、发布、还原不了的删，到点也留给你。</li>
             <li>Claude Code 自己的权限确认框：到点按允许（开着自动时记进全自动报告"放行的检查"）；命令里有推送、发布，是查库、redis 的命令、关服务，或者是还原不了的删（rm -rf、git reset --hard、Remove-Item -Recurse 这类），按不允许，留给你。</li>
+            <li>到点替你定的每一件（提问框它自己定的、开工那一问、确认框放行和没放行的）记进启动 Claude 那个目录的 <code>.vibe/auto-decisions.json</code>；提问框它定了什么由它登记一句。什么时候列给你：属于大任务的，表里的变更任务都做完时；不在大任务里的变更，那个变更做完时；不走 OpenSpec 的，它停下来时。中间停下不列，列过的不再列，清单同时写进 <code>.vibe/reports/替你定的事-&lt;时间&gt;.md</code>。</li>
             <li>实测 Claude Code 2.1.120、2.1.259、2.1.289、2.1.316 都能在框显示以后替你收掉。</li>
           </ul></details></div>
         <div class="ctl"><input type="number" id="k_askTimeoutMin" min="0" max="120" step="1"><span class="dim">分钟</span></div>
+      </div>
+      <div class="opt">
+        <div><div class="t">探索阶段，询问没人回等多久</div><div class="d">大任务还在需求探索（探索记录"还没定的"没清空、还没开始写提案）时，提问框、确认框按这个时长等，默认 60 分钟（2026-11-20 起）；写需求、实施、不走 OpenSpec 的按上一项。0 是一直等。到点怎么收和上一项一样。</div></div>
+        <div class="ctl"><input type="number" id="k_askTimeoutExploreMin" min="0" max="120" step="1"><span class="dim">分钟</span></div>
       </div>
       <ul class="g-list">
         <li><b>审查</b>：四份需求文档写完审一次整套（这一步不分人工、自动，都不问你），一个 change 的任务全部做完审一次，都由脚本调 claude -p 自动审查、核验、修改和复验，没有 P1、P2 才做下一步，不设次数上限。审出问题没处理就收工的，收工检查催它处理（不是再审一遍），同一个状态最多催 3 次，然后写进全自动报告。</li>
@@ -959,7 +964,7 @@
   fNum('contextPercent', '到百分之多少', 30, 95); fNum('contextLimitTokens', '上下文上限', 50000, 10000000, true);
   fSel('usageReport', '使用情况上报', ['on', 'off']); fSel('perfReport', '耗时异常上报', ['on', 'local', 'off']);
   fSel('contextAction', '快满时怎么办', ['compact', 'remind', 'ask', 'off']); fSel('commitMode', '提交方式', ['ask', 'auto', 'off']);
-  fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800); fNum('askTimeoutMin', '询问没人回等多久', 1, 120, true);
+  fNum('reviewBudgetSeconds', '审查预期用时', 10, 1800); fNum('askTimeoutMin', '询问没人回等多久', 1, 120, true); fNum('askTimeoutExploreMin', '探索阶段询问没人回等多久', 1, 120, true);
   fSel('lessons', '经验规则', ['on', 'collect', 'off']); fNum('lessonThreshold', '出现几次变成规则', 1, 5); fNum('lessonMaxPerGroup', '一种文件类型最多几条', 3, 30); fNum('lessonMaxChars', '一条规则最多多少字', 40, 300);
   fSel('lessonPromote', '升成用户级', ['ask', 'auto']); fSel('autoMemory', 'Claude Code 自带的自动记忆', ['off', 'on']);
   fBool('lessonAuto', '审查报的问题自动收'); fBool('dbcrudDaemon', '查库的后台执行器'); fNum('dbcrudDaemonIdleMinutes', '后台执行器多久没人用就退出', 1, 60);

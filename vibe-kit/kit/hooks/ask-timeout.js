@@ -13,7 +13,10 @@
  *     关服务（devserver.js stop）也按"不允许"：自己起的服务用户说关才关（用户 2026-11-17 定的）。
  *   ExitPlanMode 不管。
  * 任何时候都等（2026-11-18 起，权限确认框也是，仓库主人选的"什么时候都按允许"）。只读配置和流程状态文件，不调 git。
- * 等多久：配置页"询问没人回，等多久替你做主"（askTimeoutMin，默认 10 分钟，0 是一直等）。
+ * 等多久：配置页"询问没人回，等多久替你做主"（askTimeoutMin，默认 10 分钟，0 是一直等）；大任务还在探索的时候按"探索阶段等多久"
+ *   （askTimeoutExploreMin，默认 60 分钟；问题表第 94 条，仓库主人 2026-11-20 定的"写需求和实施还是 10 分钟，需求探索讨论阶段 1 小时"）。
+ * 到点替用户定的每一件（提问框、开工那一问、确认框放行和没放行的）记进 .vibe/auto-decisions.json（lib/auto-decisions.js，第 94 条）：
+ *   提问框让模型自己定的，交代里给它登记命令（tools/decided.js，带编号），定了什么由它补上；大任务全部做完时收工钩子一次列给用户。
  *
  * 实测（dev/probes/cc-ask-timeout.js，2.1.120、2.1.259、2.1.289、2.1.316）：框先显示、钩子同时被调；钩子给出决定时框自己收起、
  * 会话接着走；用户先答了，钩子的进程不会被结束，后到的决定不起作用。所以等的时候隔几秒看一眼会话记录：这个框有结果了、
@@ -93,12 +96,29 @@ function settled(j, since, opts) {
   return false;
 }
 
-/** 等多久（毫秒）。0 是不等、不管。测试用 VIBE_KIT_ASK_TIMEOUT_MS、VIBE_KIT_ASK_POLL_MS 顶替 */
-function waitOf(cfg) {
-  const over = process.env.VIBE_KIT_ASK_TIMEOUT_MS;
+/**
+ * 等多久（毫秒）。0 是不等、不管。explore 为真（大任务还在探索）按 askTimeoutExploreMin，别的按 askTimeoutMin（第 94 条）。
+ * 测试用 VIBE_KIT_ASK_TIMEOUT_MS（探索时 VIBE_KIT_ASK_EXPLORE_TIMEOUT_MS）、VIBE_KIT_ASK_POLL_MS 顶替
+ */
+function waitOf(cfg, explore) {
+  const over = explore && process.env.VIBE_KIT_ASK_EXPLORE_TIMEOUT_MS !== undefined && process.env.VIBE_KIT_ASK_EXPLORE_TIMEOUT_MS !== '' ? process.env.VIBE_KIT_ASK_EXPLORE_TIMEOUT_MS : process.env.VIBE_KIT_ASK_TIMEOUT_MS;
   if (over !== undefined && over !== '') return Math.max(0, Number(over) || 0);
-  const m = Number(cfg && cfg.askTimeoutMin);
+  const m = Number(explore && cfg && cfg.askTimeoutExploreMin !== undefined ? cfg.askTimeoutExploreMin : cfg && cfg.askTimeoutMin);
   return m > 0 ? m * 60000 : 0;
+}
+/**
+ * 现在是不是需求探索阶段：这个会话的大任务走到 explore（"还没定的"没清空、一个 change 都没开始）；
+ * 没有大任务的（plan.md 还没建）：在流程里、还没碰过哪个变更、不在做任务。只读流程状态和 plan.md、探索记录，不调 git。判断不了按不是
+ */
+function exploring(j) {
+  try {
+    const S = require('../lib/session');
+    const B = require('../lib/big-task');
+    const task = B.forSession(j);
+    if (task) return B.phaseFor(j, task).phase === 'explore';
+    const st = S.flowState(j) || {};
+    return !!st.on && st.stage !== 'apply' && !S.flowChanges(j).length;
+  } catch (e) { return false; }
 }
 const pollOf = () => { const p = Number(process.env.VIBE_KIT_ASK_POLL_MS); return p > 0 ? p : POLL_MS; };
 const waitedText = (ms) => (ms >= 60000 ? Math.round(ms / 60000) + ' 分钟' : Math.max(1, Math.round(ms / 1000)) + ' 秒');
@@ -110,6 +130,7 @@ function decide(j, waitMs, found) {
   let report = null;
   try { report = require('../lib/report.js'); } catch (e) { report = null; }
   const note = (item) => { try { if (report) report.note(j, item); } catch (e) { /* 记不了不影响 */ } };
+  const rec = (item) => recordDecision(j, item);
   const S = require('../lib/session');
   if (tool === 'AskUserQuestion') {
     const qs = Array.isArray(j.tool_input && j.tool_input.questions) ? j.tool_input.questions : [];
@@ -121,6 +142,7 @@ function decide(j, waitMs, found) {
     if (applyAsk) {
       // 对不上（会话记录里没找到这一问、问题里没点名唯一一个变更、需求还没整套审过）：不替用户开工，停下等用户
       S.hookLog('ask-timeout 开工那一问等了 ' + waited + '没人答，对不上开工的条件，没替用户开工：' + clip(qs.map((q) => q && q.question).join('；'), 80));
+      rec({ kind: 'apply', title: qs.map((q) => q && q.question).join('；'), outcome: '等了 ' + waited + '没人答，对不上开工的条件，没替你开工，停下等你' });
       return answer({ behavior: 'deny', message: '[vibe-kit] 开工那一问发出 ' + waited + '没人答。没替用户开工：问题里要点名一个变更、它的需求要整套审过，会话记录里要找得到这一问，有一样对不上。不要自己开工，停在这里，写进最后的交代，等用户回来说开工。' });
     }
     for (const q of qs.slice(0, 4)) note({ kind: 'ask', title: clip(q && q.question, 160), detail: ((q && q.options) || []).map((o) => clip(o && o.label, 40)).join(' / ') + '；等了 ' + waited + '没人答，让它自己定了' });
@@ -129,37 +151,57 @@ function decide(j, waitMs, found) {
     const how = !st.on ? '最后交代时说清你替用户定了什么、为什么，接着做。'
       : st.stage !== 'apply' ? '定的内容写进需求文档的，在写进去的那句话后面标"（用户没回，按推荐定的）"；还没建变更、在探索的，写进探索记录"定了的"一节，带同样的标记；建了变更的，再记一条进它的 revisions.md（起因：用户没回，按推荐定的）。最后交代时把这几处列出来，让用户回来改。接着做。'
         : '把问的是什么、你怎么定的记进 revisions.md（起因：自动模式决定，用户没回），写进最后的交代，接着做。';
-    return answer({ behavior: 'deny', message: head + how + HARD + '同一个问题不要再问一遍。' });
+    return answer({ behavior: 'deny', message: head + how + HARD + '同一个问题不要再问一遍。' + askRecords(j, qs.slice(0, 4), waited) });
   }
   const cmd = String((j.tool_input && j.tool_input.command) || '');
   const what = tool + (cmd ? '：' + clip(cmd, 120) : '');
   if (/^(Bash|PowerShell)$/.test(tool) && DATA_TOOL.test(cmd)) {
     note({ kind: 'hand', title: '查库、redis 的命令要你确认、没人点，没让它跑：' + clip(cmd, 120), detail: '框挂久了，工具认不出你在不在' });
+    rec({ kind: 'deny', title: what, outcome: '没放行，留给你：查库、redis 的命令框挂久了，工具认不出你在不在' });
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是查库、redis 的命令，按不允许收掉：' + clip(cmd, 80));
     return answer({ behavior: 'deny', message: '[vibe-kit] 这条查库、redis 的命令弹了确认框，' + waited + '没人点，不替用户放行。换一个不弹框的写法（不和 cd 串在一起，路径写全）重跑一次；还弹就把这一步留给用户，写进最后的交代，接着做别的。' });
   }
   // 关服务要用户点头（用户 2026-11-17 定的）：没人点就留着
   if (/^(Bash|PowerShell)$/.test(tool) && /devserver(?:\.js)?["']?\s+stop\b/i.test(cmd)) {
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是关服务，按不允许收掉：' + clip(cmd, 80));
+    rec({ kind: 'deny', title: what, outcome: '没放行：关服务要你点头，服务留着' });
     return answer({ behavior: 'deny', message: '[vibe-kit] 关服务的确认框 ' + waited + '没人点，服务留着。不要再试，最后的交代里写一句哪些服务在跑、端口是多少，接着做别的。' });
   }
   // 还原不了的删、丢改动的命令（复审 R7：和提问框那边"还原不了的删留给用户"一个口径）：按不允许，留给用户
   if (/^(Bash|PowerShell)$/.test(tool) && DESTRUCTIVE.test(cmd)) {
     note({ kind: 'hand', title: '要你确认的命令没人点，没让它跑：' + clip(cmd, 120), detail: '删东西、丢改动还原不了，要你自己来' });
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，是还原不了的删除，按不允许收掉：' + clip(cmd, 80));
+    rec({ kind: 'deny', title: what, outcome: '没放行，留给你：删东西、丢改动还原不了' });
     return answer({ behavior: 'deny', message: '[vibe-kit] 这个确认框发出 ' + waited + '没人点。命令会删东西或丢掉改动，还原不了，留给用户：不要再试、不要换个写法删，写进最后的交代，接着做别的。' });
   }
   if (/^(Bash|PowerShell)$/.test(tool) && PUSH_LIKE.test(cmd)) {
     note({ kind: 'hand', title: '要你确认的命令没人点，没让它跑：' + clip(cmd, 120), detail: '推送、发布要你自己来' });
     S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，像推送、发布，按不允许收掉：' + clip(cmd, 80));
+    rec({ kind: 'deny', title: what, outcome: '没放行，留给你：推送、发布要你自己来' });
     return answer({ behavior: 'deny', message: '[vibe-kit] 这个确认框发出 ' + waited + '没人点。命令里有推送或发布，留给用户：不要再试，写进最后的交代，接着做别的。' });
   }
   note({ kind: 'bypass', title: '权限确认框没人点，到点替你点了允许：' + what, detail: '等了 ' + waited });
+  rec({ kind: 'allow', title: what, outcome: '等了 ' + waited + '没人点，替你点了允许' });
   S.hookLog('ask-timeout 确认框等了 ' + waited + '没人点，按允许收掉：' + clip(what, 80));
   return answer({ behavior: 'allow' });
 }
 
 const HARD = '要用户本人点头的事不能自己定（推送、归档、发布、还原不了的删）：那一步留给用户，写进最后的交代，接着做别的；没有别的可做就收工。';
+const DECIDED = 'node "' + path.join(__dirname, '..', 'tools', 'decided.js').split(path.sep).join('/') + '"';
+
+/** 记一件到点替用户定的事（lib/auto-decisions.js，问题表第 94 条）。记不了返回 null，不影响收框 */
+function recordDecision(j, item) {
+  try { return require('../lib/auto-decisions').record(j, item); } catch (e) { try { require('../lib/session').hookLog('ask-timeout 记替用户定的事没记上：' + ((e && e.message) || e)); } catch (err) { /* 记不了就算了 */ } return null; }
+}
+/** 让模型自己定的几问：每一问记一件，返回交代里要加的登记命令（一问一条，带编号）；一件都没记上返回 '' */
+function askRecords(j, qs, waited) {
+  const recs = qs.map((q) => ({ q, r: recordDecision(j, { kind: 'ask', title: (q && q.question) || '', options: ((q && q.options) || []).map((o) => clip(o && o.label, 40)).join(' / '), outcome: '等了 ' + waited + '没人答，让它自己定' }) })).filter((x) => x.r);
+  if (!recs.length) return '';
+  const one = (x) => DECIDED + ' --file "' + x.r.file.split(path.sep).join('/') + '" --id ' + x.r.id + ' --text "<这一问你定了什么>" --why "<理由>"';
+  const lead = '定了以后登记一句，大任务全部做完时套件一起列给用户看：';
+  if (recs.length === 1) return lead + one(recs[0]) + '。';
+  return '定了以后每一问登记一句，大任务全部做完时套件一起列给用户看：' + recs.map((x) => '"' + clip(x.q && x.q.question, 30) + '"：' + one(x)).join('；') + '。';
+}
 
 /**
  * 开工那一问到点：替用户开工。按问题里点名的变更登记开工范围（和用户选了"开始实施"走同一个 grant），进做任务那一段，自动开着。
@@ -185,6 +227,7 @@ function startApply(j, qs, waited, found) {
   try { g = require('../lib/apply-scope').grant(j, '开始实施 ' + named[0].name, context, {}); } catch (e) { g = { ok: false, reason: (e && e.message) || String(e) }; }
   if (!g || !g.ok) {
     S.hookLog('ask-timeout 开工那一问等了 ' + waited + '没人答，想替用户开工没认下来：' + clip(g && g.reason, 80));
+    recordDecision(j, { kind: 'apply', title: context, outcome: '等了 ' + waited + '没人答，想按"开始实施"替你开工，开工没认下来（' + clip(g && g.reason, 120) + '），停下等你' });
     return answer({ behavior: 'deny', message: '[vibe-kit] 开工那一问发出 ' + waited + '没人答，想按"开始实施"替用户开工，开工没认下来：' + clip(g && g.reason, 200) + '。停在这里，写进最后的交代，等用户回来说开工。' });
   }
   S.setFlow(j, true, '开工那一问没人答，到点开工', 'apply');
@@ -192,8 +235,10 @@ function startApply(j, qs, waited, found) {
   const names = (g.targets || []).join('、');
   try { require('../lib/report.js').note(j, { kind: 'decision', title: '开工那一问没人答，到点替你开工了：' + clip(names, 120), detail: '等了 ' + waited }); } catch (e) { /* 记不了不影响 */ }
   S.hookLog('ask-timeout 开工那一问等了 ' + waited + '没人答，到点开工：' + clip(names, 80));
-  // 同一个框里还有别的问题（复审 R2）：那几问照普通的到点规矩自己定
-  const rest = qs.length > 1 ? '这个提问框里别的问题你自己定：选你推荐的那一项，记进 revisions.md（起因：自动模式决定，用户没回）。' : '';
+  const isApplyQ = (q) => ((q && q.options) || []).some((o) => S.autoAnswerOf(o && o.label, q && q.question) === 'on');
+  recordDecision(j, { kind: 'apply', title: qs.filter(isApplyQ).map((q) => q && q.question).join('；') || context, outcome: '等了 ' + waited + '没人答，到点替你开工了', chose: '开始实施 ' + names });
+  // 同一个框里还有别的问题（复审 R2）：那几问照普通的到点规矩自己定，也记下来、让它登记定了什么（第 94 条）
+  const rest = qs.length > 1 ? '这个提问框里别的问题你自己定：选你推荐的那一项，记进 revisions.md（起因：自动模式决定，用户没回）。' + askRecords(j, qs.filter((q) => !isApplyQ(q)).slice(0, 4), waited) : '';
   return answer({ behavior: 'deny', message: '[vibe-kit] 开工那一问发出 ' + waited + '没人答，按"开始实施"替用户开工了（' + names + '）：接着做任务，照自动实施的规矩做完、审查、改、复审，同一个问题不要再问。' + rest + '最后交代时写一句"开工那一问你没回，到点开工了"。' });
 }
 
@@ -210,10 +255,10 @@ async function handle(j, opts) {
   const tool = String((j && j.tool_name) || '');
   if (!tool || NOT_OURS.test(tool)) return null;
   const S = require('../lib/session');
-  // 任何时候都等（2026-11-18 起）：只读配置，不算流程状态、不调 git（每个确认框都起这个进程）
+  // 任何时候都等（2026-11-18 起）：读配置；等多久要看是不是在探索（第 94 条），只读流程状态和 plan.md、探索记录，不调 git（每个确认框都起这个进程）
   let cfg = null;
   try { cfg = S.readConfig(j); } catch (e) { return null; }
-  const waitMs = waitOf(cfg);
+  const waitMs = waitOf(cfg, exploring(j));
   if (!(waitMs > 0)) return null;
   const sleep = (opts && opts.sleep) || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const started = Date.now();
