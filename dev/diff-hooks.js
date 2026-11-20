@@ -97,6 +97,7 @@ const V0003 = '20261112.0003'; // 第 82 条：写进代码的文字里不带审
 const V202611131001 = '20261113.1001'; // 第 88、89 条和议题 #458—#467：拦"没说要走 OpenSpec"时写明选项里带"探索"就认
 const V202611181047 = '20261118.1047'; // 11-17 这批：起服务不拦、关服务要问、收工提示写明审查自测
 const V202611190611 = '20261119.0611'; // 11-18 这批：实施一律自动（说开工就开、需求审过问开始实施）、提问框到点
+const V202611210243 = '20261121.0243'; // 第 92—94 条：探索记录多角度讨论、复用和简化、到点替你定的事
 const V1523 = '20261112.1523'; // 第 85—87 条：需求一次写到 tasks、写完强制审修，审过问怎么实施；/vk-auto 删了
 // config：跑这一个输入之前先改的开关（两版都改），跑完改回去
 // since 还可以写成 { from: 版本, to: 版本 }：这个毛病是 from 那一版才带进来的，to 那一版改回去了（to 不写就是这一版）——
@@ -532,8 +533,8 @@ for (const c of cases) {
   if (c.name === '收工：说了没验证') { c.expect = /本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测（问题里写明\W+审查\W+自测/; c.since = V202611181047; }
   if (c.name === '1013：多变更提问绑定开工目标') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-1013'; H.inFlow(kit, 'sess-diff-1013', [], true, 'plan'); return r; }; c.expect = /开始 apply：全自动模式开着/; c.since = V202611190611; }
   if (c.name === '开口：让它停') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-halt'; H.inFlow(kit, r.j.session_id, [path.join(r.proj, 'openspec/changes/add-export')], true, 'plan'); return r; }; c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*四份写完强制审一次整套，不问用户[\s\S]*开始实施\W{0,6}先不实施\W{0,4}；实施一律自动/; c.since = V202611190611; }
-  // 第 92 条（下一版改的）：写需求那一段的规矩里加了"大任务的第一个提案之前先跑一轮多角度讨论"
-  if (c.name === '开口：让它停') { c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*第一个提案之前先跑一轮多角度讨论[\s\S]*run --mode explore[\s\S]*四份写完强制审一次整套，不问用户/; c.since = NEXT; }
+  // 第 92 条（20261121.0243 改的）：写需求那一段的规矩里加了"大任务的第一个提案之前先跑一轮多角度讨论"
+  if (c.name === '开口：让它停') { c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*第一个提案之前先跑一轮多角度讨论[\s\S]*run --mode explore[\s\S]*四份写完强制审一次整套，不问用户/; c.since = V202611210243; }
 }
 
 let same = 0;
