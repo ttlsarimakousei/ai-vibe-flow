@@ -62,7 +62,9 @@ let stuck = null;
   const fp1 = P.fingerprint(d, 'change');
   const all = prep(proj, 'c1', { all: true });
   H.ok('--all：照旧按这个仓库的全部改动审', all.status === 'prepared' && labels(all).includes('src/other/B.java') && labels(all).includes('src/duty/A.java'), [all.status, all.reason, labels(all)]);
-  // 这一轮（按全部改动审的）审出两条：一条在别人的文件上，一条在这个 change 的文件上
+  // 这一轮（按全部改动审的）审出两条：一条在别人的文件上，一条在这个 change 的文件上。
+  // 2026-11-20 第 93 条起第一次审代码多一个"复用和简化"角度：先交它（没有问题），最后交的那个角度拿到这一轮的结果
+  if ((all.lenses || []).includes('复用和简化')) R.submit(all.id, '复用和简化', answer([]));
   const done = R.submit(all.id, all.lenses[0], answer([{ severity: 'P1', file: 'src/other/B.java', line: 1, problem: '别的模块里 y 没有初始化', evidence: '调用时是 0' }, { severity: 'P2', file: 'src/duty/A.java', line: 1, problem: '值班的 x 没有校验范围', evidence: '传负数会存进去' }]));
   H.ok('两条都入了账', done.ok && done.blocking === 2, done);
   H.ok('下一步里写着注释不写审查编号', /不写审查编号/.test(String(done.next)), done.next);

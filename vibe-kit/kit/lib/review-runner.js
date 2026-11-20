@@ -327,7 +327,11 @@ function nextText(result) {
 function nextBody(result) {
   if (result.noChange) return '文件和上一轮审过的一样，这次不用审' + (result.blocking ? '；上一轮的 ' + result.blocking + ' 条 P1、P2 还没处理' : '') + '。用户要整份再审一遍，加 --full。';
   if (!result.issues.length) return '没有问题，这个点过了。';
-  if (!result.blocking) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
+  if (!result.blocking) {
+    const clean = result.issues.filter(Sc.isCleanup).length;
+    if (!clean) return '只有 P3，这个点过了，不用再审。顺手能改的改了用 review.js resolve 登记 fixed，不想改的不用管。';
+    return '只有 P3，这个点过了。其中 ' + clean + ' 条是"复用和简化"的清理建议（kind 清理）：改不改你定，只改不改变行为的；改了就跑 review.js run 加 --decisions <处理明细>（和这次一样的 --change、--mode、--point、--project；fixed 的写清改了什么，不改的写 rejected 或 accepted 和理由），先登记再复审改过的地方；一条都不改的不用管。别的 P3 顺手能改的改了照样登记 fixed。';
+  }
   return '有 ' + result.blocking + ' 条 P1、P2：逐条核实，成立的改，不成立的写依据（rejected）；提案、规格里被要求补的实现细节写进 design，不写进提案、规格。写好处理明细，跑 review.js run 加 --decisions <处理明细>（和这次一样的 --change、--mode、--point、--project）：先登记再复审，一条命令，下一轮只审改过的地方。' + (result.mode === 'code' ? '改代码时注释、日志只写业务上的原因，不写审查编号（r1 这类）、第几轮审查、工具的名字：同事看不懂。' : '');
 }
 const MODE_NAME = { proposal: '提案', code: '代码' };
@@ -460,6 +464,9 @@ function prepare(opts) {
     // 一个请求放不下：分批，每批一个请求，一个人看全几个角度。放得下就是一批，每个角度都看全部材料
     const packs = !plan.scoped && !noChange ? Facts.packsOf(material.items) : [];
     if (packs.length > 1) list = packs.map((pack, i) => ({ name: '第' + (i + 1) + '批', text: '材料太多分了 ' + packs.length + ' 批，这是第 ' + (i + 1) + ' 批，你一个人看全所有角度，只报这一批里的问题。' }));
+    // 第 93 条：OpenSpec 变更的任务全部做完后（审查点 change）第一次审代码，多一个"复用和简化"角度，单独一个请求。
+    // 复审、交叉审、材料分批（一个请求看不全）、不走 OpenSpec 的不加
+    if (opts.mode === 'code' && change && opts.point === 'change' && !prevRound && !plan.scoped && !noChange && packs.length <= 1 && !policy.isCross(opts.point)) list = list.concat([Sc.CLEANUP_LENS]);
     // 复审放不下也分批（#425：以前复审不分，147 万字一个请求，想到 128000 token 上限也没交结论）
     const scopedPacks = plan.scoped && !noChange ? Sc.batchesOf(plan.items, Facts.REQUEST_CHARS) : [];
     if (scopedPacks.length > 1) list = scopedPacks.map((items, i) => ({ name: '复审第' + (i + 1) + '批', items, first: i === 0, text: '改动太多分了 ' + scopedPacks.length + ' 批，这是第 ' + (i + 1) + ' 批：只核对这一批里的文件和写它们的"上一轮的问题"，只报这一批里的问题。' }));
@@ -716,7 +723,8 @@ function finish(id) {
   const labels = Object.keys(plan.currents || {});
   // 审查者写的文件名对到材料的名字：相对项目的、带行号的也认（#420）
   const labelOf = (f) => Sc.matchLabel(f, plan.currents || {});
-  let issues = Sc.mergeIssues(groups.map((g) => g.issues.map((x) => Object.assign({}, x, { file: labelOf(x.file) }))));
+  // "复用和简化"角度报的一律按 P3、kind 清理（第 93 条）：模型写成 P2 也不挡通过
+  let issues = Sc.mergeIssues(groups.map((g, gi) => g.issues.map((x) => Object.assign({}, x, { file: labelOf(x.file) }, job.lenses[gi] === Sc.CLEANUP_LENS.name ? { severity: 'P3', kind: '清理', scope: 'in' } : {}))));
   // 需求和探索记录里没有的（scope: out）不算问题：不挡通过、不触发复审，人工核验时列给用户（第 43 条）
   const outside = issues.filter((x) => /^out$/i.test(String(x.scope || '')));
   issues = issues.filter((x) => !/^out$/i.test(String(x.scope || '')));
@@ -832,7 +840,8 @@ function resolve(opts) {
   // 改文档不用跑编译（窗口里见过：为了登记提案的修改先跑基线编译）；代码照旧要有复验证据
   if (kind === 'code' && decisions.findings.some((x) => x.action === 'fixed') && !provedIn(opts.cwd || process.cwd(), change)) throw new Error(NO_EVIDENCE);
   // 只有 P1、P2 修了才要复审；P3 顺手改了不再审（问题表第 37 条）
-  const refix = decisions.findings.some((x) => x.action === 'fixed' && !/^P3$/i.test(String((report.issues.find((i) => i.id === x.id) || {}).severity || '')));
+  // P3 修了不复审；"复用和简化"的清理建议（kind 清理）例外：改了代码、要复审改过的地方（第 93 条，仓库主人选的"改了进复审"）
+  const refix = decisions.findings.some((x) => { if (x.action !== 'fixed') return false; const iss = report.issues.find((i) => i.id === x.id) || {}; return !/^P3$/i.test(String(iss.severity || '')) || Sc.isCleanup(iss); });
   const noted = decisions.findings.map((x) => ({ id: x.id, action: x.action, reason: R.clip(x.reason, 1000) }));
   // 校验都过了才记：不然登记失败了，决定却已经进了下一轮的"已处理"和审查记录
   const remember = () => { if (r.reportFile) { try { Sc.noteDecisions(store, r.reportFile, noted); Sc.logDecisions(path.dirname(r.reportFile), opts.point || kind, noted); } catch (e) { /* 记不了不影响登记 */ } } };

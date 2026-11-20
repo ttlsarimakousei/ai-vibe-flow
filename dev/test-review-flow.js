@@ -39,7 +39,8 @@ H.section('第一轮几个角度，交齐才入账');
 {
   const p = project();
   const r = R.prepare(opts(p));
-  H.ok('prepare 不发请求，给 3 个角度的提示', r.status === 'prepared' && r.pending.length === 3, r);
+  // 2026-11-20 第 93 条起：任务都做完、第一次审代码，3 个角度后面多一个"复用和简化"
+  H.ok('prepare 不发请求，给 3 个角度加"复用和简化"的提示', r.status === 'prepared' && r.pending.length === 4 && r.pending[3].lens === '复用和简化', r);
   H.ok('每个角度一份范围文件', fs.existsSync(r.pending[0].scope), r.pending[0]);
   const scope = H.read(r.pending[0].scope);
   H.ok('范围文件写了要审的文件、基线', /src\/a\.js/.test(scope) && /基线/.test(scope), scope);
@@ -53,8 +54,9 @@ H.section('第一轮几个角度，交齐才入账');
   const re = R.submit(r.id, r.pending[0].lens, tell(r, r.pending[0].lens));
   H.ok('同一角度交两次只算一次', re.repeat === true && !P.settled(p.dir, 'change'), re);
   const third = R.prepare(opts(p));
-  H.ok('再 prepare：已交的不重开，只给没交的', third.id === r.id && third.pending.length === 1 && third.pending[0].lens === r.pending[2].lens, third);
-  const done = R.submit(r.id, r.pending[2].lens, tell(r, r.pending[2].lens));
+  H.ok('再 prepare：已交的不重开，只给没交的', third.id === r.id && third.pending.length === 2 && third.pending[0].lens === r.pending[2].lens && third.pending[1].lens === r.pending[3].lens, third);
+  R.submit(r.id, r.pending[2].lens, tell(r, r.pending[2].lens));
+  const done = R.submit(r.id, r.pending[3].lens, tell(r, r.pending[3].lens));
   H.ok('交齐：completed，这个点过了', done.status === 'completed' && P.settled(p.dir, 'change'), done);
   H.ok('写了结果文件和审查记录，任务目录清掉', fs.existsSync(done.file) && /第 1 轮/.test(H.read(path.join(p.proj, '.vibe/reviews/c1/审查记录.md'))) && !fs.existsSync(path.join(p.proj, '.vibe/reviews/c1/job-' + r.id)));
 }
