@@ -44,9 +44,11 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | `openspec.js` | 套件自带的 OpenSpec（`kit/openspec/`，2026-10-17 集成）：能不能用（Node 版本）、把命令里的 `openspec` 改成调用自带的那份、项目没初始化时 `init --tools none`、安装时生成用户级 `/opsx:*` 命令和技能 |
 | `feedback.js` | 问题反馈的记录（`~/.claude/vibe-kit/feedback/`），拦截编号和通行证，拦得最多的规矩、放行记录、开关改动记录 |
 | `report.js` | 全自动模式的报告 |
+| `auto-decisions.js` | 到点替用户定的事（2026-11-20，问题表第 94 条）：`ask-timeout` 收掉提问框、确认框时记一件进启动目录的 `.vibe/auto-decisions.json`（属于哪个大任务、哪些变更，还是不走 OpenSpec 的）；提问框它定了什么由 `tools/decided.js` 补；`verify-gate` 收工时 `takeDue`：大任务 `phaseOf` 到 selftest 以后、变更任务勾完、不走 OpenSpec 的随时，列过记 shown，清单写 `.vibe/reports/替你定的事-<时间>.md` |
+| `explore-panel.js` | 探索记录的多角度讨论（2026-11-20，第 92 条）：`review.js run --mode explore --task <大任务>`，三个角度各一个后台 `claude -p`（`review-runner.askClaude`），结果去重后追加进"还没定的"，记到 `state/big-task.json` 这个大任务的 `panel`；`guard-spec` 新建第一个提案时用 `gateIssue` 查。一轮的材料和结果在 `<项目>/.vibe/reviews/explore-<大任务>/` |
 | `lessons.js` | 经验规则：审查里反复出现的问题沉淀成 `.claude/rules/vk-lessons-*.md` |
 | `review-facts.js` | 审查材料里脚本先查好的（第 72 条）：文档点名的类、方法、表在代码里的位置，改到的方法哪里用到；一个请求放不下时分批 |
-| `review-scope.js` | 审查怎么分轮（2026-11-02，问题表第 37 条）：第一轮几个角度、后面只审修改点（和上一轮的内容比）、按阶段的提示、合并问题（只合不同角度之间的）、定过的问题历轮累计（`closed`）、审查记录。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json` |
+| `review-scope.js` | 审查怎么分轮（2026-11-02，问题表第 37 条）：第一轮几个角度（任务全部做完后第一次审代码另加 `CLEANUP_LENS`"复用和简化"，2026-11-20 第 93 条）、后面只审修改点（和上一轮的内容比）、按阶段的提示、合并问题（只合不同角度之间的）、定过的问题历轮累计（`closed`）、审查记录。上一轮存在 `.vibe/reviews/<变更>/<模式>-<点>.snapshot.json` |
 | `maven-offline.js` | devserver 起后端先离线、缺依赖只拉缺的（问题表第 35 条）：加 `-o`、从 Maven 报错里取缺的依赖、拼 `dependency:get` |
 | `outputs.js` | 代码之外的产出位置。用户说过的位置先看最后 600 KB，再看整份记录里用户说的话（#429） |
 | `spec-validate.js` | 需求文档写齐了钩子自己跑 `openspec validate --strict`（after-tool 调，2026-11-09）：内容没变不再跑，结果记在 `state/<会话>-spec-validate.json` |
