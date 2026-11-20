@@ -532,6 +532,8 @@ for (const c of cases) {
   if (c.name === '收工：说了没验证') { c.expect = /本次代码已修改。用一个提问框问，一件事一个问题：要不要审查、要不要自测（问题里写明\W+审查\W+自测/; c.since = V202611181047; }
   if (c.name === '1013：多变更提问绑定开工目标') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-1013'; H.inFlow(kit, 'sess-diff-1013', [], true, 'plan'); return r; }; c.expect = /开始 apply：全自动模式开着/; c.since = V202611190611; }
   if (c.name === '开口：让它停') { const build = c.build; c.build = (kit) => { const r = build(kit); r.j.session_id = 'sess-diff-halt'; H.inFlow(kit, r.j.session_id, [path.join(r.proj, 'openspec/changes/add-export')], true, 'plan'); return r; }; c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*四份写完强制审一次整套，不问用户[\s\S]*开始实施\W{0,6}先不实施\W{0,4}；实施一律自动/; c.since = V202611190611; }
+  // 第 92 条（下一版改的）：写需求那一段的规矩里加了"大任务的第一个提案之前先跑一轮多角度讨论"
+  if (c.name === '开口：让它停') { c.expect = /写需求这一段的规矩（照做就不会被拦）[\s\S]*第一个提案之前先跑一轮多角度讨论[\s\S]*run --mode explore[\s\S]*四份写完强制审一次整套，不问用户/; c.since = NEXT; }
 }
 
 let same = 0;

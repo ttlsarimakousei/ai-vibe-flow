@@ -55,6 +55,9 @@ function exploreFirstIssue(j, art, cfg) {
   if (!task) return '变更 ' + art.name + ' 不在 openspec/plan.md 的大任务里，也就没有探索记录。先跑 ' + tool + '，把探索结果写进 openspec/explore/<大任务名>.md（短的也行），再写提案。';
   const left = B.exploreIssues(task, art.name);
   if (left.length) return left.join('；') + '。写进探索记录再写提案，例：## change: ' + art.name + ' 这一节写目标、边界、依赖。';
+  // 探索记录要先过一轮多角度讨论（问题表第 92 条，仓库主人 2026-11-20 选的"强制一轮"）
+  let panel = ''; try { panel = require('../lib/explore-panel').gateIssue(task, art); } catch (e) { panel = ''; }
+  if (panel) return panel;
   if (!j.transcript_path) return '';
   const roots = [art.root].concat(nestedRepos(art.root));
   if (!roots.some((r) => looksLikeProject(r))) return '';

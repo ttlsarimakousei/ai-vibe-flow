@@ -36,7 +36,7 @@ function stageRules(j, stage, cfg) {
   const tool = (n) => 'node "' + path.join(KIT, 'tools', n).split(path.sep).join('/') + '"';
   const head = spec ? spec + '\n\n' : '';
   // 需求阶段没有自动模式（第 85 条，仓库主人 2026-11-12 定的，替代 10-17 的"一份一份写"）：一次写到 tasks，写完强制审修，审过问开不开始实施
-  if (stage === 'plan') return head + '写需求这一段的规矩（照做就不会被拦）：探索记录"还没定的"清空了才写；需求文档一次写到 tasks（proposal → specs → design → tasks，中间不停、不问审查），写的时候有任何疑问用提问框问，探索记录、用户的话、读过的代码和材料里没有的不写进需求；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；四份写完强制审一次整套，不问用户：' + tool('review.js') + ' run --change <变更名> --mode proposal --point tasks，成立的直接改、要用户拿主意的问用户，改到过；审过了按提交方式提交，再用提问框问开不开始实施（问题里写变更名，选项"开始实施""先不实施"；实施一律自动，不问自动还是人工）。';
+  if (stage === 'plan') return head + '写需求这一段的规矩（照做就不会被拦）：探索记录"还没定的"清空了才写；大任务的第一个提案之前先跑一轮多角度讨论：' + tool('review.js') + ' run --mode explore --task <大任务名> --project <项目>，提出的问题它写进"还没定的"，问过用户、清空了再写；需求文档一次写到 tasks（proposal → specs → design → tasks，中间不停、不问审查），写的时候有任何疑问用提问框问，探索记录、用户的话、读过的代码和材料里没有的不写进需求；design.md 要有"## 验收用例"一节；tasks.md 只写实现任务，不写测试、审查、验收任务；四份写完强制审一次整套，不问用户：' + tool('review.js') + ' run --change <变更名> --mode proposal --point tasks，成立的直接改、要用户拿主意的问用户，改到过；审过了按提交方式提交，再用提问框问开不开始实施（问题里写变更名，选项"开始实施""先不实施"；实施一律自动，不问自动还是人工）。';
   // 这个会话开着自动：开工前先存检查点（K3 M07，lib/checkpoint.js；和收工钩子共用"只送一次"的记录，不进全局约定）
   let ckpt = '';
   if (cfg && cfg.autoSwitch) { try { ckpt = require('./checkpoint').hintOnce(j, 'apply'); } catch (e) { ckpt = ''; } }

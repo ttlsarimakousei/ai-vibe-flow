@@ -89,8 +89,12 @@ H.section('新建提案要有探索记录（要定的第 5 条）');
   H.write(ex, good);
   j = session(proj, [H.tr.user('/opsx:propose c1'), read]);
   S.setFlow(j, true, '测试', 'plan');
+  // 2026-11-20 第 92 条起：写这个大任务第一个提案前，探索记录要先过一轮多角度讨论
+  const gated = H.reasonOf(write(j, file, body));
+  H.ok('探索记录写好了、还没讨论过：拦下，给了讨论的命令', /多角度讨论/.test(gated) && /--mode explore/.test(gated), gated);
+  { const BT = require(path.join(h.kit, 'lib', 'big-task.js')); const t = BT.tasks(proj).find((x) => x.changes.some((c) => c.name === 'c1')); if (t) BT.setTaskState(t, { panel: { at: Date.now(), added: 0 } }); }
   const ok = H.reasonOf(write(j, file, body));
-  H.ok('探索记录写好了：放行', !/探索|plan\.md|还没定/.test(ok), ok);
+  H.ok('探索记录写好了、讨论过了：放行', !/探索|plan\.md|还没定|多角度/.test(ok), ok);
   j = session(proj, [H.tr.user('加个导出'), read]);
   H.ok('不在流程里、用户没说：拦下', /用户没说要走 OpenSpec/.test(H.reasonOf(write(j, file, body))));
 }
