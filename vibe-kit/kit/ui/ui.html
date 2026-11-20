@@ -627,7 +627,7 @@
             <li>需求审过那一问（开始实施 / 先不实施）：问题里点了变更名、需求整套审过的，到点替你开工，自动实施；对不上就停着等你。</li>
             <li>要你本人点头的事不算：推送、归档、发布、还原不了的删，到点也留给你。</li>
             <li>Claude Code 自己的权限确认框：到点按允许（开着自动时记进全自动报告"放行的检查"）；命令里有推送、发布，是查库、redis 的命令、关服务，或者是还原不了的删（rm -rf、git reset --hard、Remove-Item -Recurse 这类），按不允许，留给你。</li>
-            <li>到点替你定的每一件（提问框它自己定的、开工那一问、确认框放行和没放行的）记进启动 Claude 那个目录的 <code>.vibe/auto-decisions.json</code>；提问框它定了什么由它登记一句。什么时候列给你：属于大任务的，表里的变更任务都做完时；不在大任务里的变更，那个变更做完时；不走 OpenSpec 的，它停下来时。中间停下不列，列过的不再列，清单同时写进 <code>.vibe/reports/替你定的事-&lt;时间&gt;.md</code>。</li>
+            <li>到点替你定的每一件（提问框它自己定的、开工那一问、确认框放行和没放行的）记进启动 Claude 那个目录的 <code>.vibe/auto-decisions.json</code>；提问框它定了什么由它登记一句。什么时候列给你：属于大任务的，表里的变更任务都做完时；不在大任务里的变更，那个变更做完时；不走 OpenSpec 的，它停下来时。中间停下不列，列过的不再列，清单同时写进 <code>.vibe/reports/替你定的事-&lt;时间&gt;.md</code>，收工时直接显示一行告诉你几件、清单在哪。</li>
             <li>实测 Claude Code 2.1.120、2.1.259、2.1.289、2.1.316 都能在框显示以后替你收掉。</li>
           </ul></details></div>
         <div class="ctl"><input type="number" id="k_askTimeoutMin" min="0" max="120" step="1"><span class="dim">分钟</span></div>

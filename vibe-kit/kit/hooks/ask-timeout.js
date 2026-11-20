@@ -114,10 +114,12 @@ function exploring(j) {
   try {
     const S = require('../lib/session');
     const B = require('../lib/big-task');
+    // 不在流程里的会话不算（复审 R1：forSession 会兜底认上目录里唯一一个没做完的大任务，别的窗口在探索，这个窗口做普通的活也按 60 分钟等）
+    const st = S.flowState(j) || {};
+    if (!st.on) return false;
     const task = B.forSession(j);
     if (task) return B.phaseFor(j, task).phase === 'explore';
-    const st = S.flowState(j) || {};
-    return !!st.on && st.stage !== 'apply' && !S.flowChanges(j).length;
+    return st.stage !== 'apply' && !S.flowChanges(j).length;
   } catch (e) { return false; }
 }
 const pollOf = () => { const p = Number(process.env.VIBE_KIT_ASK_POLL_MS); return p > 0 ? p : POLL_MS; };

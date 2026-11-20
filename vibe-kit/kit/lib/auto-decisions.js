@@ -9,7 +9,8 @@
  * 什么时候列给用户（仓库主人选的"大任务全部做完时"，中间停下不列）：
  *   属于大任务的：plan.md 表里的变更任务都做完了（big-task.phaseOf 到了 selftest、verify、archive、done）
  *   不在哪个大任务里的变更：记的时候在做的变更，任务都勾完了、或者归档了（目录不在了）
- *   不走 OpenSpec 的：它停下来的那次收工就列（Claude 定的：没有"任务"可等）
+ *   不走 OpenSpec 的（会话不在流程里）：记它的那个会话停下来的那次收工就列（Claude 定的：没有"任务"可等）
+ *   在流程里、记的时候还没有大任务和变更的（探索刚开始）：到时候按记它的会话再认（复审 R3）
  * 收工钩子（verify-gate）别的事都了了时取一次（takeDue）：接在全自动报告后面，或者单独交给模型照抄进最后的交代；
  * 列过的记 shown，不再列。同时写一份 .vibe/reports/替你定的事-<时间>.md。
  * 只读写这个文件和报告目录，不调 git。出错的地方由调用方 try 住（钩子出错放行）。
@@ -38,6 +39,15 @@ function read(file) {
     return { next: Number(d.next) || 1, items: Array.isArray(d.items) ? d.items : [] };
   } catch (e) { return { next: 1, items: [] }; }
 }
+/**
+ * 读改写一次只让一个进程做（复审 R2：几个框同时到点，几个 ask-timeout 进程同时记，后写的盖掉先写的、编号重复）。
+ * 锁在记录文件旁边，5 秒拿不到照旧做（和 lessons.js 一样）
+ */
+function withLock(file, fn) {
+  let lock = null;
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); lock = require('./state-store').acquire(file + '.lock', { waitMs: 5000 }); } catch (e) { lock = null; }
+  try { return fn(); } finally { if (lock) lock.release(); }
+}
 function write(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = file + '.' + process.pid + '.tmp';
@@ -46,20 +56,25 @@ function write(file, data) {
   try { require('./session').ensureVibeIgnored(file); } catch (e) { /* 加不上不影响 */ }
 }
 
-/** 记的时候在做什么：属于哪个大任务（task、osDir），不在大任务里的在做哪些变更（dirs）；都没有是不走 OpenSpec 的 */
+/** 这个会话在做的变更目录（流程里动过的） */
+function flowDirs(j) {
+  const S = require('./session');
+  try { const keys = S.flowChanges(j); return S.allChanges(S.sessionHome(j)).filter((c) => keys.includes(S.normKey(c.dir))).map((c) => c.dir); } catch (e) { return []; }
+}
+/**
+ * 记的时候在做什么。不在流程里的会话是不走 OpenSpec 的（plain），不去认目录里碰巧只有一个的大任务（复审 R1：big-task.forSession 的兜底会认上它）。
+ * 在流程里：属于哪个大任务（task、osDir）；不在大任务里的在做哪些变更（change、dirs）；都还没有的（探索刚开始、plan.md 还没建）记成 flow，到时候按会话再认
+ */
 function contextOf(j) {
   const S = require('./session');
+  let on = false;
+  try { on = !!S.flowState(j).on; } catch (e) { on = false; }
+  if (!on) return { group: 'plain', task: '', osDir: '', dirs: [] };
   let task = null;
   try { task = require('./big-task').forSession(j); } catch (e) { task = null; }
   if (task) return { group: 'task', task: task.name, osDir: S.normKey(task.osDir), dirs: [] };
-  let dirs = [];
-  try {
-    if (S.flowState(j).on) {
-      const keys = S.flowChanges(j);
-      dirs = S.allChanges(S.sessionHome(j)).filter((c) => keys.includes(S.normKey(c.dir))).map((c) => c.dir);
-    }
-  } catch (e) { dirs = []; }
-  return dirs.length ? { group: 'change', task: '', osDir: '', dirs } : { group: 'plain', task: '', osDir: '', dirs: [] };
+  const dirs = flowDirs(j);
+  return dirs.length ? { group: 'change', task: '', osDir: '', dirs } : { group: 'flow', task: '', osDir: '', dirs: [] };
 }
 
 /**
@@ -71,32 +86,36 @@ function record(j, item) {
   const ctx = contextOf(j);
   let redact = (s) => s;
   try { redact = require('./feedback').redact; } catch (e) { /* 老版本没有 */ }
-  const d = read(file);
-  const id = d.next;
-  d.items.push(Object.assign({
-    id, at: Date.now(), session: String((j && j.session_id) || ''), kind: item.kind,
-    title: clip(redact(item.title), 300), options: clip(item.options, 300), outcome: clip(item.outcome, 200),
-    chose: clip(redact(item.chose || ''), 300), why: '', shown: 0,
-  }, ctx));
-  d.next = id + 1;
-  // 攒多了：列过的旧条目先丢
-  while (d.items.length > MAX_ITEMS) { const i = d.items.findIndex((x) => x.shown); d.items.splice(i >= 0 ? i : 0, 1); }
-  write(file, d);
-  return { id, file };
+  return withLock(file, () => {
+    const d = read(file);
+    const id = d.next;
+    d.items.push(Object.assign({
+      id, at: Date.now(), session: String((j && j.session_id) || ''), kind: item.kind,
+      title: clip(redact(item.title), 300), options: clip(item.options, 300), outcome: clip(item.outcome, 200),
+      chose: clip(redact(item.chose || ''), 300), why: '', shown: 0,
+    }, ctx));
+    d.next = id + 1;
+    // 攒多了：列过的旧条目先丢
+    while (d.items.length > MAX_ITEMS) { const i = d.items.findIndex((x) => x.shown); d.items.splice(i >= 0 ? i : 0, 1); }
+    write(file, d);
+    return { id, file };
+  });
 }
 
 /** 模型补上自己定了什么（tools/decided.js）。返回 { ok, id, reason } */
 function fill(file, id, chose, why) {
-  const d = read(file);
-  const it = d.items.find((x) => Number(x.id) === Number(id));
-  if (!it) return { ok: false, reason: '没有编号 ' + id + ' 这一条（' + file + '）' };
   let redact = (s) => s;
   try { redact = require('./feedback').redact; } catch (e) { /* 老版本没有 */ }
-  it.chose = clip(redact(chose), 300);
-  it.why = clip(redact(why), 300);
-  it.filledAt = Date.now();
-  write(file, d);
-  return { ok: true, id: it.id };
+  return withLock(file, () => {
+    const d = read(file);
+    const it = d.items.find((x) => Number(x.id) === Number(id));
+    if (!it) return { ok: false, reason: '没有编号 ' + id + ' 这一条（' + file + '）' };
+    it.chose = clip(redact(chose), 300);
+    it.why = clip(redact(why), 300);
+    it.filledAt = Date.now();
+    write(file, d);
+    return { ok: true, id: it.id };
+  });
 }
 
 /** 从 cwd 往上找记录文件（decided.js 没给 --file 时用） */
@@ -115,17 +134,35 @@ function changeDone(dir) {
   const todo = (t.match(/^\s*[-*]\s*\[ \]/gm) || []).length;
   return done > 0 && todo === 0;
 }
-/** 这一件到没到列给用户的时候。tasksOf 给 big-task 的大任务清单（同一次收工只算一遍） */
-function isDue(it, tasksOf) {
+/**
+ * 这一件到没到列给用户的时候。tasksOf 给 big-task 的大任务清单（同一次收工只算一遍）；j 是现在收工的会话。
+ *   plain：只在记它的那个会话收工时列（复审 R3：同一个目录里别的会话的不归这个会话交代）
+ *   flow：记的时候还认不出大任务、变更的，按记它的会话现在的样子再认：认出大任务的等大任务做完，认出变更的等变更做完；
+ *         那个会话已经不在流程里了（走完了、关了），记它的会话收工时列
+ */
+function isDue(it, tasksOf, j) {
+  const S = require('./session');
+  const B = require('./big-task');
+  const taskDone = (t) => { try { return DONE_PHASES.includes(B.phaseOf(t).phase); } catch (e) { return false; } };
   if (it.group === 'task') {
-    const B = require('./big-task');
-    const t = tasksOf().find((x) => require('./session').normKey(x.osDir) === it.osDir && x.name === it.task);
+    const t = tasksOf().find((x) => S.normKey(x.osDir) === it.osDir && x.name === it.task);
     // 表没了、大任务改名了：找不到它，就别一直压着
-    if (!t) return true;
-    try { return DONE_PHASES.includes(B.phaseOf(t).phase); } catch (e) { return false; }
+    return t ? taskDone(t) : true;
   }
   if (it.group === 'change') return (it.dirs || []).every(changeDone);
-  return true;
+  const mine = String(it.session || '') === String((j && j.session_id) || '');
+  if (it.group === 'flow') {
+    const jj = { session_id: it.session, cwd: S.sessionHome(j) };
+    let on = false;
+    try { on = !!S.flowState(jj).on; } catch (e) { on = false; }
+    if (!on) return mine;
+    let t = null;
+    try { t = B.forSession(jj); } catch (e) { t = null; }
+    if (t) return taskDone(t);
+    const dirs = flowDirs(jj);
+    return dirs.length > 0 && dirs.every(changeDone);
+  }
+  return mine;
 }
 
 /** 一件写成一行 */
@@ -137,6 +174,7 @@ function lineOf(it) {
 function groupHead(it) {
   if (it.group === 'task') return '大任务 ' + it.task;
   if (it.group === 'change') return '变更 ' + (it.dirs || []).map((d) => path.basename(d)).join('、');
+  if (it.group === 'flow') return '这一段流程';
   return '不走 OpenSpec 的活';
 }
 
@@ -147,21 +185,24 @@ function groupHead(it) {
 function takeDue(j) {
   const file = fileOf(j);
   if (!fs.existsSync(file)) return null;
-  const d = read(file);
-  const open = d.items.filter((x) => !x.shown);
-  if (!open.length) return null;
   let cache = null;
   const S = require('./session');
   const tasksOf = () => { if (!cache) { try { cache = require('./big-task').tasks(S.sessionHome(j)); } catch (e) { cache = []; } } return cache; };
-  const due = open.filter((x) => isDue(x, tasksOf));
+  const now = Date.now();
+  // 挑出来、记成列过，在锁里一起做：两个会话同时收工不会各列一遍
+  const due = withLock(file, () => {
+    const d = read(file);
+    const list = d.items.filter((x) => !x.shown && isDue(x, tasksOf, j));
+    if (!list.length) return [];
+    for (const it of list) it.shown = now;
+    write(file, d);
+    return list;
+  });
   if (!due.length) return null;
   const groups = [];
   for (const it of due) { const h = groupHead(it); let g = groups.find((x) => x.head === h); if (!g) { g = { head: h, items: [] }; groups.push(g); } g.items.push(it); }
   const lines = [];
   for (const g of groups) { lines.push(g.head + '（' + g.items.length + ' 件）：'); g.items.forEach((it, i) => lines.push('  ' + (i + 1) + '. ' + lineOf(it))); }
-  const now = Date.now();
-  for (const it of due) it.shown = now;
-  write(file, d);
   let out = '';
   try {
     const dir = path.join(path.dirname(file), 'reports');

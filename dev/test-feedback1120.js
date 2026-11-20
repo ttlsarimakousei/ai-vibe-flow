@@ -35,6 +35,7 @@ function fakeClaude(h) {
     'if(/这次的角度：用户和业务/.test(s))r=' + JSON.stringify(A) + ';',
     'else if(/这次的角度：现有代码/.test(s))r=' + JSON.stringify(B) + ';',
     'else if(/这次的角度：反方/.test(s))r=' + JSON.stringify('{"items":[]}') + ';',
+    'if(process.env.FAKE_EXPLORE_FAIL&&/这次的角度：(现有代码|反方)/.test(s))r="只想不答";',
     "process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:r,usage:{input_tokens:10,output_tokens:5}})+'\\n');process.exit(0)});",
   ].join('\n'));
   const cmd = path.join(bin, 'claude.cmd');
@@ -102,6 +103,12 @@ function fakeClaude(h) {
   const rA = await runAsk(p, sid, { tool_name: 'Bash', tool_input: cmd0, transcript_path: tp([H.tr.user('做导出'), H.tr.call('Bash', cmd0, 'toolu_a0')]) }, slow);
   H.ok('探索阶段按探索那一项等（3 秒才收）', decision(rE).behavior === 'allow' && rE.ms >= 3000, [rE.ms, rE.out]);
   H.ok('做任务时照旧按原来那一项等（不到 3 秒就收）', decision(rA).behavior === 'allow' && rA.ms < 2800, [rA.ms, rA.out]);
+  // 复审 R1：同一个目录里只有一个大任务在探索，这个会话不在流程里（做普通的活）：不算探索，也不挂到那个大任务上
+  const sidN = 's-1120n';
+  const rN = await runAsk(pe, sidN, { tool_name: 'Bash', tool_input: cmd0, transcript_path: tp([H.tr.user('看看日志'), H.tr.call('Bash', cmd0, 'toolu_n0')]) }, slow);
+  H.ok('不在流程里的会话：照旧按原来那一项等（复审 R1）', decision(rN).behavior === 'allow' && rN.ms < 2800, [rN.ms, rN.out]);
+  const itN = AD ? AD.read(path.join(pe, '.vibe', 'auto-decisions.json')).items.find((x) => x.session === sidN) : null;
+  H.ok('它的记录算不走 OpenSpec 的，不挂到大任务上', !!itN && itN.group === 'plain' && !itN.task, itN);
 
   H.section('第 94 条：到点替用户定的记进 .vibe/auto-decisions.json');
   const recFile = path.join(p, '.vibe', 'auto-decisions.json');
@@ -153,8 +160,26 @@ function fakeClaude(h) {
   const st1 = H.hook(h, 'verify-gate', stopIn());
   const why1 = H.reasonOf(st1);
   H.ok('收工钩子把替你定的事交给它照抄进交代', /替你定的事/.test(why1) && /Bash：dir/.test(why1) && /原样放进最后的交代/.test(why1), st1);
+  H.ok('清单同时直接显示给用户一行（复审 R7）', !!st1 && /替你定的事/.test(String(st1.systemMessage || '')) && /清单在/.test(String(st1.systemMessage || '')), st1);
   const st2 = H.hook(h, 'verify-gate', stopIn());
   H.ok('下一次收工不再交', !/替你定的事/.test(H.reasonOf(st2)), st2);
+  // 复审 R3：不走 OpenSpec 的记录只归记它的会话；在流程里、还没有大任务和变更的，等流程有了着落再列
+  try { AD.record(jP, { kind: 'allow', title: 'Bash：ls', outcome: '替你点了允许' }); } catch (e) { /* 下面看得出来 */ }
+  H.ok('别的会话收工不列这个会话的（复审 R3）', !!AD && AD.takeDue({ session_id: 's-1120other', cwd: pp }) === null, '');
+  const sidF = 's-1120f'; const jF = { session_id: sidF, cwd: pp };
+  H.inFlow(h, sidF, [], true, 'plan');
+  let recF = null; try { recF = AD.record(jF, { kind: 'allow', title: 'Bash：git status', outcome: '替你点了允许' }); } catch (e) { recF = { err: e.message }; }
+  H.ok('在流程里、还没有大任务和变更：记成 flow，先不列', !!recF && (itemsOf(recF.file).find((x) => x.id === recF.id) || {}).group === 'flow' && AD.takeDue(jF) === null, recF);
+  H.inFlow(h, sidF, [], false, 'plan');
+  const dueF = AD ? AD.takeDue(jF) : null;
+  H.ok('流程走完（不在流程里了）：记它的会话收工时列', !!dueF && /git status/.test(dueF.lines.join('\n')), dueF);
+  // 复审 R2：几个框同时到点，几个进程同时记：一条不丢、编号不重
+  const pPar = H.makeRepo(path.join(h.work, 'ppar'), { 'a.txt': 'x\n', '.gitignore': '.vibe/\n' });
+  const recJs = path.join(h.root, 'rec-one.js');
+  H.write(recJs, 'const AD = require(' + JSON.stringify(path.join(h.kit, 'lib', 'auto-decisions.js')) + ');\nAD.record({ session_id: "s-par", cwd: ' + JSON.stringify(pPar) + ' }, { kind: "allow", title: "Bash：第 " + process.argv[2] + " 个", outcome: "替你点了允许" });\n');
+  await Promise.all([1, 2, 3, 4, 5, 6].map((n) => new Promise((resolve) => { const c = spawn(process.execPath, [recJs, String(n)], { env: H.envFor(h), windowsHide: true, stdio: 'ignore' }); c.on('close', resolve); })));
+  const par = itemsOf(path.join(pPar, '.vibe', 'auto-decisions.json'));
+  H.ok('6 个进程同时记：6 条都在，编号 1 到 6 不重（复审 R2）', par.length === 6 && new Set(par.map((x) => x.id)).size === 6 && Math.max(...par.map((x) => x.id)) === 6, par.map((x) => [x.id, x.title]));
 
   // 全自动报告以前漏了 decision 这一类
   const jx = { session_id: 's-1120x', cwd: p };
@@ -208,7 +233,7 @@ function fakeClaude(h) {
   const ex = path.join(px, 'openspec', 'explore', '订单.md');
   const task = B.tasks(px).find((t) => t.name === '订单');
   const gate = EP ? EP.gateIssue(task, { name: 'c1' }) : '';
-  H.ok('还没讨论过：新建 c1 的提案拦下，给了命令', /多角度讨论/.test(gate) && /run --mode explore --task 订单/.test(gate), gate);
+  H.ok('还没讨论过：新建 c1 的提案拦下，给了命令（大任务名带引号，复审 R5）', /多角度讨论/.test(gate) && /run --mode explore --task "订单"/.test(gate), gate);
   const sidX = 's-1120px'; H.inFlow(h, sidX, [], true, 'plan');
   const pro = path.join(px, 'openspec', 'changes', 'c1', 'proposal.md');
   const pe1 = H.hook(h, 'pre-edit', { session_id: sidX, cwd: px, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: pro, content: '## Why\n\n要导出。\n\n## What Changes\n\n- 导出\n' } });
@@ -236,6 +261,17 @@ function fakeClaude(h) {
   H.ok('解析回复：取最后的 JSON，kind 缺省按 ask', parsed && parsed.items && parsed.items[0].kind === 'ask' && parsed.items[0].question === '要不要分页？', parsed);
   let threw = ''; try { EP.parse('只想没答'); } catch (e) { threw = e.message; }
   H.ok('回复里没有 JSON：报错（后台会重试一次）', /JSON/.test(threw), threw);
+  // 复审 R9：探索记录没有"还没定的"这一节、用 CRLF 换行的，追加不坏别的节
+  const exC = path.join(h.root, 'explore-crlf.md');
+  H.write(exC, '# 探索\r\n\r\n## 范围\r\n\r\n只改导出\r\n');
+  const addC = EP ? EP.appendOpen(exC, [{ question: '要不要分页？', why: '数据多', lens: '反方' }]) : 0;
+  const textC = H.read(exC) || '';
+  H.ok('没有"还没定的"这一节：补一节，换行照原来的 CRLF，"范围"不动', addC === 1 && /## 还没定的\r\n\r\n- 要不要分页？（数据多）（多角度讨论：反方）\r\n/.test(textC) && /## 范围\r\n\r\n只改导出\r\n/.test(textC) && !/[^\r]\n/.test(textC), JSON.stringify(textC));
+  // 复审 R9：只有一个角度交了结论：不算讨论过，照旧拦
+  const py = H.makeRepo(path.join(h.work, 'py'), { 'pom.xml': '<project/>\n', '.gitignore': '.vibe/\n', 'openspec/plan.md': '# 计划\n\n## 发货\n\n探索记录：explore/发货.md\n\n' + PLAN_HEAD + '| | d1 | | |\n', 'openspec/explore/发货.md': '# 探索\n\n## 还没定的\n\n无\n\n## 范围\n\n只改发货\n\n## change: d1\n\n发货接口\n' });
+  const y1 = jsonOf(H.node(h, path.join(h.kit, 'tools', 'review.js'), ['run', '--mode', 'explore', '--task', '发货', '--project', py], { cwd: py, timeout: 180000, env: { VIBE_KIT_CLAUDE_EXE: fake.cmd, FAKE_EXPLORE_FAIL: '1' } }));
+  const tY = B.tasks(py).find((t) => t.name === '发货');
+  H.ok('只有一个角度交了：讨论失败、不记成讨论过，新建提案照旧拦（复审 R9）', y1.status === 'failed' && !(B.taskState(tY).panel) && /多角度讨论/.test(EP.gateIssue(tY, { name: 'd1' })), [y1, B.taskState(tY)]);
   // 升级前就在做的大任务：别的 change 已经写了提案，不半路补
   const pu = H.makeRepo(path.join(h.work, 'pu'), { '.gitignore': '.vibe/\n', 'openspec/plan.md': '# 计划\n\n## 订单\n\n探索记录：explore/订单.md\n\n' + PLAN_HEAD + '| | c1 | | |\n| | c2 | | |\n', 'openspec/explore/订单.md': '# 探索\n\n## 还没定的\n\n## 范围\n\nx\n\n## change: c1\n\na\n\n## change: c2\n\nb\n', 'openspec/changes/c1/proposal.md': '## Why\n\nx\n', 'openspec/changes/c1/tasks.md': '- [x] 1.1 a\n' });
   H.ok('别的 change 已经写了提案：不拦', EP && EP.gateIssue(B.tasks(pu).find((t) => t.name === '订单'), { name: 'c2' }) === '', '');

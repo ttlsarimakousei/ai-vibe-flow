@@ -1047,9 +1047,11 @@ async function handle(j) {
   // 询问没人回、到点替用户定的事（问题表第 94 条）：大任务全部做完时一次列给他。取了就记成列过，接在全自动报告里，没有报告就单独交代
   let due = null;
   try { due = require('../lib/auto-decisions').takeDue(j); } catch (e) { hookLog('verify-gate 替用户定的事出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（替用户定的事）', j, e); }
+  // 清单同时直接给用户看一行（复审 R7：只靠模型照抄，它没抄这件事就算列过了，用户不知道有这份清单）
+  const dueNote = (o) => { if (due && o) o.systemMessage = (o.systemMessage ? o.systemMessage + '\n' : '') + '[vibe-kit 替你定的事] 你不在时到点替你定的 ' + due.count + ' 件' + (due.file ? '，清单在 ' + due.file : '') + '。'; return o; };
   // 全自动模式收工：把这一轮的报告交给它，照着交代
-  try { const rp = autoReport(j, cfg, entries, lastSaid, changes(), due); if (rp) return withPlanNotes(blockOut('Stop', rp)); } catch (e) { hookLog('verify-gate 全自动报告出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（全自动报告）', j, e); }
-  if (due) { hookLog('verify-gate 替用户定的事 ' + due.count + ' 件交给它列出来：' + due.heads.join('、')); return withPlanNotes(blockOut('Stop', require('../lib/auto-decisions').dueText(due))); }
+  try { const rp = autoReport(j, cfg, entries, lastSaid, changes(), due); if (rp) return dueNote(withPlanNotes(blockOut('Stop', rp))); } catch (e) { hookLog('verify-gate 全自动报告出错（不拦）：' + ((e && e.message) || e)); if (feedback) feedback.recordHookError('verify-gate（全自动报告）', j, e); }
+  if (due) { hookLog('verify-gate 替用户定的事 ' + due.count + ' 件交给它列出来：' + due.heads.join('、')); return dueNote(withPlanNotes(blockOut('Stop', require('../lib/auto-decisions').dueText(due)))); }
   // 验证的事都没落下，再看要不要问一句交接（两件事不挤在一起说）
   const ask = handoverQuestion(j, cfg, entries, wroteHo);
   if (ask) return withPlanNotes(blockOut('Stop', ask));
