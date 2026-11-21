@@ -6,6 +6,8 @@
  */
 const path = require('path');
 const { normKey, KIT, realish, isKitPath } = require('./session');
+// \\?\C:\…、\\localhost\C$\… 先换成 C:\…：不然 \\?\ 里的 ? 被当成通配符，不去算真实路径，接上 8.3 短名就认不出（全量审核 A3）
+const { localPath } = require('./session-kitfiles');
 const { preprocess, splitCommand, scanRedirects, words, local, CONTROL, WRAPPER, headOf, innerCommand } = require('./shell-words');
 
 /** 一个词可能指向的路径：词本身；PowerShell 的 -LiteralPath:xxx 取冒号后面 */
@@ -107,7 +109,7 @@ const PASSING = new Set(['ls', 'dir', 'get-childitem', 'gci', 'tree', 'get-item'
  * 会：返回一句为什么；不会：返回 ''
  */
 function secretTouch(word, dir, head, recursive) {
-  let s = local(String(word || '').replace(/^["']|["']$/g, ''));
+  let s = localPath(local(String(word || '').replace(/^["']|["']$/g, '')));
   if (!s || /^-/.test(s)) return '';
   const abs0 = path.isAbsolute(s) ? s : path.resolve(dir, s);
   const wild = /[*?[\]]/.test(abs0);
@@ -201,7 +203,7 @@ function copySources(x, h) {
 }
 /** 这个源是不是套件目录本身、它的上级（~/.claude、用户目录），或者通配符落在这一级：会把令牌带出去 */
 function copyTouch(word, dir) {
-  const s = local(String(word || '').replace(/^["']|["']$/g, ''));
+  const s = localPath(local(String(word || '').replace(/^["']|["']$/g, '')));
   if (!s) return '';
   const abs0 = path.isAbsolute(s) ? s : path.resolve(dir, s);
   const wild = /[*?[\]]/.test(abs0);

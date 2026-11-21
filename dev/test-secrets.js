@@ -89,7 +89,9 @@ H.section('用 Grep 工具搜：范围里有令牌、要看内容的，拦');
     H.ok('放行：' + name, o === null, H.reasonOf(o) || o);
   }
   const read = H.hook(h, 'guard-read', { session_id: 's-sec', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: path.join(h.kit, 'secrets.json') } });
-  H.ok('别的工具不归它管（Read 由权限规则挡）', read === null, read);
+  // 2026-11-21 起 Read 也归它管（全量审核 A3：权限规则认不出 8.3 短名、\\?\、管理共享，钩子按真实路径再查一遍）
+  H.ok('Read 令牌文件：也拦（权限规则之外再查一遍）', !!read && read.decision === 'block', read);
+  H.ok('Read 项目里的文件：放行', H.hook(h, 'guard-read', { session_id: 's-sec', cwd: proj, hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: path.join(proj, 'pom.xml') } }) === null);
   H.ok('关掉了禁改：照样拦', blocked(grep({ pattern: 'token', path: h.kit, output_mode: 'content' })));
   H.ok('套件目录里有 .ignore，让搜索工具跳过这两处', /^secrets\.json$/m.test(H.read(path.join(h.kit, '.ignore')) || '') && /^router-data\/$/m.test(H.read(path.join(h.kit, '.ignore')) || ''), H.read(path.join(h.kit, '.ignore')));
 }
@@ -168,7 +170,7 @@ H.section('安装器：加"不许读"的权限规则');
   H.ok('装上了，规则加进去了', r.code === 0 && want.every((w) => settings(u).permissions.deny.includes(w)), settings(u).permissions);
   H.ok('用户自己的规则还在', settings(u).permissions.deny.includes('Read(./.env)'));
   const pre = (settings(u).hooks || {}).PreToolUse || [];
-  H.ok('登记了搜索保护的钩子（Grep）', pre.some((g) => g.matcher === 'Grep' && JSON.stringify(g.hooks).includes('guard-read')), pre);
+  H.ok('登记了读、搜保护的钩子（Grep、Read，2026-11-21 起管 Read）', pre.some((g) => g.matcher === 'Grep|Read' && JSON.stringify(g.hooks).includes('guard-read')), pre);
   H.ok('装上了 .ignore', fs.existsSync(path.join(u.kit, '.ignore')));
   H.ok('记成自己加的', want.every((w) => manifest(u).deny.includes(w)) && !manifest(u).deny.includes('Read(./.env)'), manifest(u).deny);
   const s1 = settings(u);

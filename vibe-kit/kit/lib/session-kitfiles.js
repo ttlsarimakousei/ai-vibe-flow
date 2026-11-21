@@ -13,9 +13,29 @@ const { KIT, readState, writeState, hookLog, normKey } = require('./session-stat
 // 以前拿它拦模型改套件（开关"禁止改套件"），2026-11-04 去掉了（仓库主人定的：套件可以改）。现在拿它认"这是套件的东西"：读令牌、改动清单跳过套件的文件。
 const CFG_DIR = path.dirname(KIT);
 
-/** 路径解析成真实路径（跟着目录联接、符号链接走）；路径还不存在时解析它最近一级存在的上级，再把剩下的拼回去 */
+/**
+ * 同一个本机文件的另几种写法换回普通写法（全量审核 A3，2026-11-21 实测 2.1.289：权限规则 Read(~/.claude/vibe-kit/secrets.json)
+ * 认不出这几种，跳过权限时令牌直接读出来）：
+ *   \\?\C:\x、\\.\C:\x（设备路径前缀）→ C:\x；\\?\UNC\主机\共享\x → \\主机\共享\x
+ *   \\localhost\C$\x、\\127.0.0.1\C$\x、\\[::1]\C$\x、\\本机名\C$\x（本机的管理共享）→ C:\x
+ * 斜杠方向都认。别的写法原样返回。8.3 短名、目录联接由 realish 的 realpath 还原
+ */
+function localPath(p) {
+  let s = String(p || '');
+  const dev = /^[\\/]{2}[?.][\\/](?:UNC[\\/])?/i.exec(s);
+  if (dev) s = /UNC[\\/]$/i.test(dev[0]) ? '\\\\' + s.slice(dev[0].length) : s.slice(dev[0].length);
+  const m = /^[\\/]{2}([^\\/]+)[\\/]([A-Za-z])\$(?=[\\/]|$)/.exec(s);
+  if (m) {
+    let host = ''; try { host = os.hostname().toLowerCase(); } catch (e) { host = ''; }
+    const h = m[1].toLowerCase().replace(/^\[|\]$/g, '');
+    if (['localhost', '127.0.0.1', '::1', '0:0:0:0:0:0:0:1'].includes(h) || (host && (h === host || h.split('.')[0] === host))) s = m[2] + ':' + (s.slice(m[0].length) || '\\');
+  }
+  return s;
+}
+
+/** 路径解析成真实路径（跟着目录联接、符号链接走，8.3 短名换成长名）；路径还不存在时解析它最近一级存在的上级，再把剩下的拼回去 */
 function realish(p) {
-  let cur = path.resolve(p);
+  let cur = path.resolve(localPath(p));
   const rest = [];
   for (let i = 0; i < 60; i++) {
     try { const r = fs.realpathSync.native(cur); return rest.length ? path.join(r, ...rest.reverse()) : r; } catch (e) { /* 往上一级 */ }
@@ -24,7 +44,7 @@ function realish(p) {
     rest.push(path.basename(cur));
     cur = up;
   }
-  return path.resolve(p);
+  return path.resolve(localPath(p));
 }
 
 /**
@@ -234,4 +254,4 @@ function convUpdateNotice(j) {
   return out.join('\n\n');
 }
 
-module.exports = { CFG_DIR, realish, protectedKitPaths, expandHome, isKitPath, isKitSkillScript, mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice };
+module.exports = { CFG_DIR, localPath, realish, protectedKitPaths, expandHome, isKitPath, isKitSkillScript, mdSections, conventionDiff, skillIndex, sessionStartMs, recordConvBaseline, convUpdateNotice };

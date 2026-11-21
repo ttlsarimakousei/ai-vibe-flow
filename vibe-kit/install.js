@@ -376,8 +376,9 @@ function mergeSettings(s, remove, hooksOnly) {
   const OURS = {
     // 改文件的三个检查（套件文件不许改、编码保护、OpenSpec 门槛）合成一个入口 pre-edit：一次编辑只起一个进程（或只发一次请求）
     PreToolUse: [{ matcher: 'Edit|Write|MultiEdit', hooks: [fast('pre-edit')] }, { matcher: 'Bash|PowerShell|mcp__.*', hooks: [fast('guard-commit')] }, { matcher: 'AskUserQuestion|Skill|SlashCommand|Agent|Task', hooks: [fast('guard-ask')] },
-      // 搜文件内容：范围里有放令牌、放模型 key 的地方就拦（权限规则管不到"对着上级目录搜"）
-      { matcher: 'Grep', hooks: [fast('guard-read')] }],
+      // 搜文件内容：范围里有放令牌、放模型 key 的地方就拦（权限规则管不到"对着上级目录搜"）；读文件：权限规则认不出 8.3 短名、\\?\ 前缀、
+      // \\localhost\C$ 管理共享这几种写法（全量审核 A3，2026-11-21 实测），钩子按真实路径再查一遍
+      { matcher: 'Grep|Read', hooks: [fast('guard-read')] }],
     // 读文件时提醒（提示规则）2026-09-30 去掉了。以前这里还有一个空的 PostToolUse 键，被下面那个同名键盖掉、从来没起作用（审核 P07），删了：
     // 以前登记过的读文件提醒照样摘得掉，靠的是登记时按套件的钩子文件名整个替换
     // 用户开口的钩子，Claude Code 默认只等 30 秒（官方文档：UserPromptSubmit 上命令钩子的默认超时从 600 秒降到了 30 秒），到点就结束它、丢掉输出。

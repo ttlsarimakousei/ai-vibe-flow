@@ -264,6 +264,10 @@ const grepIn = (input) => (kit) => { const proj = project(kit); return { proj, j
 add('Grep：对着套件目录搜内容', 'guard-read', grepIn({ pattern: 'token', path: '<套件>', output_mode: 'content' }), /里有放令牌、放模型 key 的文件/, V0928B);
 add('Grep：对着套件目录只看文件名', 'guard-read', grepIn({ pattern: 'token', path: '<套件>', output_mode: 'files_with_matches' }));
 add('Grep：搜项目的内容', 'guard-read', grepIn({ pattern: 'class', path: '<项目>', output_mode: 'content' }));
+// 下一版有意改的（全量审核 A3，2026-11-21）：guard-read 也管 Read，权限规则认不出的 \\?\ 前缀按真实路径拦；正常读项目文件照旧不说话
+const readOf = (rel) => (kit) => { const proj = project(kit); return { proj, j: base(proj, kit, { hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: rel === '<令牌>' ? '\\\\?\\' + path.join(kit.kit, 'secrets.json') : path.join(proj, rel) } }) }; };
+add('Read：\\\\?\\ 前缀读令牌', 'guard-read', readOf('<令牌>'), /是套件放令牌、放模型 key 的文件，内容不能读/, NEXT);
+add('Read：读项目里的文件', 'guard-read', readOf('pom.xml'));
 add('命令：在套件的钩子里搜', 'guard-commit', cmd('grep -rn readConfig ~/.claude/vibe-kit/hooks'));
 
 // ---------- 收工 ----------
