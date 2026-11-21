@@ -25,7 +25,7 @@ const FROM_PACKAGE = fs.existsSync(path.join(SRC, 'claude')) && fs.existsSync(pa
 const CLAUDE = FROM_PACKAGE ? (process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude')) : path.dirname(SRC);
 const KIT = path.join(CLAUDE, 'vibe-kit');
 // 新版删掉了的套件文件（相对 vibe-kit 目录）：装新版时把旧版留下的删掉。2026-10-28：IDEA 起服务、合并推送整条去掉；2026-11-03：路由、IDEA MCP
-const DROPPED_FILES = ['lib/idea-run.js', 'lib/merge-push.js', 'tools/merge-push.js', 'lib/idea-mcp.js', 'lib/idea-tools.js', 'lib/hook-host.js', 'lib/hook-worker.js', 'lib/hook-health.js', 'lib/router-smoke.js'];
+const DROPPED_FILES = ['lib/pull.js', 'lib/idea-run.js', 'lib/merge-push.js', 'tools/merge-push.js', 'lib/idea-mcp.js', 'lib/idea-tools.js', 'lib/hook-host.js', 'lib/hook-worker.js', 'lib/hook-health.js', 'lib/router-smoke.js'];
 const BEGIN = '<!-- vibe-kit:begin 这两行标记之间的内容是生成的。自己的约定写在 ~/.claude/vibe-kit/user/ 里的 .md（更新不碰），然后运行 node ~/.claude/vibe-kit/install.js --sync -->';
 const END = '<!-- vibe-kit:end -->';
 const BLOCK_RE = /^<!-- vibe-kit:begin[^\n]*-->\r?\n[\s\S]*?^<!-- vibe-kit:end -->[ \t]*\r?\n?/gm;
@@ -382,7 +382,7 @@ function mergeSettings(s, remove, hooksOnly) {
     // 读文件时提醒（提示规则）2026-09-30 去掉了。以前这里还有一个空的 PostToolUse 键，被下面那个同名键盖掉、从来没起作用（审核 P07），删了：
     // 以前登记过的读文件提醒照样摘得掉，靠的是登记时按套件的钩子文件名整个替换
     // 用户开口的钩子，Claude Code 默认只等 30 秒（官方文档：UserPromptSubmit 上命令钩子的默认超时从 600 秒降到了 30 秒），到点就结束它、丢掉输出。
-    // 开工前拉代码在这个钩子里：连远端最多 15 秒，合并做到一半又不能被结束（会留下 index.lock 和改了一半的工作区），所以写明等 300 秒
+    // 这个钩子本机预算 30 秒（lib/session-out.js 的 BUDGET_MS），慢电脑上读会话记录、开工登记、等后台探索会接近 30 秒：写明等 300 秒，不让 Claude Code 先把它结束
     UserPromptSubmit: [{ hooks: [Object.assign(hook('task-anchor.js'), { timeout: 300 })] }],
     SessionStart: [{ hooks: [hook('session-start.js')] }],
     PostToolUse: [{ matcher: 'Bash|PowerShell|Edit|Write|MultiEdit', hooks: [fast('after-tool')] }],

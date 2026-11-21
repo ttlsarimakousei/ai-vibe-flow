@@ -11,7 +11,7 @@
  *
  * 记的：会话怎么来的（新开、恢复、/clear、压缩后）、开口几次、进 OpenSpec 流程几次、接着交接记录做几次、全自动收工报告几次、
  *       各道检查拦了几次、放行几次（没问人的、问了人的）、上下文到 70% / 90% / 超过上限的会话几个、审查几轮、
- *       写代码前拉代码的结果、钩子出错几次、Claude Code 和套件的版本、开关里和默认不一样的几项
+ *       钩子出错几次、Claude Code 和套件的版本、开关里和默认不一样的几项
  * 不记：路径、项目名、文件名、分支名、提交信息、提示词、代码、模型的回答、令牌、key
  */
 const fs = require('fs');
@@ -153,7 +153,6 @@ function rowsOf(n) {
     ['放行', (g('bypass.auto') + g('bypass.ask')) + ' 次'],
     // 钩子直接改写、不拦下的（第 71 条第 1 点）：看省了多少次重发
     ['改写', '串着 cd 的命令 ' + g('rewrite.cd') + ' 次，审查登记加复审一条命令 ' + g('review.decisions') + ' 次，钩子跑 openspec validate ' + g('validate.auto') + ' 次'],
-    ['拉代码', '拉到了新代码 ' + g('pull.updated') + ' 次，本来就是最新 ' + g('pull.latest') + ' 次，没拉成 ' + g('pull.fail') + ' 次'],
     ['钩子出错', g('hook.error') + ' 次'],
   ];
 }
@@ -219,7 +218,7 @@ function aggregate(list, from, to) {
   return '## 使用情况（' + from + ' 到 ' + to + '，' + names.length + ' 台电脑，一共 ' + personDays + ' 个人天）\n\n'
     + '不是问题，是各台电脑每天用套件的次数（每台电脑一条"[使用情况]"议题，一天一条补充，导出时不会被关掉）。给改套件的人看哪里能优化：'
     + '拦得多、放行多的检查，提示可能写得不清楚或者判断错了；超过上限的会话多，自动压缩没起作用；审查轮数多、轮数用完的多，审查提示或者改法有问题；'
-    + '拉代码没拉成的多，看是分叉还是连不上；\n\n'
+    + '\n\n'
     + '| 项 | 合计 |\n|---|---|\n' + rowsOf(n).map((r) => '| ' + r[0] + ' | ' + cell(r[1]) + ' |').join('\n') + '\n'
     + (Object.keys(sw).length ? '| 改过的开关（几台电脑） | ' + cell(Object.keys(sw).sort((a, b) => sw[b] - sw[a]).map((k) => k + ' ' + sw[k]).join('，')) + ' |\n' : '')
     + (Object.keys(models).length ? '\n' + modelTable(models) : '')

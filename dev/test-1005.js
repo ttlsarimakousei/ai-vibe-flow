@@ -112,32 +112,13 @@ const today = now0.getFullYear() + '-' + p2(now0.getMonth() + 1) + '-' + p2(now0
     H.ok('配置页上没有这个开关', !/k_ccAutoMode/.test(ui) && !/fSel\('ccAutoMode'/.test(ui));
   }
 
-  // 2026-10-17 起开工前不再拉代码；合并推送照样用 lib/pull.js 的 envFor 设 git 的环境，这里只查它
-  H.section('合并推送的 git 环境：登不上的远端不拿提示语当口令去试');
+  // 老一点的 git 会去问口令：问口令的程序以前指的是 echo，它把提示语吐回来，git 就拿提示语当用户名、口令发给服务器（审核 P44）。
+  // 以前查的是开工前拉代码的 lib/pull.js（2026-10-17 起不拉，2026-11-21 全量审核删了这个文件）；现在跑 git 连远端的只有 lib/gitlab.js（自动更新、上报），查它
+  H.section('自动更新、上报的 git 环境：登不上的远端不拿提示语当口令去试');
   {
     const w = H.makeHome('t1005-ask');
-    const gl = await H.fakeGitlab('t1005-gl', PORT + 1);
-    H.ok('假 GitLab 起来了', gl.up, gl.log());
-    const TK = 'glpat-t1005-token-0000001';
-    gl.addToken(TK, 'me');
-    // 这几条 git 用假用户目录的环境跑，不读系统的 git 配置：不碰这台电脑真的凭据管理器
-    const gitx = (dir, args) => H.run(w, 'git', ['-C', dir].concat(args), { env: { GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' } });
-    const url = gl.url;
-    const authUrl = url.replace('http://', 'http://oauth2:' + TK + '@');
-    const seed = H.makeRepo(path.join(w.root, 'seed'), { 'a.txt': 'a\n' });
-    H.git(seed, ['branch', '-M', 'main']);
-    const p0 = gitx(seed, ['push', '-q', authUrl, 'main']);
-    fs.mkdirSync(w.work, { recursive: true });
-    const hp = path.join(w.work, 'hp');
-    const c0 = gitx(w.work, ['clone', '-q', authUrl, hp]);
-    gitx(hp, ['remote', 'set-url', 'origin', url]);
-    H.ok('（带令牌克隆下来了，远端地址换成不带令牌的）', p0.code === 0 && c0.code === 0 && fs.existsSync(path.join(hp, 'a.txt')), p0.err + c0.err);
-    // 老一点的 git 会去问口令：
-    // 问口令的程序以前指的是 echo，它把提示语吐回来，git 就拿提示语当用户名、口令发给服务器。所以直接查指到了哪
-    const ev = H.node(w, '-e', ['const P = require(' + JSON.stringify(path.join(w.kit, 'lib', 'pull.js')) + '); const e = P.envFor ? P.envFor(' + JSON.stringify(hp) + ', false) : {}; console.log(JSON.stringify([e.GIT_ASKPASS, e.SSH_ASKPASS, e.GIT_TERMINAL_PROMPT]))'], { cwd: w.root });
-    H.ok('问口令的程序指到一个不存在的名字，不是 echo', ev.out.trim() === '["vibe-kit-no-askpass","vibe-kit-no-askpass","0"]', ev.out + ev.err);
-    gl.stop();
-    await H.sleep(300);
+    const ev = H.node(w, '-e', ['const G = require(' + JSON.stringify(path.join(w.kit, 'lib', 'gitlab.js')) + '); const e = G.quietEnv ? G.quietEnv() : {}; console.log(JSON.stringify([e.GIT_ASKPASS, e.SSH_ASKPASS, e.GIT_TERMINAL_PROMPT, e.GCM_INTERACTIVE]))'], { cwd: w.root });
+    H.ok('问口令的程序指到一个不存在的名字，不是 echo；凭据管理器不弹窗', ev.out.trim() === '["vibe-kit-no-askpass","vibe-kit-no-askpass","0","Never"]', ev.out + ev.err);
   }
 
   // ---------------------------------------------------------------------------------------------

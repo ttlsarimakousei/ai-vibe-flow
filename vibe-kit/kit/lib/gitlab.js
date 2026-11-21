@@ -226,7 +226,7 @@ function sshCommand() {
   return /plink/i.test(sshBase) ? sshBase + ' -batch' : sshBase + ' -o BatchMode=yes -o ConnectTimeout=10';
 }
 const hide = (t) => String(t || '').replace(/Authorization: Basic \S+/g, 'Authorization: Basic ***').replace(/(https?:\/\/)[^/@\s]+@/gi, '$1***@').replace(/\bglpat-[\w-]{6,}/g, 'glpat-***');
-// 问口令的程序指到一个不存在的名字（照 pull.js 的做法，审核 P44）：以前是 echo，git 会把"Username for …"这句提示当成用户名发给服务器
+// 问口令的程序指到一个不存在的名字（审核 P44；以前开工前拉代码的 pull.js 也这样，2026-11-21 删了）：以前是 echo，git 会把"Username for …"这句提示当成用户名发给服务器
 function quietEnv() { return Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_ASKPASS: 'vibe-kit-no-askpass', SSH_ASKPASS: 'vibe-kit-no-askpass', LANG: 'C', LC_ALL: 'C' }); }
 /**
  * 跑一条 git：不交互、不弹窗口、不改文件的换行。opt.route 是走哪条路（routes() 里的一项）；不给就是不碰远端的本地操作。
@@ -433,4 +433,4 @@ function isMaintainer() {
   return want.some((w) => mine.includes(w) || mine.includes(String(w).toLowerCase()));
 }
 
-module.exports = { DEFAULT_REPO, SETTINGS_FILE, SECRETS_FILE, TOKEN_DAYS, parseRepo, parseSsh, sshTarget, maskUrl, maskToken, settings, repoKey, publicSettings, saveSettings, request, explain, projectApi, git, gitVersion, sshCommand, explainGit, routes, orderedRoutes, viaRoutes, explainRoutes, ssh, sshWho, mintToken, dropSshToken, mayMint, withToken, tokenName, diagnose, isMaintainer };
+module.exports = { quietEnv, DEFAULT_REPO, SETTINGS_FILE, SECRETS_FILE, TOKEN_DAYS, parseRepo, parseSsh, sshTarget, maskUrl, maskToken, settings, repoKey, publicSettings, saveSettings, request, explain, projectApi, git, gitVersion, sshCommand, explainGit, routes, orderedRoutes, viaRoutes, explainRoutes, ssh, sshWho, mintToken, dropSshToken, mayMint, withToken, tokenName, diagnose, isMaintainer };

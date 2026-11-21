@@ -16,10 +16,11 @@ const REPO = path.join(__dirname, '..');
 const KIT_ROOT = FROM ? path.resolve(FROM) : path.join(REPO, 'vibe-kit');
 const OLD_UPDATERS = '上报里没有 20261102.2248 及更早的机器之后';
 const OLD_RENAME = '上报里没有 20261104.1301 及更早的机器之后（ttls- 改成 vk- 那一版之前）';
+const OLD_PULL = '上报里没有 20261121.0243 及更早的机器之后（lib/pull.js 删掉的那一版之前）';
 
 // 已删的名字：能认出来是残留的才放进来，太短的（router、路由）误伤多，单独按文件看
 const GONE = [
-  'hook-host', 'hook-worker', 'hook-health', 'router-smoke', 'idea-mcp', 'idea-tools', 'fake-busy', 'fake-idea', 'cc-http-hooks', 'cc-stream-cut',
+  'lib/pull.js', 'hook-host', 'hook-worker', 'hook-health', 'router-smoke', 'idea-mcp', 'idea-tools', 'fake-busy', 'fake-idea', 'cc-http-hooks', 'cc-stream-cut',
   'statusUsage', 'hookTransport', 'reviewExecutor', 'reviewMaxFiles', 'requirementsReviewMaxRounds', 'applyReviewMaxRounds', 'reviewMaxRounds', 'reviewLoop',
   'nearGatewayLimit', 'gatewayLimit', 'autoCompactAt', 'autoCompactWindowOf', 'flagVersion', 'ensureRouter', 'router/service.js', 'router/ui.html', 'router/kit-api', 'router/router.js',
   'ttls-onboard', 'ttls-see-page', 'ttls-cross-review', 'ttls-handover', 'ttls-db-crud', 'ttls-redis', 'ttls-reviewer', 'ttls-lessons-',
@@ -100,6 +101,9 @@ const KEEP = [
   ['dev/test-update-canary.js', '观察期', '测自动报的入口和观察期都没了', OLD_UPDATERS],
   ['dev/probes/up-no-router.js', 'vibe-kit-router', '测真装着旧路由的电脑升级', OLD_UPDATERS],
   ['dev/ui-update.js', 'vibe-kit-router', '测不写开机自启', OLD_UPDATERS],
+  ['vibe-kit/install.js', 'lib/pull.js', 'DROPPED_FILES：升级时删掉老版本装下的开工前拉代码的库（全量审核 C2）', OLD_PULL],
+  ['dev/test-1005.js', 'lib/pull.js', '注释：这一节以前查的是它', OLD_PULL],
+  ['dev/test-feedback1121.js', 'lib/pull.js', '测删掉了、升级时会删', OLD_PULL],
 ];
 // 整个文件都是历史或者就是在讲这些的
 const SKIP_FILES = [/^vibe-kit\/更新说明/, /^dev\/test-router-retire\.js$/, /^dev\/test-no-leftovers\.js$/, /^dev\/baseline\//, /^dev\/contracts\.md$/, /^dev\/check-old-repro/];
