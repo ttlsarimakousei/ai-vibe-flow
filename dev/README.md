@@ -164,6 +164,9 @@ node dev/pack.js
 | `lib/fake-gitlab.js` | 假 GitLab：git 的 http 通道加 issue 的接口 |
 | `lib/fake-ssh.js` | 假 ssh：拉仓库、推仓库、申请令牌 |
 | `test-feedback1028.js [端口] [旧套件目录]` | 1028 这批（docs/feedback-20261028.md）：审查不截断、超时上报、只回思考时拆批；不走 OpenSpec 的审查登记决定；开工说法和自动模式的提示；产出位置认提问框答的根目录、放行对两种拦截都算；devserver 看日志等服务起来；用量页 |
+| `probes/cc-read-deny.js <版本> [--bypass]` | 探测（全量审核 A3）：Read 工具换几种路径写法读令牌（8.3 短名、`\\?\`、管理共享、联接……），权限规则挡不挡得住；每种带一个同目录的对照文件 |
+| `probes/cc-perm-running.js <版本> [命令跑几秒]` | 探测（全量审核 B4）：权限确认框点了允许、命令还在跑的时候，会话记录里写了什么 |
+| `test-feedback1121.js [旧套件目录]` | 11-21 全量审核这一批（docs/feedback-20261121.md）：坏掉的锁文件收得回来、guard-ask 出错记反馈、guard-commit 载入时就崩照样要确认推送、查库工具认有副作用的函数、文档和死代码 |
 | `lib/watch-windows.ps1` | 盯着桌面，测试跑的时候冒出来的窗口都记下来，一闪就关的也算 |
 | `lib/harness.js` | 公共部分：假用户目录、假会话记录、结尾核对真实文件没变 |
 
