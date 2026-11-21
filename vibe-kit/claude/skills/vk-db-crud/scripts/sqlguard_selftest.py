@@ -99,6 +99,12 @@ case("字符串里的 setval( 不算", "SELECT * FROM t WHERE note = 'setval(1)'
 case("别的 schema 下同名的是自己的函数，不算", "SELECT app.setval(1)", g.SAFE, dialect="postgresql")
 case("列名叫 nextval 不算", "SELECT nextval FROM t_seq", g.SAFE, dialect="postgresql")
 case("INSERT 里用 nextval 照旧是 INSERT", "INSERT INTO t(id) VALUES (nextval('seq_order'))", g.SAFE, dialect="postgresql")
+# 函数名加了引号（复审 R2）
+case("函数名加双引号也认", "SELECT \"setval\"('seq_order', 1)", g.DANGEROUS, dialect="postgresql")
+case("schema 和函数名都加双引号也认", "SELECT \"pg_catalog\".\"setval\"('seq_order', 1)", g.DANGEROUS, dialect="postgresql")
+case("点两边有空格、函数名加引号也认", "SELECT pg_catalog . \"nextval\"('seq_order')", g.DANGEROUS, dialect="postgresql")
+case("SQL Server 方括号也认", "SELECT * FROM [OPENQUERY](lnk, 'DELETE FROM t')", g.DANGEROUS, dialect="sqlserver")
+case("别的 schema 下加引号的同名函数不算", "SELECT app.\"setval\"(1)", g.SAFE, dialect="postgresql")
 
 # ---------------------------------------------------- INSERT 的行数
 case("多行 INSERT 数得出行数", "INSERT INTO t(a) VALUES (1),(2),(3)", g.SAFE)

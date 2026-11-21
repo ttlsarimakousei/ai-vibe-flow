@@ -329,11 +329,11 @@ def _analyze_one(raw, dialect=None):
 
     # 看着是查询、调的函数却会改库（回滚撤不掉）：按看不懂的语句算，exec 要人点头，query 不让跑
     if st.kind == SELECT:
-        m = _SIDE_EFFECT_FN.search(masked)
-        if m:
+        fn = _side_effect(masked)
+        if fn:
             st.kind = UNKNOWN
-            st.side_effect = m.group(1).lower()
-            st.parse_note = _side_effect_note(st.side_effect)
+            st.side_effect = fn
+            st.parse_note = _side_effect_note(fn)
 
     if st.kind == UNKNOWN and not st.parse_note:
         st.parse_note = "语句类型不明"
@@ -577,6 +577,16 @@ _SIDE_EFFECT_FN = re.compile(
     r")\s*\(", re.I)
 
 
+# 标识符外面的引号（"setval"、`setval`、[setval]）：PostgreSQL、SQL Server 里函数名可以这样写，查名单前去掉（复审 R2）
+_QUOTED_IDENT = re.compile(r'"([A-Za-z_][\w$]*)"|`([A-Za-z_][\w$]*)`|\[([A-Za-z_][\w$]*)\]')
+
+
+def _side_effect(masked):
+    """masked（抹掉了字面量的 SQL）里调了名单里的函数：返回函数名（小写），没有返回 None。"""
+    m = _SIDE_EFFECT_FN.search(_QUOTED_IDENT.sub(lambda x: x.group(1) or x.group(2) or x.group(3), masked))
+    return m.group(1).lower() if m else None
+
+
 def _side_effect_note(fn):
     return "调了 %s()：它会改数据库的状态（断开连接、动序列、删大对象、在别的库上执行这类），回滚撤不掉，按写操作走确认" % fn
 
@@ -611,9 +621,9 @@ def readonly_problem(stmt):
     if "/*!" in raw:
         return "含 MySQL 可执行注释 /*! */，里面的内容会被真的执行"
     # SELECT、WITH 里调了会改库的函数（全量审核 A4）
-    fn = _SIDE_EFFECT_FN.search(masked)
+    fn = _side_effect(masked)
     if fn:
-        return "调了 %s()，会改数据库的状态、回滚撤不掉，不是单纯的查询" % fn.group(1).lower()
+        return "调了 %s()，会改数据库的状态、回滚撤不掉，不是单纯的查询" % fn
     if stmt.kind == SELECT:
         top = _top_level(masked)
         m = re.search(r"\bINTO\b", top, re.I)
@@ -653,9 +663,9 @@ def fragment_problem(text, what, dialect=None):
     m = _WRITE_WORD.search(bare)
     if m:
         return "%s 里有 %s，这不是查询的条件" % (what, m.group(1).upper())
-    m = _SIDE_EFFECT_FN.search(bare)
-    if m:
-        return "%s 里调了 %s()，会改数据库的状态，这不是查询的条件" % (what, m.group(1).lower())
+    fn = _side_effect(bare)
+    if fn:
+        return "%s 里调了 %s()，会改数据库的状态，这不是查询的条件" % (what, fn)
     if what == "--order":
         item = r"\s*%s\s*(?:\s(?:ASC|DESC))?\s*(?:\sNULLS\s+(?:FIRST|LAST))?\s*" % _QUALIFIED
         if not re.match(r"^%s(?:,%s)*$" % (item, item), bare, re.I):

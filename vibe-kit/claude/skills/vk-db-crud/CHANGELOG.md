@@ -6,7 +6,8 @@
 
 - `SELECT setval(…)`、`SELECT nextval(…)`、`SELECT pg_terminate_backend(…)`、`SELECT lo_unlink(…)`、`dblink`、SQL Server 的 `OPENQUERY` 这类：以前当成查询直接跑，执行器最后回滚也撤不掉（序列、断连接不在事务里）
 - 现在 `query` 拦下（退出码 3），`peek` 的 `--where` 里也不许写；`exec` 按看不懂的语句算，要人点头，全自动下留给用户
-- 名单见 `sqlguard.py` 的 `_SIDE_EFFECT_FN`；`currval`、别的 schema 下同名的函数、字符串里写的不算
+- 名单见 `sqlguard.py` 的 `_SIDE_EFFECT_FN`；函数名加了引号（`"setval"(…)`、`"pg_catalog"."setval"(…)`、`[OPENQUERY]`）也认；`currval`、别的 schema 下同名的函数、字符串里写的不算
+- 只锁住、拖慢别的会话的（`pg_advisory_lock`、`GET_LOCK`、`pg_sleep`、`SLEEP`）不算：它们不改数据，连接一关就释放（2026-11-21 仓库主人定的）
 
 ## 1.2.0 —— 2026-11-13　开发库上只有还原不了的删要人确认（问题表第 91 条）
 
