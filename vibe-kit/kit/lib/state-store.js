@@ -7,6 +7,7 @@
  *   要紧的几份（DURABLE：审查记录、开工基线、大任务、会话的流程状态……）写完先落盘再改名，改名之前把上一份留成 .prev；
  *   读出来是坏的（断电那一刻正在写，文件成了空的或一片 0）就用 .prev，不从空的重新记。别的照旧只改名，不落盘（每次落盘要几毫秒到几十毫秒）。
  *   锁、进程记录里的时间比这次开机还早的，是重启之前留下的：进程号可能被别的程序占了，不看进程号，直接按失效算（bootTime）。
+ *   锁文件本身成了空的、一片 0（断电时链接落了盘、内容没落盘）：5 秒没动就按失效收回（unreadable，全量审核 B1）。
  */
 const fs = require('fs');
 const path = require('path');
@@ -27,6 +28,22 @@ function beforeBoot(at) { const b = bootTime(); return !!b && Number(at) > 0 && 
 const DURABLE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-)?(?:review-points|review-jobs|work-baselines|big-task|change-files|reviewed|reviewed-proposal|flow|changes|auto-switch)\.json$/i;
 const durable = (file) => DURABLE.test(path.basename(file));
 function owner(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return null; } }
+/**
+ * 锁文件在、内容却读不懂（没有进程号），而且 ms 毫秒没动过：断电那一刻 claim 的硬链接落了盘、内容没落盘，留下空的或一片 0 的锁。
+ * 这种锁谁都认不出是谁的，以前永远拿不回，那份状态每次等满 2 秒写失败，要等清理按天数删掉它（全量审核 B1，2026-11-21）。
+ * claim 是写完再建链接，正常的锁不会有"写了一半"的时候，所以读不懂就是坏了；读的时候文件被占着（EBUSY、EPERM）不算
+ */
+function unreadable(file, ms) {
+  let st;
+  try { st = fs.statSync(file); } catch (e) { return false; }
+  if (Date.now() - st.mtimeMs < ms) return false;
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return false; }
+  try { const o = JSON.parse(text); return !o || typeof o !== 'object' || !(Number.isInteger(o.pid) && o.pid > 0); } catch (e) { return true; }
+}
+const BROKEN_LOCK_MS = 5000;
+// .recover 只在收回失效的锁那一下拿着（不到一秒）：坏了等久一点再删，免得和正在收回的进程撞上
+const BROKEN_RECOVER_MS = 60000;
 function release(file, token) {
   try { const o = owner(file); if (o && o.token === token) { fs.unlinkSync(file); return true; } } catch (e) { /* 已释放或文件被占用 */ }
   return false;
@@ -55,17 +72,21 @@ function acquire(file, options) {
   do {
     const recovery = owner(reap);
     if (recovery && (beforeBoot(recovery.at) || !alive(recovery.pid))) release(reap, recovery.token);
+    else if (unreadable(reap, BROKEN_RECOVER_MS)) { try { fs.unlinkSync(reap); } catch (e) { /* 别人刚删了 */ } }
     if (!fs.existsSync(reap) && claim(file, record)) {
       if (!fs.existsSync(reap)) { waited(); return { file, token: record.token, release: () => release(file, record.token) }; }
       release(file, record.token);
     }
     const old = owner(file);
     const stale = (o) => !!o && Number.isInteger(o.pid) && o.pid > 0 && (beforeBoot(o.at) || !alive(o.pid) || (Number(o.at) > 0 && Date.now() - Number(o.at) > lease));
-    if (stale(old) && claim(reap, record)) {
+    // 坏了的锁（读不懂、5 秒没动）：和失效的锁一样，拿到 .recover 再删，删之前再看一眼还是不是那把坏锁
+    const broken = !stale(old) && unreadable(file, BROKEN_LOCK_MS);
+    if ((stale(old) || broken) && claim(reap, record)) {
       try {
         const cur = owner(file);
-        if (cur && cur.token === old.token && stale(cur)) release(file, cur.token);
-        if (!fs.existsSync(file) && claim(file, record)) return { file, token: record.token, release: () => release(file, record.token) };
+        if (!broken && cur && cur.token === old.token && stale(cur)) release(file, cur.token);
+        else if (broken && unreadable(file, BROKEN_LOCK_MS)) { try { fs.unlinkSync(file); } catch (e) { /* 被占着：下一圈再试 */ } }
+        if (!fs.existsSync(file) && claim(file, record)) { waited(); return { file, token: record.token, release: () => release(file, record.token) }; }
       }
       finally { release(reap, record.token); }
       continue;
