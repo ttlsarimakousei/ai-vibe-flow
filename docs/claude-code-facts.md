@@ -64,6 +64,11 @@ Claude Code 用户级 MCP 在 `~/.claude.json` 顶层 `mcpServers`；设置 `CLA
 - 权限规则 `Bash(git push:*)` 按前缀匹配，`git -C 子项目 push` 绕得过去，所以 push 的确认由钩子来做。2026-10-30 起套件不再登记这条规则（用户定的：push 只留钩子一道确认，免得说了推送还弹框）。
 - 项目里写 `.claude/settings.local.json` 的 `{"disableAllHooks": true}` 能让所有钩子失效，套件的 `guard-kit` 拦这种写入。
 - 2.1.120、2.1.259 都认用户 settings.json 里的 `permissions.defaultMode: "bypassPermissions"`；2.1.259 不认项目、local 设置里写的。
+- 拒读规则 `Read(~/.claude/vibe-kit/secrets.json)`、`Read(~/.claude/vibe-kit/router-data/**)` 按路径的字面比（2026-11-21，`dev/probes/cc-read-deny.js`，2.1.289，全量审核 A3）：
+  - 挡得住：正常写法、正斜杠、大小写不同、相对路径、`~` 开头、目录联接（它会跟着联接走）。
+  - 挡不住：8.3 短名（`CLAUDE~1`）、`\\?\C:\…` 前缀、`\\localhost\C$\…` 管理共享。普通模式下当成"可疑的 Windows 路径"弹权限框（`-p` 里直接不给读）；`--dangerously-skip-permissions` 下令牌和 key 直接读出来。
+  - 套件因此给 Read 加了钩子（guard-read 按真实路径比）。
+- 权限确认框点了允许以后、命令跑完以前，会话记录里一行都不写，也没有别的钩子事件（2026-11-21，`dev/probes/cc-perm-running.js`，2.1.289）：PermissionRequest 之后下一条就是 PostToolUse 和工具结果。ask-timeout 因此认不出"已经批准、还在跑"（全量审核 B4，仓库主人定的不改）。
 
 ## 其他
 
