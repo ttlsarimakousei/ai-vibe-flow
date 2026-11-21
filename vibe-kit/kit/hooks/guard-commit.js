@@ -37,6 +37,27 @@
  * 2026-11-01 起（K 批）这个文件只留调度（analyze、check、handle）：拆命令在 lib/shell-words.js；各类检查在 lib/guard-git.js（1、2、3、9、12 条）、
  *   lib/guard-kit.js（第 5 条）、lib/guard-process.js（6、7、8、10、11 条）、lib/guard-archive.js（第 4 条）。导出的名字和以前一样。
  */
+/*
+ * 载入时就崩了（自动更新正在覆盖文件、读到半截的库，全量审核 B3，2026-11-21）：下面的 require 没跑完进程就退出，到不了文件末尾的 cli()，
+ * 它的 onError（pushFailOut）接不住，命令里有 git push 也不弹确认。push 只留钩子这一道确认（用户 2026-10-30 定的），不能这样放过去。
+ * 这里只用 Node 自带的模块：像推送的按 ask 回（全自动下没人点，到点 ask-timeout 按不允许收），别的照旧放行，记一条问题反馈（记得了的话）。
+ * 认法和 lib/session-out.js 的 PUSH_LIKE 一样。载入成功后在文件末尾摘掉，之后的出错照旧由 cli() 管
+ */
+function onLoadCrash(e) {
+  try {
+    const fsx = require('fs');
+    let j = {};
+    try { j = JSON.parse(fsx.readFileSync(0, 'utf8') || '{}'); } catch (x) { j = {}; }
+    const cmd = String((j && j.tool_input && j.tool_input.command) || '');
+    if (/push|publish|发布到/i.test(cmd)) {
+      const why = String((e && e.message) || e || '').split('\n')[0].slice(0, 120);
+      fsx.writeSync(1, JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'ask', permissionDecisionReason: '[vibe-kit] 推送的检查这次没载入成功（' + why + '，多半是套件正在自动更新），推到远端要你确认。' } }));
+    }
+    try { require('../lib/feedback').recordHookError('guard-commit（载入）', j, e); } catch (x) { /* 库本身就是坏的那个：记不了 */ }
+  } catch (x) { /* 兜底也出错：放行 */ }
+  process.exit(0);
+}
+if (require.main === module) process.on('uncaughtException', onLoadCrash);
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -456,4 +477,8 @@ function handleOne(j) {
 
 module.exports = { handle, securityFirst, preprocess, stripComments, splitCommand, words, scanRedirects, parseGit, messageOf };
 // 命令方式下出错、超出 12 秒预算：别的检查照旧放行，像推送的不放行（push 只留钩子这一道确认，复审 S3）
-if (require.main === module) cli(handle, { onError: (j, e) => require('../lib/session').pushFailOut(j, (e && e.message) || e) });
+if (require.main === module) {
+  // 载入成功了：摘掉开头那个载入出错的兜底
+  process.removeListener('uncaughtException', onLoadCrash);
+  cli(handle, { onError: (j, e) => require('../lib/session').pushFailOut(j, (e && e.message) || e) });
+}
