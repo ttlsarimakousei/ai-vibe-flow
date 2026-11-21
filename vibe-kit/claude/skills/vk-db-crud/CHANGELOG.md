@@ -1,6 +1,12 @@
 # vk-db-crud 变更记录
 
-> 当前版本 **1.2.0**。这个技能原来叫 urai-db-crud，在 skytech-skills 仓库里；2026-09-30 并进 vibe-kit，以后在 vibe-kit 这边维护。2026-11-04 起叫 vk-db-crud（以前叫 ttls-db-crud），下面的记录照当时的名字写。
+> 当前版本 **1.2.1**。这个技能原来叫 urai-db-crud，在 skytech-skills 仓库里；2026-09-30 并进 vibe-kit，以后在 vibe-kit 这边维护。2026-11-04 起叫 vk-db-crud（以前叫 ttls-db-crud），下面的记录照当时的名字写。
+
+## 1.2.1 —— 2026-11-21　查询里调了会改库的函数按写操作算（全量审核 A4）
+
+- `SELECT setval(…)`、`SELECT nextval(…)`、`SELECT pg_terminate_backend(…)`、`SELECT lo_unlink(…)`、`dblink`、SQL Server 的 `OPENQUERY` 这类：以前当成查询直接跑，执行器最后回滚也撤不掉（序列、断连接不在事务里）
+- 现在 `query` 拦下（退出码 3），`peek` 的 `--where` 里也不许写；`exec` 按看不懂的语句算，要人点头，全自动下留给用户
+- 名单见 `sqlguard.py` 的 `_SIDE_EFFECT_FN`；`currval`、别的 schema 下同名的函数、字符串里写的不算
 
 ## 1.2.0 —— 2026-11-13　开发库上只有还原不了的删要人确认（问题表第 91 条）
 

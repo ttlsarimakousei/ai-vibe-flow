@@ -89,6 +89,17 @@ case("没命中就不拦", "SELECT * FROM production_notes", g.SAFE)
 case("只读连接拒绝写", "UPDATE t SET a=1 WHERE id=1", g.FORBIDDEN, rows=1, readonly=True)
 case("只读连接照常查", "SELECT * FROM t", g.SAFE, readonly=True)
 
+# ---------------------------------------------------- 查询里调了会改库的函数（全量审核 A4，2026-11-21）
+case("SELECT setval：序列回滚撤不掉，按看不懂的语句", "SELECT setval('seq_order', 1)", g.DANGEROUS, dialect="postgresql")
+case("SELECT pg_terminate_backend：断别人的连接", "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'app'", g.DANGEROUS, dialect="postgresql")
+case("写成 pg_catalog.nextval 也认", "SELECT pg_catalog.nextval('seq_order')", g.DANGEROUS, dialect="postgresql")
+case("SQL Server 的 OPENQUERY", "SELECT * FROM OPENQUERY(lnk, 'DELETE FROM t')", g.DANGEROUS, dialect="sqlserver")
+case("currval 只读，照常查", "SELECT currval('seq_order')", g.SAFE, dialect="postgresql")
+case("字符串里的 setval( 不算", "SELECT * FROM t WHERE note = 'setval(1)'", g.SAFE, dialect="postgresql")
+case("别的 schema 下同名的是自己的函数，不算", "SELECT app.setval(1)", g.SAFE, dialect="postgresql")
+case("列名叫 nextval 不算", "SELECT nextval FROM t_seq", g.SAFE, dialect="postgresql")
+case("INSERT 里用 nextval 照旧是 INSERT", "INSERT INTO t(id) VALUES (nextval('seq_order'))", g.SAFE, dialect="postgresql")
+
 # ---------------------------------------------------- INSERT 的行数
 case("多行 INSERT 数得出行数", "INSERT INTO t(a) VALUES (1),(2),(3)", g.SAFE)
 case("INSERT ... SELECT 估不出行数，要确认",
@@ -194,6 +205,10 @@ def run():
     same("WITH 里有 DELETE 不行", rp("WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x") is not None, True)
     same("EXPLAIN ANALYZE 不行", rp("EXPLAIN ANALYZE SELECT 1") is not None, True)
     same("CALL 不行", rp("CALL p()") is not None, True)
+    same("SELECT setval 不行（回滚撤不掉）", rp("SELECT setval('s', 1)", "postgresql") is not None, True)
+    same("WITH 里调 pg_terminate_backend 不行", rp("WITH x AS (SELECT pid FROM pg_stat_activity) SELECT pg_terminate_backend(pid) FROM x", "postgresql") is not None, True)
+    same("SELECT currval 可以", rp("SELECT currval('s')", "postgresql"), None)
+    same("调了会改库的函数：记下是哪个", getattr(g.analyze("SELECT setval('s', 1)", "postgresql")[0], "side_effect", None), "setval")
     # peek 的 --where、--order
     fp = g.fragment_problem
     same("条件：普通的可以", fp("STATUS = '待支付' AND AMOUNT > 10", "--where", "mysql"), None)
@@ -205,6 +220,7 @@ def run():
     same("排序：列名加 DESC 可以", fp("CREATED DESC, t.ID", "--order"), None)
     same("排序：塞别的不行", fp("ID; TRUNCATE T_LOG", "--order") is not None, True)
     same("排序：函数调用不行", fp("SLEEP(10)", "--order") is not None, True)
+    same("条件：调了会改库的函数不行", fp("pg_terminate_backend(PID) IS NOT NULL", "--where", "postgresql") is not None, True)
 
     total = len(CASES) + checks
     bad = len(failures) + len(extra)

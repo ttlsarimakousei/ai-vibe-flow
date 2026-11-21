@@ -105,6 +105,7 @@ class Stmt(object):
         self.has_where = False
         self.where_trivial = False      # WHERE 1=1 这种等于没写
         self.parse_note = None          # 没看懂的话，说明卡在哪
+        self.side_effect = None         # SELECT 里调了会改库的函数（setval、pg_terminate_backend……）：函数名，按写操作走
         self.identifiers = []           # 语句里出现过的所有标识符，用来比禁止名单
 
     def __repr__(self):
@@ -325,6 +326,14 @@ def _analyze_one(raw, dialect=None):
         st.kind = UNKNOWN
         head = raw.strip().split()[:3]
         st.parse_note = "认不出这是什么语句：%s..." % " ".join(head)
+
+    # 看着是查询、调的函数却会改库（回滚撤不掉）：按看不懂的语句算，exec 要人点头，query 不让跑
+    if st.kind == SELECT:
+        m = _SIDE_EFFECT_FN.search(masked)
+        if m:
+            st.kind = UNKNOWN
+            st.side_effect = m.group(1).lower()
+            st.parse_note = _side_effect_note(st.side_effect)
 
     if st.kind == UNKNOWN and not st.parse_note:
         st.parse_note = "语句类型不明"
@@ -553,6 +562,24 @@ _READ_HEAD = re.compile(r"^\s*(SHOW|DESC|DESCRIBE|EXPLAIN)\b", re.I)
 _WRITE_WORD = re.compile(
     r"\b(INSERT|UPDATE|DELETE|MERGE|TRUNCATE|DROP|ALTER|CREATE|GRANT|REVOKE|INTO|CALL|EXEC|EXECUTE)\b", re.I)
 
+# 写在查询里、调了就会改库的函数（全量审核 A4，仓库主人 2026-11-21 定的"按写操作要确认"）。执行器读的时候一律回滚，
+# 这几个回滚撤不掉，或者根本不在事务里：断开别人的连接、改服务器状态、动序列（nextval 取一次用掉一个号，currval 只读不算）、
+# 删改大对象和服务器上的文件、在别的库上执行（dblink、SQL Server 的 OPENQUERY 这类）。schema 写成 pg_catalog 的也认；
+# 别的 schema 下同名的是用户自己的函数，不算。字符串里的不算（先抹掉字面量再找）
+_SIDE_EFFECT_FN = re.compile(
+    r"(?<![\w$.\"`\]])(?:pg_catalog\s*\.\s*)?("
+    r"pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_switch_wal|pg_switch_xlog"
+    r"|pg_create_restore_point|pg_promote|pg_drop_replication_slot|pg_create_physical_replication_slot"
+    r"|pg_create_logical_replication_slot|pg_stat_reset\w*|setval|nextval"
+    r"|lo_unlink|lo_import|lo_export|lo_put|lo_from_bytea|lo_create|lo_creat|lo_truncate\w*"
+    r"|pg_file_write|pg_file_unlink|pg_file_rename|pg_file_sync|dblink_exec|dblink"
+    r"|openquery|openrowset|opendatasource"
+    r")\s*\(", re.I)
+
+
+def _side_effect_note(fn):
+    return "调了 %s()：它会改数据库的状态（断开连接、动序列、删大对象、在别的库上执行这类），回滚撤不掉，按写操作走确认" % fn
+
 
 def _top_level(masked):
     """只留括号深度为 0 的部分（子查询、函数参数里的抹成空格）。"""
@@ -583,6 +610,10 @@ def readonly_problem(stmt):
     masked = _mask_literals(raw, stmt.dialect)
     if "/*!" in raw:
         return "含 MySQL 可执行注释 /*! */，里面的内容会被真的执行"
+    # SELECT、WITH 里调了会改库的函数（全量审核 A4）
+    fn = _SIDE_EFFECT_FN.search(masked)
+    if fn:
+        return "调了 %s()，会改数据库的状态、回滚撤不掉，不是单纯的查询" % fn.group(1).lower()
     if stmt.kind == SELECT:
         top = _top_level(masked)
         m = re.search(r"\bINTO\b", top, re.I)
@@ -622,6 +653,9 @@ def fragment_problem(text, what, dialect=None):
     m = _WRITE_WORD.search(bare)
     if m:
         return "%s 里有 %s，这不是查询的条件" % (what, m.group(1).upper())
+    m = _SIDE_EFFECT_FN.search(bare)
+    if m:
+        return "%s 里调了 %s()，会改数据库的状态，这不是查询的条件" % (what, m.group(1).lower())
     if what == "--order":
         item = r"\s*%s\s*(?:\s(?:ASC|DESC))?\s*(?:\sNULLS\s+(?:FIRST|LAST))?\s*" % _QUALIFIED
         if not re.match(r"^%s(?:,%s)*$" % (item, item), bare, re.I):

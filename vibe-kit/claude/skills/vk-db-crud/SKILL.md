@@ -5,7 +5,7 @@ description: 连数据库做读写。查表结构、按关键字找表和字段�
 
 # 数据库读写
 
-> 版本 1.2.0　｜　更新 2026-11-13　｜　变更记录见 [CHANGELOG.md](CHANGELOG.md)
+> 版本 1.2.1　｜　更新 2026-11-21　｜　变更记录见 [CHANGELOG.md](CHANGELOG.md)
 > 原来叫 urai-db-crud，现在并进 vibe-kit，跟着套件一起装、一起更新。
 
 ## 这个技能在干什么
@@ -140,7 +140,7 @@ shell 传中文参数报错时，`find --keyword-file <UTF-8文件>` 读查找�
   `--where` 只能是条件，`--order` 只能是列名加 ASC / DESC：带分号、注释、写操作关键字的会被拦下（退出码 3）。
   `--cols a,b,c` 只看这几列。
 - `columns` 会一并报主键。没有主键的表照常增、改，不用问；做完在交代里说一句工具还原不了（生成不了反向 SQL）。
-- `query` 默认最多 200 行。**只跑查询**：里面有增删改、改结构、`SELECT … FOR UPDATE` 的语句会被拦下（退出码 3），那些走 `exec`。
+- `query` 默认最多 200 行。**只跑查询**：里面有增删改、改结构、`SELECT … FOR UPDATE`、调了会改库的函数（`setval`、`nextval`、`pg_terminate_backend`、`dblink` 这类，回滚撤不掉）的语句会被拦下（退出码 3），那些走 `exec`，要人点头。
 - 每格默认显示 40 个字符。结果只有两三行、又有长的值时自动改成竖着排、不截；
   行多的时候被截了会有 ★ 提示，要看全就加 `--width 0`。
 
