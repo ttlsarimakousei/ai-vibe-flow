@@ -25,8 +25,9 @@ const WIN = process.platform === 'win32';
 function norm(p) {
   let r = path.resolve(localPath(p));
   // 目录联接、大小写不同、8.3 短名，都按真实路径比；不存在的就按写的比。
-  // 别的电脑的共享（换完还是 \\ 开头）不去算：网络不通时 realpath 会卡住，而令牌不会在别的电脑上
-  if (!/^[\\/]{2}/.test(r)) { try { r = fs.realpathSync.native(r); } catch (e) { /* 不存在 */ } }
+  // 别的电脑的共享（换完还是 \\主机\ 开头）不去算：网络不通时 realpath 会卡住，而令牌不会在别的电脑上。
+  // 设备路径（\\?\Volume{…}\、\\.\GLOBALROOT\…）要算：realpath 把它们还原成盘符（复审 R1）
+  if (!/^[\\/]{2}(?![?.][\\/])/.test(r)) { try { r = fs.realpathSync.native(r); } catch (e) { /* 不存在 */ } }
   r = localPath(r).replace(/\\/g, '/').replace(/\/+$/, '');
   return WIN ? r.toLowerCase() : r;
 }

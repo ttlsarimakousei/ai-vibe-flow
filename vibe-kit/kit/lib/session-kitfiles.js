@@ -22,7 +22,9 @@ const CFG_DIR = path.dirname(KIT);
  */
 function localPath(p) {
   let s = String(p || '');
-  const dev = /^[\\/]{2}[?.][\\/](?:UNC[\\/])?/i.exec(s);
+  // 前缀后面是盘符或 UNC\ 才去掉；卷 GUID（\\?\Volume{…}\）、GLOBALROOT 这类去掉前缀就成了相对路径，原样留着，
+  // 让 realpath 还原成盘符（复审 R1，2026-11-21 实测 realpathSync.native 能还原）
+  const dev = /^[\\/]{2}[?.][\\/](?:UNC[\\/]|(?=[A-Za-z]:(?:[\\/]|$)))/i.exec(s);
   if (dev) s = /UNC[\\/]$/i.test(dev[0]) ? '\\\\' + s.slice(dev[0].length) : s.slice(dev[0].length);
   const m = /^[\\/]{2}([^\\/]+)[\\/]([A-Za-z])\$(?=[\\/]|$)/.exec(s);
   if (m) {

@@ -8,6 +8,8 @@ const path = require('path');
 const { normKey, KIT, realish, isKitPath } = require('./session');
 // \\?\C:\…、\\localhost\C$\… 先换成 C:\…：不然 \\?\ 里的 ? 被当成通配符，不去算真实路径，接上 8.3 短名就认不出（全量审核 A3）
 const { localPath } = require('./session-kitfiles');
+// 设备路径的前缀（\\?\、\\.\）：里面的 ? 不是通配符（复审 R1：\\?\Volume{…}\… 要去算真实路径，realpath 会还原成盘符）
+const DEVICE = /^[\\/]{2}[?.][\\/]/;
 const { preprocess, splitCommand, scanRedirects, words, local, CONTROL, WRAPPER, headOf, innerCommand } = require('./shell-words');
 
 /** 一个词可能指向的路径：词本身；PowerShell 的 -LiteralPath:xxx 取冒号后面 */
@@ -112,7 +114,7 @@ function secretTouch(word, dir, head, recursive) {
   let s = localPath(local(String(word || '').replace(/^["']|["']$/g, '')));
   if (!s || /^-/.test(s)) return '';
   const abs0 = path.isAbsolute(s) ? s : path.resolve(dir, s);
-  const wild = /[*?[\]]/.test(abs0);
+  const wild = /[*?[\]]/.test(abs0.replace(DEVICE, ''));
   // 8.3 短名（VIBE-K~1）、目录联接：按真实路径也比一遍。带通配符的算不出真实路径，只比看到的
   const keys = wild ? [normKey(abs0)] : [...new Set([normKey(abs0), normKey(realish(abs0))])];
   const search = SEARCHES.has(head);
@@ -206,7 +208,7 @@ function copyTouch(word, dir) {
   const s = localPath(local(String(word || '').replace(/^["']|["']$/g, '')));
   if (!s) return '';
   const abs0 = path.isAbsolute(s) ? s : path.resolve(dir, s);
-  const wild = /[*?[\]]/.test(abs0);
+  const wild = /[*?[\]]/.test(abs0.replace(DEVICE, ''));
   for (const r of secretRoots()) {
     for (const abs of wild ? [normKey(abs0)] : [...new Set([normKey(abs0), normKey(realish(abs0))])]) {
       const fixed = wild ? abs.split('/').reduce((acc, seg) => (acc.stop || /[*?[\]]/.test(seg) ? Object.assign(acc, { stop: true }) : Object.assign(acc, { parts: acc.parts.concat(seg) })), { parts: [], stop: false }).parts.join('/') : abs;

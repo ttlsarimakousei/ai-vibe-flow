@@ -150,6 +150,22 @@ H.section('A3 Read 读令牌：权限规则认不出的几种写法，钩子按�
   const cmd = (tool, command) => H.hook(h, 'guard-commit', { hook_event_name: 'PreToolUse', tool_name: tool, tool_input: { command }, session_id: 't1121-read', cwd: proj }, { spawn: true });
   H.ok('Bash：cat "\\\\?\\<短名>" 拦下', blocked(cmd('Bash', 'cat "\\\\?\\' + short + '"')));
   H.ok('PowerShell：Get-Content 管理共享的写法 拦下', blocked(cmd('PowerShell', "Get-Content '\\\\localhost\\" + drive + '$' + short.slice(2) + "'")));
+  // 复审 R1：卷 GUID 写法（\\?\Volume{…}\…）去掉前缀会成了相对路径，要留给 realpath 还原成盘符
+  let guid = '';
+  try { guid = String(spawnSync('mountvol', [drive + ':\\', '/L'], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).stdout || '').trim().replace(/\\$/, ''); } catch (e) { guid = ''; }
+  if (!/^\\\\\?\\Volume\{/.test(guid)) console.log('  （这台电脑取不到卷 GUID，跳过卷 GUID 那几项）');
+  else {
+    H.ok('Read 卷 GUID 写法（\\\\?\\Volume{…}\\…）：拦下', blocked(read(guid + sec.slice(2))), guid + sec.slice(2));
+    H.ok('Read 卷 GUID 加短名：拦下', blocked(read(guid + short.slice(2))));
+    H.ok('Bash：cat 卷 GUID 加短名 拦下', blocked(cmd('Bash', 'cat "' + guid + short.slice(2) + '"')));
+  }
+  // MCP 工具的路径字段：guard-mcp 交给 guard-read 和 realish，几种写法一样认
+  const mcp = (input) => H.hook(h, 'guard-commit', { hook_event_name: 'PreToolUse', tool_name: 'mcp__files__read_file', tool_input: input, session_id: 't1121-read', cwd: proj }, { spawn: true });
+  const mcpBlocked = (o) => !!o && o.decision === 'block' && /令牌/.test(H.reasonOf(o));
+  H.ok('MCP：路径字段写 \\\\?\\<短名>，拦下', mcpBlocked(mcp({ path: '\\\\?\\' + short })));
+  H.ok('MCP：路径字段写管理共享加短名，拦下', mcpBlocked(mcp({ path: '\\\\localhost\\' + drive + '$' + short.slice(2) })));
+  if (/^\\\\\?\\Volume\{/.test(guid)) H.ok('MCP：路径字段写卷 GUID 加短名，拦下', mcpBlocked(mcp({ path: guid + short.slice(2) })));
+  H.ok('MCP：读项目里的文件，放行', mcp({ path: path.join(proj, 'a.txt') }) === null);
 }
 
 H.section('A1、C 说明和代码对上、没人调用的 lib/pull.js 删掉');
