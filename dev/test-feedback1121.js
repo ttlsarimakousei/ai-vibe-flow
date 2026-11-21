@@ -168,6 +168,37 @@ H.section('A3 Read 读令牌：权限规则认不出的几种写法，钩子按�
   H.ok('MCP：读项目里的文件，放行', mcp({ path: path.join(proj, 'a.txt') }) === null);
 }
 
+H.section('复审 R3 安装器拷文件先写临时文件再改名，正在载入的钩子读不到半截');
+{
+  const h = H.freshHome('t1121-inst');
+  const install = () => H.node(h, path.join(SRCDIR, 'install.js'), ['--no-router', '--no-open'], { cwd: h.root, timeout: 180000 });
+  const first = install();
+  H.ok('（装上了）', first.code === 0, first.out + first.err);
+  // 第二遍是覆盖已有的文件：边装边有人一直读 guard-commit.js，读到的每一次都要是完整的
+  const target = path.join(h.kit, 'hooks', 'guard-commit.js');
+  const want = fs.readFileSync(path.join(SRCDIR, 'kit', 'hooks', 'guard-commit.js'));
+  const log = path.join(h.root, 'reads.json');
+  const reader = require('child_process').spawn(process.execPath, ['-e', [
+    "const fs = require('fs'); const want = " + want.length + "; let n = 0, bad = 0, miss = 0; const end = Date.now() + 60000;",
+    "const stop = () => { fs.writeFileSync(" + JSON.stringify(log) + ", JSON.stringify({ n, bad, miss })); process.exit(0); };",
+    "process.on('SIGTERM', stop); setInterval(() => { if (fs.existsSync(" + JSON.stringify(log + '.stop') + ") || Date.now() > end) stop(); }, 50);",
+    "(function loop() { for (let i = 0; i < 200; i++) { try { const b = fs.readFileSync(" + JSON.stringify(target) + "); n++; if (b.length !== want) bad++; } catch (e) { miss++; } } setImmediate(loop); })();",
+  ].join('\n')], { windowsHide: true, stdio: 'ignore' });
+  const again = install();
+  fs.writeFileSync(log + '.stop', '');
+  const t0 = Date.now(); while (!fs.existsSync(log) && Date.now() - t0 < 10000) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  try { reader.kill(); } catch (e) { /* 已经退了 */ }
+  let r = {}; try { r = JSON.parse(fs.readFileSync(log, 'utf8')); } catch (e) { r = {}; }
+  H.ok('（覆盖安装也装上了）', again.code === 0, again.out + again.err);
+  H.ok('装的时候一直读 guard-commit.js：没读到过半截、也没读不到', r.n > 0 && r.bad === 0 && r.miss === 0, r);
+  const left = [];
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.vk-copy-\d+\.tmp$/.test(e.name)) left.push(p); } };
+  walk(h.cfg);
+  H.ok('装完没有留下拷贝用的临时文件', left.length === 0, left.slice(0, 5));
+  H.ok('装上的钩子和包里的一样', fs.readFileSync(target).equals(want));
+  H.ok('安装器拷文件先写临时文件、再改名换掉', /function copyFile[\s\S]{0,600}copyFileSync\(s, tmp\)[\s\S]{0,300}renameSync\(tmp, d\)/.test(H.read(path.join(SRCDIR, 'install.js')) || ''));
+}
+
 H.section('A1、C 说明和代码对上、没人调用的 lib/pull.js 删掉');
 {
   const read = (rel) => H.read(path.join(SRCDIR, rel)) || '';

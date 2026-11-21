@@ -90,9 +90,28 @@ function writeAtomic(file, text) {
   fs.writeFileSync(tmp, text);
   try { fs.renameSync(tmp, file); } catch (e) { try { fs.writeFileSync(file, text); } finally { try { fs.unlinkSync(tmp); } catch (x) { /* 已经没了 */ } } }
 }
+/*
+ * 先拷成同目录下的临时文件，再改名换掉（全量审核修复复审 R3，仓库主人 2026-11-21 定的"安装器改成原子替换"）：
+ * 自动更新在后台装的时候，别的会话的钩子正在载入这些文件。原地覆盖会读到半截：库半截时 guard-commit 载入出错还有兜底，
+ * guard-commit.js 自己半截时连兜底都跑不到，push 不经确认。改名是一步换掉，读到的要么是旧的、要么是新的。
+ * 改名失败（杀毒软件、编辑器占着文件，没给删除共享）隔一会儿再试，几次都不行退回原地覆盖（和以前一样），不因此装不上
+ */
+const COPY_TMP = '.vk-copy-' + process.pid + '.tmp';
 function copyFile(s, d) {
   try { fs.chmodSync(d, 0o644); } catch (e) { /* 目标不存在 */ }
-  fs.copyFileSync(s, d);
+  const tmp = d + COPY_TMP;
+  let moved = false;
+  try {
+    fs.copyFileSync(s, tmp);
+    try { fs.chmodSync(tmp, 0o644); } catch (e) { /* 忽略 */ }
+    for (let i = 0; i < 5 && !moved; i++) {
+      try { fs.renameSync(tmp, d); moved = true; } catch (e) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 40); }
+    }
+  } catch (e) { /* 临时文件写不了（目录只读这类）：下面原地覆盖 */ }
+  if (!moved) {
+    try { fs.unlinkSync(tmp); } catch (e) { /* 没有 */ }
+    fs.copyFileSync(s, d);
+  }
   try { fs.chmodSync(d, 0o644); } catch (e) { /* 忽略 */ }
 }
 /** skip：这一层不拷的名字 */
