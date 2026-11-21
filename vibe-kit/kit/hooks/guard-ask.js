@@ -65,7 +65,11 @@ function handle(j) {
       if (/^(?:vk-|ttls-)?handover$/i.test(first)) {
         if (!require('../lib/session').canWriteHandover(j)) return blockOut('PreToolUse', '[vibe-kit] 当前用户没有要求交接。连续工作用自动压缩，接着处理当前任务；不要自行写交接或 clear。用户明确说交接或执行 /vk-handover 后再写。');
         try { require('../lib/usage.js').bump('handover.write'); } catch (e) { /* 数不了就算了 */ } }
-    } catch (e) { out = null; /* 记不了不影响调技能 */ }
+    } catch (e) {
+      // 出错放行（硬规矩 2），但要记一条问题反馈：开工门槛、进流程、交接许可都在这一段，以前出错悄悄放过，内网看不出来（全量审核 B2）
+      out = null;
+      try { require('../lib/feedback.js').recordHookError('guard-ask 调技能', j, e); } catch (err) { /* 记不了就算了 */ }
+    }
     return out;
   }
   // 自动阶段仍允许 Ask 澄清需求本身的疑问。做法上的取舍按用户 2026-10-30 定的自己定、记进 revisions.md（开工、收工的提示里说，这里不拦提问框）。
