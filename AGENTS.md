@@ -6,7 +6,7 @@
 
 内网的同事用 Claude Code，后面接的是公司网关上的私有模型。这个仓库做的是给他们用的工作流 `vibe-kit`：
 
-- 一套装进 `~/.claude` 的东西：全局约定、规范、六个技能、一个审查代理、十几个钩子、状态栏。
+- 一套装进 `~/.claude` 的东西：全局约定、规范、六个技能、几个斜杠命令、十几个钩子、状态栏。
 - 一个用时才起的本机配置页（敲 `/vk-config`），开关都在配置页上改。模型路由 2026-11-03 删了，连模型由用户自己配。
 - 挂在 OpenSpec 上：需求和任务归 OpenSpec 管，套件只在提案、打勾、归档这些节点上做确定性的检查。安装包自带一份 OpenSpec（打包时的最新版），同事电脑 Node 版本不够时退回用他自己装的。
 
@@ -38,7 +38,7 @@
 | `vibe-kit/kit/openspec/` | 套件自带的 OpenSpec（2026-10-17 集成，打包时的最新版）。`node_modules/` 同样有意带进仓库；怎么用上、怎么降级见 `kit/lib/openspec.js`，升级见 docs/release.md |
 | `vibe-kit/kit/statusline.js` | 状态栏 |
 | `vibe-kit/kit/ui/` | 配置页 `ui.html` 和它的后端 `kit-api.js`、`kit-worker.js`；起它的是 `kit/lib/config-page.js` |
-| `vibe-kit/claude/` | 装进 `~/.claude` 的给模型看的东西：全局约定模板 `CLAUDE.md`、规范 `rules/`、技能 `skills/`、审查代理 `agents/` |
+| `vibe-kit/claude/` | 装进 `~/.claude` 的给模型看的东西：全局约定模板 `CLAUDE.md`、规范 `rules/`、技能 `skills/`、斜杠命令 `commands/` |
 | `vibe-kit/README.md`、`vibe-kit/手册/`、`vibe-kit/更新说明.md` | 用户手册（README 是短手册，`手册/` 下是一件事一份的附录）、版本说明。会打进安装包；`手册/` 新加的文件要加进 `dev/pack.js` 的必备清单 |
 | `dev/` | 测试（`test-*.js`、`ui-*.js`、`e2e-*.js`）、`run-all.js`、`pack.js`、`accept-packages.js`、`diff-hooks.js`、测试支架 `lib/`、旧版基线 `baseline/` |
 | `docs/` | 协作文档；`docs/history/` 是早期的方案和审查报告，只读 |

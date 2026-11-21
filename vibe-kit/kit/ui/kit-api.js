@@ -295,7 +295,7 @@ async function handle(method, url, body, kitDir) {
   }
   // 更新和上报
   if (/^\/api\/kit\/remote(\/|\?|$)/.test(url)) return remote(method, url, body, kitDir);
-  // 经验规则：各项目和用户级现在生效的规则、候选、等确认升用户级的。升用户级、删、改字只有这里能做（命令行工具里没有，模型做不了）
+  // 经验规则：各项目和用户级现在生效的规则、候选、等确认升用户级的。升用户级、删、改字在这里做（命令行工具里没有；2026-11-04 起不拦调配置页的接口，模型也调得到，只防误改）
   if (url === '/api/kit/lessons' && method === 'GET') return inWorker('lessons', { kitDir, action: 'list' }, '读经验规则');
   if (method === 'POST' && /^\/api\/kit\/lessons\/(promote|dismiss|edit|remove|add|promote-candidate)$/.test(url)) {
     return inWorker('lessons', { kitDir, action: url.split('/').pop(), id: str(body && body.id), scope: body && body.scope === 'user' ? 'user' : 'project', root: str(body && body.root), text: str(body && body.text), group: str(body && body.group), ext: str(body && body.ext) }, '改经验规则');

@@ -10,7 +10,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
      ├─ 钩子（命令方式：node kit/hooks/<名字>.js）
      ├─ 状态栏 kit/statusline.js
      ├─ 配置页（敲 /vk-config 才起：kit/lib/config-page.js 加 kit/ui/，只在本机）
-     └─ ~/.claude 里的约定、规范、技能、审查代理（install.js 装进去）
+     └─ ~/.claude 里的约定、规范、技能、命令（install.js 装进去）
 ```
 
 装好之后的位置：套件在 `~/.claude/vibe-kit/`。
@@ -20,11 +20,11 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | 时机 | 钩子 | 做什么 |
 |---|---|---|
 | 会话开始（新开、/clear、压缩后、恢复） | `session-start.js` | 送项目说明、只读就绪摘要和壳子结构；压缩恢复时核对当前事实；不自动续接旧交接许可；记启动目录、核对套件指纹、清过期文件、数使用情况；新代码第一次跑时收回路由（`router-retire`） |
-| 用户开口 | `task-anchor.js` | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；进流程时先拉代码；约定和技能变了就把变了的部分带给模型；`/vk-config` 起配置页，不发模型请求（decision:block） |
+| 用户开口 | `task-anchor.js` | 打断后提醒刚才在做哪条指令；进行中的变更做到第几项；交接线；定"这一句算不算进了 OpenSpec 流程、在写提案还是做任务那一段"；开工时告诉用户全自动开没开（systemMessage）；约定和技能变了就把变了的部分带给模型；`/vk-config` 起配置页，不发模型请求（decision:block） |
 | 改文件之前（Edit/Write/MultiEdit） | `pre-edit.js` | 依次跑这几道检查（`guard-kit` 2026-11-04 起是空壳，套件可以改）：`guard-vibe`（过程文件放 `.vibe/tmp`）→ `guard-output`（代码之外的产出放哪要先定）→ `guard-encoding`（会写坏中文的编辑）→ `guard-spec`（OpenSpec 产物的门槛、打勾前要跑过验法） |
 | 跑命令之前（Bash/PowerShell） | `guard-commit.js` | 提交检查（信息格式、整仓 add、新文件没 add）、按提交方式（关 / 询问 / 自动）管提交、push 要用户当场说推送，内网发布单独确认、读令牌和 key 的拦下、cd 串命令拦下、起服务要走 devserver、归档门槛（含用户没说归档）；都过了再把 `openspec …` 改成调用自带的 OpenSpec（updatedInput） |
-| 提问框、调技能和审查代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
-| 搜文件内容之前（Grep） | `guard-read.js` | 搜的范围里有令牌、key 且要输出内容时拦下 |
+| 提问框、调技能、开子代理之前 | `guard-ask.js` | 提问始终允许；人工审查、自测先有明确要求；双自动且已探索、逐点审修、定稿提交后可衔接 apply，其余需要开工许可 |
+| 读文件、搜文件内容之前（Read、Grep） | `guard-read.js` | 读的是令牌、key（按真实路径比，8.3 短名、`\\?\` 前缀、本机管理共享都认，2026-11-21 起管 Read），或者搜的范围里有它们且要输出内容时拦下 |
 | 工具成功或失败后 | `after-tool.js` | 核对实际完成结果；成功才登记验证证据和消费许可；失败或后台启动不算通过；MCP 工具的返回原样给模型 |
 | 提问框、权限确认框要问用户的时候（PermissionRequest） | `ask-timeout.js` | 任何时候都管（2026-11-18 起，以前只在自动实施时）：等 `askTimeoutMin` 分钟（默认 10）没人回，提问框按不允许收掉、让模型自己定（按流程状态给写需求、做任务、普通任务不同的交代）；需求审过"开始实施 / 先不实施"那一问到点由它 `apply-scope.grant` 替用户开工、开自动（会话记录里找到这一问、问题里点名唯一一个变更、需求整套审过才开）。别的确认框按允许，像推送、发布的、跑查库和 redis 工具的、关服务的、还原不了的删（`DESTRUCTIVE`）按不允许（框挂久了那两个工具的条子过期，会当成有人在）；记进全自动报告。只读配置和流程状态，不调 git。隔 3 秒看一眼会话记录，框有了结果、用户另说了话就退出。不走 `cli()` 的 12 秒预算 |
 | 模型说做完了 | `verify-gate.js` | 自动阶段文档没写到 tasks 催接着写，写完催审整套，任务全部做完催审整个 change；人工阶段 Ask；提醒提交与自动提交分开；核对材料、修订链和实际验证结果，交付用例及结果，用户决定验收归档 |
@@ -64,7 +64,6 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 | `perf.js` | 耗时异常（2026-10-31，问题表第 20 条）：devserver 每次起服务按"项目 + 命令"记分段耗时，比本机基线（最近几次的中位数）慢一倍以上且多 60 秒以上、或它自己的检查超过 20 秒，记一条问题反馈并按开关 `perfReport` 上报（只带秒数、分段、原因类别）；基线和上报记录在 `perf-baseline.json`、`perf-report.json`（GLOBAL_STATE），每天最多报 3 条、同一个 24 小时一次 |
 | `gitlab.js`、`updater.js`、`issues.js` | 内网 GitLab：自动更新、问题上报、导出议题、使用情况上报 |
 | `usage.js` | 使用情况：每天数次数，第二天传到 GitLab |
-| `pull.js` | 开工前拉代码 |
 | `guard-mcp.js` | MCP 工具的令牌保护（硬规矩第 6 条）：套件不接 MCP，不认工具名，所有 `mcp__` 工具四层：路径字段范围有令牌的拦、参数原文点到令牌文件的拦、`command` 这类字段按 Bash 和 PowerShell 查读令牌、路径落在套件目录的拦。别的不查 |
 | `big-task.js`、`guard-explore.js` | 大任务状态从 plan.md 和探索记录算（`phaseOf`、状态栏的 `bar`）；探索完后范围只能在用户开口那一轮改 |
 | `router-retire.js` | 收回路由（只放迁移代码）：判据只看文件在不在；自动更新在新代码第一次跑 session-start 时收，手动安装装完当场收；中途失败下次再试 |
@@ -104,7 +103,7 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 
 - `install.js`：先检查后动手（settings.json 读不懂、全局 CLAUDE.md 不是 UTF-8 就什么都不动）；只往 `~/.claude` 里添加，覆盖前备份；`--sync` 只重新生成约定、重新登记钩子（配置页保存开关时调）；`--uninstall` 只收回自己加的。它替用户写进 settings.json 的 Claude Code 设置有三样，都跟着开关走、记在安装清单里：自动压缩窗口 `autoCompactWindow`、关自动记忆的环境变量、关自带自动模式的 `permissions.disableAutoMode`。
   - 依赖（K1-6）：按安装包里的依赖清单 `kit/deps.json` 核对每个包在不在、版本对不对（不算哈希），这台电脑的 Node 用不了哪个组件照清单说；没有清单（直接从源码装、本地恢复包）照以前写死的检查。清单由 `dev/pack.js` 生成，查库执行器的 class 打包时按编译记录 `DbRunner.build.json` 核对是从现在的 `DbRunner.java` 编的。
-  - 用户改过的（F8，用户 2026-10-30 定的）：升级时套件的 `CLAUDE.md`、`rules/<套件的>.md` 和上次装的原样（`pristine/`）对不上的，按行比，新加的（带所在那一节的标题）挪进 `user/migrated-<文件名>.md`，删掉改掉的原句并进 `user/remove.txt`，再备份、换成新版；重装时同样的内容不重复写。技能、审查代理、命令照旧换成新版、先备份。这些都记进 `state/install-done.json` 的 `notice`（没看过的跨次安装留着，最多 20 条），配置页（`kit-api.js` 的 `installNotice`）在顶上提示，点"知道了"写 `noticeSeen`。
+  - 用户改过的（F8，用户 2026-10-30 定的）：升级时套件的 `CLAUDE.md`、`rules/<套件的>.md` 和上次装的原样（`pristine/`）对不上的，按行比，新加的（带所在那一节的标题）挪进 `user/migrated-<文件名>.md`，删掉改掉的原句并进 `user/remove.txt`，再备份、换成新版；重装时同样的内容不重复写。技能、命令照旧换成新版、先备份。这些都记进 `state/install-done.json` 的 `notice`（没看过的跨次安装留着，最多 20 条），配置页（`kit-api.js` 的 `installNotice`）在顶上提示，点"知道了"写 `noticeSeen`。
   - `JAVA_TOOL_OPTIONS`（F8）：settings.json 的 env 会替掉 Claude Code 里跑的命令看到的系统值，所以写进去的是系统的值（注册表里用户级、机器级的环境变量，测试用 `VIBE_KIT_SYSTEM_JAVA_TOOL_OPTIONS` 顶替）加上套件要的、系统里没写同名项的几项；还是套件写的那个值的，每次安装跟着系统重新算，用户改过的不动。
 - 自动更新：团队的内网 GitLab 仓库里放着解开的安装包。钩子看一眼"该检查了没有"，该了就甩一个后台进程（`updater.js run`）：拉仓库、跑新版的 `install.js`、自检，不过就装回上一版。`updater` 给新 install.js 传 `--no-router`：新版不认，旧版回滚时不装回路由。
 - 问题上报：本机记下的问题反馈由后台进程建成 GitLab 的议题，不重复建；使用情况一台电脑一条议题、一天一条补充。维护的那台电脑在配置页导出开放中的议题（浏览器下载），导出后关掉这一批。
@@ -130,13 +129,13 @@ Claude Code ──请求──▶ 用户自己配的网关（套件不管，2026
 
 `after-tool.js` 登记 PostToolUse 和 Failure，消费成功操作许可并采集本机证据。`evidence.js`、`workspace.js` 计算当前输入与环境指纹。`task-types.js` 区分审查、意见处理和用户验收，不制造审查循环。
 
-`review-runner.js` 与 `tools/review.js` 管备材料、算修改点、记账（2026-11-03 起不发请求，审查是子代理做的）、超出预期用时的上报、取消与意见处理；`readiness.js`、`workflow.js` 提供就绪、交付、提交计划、自测和恢复事实；`work-sessions.js` 提示同变更冲突。`connection-lifecycle.js` 留无凭据退役记录；`redact.js` 统一诊断出口；`local-backup.js` 和 `entry-check.js` 管本地恢复与入口行为自检。
+`review-runner.js` 与 `tools/review.js` 管备材料、算修改点、记账（2026-11-05 起每个角度一个后台 `claude -p`，见上面"给模型看的东西"）、超出预期用时的上报、取消与意见处理；`readiness.js`、`workflow.js` 提供就绪、交付、提交计划、自测和恢复事实；`work-sessions.js` 提示同变更冲突。`connection-lifecycle.js` 留无凭据退役记录；`redact.js` 统一诊断出口；`local-backup.js` 和 `entry-check.js` 管本地恢复与入口行为自检。
 
 跨会话状态加入 GLOBAL_STATE：evidence、review-jobs、work-baselines、review-local-metrics、work-sessions、readiness、usage-device、devserver（2026-10-28，devserver 的全机服务登记：端口 → 项目里的记录文件、运行目录、命令；start 找不到同名记录时按运行目录和命令认出之前起的服务，status、stop、会话开始的提醒也看它）。许可仍按会话清理。使用情况按持久随机设备标识分组；旧议题复用编号并改名，历史补充保留。审查材料和诊断明细不上传，耗时仅留本机。用户可见行为以 vibe-kit/README.md 和 vibe-kit/手册/ 为准（开发流程.md、验收清单.md 2026-10-30 删了，用户定的）。
 
 `state-store.atomicWrite` 写结构化对象，`atomicText` 写 Markdown 等原文；调用方检查保存结果。`state-store.acquire` 的锁记进程号和拿锁时间，进程不在了或者超过租期（默认 10 分钟，`leaseMs` 可改）都按失效处理（2026-10-31：Windows 复用进程号时锁曾经永远拿不回来）；经验规则的读改写用 `state/lessons.lock`。`workspace` 的相同只读 Git 查询只在一次钩子调用内复用，下一次调用重新核对。审查读材料前检查真实路径、文件类型和编码，范围外链接与未覆盖材料不会算作完整审查。
 
-审查不限时（2026-10-28 用户定的）：每批都送完，配置页的 `reviewBudgetSeconds` 是预期用时，审完超了、有批次只回思考或没拿到结论，`reportReview` 记一条问题反馈（总用时、每批用时、重试、输出 token、停止原因、原因，不带材料原文）；`--new-budget` 不再需要。（2026-11-03 起审查改子代理，分批、重试这些没了，只留超时记反馈。）不带变更名的审查（`.vibe/reviews/plain/code.json`）也能 `resolve` 登记决定，"接受"按项目目录核对用户许可（#234）。新的完整审查清除上一轮意见处理状态，修复意见须有当前版本的成功复验。零问题或仅驳回意见不能批准后来修改的代码。
+审查不限时（2026-10-28 用户定的）：每批都送完，配置页的 `reviewBudgetSeconds` 是预期用时，审完超了、有批次只回思考或没拿到结论，`reportReview` 记一条问题反馈（总用时、每批用时、重试、输出 token、停止原因、原因，不带材料原文）；`--new-budget` 不再需要。（2026-11-03 到 11-05 审查改过子代理；11-05 起改回不带工具的 `claude -p`，分批、只回思考时重试一次、超时记反馈都在。）不带变更名的审查（`.vibe/reviews/plain/code.json`）也能 `resolve` 登记决定，"接受"按项目目录核对用户许可（#234）。新的完整审查清除上一轮意见处理状态，修复意见须有当前版本的成功复验。零问题或仅驳回意见不能批准后来修改的代码。
 
 本地恢复包只包含受管程序，清单记录文件哈希和目录集合；额外文件、敏感文件、目录链接、清单变化均使恢复包失效。新版失败优先使用可验证的本地上一版，保留原来的远端恢复政策。活进程锁不因续期丢失随机身份。
 
